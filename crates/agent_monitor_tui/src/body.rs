@@ -47,6 +47,12 @@ pub trait BodyPane: Send {
 
     /// Draws into `area`.
     fn render(&self, area: Rect, buffer: &mut Buffer);
+
+    /// Shows the next figure (or the previous one when `forward` is false),
+    /// for panes that have several. Ignored by default.
+    fn cycle(&mut self, forward: bool) {
+        let _ = forward;
+    }
 }
 
 /// Seconds the rate gauges count over.

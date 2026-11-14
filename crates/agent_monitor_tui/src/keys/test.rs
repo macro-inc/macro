@@ -238,6 +238,23 @@ fn a_letter_starts_the_command_line_and_enter_runs_it() {
 }
 
 #[test]
+fn b_cycles_body_figures_where_body_shows_and_types_elsewhere() {
+    for page in [Page::Monitor, Page::Zoom(Pane::Body)] {
+        assert_eq!(
+            step(idle(), Key::Char('b'), &page),
+            (idle(), Action::CycleFigure(true))
+        );
+        assert_eq!(
+            step(idle(), Key::Char('B'), &page),
+            (idle(), Action::CycleFigure(false))
+        );
+    }
+    let (mode, action) = step(idle(), Key::Char('b'), &Page::Tree);
+    assert_eq!(action, Action::None);
+    assert!(matches!(mode, Mode::Command { .. }));
+}
+
+#[test]
 fn reserved_letters_do_not_start_the_command_line() {
     for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
         let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);

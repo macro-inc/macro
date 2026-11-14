@@ -23,9 +23,17 @@ mod environment {
 }
 
 /// The mesh man as the BODY pane.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MeshBody {
     body: Body,
+    /// The pane title: the figure's place and name, `[2/5] ANATOMICAL`.
+    title: String,
+}
+
+impl Default for MeshBody {
+    fn default() -> Self {
+        Self::with_body(Body::new())
+    }
 }
 
 impl MeshBody {
@@ -36,13 +44,46 @@ impl MeshBody {
         let depth = ColorDepth::from_colorterm(colorterm.as_ref().and_then(|value| value.value()));
         let mut body = Body::new();
         body.set_color_depth(depth);
-        Self { body }
+        Self::with_body(body)
+    }
+
+    /// Starts on the figure called `name` (any case) or numbered `name`
+    /// (from 1); returns whether there was one.
+    pub fn select_figure(&mut self, name: &str) -> bool {
+        let found = self.body.select_figure(name)
+            || name
+                .parse::<usize>()
+                .ok()
+                .filter(|number| (1..=self.body.figure_count()).contains(number))
+                .map(|number| self.body.set_figure(number - 1))
+                .is_some();
+        self.title = title(&self.body);
+        found
+    }
+
+    fn with_body(body: Body) -> Self {
+        let title = title(&body);
+        Self { body, title }
+    }
+}
+
+/// `[i/n] NAME` when there are several figures, else just the name.
+fn title(body: &Body) -> String {
+    if body.figure_count() > 1 {
+        format!(
+            "[{}/{}] {}",
+            body.figure_index() + 1,
+            body.figure_count(),
+            body.figure_name()
+        )
+    } else {
+        body.figure_name().to_owned()
     }
 }
 
 impl BodyPane for MeshBody {
     fn title(&self) -> &str {
-        "MESH MAN"
+        &self.title
     }
 
     fn event(&mut self, event: &TapeEvent) {
@@ -83,5 +124,14 @@ impl BodyPane for MeshBody {
 
     fn render(&self, area: Rect, buffer: &mut Buffer) {
         (&self.body).render(area, buffer);
+    }
+
+    fn cycle(&mut self, forward: bool) {
+        if forward {
+            self.body.next_figure();
+        } else {
+            self.body.prev_figure();
+        }
+        self.title = title(&self.body);
     }
 }

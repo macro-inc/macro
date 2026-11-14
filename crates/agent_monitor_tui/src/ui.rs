@@ -479,7 +479,7 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     spans
 }
 
-const HELP: [(&str, &str); 17] = [
+const HELP: [(&str, &str); 18] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
@@ -496,6 +496,7 @@ const HELP: [(&str, &str); 17] = [
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
+    ("b  B", "next / previous BODY figure (monitor and BODY)"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),

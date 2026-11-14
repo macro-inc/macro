@@ -54,6 +54,9 @@ mod unix {
         pub feed: FeedChoice,
         /// Frames per second while something animates; 0 stops animation.
         pub fps: u8,
+        /// The BODY figure to start on, by name or number (from 1); the
+        /// default figure when `None` or unknown.
+        pub figure: Option<String>,
     }
 
     /// Why the viewer stopped with an error.
@@ -66,13 +69,17 @@ mod unix {
 
     /// The BODY pane: the mesh man.
     #[cfg(feature = "mesh-man")]
-    fn body() -> Box<dyn crate::body::BodyPane> {
-        Box::new(crate::body::mesh::MeshBody::for_terminal())
+    fn body(figure: Option<&str>) -> Box<dyn crate::body::BodyPane> {
+        let mut body = crate::body::mesh::MeshBody::for_terminal();
+        if let Some(figure) = figure {
+            body.select_figure(figure);
+        }
+        Box::new(body)
     }
 
     /// The BODY pane: the vitals panel, built without the mesh man.
     #[cfg(not(feature = "mesh-man"))]
-    fn body() -> Box<dyn crate::body::BodyPane> {
+    fn body(_figure: Option<&str>) -> Box<dyn crate::body::BodyPane> {
         Box::new(crate::body::Vitals::default())
     }
 
@@ -83,13 +90,22 @@ mod unix {
             FeedChoice::Socket(socket) => (feed::socket(socket), None),
             FeedChoice::Demo { seed } => (feed::demo(seed), Some(String::from("DEMO"))),
         };
-        run_feed(feed, label, options.fps).await
+        run_with(feed, label, options.fps, options.figure.as_deref()).await
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
     /// over a store it hosts; `label` is shown in the header.
     pub async fn run_feed(feed: Feed, label: Option<String>, fps: u8) -> Result<(), ViewerError> {
-        let mut app = App::new(ViewState::new(body()), label);
+        run_with(feed, label, fps, None).await
+    }
+
+    async fn run_with(
+        feed: Feed,
+        label: Option<String>,
+        fps: u8,
+        figure: Option<&str>,
+    ) -> Result<(), ViewerError> {
+        let mut app = App::new(ViewState::new(body(figure)), label);
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(

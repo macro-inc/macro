@@ -29,6 +29,9 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         /// Frames per second while something animates.
         #[arg(long, default_value_t = 12)]
         fps: u8,
+        /// The BODY figure to start on, by name or number (`b` / `B` cycle).
+        #[arg(long)]
+        figure: Option<String>,
     }
 
     let cli = Cli::parse();
@@ -36,5 +39,10 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         Some(socket) => FeedChoice::Socket(socket),
         None => FeedChoice::Demo { seed: cli.seed },
     };
-    run(Options { feed, fps: cli.fps }).await
+    run(Options {
+        feed,
+        fps: cli.fps,
+        figure: cli.figure,
+    })
+    .await
 }

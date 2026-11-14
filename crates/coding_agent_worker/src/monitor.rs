@@ -73,6 +73,10 @@ pub struct MonitorArgs {
     /// Show the scripted demo fleet from this process, with no collector.
     #[arg(long)]
     demo: bool,
+    /// The BODY figure to start on, by name or number (`b` / `B` cycle in
+    /// the viewer).
+    #[arg(long)]
+    figure: Option<String>,
     /// The collector's socket; defaults to `~/.macrod/monitor/monitor.sock`.
     #[arg(long, global = true)]
     socket: Option<PathBuf>,
@@ -127,7 +131,7 @@ pub async fn run(args: MonitorArgs) -> ExitCode {
             count,
             transcript: Some(agent),
         }) => dump_transcript(args.socket, agent, count).await,
-        None => view(args.socket, &config, args.demo).await,
+        None => view(args.socket, &config, args.demo, args.figure).await,
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -557,6 +561,7 @@ async fn view(
     socket: Option<PathBuf>,
     config: &MonitorConfig,
     demo: bool,
+    figure: Option<String>,
 ) -> rootcause::Result<()> {
     let settings = config.settings()?;
     let feed = if demo {
@@ -574,6 +579,7 @@ async fn view(
     agent_monitor_tui::run(agent_monitor_tui::Options {
         feed,
         fps: settings.fps,
+        figure,
     })
     .await
     .map_err(|error| rootcause::report!("{error}"))

@@ -135,6 +135,7 @@ impl App {
                 self.open(command.page);
             }
             Action::ToggleAll => self.filter.all = !self.filter.all,
+            Action::CycleFigure(forward) => self.view.body.cycle(forward),
             Action::Unknown(line) => {
                 self.message = Some(format!("UNKNOWN COMMAND: {line}"));
             }

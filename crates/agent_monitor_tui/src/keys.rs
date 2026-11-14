@@ -316,6 +316,8 @@ pub enum Action {
     Find(String),
     /// Show ended agents too, or only current ones again.
     ToggleAll,
+    /// Show the BODY pane's next figure, or the previous one when false.
+    CycleFigure(bool),
 }
 
 /// The next state and action for `key` in `mode` on `page`.
@@ -361,6 +363,12 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('q') => (stay, Action::Quit),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
+        // Only where BODY shows; elsewhere `b` starts a command as before.
+        Key::Char(letter @ ('b' | 'B'))
+            if matches!(page, Page::Monitor | Page::Zoom(Pane::Body)) =>
+        {
+            (stay, Action::CycleFigure(letter == 'b'))
+        }
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),
