@@ -26,8 +26,8 @@ times a second, and ticks at `fps` only while something animates.
   8 PRS (`ui/panes.rs` `prs`/`pr_line`) shares the lower right with
   FAILURES; agent rows carry a PR badge and the drill-in lists the agent's PRs.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
-- `src/theme.rs`: the palette and the HUD dressing: bracket frames, slanted
-  title strips, segmented meters, the dot grid and the glitch on fresh errors.
+- `src/theme.rs`: the palette and the HUD dressing: bracket frames, orange
+  title chips, segmented meters, the dot grid and the glitch on fresh errors.
 
 ## Scope
 
