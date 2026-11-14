@@ -297,7 +297,7 @@ jobs:
         WASM_PKG_HTTP_CACHE: '1'
     - name: report tests for known bugs
       if: '!cancelled()'
-      run: just test-email-e2e-browser --pass-with-no-tests
+      run: just test-email-e2e-browser --pass-with-no-tests --retries 0
       env:
         EMAIL_E2E_KNOWN_BUGS: '1'
       continue-on-error: true

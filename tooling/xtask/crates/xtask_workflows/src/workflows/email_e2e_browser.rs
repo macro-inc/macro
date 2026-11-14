@@ -163,10 +163,11 @@ fn run_suite() -> Step<Run> {
 }
 
 /// Tests kept for known, unfixed bugs fail by design, so this step never
-/// fails the job: its output says which still fail and which now pass.
+/// fails the job: its output says which still fail and which now pass. A
+/// test that is expected to fail is not retried.
 fn known_bugs() -> Step<Run> {
     Step::new("report tests for known bugs")
-        .run("just test-email-e2e-browser --pass-with-no-tests")
+        .run("just test-email-e2e-browser --pass-with-no-tests --retries 0")
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .continue_on_error(true)
