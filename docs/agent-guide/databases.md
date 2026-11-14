@@ -764,7 +764,8 @@ below shows each webhook's token prefix and a delete button. Deleting the last
 webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
-400 listing every problem. The row is written as the webhook's creator, and the
+400 listing every problem. Number and percentage columns take the stored
+number (0.25 is 25%); a trailing `%` is not accepted. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and
