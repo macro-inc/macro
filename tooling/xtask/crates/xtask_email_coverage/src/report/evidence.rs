@@ -1,7 +1,9 @@
 //! The evidence files the harness writes: one per scenario that finished
 //! healthy, in its log directory (`crates/email_e2e/src/evidence.rs`).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use rootcause::prelude::*;
 use serde::Deserialize;
@@ -116,25 +118,39 @@ pub(crate) struct ServiceRequest {
     pub(crate) body: Option<Value>,
 }
 
-/// Reads every evidence file under `dirs`.
+/// Reads the evidence files under `dirs`: for each scenario the one written
+/// last, since a log directory keeps the records of earlier runs.
 pub(crate) fn load(dirs: &[PathBuf]) -> Result<Vec<Evidence>, Report> {
-    files_named(dirs, FILE_NAME)?
-        .iter()
-        .map(|file| {
-            let text = std::fs::read_to_string(file)
-                .context(format!("could not read {}", file.display()))?;
-            let evidence: Evidence = serde_json::from_str(&text)
-                .context(format!("{} is not an evidence file", file.display()))?;
-            if evidence.version != VERSION {
-                bail!(
-                    "{} is evidence version {}, and this report reads version {VERSION}",
-                    file.display(),
-                    evidence.version
-                );
+    let mut latest: BTreeMap<(String, String), (SystemTime, Evidence)> = BTreeMap::new();
+    for file in files_named(dirs, FILE_NAME)? {
+        let written = std::fs::metadata(&file)
+            .and_then(|metadata| metadata.modified())
+            .context(format!("could not read {}", file.display()))?;
+        let evidence = read(&file)?;
+        let scenario = (evidence.binary.clone(), evidence.test.clone());
+        match latest.get(&scenario) {
+            Some((newest, _)) if *newest >= written => {}
+            _ => {
+                latest.insert(scenario, (written, evidence));
             }
-            Ok(evidence)
-        })
-        .collect()
+        }
+    }
+    Ok(latest.into_values().map(|(_, evidence)| evidence).collect())
+}
+
+fn read(file: &Path) -> Result<Evidence, Report> {
+    let text =
+        std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
+    let evidence: Evidence = serde_json::from_str(&text)
+        .context(format!("{} is not an evidence file", file.display()))?;
+    if evidence.version != VERSION {
+        bail!(
+            "{} is evidence version {}, and this report reads version {VERSION}",
+            file.display(),
+            evidence.version
+        );
+    }
+    Ok(evidence)
 }
 
 /// Every file called `name` under `dirs`, in path order.
