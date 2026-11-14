@@ -440,8 +440,11 @@ const HELP: [(&str, &str); 16] = [
     ("AGT builder working", "words after a mnemonic filter rows"),
 ];
 
+/// The help box: the keys column plus the longest description and borders.
+const HELP_WIDTH: u16 = 86;
+
 fn draw_help(frame: &mut Frame<'_>, area: Rect) {
-    let width = area.width.min(78);
+    let width = area.width.min(HELP_WIDTH);
     let height = area.height.min(u16::try_from(HELP.len()).unwrap_or(0) + 2);
     let popup = Rect {
         x: area.x + (area.width - width) / 2,
