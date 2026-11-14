@@ -128,6 +128,7 @@ export const settings = {
     {
       id: 'AX-001',
       surface: 'SX-01',
+      fn: ['F-001', 'F-004'],
       action: 'Connect a Google Workspace account',
       trigger:
         'button "Connect" (aria "Connect a Google Workspace account"; title "Connect another Google Workspace account" once an inbox exists)',
@@ -141,6 +142,7 @@ export const settings = {
     {
       id: 'AX-002',
       surface: 'SX-01',
+      fn: ['F-002', 'F-004'],
       action: 'Connect an Outlook account',
       trigger: 'button "Connect" (aria "Connect an Outlook account")',
       source: [
@@ -148,11 +150,13 @@ export const settings = {
         'src/lib/core/email-link/index.ts',
       ],
       providers: ['outlook'],
+      needs: 'the authentication service for Outlook linking',
       note: 'Row shown only when GET /auth/link/email/providers offers Outlook; with an inbox already connected only under enable-multi-inbox.',
     },
     {
       id: 'AX-003',
       surface: 'SX-01',
+      fn: ['F-008'],
       action: 'Enable a disabled primary inbox (opens the provider chooser)',
       trigger: 'button "Enable" on the row with chips "Primary", "Disabled"',
       source: ['src/features/settings/Email.tsx'],
@@ -160,6 +164,7 @@ export const settings = {
     {
       id: 'AX-004',
       surface: 'SX-01',
+      fn: ['F-007'],
       action: 'Reconnect an inbox whose sync needs re-auth',
       trigger: 'button "Reconnect" (aria "Reconnect <address>")',
       source: [
@@ -170,6 +175,7 @@ export const settings = {
     {
       id: 'AX-005',
       surface: 'SX-01',
+      fn: ['F-157'],
       action: 'Enable calendar for an inbox that lacks calendar permission',
       trigger:
         'button "Enable calendar" (aria "Enable calendar for <address>")',
@@ -179,6 +185,7 @@ export const settings = {
     {
       id: 'AX-006',
       surface: 'SX-01',
+      fn: ['F-157'],
       action: 'Open Turn off calendar dialog (own inbox only)',
       trigger:
         'icon button aria "Turn off calendar for <address>" (tooltip "Turn off calendar")',
@@ -188,6 +195,7 @@ export const settings = {
     {
       id: 'AX-009',
       surface: 'SX-01',
+      fn: ['F-023'],
       action: 'Force sync an inbox',
       trigger: 'icon button aria "Force sync <address>"',
       source: ['src/features/settings/Email.tsx'],
@@ -196,6 +204,7 @@ export const settings = {
     {
       id: 'AX-010',
       surface: 'SX-01',
+      fn: ['F-009'],
       action: 'Open Remove inbox dialog',
       trigger:
         'button "Remove" (aria "Remove <address>", tooltip "Remove inbox")',
@@ -204,6 +213,7 @@ export const settings = {
     {
       id: 'AX-013',
       surface: 'SX-01',
+      fn: ['F-189'],
       action: 'Retry loading accounts / signatures',
       trigger: 'button "Try again"',
       source: ['src/features/settings/email-settings.tsx'],
@@ -211,6 +221,7 @@ export const settings = {
     {
       id: 'AX-014',
       surface: 'SX-01',
+      fn: ['F-067'],
       action: 'Toggle read receipts for an own inbox',
       trigger: 'switch "Read receipts for <address>"',
       source: ['src/features/settings/email-settings.tsx'],
@@ -219,6 +230,7 @@ export const settings = {
     {
       id: 'AX-015',
       surface: 'SX-01',
+      fn: ['F-162'],
       action: 'Open Notifications settings from Email settings',
       trigger: 'button "Manage notifications"',
       source: ['src/features/settings/email-settings.tsx'],
@@ -226,6 +238,7 @@ export const settings = {
     {
       id: 'AX-016',
       surface: 'SX-01',
+      fn: ['F-157'],
       action: 'Open Calendar settings from Email settings',
       trigger: 'button "Manage calendars"',
       source: ['src/features/settings/email-settings.tsx'],
@@ -233,6 +246,7 @@ export const settings = {
     {
       id: 'AX-200',
       surface: 'SX-101',
+      fn: ['F-189'],
       action: 'Open Email settings from the Connected page',
       trigger: 'icon button "Email settings" on the Email section',
       source: ['src/features/settings/IntegrationsPage.tsx'],
@@ -240,6 +254,7 @@ export const settings = {
     {
       id: 'AX-011',
       surface: 'SX-02',
+      fn: ['F-009'],
       action:
         'Confirm remove inbox (own inbox: clears data; shared inbox: removes access)',
       trigger: 'dialog "Remove inbox", button "Remove"',
@@ -248,6 +263,7 @@ export const settings = {
     {
       id: 'AX-012',
       surface: 'SX-02',
+      fn: ['F-009'],
       action: 'Cancel remove inbox',
       trigger: 'button "Cancel" / dismiss dialog',
       source: ['src/features/settings/Email.tsx'],
@@ -255,6 +271,7 @@ export const settings = {
     {
       id: 'AX-007',
       surface: 'SX-03',
+      fn: ['F-157'],
       action: 'Confirm turn off calendar',
       trigger: 'dialog "Turn off calendar", button "Turn off"',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
@@ -263,6 +280,7 @@ export const settings = {
     {
       id: 'AX-008',
       surface: 'SX-03',
+      fn: ['F-157'],
       action: 'Cancel turn off calendar',
       trigger: 'button "Cancel"',
       source: ['src/features/calendar/components/TurnOffCalendarDialog.tsx'],
@@ -271,6 +289,7 @@ export const settings = {
     {
       id: 'AX-017',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Edit signature in rich text (typing)',
       trigger: 'type in editor "Signature for <address>" (Rich text tab)',
       source: [
@@ -282,6 +301,7 @@ export const settings = {
     {
       id: 'AX-018',
       surface: 'SX-04',
+      fn: ['F-149'],
       action:
         'Format signature: Font, Font size, Bold (Cmd+B), Italic (Cmd+I), Underline (Cmd+U), Text color, Highlight color, Numbered list, Bulleted list, Link, Clear formatting',
       trigger: 'toolbar buttons / selects',
@@ -291,6 +311,7 @@ export const settings = {
     {
       id: 'AX-019',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Insert an image into the signature (uploaded as a static file)',
       trigger: 'toolbar "Image"; paste or drop an image',
       source: ['src/features/settings/SignatureEditor.tsx'],
@@ -300,6 +321,7 @@ export const settings = {
     {
       id: 'AX-201',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Resize an image in the signature',
       trigger: 'drag the resize handle of a selected image',
       source: ['src/features/settings/SignatureEditor.tsx'],
@@ -308,6 +330,7 @@ export const settings = {
     {
       id: 'AX-202',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Paste a URL over selected text to make it a link',
       trigger: 'paste a URL with text selected in Rich text',
       source: [
@@ -319,6 +342,7 @@ export const settings = {
     {
       id: 'AX-020',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Switch signature view: Preview / Rich text / HTML',
       trigger: 'tabs "Signature views for <address>"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
@@ -327,6 +351,7 @@ export const settings = {
     {
       id: 'AX-021',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Edit signature HTML source',
       trigger: 'textarea "Signature HTML for <address>"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
@@ -335,6 +360,7 @@ export const settings = {
     {
       id: 'AX-022',
       surface: 'SX-04',
+      fn: ['F-149'],
       action:
         'Confirm "Convert to rich text?" when opening Rich text on custom HTML',
       trigger: 'confirm dialog button "Continue to rich text"',
@@ -344,6 +370,7 @@ export const settings = {
     {
       id: 'AX-203',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Cancel "Convert to rich text?" (stays on the current tab)',
       trigger: 'confirm dialog "Cancel"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
@@ -352,6 +379,7 @@ export const settings = {
     {
       id: 'AX-204',
       surface: 'SX-04',
+      fn: ['F-149'],
       action:
         'Paste a signature with custom HTML into an empty Rich text editor (kept as HTML, no dialog)',
       trigger: 'paste formatted HTML in Rich text',
@@ -361,6 +389,7 @@ export const settings = {
     {
       id: 'AX-023',
       surface: 'SX-04',
+      fn: ['F-149'],
       action:
         'Confirm "Replace with pasted signature?" (pasting custom HTML over an existing signature)',
       trigger: 'confirm dialog button "Use pasted signature"',
@@ -370,6 +399,7 @@ export const settings = {
     {
       id: 'AX-205',
       surface: 'SX-04',
+      fn: ['F-149'],
       action: 'Cancel "Replace with pasted signature?"',
       trigger: 'confirm dialog "Cancel"',
       source: ['src/features/settings/components/signature-workspace.tsx'],
@@ -378,6 +408,7 @@ export const settings = {
     {
       id: 'AX-024',
       surface: 'SX-04',
+      fn: ['F-148'],
       action: 'Save signature',
       trigger: 'button "Save signature"',
       source: [
@@ -389,6 +420,7 @@ export const settings = {
     {
       id: 'AX-025',
       surface: 'SX-04',
+      fn: ['F-150'],
       action: 'Clear signature',
       trigger: 'button "Clear signature"',
       source: [
@@ -401,6 +433,7 @@ export const settings = {
     {
       id: 'AX-026',
       surface: 'SX-04',
+      fn: ['F-151'],
       action: 'Import signature from Gmail',
       trigger: 'button "Import from Gmail"',
       source: [
@@ -413,6 +446,7 @@ export const settings = {
     {
       id: 'AX-027',
       surface: 'SX-04',
+      fn: ['F-152'],
       action: 'Toggle "Add to replies & forwards"',
       trigger: 'switch "Add to replies & forwards"',
       source: [
@@ -425,6 +459,7 @@ export const settings = {
     {
       id: 'AX-028',
       surface: 'SX-06',
+      fn: ['F-001'],
       action: 'Choose Gmail in provider chooser',
       trigger: 'dialog "Connect email", button "Gmail"',
       source: [
@@ -436,6 +471,7 @@ export const settings = {
     {
       id: 'AX-029',
       surface: 'SX-06',
+      fn: ['F-002'],
       action: 'Choose Outlook in provider chooser',
       trigger: 'dialog "Connect email", button "Outlook / Microsoft 365"',
       source: [
@@ -443,10 +479,12 @@ export const settings = {
         'src/lib/core/email-link/index.ts',
       ],
       providers: ['outlook'],
+      needs: 'the authentication service for Outlook linking',
     },
     {
       id: 'AX-030',
       surface: 'SX-06',
+      fn: ['F-006'],
       action: 'Cancel provider chooser',
       trigger: 'button "Cancel" / dismiss',
       source: ['src/lib/core/email-link/ProviderDialog.tsx'],
@@ -454,6 +492,7 @@ export const settings = {
     {
       id: 'AX-206',
       surface: 'SX-07',
+      fn: ['F-001', 'F-002'],
       action: 'Choose a provider in the Add inbox dialog',
       trigger:
         'dialog "Connect email", button "Gmail" or "Outlook / Microsoft 365"',
@@ -465,6 +504,7 @@ export const settings = {
     {
       id: 'AX-207',
       surface: 'SX-07',
+      fn: ['F-006'],
       action: 'Cancel the Add inbox dialog',
       trigger: 'button "Cancel" / dismiss',
       source: ['src/features/inbox/AddInboxDialog.tsx'],
@@ -472,6 +512,7 @@ export const settings = {
     {
       id: 'AX-031',
       surface: 'SX-08',
+      fn: ['F-001', 'F-002'],
       action:
         'Return from provider consent (success): inbox initialised; stashed layout restored, else Home with Settings > Connected, else Mail on phone; first-run user goes back to onboarding',
       trigger: 'browser redirect to /app/inbox-link-callback?link_id=',
@@ -483,6 +524,7 @@ export const settings = {
     {
       id: 'AX-032',
       surface: 'SX-08',
+      fn: ['F-006'],
       action:
         'Return from provider consent after cancelling on the consent screen',
       trigger: 'browser redirect with email_link_error=cancelled',
@@ -494,6 +536,7 @@ export const settings = {
     {
       id: 'AX-033',
       surface: 'SX-08',
+      fn: ['F-006'],
       action: 'Leave the callback page while it is still finishing',
       trigger: 'button "Back to app" under "Finishing account connection…"',
       source: ['src/features/auth/EmailAuth.tsx'],
@@ -501,6 +544,7 @@ export const settings = {
     {
       id: 'AX-036',
       surface: 'SX-08',
+      fn: ['F-003'],
       action:
         'Return after an administrator approved the tenant (toast, then the Add inbox dialog opens)',
       trigger: 'browser redirect with email_link_notice=admin_consent_granted',
@@ -510,6 +554,7 @@ export const settings = {
     {
       id: 'AX-034',
       surface: 'SX-09',
+      fn: ['F-003'],
       action: 'Copy admin approval link',
       trigger: 'button "Copy admin approval link"',
       source: ['src/features/inbox/AdminConsentRequiredDialog.tsx'],
@@ -518,6 +563,7 @@ export const settings = {
     {
       id: 'AX-035',
       surface: 'SX-09',
+      fn: ['F-003'],
       action: 'Connect a different account',
       trigger: 'button "Connect a different account"',
       source: [
@@ -529,6 +575,7 @@ export const settings = {
     {
       id: 'AX-037',
       surface: 'SX-10',
+      fn: ['F-005'],
       action: 'Share an inbox already owned by another user',
       trigger: 'dialog "Share this inbox?", button "Share inbox"',
       source: [
@@ -540,6 +587,7 @@ export const settings = {
     {
       id: 'AX-038',
       surface: 'SX-10',
+      fn: ['F-005'],
       action: 'Cancel share inbox conflict',
       trigger: 'button "Cancel"',
       source: ['src/features/inbox/ShareInboxConflictDialog.tsx'],
@@ -547,6 +595,7 @@ export const settings = {
     {
       id: 'AX-039',
       surface: 'SX-11',
+      fn: ['F-007'],
       action: 'Reconnect from the reconnect prompt',
       trigger: 'toast action "Reconnect"',
       source: [
@@ -557,6 +606,7 @@ export const settings = {
     {
       id: 'AX-208',
       surface: 'SX-11',
+      fn: ['F-014'],
       action: 'Dismiss the reconnect prompt',
       trigger: 'toast button "Maybe later"',
       source: ['src/features/auth/GmailReauthenticationPrompt.tsx'],
@@ -564,6 +614,7 @@ export const settings = {
     {
       id: 'AX-040',
       surface: 'SX-12',
+      fn: ['F-157'],
       action: 'Grant calendar access from the Enable calendar prompt',
       trigger: 'toast action "Grant access"',
       source: ['src/features/auth/CalendarPermissionPrompt.tsx'],
@@ -572,6 +623,7 @@ export const settings = {
     {
       id: 'AX-209',
       surface: 'SX-12',
+      fn: ['F-157'],
       action:
         'Dismiss the Enable calendar prompt (remembered, not shown again for that inbox)',
       trigger: 'toast button "Not now"',
@@ -581,6 +633,7 @@ export const settings = {
     {
       id: 'AX-041',
       surface: 'SX-13',
+      fn: ['F-006'],
       action:
         'Retry from "Email access required" (opens the Add inbox dialog with the same scopes)',
       trigger: 'toast action "Try again"',
@@ -590,6 +643,7 @@ export const settings = {
     {
       id: 'AX-210',
       surface: 'SX-13',
+      fn: ['F-006'],
       action: 'Dismiss "Email access required"',
       trigger: 'toast button "Maybe later"',
       source: ['src/features/auth/EmailAuth.tsx'],
@@ -598,6 +652,7 @@ export const settings = {
     {
       id: 'AX-042',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: connect a Google account as work email',
       trigger:
         'button "Connect work email" ("Continue with Google" when Microsoft is also offered)',
@@ -610,6 +665,7 @@ export const settings = {
     {
       id: 'AX-043',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: connect a Microsoft account',
       trigger: 'button "Continue with Microsoft"',
       source: [
@@ -617,10 +673,12 @@ export const settings = {
         'src/features/onboarding/views/email-step.tsx',
       ],
       providers: ['outlook'],
+      needs: 'the authentication service for Outlook linking',
     },
     {
       id: 'AX-211',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: reconnect a work email that needs re-auth',
       trigger: 'button "Reconnect work email"',
       source: ['src/features/onboarding/components/google-accounts-step.tsx'],
@@ -628,6 +686,7 @@ export const settings = {
     {
       id: 'AX-212',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: connect a second, personal email',
       trigger: 'button "Connect personal email"',
       source: ['src/features/onboarding/components/google-accounts-step.tsx'],
@@ -635,6 +694,7 @@ export const settings = {
     {
       id: 'AX-044',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: retry loading the connected accounts',
       trigger:
         'button "Try again" under "Couldn\'t load your connected accounts."',
@@ -643,6 +703,7 @@ export const settings = {
     {
       id: 'AX-213',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: continue past the email step',
       trigger: 'button "Continue" (or "Choose integrations")',
       source: ['src/features/onboarding/components/google-accounts-step.tsx'],
@@ -650,6 +711,7 @@ export const settings = {
     {
       id: 'AX-214',
       surface: 'SX-14',
+      fn: ['F-010'],
       action: 'Onboarding: skip the email step',
       trigger: 'button "Skip for now"',
       source: ['src/features/onboarding/components/google-accounts-step.tsx'],
@@ -657,6 +719,7 @@ export const settings = {
     {
       id: 'AX-045',
       surface: 'SX-15',
+      fn: ['F-010'],
       action: 'Mobile onboarding: add inbox',
       trigger: 'button "Connect Another Gmail"',
       source: ['src/features/mobile-onboarding/OnboardingConnectAccounts.tsx'],
@@ -664,6 +727,7 @@ export const settings = {
     {
       id: 'AX-215',
       surface: 'SX-16',
+      fn: ['F-121'],
       action: 'Confirm sign out and remove local drafts',
       trigger: 'dialog button "Sign out"',
       source: ['src/lib/core/auth/logout.ts'],
@@ -671,6 +735,7 @@ export const settings = {
     {
       id: 'AX-216',
       surface: 'SX-16',
+      fn: ['F-121'],
       action: 'Cancel sign out (drafts kept, session stays)',
       trigger: 'dialog "Cancel" / dismiss',
       source: ['src/lib/core/auth/logout.ts'],
@@ -680,6 +745,7 @@ export const settings = {
     {
       id: 'STX-001',
       surface: 'SX-01',
+      fn: ['F-189'],
       state: '"Loading accounts…"',
       trigger: 'links query pending',
       source: ['src/features/settings/email-settings.tsx'],
@@ -687,6 +753,7 @@ export const settings = {
     {
       id: 'STX-002',
       surface: 'SX-01',
+      fn: ['F-189'],
       state: '"Couldn\'t load accounts" + Try again',
       trigger: 'GET /email/links failed',
       source: ['src/features/settings/email-settings.tsx'],
@@ -694,6 +761,7 @@ export const settings = {
     {
       id: 'STX-003',
       surface: 'SX-01',
+      fn: ['F-148'],
       state: '"Loading signatures…" / "Loading signature…"',
       trigger: 'links query pending',
       source: ['src/features/settings/email-settings.tsx'],
@@ -702,6 +770,7 @@ export const settings = {
     {
       id: 'STX-004',
       surface: 'SX-01',
+      fn: ['F-148'],
       state: '"Couldn\'t load signatures" + Try again',
       trigger: 'GET /email/links failed',
       source: ['src/features/settings/email-settings.tsx'],
@@ -710,6 +779,7 @@ export const settings = {
     {
       id: 'STX-005',
       surface: 'SX-01',
+      fn: ['F-148'],
       state: '"Connect an email account above to add a signature."',
       trigger: 'no linked inbox',
       source: ['src/features/settings/email-settings.tsx'],
@@ -718,6 +788,7 @@ export const settings = {
     {
       id: 'STX-006',
       surface: 'SX-01',
+      fn: ['F-067'],
       state: '"Connect an email account above to use read receipts."',
       trigger: 'no linked inbox',
       source: ['src/features/settings/email-settings.tsx'],
@@ -726,6 +797,7 @@ export const settings = {
     {
       id: 'STX-007',
       surface: 'SX-01',
+      fn: ['F-014'],
       state:
         'Inbox row sync status: "Syncing…", "Error — re-sync", "Reconnect to resume sync", "Disabled" (nothing when up to date)',
       trigger: 'link.sync_status other than UP_TO_DATE',
@@ -735,6 +807,7 @@ export const settings = {
     {
       id: 'STX-008',
       surface: 'SX-01',
+      fn: ['F-016'],
       state:
         'Backfill progress bar "Backfilling…", "N of M threads", "~Xm left"',
       trigger: 'backfill_progress events from the connection gateway',
@@ -747,6 +820,7 @@ export const settings = {
     {
       id: 'STX-009',
       surface: 'SX-01',
+      fn: ['F-189'],
       state:
         'Inbox row: provider label "Gmail" or "Outlook / Microsoft 365" with "Beta" badge; chips "Primary", "Shared"; disabled primary row "Primary", "Disabled", "Sync disabled"',
       trigger: 'link fields',
@@ -755,6 +829,7 @@ export const settings = {
     {
       id: 'STX-200',
       surface: 'SX-01',
+      fn: ['F-004'],
       state:
         'Connect rows hidden once an inbox is connected without enable-multi-inbox; Outlook row hidden when not offered',
       trigger: 'one inbox linked, flag off; providers endpoint without outlook',
@@ -763,6 +838,7 @@ export const settings = {
     {
       id: 'STX-201',
       surface: 'SX-01',
+      fn: ['F-023'],
       state: 'Force sync button disabled while the inbox is syncing',
       trigger: 'resync pending or sync_status SYNCING',
       source: ['src/features/settings/Email.tsx'],
@@ -771,6 +847,7 @@ export const settings = {
     {
       id: 'STX-010',
       surface: 'SX-01',
+      fn: ['F-009'],
       state:
         'Toast "Inbox removed" / "Failed to remove inbox. Please try again."',
       trigger: 'DELETE /email/links/{id} result',
@@ -779,6 +856,7 @@ export const settings = {
     {
       id: 'STX-011',
       surface: 'SX-01',
+      fn: ['F-023'],
       state:
         'Toast "Re-sync started" / "Sync already in progress" / "Failed to start re-sync"',
       trigger: 'POST resync result',
@@ -788,6 +866,7 @@ export const settings = {
     {
       id: 'STX-012',
       surface: 'SX-01',
+      fn: ['F-002'],
       state: 'Toast "New Outlook connections are temporarily unavailable."',
       trigger: 'providers endpoint says outlook=false at click',
       source: ['src/features/settings/Email.tsx'],
@@ -796,6 +875,7 @@ export const settings = {
     {
       id: 'STX-013',
       surface: 'SX-01',
+      fn: ['F-067'],
       state: 'Toast "Failed to update read receipts."',
       trigger: 'PATCH /email/settings failed',
       source: ['src/features/settings/email-settings.tsx'],
@@ -804,6 +884,7 @@ export const settings = {
     {
       id: 'STX-202',
       surface: 'SX-01',
+      fn: ['F-016'],
       state: 'toast: "Inbox synced"',
       trigger: 'backfill_progress event reporting the backfill complete',
       source: ['src/lib/queries/email/sync.ts'],
@@ -813,6 +894,7 @@ export const settings = {
     {
       id: 'STX-203',
       surface: 'SX-01',
+      fn: ['F-016'],
       state: 'toast: "Inbox sync failed"',
       trigger: 'legacy backfill event with status failed',
       source: ['src/lib/queries/email/sync.ts'],
@@ -822,6 +904,7 @@ export const settings = {
     {
       id: 'STX-204',
       surface: 'SX-02',
+      fn: ['F-009'],
       state:
         'Dialog "Remove inbox": own inbox text vs shared "Remove access to … The inbox and its data stay with its owner."',
       trigger: 'Remove on an own inbox / on an inbox shared with the user',
@@ -830,6 +913,7 @@ export const settings = {
     {
       id: 'STX-205',
       surface: 'SX-03',
+      fn: ['F-157'],
       state:
         'Button "Turning off…" with status "Turning off calendar and removing synced events…"',
       trigger: 'turn-off request pending',
@@ -839,6 +923,7 @@ export const settings = {
     {
       id: 'STX-014',
       surface: 'SX-03',
+      fn: ['F-157'],
       state:
         'Toast "Calendar turned off" / "Failed to turn off calendar. Please try again."',
       trigger: 'turn-off result',
@@ -848,6 +933,7 @@ export const settings = {
     {
       id: 'STX-015',
       surface: 'SX-04',
+      fn: ['F-148', 'F-150', 'F-152'],
       state:
         'Toasts "Signature saved", "Signature removed", "Failed to update setting.", "Failed to remove signature. Please try again."',
       trigger: 'PATCH /email/settings result',
@@ -858,6 +944,7 @@ export const settings = {
     {
       id: 'STX-206',
       surface: 'SX-04',
+      fn: ['F-148'],
       state:
         'Inline error "Failed to save signature. Please try again." / "Unable to save images. Add accessible image URLs in HTML, or use the image button in Rich text."; button "Saving…"',
       trigger: 'save pending / failed / images that cannot be stored',
@@ -870,6 +957,7 @@ export const settings = {
     {
       id: 'STX-016',
       surface: 'SX-04',
+      fn: ['F-151'],
       state:
         'Toasts "Signature imported from Gmail", "No signature found in Gmail", "Failed to import signature. Please try again."; inline "Couldn\'t import images from your Gmail signature. …"; button "Importing…"',
       trigger: 'import result',
@@ -883,6 +971,7 @@ export const settings = {
     {
       id: 'STX-017',
       surface: 'SX-04',
+      fn: ['F-149'],
       state: 'Toast "Failed to upload image"',
       trigger: 'static upload failed',
       source: ['src/features/settings/SignatureEditor.tsx'],
@@ -892,6 +981,7 @@ export const settings = {
     {
       id: 'STX-207',
       surface: 'SX-04',
+      fn: ['F-149'],
       state:
         'Preview tab: rendered signature, or "Write in Rich text or paste your HTML." when empty',
       trigger: 'Preview tab with / without a signature',
@@ -901,6 +991,7 @@ export const settings = {
     {
       id: 'STX-208',
       surface: 'SX-04',
+      fn: ['F-148'],
       state:
         'Shared inbox description "Shared inbox. Automatically added to new emails anyone sends from this account."',
       trigger: 'signature of an inbox shared with the user',
@@ -911,6 +1002,7 @@ export const settings = {
     {
       id: 'STX-018',
       surface: 'SX-04',
+      fn: ['F-149'],
       state:
         'Touch layout: preview only ("No signature saved." when empty) with "Update your signature on desktop."; no tabs, Save or Import',
       trigger: 'phone width on a touch device (isMobile)',
@@ -924,6 +1016,7 @@ export const settings = {
     {
       id: 'STX-019',
       surface: 'SX-05',
+      fn: ['F-180'],
       state:
         'Operation line "Create label “x”" / "Delete label “x”" / "Block x" / "Unblock x" with "Waiting for mailbox confirmation." or "Waiting to retry. Check that this inbox is connected and the change is allowed in your mailbox."',
       trigger:
@@ -936,6 +1029,7 @@ export const settings = {
     {
       id: 'STX-209',
       surface: 'SX-06',
+      fn: ['F-001', 'F-002'],
       state:
         'Dialog "Connect email" with "Gmail", "Outlook / Microsoft 365" + "Beta" badge, "Cancel"; skipped (straight to Google) when Outlook is not offered',
       trigger: 'connect without a provider',
@@ -947,6 +1041,7 @@ export const settings = {
     {
       id: 'STX-023',
       surface: 'SX-06',
+      fn: ['F-006'],
       state:
         'toast: "Failed to start inbox connection"; "Too many inbox connections in progress." on 429',
       trigger: 'POST /auth/link/gmail|outlook failed',
@@ -959,6 +1054,7 @@ export const settings = {
     {
       id: 'STX-025',
       surface: 'SX-06',
+      fn: ['F-174'],
       state: 'Multi-inbox paywall',
       trigger: '402 from POST /auth/link/gmail|outlook',
       source: ['src/lib/core/email-link/index.ts'],
@@ -966,6 +1062,7 @@ export const settings = {
     {
       id: 'STX-210',
       surface: 'SX-06',
+      fn: ['F-006'],
       state:
         'toast: "Failed to add inbox" (mobile app) / "Failed to open the browser to connect your account. Please try again." (desktop app)',
       trigger: 'native link completion failed / system browser failed to open',
@@ -983,6 +1080,7 @@ export const settings = {
     {
       id: 'STX-211',
       surface: 'SX-08',
+      fn: ['F-001', 'F-002'],
       state: '"Finishing account connection…" with "Back to app"',
       trigger: 'callback route while the inbox is being initialised',
       source: ['src/features/auth/EmailAuth.tsx'],
@@ -990,6 +1088,7 @@ export const settings = {
     {
       id: 'STX-020',
       surface: 'SX-08',
+      fn: ['F-001', 'F-002'],
       state: 'toast: "Account connected"',
       trigger: 'init succeeded with a new inbox',
       source: ['src/lib/core/email-link/link-outcome.ts'],
@@ -998,18 +1097,21 @@ export const settings = {
     {
       id: 'STX-021',
       surface: 'SX-08',
+      fn: ['F-006'],
       state:
         'toast: "<address> is already connected" + hint to choose a different Google / Microsoft account',
       trigger:
         'AlreadyInitialized, or the chooser returned an already-linked account',
       source: ['src/lib/core/email-link/link-outcome.ts'],
       toasts: [
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the toast's key as the source spells it
         'src/lib/core/email-link/link-outcome.ts#${emailAddress} is already connected',
       ],
     },
     {
       id: 'STX-022',
       surface: 'SX-08',
+      fn: ['F-006'],
       state:
         'toast: "Account not connected" with "Sign-in was cancelled before access was granted."',
       trigger: 'consent cancelled (web: email_link_error=cancelled)',
@@ -1022,6 +1124,7 @@ export const settings = {
     {
       id: 'STX-024',
       surface: 'SX-08',
+      fn: ['F-006', 'F-174'],
       state:
         'Toasts "Gmail access was not granted. Please allow all requested permissions and try again.", "A professional subscription is required to add another inbox.", "Failed to add inbox", "Failed to finish connecting your account. Please try again from Settings.", "Failed to connect your account. Please try again.", "Missing link id in callback URL"',
       trigger:
@@ -1031,6 +1134,7 @@ export const settings = {
     {
       id: 'STX-027',
       surface: 'SX-08',
+      fn: ['F-003'],
       state: 'Toast "Approved. Try connecting again."',
       trigger: 'email_link_notice=admin_consent_granted',
       source: ['src/features/auth/EmailAuth.tsx'],
@@ -1039,6 +1143,7 @@ export const settings = {
     {
       id: 'STX-212',
       surface: 'SX-100',
+      fn: ['F-006'],
       state:
         'Toast "Failed to connect email" with "Select email permissions on sign-in to enable"; other failures toast the error message',
       trigger: 'sign-up callback without email permissions / with an error',
@@ -1047,6 +1152,7 @@ export const settings = {
     {
       id: 'STX-026',
       surface: 'SX-09',
+      fn: ['F-003'],
       state:
         'Dialog "Admin approval required"; copy button disabled with "The approval link is unavailable right now. Try again later or connect a different account."; toasts "Admin approval link copied" / "Could not copy link"',
       trigger: 'Outlook tenant requires admin consent',
@@ -1056,6 +1162,7 @@ export const settings = {
     {
       id: 'STX-213',
       surface: 'SX-10',
+      fn: ['F-005'],
       state: 'Dialog "Share this inbox?" with "Cancel", "Share inbox"',
       trigger: 'init returned SharedInboxConflict',
       source: [
@@ -1066,6 +1173,7 @@ export const settings = {
     {
       id: 'STX-028',
       surface: 'SX-11',
+      fn: ['F-014'],
       state:
         'Persistent toast "Reconnect inbox" / "Reconnect email and calendar": "Sync stopped for <address>. Reconnect to restore email [and calendar] sync."',
       trigger:
@@ -1078,6 +1186,7 @@ export const settings = {
     {
       id: 'STX-029',
       surface: 'SX-12',
+      fn: ['F-157'],
       state:
         'Persistent toast "Enable calendar": "Macro can now sync your calendar. Grant calendar access for <address> to turn it on."',
       trigger: 'own inbox with needs_calendar_permission, not dismissed before',
@@ -1087,6 +1196,7 @@ export const settings = {
     {
       id: 'STX-030',
       surface: 'SX-13',
+      fn: ['F-006'],
       state:
         'Persistent toast "Email access required": "Macro connects an account\'s email and calendar together, so keep the email permissions checked. The account was not connected."',
       trigger: 'email_link_error=gmail_not_granted',
@@ -1096,6 +1206,7 @@ export const settings = {
     {
       id: 'STX-214',
       surface: 'SX-14',
+      fn: ['F-010'],
       state:
         'Onboarding status: "Work email connected" / personal address; buttons "Checking connection…", "Opening Google…", "Opening Microsoft…"; error "Couldn\'t load your connected accounts."',
       trigger: 'links query pending / loaded / failed; consent opening',
@@ -1104,6 +1215,7 @@ export const settings = {
     {
       id: 'STX-031',
       surface: 'SX-16',
+      fn: ['F-121'],
       state:
         'Dialog "Sign out and remove local drafts?" with "N draft(s) have changes saved only on this device…", "Pending sends remain saved for this account…", or "Draft storage could not be checked…"',
       trigger:

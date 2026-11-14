@@ -126,7 +126,7 @@ F-124	attachments	Forward a message with its attachments	yes	yes	yes	provider
 F-125	attachments	Share a file too large to attach as a link	yes	yes	yes	service
 F-126	attachments	Open and preview a received attachment	yes	yes	yes	service
 F-127	attachments	Download a received attachment	yes	yes	yes	service
-F-128	attachments	Save a received attachment to Drive	yes	yes	yes	service
+F-128	attachments	Save a received attachment to Drive	yes	yes	no	service
 F-129	attachments	Open cloud attachments of an Outlook message	no	yes	yes	ui
 F-130	attachments	Clean up stored files of discarded drafts	yes	yes	no	service
 F-131	send	Send a new message	yes	yes	yes	provider
@@ -187,3 +187,7 @@ F-185	attachments	Open and preview an attachment on a draft	yes	yes	yes	service
 F-186	compose	See the Macro watermark without a paid plan and open the upgrade prompt	yes	yes	yes	ui
 F-187	read	Copy a thread's ID	yes	yes	yes	ui
 F-188	read	See a thread's details in the side panel (activity, references, dates)	yes	yes	yes	ui
+F-189	connect	See the connected inboxes in Settings (provider, primary or shared, loading and failed states)	yes	yes	yes	service
+F-190	ai	See what the assistant read, listed or changed in mail (tool cards)	yes	yes	yes	ui
+F-191	elsewhere	Mention an email thread in a document, message or chat	yes	yes	yes	ui
+F-192	elsewhere	Exclude domains from the mail shared with CRM	yes	yes	yes	service

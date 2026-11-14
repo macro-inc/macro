@@ -35,6 +35,9 @@ Outlook,
 3. checks the result at the provider or in the service (`confirmed`),
    unless the function is checked in the UI alone.
 
+A function the user does nothing for (mail arriving, the unread badge) has
+no action row, and is covered by 2 and 3 alone.
+
 It is **in part** when tests show some of that, **deferred** or **waived**
 when every way to do it is, and **open** otherwise.
 
@@ -128,6 +131,6 @@ under "Manifest against the source":
 - every source file a row names exists, ids are unique, rows are on a surface
   of their group;
 - every row belongs to a function of `functions.tsv`, and every function
-  with a UI has an action row.
+  with a UI has a row.
 
 Requests the app made that the manifest does not list are reported too.

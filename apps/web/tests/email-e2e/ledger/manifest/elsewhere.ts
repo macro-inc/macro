@@ -124,6 +124,7 @@ export const elsewhere = {
     {
       id: 'AX-302',
       surface: 'SX-18',
+      fn: ['F-096'],
       action: 'Open the composer from a mailto: link, To prefilled',
       trigger: 'plain click on a mailto: link (modifier clicks are left alone)',
       source: [
@@ -135,6 +136,7 @@ export const elsewhere = {
     {
       id: 'AX-048',
       surface: 'SX-19',
+      fn: ['F-095'],
       action: 'Create a new email from the app Create menu / Launcher',
       trigger: 'menu item "Email"',
       source: ['src/features/command/Launcher.tsx'],
@@ -142,6 +144,7 @@ export const elsewhere = {
     {
       id: 'AX-304',
       surface: 'SX-19',
+      fn: ['F-095'],
       action: 'Create a new email from the mobile page create button on Mail',
       trigger: 'create button of the Mail page',
       source: [
@@ -153,6 +156,7 @@ export const elsewhere = {
     {
       id: 'AX-305',
       surface: 'SX-20',
+      fn: ['F-166'],
       action: 'Universal input: choose the Email content type',
       trigger: 'select "Content type" > Email',
       source: ['src/features/universal-input/views/universal-composer.tsx'],
@@ -161,6 +165,7 @@ export const elsewhere = {
     {
       id: 'AX-306',
       surface: 'SX-20',
+      fn: ['F-166'],
       action:
         'Universal input: fill From, To, Cc, Bcc, Subject and the message',
       trigger:
@@ -171,6 +176,7 @@ export const elsewhere = {
     {
       id: 'AX-049',
       surface: 'SX-20',
+      fn: ['F-166'],
       action: 'Universal input: save an email draft',
       trigger: 'button "Save as draft"',
       source: [
@@ -182,6 +188,7 @@ export const elsewhere = {
     {
       id: 'AX-050',
       surface: 'SX-20',
+      fn: ['F-166'],
       action: 'Universal input: send an email',
       trigger: 'button "Send email" / Cmd+Enter',
       source: [
@@ -193,6 +200,7 @@ export const elsewhere = {
     {
       id: 'AX-051',
       surface: 'SX-20',
+      fn: ['F-166'],
       action: 'Universal input: connect Google when no inbox is connected',
       trigger: 'button "Connect Google"',
       source: [
@@ -204,6 +212,7 @@ export const elsewhere = {
     {
       id: 'AX-307',
       surface: 'SX-20',
+      fn: ['F-166'],
       action: 'Universal input: open the saved draft or sent thread',
       trigger: 'open action on the "Email draft saved" / "Email sent" result',
       source: ['src/features/universal-input/actions.ts'],
@@ -212,6 +221,7 @@ export const elsewhere = {
     {
       id: 'AX-052',
       surface: 'SX-21',
+      fn: ['F-168'],
       action:
         'Send-email review: edit recipients, subject or body of the drafted email',
       trigger: 'type in the review composer',
@@ -223,6 +233,7 @@ export const elsewhere = {
     {
       id: 'AX-053',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Send-email review: attach a file',
       trigger: 'attach button / drop',
       source: [
@@ -233,6 +244,7 @@ export const elsewhere = {
     {
       id: 'AX-054',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Send-email review: approve and send',
       trigger: 'button "Send email" / Cmd+Enter',
       source: [
@@ -242,6 +254,7 @@ export const elsewhere = {
     {
       id: 'AX-055',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Send-email review: retry the sender lookup',
       trigger: 'button "Retry" on the sender notice',
       source: [
@@ -251,6 +264,7 @@ export const elsewhere = {
     {
       id: 'AX-308',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Send-email review: choose the sending inbox',
       trigger: 'From selector',
       source: [
@@ -261,6 +275,7 @@ export const elsewhere = {
     {
       id: 'AX-309',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Send-email review: remove the signature preview',
       trigger: 'dismiss button on the signature preview',
       source: [
@@ -271,6 +286,7 @@ export const elsewhere = {
     {
       id: 'AX-310',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Review deck: move between several drafted emails',
       trigger:
         'buttons "Previous draft" / "Next draft"; draft chooser; "Search drafts"',
@@ -282,6 +298,7 @@ export const elsewhere = {
     {
       id: 'AX-311',
       surface: 'SX-21',
+      fn: ['F-168'],
       action:
         'Open the saved draft from a "saved as draft" card (Shift opens a new split)',
       trigger: 'draft button labelled with the subject or "Draft email"',
@@ -290,6 +307,7 @@ export const elsewhere = {
     {
       id: 'AX-312',
       surface: 'SX-21',
+      fn: ['F-168'],
       action: 'Expand an "Email sent to …" card to preview the sent thread',
       trigger: 'click the card summary',
       source: [
@@ -300,6 +318,7 @@ export const elsewhere = {
     {
       id: 'AX-313',
       surface: 'SX-120',
+      fn: ['F-190'],
       action: 'Expand the list of inboxes on a "List inboxes" card',
       trigger: 'toggle "N inboxes"',
       source: ['src/lib/core/component/AI/component/tool/ListInboxes.tsx'],
@@ -307,6 +326,7 @@ export const elsewhere = {
     {
       id: 'AX-056',
       surface: 'SX-22',
+      fn: ['F-051', 'F-052'],
       action:
         'Open an email thread from a Search result (a content hit opens at the matching message)',
       trigger: 'click / Enter on result row or snippet',
@@ -315,6 +335,7 @@ export const elsewhere = {
     {
       id: 'AX-057',
       surface: 'SX-23',
+      fn: ['F-164'],
       action: 'Open an email from the Home work feed',
       trigger: 'click row',
       source: [
@@ -325,6 +346,7 @@ export const elsewhere = {
     {
       id: 'AX-314',
       surface: 'SX-23',
+      fn: ['F-164'],
       action: 'Mark an email done from Home',
       trigger: 'row "Mark done" action; e on a focused row',
       source: ['src/features/home/components/HomeList.tsx'],
@@ -332,6 +354,7 @@ export const elsewhere = {
     {
       id: 'AX-315',
       surface: 'SX-23',
+      fn: ['F-164'],
       action: 'Filter Home to email',
       trigger: 'filter "Email"',
       source: [
@@ -342,6 +365,7 @@ export const elsewhere = {
     {
       id: 'AX-316',
       surface: 'SX-23',
+      fn: ['F-001', 'F-002'],
       action: 'Connect email from the Home empty state',
       trigger: 'button "Connect email" under "Welcome home"',
       source: ['src/features/home/components/HomeEmptyState.tsx'],
@@ -349,6 +373,7 @@ export const elsewhere = {
     {
       id: 'AX-317',
       surface: 'SX-23',
+      fn: ['F-001', 'F-002'],
       action: 'Open Settings > Email from Home suggestions',
       trigger: 'button "Connect your inbox for suggested actions"',
       source: [
@@ -359,6 +384,7 @@ export const elsewhere = {
     {
       id: 'AX-058',
       surface: 'SX-24',
+      fn: ['F-163'],
       action:
         'Open an email thread from a notification (new_email, shared thread, reminder)',
       trigger: 'click notification row / toast / push',
@@ -367,6 +393,7 @@ export const elsewhere = {
     {
       id: 'AX-059',
       surface: 'SX-25',
+      fn: ['F-055'],
       action: 'Open an email thread from a mention chip',
       trigger: 'click mention',
       source: [
@@ -376,6 +403,7 @@ export const elsewhere = {
     {
       id: 'AX-318',
       surface: 'SX-25',
+      fn: ['F-191'],
       action: 'Mention an email thread from the mention menu',
       trigger: '@, section "Emails", pick a thread',
       source: [
@@ -388,6 +416,7 @@ export const elsewhere = {
     {
       id: 'AX-319',
       surface: 'SX-25',
+      fn: ['F-191'],
       action: 'Paste a /app/mail/<id> link to get an email mention',
       trigger: 'paste the link copied by "Copy Link" into an editor',
       source: [
@@ -397,6 +426,7 @@ export const elsewhere = {
     {
       id: 'AX-060',
       surface: 'SX-26',
+      fn: ['F-165'],
       action:
         'CRM: compose an email (addressed to the contact on a contact record)',
       trigger:
@@ -413,6 +443,7 @@ export const elsewhere = {
     {
       id: 'AX-320',
       surface: 'SX-26',
+      fn: ['F-165'],
       action: 'CRM Emails: switch Signal / All',
       trigger: 'toggle "Email importance"',
       source: [
@@ -424,6 +455,7 @@ export const elsewhere = {
     {
       id: 'AX-321',
       surface: 'SX-26',
+      fn: ['F-165'],
       action: 'CRM Emails: switch Team / Me inboxes',
       trigger: 'toggle "Email inboxes"',
       source: [
@@ -435,6 +467,7 @@ export const elsewhere = {
     {
       id: 'AX-322',
       surface: 'SX-26',
+      fn: ['F-192'],
       action: 'CRM email privacy: add or remove an excluded domain',
       trigger: 'domain input; remove button on a domain row',
       source: ['src/features/crm/views/email-privacy.tsx'],
@@ -443,6 +476,7 @@ export const elsewhere = {
     {
       id: 'AX-061',
       surface: 'SX-27',
+      fn: ['F-157'],
       action:
         'Calendar setup status: connect, grant access, turn on or reconnect',
       trigger:
@@ -453,6 +487,7 @@ export const elsewhere = {
     {
       id: 'AX-323',
       surface: 'SX-27',
+      fn: ['F-096'],
       action: 'Email the guests of a calendar event (composer with To filled)',
       trigger: 'guest email / email-guests action on an event',
       source: ['src/features/calendar-view/components/use-open-event-email.ts'],
@@ -461,6 +496,7 @@ export const elsewhere = {
     {
       id: 'AX-062',
       surface: 'SX-29',
+      fn: ['F-162'],
       action: 'Toggle Email digest notifications',
       trigger: 'switch on the row "Email digest"',
       source: ['src/features/settings/Notifications.tsx'],
@@ -468,6 +504,7 @@ export const elsewhere = {
     {
       id: 'AX-063',
       surface: 'SX-29',
+      fn: ['F-162'],
       action: 'Toggle "New email" notifications (also hides the Mail badge)',
       trigger: 'switch on the row "New email" ("When a new email arrives")',
       source: [
@@ -478,6 +515,7 @@ export const elsewhere = {
     {
       id: 'AX-324',
       surface: 'SX-30',
+      fn: ['F-054', 'F-055'],
       action: 'Open a thread by its direct link in a standalone split',
       trigger: 'navigate to /app/email/<thread-id>; Shift-click a thread',
       source: [
@@ -488,6 +526,7 @@ export const elsewhere = {
     {
       id: 'AX-325',
       surface: 'SX-31',
+      fn: ['F-183'],
       action: 'Email tour: open Settings > Email to connect',
       trigger: 'tour button "Google" (shown until an inbox is connected)',
       source: [
@@ -500,6 +539,7 @@ export const elsewhere = {
     {
       id: 'STX-032',
       surface: 'SX-17',
+      fn: ['F-042'],
       state:
         'Unread mark on the Mail navigation entry; hidden when "New email" notifications are off',
       trigger: 'an unread, not-done Signal thread in the loaded page',
@@ -508,6 +548,7 @@ export const elsewhere = {
     {
       id: 'STX-300',
       surface: 'SX-18',
+      fn: ['F-096'],
       state: 'New email composer open with the mailto address in To',
       trigger: 'mailto: link clicked',
       source: ['src/components/app/mailtoComposerHandler.ts'],
@@ -515,6 +556,7 @@ export const elsewhere = {
     {
       id: 'STX-033',
       surface: 'SX-20',
+      fn: ['F-166'],
       state:
         'Validation line: "Choose Email", "Connect or choose an email account", "Choose a specific recipient for …", "Add a subject", "Attached context is supported for AI. Remove it or choose AI."; buttons disabled',
       trigger: 'incomplete email draft',
@@ -527,6 +569,7 @@ export const elsewhere = {
     {
       id: 'STX-301',
       surface: 'SX-20',
+      fn: ['F-166'],
       state:
         '"Connect Google to send email and create calendar events. Then return here to compose."',
       trigger: 'Email type with no connected inbox',
@@ -536,6 +579,7 @@ export const elsewhere = {
     {
       id: 'STX-302',
       surface: 'SX-20',
+      fn: ['F-166'],
       state: 'Toast "Could not connect Google. Please try again."',
       trigger: 'Connect Google failed',
       source: ['src/features/universal-input/actions.ts'],
@@ -544,6 +588,7 @@ export const elsewhere = {
     {
       id: 'STX-303',
       surface: 'SX-20',
+      fn: ['F-166'],
       state:
         'Result "Email draft saved" / "Email sent"; buttons "Saving…" / "Working…" while pending',
       trigger: 'save or send finished / pending',
@@ -556,6 +601,7 @@ export const elsewhere = {
     {
       id: 'STX-034',
       surface: 'SX-21',
+      fn: ['F-168'],
       state:
         'Sender notice: "Resolving sender...", "Could not load your inboxes. Try again.", "<from> is unavailable. Choose a connected sending inbox.", "Could not resolve the reply sender. Try again or choose a sending inbox.", "Connect an inbox to send email."; Send disabled',
       trigger: 'sender lookup pending / failed / no usable inbox',
@@ -567,18 +613,21 @@ export const elsewhere = {
     {
       id: 'STX-304',
       surface: 'SX-21',
+      fn: ['F-168'],
       state: 'toast: "Failed to attach <file>"',
       trigger: 'attaching a file to the drafted email failed',
       source: [
         'src/lib/core/component/AI/component/tool/email/DraftComposer.tsx',
       ],
       toasts: [
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the toast's key as the source spells it
         'src/lib/core/component/AI/component/tool/email/DraftComposer.tsx#Failed to attach ${file.name}',
       ],
     },
     {
       id: 'STX-305',
       surface: 'SX-21',
+      fn: ['F-168'],
       state: 'Validation "Add at least one recipient" / "Write a message"',
       trigger: 'send with no recipient / empty body',
       source: [
@@ -588,6 +637,7 @@ export const elsewhere = {
     {
       id: 'STX-306',
       surface: 'SX-21',
+      fn: ['F-168'],
       state:
         'Read-only composer: in a legacy AI chat, or with "Only the person whose account this review uses can submit it."',
       trigger: 'viewer cannot act on the draft',
@@ -599,6 +649,7 @@ export const elsewhere = {
     {
       id: 'STX-307',
       surface: 'SX-21',
+      fn: ['F-168'],
       state:
         'Result card: "Email not sent", "Email send rejected", "Email sent to <recipients> [from x] [with N attachments]", "Email saved as draft for <recipients>", "Email edited by the user"',
       trigger: 'tool call pending / rejected / sent / saved as draft / edited',
@@ -610,6 +661,7 @@ export const elsewhere = {
     {
       id: 'STX-308',
       surface: 'SX-120',
+      fn: ['F-190'],
       state: 'Card "Read N <type>s" / "Read thread"',
       trigger: 'agent read email threads',
       source: [
@@ -620,6 +672,7 @@ export const elsewhere = {
     {
       id: 'STX-309',
       surface: 'SX-120',
+      fn: ['F-190'],
       state:
         'Card "List inboxes" with "No inboxes" / "1 inbox" / "N inboxes"; rows marked Primary, Delegated or Connected',
       trigger: 'agent listed inboxes',
@@ -628,6 +681,7 @@ export const elsewhere = {
     {
       id: 'STX-310',
       surface: 'SX-120',
+      fn: ['F-190'],
       state: 'Cards "List email labels" and the update-labels call',
       trigger: 'agent listed or changed thread labels',
       source: [
@@ -638,6 +692,7 @@ export const elsewhere = {
     {
       id: 'STX-311',
       surface: 'SX-23',
+      fn: ['F-164'],
       state:
         'Empty Home "Welcome home": "… Connect email to include your inbox, too." with "Connect email"',
       trigger: 'Home empty and no inbox connected',
@@ -646,6 +701,7 @@ export const elsewhere = {
     {
       id: 'STX-312',
       surface: 'SX-23',
+      fn: ['F-093'],
       state:
         'A returned email reminder shows as a notification on that email row in Home',
       trigger: 'snooze / reminder comes due',
@@ -658,6 +714,7 @@ export const elsewhere = {
     {
       id: 'STX-313',
       surface: 'SX-24',
+      fn: ['F-161'],
       state:
         'Email notification row: sender, "sent you an email" / "responded to thread", subject and snippet; reminder rows labelled reminder',
       trigger: 'new_email / reminder notification in the inbox',
@@ -669,6 +726,7 @@ export const elsewhere = {
     {
       id: 'STX-314',
       surface: 'SX-25',
+      fn: ['F-051'],
       state:
         'Email entries in the mention menu / quick access: cached threads by subject and sender, unsynced local drafts, "No Subject" fallback',
       trigger: 'typing a name in the mention menu or Cmd+K',
@@ -681,6 +739,7 @@ export const elsewhere = {
     {
       id: 'STX-315',
       surface: 'SX-26',
+      fn: ['F-165'],
       state:
         'Emails section empty: "No signal emails with this contact yet." / "… in your inbox"; "Email sync is disabled for this company."',
       trigger: 'no matching threads / company email sync off',
@@ -693,6 +752,7 @@ export const elsewhere = {
     {
       id: 'STX-316',
       surface: 'SX-27',
+      fn: ['F-157'],
       state:
         'Setup status "Connect your calendar" / "Enable calendar" / "Calendar is off" / "Reconnect calendar": overlay on an empty grid, pill when events show',
       trigger:
@@ -703,6 +763,7 @@ export const elsewhere = {
     {
       id: 'STX-035',
       surface: 'SX-27',
+      fn: ['F-157'],
       state:
         'Calendar sync warning line "<address> — <calendar>: <error>" (role status)',
       trigger: 'a visible calendar reports a sync error and setup is complete',
@@ -712,6 +773,7 @@ export const elsewhere = {
     {
       id: 'STX-317',
       surface: 'SX-28',
+      fn: ['F-184'],
       state:
         'Shortcut reference sections "Email" (Search email, Star or unstar, Mute or unmute, …) and "Email drafts" (Discard draft, Attach files, …)',
       trigger: 'open Settings > Shortcuts',
@@ -720,6 +782,7 @@ export const elsewhere = {
     {
       id: 'STX-318',
       surface: 'SX-30',
+      fn: ['F-055'],
       state:
         'Target message expanded, scrolled into view and briefly highlighted (older pages loaded as needed)',
       trigger: 'direct link with ?email_message_id=<message-id>',
@@ -731,6 +794,7 @@ export const elsewhere = {
     {
       id: 'STX-319',
       surface: 'SX-31',
+      fn: ['F-183'],
       state:
         'Tour steps "Find the signal in your inbox" and "Move faster with shortcuts", with the Macro Mail video',
       trigger: 'start the Email tour',

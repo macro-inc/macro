@@ -117,6 +117,9 @@ export function functionRows(
   return functions.map((fn): FunctionRow => {
     const mine = rows.filter((row) => row.fn.includes(fn.id));
     const actions = mine.filter((row) => row.kind === 'action');
+    // Mail arriving, a count on a badge: the user does nothing, so there is
+    // nothing to perform and the function is covered by what a test sees.
+    const observed = actions.length === 0;
     const on = (provider: Provider): FunctionOn => {
       const found = evidence.flatMap((test) =>
         test.provider === provider
@@ -129,7 +132,7 @@ export function functionRows(
           : []
       );
       const whole = (each: (typeof found)[number]) =>
-        each.performed &&
+        (observed || each.performed) &&
         each.seen &&
         (fn.checkedAt === 'ui' || each.confirmed);
       return {
@@ -149,7 +152,7 @@ export function functionRows(
       if (of.covered) return [];
       if (of.tests.length === 0) return touched ? [`${provider}: no test`] : [];
       const lacks = [
-        of.performed ? '' : 'not done through the UI',
+        observed || of.performed ? '' : 'not done through the UI',
         of.seen ? '' : 'result not checked in the UI',
         fn.checkedAt === 'ui' || of.confirmed
           ? ''
@@ -159,8 +162,9 @@ export function functionRows(
         `${provider}: ${lacks.join(', ') || 'no one test does all of it'}`,
       ];
     });
+    const ways = observed ? mine : actions;
     const every = (status: Status[]) =>
-      actions.length > 0 && actions.every((row) => status.includes(row.status));
+      ways.length > 0 && ways.every((row) => status.includes(row.status));
     const status: FunctionRow['status'] = !fn.ui
       ? 'backend'
       : fn.providers.every((provider) => state[provider].covered)
@@ -177,7 +181,7 @@ export function functionRows(
       status,
       reason:
         status === 'waived' || status === 'deferred'
-          ? [...new Set(actions.map((row) => row.reason))].join('; ')
+          ? [...new Set(ways.map((row) => row.reason))].join('; ')
           : undefined,
       variants: actions.map((row) => row.id),
       states: mine.filter((row) => row.kind === 'state').map((row) => row.id),
@@ -434,11 +438,11 @@ function manifestDrift(): Drift[] {
   if (loose.length) {
     drift.push({ check: 'Rows that belong to no function', items: loose });
   }
-  const done = new Set(actions.flatMap((row) => row.fn ?? []));
+  const done = new Set(all.flatMap((row) => row.fn ?? []));
   const undoable = FUNCTIONS.filter((fn) => fn.ui && !done.has(fn.id));
   if (undoable.length) {
     drift.push({
-      check: 'Functions with a UI and no action row',
+      check: 'Functions with a UI and no row',
       items: undoable.map((fn) => `${fn.id} ${fn.name}`),
     });
   }

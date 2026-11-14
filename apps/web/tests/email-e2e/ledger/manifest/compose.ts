@@ -1272,7 +1272,7 @@ export const compose = {
     {
       id: 'STC-307',
       surface: 'SC-07',
-      fn: ['F-100'],
+      fn: ['F-100', 'F-015'],
       state:
         'dropdown lists inboxes with their aliases indented; the active sender has a check mark',
       trigger: 'From dropdown open',

@@ -175,6 +175,21 @@ describe('functionRows', () => {
     expect(sort.status).toBe('covered');
   });
 
+  it('asks for no action where the user takes none', () => {
+    const [arrive] = functionRows(
+      functions,
+      [
+        test('gmail', 'g', 'F-001', { seen: true, confirmed: true }),
+        test('outlook', 'o', 'F-001', { seen: true }),
+      ],
+      rows.filter((row) => row.kind === 'state')
+    );
+    expect(arrive.on.gmail.covered).toBe(true);
+    expect(arrive.missing).toEqual([
+      'outlook: result not checked at the provider',
+    ]);
+  });
+
   it('defers a function whose every way needs more, and leaves the backend its own', () => {
     const [star, sort, refresh] = functionRows(functions, [], rows);
     expect(star.status).toBe('open');

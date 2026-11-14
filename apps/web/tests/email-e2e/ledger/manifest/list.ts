@@ -194,7 +194,7 @@ export const list = {
     {
       id: 'AL-002',
       surface: 'SL-17',
-      fn: ['F-030', 'F-031', 'F-032'],
+      fn: ['F-030', 'F-031', 'F-032', 'F-092', 'F-145'],
       action:
         'switch mailbox tab (Favorites, Drafts, Sent, Scheduled, Reminders, All mail, Archived, Shared, Spam, Trash)',
       trigger: 'click sidebar item (one test per tab)',
@@ -1870,6 +1870,50 @@ export const list = {
         'src/features/email-view/tour.ts',
         'src/features/tours/ViewTour.tsx',
       ],
+    },
+    {
+      id: 'STL-900',
+      surface: 'SL-01',
+      fn: ['F-018'],
+      state: 'a new message appears at the top of the open list',
+      trigger: 'mail arrives while the list is open, no reload',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+      needs: 'live updates over the websocket',
+    },
+    {
+      id: 'STL-901',
+      surface: 'SL-01',
+      fn: ['F-019'],
+      state:
+        "a row shows a change made in the provider's own client (read, archived, starred, trashed, labelled)",
+      trigger: 'change the thread at the provider, then load the list',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
+      id: 'STL-903',
+      surface: 'SL-06',
+      fn: ['F-021'],
+      state:
+        'a draft written at the provider is listed in Drafts with its text',
+      trigger: 'create or change a draft at the provider, then open Drafts',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
+      id: 'STL-904',
+      surface: 'SL-07',
+      fn: ['F-022'],
+      state: "mail sent from the provider's own client is listed in Sent",
+      trigger: 'send at the provider, then open Sent',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
+      id: 'STL-908',
+      surface: 'SL-09',
+      fn: ['F-094'],
+      state: 'an if-no-reply reminder is gone once a reply arrives',
+      trigger: 'a reply arrives on a thread with such a reminder',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+      flag: 'enable-reminders',
     },
   ],
 } as const satisfies Group;

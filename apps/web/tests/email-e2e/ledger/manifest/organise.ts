@@ -490,7 +490,7 @@ export const organise = {
     {
       id: 'AL-132',
       surface: 'SL-30',
-      fn: ['F-088'],
+      fn: ['F-188'],
       action: 'toggle side panel',
       trigger: 'header "Show details" / "Hide details" button',
       source: [
@@ -704,7 +704,7 @@ export const organise = {
     {
       id: 'AL-618',
       surface: 'SL-32',
-      fn: ['F-088'],
+      fn: ['F-188'],
       action: 'open thread details sheet',
       trigger: 'mobile header Info button',
       source: [
@@ -811,6 +811,17 @@ export const organise = {
       ],
       flag: 'enable-reminders',
     },
+    {
+      id: 'AL-903',
+      surface: 'SL-33',
+      fn: ['F-160'],
+      action: 'Request access to a thread',
+      trigger: 'Share dialog "Request access"',
+      source: [
+        'src/lib/core/component/TopBar/ShareButton.tsx',
+        'src/features/access-requests/views/RequestAccessView.tsx',
+      ],
+    },
   ],
   states: [
     // SL-25 row action menu
@@ -848,6 +859,7 @@ export const organise = {
       trigger: 'Sender → Signal/Noise',
       source: ['src/lib/queries/email/thread.ts'],
       toasts: [
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the toast's key as the source spells it
         'src/lib/queries/email/thread.ts#Sender marked as ${label}',
         'src/lib/queries/email/thread.ts#Sender filter removed',
       ],
@@ -860,6 +872,7 @@ export const organise = {
       trigger: 'sender filter or its Undo fails',
       source: ['src/lib/queries/email/thread.ts'],
       toasts: [
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: the toast's key as the source spells it
         'src/lib/queries/email/thread.ts#Failed to mark sender as ${label}',
         'src/lib/queries/email/thread.ts#Failed to undo',
       ],
