@@ -107,7 +107,9 @@ Reviews persist the immutable acting account. Only that account may edit or
 submit.
 ACP presentation uses the session owner's transcript capability, independently
 of the account that later sends the email or creates the event. Cards require
-direct user authentication; `DecideReview` requires a real turn prompted by the
+direct user authentication; agent runs (agent attribution or the execution
+header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
+which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
 review's acting account, and its Submit waits for `ReviewActions::approvable`
 (default: always), the hook a kind uses to refuse until it is ready. `GetReview`
 reads final

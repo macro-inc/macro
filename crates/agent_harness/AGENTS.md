@@ -176,6 +176,11 @@ the lease. To debug a harness in Datadog, search `@harness:<id>` for
 harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
 disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
 
+Only directly authenticated users with edit access may answer ACP permissions or
+elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
+cancel held tool calls, but cannot approve or approve and remember them; the
+HTTP boundary checks both agent attribution and the execution header.
+
 ## Checks
 
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`

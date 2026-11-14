@@ -3961,7 +3961,7 @@ export const linkAgentSessionTask = async (
 /**
  * @summary Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
-anyone's with edit access.
+anyone's with edit access. Agent runs may deny or cancel, but never approve.
  */
 export type answerAgentSessionToolApprovalResponse200 = {
   data: AnswerToolApprovalResponse;

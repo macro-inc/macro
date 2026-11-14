@@ -31,3 +31,52 @@ fn the_wire_speaks_snake_case() {
         serde_json::json!({ "status": "cancelled" })
     );
 }
+
+#[test]
+fn an_agent_cannot_approve_a_held_call() {
+    let response = refuse_program_approval(ToolApprovalAnswerDto::Approve, true, &HeaderMap::new())
+        .unwrap_err()
+        .into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn an_agent_can_deny_a_held_call() {
+    let result = refuse_program_approval(ToolApprovalAnswerDto::Deny, true, &HeaderMap::new());
+
+    assert!(result.is_ok());
+}
+
+#[test]
+fn both_agent_run_markers_refuse_approvals_but_allow_denial_and_cancellation() {
+    let execution_headers = HeaderMap::from_iter([(
+        axum::http::HeaderName::from_static(macro_authorization::CODE_EXECUTION_HEADER),
+        axum::http::HeaderValue::from_static("execution"),
+    )]);
+
+    for (attributed, headers) in [(true, HeaderMap::new()), (false, execution_headers)] {
+        for answer in [
+            ToolApprovalAnswerDto::Approve,
+            ToolApprovalAnswerDto::ApproveAndRemember,
+        ] {
+            let response = refuse_program_approval(answer, attributed, &headers)
+                .unwrap_err()
+                .into_response();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+        for answer in [ToolApprovalAnswerDto::Deny, ToolApprovalAnswerDto::Cancel] {
+            assert!(refuse_program_approval(answer, attributed, &headers).is_ok());
+        }
+    }
+}
+
+#[test]
+fn a_person_can_approve_or_remember_a_held_call() {
+    for answer in [
+        ToolApprovalAnswerDto::Approve,
+        ToolApprovalAnswerDto::ApproveAndRemember,
+    ] {
+        assert!(refuse_program_approval(answer, false, &HeaderMap::new()).is_ok());
+    }
+}

@@ -15,13 +15,16 @@ use agent_egress::domain::model::AgentSessionId;
 use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use axum::Router;
 use axum::extract::{FromRef, Json, Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    is_agent_run,
+};
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -200,6 +203,27 @@ impl IntoResponse for ToolApprovalApiError {
     }
 }
 
+/// Only a person lets a held call run: an agent's program (see
+/// [`is_agent_run`]) may deny or cancel one, but approving would let it
+/// approve its own call.
+fn refuse_program_approval(
+    answer: ToolApprovalAnswerDto,
+    agent_attributed: bool,
+    headers: &HeaderMap,
+) -> Result<(), (StatusCode, &'static str)> {
+    let approves = matches!(
+        answer,
+        ToolApprovalAnswerDto::Approve | ToolApprovalAnswerDto::ApproveAndRemember
+    );
+    if approves && is_agent_run(agent_attributed, headers) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "An agent can't approve this for you.",
+        ));
+    }
+    Ok(())
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/tool-approvals/{approval_id}",
@@ -213,7 +237,7 @@ impl IntoResponse for ToolApprovalApiError {
     responses(
         (status = 200, body = AnswerToolApprovalResponse),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Not the owner, for approve or deny; or no edit access"),
+        (status = 403, body = String, description = "Agent run approving, not the owner for approve or deny, or no edit access"),
         (status = 404, body = String),
         (status = 409, body = String, description = "Already resolved"),
         (status = 422, body = String, description = "Approve for good, for a call no person asked for"),
@@ -222,10 +246,12 @@ impl IntoResponse for ToolApprovalApiError {
 )]
 /// Answer a tool call the agent made in a turn somebody other than the
 /// session's owner prompted. Approve and deny are the owner's; cancel is
-/// anyone's with edit access.
+/// anyone's with edit access. Agent runs may deny or cancel, but never approve.
 #[tracing::instrument(skip_all, fields(%session_id, %approval_id), err(Debug))]
 pub async fn answer_tool_approval_handler<Approvals, Access, Auth>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     State(state): State<ToolApprovalsRouterState<Approvals, Access, Auth>>,
     Path((session_id, approval_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<AnswerToolApprovalRequest>,
@@ -235,6 +261,12 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    refuse_program_approval(
+        request.answer,
+        caller.authorization.agent_id.is_some(),
+        &headers,
+    )
+    .map_err(IntoResponse::into_response)?;
     // A person answers: a bot has no say over whose access is spent.
     let by = access
         .entity_access_receipt
