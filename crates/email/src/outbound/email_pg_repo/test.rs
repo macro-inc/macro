@@ -10,6 +10,7 @@ mod labels;
 mod link;
 mod mail_tab_projection;
 mod message;
+mod owned_address_read;
 mod preview;
 mod project;
 mod project_scope_dynamic_query;
