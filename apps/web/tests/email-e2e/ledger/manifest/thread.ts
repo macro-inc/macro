@@ -1536,5 +1536,20 @@ export const thread = {
         'src/features/email-thread/components/copy-subject-button.tsx',
       ],
     },
+    {
+      id: 'STL-988',
+      surface: 'SL-28',
+      fn: ['F-114'],
+      state:
+        'result: the event composer is open with the subject as its title and the people on the thread as guests',
+      trigger: 'after the action succeeds',
+      source: [
+        'src/features/block-email/EmailThreadHostView.tsx',
+        'src/features/email-compose/email-event.ts',
+      ],
+      viewports: ['desktop'],
+      flag: 'enable-calendar-ui',
+      needs: 'the calendar service',
+    },
   ],
 } as const satisfies Group;
