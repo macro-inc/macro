@@ -392,6 +392,36 @@ function useDiscoverItems(list: ReturnType<typeof useSuggestionList>) {
   });
 }
 
+/**
+ * The routine suggestions the For you page shows: opening one for review,
+ * and saving it as a routine. Their wording comes with the feed. Enabling one twice saves one routine.
+ */
+export function useForYouRoutineSuggestions() {
+  const list = useSuggestionList(
+    () => ({ kind: 'forYou' }),
+    () => {}
+  );
+  const find = (suggestionId: string) =>
+    list.items()?.find((item) => item.id === suggestionId);
+
+  return {
+    review(suggestionId: string) {
+      const item = find(suggestionId);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      list.actions.customize(item);
+    },
+    async turnOn(suggestionId: string) {
+      const item = find(suggestionId);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      await list.actions.enable(item);
+      const status = list.actions.statusFor(item);
+      if (status.kind === 'failed') throw new Error(status.message);
+    },
+  };
+}
+
 /** The one row of suggestions above the routines list. */
 function RoutinesSuggestionRow(props: { onOpenDiscover(): void }) {
   const list = useSuggestionList(

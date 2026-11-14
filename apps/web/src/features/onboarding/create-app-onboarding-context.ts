@@ -60,8 +60,10 @@ import { loadableQuery } from './queries/loadable-query';
 import { createAppOutlookAvailability } from './queries/outlook-availability';
 import {
   createAppRoutinesStep,
-  generateRoutineSuggestions,
+  seedRoutineSuggestions,
+  startSuggestionGeneration,
   useRoutineSuggestionsEnabled,
+  useSuggestionGenerationEnabled,
 } from './queries/routine-suggestions';
 import { useTeamContacts } from './queries/team-contacts';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
@@ -169,6 +171,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const createInviteLink = useCreateTeamInviteLinkMutation();
   const sendReferrals = useSendReferralInvitesMutation();
   const routineSuggestionsEnabled = useRoutineSuggestionsEnabled();
+  const suggestionGenerationEnabled = useSuggestionGenerationEnabled();
   // A team created on this step: its optimistic placeholder is in the teams
   // cache until creation settles, so the invite link waits for the real id.
   let createdTeam: Promise<string | undefined> | undefined;
@@ -426,14 +429,20 @@ export function createAppOnboardingContext(): OnboardingContext {
       return { t: 'completed' };
     },
     routineSuggestionsEnabled,
-    generateRoutineSuggestions: () =>
+    suggestionGenerationEnabled,
+    startSuggestionGeneration: () =>
       fireAndForget(
-        Telemetry.span('onboarding.routines.generate', async (span) => {
-          const answer = await generateRoutineSuggestions(getDefaultTimezone());
+        Telemetry.span('onboarding.suggestions.generate', async (span) => {
+          await startSuggestionGeneration(getDefaultTimezone());
+          span.setAttr('routines.enabled', routineSuggestionsEnabled());
+          // Only the routines step reads the list this seeds.
+          if (!routineSuggestionsEnabled()) return;
+
+          const answer = await seedRoutineSuggestions();
           span.setAttr('routines.status', answer.status);
           span.setAttr('routines.suggestions', answer.suggestions.length);
         }),
-        'onboarding.routines'
+        'onboarding.suggestions'
       ),
     createRoutinesStep: createAppRoutinesStep,
     repairTutorial: async () => {

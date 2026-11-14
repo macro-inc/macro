@@ -1040,6 +1040,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
+- Suggestions (the For you page and Home's Today strip and top priorities) live in `src/features/suggestions`; read its `AGENTS.md`. Gate every entry point with `useSuggestionsFlag` (`enable-suggestions`, desktop only).
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
 - Preview Home project rows with the shared `ProjectDetail`; preserve its project

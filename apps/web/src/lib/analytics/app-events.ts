@@ -511,7 +511,7 @@ type RoutineSuggestionEvent = {
   suggestionId: string;
   /** The sidebar's surface, or the suggestion's main one on the Routines page. */
   surface: string;
-  placement: 'sidebar' | 'routines';
+  placement: 'sidebar' | 'routines' | 'forYou';
   /** `for_you` from AI, `macro` for Macro's templates. */
   from: 'for_you' | 'macro';
   /** A catalog routine with AI's values, or a routine AI drafted. */

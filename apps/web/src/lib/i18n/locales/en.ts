@@ -33,6 +33,7 @@ import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
+import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import tutorials from './en/tutorials';
@@ -63,6 +64,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  suggestions,
   localRuntime,
   markdownEditor,
   mobile,

@@ -299,3 +299,29 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Suggestions on Home
+
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
+and in place of the recommended actions:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: the five most important open suggestions, as the
+  server ranks them. A row opens For you with that suggestion first; **All in
+  For you** opens the page.
+
+On For you, each card has one main action for its kind: **Open in chat** opens
+the composer with the prompt, unsent; **Run in background** starts the run at
+once (the card says what it will post or send first), then shows Running and,
+when done, a row with **Open result**; **Open** or **Open draft** opens the
+item or the drafted reply; **Turn on** saves a routine suggestion and
+**Review** opens it in the routine editor. The `x` (shown on hover or focus)
+dismisses at once and leaves an Undo row for the visit; Undo restores the
+suggestion, which the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
+**Refresh suggestions** in the header asks for a fresh run, at most once an
+hour; while one runs it reads "Looking for suggestions", and during the
+cooldown "Available at" a time.
+

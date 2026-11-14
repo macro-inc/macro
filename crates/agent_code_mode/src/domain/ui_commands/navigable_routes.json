@@ -128,6 +128,7 @@
     {"route":"view-routines","navigable":true,"segments":["routines"]},
     {"route":"view-home","navigable":true,"segments":["home"]},
     {"route":"view-recent","navigable":true,"segments":["recent"]},
+    {"route":"view-for-you","navigable":false,"segments":["for-you"]},
     {"route":"view-activity","navigable":true,"segments":["activity"]},
     {"route":"view-passwords","navigable":false,"segments":["passwords"]},
     {"route":"view-notifications","navigable":true,"segments":["notifications"]},

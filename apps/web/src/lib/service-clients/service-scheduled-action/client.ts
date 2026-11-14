@@ -4,8 +4,8 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Result } from 'neverthrow';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
+import { ok, type Result } from 'neverthrow';
 import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
@@ -41,7 +41,17 @@ async function draftJobErrorResponseHandler(
   return draftErrorResponseHandler(response);
 }
 
+import {
+  getAcceptSuggestionUrl,
+  getDismissSuggestionUrl,
+  getGetSuggestionGenerationUrl,
+  getListSuggestionsUrl,
+  getRecordSuggestionsViewedUrl,
+  getRegenerateSuggestionsUrl,
+  getRestoreSuggestionUrl,
+} from './generated/client';
 import type {
+  AcceptSuggestionRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   CatalogEntry,
@@ -50,7 +60,9 @@ import type {
   DraftJob,
   DraftRoutineRequest,
   ExecutionRecordResponse,
+  GenerationOverview,
   InProgressExecution,
+  RegenerationCooldown,
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
@@ -58,7 +70,16 @@ import type {
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
   StartDraftJobRequest,
+  Suggestion,
+  SuggestionChanged,
+  SuggestionFeed,
 } from './generated/schemas';
+
+/** How `POST /suggestions/regenerate` answered. */
+export type RegenerateAnswer =
+  | { kind: 'started' }
+  | { kind: 'running' }
+  | { kind: 'cooldown'; availableAt: string };
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
 
@@ -275,4 +296,102 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /**
+   * The caller's feed of suggestions. `timezone` is the IANA zone they are
+   * in. With `limit`, only that many open ones, best first, and no done ones.
+   */
+  listSuggestions: (args: { timezone: string; limit?: number }) =>
+    scheduledActionFetch<SuggestionFeed>(getListSuggestionsUrl(args), {
+      method: 'GET',
+    }),
+
+  /** Take an suggestion up; a background prompt suggestion starts running. */
+  /**
+   * `changed` is the suggestion as it is now, when it was rewritten since the caller
+   * read it: nothing was taken up.
+   */
+  acceptSuggestion: async (args: {
+    suggestionId: string;
+    body: AcceptSuggestionRequest;
+  }): Promise<
+    Result<{ changed?: Suggestion }, ResultError<FetchWithTokenErrorCode>[]>
+  > => {
+    let changed: SuggestionChanged | undefined;
+    const result = await fetchWithToken<{}>(
+      `${scheduledActionHost}${getAcceptSuggestionUrl(args.suggestionId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            changed = await response.clone().json();
+          }
+
+          return statusError(response.status);
+        },
+      }
+    );
+    if (changed) return ok({ changed: changed.suggestion });
+
+    return result.map(() => ({}));
+  },
+
+  /** Whether a generation is running, and when a refresh may be asked for. */
+  suggestionGeneration: () =>
+    scheduledActionFetch<GenerationOverview>(getGetSuggestionGenerationUrl(), {
+      method: 'GET',
+    }),
+
+  /**
+   * Ask for a fresh run of suggestions. `running` and `cooldown` are the two
+   * refusals: one is under way, or one was asked for within the hour.
+   */
+  regenerateSuggestions: async (args: {
+    timezone: string;
+  }): Promise<
+    Result<RegenerateAnswer, ResultError<FetchWithTokenErrorCode>[]>
+  > => {
+    let refusal: RegenerateAnswer | undefined;
+    const result = await fetchWithToken<{}>(
+      `${scheduledActionHost}${getRegenerateSuggestionsUrl(args)}`,
+      {
+        method: 'POST',
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) refusal = { kind: 'running' };
+          if (response.status === 429) {
+            const body: RegenerationCooldown = await response.clone().json();
+            refusal = { kind: 'cooldown', availableAt: body.availableAt };
+          }
+
+          return statusError(response.status);
+        },
+      }
+    );
+    if (refusal) return ok(refusal);
+
+    return result.map(() => ({ kind: 'started' }));
+  },
+
+  /** Turn a suggestion down; one whose run is under way has it stopped. */
+  dismissSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getDismissSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /** Take back the caller's own dismissal, within a few minutes of it. */
+  restoreSuggestion: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getRestoreSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /**
+   * The caller looked at their feed: what is proposed after this is new.
+   * `keepalive` lets the call outlive a page that is closing.
+   */
+  recordSuggestionsViewed: (args: { keepalive?: boolean }) =>
+    scheduledActionFetch(getRecordSuggestionsViewedUrl(), {
+      method: 'POST',
+      keepalive: args.keepalive,
+    }),
 };
