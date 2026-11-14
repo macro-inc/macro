@@ -49,7 +49,7 @@ impl Rig {
         points
     }
 
-    fn from_cord(&self, y: f32, rest: &[Vec3]) -> Vec<Vec3> {
+    fn branch_off_cord(&self, y: f32, rest: &[Vec3]) -> Vec<Vec3> {
         let mut points = self.cord_to(y);
         points.extend_from_slice(rest);
         points
@@ -78,7 +78,7 @@ impl Rig {
             ] {
                 out.push((
                     name(nerve),
-                    self.from_cord(
+                    self.branch_off_cord(
                         neck_y,
                         &[
                             plexus[0],
@@ -130,17 +130,17 @@ impl Rig {
                 side.heel,
                 side.toe + Vec3::new(-s * 0.02, 0.0, -0.02),
             ]);
-            out.push((name("tibial"), self.from_cord(lumbar_y, &tibial)));
+            out.push((name("tibial"), self.branch_off_cord(lumbar_y, &tibial)));
             let mut peroneal = sciatic.to_vec();
             peroneal.extend([
                 side.knee + Vec3::new(s * 0.035, -0.06, 0.0),
                 side.ankle + Vec3::new(s * 0.012, 0.0, 0.03),
                 side.toe + Vec3::new(s * 0.01, 0.01, 0.0),
             ]);
-            out.push((name("peroneal"), self.from_cord(lumbar_y, &peroneal)));
+            out.push((name("peroneal"), self.branch_off_cord(lumbar_y, &peroneal)));
             out.push((
                 name("femoral"),
-                self.from_cord(
+                self.branch_off_cord(
                     lumbar_y,
                     &[
                         lumbar,

@@ -92,8 +92,7 @@ times a second, and ticks at `fps` only while something animates.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
 - `b` / `B` cycle the BODY figure only on pages that show BODY (monitor and
-  BODY); elsewhere `b` still starts the command line. The `demo-assets`
-  feature (default on this demo branch) adds the mesh man's asset figures.
+  BODY); elsewhere `b` still starts the command line.
   Every figure follows the theme: `Theme::figure` is the mesh man's
   `Palette`, and each figure's `Look` maps its parts onto those roles, so
   `t` recolours whichever figure is showing.

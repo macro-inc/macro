@@ -10,7 +10,7 @@ mod format;
 mod mesh;
 mod rig;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -246,7 +246,8 @@ fn anatomical(root: &Path, out_path: &Path, name: &str) -> Result<(), Box<dyn st
     let mut bones = bp.load(&bone_ids);
     bones.map(to_figure);
 
-    let nervous: HashSet<String> = bp
+    // Sorted, so the same download converts to the same bytes.
+    let nervous: BTreeSet<String> = bp
         .concepts
         .get("FMA7157")
         .cloned()

@@ -1,7 +1,7 @@
-//! Figures made from downloaded 3D assets (behind the `demo-assets`
-//! feature): line data the `convert` tool wrote from BodyParts3D and rigged
-//! glTF characters, decoded at start-up. See `convert/src/format.rs` for the
-//! `.mmf` layout.
+//! Figures made from downloaded 3D assets: line data the `convert` tool
+//! wrote from BodyParts3D and rigged glTF characters, decoded at start-up.
+//! Sources and licences are in `assets/SOURCES.md`; the `.mmf` layout is in
+//! `convert/src/format.rs`.
 
 use glam::Vec3;
 

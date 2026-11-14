@@ -27,11 +27,9 @@ tui-tree-widget = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [features]
-default = ["demo-assets"]
+default = ["mesh-man"]
 # Draw the BODY pane with the mesh man instead of the vitals panel.
 mesh-man = ["dep:mesh_man", "dep:macro_env_var"]
-# The mesh man's figures made from downloaded 3D assets (demo builds).
-demo-assets = ["mesh-man", "mesh_man/demo-assets"]
 
 [dev-dependencies]
 clap = { workspace = true }

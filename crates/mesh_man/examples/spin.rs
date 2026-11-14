@@ -1,8 +1,7 @@
 //! The mesh man alone, turning, with random nerve activity.
 //!
 //! `cargo run -p mesh_man --example spin [-- --figure NAME]`; `b` / `B`
-//! cycle figures, `q`, Esc or Ctrl-C quits. Add `--features demo-assets` for
-//! the figures made from downloaded meshes.
+//! cycle figures, `q`, Esc or Ctrl-C quits.
 
 use std::collections::VecDeque;
 use std::io;
