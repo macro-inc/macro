@@ -53,10 +53,12 @@ $$;
 --     column (contacts_link_id_email_address_idx).
 --
 -- Every writer takes a message before its attachments: deleting a message
--- (its cascade), adopting a sent message (the delivery's completion locks the
--- local message, then sent_identity's imported_message the imported one), and
--- a link (lock_linked_message, before the foreign key check takes the
--- attachment). A link holding its attachment while it waited for the
+-- (its cascade), sync's attachment refresh (after its message upsert),
+-- adopting a sent message (the delivery's completion locks the local message,
+-- then sent_identity's imported_message the imported one), a mailbox purge
+-- batch (links::delete::delete_message_attachments locks its messages
+-- first), and a link (lock_linked_message, before the foreign key check takes
+-- the attachment). A link holding its attachment while it waited for the
 -- message would deadlock with a writer holding the message that then deletes
 -- or moves the attachment. Updating a link or moving an attachment locks that
 -- row before any trigger runs, so a writer doing either locks the messages
