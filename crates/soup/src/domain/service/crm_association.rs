@@ -559,8 +559,8 @@ where
 
     /// The activity scope, reading only what `reads` names: the scope's
     /// participants through the record query, and the edges through one
-    /// statement that probes each property's records against the scope, so
-    /// the cost does not follow the scope's record count.
+    /// statement that probes the property indexes once per record of the
+    /// scope, so Soup never holds the scope's ids.
     async fn resolve_activity(
         &self,
         user: &MacroUserIdStr<'_>,
