@@ -45,6 +45,11 @@ pub struct Daemon {
     handoff: HandoffSender,
     runtime_connected: watch::Receiver<bool>,
     _presence_watch: AbortOnDropHandle<()>,
+    #[cfg(unix)]
+    harness_id: harness_id::HarnessId,
+    /// Copies this core's state to the agent monitor, while one is hosted.
+    #[cfg(unix)]
+    _monitor_report: Option<AbortOnDropHandle<()>>,
 }
 
 /// The agent a previous macrod process image handed over, ready to relay.
@@ -171,12 +176,29 @@ impl Daemon {
             handoff,
             runtime_connected,
             _presence_watch: presence_watch,
+            #[cfg(unix)]
+            harness_id: credentials.harness_id,
+            #[cfg(unix)]
+            _monitor_report: None,
         })
     }
 
     /// Whether this daemon currently holds a runtime connection.
     pub fn runtime_connected(&self) -> bool {
         *self.runtime_connected.borrow()
+    }
+
+    /// Report this core's harness, runtime connection and open prompts to
+    /// the agent monitor through `link`, until this core stops.
+    #[cfg(unix)]
+    pub fn reporting_to(mut self, link: crate::monitor::DaemonLink) -> Self {
+        self._monitor_report = Some(crate::monitor::report_daemon(
+            link,
+            self.harness_id,
+            self.runtime_connected.clone(),
+            self.turns.open_count(),
+        ));
+        self
     }
 
     /// Whether the serving task is still alive.

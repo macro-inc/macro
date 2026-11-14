@@ -125,6 +125,18 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
         daemon = start(&selection, &options) => daemon?,
         () = &mut shutdown => return Ok(()),
     };
+    #[cfg(unix)]
+    let mut monitor = crate::monitor::Host::new();
+    #[cfg(unix)]
+    let daemon = {
+        // `start` validated the file; the monitor is an extra, so a failure
+        // to read its table only skips hosting.
+        match Config::load(&path) {
+            Ok(config) => monitor.apply(&config.monitor).await,
+            Err(error) => tracing::warn!(error = %error, "could not read [monitor]"),
+        }
+        daemon.reporting_to(monitor.link())
+    };
 
     loop {
         tokio::select! {
@@ -132,12 +144,16 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
             () = tokio::time::sleep(DAEMON_WATCH) => {
                 if !daemon.is_running() {
                     daemon.stop().await;
+                    #[cfg(unix)]
+                    monitor.stop().await;
                     rootcause::bail!("the serving core stopped unexpectedly");
                 }
             }
         }
     }
     daemon.stop().await;
+    #[cfg(unix)]
+    monitor.stop().await;
     Ok(())
 }
 

@@ -900,10 +900,12 @@ dependencies = [
  "async-stream",
  "async-trait",
  "chrono",
+ "clap",
  "futures",
  "hyper-util",
  "notify",
  "opentelemetry",
+ "opentelemetry_sdk",
  "prost 0.14.3",
  "protox",
  "rand 0.9.4",
@@ -921,6 +923,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -929,6 +932,7 @@ name = "agent_monitor_tui"
 version = "0.1.0"
 dependencies = [
  "agent_monitor",
+ "thiserror 2.0.18",
  "workspace-hack",
 ]
 
@@ -4816,10 +4820,13 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "agent_fold",
+ "agent_monitor",
+ "agent_monitor_tui",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
  "arboard",
+ "async-trait",
  "base64 0.22.1",
  "bot_id",
  "channel_sender",

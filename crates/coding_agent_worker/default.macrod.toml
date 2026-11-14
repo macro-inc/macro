@@ -14,3 +14,7 @@ args = ["acp"]
 
 [workspace]
 path = "."
+
+# The agent monitor (`macrod monitor`): host the machine's collector here.
+[monitor]
+enabled = true

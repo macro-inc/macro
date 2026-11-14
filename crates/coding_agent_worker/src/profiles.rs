@@ -113,6 +113,12 @@ impl MacrodHome {
         }
     }
 
+    /// `~/.macrod` itself.
+    #[cfg_attr(not(unix), expect(dead_code, reason = "only the Unix agent monitor reads it"))]
+    pub fn directory(&self) -> &Path {
+        &self.directory
+    }
+
     /// `~/.macrod/macrod.toml`.
     pub fn default_config(&self) -> PathBuf {
         self.directory.join(CONFIG_FILE)

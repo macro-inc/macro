@@ -28,6 +28,8 @@ mod handoff;
 mod harness;
 #[cfg(unix)]
 mod herdr;
+#[cfg(unix)]
+mod monitor;
 mod outbound;
 mod profiles;
 mod repository;
@@ -166,6 +168,10 @@ enum Command {
         #[arg(long, default_value = "/", hide = true)]
         root: std::path::PathBuf,
     },
+    /// The live agent monitor: every agent on this machine, from the
+    /// collector on `~/.macrod/monitor.sock` (started when none answers).
+    #[cfg(unix)]
+    Monitor(monitor::MonitorArgs),
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
     /// Report the service config's state as JSON without running anything.
@@ -357,6 +363,8 @@ async fn main() -> ExitCode {
                 }
             };
         }
+        #[cfg(unix)]
+        Some(Command::Monitor(monitor)) => return monitor::run(monitor).await,
         Some(Command::DetectAgents) => {
             println!("{}", service::detect_agents_json());
             return ExitCode::SUCCESS;

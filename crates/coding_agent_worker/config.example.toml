@@ -46,3 +46,13 @@ repo_url = "https://github.com/macro-inc/macro"
 # installs it. Set auto = false (or MACROD_NO_UPDATE=1) to turn that off.
 # [update]
 # auto = true
+
+# Optional: the agent monitor (`macrod monitor`, Linux and macOS). One
+# collector serves the machine on ~/.macrod/monitor.sock; the first macrod
+# with `enabled = true` hosts it, and `macrod monitor` starts one when none is
+# running. Every key below is the default.
+# [monitor]
+# enabled = true              # Host the collector in this macrod (also in the TUI).
+# history_hours = 24          # Transcripts indexed at startup, finished runs kept.
+# fps = 12                    # Viewer animation; 0 turns it off.
+# run_record_dirs = []        # Extra work-run record directories (<id>.json, <id>.cost).
