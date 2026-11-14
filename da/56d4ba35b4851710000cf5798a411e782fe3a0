@@ -1,0 +1,23 @@
+crates/workspace-hack/Cargo.toml
+  s_7a07194ea723e2::t_d6af2ef16709cd 420,443
+Cargo.lock
+  s_7a07194ea723e2::t_5f3f5a3f24db3a 903,23991
+deny.toml
+  s_7a07194ea723e2::t_8d7d73eebe6a1e 146-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "da56d4ba35b4851710000cf5798a411e782fe3a0",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
