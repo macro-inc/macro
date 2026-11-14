@@ -940,7 +940,11 @@ async fn a_stalled_apply_does_not_hold_back_other_customers(pool: PgPool) {
     stop.cancel();
     recorder.release.notify_one();
     worker.await.unwrap();
-    assert!(recorder.applied(Consumer::Analytics).contains(&"evt_Stalled".to_owned()));
+    assert!(
+        recorder
+            .applied(Consumer::Analytics)
+            .contains(&"evt_Stalled".to_owned())
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

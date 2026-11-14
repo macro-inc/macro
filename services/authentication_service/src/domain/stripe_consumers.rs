@@ -309,7 +309,9 @@ pub fn decide_personal_subscription(
         return Ok(PersonalDecision::CancelDuplicate);
     }
     if subscription.status == SubscriptionStatus::Canceled
-        && customer_subscriptions.iter().any(SubscriptionFacts::is_live)
+        && customer_subscriptions
+            .iter()
+            .any(SubscriptionFacts::is_live)
     {
         return Ok(PersonalDecision::KeepAccess);
     }
