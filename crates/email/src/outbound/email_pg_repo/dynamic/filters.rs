@@ -137,7 +137,12 @@ fn build_address_predicate_on_m(
         // and "joe@..."). Rides the trigram index on email_address.
         (None, Email::Partial(s)) => {
             let pattern = format!("%{}%", escape_like_pattern(s));
-            build_address_text_match(kind, "c.email_address ILIKE ", pattern)
+            build_address_text_match(
+                kind,
+                "c.email_address ILIKE ",
+                pattern,
+                resolved.contact_links(),
+            )
         }
         // Domain: exact match on the domain portion of the address. Backed
         // by the expression index on `LOWER(SPLIT_PART(email_address, '@', 2))`
@@ -150,6 +155,7 @@ fn build_address_predicate_on_m(
                 kind,
                 "LOWER(SPLIT_PART(c.email_address, '@', 2)) = ",
                 domain,
+                resolved.contact_links(),
             )
         }
     }
@@ -158,11 +164,13 @@ fn build_address_predicate_on_m(
 /// Shared shape for "join `email_contacts`, apply a single bound predicate
 /// against `c.*`". `predicate_prefix` is the SQL up to the bind site
 /// (e.g. `"c.email_address ILIKE "`), and `bind_value` is the string that
-/// gets bound at that position.
+/// gets bound at that position. `link_scope` keeps the match to those
+/// inboxes' contacts.
 fn build_address_text_match(
     kind: AddressKind,
     predicate_prefix: &str,
     bind_value: String,
+    link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
     match kind {
         AddressKind::Sender => {
@@ -173,6 +181,7 @@ fn build_address_text_match(
                     AND {predicate_prefix}"#
             ));
             f.extend(SqlFragment::bind_string(bind_value));
+            f.extend(link_scope_fragment("c", link_scope));
             f.push_raw("\n                )");
             f
         }
@@ -187,6 +196,7 @@ fn build_address_text_match(
                     AND {predicate_prefix}"#,
             ));
             f.extend(SqlFragment::bind_string(bind_value));
+            f.extend(link_scope_fragment("c", link_scope));
             f.push_raw("\n                )");
             f
         }
@@ -972,19 +982,37 @@ pub(super) fn build_matching_threads_ctes(
 /// probe, plus the hoisted contact CTEs they read. The owned address read
 /// (`dynamic/query/owned_scope.rs`) counts and sorts these threads, then gives
 /// each thread it reads the full message match, which implies the branch
-/// condition: a thread's messages and contacts share its link.
+/// condition when a message's contacts are its own inbox's.
 #[derive(Clone)]
 pub(super) struct AddressSuperset {
     pub(super) contact_ctes: Vec<(String, SqlFragment)>,
     pub(super) branches: Vec<SqlFragment>,
+    /// How a thread's match stays on the inboxes' own contacts, when the tree
+    /// has domains or partial addresses.
+    pub(super) contact_scope: Option<ContactScope>,
+}
+
+/// How the owned address read keeps a thread's match to the queried inboxes'
+/// contacts, as the general builder's `matching_threads` does. The preview
+/// pick matches a domain or partial address on any inbox's contact, as in the
+/// general builder; a message lists only its own inbox's contacts
+/// (`parse_and_upsert_message_contacts`), but no constraint keeps it so.
+#[derive(Clone)]
+pub(super) struct ContactScope {
+    /// True when every contact on `m` is one of the inboxes', so a match on
+    /// `m` is a match through their contacts.
+    pub(super) own_contacts: SqlFragment,
+    /// The thread `t` has a present message outside trash that matches the
+    /// tree through the inboxes' contacts: `matching_threads`' condition.
+    pub(super) member: SqlFragment,
 }
 
 /// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
 /// is a flat OR-tree of positive address literals (a CRM record's addresses
-/// and domains), scoped to `links`, and `None` for any other tree. A complete
-/// address has only the contacts `resolved` found in `links`' inboxes, so a
-/// record whose addresses have no contact there gets no branches: nothing can
-/// match.
+/// and domains), on the contacts of `links`, and `None` for any other tree. A
+/// complete address has only the contacts `resolved` found in `links`'
+/// inboxes, so a record whose addresses have no contact there gets no
+/// branches: nothing can match.
 pub(super) fn build_address_superset(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
@@ -995,12 +1023,49 @@ pub(super) fn build_address_superset(
         return None;
     };
     let literals = flatten_or_tree_of_address_literals(conjunct)?;
+    // Complete addresses resolved to the inboxes' contacts, so only text
+    // matches can reach another inbox's.
+    let contact_scope = literals
+        .iter()
+        .any(|(_, email)| !matches!(email, Email::Complete(_)))
+        .then(|| {
+            let scoped = resolved.scoped_to(links);
+            let mut member = SqlFragment::raw(
+                "EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
+            );
+            member.extend(build_trash_check(&scoped));
+            member.push_raw(" AND ");
+            member.extend(address_groups::message_predicate(literals.clone(), &scoped));
+            member.push_raw(")");
+            ContactScope {
+                own_contacts: own_contacts(links),
+                member,
+            }
+        });
     let (contact_ctes, branches) =
         address_groups::build(literals, resolved, BranchFacts::Skipped, Some(links));
     Some(AddressSuperset {
         contact_ctes,
         branches,
+        contact_scope,
     })
+}
+
+/// True when no contact on `m`, sender or recipient, is outside `links`.
+fn own_contacts(links: &[Uuid]) -> SqlFragment {
+    let mut f = SqlFragment::raw(
+        "NOT EXISTS (SELECT 1 FROM email_contacts c \
+         WHERE c.id = m.from_contact_id AND NOT (c.link_id = ANY(",
+    );
+    f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+    f.push_raw(
+        "))) AND NOT EXISTS (SELECT 1 FROM email_message_recipients mr \
+         JOIN email_contacts c ON c.id = mr.contact_id \
+         WHERE mr.message_id = m.id AND NOT (c.link_id = ANY(",
+    );
+    f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+    f.push_raw(")))");
+    f
 }
 
 /// The inboxes named by top-level `Owner` conjuncts: a thread outside any

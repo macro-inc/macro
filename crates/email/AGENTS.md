@@ -154,12 +154,13 @@ tools — hexagonal, heavily feature-gated.
   superset, then either the sorted superset or each inbox's newest threads
   stream into the preview pick until LIMIT, the superset stream finishing a
   page the inbox window left short unless the window reached the inboxes'
-  end. The inbox stream relies on a message listing only its own inbox's
-  contacts. Keep the `OFFSET 0` fence and the stream's `ORDER BY`, or the
-  planner joins the whole stream to its facts. The read runs in one
-  repeatable-read, read-only transaction (a short page and its window count
-  see one snapshot) and, like the general builder's owned requests, has no
-  `statement_timeout`.
+  end. A domain or partial address lists a thread only through the queried
+  inboxes' own contacts, as `matching_threads` requires, while the preview
+  pick keeps its match on any contact (`ContactScope`). Keep the `OFFSET 0`
+  fence and the stream's `ORDER BY`, or the planner joins the whole stream to
+  its facts. The read runs in one repeatable-read, read-only transaction (a
+  short page and its window count see one snapshot) and, like the general
+  builder's owned requests, has no `statement_timeout`.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox

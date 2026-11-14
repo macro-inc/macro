@@ -27,9 +27,13 @@
 //! window held every thread left in the inboxes (a list's last page);
 //! otherwise the superset stream reads it.
 //!
-//! The inbox stream never reads the domains' contacts: it relies on a message
-//! listing only its own inbox's contacts (`parse_and_upsert_message_contacts`),
-//! as the general builder's inbox-scoped `matching_threads` does.
+//! The general builder lists a thread only when it matches through the queried
+//! inboxes' own contacts (`matching_threads`), while its preview pick matches a
+//! domain or partial address on any inbox's contact. A message lists only its
+//! own inbox's contacts (`parse_and_upsert_message_contacts`), but no
+//! constraint keeps it so: a picked message with another inbox's contact
+//! lists its thread in either stream only if `matching_threads`' condition
+//! holds for it ([`ContactScope`]).
 
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
@@ -40,11 +44,11 @@ use uuid::Uuid;
 
 use super::super::SqlFragment;
 use super::super::filters::{
-    AddressSuperset, build_address_superset, build_thread_conjunct_filter,
+    AddressSuperset, ContactScope, build_address_superset, build_thread_conjunct_filter,
     get_sort_timestamp_field, top_level_owners,
 };
 use super::{
-    QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select,
+    QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
     uses_subject_subscans, uses_view_history,
 };
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
@@ -110,7 +114,9 @@ pub(super) struct OwnedRead<'a> {
     email_filter: &'a Expr<EmailLiteral>,
     params: QueryParams,
     tuning: OwnedReadTuning,
-    /// The caller's inboxes the filter's top-level `Owner` terms allow.
+    /// The caller's inboxes the filter's top-level `Owner` terms allow. The
+    /// superset and the contact scope are on all the request's inboxes, as the
+    /// general builder's `matching_threads` is.
     inboxes: Vec<Uuid>,
     superset: AddressSuperset,
     /// The filter's top-level thread-level terms on `t`, which the streams
@@ -148,7 +154,8 @@ impl<'a> OwnedRead<'a> {
             .copied()
             .filter(|inbox| owners.iter().all(|owner| owner == inbox))
             .collect();
-        let Some(superset) = build_address_superset(email_filter, &params.resolved, &inboxes)
+        let Some(superset) =
+            build_address_superset(email_filter, &params.resolved, &params.link_ids)
         else {
             return Err(Box::new(params));
         };
@@ -342,10 +349,31 @@ impl<'a> OwnedRead<'a> {
             ) AS t
             CROSS JOIN LATERAL ("#,
         );
-        push_preview_message_select(&mut builder, self.view, self.email_filter, &self.params);
+        let contact_scope = self.superset.contact_scope.clone();
+        push_preview_message_select_with(
+            &mut builder,
+            self.view,
+            self.email_filter,
+            &self.params,
+            contact_scope
+                .as_ref()
+                .map(|scope| (scope.own_contacts.clone(), "own_contacts")),
+        );
         builder.push(
             r#"
-            ) AS lmp
+            ) AS lmp"#,
+        );
+        if let Some(ContactScope { member, .. }) = contact_scope {
+            // On the inboxes' own contacts the pick is a match through them,
+            // so `member` runs only for a message that lists another inbox's.
+            builder.push(
+                r#"
+            WHERE lmp.own_contacts OR "#,
+            );
+            member.push_into(&mut builder, &self.params.user_id);
+        }
+        builder.push(
+            r#"
             ORDER BY t.effective_ts DESC, t.id DESC
             LIMIT "#,
         );

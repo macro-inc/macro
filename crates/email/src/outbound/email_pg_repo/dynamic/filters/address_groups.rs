@@ -195,10 +195,18 @@ pub(super) fn message_predicate(
         }
         if !members.domains.is_empty() {
             if kinds.sender {
-                predicates.push(message_domains(&members.domains, None));
+                predicates.push(message_domains(
+                    &members.domains,
+                    None,
+                    resolved.contact_links(),
+                ));
             }
             if kinds.any_recipient() {
-                predicates.push(message_domains(&members.domains, Some(kinds)));
+                predicates.push(message_domains(
+                    &members.domains,
+                    Some(kinds),
+                    resolved.contact_links(),
+                ));
             }
         }
     }
@@ -208,7 +216,11 @@ pub(super) fn message_predicate(
         .unwrap_or_else(|| SqlFragment::raw("FALSE"))
 }
 
-fn message_domains(domains: &[String], recipients: Option<AddressKinds>) -> SqlFragment {
+fn message_domains(
+    domains: &[String],
+    recipients: Option<AddressKinds>,
+    link_scope: Option<&[Uuid]>,
+) -> SqlFragment {
     let mut predicate = match recipients {
         None => SqlFragment::raw(
             "EXISTS (SELECT 1 FROM email_contacts c WHERE c.id = m.from_contact_id AND ",
@@ -220,6 +232,8 @@ fn message_domains(domains: &[String], recipients: Option<AddressKinds>) -> SqlF
     };
     predicate.push_raw("LOWER(SPLIT_PART(c.email_address, '@', 2)) = ANY(");
     predicate.extend(SqlFragment::bind_string_array(domains.to_vec()));
-    predicate.push_raw("))");
+    predicate.push_raw(")");
+    predicate.extend(link_scope_fragment("c", link_scope));
+    predicate.push_raw(")");
     predicate
 }

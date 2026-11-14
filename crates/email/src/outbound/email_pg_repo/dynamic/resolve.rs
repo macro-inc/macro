@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Cache mailbox-scoped contact identities for address predicates and team scope.
+#[derive(Clone)]
 pub(super) struct ResolvedFilters {
     /// Only the explicit Trash view may admit present messages in trash.
     pub(super) include_trash: bool,
@@ -17,6 +18,10 @@ pub(super) struct ResolvedFilters {
     /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
     /// the `matching_threads` link scope.
     team_link_ids: Option<Vec<Uuid>>,
+    /// The inboxes whose contacts a domain or partial address matches on a
+    /// message, or `None` for every inbox. Complete addresses resolve to
+    /// contacts of the queried inboxes already.
+    contact_links: Option<Vec<Uuid>>,
 }
 
 impl ResolvedFilters {
@@ -41,6 +46,20 @@ impl ResolvedFilters {
         self.team_link_ids.as_deref()
     }
 
+    /// The inboxes a domain or partial address's contacts must belong to.
+    pub(super) fn contact_links(&self) -> Option<&[Uuid]> {
+        self.contact_links.as_deref()
+    }
+
+    /// This resolution with domain and partial addresses matching only
+    /// contacts of `links`.
+    pub(super) fn scoped_to(&self, links: &[Uuid]) -> Self {
+        Self {
+            contact_links: Some(links.to_vec()),
+            ..self.clone()
+        }
+    }
+
     /// True iff at least one Complete email address in the AST has any
     /// matching contact in the resolved scope. Used by `fold_unresolved`.
     fn has_contact_for(&self, lowered_email: &str) -> bool {
@@ -56,6 +75,7 @@ impl ResolvedFilters {
             include_trash: false,
             contact_ids: HashMap::new(),
             team_link_ids: None,
+            contact_links: None,
         }
     }
 
@@ -210,5 +230,6 @@ pub(super) async fn resolve_filters(
         include_trash: false,
         contact_ids,
         team_link_ids,
+        contact_links: None,
     })
 }

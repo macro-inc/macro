@@ -1,5 +1,6 @@
 mod owned_scope;
 
+use super::SqlFragment;
 use super::filters::*;
 use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
@@ -256,6 +257,18 @@ fn push_preview_message_select(
     email_filter: &Expr<EmailLiteral>,
     params: &QueryParams,
 ) {
+    push_preview_message_select_with(builder, view, email_filter, params, None);
+}
+
+/// [`push_preview_message_select`], with one more column of the picked
+/// message as `(expression on m, name)`.
+fn push_preview_message_select_with(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    column: Option<(SqlFragment, &str)>,
+) {
     builder.push(
         r#"
             SELECT
@@ -263,7 +276,15 @@ fn push_preview_message_select(
                    m.snippet,
                    m.from_contact_id,
                    m.from_name,
-                   m.is_draft
+                   m.is_draft"#,
+    );
+    if let Some((expression, name)) = column {
+        builder.push(",\n                   ");
+        expression.push_into(builder, &params.user_id);
+        builder.push(format!(" AS {name}"));
+    }
+    builder.push(
+        r#"
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND "#,
