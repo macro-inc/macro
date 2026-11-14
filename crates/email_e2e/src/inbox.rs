@@ -294,11 +294,12 @@ impl Inbox {
                 ))
                 .await?
                 .ok()?;
+            let Some(items) = listed["items"].as_array() else {
+                bail!("the {view} view answered without a list of threads: {listed}");
+            };
             previews.extend(
-                listed["items"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
+                items
+                    .iter()
                     .filter(|item| item["linkId"] == link_id.as_str())
                     .cloned(),
             );
