@@ -541,6 +541,7 @@ export type DraftJobProgress = {
      * looked up.
      */
     found?: number | null;
+    names?: null | FoundNames;
     stage: DraftStage;
 };
 
@@ -786,6 +787,34 @@ export type FeedCounts = {
 };
 
 /**
+ * An item found by the name the words use.
+ */
+export type FoundName = {
+    kind: ItemKind;
+    /**
+     * Its name as stored.
+     */
+    name: string;
+};
+
+/**
+ * The items a draft's words name, as the drafter looked them up by name.
+ * Names only, as the person wrote them or the items are called: never
+ * ids.
+ */
+export type FoundNames = {
+    /**
+     * Each the only item of its kinds with the name the words use.
+     */
+    found: Array<FoundName>;
+    /**
+     * Names no item has, or several do: the draft leaves them out for the
+     * person to pick.
+     */
+    left: Array<LeftName>;
+};
+
+/**
  * The person's generations now, for the web app to show and poll.
  */
 export type GenerationOverview = {
@@ -868,6 +897,11 @@ export type InProgressExecution = {
 };
 
 /**
+ * A kind of item a request can name, as the name lookup knows them.
+ */
+export type ItemKind = 'channel' | 'person' | 'project' | 'initiative' | 'document' | 'task' | 'database' | 'agent' | 'label' | 'tag' | 'channel_label';
+
+/**
  * A suggestion's kind, without its data.
  */
 export type KindName = 'prompt' | 'entity' | 'routine';
@@ -877,6 +911,21 @@ export type KindName = 'prompt' | 'entity' | 'routine';
  * digits, e.g. `dueWithinDays`.
  */
 export type KnobName = string;
+
+/**
+ * A name the words use that the drafter couldn't settle on one item for.
+ */
+export type LeftName = {
+    kind?: null | ItemKind;
+    /**
+     * How many items have it: none, or several.
+     */
+    matches: number;
+    /**
+     * The name as the words use it.
+     */
+    name: string;
+};
 
 /**
  * What a text knob's value names: one of its owner's items, which a client

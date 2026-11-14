@@ -432,6 +432,39 @@ pub trait DraftHandBacks: Send + Sync + 'static {
     async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
 }
 
+/// The fast model a routine draft finds its items with, admitted and billed
+/// as the person's automation usage. Object-safe (`async_trait`): the drafter holds
+/// it erased.
+#[async_trait::async_trait]
+pub trait DraftModel: Send + Sync + 'static {
+    /// Admit `owner`'s usage for one draft, before its first call.
+    async fn admit(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<(), ai_billing::AiAdmissionError>;
+
+    /// One call's answer, as text.
+    async fn complete(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        call: super::drafts::finding::DraftCall<'_>,
+    ) -> Result<String, super::drafts::finding::DraftCallError>;
+}
+
+/// Finds the items a person can access by the names a request uses, of
+/// any kind, in one call. Object-safe (`async_trait`): the drafter holds it
+/// erased.
+#[async_trait::async_trait]
+pub trait NameLookups: Send + Sync + 'static {
+    /// What each of `names` matched, in the order asked, and the kinds that
+    /// couldn't be searched.
+    async fn look_up(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        names: &[super::drafts::finding::NameAsked],
+    ) -> Result<super::drafts::finding::NameAnswers, super::drafts::finding::NameLookupError>;
+}
+
 /// Background drafts' rows: the same rows [`DraftHandBacks`] keeps checks
 /// on, with a state, what was asked, the progress and, once finished, the
 /// result. Any replica reads and changes them. Object-safe: the drafting
@@ -844,6 +877,19 @@ pub trait RoutineCode: Send + Sync + 'static {
         String::new()
     }
 
+    /// Every area of the SDK, one line each: its name and when to use it.
+    /// Empty when code can't run here.
+    fn sdk_areas(&self) -> String {
+        String::new()
+    }
+
+    /// The guidance and index of each SDK area `areas` names, as
+    /// [`Self::sdk_areas`] names them; names it doesn't know are skipped.
+    fn area_reference(&self, areas: &[String]) -> String {
+        let _ = areas;
+        String::new()
+    }
+
     /// Rewrite `step`'s source so the problems [`Self::check_program`]
     /// found go away, keeping what it does, billed to `owner`. `steps` is
     /// the TypeScript type of the outputs it reads. The model sees the code
@@ -1008,6 +1054,16 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
     fn symbol_references(&self, symbols: &[String], shown: &str) -> String {
         self.as_ref()
             .map(|code| code.symbol_references(symbols, shown))
+            .unwrap_or_default()
+    }
+
+    fn sdk_areas(&self) -> String {
+        self.as_ref().map(Code::sdk_areas).unwrap_or_default()
+    }
+
+    fn area_reference(&self, areas: &[String]) -> String {
+        self.as_ref()
+            .map(|code| code.area_reference(areas))
             .unwrap_or_default()
     }
 

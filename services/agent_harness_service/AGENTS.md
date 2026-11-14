@@ -213,12 +213,21 @@ Pulumi stacks; they do not host extra agent processes.
   sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
-  (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
-  in-process Macro agent on the person's Ask AI model, admitted and billed
-  as their agent session usage; `scheduling.rs` composes the drafter, its
-  `scheduled_action_draft` store, the check's code-mode invocation lookup
-  (`CorrelationSessions`), what a session created from its agent activity
-  (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  (`POST /scheduled-actions/drafts`) in a hidden session of the in-process
+  agent, which runs a background session given instructions at low effort
+  and delivers its replies unseen (`containers.rs`, `reply_delivery`).
+  Before the session starts, a fast call on the router names what the
+  words refer to (`src/scheduling/routine_drafting.rs`:
+  `RouterDraftModels` admits and bills it as the person's automation
+  usage), and `DocumentStorageNames` looks the names up through document
+  storage's `POST /search/names` as the person (internal key, five-second
+  timeout). `routine_code.rs` gives the session each SDK area it needs
+  (`area_reference`: the area's index, guidance and declarations, then
+  the generated types they import). `scheduling.rs` composes the drafter
+  after the service with its
+  `scheduled_action_draft` store, the session drafter's check lookup
+  (`CorrelationSessions`) and activity (`ActivityCreations`), and the
+  sweep of drafts a stopped process left.
   Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
   the scheduling `workers` tracker under `stop_workers`, so shutdown fails
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they

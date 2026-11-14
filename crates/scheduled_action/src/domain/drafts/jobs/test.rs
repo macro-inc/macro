@@ -6,6 +6,7 @@ use ai_billing::AiAdmissionError;
 use chrono::DateTime;
 use serde_json::json;
 
+use super::super::finding::test::never_answering;
 use super::super::test::{
     BUG_REPORTS, Gate, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
     drafts, message_posted, owner, plain, routine,
@@ -303,12 +304,31 @@ impl Replica {
         Self::publishing(rows, sessions, &Arc::new(Published::default()))
     }
 
+    /// A replica that finds its drafts' items first, whose fast model never
+    /// answers.
+    fn finding(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> Self {
+        Self::drafting(
+            rows,
+            drafts(rows, sessions).with_finding(never_answering()),
+            &Arc::new(Published::default()),
+        )
+    }
+
     /// A replica whose updates reach `published`.
     fn publishing(rows: &Arc<Rows>, sessions: &Arc<Sessions>, published: &Arc<Published>) -> Self {
+        Self::drafting(rows, drafts(rows, sessions), published)
+    }
+
+    /// A replica drafting with `drafts`, whose updates reach `published`.
+    fn drafting(
+        rows: &Arc<Rows>,
+        drafts: RoutineDrafts<Checker, Sessions>,
+        published: &Arc<Published>,
+    ) -> Self {
         let (tasks, shutdown) = (TaskTracker::new(), CancellationToken::new());
         Self {
             jobs: DraftJobs::new(
-                Arc::new(drafts(rows, sessions)),
+                Arc::new(drafts),
                 Arc::clone(rows) as Arc<dyn DraftJobStore>,
                 Arc::clone(published),
                 tasks.clone(),
@@ -957,6 +977,29 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     assert_eq!(Arc::new(drafts(&rows, &sessions)).sweep().await.unwrap(), 1);
     assert_eq!(rows.phase(unopened), Some(DraftJobPhase::Ready));
     assert_eq!(rows.phase(died), Some(DraftJobPhase::Failed));
+}
+
+/// A draft that finds its items answers its start once its usage is
+/// admitted, before the fast model has named anything or a session started;
+/// a find that never answers is given up, and the session drafts without it.
+#[tokio::test(start_paused = true)]
+async fn a_draft_that_finds_its_items_answers_its_start_once_admitted() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::finding(&rows, &sessions);
+
+    let started = tokio::time::Instant::now();
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+
+    assert!(started.elapsed() < POLL, "{:?}", started.elapsed());
+    assert_eq!(job.state, DraftJobState::Drafting);
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    replica.settled().await;
+    assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
+    assert!(matches!(
+        replica.jobs.job(owner(), job.id).await.unwrap().state,
+        DraftJobState::Failed { .. }
+    ));
 }
 
 /// A refused admission is the blocking route's error, and leaves nothing.

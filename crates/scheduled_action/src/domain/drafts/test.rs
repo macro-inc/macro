@@ -292,7 +292,7 @@ impl RoutineSessions for Sessions {
 
 /// What the check route answers for `routine`: its code type-checked as
 /// saving checks it.
-async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
+pub(super) async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     let mut routine = routine;
     routine.task = code_check::named_steps(&routine.task);
     let (steps, task) = match code_check::checked_task(code, &routine.task, None).await {
@@ -315,7 +315,7 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
 /// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
 const GUIDE: &str = "Find the item whose name is exactly the name used.";
 
-fn agent() -> DraftAgent {
+pub(super) fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
         guide: GUIDE,
