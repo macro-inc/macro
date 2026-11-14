@@ -5,7 +5,8 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use agent_monitor::domain::model::{
-    Timestamp, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
+    SourceHealth, SourceKind, SourceState, Timestamp, TranscriptItem, TranscriptItemKind, Update,
+    UpdateKind,
 };
 use agent_monitor::outbound::demo;
 
@@ -58,6 +59,41 @@ fn render(app: &mut App, width: u16, height: u16) -> String {
         text.push('\n');
     }
     text
+}
+
+#[test]
+fn the_header_shows_the_hosting_macrod() {
+    let mut app = app();
+    app.view.apply(Update {
+        seq: 2,
+        kind: UpdateKind::Source(SourceHealth {
+            state: SourceState::Healthy,
+            detail: Some(String::from("0190f3a2-0000-7000-8000-000000000001")),
+            items: 2,
+            ..SourceHealth::starting(SourceKind::Daemon)
+        }),
+    });
+    let header = render(&mut app, 200, 56)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(header.contains("HOST 0190f3a2 ● ON  PROMPTS 2"), "{header}");
+
+    app.view.apply(Update {
+        seq: 3,
+        kind: UpdateKind::Source(SourceHealth {
+            state: SourceState::Unhealthy,
+            detail: Some(String::from("0190f3a2-0000-7000-8000-000000000001")),
+            ..SourceHealth::starting(SourceKind::Daemon)
+        }),
+    });
+    let header = render(&mut app, 200, 56)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(header.contains("HOST 0190f3a2 ○ OFFLINE"), "{header}");
 }
 
 #[test]

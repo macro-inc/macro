@@ -130,26 +130,19 @@ async fn send(out: &mpsc::Sender<Observation>, change: Change) -> Result<(), Sou
     .map_err(|_| SourceError::StoreClosed)
 }
 
-/// The health row for `state`: absent while nothing is served, unhealthy
-/// while the runtime is not connected.
+/// The health row for `state`, in the shape the viewer's header reads: the
+/// state says whether a harness is served (absent) and its runtime is
+/// connected (healthy) or not (unhealthy), the detail is the harness id, and
+/// the items are the open prompts.
 pub(super) fn health(state: &DaemonState, now: Timestamp) -> SourceHealth {
-    let (source_state, detail) = match state.harness {
-        None => (SourceState::Absent, String::from("not serving a harness")),
-        Some(harness) if state.connected => (
-            SourceState::Healthy,
-            format!(
-                "harness {harness} · runtime connected · {} open prompts",
-                state.open_prompts
-            ),
-        ),
-        Some(harness) => (
-            SourceState::Unhealthy,
-            format!("harness {harness} · runtime not connected"),
-        ),
+    let source_state = match state.harness {
+        None => SourceState::Absent,
+        Some(_) if state.connected => SourceState::Healthy,
+        Some(_) => SourceState::Unhealthy,
     };
     SourceHealth {
         state: source_state,
-        detail: Some(detail),
+        detail: state.harness.map(|harness| harness.to_string()),
         items: u32::try_from(state.open_prompts).unwrap_or(u32::MAX),
         last_event: Some(now),
         ..SourceHealth::starting(SourceKind::Daemon)

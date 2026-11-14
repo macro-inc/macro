@@ -154,6 +154,7 @@ fn daemon_health_says_whether_the_runtime_is_connected() {
         agent_monitor::domain::model::SourceState::Healthy
     );
     assert_eq!(healthy.items, 3);
+    assert_eq!(healthy.detail, Some(HarnessId::TEST_A.to_string()));
 
     let offline = daemon_source::health(
         &DaemonState {

@@ -19,7 +19,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-use agent_monitor::domain::model::Timestamp;
+use agent_monitor::domain::model::{SourceKind, SourceState, Timestamp};
 
 use crate::app::App;
 use crate::format;
@@ -160,6 +160,7 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
             format!("  AGENTS {}", app.view.agents.len()),
             theme::ink(theme::DIM),
         ));
+        left.extend(host_spans(app));
         left.push(Span::styled(
             format!("  SEQ {}", app.view.seq),
             theme::ink(theme::FAINT),
@@ -194,6 +195,38 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         ])),
         right_area,
     );
+}
+
+/// Characters of the hosting macrod's harness id shown in the header.
+const HARNESS_ID_SHOWN: usize = 8;
+
+/// The header's segment for the macrod hosting the collector (its `daemon`
+/// source): the harness it serves, whether its runtime is connected, and its
+/// open prompts. Empty when no macrod hosts the collector.
+fn host_spans(app: &App) -> Vec<Span<'static>> {
+    let Some(health) = app.view.sources.get(&SourceKind::Daemon) else {
+        return Vec::new();
+    };
+    let label = Span::styled("  HOST ", theme::ink(theme::DIM));
+    let harness = health
+        .detail
+        .as_deref()
+        .map(|id| id.chars().take(HARNESS_ID_SHOWN).collect::<String>());
+    let Some(harness) = harness else {
+        return vec![label, Span::styled("NOT SERVING", theme::ink(theme::FAINT))];
+    };
+
+    let mut spans = vec![label, Span::styled(harness, theme::bold(theme::AMBER))];
+    if health.state == SourceState::Healthy {
+        spans.extend([
+            Span::styled(" ● ON", theme::bold(theme::GREEN)),
+            Span::styled("  PROMPTS ", theme::ink(theme::DIM)),
+            Span::styled(health.items.to_string(), theme::bold(theme::YELLOW)),
+        ]);
+    } else {
+        spans.push(Span::styled(" ○ OFFLINE", theme::bold(theme::RED)));
+    }
+    spans
 }
 
 /// Tape lines on the ticker.
