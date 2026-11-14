@@ -2242,7 +2242,7 @@ where
         self.populate_properties_output(user_id, output).await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(err, skip(self, req), fields(with_properties = true))]
     async fn get_user_soup_grouped(
         &self,
         req: GroupedSortRequest<'_>,
@@ -2252,7 +2252,12 @@ where
         self.populate_grouped_items(user_id, items).await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(
+        name = "get_user_soup_grouped",
+        err,
+        skip(self, req),
+        fields(with_properties = false)
+    )]
     async fn get_user_soup_grouped_without_properties(
         &self,
         req: GroupedSortRequest<'_>,
