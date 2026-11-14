@@ -141,3 +141,27 @@ fn only_rollout_files_with_a_session_id_are_read() {
     );
     assert_eq!(format.key(root, Path::new("/s/rollout-short.jsonl")), None);
 }
+
+#[tokio::test]
+async fn a_gh_pr_create_call_and_its_output_open_a_pr() {
+    let deltas = index("codex_prs").await;
+
+    let opened: Vec<(Timestamp, PrRef)> = deltas
+        .iter()
+        .flat_map(|delta| &delta.events)
+        .filter_map(|event| match &event.kind {
+            TranscriptEventKind::PrOpened(pr) => Some((event.at, pr.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        opened,
+        vec![(
+            at("2030-01-02T10:01:05Z"),
+            PrRef {
+                repo: crate::domain::model::RepoName::parse("example-org/widgets").expect("repo"),
+                number: 43,
+            }
+        )]
+    );
+}

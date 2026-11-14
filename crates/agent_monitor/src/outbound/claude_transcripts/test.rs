@@ -277,3 +277,44 @@ fn only_session_and_subagent_transcripts_are_read() {
     );
     assert_eq!(format.key(root, Path::new("/p/proj/memory/notes.md")), None);
 }
+
+fn opened(deltas: &[TranscriptDelta]) -> Vec<(Timestamp, PrRef)> {
+    deltas
+        .iter()
+        .flat_map(|delta| &delta.events)
+        .filter_map(|event| match &event.kind {
+            TranscriptEventKind::PrOpened(pr) => Some((event.at, pr.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn pr(repo: &str, number: u32) -> PrRef {
+    PrRef {
+        repo: crate::domain::model::RepoName::parse(repo).expect("a repo"),
+        number,
+    }
+}
+
+#[tokio::test]
+async fn a_pr_is_opened_by_gh_pr_create_and_its_url_or_by_claude_codes_own_record() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    copy_tree(&fixtures().join("claude_prs"), dir.path());
+    let mut source = start(Box::new(ClaudeTranscriptsSource::new(
+        dir.path().to_owned(),
+        DAY,
+    )));
+
+    let deltas = deltas(source.until_ready().await);
+    assert!(deltas.iter().all(|delta| delta.key == key("s-pr", None)));
+    // A URL printed by another command opens nothing, nor does an edit;
+    // the `pull/new/<branch>` hint is not a pull request.
+    assert_eq!(
+        opened(&deltas),
+        vec![
+            (at("2030-01-02T10:02:05Z"), pr("example-org/widgets", 42)),
+            (at("2030-01-02T10:03:05Z"), pr("example-org/gadgets", 7)),
+        ]
+    );
+    source.stop().await;
+}

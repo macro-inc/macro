@@ -1,7 +1,9 @@
 //! Codex rollouts: `<sessions>/YYYY/MM/DD/rollout-<time>-<session id>.jsonl`.
 //!
 //! Counts turns (`task_started` / `task_complete`), tool calls
-//! (`function_call` and `custom_tool_call` with their outputs) and token usage.
+//! (`function_call` and `custom_tool_call` with their outputs), token usage,
+//! and pull requests opened: a call whose arguments run `gh pr create`,
+//! paired with the PR URL its output printed.
 //! Usage comes from per-response `token_usage_record`s; rollouts written
 //! before those existed only carry running totals in `token_count` events,
 //! which are turned into increases.
@@ -9,6 +11,7 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -18,11 +21,12 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::{SourceKind, Timestamp, Tokens};
+use crate::domain::model::{PrRef, SourceKind, Timestamp, Tokens};
 use crate::domain::observation::{
     Observation, TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
 use crate::domain::source::{AgentSource, SourceError};
+use crate::outbound::claude_transcripts::PR_CREATE;
 use crate::outbound::transcripts::{self, Deltas, LineParser, TranscriptConfig, TranscriptFormat};
 
 const ROLLOUT_PREFIX: &str = "rollout-";
@@ -113,6 +117,8 @@ pub(crate) struct CodexParser {
     saw_usage_records: bool,
     /// The last running total, to turn the next one into an increase.
     last_total: Tokens,
+    /// Open calls that run `gh pr create`.
+    pr_calls: BTreeSet<String>,
 }
 
 #[derive(Deserialize)]
@@ -134,6 +140,10 @@ struct Payload {
     name: Option<String>,
     usage: Option<Usage>,
     info: Option<TokenInfo>,
+    /// A `function_call`'s arguments, as a JSON string.
+    arguments: Option<String>,
+    /// A `custom_tool_call`'s input.
+    input: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -235,12 +245,24 @@ impl LineParser for CodexParser {
             }
             (Some("response_item"), Some("function_call" | "custom_tool_call")) => {
                 if let (Some(id), Some(name)) = (payload.call_id, payload.name) {
+                    let opens_pr = [&payload.arguments, &payload.input]
+                        .into_iter()
+                        .flatten()
+                        .any(|text| text.contains(PR_CREATE));
+                    if opens_pr {
+                        self.pr_calls.insert(id.clone());
+                    }
                     let gist = None;
                     out.push(at, TranscriptEventKind::ToolStart { id, name, gist });
                 }
             }
             (Some("response_item"), Some("function_call_output" | "custom_tool_call_output")) => {
                 if let Some(id) = payload.call_id {
+                    if self.pr_calls.remove(&id)
+                        && let Some(pr) = std::str::from_utf8(line).ok().and_then(PrRef::last_in)
+                    {
+                        out.push(at, TranscriptEventKind::PrOpened(pr));
+                    }
                     // Rollouts do not mark a failed call apart from its output.
                     let is_error = false;
                     out.push(at, TranscriptEventKind::ToolEnd { id, is_error });

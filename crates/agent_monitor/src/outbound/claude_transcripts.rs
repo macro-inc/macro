@@ -6,12 +6,15 @@
 //! response is written as one line per content block, all with the same
 //! usage, so usage is counted once per message id), the session's reported
 //! cost (`cost-state.totalCostUSD`, a running total that includes its
-//! subagents) and its title. Every field is optional: the layout is not a
-//! contract.
+//! subagents), its title, and the pull requests it opened: Claude Code's own
+//! `toolUseResult.gitOperation.pr` record with `action: created`, or a Bash
+//! call running `gh pr create` paired with the PR URL its result printed.
+//! Every field is optional: the layout is not a contract.
 
 #[cfg(test)]
 mod test;
 
+use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
@@ -21,7 +24,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::{Cost, SourceKind, Timestamp, Tokens};
+use crate::domain::model::{Cost, PrRef, SourceKind, Timestamp, Tokens};
 use crate::domain::observation::{
     Observation, TranscriptEventKind, TranscriptKey, TranscriptProgram,
 };
@@ -37,6 +40,15 @@ const SYNTHETIC_MODEL: &str = "<synthetic>";
 
 /// Stop reasons that end a turn (anything but a pause for a tool call).
 const TURN_ENDING_STOPS: &[&str] = &["end_turn", "stop_sequence", "max_tokens", "refusal"];
+
+/// The command that opens a pull request.
+pub(crate) const PR_CREATE: &str = "gh pr create";
+
+/// Lines that may carry Claude Code's record of a git operation.
+const GIT_OPERATION: &[u8] = b"\"gitOperation\":{\"pr\"";
+
+/// The `gitOperation.pr.action` of a pull request Claude Code opened.
+const PR_CREATED: &str = "created";
 
 /// Lines worth parsing; everything else (snapshots, request shapes, modes) is
 /// skipped before decoding.
@@ -125,6 +137,7 @@ impl TranscriptFormat for ClaudeFormat {
         ClaudeParser {
             pending_title: title,
             last_message: None,
+            pr_calls: BTreeSet::new(),
         }
     }
 }
@@ -149,6 +162,32 @@ pub(crate) struct ClaudeParser {
     pending_title: Option<String>,
     /// The id of the last assistant message seen; its later lines repeat it.
     last_message: Option<String>,
+    /// Open tool calls that run `gh pr create`.
+    pr_calls: BTreeSet<String>,
+}
+
+/// Only the git operation of a tool result record.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitOperationRecord {
+    tool_use_result: Option<ToolUseResult>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolUseResult {
+    git_operation: Option<GitOperation>,
+}
+
+#[derive(Deserialize)]
+struct GitOperation {
+    pr: Option<GitPr>,
+}
+
+#[derive(Deserialize)]
+struct GitPr {
+    url: Option<String>,
+    action: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -268,7 +307,7 @@ impl LineParser for ClaudeParser {
             }
             Some("user") if !record.is_meta => {
                 if let Some(content) = record.message.and_then(|message| message.content) {
-                    user(content, at, out);
+                    self.user(content, line, at, out);
                 }
             }
             Some("ai-title") => {
@@ -304,6 +343,13 @@ impl ClaudeParser {
         if let Some(Content::Blocks(blocks)) = message.content {
             for block in blocks {
                 if let Block::ToolUse { id, name, input } = block {
+                    let opens_pr = input
+                        .as_ref()
+                        .and_then(|input| input.command.as_deref())
+                        .is_some_and(|command| command.contains(PR_CREATE));
+                    if opens_pr {
+                        self.pr_calls.insert(id.clone());
+                    }
                     let gist = input.as_ref().and_then(gist);
                     out.push(at, TranscriptEventKind::ToolStart { id, name, gist });
                 }
@@ -320,37 +366,68 @@ impl ClaudeParser {
     }
 }
 
-/// A user record starts a turn when it carries a prompt, and ends tool calls
-/// for each tool result it carries.
-fn user(content: Content, at: Timestamp, out: &mut Deltas) {
-    let blocks = match content {
-        Content::Text(_) => {
-            out.push(at, TranscriptEventKind::TurnStart);
-            return;
-        }
-        Content::Blocks(blocks) => blocks,
-    };
+impl ClaudeParser {
+    /// A user record starts a turn when it carries a prompt, and ends tool
+    /// calls for each tool result it carries. The result of a `gh pr create`
+    /// call, or Claude Code's record of a created pull request, opens a PR.
+    fn user(&mut self, content: Content, line: &[u8], at: Timestamp, out: &mut Deltas) {
+        let blocks = match content {
+            Content::Text(_) => {
+                out.push(at, TranscriptEventKind::TurnStart);
+                return;
+            }
+            Content::Blocks(blocks) => blocks,
+        };
 
-    let mut prompt = false;
-    for block in blocks {
-        match block {
-            Block::ToolResult {
-                tool_use_id,
-                is_error,
-            } => out.push(
-                at,
-                TranscriptEventKind::ToolEnd {
-                    id: tool_use_id,
-                    is_error: is_error.unwrap_or(false),
-                },
-            ),
-            Block::Text => prompt = true,
-            Block::ToolUse { .. } | Block::Other => {}
+        let mut prompt = false;
+        let mut opened = None;
+        for block in blocks {
+            match block {
+                Block::ToolResult {
+                    tool_use_id,
+                    is_error,
+                } => {
+                    let is_error = is_error.unwrap_or(false);
+                    if self.pr_calls.remove(&tool_use_id) && !is_error {
+                        opened = opened.or_else(|| {
+                            std::str::from_utf8(line).ok().and_then(PrRef::last_in)
+                        });
+                    }
+                    out.push(
+                        at,
+                        TranscriptEventKind::ToolEnd {
+                            id: tool_use_id,
+                            is_error,
+                        },
+                    );
+                }
+                Block::Text => prompt = true,
+                Block::ToolUse { .. } | Block::Other => {}
+            }
+        }
+        if let Some(pr) = opened.or_else(|| created_pr(line)) {
+            out.push(at, TranscriptEventKind::PrOpened(pr));
+        }
+        if prompt {
+            out.push(at, TranscriptEventKind::TurnStart);
         }
     }
-    if prompt {
-        out.push(at, TranscriptEventKind::TurnStart);
+}
+
+/// The pull request Claude Code recorded creating in this tool result line.
+fn created_pr(line: &[u8]) -> Option<PrRef> {
+    if !line
+        .windows(GIT_OPERATION.len())
+        .any(|window| window == GIT_OPERATION)
+    {
+        return None;
     }
+    let record: GitOperationRecord = serde_json::from_slice(line).ok()?;
+    let pr = record.tool_use_result?.git_operation?.pr?;
+    if pr.action.as_deref() != Some(PR_CREATED) {
+        return None;
+    }
+    PrRef::last_in(&pr.url?)
 }
 
 fn tokens(usage: &Usage) -> Tokens {

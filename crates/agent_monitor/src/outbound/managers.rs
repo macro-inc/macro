@@ -1,6 +1,7 @@
 //! herdr manager directories: `<managers>/<terminal>-<started ms>/` with
 //! `goal.md`, a `state` word, and review verdicts in `reviews/<n>.verdict`
-//! (first line `pass` or `fail`).
+//! (first line `pass` or `fail`), and `prs`: the pull request URLs it
+//! recorded with `herdr-manager pr`, one per line.
 
 #[cfg(test)]
 mod test;
@@ -11,7 +12,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::SourceKind;
+use crate::domain::model::{PrRef, SourceKind};
 use crate::domain::observation::{Fact, ManagerFact, Observation};
 use crate::domain::source::{AgentSource, SourceError};
 use crate::outbound::records::{self, Fingerprint, RecordFormat, WatchedDir, stat};
@@ -20,6 +21,7 @@ const GOAL_FILE: &str = "goal.md";
 const STATE_FILE: &str = "state";
 const REVIEWS_DIR: &str = "reviews";
 const VERDICT_EXTENSION: &str = "verdict";
+const PRS_FILE: &str = "prs";
 
 /// Reads herdr manager directories.
 #[derive(Clone, Debug)]
@@ -90,6 +92,7 @@ impl RecordFormat for ManagersSource {
                 stat(&record.join(GOAL_FILE)),
                 stat(&record.join(STATE_FILE)),
                 stat(&record.join(REVIEWS_DIR)),
+                stat(&record.join(PRS_FILE)),
             ]
         })
     }
@@ -108,6 +111,7 @@ impl RecordFormat for ManagersSource {
             state,
             reviews: u32::try_from(verdicts.len()).unwrap_or(u32::MAX),
             last_verdict,
+            prs: prs(&record.join(PRS_FILE)),
         }))
     }
 }
@@ -130,6 +134,20 @@ fn verdicts(reviews: &Path) -> Vec<(u32, PathBuf)> {
         .collect();
     verdicts.sort();
     verdicts
+}
+
+/// The pull requests in a `prs` file, one URL per line, in order, each once.
+fn prs(path: &Path) -> Vec<PrRef> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut prs: Vec<PrRef> = Vec::new();
+    for pr in text.lines().filter_map(PrRef::last_in) {
+        if !prs.contains(&pr) {
+            prs.push(pr);
+        }
+    }
+    prs
 }
 
 fn first_line(path: &Path) -> Option<String> {
