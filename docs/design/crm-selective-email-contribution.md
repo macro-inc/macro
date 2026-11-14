@@ -116,7 +116,10 @@ limits and reject the entire request on overflow; never truncate consent. Reject
 unknown fields/versions, unauthorized or missing IDs and invalid targets; return
 field errors only within the caller's authorized scope. Canonicalize and dedupe
 without changing meaning. An empty selected ruleset is valid and contributes
-nothing. Compare-and-swap `base_revision` rejects concurrent replacements with
+nothing. Validation warns when a target matches the contributor's own primary
+address, known aliases or mailbox domain: participant matching can select nearly
+the entire mailbox. Preserve the match, never silently discard the contributor.
+Compare-and-swap `base_revision` rejects concurrent replacements with
 409; identical retried draft/activation requests are idempotent. Version 1 is a
 wire schema version, distinct from the monotonically increasing policy revision.
 Unknown future versions fail closed, never become all-mail.
@@ -191,7 +194,9 @@ Show the exact mailbox, mode, canonical targets grouped by selection, expanded
 contact addresses/company domains, applicable exclusions, any implemented cutoff,
 and old-to-new counts. Counts are informational, not a frozen list of future
 messages. Include all targets in an expandable review, not just a truncated
-summary. On mobile use the same responsive settings dialog/review with scrolling
+summary. Carry self-address/alias/domain warnings into this saved confirmation
+and show the preview's coverage counts so a broad selection is apparent. On
+mobile use the same responsive settings dialog/review with scrolling
 and an explicit confirmation button. No graphical condition editor is needed.
 
 Only the member may activate a revision for their own mailbox. Their delegated
@@ -205,13 +210,16 @@ Private exceptions retain the dependency's existing mutation permissions.
 Use a server-owned review bound to member, team, exact mailbox, base revision,
 draft hash and expiry (24 hours). Activation comes from the member's authenticated
 review surface, with a server-verified approval, not an SDK `confirmed: true`,
-model-generated quote or arbitrary bearer-supplied approval claim. Scoped agent
-sessions must be refused by the domain authorization boundary for activation;
-reuse `agent_correlation`'s sharing restrictions where applicable and enforce
-this for every adapter. If the saved-review framework cannot enforce that
-principal distinction, building it is a prerequisite, not permission to accept
-agent self-approval. The current email privacy handler itself does not provide
-this new confirmation contract.
+model-generated quote or arbitrary bearer-supplied approval claim. All delegated
+agent credentials, including ordinary unscoped sessions, must fail activation without that member-only approval. `agent_correlation`'s sharing
+restrictions are an additional check, not proof of human approval: unscoped
+requests currently pass `may_share()`. Enforce the approval boundary for every
+adapter, including legacy `SetConsent(enabled=true)` and selected-to-all
+transitions, so an agent cannot fall back to all-mail to bypass review. Existing
+member-driven all-mail consent remains available. If the saved-review framework
+cannot enforce that principal distinction, building it is a prerequisite, not
+permission to accept agent self-approval. The current email privacy handler
+itself does not provide this new confirmation contract.
 
 Bind approval to a policy context version covering blocks, exceptions, mailbox
 lifecycle and any cutoff; reject a changed context or stale base revision and
@@ -445,8 +453,10 @@ binaries; converting existing consents would change permission without review.
 | 5 | Add minimal responsive confirmation/settings UI plus generated SDK methods and agent guidance, integrating the privacy-settings SDK task. Existing all-mail remains usable; flag off. | PR 4 and shared SDK contract. |
 | 6 | Enable an explicitly authorized limited rollout after end-to-end privacy, mixed-version and performance verification; update shipped privacy/agent docs. | All previous releases and the separately authorized rollout. |
 
-PRs 2–5 may be deployed while dormant; none enrolls members. Verify owner versus
-admin/agent denial, stale draft/mailbox lifecycle races, whole-thread exceptions,
+Reject one combined schema-and-activation release: compatibility, enforcement
+and rollback safeguards must be deployed and verified before grants can become
+active. PRs 2–5 may be deployed while dormant; none enrolls members. Verify owner
+versus admin/agent denial, stale draft/mailbox lifecycle races, whole-thread exceptions,
 subdomains, multiple addresses, teammate-copy dedupe, primary-only revocation,
 legacy clients and queued old work before enabling. Instrument draft/preview,
 activation and backfill spans with revision/count/outcome fields and trace
