@@ -339,17 +339,52 @@ impl Plugin for NodeIds {
                 }
             }
         }
+        #[cfg(feature = "application")]
+        self.initialize_root_id(tx, &reserved)?;
         Ok(())
     }
 }
 #[cfg(feature = "application")]
 impl NodeIds {
+    /// Source INITIALIZE_DOCUMENT_IDS: the open's id pass ($updateAllNodeIds from the root's
+    /// child caret, whose origin is the root) gives the root an id when it has none and keeps
+    /// an existing one. Only the initial after-commit drain covers the root; every later commit
+    /// still skips it (Source never re-ids the root after open). The id enters the index, as
+    /// Source's mappings include it.
+    fn initialize_root_id(
+        &self,
+        tx: &mut Transaction<'_>,
+        reserved: &[String],
+    ) -> Result<(), Error> {
+        let IdMint::Nanoid { length } = self.mint else {
+            return Ok(());
+        };
+        if self.track_root || !tx.is_initializing() {
+            return Ok(());
+        }
+        let stored = tx
+            .get_state(NodeKey::ROOT, self.id_state)?
+            .unwrap_or_default();
+        let id = if stored.is_empty() {
+            let minted = mint_nanoid(tx, length, reserved)?;
+            tx.set_state(NodeKey::ROOT, self.id_state, Some(minted.clone()))?;
+            minted
+        } else {
+            stored
+        };
+        let index = tx.extension_mut::<NodeIdIndex>()?;
+        if !index.ids.contains_key(&id) {
+            index.ids.insert(id.clone(), NodeKey::ROOT);
+            index.keys.insert(NodeKey::ROOT, id);
+        }
+        Ok(())
+    }
     /// Nonempty stored ids of this commit's attached, non-destroyed mutations.
     fn incoming_ids(&self, tx: &Transaction<'_>, commit: &Commit) -> Result<Vec<String>, Error> {
         let mut ids = Vec::new();
         for (key, mutation) in &commit.changes.mutations {
             if *mutation == Mutation::Destroyed
-                || (!self.track_root && *key == NodeKey::ROOT)
+                || (!self.track_root && *key == NodeKey::ROOT && !tx.is_initializing())
                 || !tx.is_attached(*key)
             {
                 continue;

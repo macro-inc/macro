@@ -947,3 +947,6 @@ mod root_text_cache_test;
 
 #[cfg(all(test, feature = "application"))]
 mod null_fields_test;
+
+#[cfg(all(test, feature = "application"))]
+mod root_id_test;
