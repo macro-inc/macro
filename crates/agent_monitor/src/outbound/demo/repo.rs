@@ -42,8 +42,8 @@ const SUBJECTS: &[&str] = &[
 /// One scripted lane.
 struct LaneScript {
     branch: &'static str,
-    /// Minutes before the start it forks from the trunk; `None` when it
-    /// stacks on `stack_on`.
+    /// Minutes before the start it forks from the trunk (for a stacked
+    /// lane, when its first commit starts).
     fork_minutes: Option<i64>,
     stack_on: Option<&'static str>,
     /// Commits it starts with, spread from its fork to `last_minutes`.
@@ -97,7 +97,8 @@ const LANES: &[LaneScript] = &[
     },
     LaneScript {
         branch: "feat/ui-pages",
-        fork_minutes: None,
+        // Its commits start after its base's tip, 50 minutes before the start.
+        fork_minutes: Some(44),
         stack_on: Some("feat/store-reducer"),
         commits: 4,
         last_minutes: 6,
@@ -183,6 +184,82 @@ const LANES: &[LaneScript] = &[
         active: false,
         behind: None,
         subjects: &["perf(feed): try a bigger page", "perf(feed): measure it"],
+    },
+    LaneScript {
+        branch: "feat/search-ranking",
+        fork_minutes: Some(5 * 60),
+        stack_on: None,
+        commits: 6,
+        last_minutes: 25,
+        unpushed: 0,
+        active: false,
+        behind: None,
+        subjects: &[
+            "feat(search): score by recency and owner",
+            "feat(search): boost pinned documents",
+            "test(search): ranking fixtures",
+            "fix(search): ties sort by title",
+            "perf(search): cache owner lookups",
+            "docs(search): how ranking works",
+        ],
+    },
+    LaneScript {
+        branch: "sync/backoff-1",
+        fork_minutes: Some(7 * 60),
+        stack_on: None,
+        commits: 3,
+        last_minutes: 5 * 60,
+        unpushed: 0,
+        active: false,
+        behind: None,
+        subjects: &[
+            "refactor(sync): one reconnect loop",
+            "feat(sync): jittered backoff",
+            "test(sync): backoff schedule",
+        ],
+    },
+    LaneScript {
+        branch: "sync/backoff-2",
+        fork_minutes: Some(290),
+        stack_on: Some("sync/backoff-1"),
+        commits: 3,
+        last_minutes: 3 * 60,
+        unpushed: 0,
+        active: false,
+        behind: None,
+        subjects: &[
+            "feat(sync): resume from the last cursor",
+            "fix(sync): drop stale acks",
+            "test(sync): resume after a drop",
+        ],
+    },
+    LaneScript {
+        branch: "sync/backoff-3",
+        fork_minutes: Some(170),
+        stack_on: Some("sync/backoff-2"),
+        commits: 2,
+        last_minutes: 80,
+        unpushed: 1,
+        active: false,
+        behind: None,
+        subjects: &[
+            "feat(sync): surface the retry in the status bar",
+            "fix(sync): address review",
+        ],
+    },
+    LaneScript {
+        branch: "chore/deps-bump",
+        fork_minutes: Some(150),
+        stack_on: None,
+        commits: 2,
+        last_minutes: 120,
+        unpushed: 0,
+        active: false,
+        behind: None,
+        subjects: &[
+            "chore(deps): bump the TLS stack",
+            "chore(deps): refresh the lockfile",
+        ],
     },
     LaneScript {
         branch: "feat/flaky-tests",
