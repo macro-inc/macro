@@ -53,7 +53,7 @@ const FILTER_CACHE_DIR: RuntimePath<'static> =
 /// it here.
 fn path_check() -> Job {
     Job::default()
-        .timeout_minutes(15u32)
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -93,7 +93,7 @@ fn path_check() -> Job {
 /// fmt + unused dependencies + clippy.
 fn check() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
         .add_step(steps::checkout(false, false))
@@ -125,7 +125,7 @@ fn with_check_env(job: Job) -> Job {
 /// path filter gates it; the xtask then picks the exact binaries.
 fn doppler_config() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
@@ -170,7 +170,7 @@ fn graphql_schema_compat() -> Job {
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
 fn test() -> Job {
     steps::gated_job()
-        .timeout_minutes(90u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
@@ -218,7 +218,7 @@ fn with_test_compile_env(job: Job) -> Job {
 /// avoids a dev shell when none can match.
 fn build_service_bins() -> Job {
     steps::gated_job()
-        .timeout_minutes(45u32)
+        .timeout_minutes(20u32)
         .cond(Expression::new(BUILD_SERVICE_BINS_CONDITION))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((

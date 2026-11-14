@@ -4,6 +4,8 @@ mod access;
 mod history;
 #[cfg(feature = "resources")]
 mod initial_properties;
+#[cfg(feature = "resources")]
+mod task_access;
 #[cfg(feature = "toolset")]
 mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;

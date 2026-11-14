@@ -204,7 +204,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   subscription (or team) already gone as removed and, after `MAX_BILLING_ATTEMPTS`, logs `computer billing item
   removal abandoned` (a Datadog monitor in `infra/stacks/monitoring`) and
   stops. `observe_subscription(team, SubscriptionObserved)` is the one billing
-  owner for webhooks: items are matched by `computer_id`, never by price or
+  owner for Stripe subscription events, fed by the Stripe inbox's
+  `computers` consumer (`docs/architecture/stripe-event-inbox.md`) with each
+  snapshot in order, its `observed_at` the event's time: items are matched by `computer_id`, never by price or
   count; a billed computer whose item is missing (or whose subscription
   ended) gets `BillingItemMissing` (ends billing now, retention); past
   due/unpaid/paused → `PaymentLapsed` (`PastDue`, the computer is turned off
@@ -212,8 +214,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   snapshot read before a computer's `billing_changed_at` cannot change it.
   Items a computer is not billed on (duplicates, or items naming a canceled,
   released or unknown computer; never one naming a reservation) are removed;
-  every computer is tried and the first error returned, so the webhook fails
-  and Stripe redelivers. An undo or restore whose charge applied but whose
+  every computer is tried and the first error returned, so the inbox retries
+  the snapshot. An undo or restore whose charge applied but whose
   event never did (a dropped request) is finished by reconcile from its item
   (`readd_charge`); a pending one is left for a later snapshot. The billing
   worker handles each effect on its own: a failure to read the computer is
@@ -318,7 +320,8 @@ attempt, so a busy database never fails a computer or abandons a removal.
   mounts it at `/home` and keeps `/var/lib/macrod` there. Docker: named
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume
-  behind a destroyed computer.
+  behind a destroyed computer: a retried Create reuses the volume an earlier
+  attempt made (Incus reports it as `VolumeCreation::AlreadyExists`, not an error).
 - **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
   `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
   get, `COMPUTERS_AGENT_IMAGE` the agent-mode build of the same guest
@@ -375,7 +378,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   latches), `Failed` when a not-yet-connected computer gives up, once per
   attempt. The fleet worker sends it to the buyer (`created_by`) through the
   `SetupNotices` port as a `computer_setup` notification; a send that keeps
-  failing is dropped after its retries and never fails the computer.
+  failing is dropped after its retries and never fails the computer. For an
+  agent teammate's computer the notice carries the agent (`agent_of`) and goes
+  to the agent's inviter by the agent's name: "<name> is ready".
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
@@ -392,6 +397,18 @@ team_agents reads an agent computer's roster state with
 `ComputerService::status_for_roster` (answered on a detached fleet too) and
 releases it with `request_release` when the agent is removed: normal release
 effects, no fleet access or name confirmation, team ownership still checked.
+
+An agent teammate is a member people reach by message, so nothing else runs on
+its computer. `PgComputerAgents` (the `ComputerAgents` reads on their own)
+implements harnesses' `ComputerTeamAgents`: the harness listings and a patch's
+answer carry `team_agent_user_id` on the computer's harness, and
+`HarnessTeamAgents::harness_team_agent` answers for one harness. Saved agents
+(bots create/update/patch) and session opens (`persona_for_owner`, and a
+runtime's external create) refuse such a harness with 409 "This computer
+belongs to an agent teammate. Message them instead." The harness stays in
+`GET /harnesses`, where Bring your AI finds it by `computer_id`; the web app's
+runtime lists read `useRunnableHarnessesQuery` /
+`useRunnableHarnessDirectoryQuery`, which drop it.
 
 ## Typed boundaries
 

@@ -6,7 +6,10 @@ Local build timings, on by default, for `just run_local`, `just stack` and
 `cargo x build-services`: each run, step, build and service health wait becomes
 one Loki line (`service_name="local-telemetry"`) and a Tempo span,
 mirroring CI's `ci-telemetry` events. `xtask_local` decides what to record; this
-crate buffers and sends it.
+crate buffers and sends it. With `services = true` in the settings it also
+decides whether the local stacks' own telemetry is forwarded, under which
+machine name, and writes the forwarder's token file; `xtask_local`'s
+`grafana_forwarder.rs` runs the containers.
 
 ## Start here
 
@@ -15,14 +18,18 @@ crate buffers and sends it.
   and the Doppler provisioning command.
 - `src/provision.rs`: writing the settings file from Doppler, backoff, the hint.
 - `src/sender.rs`: the background thread, retries, and left-behind files.
+- `src/forwarding.rs`: `services = true`, the machine name, the private token file.
 - `src/otlp.rs`: the OTLP JSON, copied from CI's `ci_telemetry_collect.ts`.
 
 ## Scope
 
 - Owns: the settings file and its provisioning, the opt-out, the buffer, OTLP
-  encoding, delivery.
+  encoding, delivery, and whether services' telemetry is forwarded.
 - Not here: which events a run emits and their fields →
-  `xtask_local/src/local/telemetry.rs`. Panels → `infra/stacks/observability/nixos/local-report.json`.
+  `xtask_local/src/local/telemetry.rs`; the forwarder and lgtm containers →
+  `xtask_local/src/local/grafana_forwarder.rs`, `docker/grafana-forwarder/`.
+  Panels → `infra/stacks/observability/nixos/local-report.json` and
+  `local-dashboard.nix`.
 
 ## Checks
 
@@ -48,10 +55,11 @@ crate buffers and sends it.
   timeout, a 5xx or a rejected token keeps it for the next run. Bodies and
   times must stay identical across resends (Loki dedupes on them), and old
   lines are clamped to 30 minutes as in CI.
-- The token is only in Doppler `observability/lcl`, the settings file (0600) and
-  the `Authorization` header: never in env, the `local` Doppler project, errors,
-  or logs. Errors carry error classes, never response bodies or parser source
-  lines.
+- The token is only in Doppler `observability/lcl`, the settings file (0600),
+  the `Authorization` header and, with `services = true`, the forwarder's token
+  file (0600 in a 0700 directory, mounted read-only): never in env, the `local`
+  Doppler project, a compose file, errors, or logs. Errors carry error
+  classes, never response bodies or parser source lines.
 - Fields are structured metadata, not labels: only `service_name` and
   `deployment_environment` index the stream. Group metadata quantiles with an
   explicit `by (...)` (see `infra/stacks/observability/README.md`).

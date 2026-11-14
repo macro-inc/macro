@@ -16,7 +16,7 @@
 /* One row: the database's name, its saved-view tabs, then the view's tools. */
 .database-views-bar, .database-views-tabs { display: flex; align-items: center; gap: 6px; }
 .database-views-bar { padding-bottom: 12px; }
-.database-views-bar > strong { margin-right: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.database-views-bar > strong { margin-right: 8px; font-size: 14px; font-weight: 500; white-space: nowrap; }
 .database-views-mark { width: 16px !important; height: 16px !important; color: oklch(78% 0.19 135); }
 .database-views-tabs { margin-right: auto; }
 
@@ -52,7 +52,7 @@
 .database-views-body[data-view=board] { display: flex; align-items: flex-start; gap: 10px; }
 .database-views-lane { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; padding: 6px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--database-views-line); }
 .database-views-lane-head { display: flex; align-items: center; gap: 8px; padding: 7px 6px 5px; }
-.database-views-lane-head strong { font-weight: 600; white-space: nowrap; }
+.database-views-lane-head strong { font-weight: 500; white-space: nowrap; }
 .database-views-lane-head span { margin-right: auto; color: var(--color-ui-content-tertiary); font-size: 11px; }
 .database-views-lane-head svg { color: var(--color-ui-content-tertiary); }
 .database-views-card { display: flex; flex-direction: column; padding: 10px; border-radius: 9px; background: var(--database-views-raised); }
@@ -70,7 +70,7 @@
 }
 .database-views-scale { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; color: var(--color-ui-content-tertiary); font-size: 11.5px; }
 .database-views-scale svg { color: var(--color-ui-content-tertiary); }
-.database-views-scale strong, .database-views-month { color: var(--color-ui-content-primary); font-weight: 600; }
+.database-views-scale strong, .database-views-month { color: var(--color-ui-content-primary); font-weight: 500; }
 .database-views-scale span { position: absolute; left: calc(var(--at) * 100%); }
 .database-views-tracks { position: relative; height: 260px; padding-top: 8px; box-sizing: border-box; border-top: 1px solid var(--database-views-line); }
 .database-views-gridline, .database-views-today { position: absolute; top: 0; bottom: 0; left: calc(var(--at) * 100%); width: 1px; background: linear-gradient(to bottom, oklch(100% 0 0 / 7%), transparent 85%); }

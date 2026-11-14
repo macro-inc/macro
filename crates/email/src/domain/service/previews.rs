@@ -34,6 +34,16 @@ mod test;
 /// the rest absent, as every thread outside All Mail was before the fallback.
 const MAX_FOLDER_LOOKUPS: usize = 20;
 
+const DEFAULT_PAGE: u32 = 20;
+const MIN_PAGE: u32 = 1;
+const MAX_PAGE: u32 = 500;
+
+/// The page size for a preview request: the documented default when the
+/// caller names none, and never outside the allowed range.
+fn page_limit(requested: Option<u32>) -> u32 {
+    requested.unwrap_or(DEFAULT_PAGE).clamp(MIN_PAGE, MAX_PAGE)
+}
+
 async fn get_frecency_scores<U: FrecencyQueryService>(
     service: &U,
     include_frecency: bool,
@@ -82,10 +92,7 @@ where
 
         let sort_method = *query.sort_method();
 
-        const MIN_PAGE: u32 = 1;
-        const MAX_PAGE: u32 = 500;
-
-        let limit = limit.unwrap_or_default().clamp(MIN_PAGE, MAX_PAGE);
+        let limit = page_limit(limit);
 
         let query = PreviewCursorQuery {
             view,

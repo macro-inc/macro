@@ -56,8 +56,11 @@ Pulumi stacks; they do not host extra agent processes.
   `/brain/anthropic/*` serves agent teammates' brains the same way, but
   authenticates the agent's own Macro API key (`anthropic_gateway/brain.rs`)
   and counts usage against the agent account, with no session entity. It
-  serves only agents with `enable-agent-teammates` on for their own account
-  (`BrainRollout`; no provider or a failed load refuses with 403).
+  serves only agents with `enable-agent-teammates` on for their creator
+  (`BrainRollout` over `agent_credentials::rollout`; PostHog never targets an
+  agent's own account; a deleted creator falls back to the team owner; no
+  provider, no one to follow or a failed load refuses with
+  403). Agent git and agent MCP keys share the same check.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -152,6 +155,9 @@ Pulumi stacks; they do not host extra agent processes.
   `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
   the status's failure reason; inbox, gateway, push) on the team entity, with
   an id derived from computer and outcome (plus `failed_at` for a failure).
+  An agent teammate's computer goes to the agent's inviter instead, with
+  `agent { userId, name }` read from `team_agents` (`PgTeamAgentsRepo`); a
+  removed agent, or one whose inviter is gone, sends nothing.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only

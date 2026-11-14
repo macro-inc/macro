@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import type { SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Input } from '@ui';
 import {
@@ -17,23 +16,14 @@ import {
   ComputerSizePicker,
   ComputerSizeSkeleton,
 } from './computer-size-picker';
+import { FailureNotice } from './failure-notice';
 
 /**
  * Why the sizes could not load, in place of the size cards. The remedy is in
  * the footer, so the alert carries only the message.
  */
 function OffersFailureNotice(props: { failure: OffersFailure }) {
-  return (
-    <div class="flex items-start gap-3 rounded-lg border border-edge-muted p-4">
-      <WarningCircleIcon
-        aria-hidden="true"
-        class="mt-0.5 size-4 shrink-0 text-failure"
-      />
-      <p role="alert" class="min-w-0 text-sm text-ink text-pretty">
-        {props.failure.message}
-      </p>
-    </div>
-  );
+  return <FailureNotice>{props.failure.message}</FailureNotice>;
 }
 
 /**
@@ -68,6 +58,9 @@ export function ComputerPurchaseStep(props: {
   });
   const offer = () =>
     props.offers?.find((item) => item.size === size() && !item.soldOut);
+  // Sizes no host can run are left out, so the list can be empty: then there
+  // is nothing to name, price or buy.
+  const noSizes = () => props.offers?.length === 0;
 
   const buyLabel = () => {
     const chosen = offer();
@@ -99,6 +92,17 @@ export function ComputerPurchaseStep(props: {
         <Switch fallback={<ComputerSizeSkeleton />}>
           <Match when={props.failure}>
             {(failure) => <OffersFailureNotice failure={failure()} />}
+          </Match>
+          <Match when={noSizes()}>
+            <div
+              role="status"
+              class="flex flex-col gap-1 rounded-lg border border-edge-muted p-4"
+            >
+              <p class="text-sm text-ink">{t('computers.noSizes')}</p>
+              <p class="text-sm text-ink-muted text-pretty">
+                {t('computers.noSizesReason')}
+              </p>
+            </div>
           </Match>
           <Match when={props.offers}>
             {(offers) => (
@@ -151,7 +155,7 @@ export function ComputerPurchaseStep(props: {
           disabled={props.pending}
           onClick={props.onClose}
         >
-          {props.failure ? t('common.close') : t('common.cancel')}
+          {props.failure || noSizes() ? t('common.close') : t('common.cancel')}
         </Button>
         <Switch
           fallback={
@@ -184,8 +188,9 @@ export function ComputerPurchaseStep(props: {
             </Button>
           </Match>
           <Match when={props.failure?.remedy === 'none'}>{null}</Match>
+          <Match when={noSizes()}>{null}</Match>
         </Switch>
-        <Show when={!props.failure}>
+        <Show when={!props.failure && !noSizes()}>
           <p class="basis-full text-right text-xs text-ink-muted text-pretty">
             {props.offers
               ? t('computers.buyHeadsUp')
