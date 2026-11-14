@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useMaybePropertiesContext } from '@property/context/PropertiesContext';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -9,7 +10,13 @@ import {
 import { useTeamMembers } from '@queries/team/members';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, createSignal, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { useProperty } from '../../core/context';
 import { useAgentAssignees } from '../../queries/agent-assignees';
 import type { EntityProperty, PropertyApiValues } from '../../types';
@@ -115,24 +122,28 @@ function EntityEditorSelector(
     onCancel?: () => void;
   }
 ) {
+  const propertiesContext = useMaybePropertiesContext();
   const property = props.draft.property;
 
   const isCompanyOwner =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
   const isAssignees =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  createEffect(() => {
+    if (!isAssignees) return;
+    propertiesContext?.retainAssignees(
+      props.draft.selectedRefs().map((ref) => ref.entity_id)
+    );
+  });
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
   const { items: people } = useQuickAccessEntities(() => 'USER');
-  const selectedIdsAtOpen = props.draft
-    .selectedRefs()
-    .map((ref) => ref.entity_id);
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
     return scopedUserOptions(
       [...agents(), ...team.users()],
       people().map((item) => item.data),
-      selectedIdsAtOpen
+      propertiesContext?.retainedAssigneeIds() ?? []
     );
   });
   const showRosterStatus = () => {

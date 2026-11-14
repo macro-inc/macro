@@ -31,6 +31,7 @@ import Permission from '@phosphor/lock.svg';
 import Setup from '@phosphor/rocket-launch.svg';
 import Property from '@phosphor/sliders-horizontal.svg';
 import Stack from '@phosphor/stack.svg';
+import { createMediaQuery } from '@solid-primitives/media';
 import { isMac } from '@solid-primitives/platform';
 import {
   type Component,
@@ -190,6 +191,9 @@ const moreLinks = [
 ];
 
 export function DocumentationNavigation(props: { currentPath: string }) {
+  const compact = createMediaQuery(
+    '(min-width: 768px) and (max-width: 1439px)'
+  );
   const [query, setQuery] = createSignal('');
   const [searchActive, setSearchActive] = createSignal(false);
   const [searchPages] = createResource(
@@ -303,7 +307,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
             aria-label="Search pages"
             aria-controls="site-search-results"
             autocomplete="off"
-            placeholder={`Search pages ${isMac ? '⌘F' : 'Ctrl+F'}`}
+            placeholder={`${compact() ? 'Search' : 'Search pages'} ${isMac ? '⌘F' : 'Ctrl+F'}`}
             value={query()}
             onFocus={() => setSearchActive(true)}
             onInput={(event) => {
@@ -437,7 +441,7 @@ export function DocumentationNavigation(props: { currentPath: string }) {
               >
                 <NavigationLabel
                   href="/posts/superhuman-alternative"
-                  title="Versus Superhuman"
+                  title={compact() ? 'Vs Superhuman' : 'Versus Superhuman'}
                 />
               </a>
               <a

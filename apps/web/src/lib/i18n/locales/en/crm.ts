@@ -56,6 +56,22 @@ export default {
   searchSalesNotes: 'Search sales notes',
   searchSalesCalls: 'Search sales calls',
   pipelines: 'Pipelines',
+  pipelineEntryPrivate: 'Private pipeline',
+  pipelineEntryOpen: 'Open {{name}}',
+  pipelineEntryShowMore: {
+    one: 'Show {{count}} more',
+    other: 'Show {{count}} more',
+  },
+  pipelineEntryShowLess: 'Show less',
+  pipelineEntryEmptyFields: {
+    one: '{{count}} empty field',
+    other: '{{count}} empty fields',
+  },
+  pipelineEntryEmptyFieldsLabel: {
+    one: '{{count}} empty field: {{names}}',
+    other: '{{count}} empty fields: {{names}}',
+  },
+  pipelineEntryEmpty: 'Empty',
   pipelinesNavigation: 'CRM pipelines',
   newPipeline: 'New pipeline',
   pipelineTeam: 'Team',

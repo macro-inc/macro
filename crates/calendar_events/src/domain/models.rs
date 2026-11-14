@@ -1098,6 +1098,43 @@ pub enum CalendarSyncStatus {
     Ready,
 }
 
+/// Why a calendar's latest sync attempt failed, while none has succeeded since.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CalendarSyncFailure {
+    /// The provider or Macro may recover by itself; until it does, the
+    /// calendar's stored events stop taking changes.
+    Transient,
+    /// The provider refused for a reason a retry will not fix.
+    Permanent,
+    /// The grant is gone: nothing syncs or writes until the user reconnects.
+    ReauthRequired,
+}
+
+/// How current one visible calendar's stored events are.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarFreshness {
+    /// Persisted Macro calendar identifier.
+    pub calendar_id: Uuid,
+    /// When the calendar's next routine sync was due: its last successful
+    /// sync, which Macro repeats every few minutes, or a day after it for a
+    /// system calendar synced daily (see [`SYSTEM_CALENDAR_SYNC_INTERVAL`]).
+    /// `None` before its first sync finished.
+    pub refresh_due_at: Option<DateTime<Utc>>,
+    /// The latest attempt's failure, from the calendar or its whole account.
+    pub failure: Option<CalendarSyncFailure>,
+}
+
+/// How current a requester's calendar data is, for a reader that must not
+/// read stale or missing data as free time.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CalendarSyncHealth {
+    /// Every calendar `list_visible_calendars` returns.
+    pub calendars: Vec<CalendarFreshness>,
+    /// Connected inboxes whose first sync has not listed a calendar yet, so
+    /// whose calendars, which count toward busy time by default, are unknown.
+    pub unlisted_inboxes: Vec<Uuid>,
+}
+
 impl OccurrenceRange {
     /// Construct the bounded history/future window maintained by sync jobs.
     pub fn historical_sync(now: DateTime<Utc>) -> Self {

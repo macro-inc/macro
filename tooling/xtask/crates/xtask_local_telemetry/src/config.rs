@@ -6,7 +6,8 @@
 //! Doppler (see [`crate::provision`]). The file lives outside every repository and
 //! is read only by this process, so the token never reaches a commit, a generated
 //! env file, or a container's environment. `enabled = false` in it, or
-//! `MACRO_LOCAL_TELEMETRY=off`, turns telemetry off; so does `CI`.
+//! `MACRO_LOCAL_TELEMETRY=off`, turns telemetry off; so does `CI`. `services =
+//! true` also forwards the local stack's own telemetry (see [`crate::forwarding`]).
 
 use std::ffi::OsString;
 use std::fmt;
@@ -15,11 +16,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::forwarding::MachineName;
+
 #[cfg(test)]
 mod test;
 
 const CONFIG_FILE: &str = "macro/local-telemetry.toml";
 const BUFFER_DIR: &str = "macro/local-telemetry";
+/// Under the buffer directory: what the forwarder container mounts.
+const FORWARDER_DIR: &str = "forwarder";
 /// Hosts a token may be sent to over plain HTTP: a throwaway Loki on this machine.
 const LOOPBACK_HOSTS: &[&str] = &["localhost", "127.0.0.1", "[::1]"];
 /// The shared OTLP ingest route, the one CI's `export-ci-telemetry` sends to.
@@ -67,6 +72,12 @@ impl Paths {
             switch: Switch::Default,
             provision: None,
         }
+    }
+
+    /// The private directory the stack's forwarder container mounts: its token
+    /// and config (see [`crate::forwarding`]).
+    pub fn forwarder_dir(&self) -> PathBuf {
+        self.buffer_dir.join(FORWARDER_DIR)
     }
 }
 
@@ -156,6 +167,8 @@ pub struct Config {
     token: Option<Token>,
     traces: bool,
     provisioned: bool,
+    services: bool,
+    machine: Option<MachineName>,
 }
 
 /// What the settings file says.
@@ -179,6 +192,10 @@ struct ConfigFile {
     traces: Option<bool>,
     /// Written by provisioning, which may then replace a token that stops working.
     provisioned: Option<bool>,
+    /// Also forward the local stack's own traces, logs and metrics.
+    services: Option<bool>,
+    /// The name those are tagged with, instead of the short hostname.
+    machine: Option<String>,
 }
 
 /// A bearer token. Its `Debug` and `Display` never show the value.
@@ -229,6 +246,12 @@ pub enum ConfigError {
         /// The settings file.
         path: PathBuf,
     },
+    /// `machine` isn't a plain name.
+    #[error("{path}: `machine` must be 1 to 63 letters, digits, `-` or `_`")]
+    Machine {
+        /// The settings file.
+        path: PathBuf,
+    },
 }
 
 impl Config {
@@ -273,11 +296,22 @@ impl Config {
             });
         }
 
+        let machine = file
+            .machine
+            .map(|machine| {
+                MachineName::parse(&machine).ok_or_else(|| ConfigError::Machine {
+                    path: path.to_owned(),
+                })
+            })
+            .transpose()?;
+
         Ok(Setting::On(Self {
             endpoint,
             token,
             traces: file.traces.unwrap_or(true),
             provisioned: file.provisioned.unwrap_or(false),
+            services: file.services.unwrap_or(false),
+            machine,
         }))
     }
 
@@ -295,7 +329,24 @@ impl Config {
     pub(crate) fn same_as(&self, other: &Self) -> bool {
         self.endpoint == other.endpoint
             && self.traces == other.traces
+            && self.services == other.services
+            && self.machine == other.machine
             && self.token.as_ref().map(Token::expose) == other.token.as_ref().map(Token::expose)
+    }
+
+    /// Whether `services = true`: the local stack's own telemetry goes out too.
+    pub(crate) fn services(&self) -> bool {
+        self.services
+    }
+
+    /// The `machine` setting, when there is one.
+    pub(crate) fn machine(&self) -> Option<&MachineName> {
+        self.machine.as_ref()
+    }
+
+    /// The configured endpoint, without a trailing slash.
+    pub(crate) fn endpoint(&self) -> &str {
+        &self.endpoint
     }
 
     /// The OTLP logs route, which Loki stores.
@@ -310,6 +361,10 @@ impl Config {
 
     pub(crate) fn token(&self) -> Option<&Token> {
         self.token.as_ref()
+    }
+
+    pub(crate) fn into_token(self) -> Option<Token> {
+        self.token
     }
 }
 

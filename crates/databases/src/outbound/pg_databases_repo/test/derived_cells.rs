@@ -689,6 +689,7 @@ async fn the_backfill_stores_missing_formula_cells_and_a_second_run_changes_noth
             name: "Plain".into(),
             owner_id: viewer().user_id,
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
