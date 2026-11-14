@@ -383,7 +383,12 @@ fn statement_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>)
             || (name.ends_with(".rs")
                 && name != "test.rs"
                 && !name.ends_with("_test.rs")
-                && !matches!(name, "test_viewers.rs" | "source_list_oracle.rs"))
+                // `entity_audiences.rs` binds the teams and channels that grants
+                // name, to list their members; it checks no viewer.
+                && !matches!(
+                    name,
+                    "test_viewers.rs" | "source_list_oracle.rs" | "entity_audiences.rs"
+                ))
         {
             files.push(path);
         }
