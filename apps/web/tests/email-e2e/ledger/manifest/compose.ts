@@ -1813,5 +1813,45 @@ export const compose = {
       trigger: 'after Reply in the touch dock',
       source: ['src/features/email-compose/views/reply-input.tsx'],
     },
+    {
+      id: 'STC-978',
+      surface: 'SC-12',
+      fn: ['F-123'],
+      state: 'result: the pill of the removed attachment is gone',
+      trigger: 'after Remove <filename>',
+      source: ['src/features/email-message/components/attachment-pill.tsx'],
+    },
+    {
+      id: 'STC-979',
+      surface: 'SC-12',
+      fn: ['F-185'],
+      state: 'result: the media viewer shows the picture of the pill',
+      trigger: 'after clicking the pill of an image',
+      source: ['src/features/email-compose/components/attachment-viewer.tsx'],
+    },
+    {
+      id: 'STC-980',
+      surface: 'SC-03',
+      fn: ['F-111'],
+      state:
+        'result: the quoted original or the forwarded message shows in the editor',
+      trigger: 'after Show quoted text / Show forwarded message',
+      source: [
+        'src/features/email-compose/views/reply-input.tsx',
+        'src/features/email-compose/primitives/reply-composer.ts',
+      ],
+    },
+    {
+      id: 'STC-981',
+      surface: 'SC-20',
+      fn: ['F-186'],
+      state:
+        'result: the upgrade prompt is open and says it removes the Macro signature',
+      trigger: 'after clicking the watermark',
+      source: [
+        'src/features/email-compose/components/macro-signature-button.tsx',
+        'src/features/email-compose/compose-adapter.ts',
+      ],
+    },
   ],
 } as const satisfies Group;

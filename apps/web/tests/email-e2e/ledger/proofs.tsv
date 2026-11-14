@@ -56,31 +56,45 @@ F-091	Remove reminder removes nothing
 F-092	the Reminders tab does not list a thread with a reminder
 F-094	a reminder cancelled by a reply stays in the Reminders tab
 F-095	New email opens no composer
+F-096	a mailto link opens no new email
 F-097	an added recipient is not added
+F-098	a recipient dragged to Cc stays in To
 F-099	Cc is not added
 F-100	the inbox chosen in From is ignored
 F-101	the typed subject is dropped
 F-102	the typed body is not sent
+F-103	formatting shortcuts and the format ribbon format nothing
 F-104	a typed address is not sent as a link
 F-105	an inserted picture is not sent
+F-106	a person mentioned in a reply is not added to Cc
 F-107	the signature cannot be left out
 F-108	Reply opens nothing
 F-109	Reply all writes to the sender alone
 F-110	Forward opens nothing
+F-111	the quoted or forwarded original cannot be shown in the editor
 F-112	an open reply does not become a forward
 F-113	the phone composer never opens
 F-115	typing saves no draft
+F-116	a saved draft cannot be read back into the composer
 F-117	Escape throws a reply away
 F-118	a reload does not reopen the draft
 F-119	discarding a draft does nothing
+F-120	Retry on a refused draft save does nothing
+F-121	Log out does not ask about drafts only this device holds
 F-122	a picked file is dropped
 F-124	a forward leaves out the files of the message
 F-126	a calendar file opens nothing
 F-127	Download saves nothing
 F-131	Send on a new message does nothing
 F-132	Send on a reply does nothing
+F-133	send and mark done does not mark the thread done
 F-134	Undo send does nothing
 F-135	a failed send does not offer what was written
+F-137	a retried send is submitted again without asking what became of the first
+F-138	choosing an alias in From keeps the main address
+F-139	a send made offline is not queued on the device
+F-140	a send the provider rejects is not reported
+F-141	a thread shared with edit access offers no reply
 F-142	Schedule send does nothing
 F-143	Update schedule does nothing
 F-144	Cancel scheduled send does nothing
@@ -97,6 +111,7 @@ F-181	Hide navigation leaves the sidebar in place
 F-182	a folder name on a row opens nothing
 F-183	the tutorial row opens no video
 F-184	the question-mark key opens no shortcuts sheet
+F-186	the watermark opens no upgrade prompt
 F-187	Copy ID copies nothing
 F-188	the thread offers no details panel
 F-189	Try again in the accounts settings does nothing

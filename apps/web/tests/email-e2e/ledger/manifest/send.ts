@@ -435,6 +435,47 @@ export const send = {
       trigger: 'browser reload on a composer whose draft is saved',
       source: ['src/features/email-compose/views/email-compose.tsx'],
     },
+    {
+      id: 'AC-913',
+      surface: 'SC-19',
+      fn: ['F-116'],
+      action: 'reopen a saved draft from the Drafts list',
+      trigger: 'Drafts tab, click the row of the draft',
+      source: ['src/features/email-compose/views/email-compose.tsx'],
+    },
+    {
+      id: 'AC-914',
+      surface: 'SC-18',
+      fn: ['F-140'],
+      action: 'send a message that the mail provider then rejects',
+      trigger: 'Send; the provider refuses the message',
+      source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
+    },
+    {
+      id: 'AC-915',
+      surface: 'SC-09',
+      fn: ['F-147'],
+      action:
+        'cancel a scheduled send the provider rejected, back to an editable draft',
+      trigger: 'bar button Cancel scheduled send, under the rejected notice',
+      source: [
+        'src/features/email-compose/components/email-schedule-summary.tsx',
+        'src/features/email-compose/primitives/email-send-schedule.ts',
+      ],
+      providers: ['outlook'],
+    },
+    {
+      id: 'AC-916',
+      surface: 'SC-09',
+      fn: ['F-147'],
+      action: 'send again a scheduled message the provider rejected',
+      trigger: 'notice button Retry send in the composer of the message',
+      source: [
+        'src/features/email-message/views/message-operation-recovery.tsx',
+        'src/features/email-message/queries/message-operation.ts',
+      ],
+      providers: ['outlook'],
+    },
   ],
   states: [
     {
@@ -1656,6 +1697,52 @@ export const send = {
         'result: the delivered message has left Scheduled and Sent lists it',
       trigger: 'after the scheduled time passes',
       source: ['src/features/email-compose/primitives/email-composer.ts'],
+    },
+    {
+      id: 'STC-974',
+      surface: 'SC-19',
+      fn: ['F-116'],
+      state:
+        'result: the draft opens from Drafts with its recipients, subject and text, and what is typed next is kept in the same draft',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-compose/views/email-compose.tsx'],
+    },
+    {
+      id: 'STC-975',
+      surface: 'SC-18',
+      fn: ['F-133'],
+      state:
+        'result: the reply is sent, its thread has left the inbox and the next thread is open',
+      trigger: 'after Send and mark done succeeds',
+      source: ['src/features/email-compose/primitives/reply-composer.ts'],
+    },
+    {
+      id: 'STC-976',
+      surface: 'SC-18',
+      fn: ['F-137'],
+      state:
+        'result: after the reload the thread shows the sent message once and no pending send is left',
+      trigger: 'after a send that was repeated or reloaded settles',
+      source: ['src/features/email-compose/primitives/email-composer.ts'],
+    },
+    {
+      id: 'STC-977',
+      surface: 'SC-18',
+      fn: ['F-140'],
+      state:
+        'result: the rejected send is reported (Email failed to send) and its message is kept in the thread, not shown as sent',
+      trigger: 'after the provider rejects a send',
+      source: ['src/features/email-compose/primitives/queued-send-notice.ts'],
+    },
+    {
+      id: 'STC-982',
+      surface: 'SC-09',
+      fn: ['F-147'],
+      state:
+        'the composer of a scheduled message says: Your mail provider rejected this send. You can retry after correcting the problem in your mailbox. (Retry send)',
+      trigger: 'the provider rejected a scheduled Outlook send when it was due',
+      source: ['src/features/email-message/core/message-operation.ts'],
+      providers: ['outlook'],
     },
   ],
 } as const satisfies Group;
