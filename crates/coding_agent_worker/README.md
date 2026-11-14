@@ -272,7 +272,10 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   refs, never by a timer; regathers are debounced and spaced at least ten
   times the last gather's duration apart. It is read-only: it never
   fetches, takes a git lock or runs `git status`. `[monitor] changes =
-  false` turns it off.
+  false` turns it off; page 8 then has no graphs and lists every pull
+  request on an `other PRs` tab, as the old PRS page did. That tab also
+  holds pull requests whose repository is not mapped (its agents aged out,
+  past the 8-repository cap, or opened from another checkout).
 - **`macrod monitor dump`** prints `{"connected": ...}`, then one
   `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
   stops after N updates. `--transcript <agent id>` prints that agent's

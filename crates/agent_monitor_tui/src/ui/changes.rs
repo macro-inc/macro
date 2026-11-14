@@ -23,10 +23,11 @@ use ratatui::text::Span;
 
 use agent_monitor::domain::model::{CiState, Lane, Pr, PrState, RepoGraph, ReviewState};
 
-use crate::app::App;
+use crate::app::{App, ChangeTab};
 use crate::theme;
 use crate::theme::Token;
 use crate::ui::Clock;
+use crate::view::{Attention, Filter};
 
 /// Width under which the zoomed page draws the compact list.
 pub const TRANSIT_MIN_WIDTH: u16 = 100;
@@ -154,6 +155,51 @@ fn lane_tag(app: &App, lane: &Lane) -> String {
         Some(agent) => agent.name.clone(),
         None => lane.branch.clone(),
     }
+}
+
+/// The tab strip: `REPO`, each mapped repository with its open lanes (✕
+/// when one fails CI), then the other pull requests tab; the shown tab is a
+/// chip.
+fn tab_spans(app: &App) -> Vec<Span<'static>> {
+    let current = app.change_tab();
+    let mut spans = vec![Span::styled("REPO ", theme::ink(Token::TextDim))];
+    for tab in app.change_tabs() {
+        let (text, failing) = match &tab {
+            ChangeTab::Repo(id) => {
+                let Some(graph) = app.view.repos.get(id) else {
+                    continue;
+                };
+                let lanes = graph
+                    .lanes
+                    .iter()
+                    .filter(|lane| lane.landed.is_none())
+                    .count();
+                let failing = graph
+                    .lanes
+                    .iter()
+                    .any(|lane| app.view.attention(lane) == Some(Attention::Failing));
+                (format!(" {} {lanes}", repo_short(graph)), failing)
+            }
+            ChangeTab::OtherPrs => {
+                let prs = app.view.unmapped_prs(&Filter::default());
+                let open = prs.iter().filter(|pr| !pr.state.is_final()).count();
+                let failing = prs
+                    .iter()
+                    .any(|pr| !pr.state.is_final() && pr.ci == CiState::Failed);
+                (format!(" other PRs {open}"), failing)
+            }
+        };
+        let text = format!("{text}{} ", if failing { " ✕" } else { "" });
+        let style = if current.as_ref() == Some(&tab) {
+            theme::chip(Token::Text)
+        } else if failing {
+            theme::ink(Token::Alert)
+        } else {
+            theme::ink(Token::TextDim)
+        };
+        spans.push(Span::styled(text, style));
+    }
+    spans
 }
 
 /// A repository's tab name: the repository's own name.
