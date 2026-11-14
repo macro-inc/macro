@@ -51,6 +51,12 @@ email-e2e-known-bugs *args:
     SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
     SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
 
+# What the last `just email-e2e` run covers: the functions of email and the
+# backend entry points, from the records its scenarios left. Writes
+# target/email-e2e-coverage/index.html. `--enforce` fails on gaps.
+email-e2e-coverage *args:
+    cargo run -p xtask -- email-coverage report --results target/debug/email-e2e --results target/nextest/email-e2e --out target/email-e2e-coverage {{ args }}
+
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:
   docker build -f docker/Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .

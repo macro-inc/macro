@@ -5,7 +5,9 @@
 //! The scenarios are divided over jobs that run side by side, so the
 //! workflow takes as long as its slowest job, not as long as their sum: the
 //! scenarios without search in [`PARTITIONS`] parts, the search scenarios
-//! with their OpenSearch, and the scenarios kept for known bugs.
+//! with their OpenSearch, and the scenarios kept for known bugs. A last job
+//! reads what the gating scenarios recorded and reports which functions of
+//! email and which backend entry points they cover (`cargo x email-coverage`).
 //!
 //! It runs on every push to `main` that changes backend code, because a
 //! shared crate or a migration can break email as easily as email code can,
@@ -41,6 +43,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/opensearch_client/**"),
     xtask_paths::repo_glob!("infra/stacks/opensearch/helpers/**"),
     xtask_paths::repo_glob!("infra/local/opensearch/**"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_email_coverage/**"),
+    xtask_paths::repo_glob!("apps/web/tests/email-e2e/ledger/**"),
     xtask_paths::repo_glob!("crates/macro_db_client/migrations/**"),
     xtask_paths::repo_glob!(".config/nextest.toml"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e.yml"),
@@ -74,6 +78,18 @@ const WITHOUT_SEARCH: &str = "not binary(search)";
 const LOGS: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/debug/email-e2e");
 
+/// Where a job gathers what the coverage report reads: the run's results and
+/// each scenario's record.
+const RESULTS: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("target/email-e2e-results");
+
+/// Where the coverage job writes its report.
+const COVERAGE: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("target/email-e2e-coverage");
+
+/// The jobs whose scenarios gate, by id.
+const GATING_JOBS: [&str; 2] = ["email-e2e", "email-e2e-search"];
+
 /// Build the workflow.
 pub fn email_e2e() -> Workflow {
     let push = MAIN_PATHS
@@ -92,6 +108,7 @@ pub fn email_e2e() -> Workflow {
         .add_job("email-e2e", scenarios())
         .add_job("email-e2e-search", search())
         .add_job("email-e2e-known-bugs", known_bug_scenarios())
+        .add_job("email-e2e-coverage", coverage())
 }
 
 /// Every commit on `main` gets its own result: a later merge does not cancel
@@ -122,6 +139,7 @@ fn job(name: &str) -> Job {
         .add_env(("EMAIL_E2E_REDIS_URL", "redis://127.0.0.1:6379"))
         .add_env(("EMAIL_E2E_SQS_URL", "http://127.0.0.1:9324"))
         .add_env(("EMAIL_E2E_KAFKA_BROKERS", "127.0.0.1:9092"))
+        .add_env(("EMAIL_E2E_RESULTS", RESULTS.as_str()))
         .add_service("postgres", code_check_cloud_storage::postgres_service())
         .add_service("redis", code_check_cloud_storage::redis_service())
         .add_service("sqs", sqs_service())
@@ -170,6 +188,7 @@ fn scenarios() -> Job {
     ))
     .map(prepare)
     .add_step(run_scenarios())
+    .map(|job| keep_results(job, "email-e2e-results-${{ matrix.partition }}"))
     .map(|job| finish(job, "email-e2e-logs-${{ matrix.partition }}"))
 }
 
@@ -184,6 +203,7 @@ fn search() -> Job {
         .map(prepare)
         .add_step(create_search_indices())
         .add_step(run_scenarios())
+        .map(|job| keep_results(job, "email-e2e-results-search"))
         .add_step(known_bugs())
         .map(|job| finish(job, "email-e2e-logs-search"))
 }
@@ -199,6 +219,57 @@ fn known_bug_scenarios() -> Job {
         .add_step(known_bugs())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Reports what the gating scenarios cover, from the records the jobs kept.
+/// It runs when scenarios failed too: the report says which, and counts only
+/// the ones that passed. Gaps do not fail it; a list that no longer matches
+/// the code does.
+fn coverage() -> Job {
+    Job::default()
+        .name("Email end-to-end (coverage)")
+        .timeout_minutes(15u32)
+        .runs_on(runners::Runner::Small.to_string())
+        .needs(GATING_JOBS.map(str::to_owned).to_vec())
+        .cond(Expression::new("always()"))
+        .add_env(("EMAIL_E2E_RESULTS", RESULTS.as_str()))
+        .add_env(("EMAIL_E2E_COVERAGE", COVERAGE.as_str()))
+        .add_step(steps::checkout(false, false))
+        .add_step(steps::setup_rust_light())
+        .add_step(
+            Step::new("download the scenarios' records")
+                .uses(
+                    "actions",
+                    "download-artifact",
+                    "634f93cb2916e3fdff6788551b99b062d0335ce0",
+                ) // v5
+                .add_with(("pattern", "email-e2e-results-*"))
+                .add_with(("path", RESULTS.as_str())),
+        )
+        .add_step(
+            Step::new("report the coverage").run(include_str!("scripts/email_e2e_coverage.sh")),
+        )
+        .add_step(
+            steps::upload_artifact("email-e2e-coverage", COVERAGE)
+                .add_with(("if-no-files-found", "ignore"))
+                .if_condition(Expression::new("always()")),
+        )
+}
+
+/// Keeps the run's results and the scenarios' records for the coverage job,
+/// whether or not the scenarios passed.
+fn keep_results(job: Job, name: &str) -> Job {
+    job.add_step(
+        Step::new("keep the results for the coverage report")
+            .run(include_str!("scripts/email_e2e_results.sh"))
+            .if_condition(Expression::new("always()")),
+    )
+    .add_step(
+        steps::upload_artifact(name, RESULTS)
+            .add_with(("if-no-files-found", "ignore"))
+            .add_with(("retention-days", 7))
+            .if_condition(Expression::new("always()")),
+    )
 }
 
 /// ElasticMQ: the SQS-compatible server the scenarios' queues live on.
