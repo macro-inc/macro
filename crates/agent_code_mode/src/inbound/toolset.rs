@@ -70,16 +70,31 @@ enum CodeHost {
     User,
 }
 
+/// What a session program is and how to read the SDK before writing one.
+const SESSION_EXECUTE_CODE: &str = include_str!("toolset/session/execute_code.md");
+/// Reviews and views: how a program shows the person what it drafted, made
+/// or found.
+const SESSION_PRESENT: &str = include_str!("toolset/session/present.md");
+/// Checking back later without waiting in a program.
+const SESSION_CHECK_BACK: &str = include_str!("toolset/session/check_back.md");
+const PROGRAM: &str = include_str!("toolset/shared/program.md");
+const RUNTIME: &str = include_str!("toolset/shared/runtime.md");
+
+/// `ExecuteCode`'s description for a session nobody watches, such as a
+/// routine draft: no reviews or views to present, so neither their guidance
+/// nor the PresentView schema, which is most of the full description.
+pub fn unseen_execute_code_description() -> String {
+    format!("{SESSION_EXECUTE_CODE}\n{SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}")
+}
+
 /// Execute a JavaScript module with the real Macro SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ExecuteCode",
     description = format!(
-        "{}\n{}\n{}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
-        include_str!("toolset/session/execute_code.md"),
-        include_str!("toolset/shared/program.md"),
-        include_str!("toolset/shared/runtime.md"),
+        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n",
+        SESSION_PRESENT.trim_end(),
         dynamic_ui::present_view_schema(),
     )
 )]
