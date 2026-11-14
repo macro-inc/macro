@@ -140,7 +140,7 @@ pub fn draw_card(
             ),
         ]),
         Line::from(doing),
-        Line::from(format::activity(&agent.activity, width, Token::Ok)),
+        Line::from(format::activity(&agent.activity, width, Token::Trace)),
         Line::from(vec![
             Span::styled("TRN ", theme::ink(Token::Rule)),
             Span::styled(agent.turns.to_string(), theme::bold(Token::Text)),

@@ -85,6 +85,10 @@ pub struct MonitorArgs {
     /// `~/.macrod/profiles/<name>.toml`, instead.
     #[arg(long, global = true)]
     profile: Option<ProfileName>,
+    /// The viewer's colour theme (classic, ember, phosphor or dusk),
+    /// instead of `[monitor] theme`.
+    #[arg(long)]
+    theme: Option<agent_monitor_tui::ThemeName>,
 }
 
 #[derive(clap::Subcommand)]
@@ -127,7 +131,7 @@ pub async fn run(args: MonitorArgs) -> ExitCode {
             count,
             transcript: Some(agent),
         }) => dump_transcript(args.socket, agent, count).await,
-        None => view(args.socket, &config, args.demo).await,
+        None => view(args.socket, &config, args.demo, args.theme).await,
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -557,6 +561,7 @@ async fn view(
     socket: Option<PathBuf>,
     config: &MonitorConfig,
     demo: bool,
+    theme: Option<agent_monitor_tui::ThemeName>,
 ) -> rootcause::Result<()> {
     let settings = config.settings()?;
     let feed = if demo {
@@ -574,6 +579,7 @@ async fn view(
     agent_monitor_tui::run(agent_monitor_tui::Options {
         feed,
         fps: settings.fps,
+        theme: theme.unwrap_or(settings.theme),
     })
     .await
     .map_err(|error| rootcause::report!("{error}"))

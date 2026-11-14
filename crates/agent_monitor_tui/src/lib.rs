@@ -22,6 +22,7 @@ pub mod theme;
 pub mod ui;
 pub mod view;
 
+pub use theme::ThemeName;
 #[cfg(unix)]
 pub use unix::{FeedChoice, Options, ViewerError, run, run_feed};
 
@@ -33,6 +34,7 @@ mod unix {
     use crate::app::App;
     use crate::feed::{self, Feed};
     use crate::runner;
+    use crate::theme::ThemeName;
     use crate::view::ViewState;
 
     /// Where the viewer reads from.
@@ -54,6 +56,8 @@ mod unix {
         pub feed: FeedChoice,
         /// Frames per second while something animates; 0 stops animation.
         pub fps: u8,
+        /// The colour theme it starts in.
+        pub theme: ThemeName,
     }
 
     /// Why the viewer stopped with an error.
@@ -83,13 +87,19 @@ mod unix {
             FeedChoice::Socket(socket) => (feed::socket(socket), None),
             FeedChoice::Demo { seed } => (feed::demo(seed), Some(String::from("DEMO"))),
         };
-        run_feed(feed, label, options.fps).await
+        run_feed(feed, label, options.fps, options.theme).await
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
     /// over a store it hosts; `label` is shown in the header.
-    pub async fn run_feed(feed: Feed, label: Option<String>, fps: u8) -> Result<(), ViewerError> {
+    pub async fn run_feed(
+        feed: Feed,
+        label: Option<String>,
+        fps: u8,
+        theme: ThemeName,
+    ) -> Result<(), ViewerError> {
         let mut app = App::new(ViewState::new(body()), label);
+        app.set_theme(theme);
         let input = runner::spawn_input();
         let mut terminal = ratatui::init();
         let result = runner::run_loop(

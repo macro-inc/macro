@@ -316,6 +316,8 @@ pub enum Action {
     Find(String),
     /// Show ended agents too, or only current ones again.
     ToggleAll,
+    /// Switch to the next colour theme.
+    CycleTheme,
 }
 
 /// The next state and action for `key` in `mode` on `page`.
@@ -361,6 +363,7 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::Char('q') => (stay, Action::Quit),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
+        Key::Char('t') => (stay, Action::CycleTheme),
         Key::Char('/') => (
             Mode::Find {
                 input: Input::default(),

@@ -79,7 +79,19 @@ pub struct MonitorSettings {
     /// most every 5 minutes with none. Values under 15 are raised to 15.
     /// 0 turns pull request status off.
     pub pr_poll_secs: u32,
+    /// The viewer's colour theme: `classic`, `ember`, `phosphor` or `dusk`.
+    /// `t` in the viewer cycles through them; `--theme` overrides this.
+    pub theme: MonitorTheme,
 }
+
+/// A viewer colour theme. Windows has no viewer: it parses the field but
+/// never reads it.
+#[cfg(unix)]
+pub type MonitorTheme = agent_monitor_tui::ThemeName;
+/// A viewer colour theme. Windows has no viewer: it parses the field but
+/// never reads it.
+#[cfg(not(unix))]
+pub type MonitorTheme = String;
 
 impl Default for MonitorSettings {
     fn default() -> Self {
@@ -90,6 +102,7 @@ impl Default for MonitorSettings {
             run_record_dirs: Vec::new(),
             run_id_labels: Vec::new(),
             pr_poll_secs: 60,
+            theme: MonitorTheme::default(),
         }
     }
 }

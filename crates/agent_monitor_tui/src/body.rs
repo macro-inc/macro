@@ -48,6 +48,12 @@ pub trait BodyPane: Send {
 
     /// Draws into `area`.
     fn render(&self, area: Rect, buffer: &mut Buffer);
+
+    /// Matches the pane's own colours to `theme`. Panes drawn with tokens
+    /// follow the theme already and ignore this.
+    fn set_theme(&mut self, theme: &theme::Theme) {
+        let _ = theme;
+    }
 }
 
 /// Seconds the rate gauges count over.
