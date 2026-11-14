@@ -444,6 +444,93 @@ fn import_runs_tab_hooks_and_tracks_absent_fields() -> Result<(), Error> {
 }
 
 #[test]
+fn split_text_keeps_imported_absent_format_style_detail_on_new_parts() -> Result<(), Error> {
+    // Source TextNode.splitText (Lexical 0.45.0 dist sha256 449d061d, L7044) copies
+    // __format/__style/__detail raw onto each new part (L7072-7074, L7108-7110), so
+    // fields the original imported as absent stay absent; mode comes from
+    // $createTextNode ('normal').
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let text = tx.create_text("old")?;
+        tx.append(paragraph, &[text.key()])?;
+        let imported = serde_json::json!({"type":"text","version":1,"text":"Before. After."});
+        tx.update_from_json(text, imported.as_object().expect("object"))?;
+        let parts = tx.text(text)?.split_text(&[Utf16Offset(8)])?;
+        assert_eq!(parts.len(), 2);
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[0])?),
+            serde_json::json!({"text":"Before. ","type":"text","version":1})
+        );
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[1])?),
+            serde_json::json!({"mode":"normal","text":"After.","type":"text","version":1})
+        );
+        // An explicit write after the split exports that field, as Source's setters do.
+        tx.text(parts[1])?.set_format(TextFormat::BOLD)?;
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[1])?),
+            serde_json::json!({"format":1,"mode":"normal","text":"After.","type":"text","version":1})
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn split_text_of_segmented_imported_text_replaces_the_first_part_too() -> Result<(), Error> {
+    // Source's segmented branch (L7090-7097): the FIRST part is also a new
+    // $createTextNode node with raw format/style/detail and mode 'normal'.
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let text = tx.create_text("old")?;
+        tx.append(paragraph, &[text.key()])?;
+        let imported = serde_json::json!({"type":"text","version":1,"text":"Before. After.","mode":"segmented"});
+        tx.update_from_json(text, imported.as_object().expect("object"))?;
+        let parts = tx.text(text)?.split_text(&[Utf16Offset(8)])?;
+        assert_eq!(parts.len(), 2);
+        assert_ne!(parts[0], text.key());
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[0])?),
+            serde_json::json!({"mode":"normal","text":"Before. ","type":"text","version":1})
+        );
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[1])?),
+            serde_json::json!({"mode":"normal","text":"After.","type":"text","version":1})
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn split_text_of_created_text_exports_every_field_on_new_parts() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("valid");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let text = tx.create_text("Before. After.")?;
+        tx.append(paragraph, &[text.key()])?;
+        let parts = tx.text(text)?.split_text(&[Utf16Offset(8)])?;
+        assert_eq!(
+            serde_json::Value::Object(tx.export_json(parts[1])?),
+            serde_json::json!({"detail":0,"format":0,"mode":"normal","style":"","text":"After.","type":"text","version":1})
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
 fn raw_text_and_paragraph_export_match_upstream() -> Result<(), Error> {
     assert_eq!(
         tokenize_raw_text("a\r\nb\tc\rd\n").collect::<Vec<_>>(),

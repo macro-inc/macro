@@ -491,6 +491,14 @@ impl TextMut<'_, '_> {
                     .set_format(data.format)?
                     .set_style(&data.style)?
                     .set_detail(data.detail)?;
+                // Source splitText copies __format/__style/__detail raw onto each
+                // new part (0.45 L7072-7074, L7108-7110), so a field the original
+                // imported as absent stays absent; mode comes from $createTextNode.
+                let carried = data.absent
+                    & (crate::node::AbsentKeys::FORMAT
+                        | crate::node::AbsentKeys::STYLE
+                        | crate::node::AbsentKeys::DETAIL);
+                target.data_mut()?.absent.insert(carried);
                 self.tx.writable(part)?.state = state.clone();
                 part
             };
