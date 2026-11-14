@@ -59,13 +59,6 @@ fn strings(ids: &[Uuid]) -> Vec<String> {
     ids.iter().map(Uuid::to_string).collect()
 }
 
-/// A positive run under a task-only filter, bound at `$slot`.
-fn task_ids(slot: usize) -> String {
-    format!(
-        "d.id = ANY(ARRAY(SELECT dst_ids.document_id FROM document_sub_type dst_ids WHERE dst_ids.document_id = ANY(${slot}::text[]) AND dst_ids.sub_type = 'task'))"
-    )
-}
-
 fn render(expr: &Expr<DocumentLiteral>) -> (String, Vec<Vec<String>>) {
     let mut arrays = DocumentIdArrays::starting_at(9);
     let sql = build_document_filter(Some(expr), Some(&mut arrays));
@@ -170,41 +163,6 @@ fn lone_ids_render_inline() {
 }
 
 #[test]
-fn task_only_filters_test_only_the_ids_of_tasks() {
-    let task = || Expr::val(DocumentLiteral::SubType(DocumentSubType::Task));
-    let (a, b) = (absent(1, 3), absent(2, 3));
-    let subtype = "EXISTS (SELECT 1 FROM document_sub_type dst_f WHERE dst_f.document_id = d.id AND dst_f.sub_type = 'task')";
-    for (expr, sql) in [
-        (
-            Expr::and(task(), any_of(&a)),
-            format!(" AND ({subtype} AND {})", task_ids(9)),
-        ),
-        // Exclusions stay as they are: they narrow nothing.
-        (
-            Expr::and(task(), Expr::and(any_of(&a), Expr::is_not(any_of(&b)))),
-            format!(
-                " AND ({subtype} AND ({} AND (NOT d.id = ANY($10::text[]))))",
-                task_ids(9)
-            ),
-        ),
-        // A run under a negation is negated again by push-down, and still
-        // only ever admits tasks.
-        (
-            Expr::and(task(), Expr::is_not(Expr::is_not(any_of(&a)))),
-            format!(" AND ({subtype} AND {})", task_ids(9)),
-        ),
-        // Without the task constraint every id is tested.
-        (
-            Expr::or(task(), any_of(&a)),
-            format!(" AND ({subtype} OR d.id = ANY($9::text[]))"),
-        ),
-        (any_of(&a), " AND d.id = ANY($9::text[])".to_owned()),
-    ] {
-        assert_eq!(render(&expr).0, sql);
-    }
-}
-
-#[test]
 fn bind_free_rendering_keeps_every_id_inline() {
     let expr = Expr::is_not(any_of(&[IN_A, IN_B, IN_C]));
     assert_eq!(
@@ -260,8 +218,7 @@ fn arrays_follow_each_querys_fixed_binds() {
         assert_eq!((flat_arrays, grouped_arrays), (2, 2));
         for (sql, first) in [(&flat, flat_first), (&grouped, grouped_first)] {
             assert!(sql.contains(&format!(
-                "({} AND (NOT d.id = ANY(${}::text[])))",
-                task_ids(first),
+                "(d.id = ANY(${first}::text[]) AND (NOT d.id = ANY(${}::text[])))",
                 first + 1
             )));
             assert!(!sql.contains(&format!("${}", first + 2)));
@@ -403,54 +360,6 @@ async fn flat_continuations_keep_bound_id_sets(pool: PgPool) -> anyhow::Result<(
         pages.push(ids(&page));
     }
     assert_eq!(pages, [vec![STANDALONE, IN_D], vec![IN_B, IN_A]]);
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(
-        "../../../../../../../macro_db_client/fixtures/mixed_items_expanded.sql",
-        "test/tasks.sql"
-    ),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn flat_task_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
-    // A, C, and D are tasks; B and the standalone document are not.
-    let set = |ids: &[Uuid], tag| any_of(&among_absent(ids, tag));
-    let name = |name: &str| Expr::val(DocumentLiteral::NameContains(name.into()));
-    for (label, filter, expected) in [
-        (
-            "association",
-            set(&[STANDALONE, IN_A, IN_B, IN_C, ISOLATED], 1),
-            vec![IN_C, IN_A],
-        ),
-        (
-            "negated association",
-            Expr::is_not(set(&[IN_A, IN_B], 1)),
-            vec![IN_D, IN_C],
-        ),
-        (
-            "association minus another",
-            Expr::and(set(&[IN_A, IN_B, IN_C], 1), Expr::is_not(set(&[IN_C], 2))),
-            vec![IN_A],
-        ),
-        (
-            "association or a name",
-            Expr::or(set(&[IN_A, IN_B], 1), name("document in d")),
-            vec![IN_D, IN_A],
-        ),
-        (
-            "not both associations",
-            Expr::is_not(Expr::and(set(&[IN_A, IN_B], 1), set(&[IN_A, IN_C], 2))),
-            vec![IN_D, IN_C],
-        ),
-    ] {
-        let cursor = Query::Sort(SimpleSortMethod::UpdatedAt, tasks(filter));
-        assert_eq!(
-            ids(&flat_page(&pool, cursor, 50).await?),
-            expected,
-            "{label}"
-        );
-    }
     Ok(())
 }
 

@@ -61,16 +61,11 @@ enum Fragment {
 pub(super) fn render(
     expr: &Expr<DocumentLiteral>,
     arrays: &mut DocumentIdArrays,
-    membership: Membership,
     literal_sql: impl Fn(DocumentLiteral) -> String,
 ) -> String {
     let mut sql = |fragment: Fragment| match fragment {
-        Fragment::AnyOf(ids) => any_of(&ids, arrays, membership, &literal_sql),
-        // Excluding fewer ids saves nothing: each candidate is still tested.
-        Fragment::NoneOf(ids) => format!(
-            "(NOT {})",
-            any_of(&ids, arrays, Membership::Any, &literal_sql)
-        ),
+        Fragment::AnyOf(ids) => any_of(&ids, arrays, &literal_sql),
+        Fragment::NoneOf(ids) => format!("(NOT {})", any_of(&ids, arrays, &literal_sql)),
         Fragment::Sql(sql) => sql,
     };
     let root = expr.collapse_frames(|frame| match frame {
@@ -95,38 +90,10 @@ pub(super) fn render(
 fn any_of(
     ids: &[Uuid],
     arrays: &mut DocumentIdArrays,
-    membership: Membership,
     literal_sql: &impl Fn(DocumentLiteral) -> String,
 ) -> String {
     match ids {
         [id] => literal_sql(DocumentLiteral::Id(*id)),
-        ids => match membership {
-            Membership::Any => arrays.bind(ids),
-            Membership::Tasks => arrays.bind_tasks(ids),
-        },
-    }
-}
-
-/// Which of a run's ids a positive match tests.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Membership {
-    /// Every id: each one is probed against the document table.
-    Any,
-    /// Only the ids of tasks. Sound only when the filter admits tasks alone:
-    /// a matching document is a task, so it is one of the ids exactly when it
-    /// is one of their tasks. An association names every kind of document,
-    /// often ten times more than its tasks, and the small subtype table
-    /// narrows the set before the document table is read.
-    Tasks,
-}
-
-impl DocumentIdArrays {
-    /// Binds `ids` as `bind` does, matching only those of them that are tasks.
-    fn bind_tasks(&mut self, ids: &[Uuid]) -> String {
-        let slot = self.first_slot + self.arrays.len();
-        self.arrays.push(ids.iter().map(Uuid::to_string).collect());
-        format!(
-            "d.id = ANY(ARRAY(SELECT dst_ids.document_id FROM document_sub_type dst_ids WHERE dst_ids.document_id = ANY(${slot}::text[]) AND dst_ids.sub_type = 'task'))"
-        )
+        ids => arrays.bind(ids),
     }
 }

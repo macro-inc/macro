@@ -1239,14 +1239,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     };
     let expr = push_not_inward(expr, false);
     let formatting = match id_arrays {
-        Some(id_arrays) => {
-            let membership = if document_filter_is_task_only(Some(&expr)) {
-                document_ids::Membership::Tasks
-            } else {
-                document_ids::Membership::Any
-            };
-            document_ids::render(&expr, id_arrays, membership, document_literal_sql)
-        }
+        Some(id_arrays) => document_ids::render(&expr, id_arrays, document_literal_sql),
         None => expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
             filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
