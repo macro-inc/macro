@@ -1,5 +1,7 @@
 use super::*;
+use entity_access::domain::models::EntityAccessReceipt;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
+use item_filters::ast::crm_company::CrmCompanyLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::CursorVal;
 
@@ -9,14 +11,16 @@ enum Leg {
     Channel,
     ChannelThread,
     Call,
+    CrmCompany,
     ForeignEntity,
 }
 
-const LEGS: [Leg; 5] = [
+const LEGS: [Leg; 6] = [
     Leg::Email,
     Leg::Channel,
     Leg::ChannelThread,
     Leg::Call,
+    Leg::CrmCompany,
     Leg::ForeignEntity,
 ];
 
@@ -38,6 +42,9 @@ fn filter_for(leg: Leg, tree: &Expr<Uuid>) -> EntityFilterAst {
             filter.channel_thread_filter = Some(map_ids(tree, ChannelThreadLiteral::ThreadId));
         }
         Leg::Call => filter.call_filter = Some(map_ids(tree, CallLiteral::CallId)),
+        Leg::CrmCompany => {
+            filter.crm_company_filter = Some(map_ids(tree, CrmCompanyLiteral::Id));
+        }
         Leg::ForeignEntity => {
             filter.foreign_entity_filter = Some(map_ids(tree, ForeignEntityLiteral::Id));
         }
@@ -70,12 +77,23 @@ fn request<T>(filter: T, follow_up: bool) -> SoupRequest<T> {
     }
 }
 
+fn team_receipt() -> EntityAccessReceipt<MemberTeamRole> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
+        &id(4).to_string(),
+        EntityType::Team,
+    )
+}
+
 fn builds_request(leg: Leg, request: &SoupRequest<Option<EntityFilterAst>>) -> bool {
     match leg {
         Leg::Email => request.build_email_request(None).is_some(),
         Leg::Channel => request.build_comms_request().is_some(),
         Leg::ChannelThread => request.build_comms_thread_request().is_some(),
         Leg::Call => request.build_call_request().is_some(),
+        Leg::CrmCompany => request
+            .build_crm_company_request(&Some(team_receipt()))
+            .is_some(),
         Leg::ForeignEntity => request.build_foreign_entity_query().is_some(),
     }
 }
@@ -101,6 +119,7 @@ fn legacy_rest_exclusions_skip_requests_after_ast_expansion() {
         "channel_filters": { "channel_ids": [nil] },
         "channel_thread_filters": { "thread_ids": [nil] },
         "call_filters": { "call_ids": [nil] },
+        "crm_company_filters": { "company_ids": [nil] },
         "foreign_entity_filters": { "ids": [nil] }
     }))
     .unwrap();
@@ -140,11 +159,14 @@ fn exclusion_respects_and_or_and_not_without_dropping_possible_matches() {
     ];
     for leg in LEGS {
         for (tree, expected) in &cases {
+            // The CRM leg fails closed on any negation (`extract_crm_company_filter`).
+            let expected =
+                *expected && !(matches!(leg, Leg::CrmCompany) && matches!(tree, Expr::Not(_)));
             for follow_up in [false, true] {
                 let req = request(Some(filter_for(leg, tree)), follow_up);
                 assert_eq!(
                     builds_request(leg, &req),
-                    *expected,
+                    expected,
                     "{leg:?}: {tree:?} (follow_up={follow_up})"
                 );
             }
@@ -199,7 +221,10 @@ fn exclusion_only_skips_the_targeted_entity_type() {
             false,
         );
         let built = LEGS.map(|leg| builds_request(leg, &req));
-        assert_eq!(built.into_iter().filter(|built| *built).count(), 4);
+        assert_eq!(
+            built.into_iter().filter(|built| *built).count(),
+            LEGS.len() - 1
+        );
     }
 }
 
@@ -218,5 +243,42 @@ fn notified_hydration_legs_also_skip_excluded_entities() {
             req.cursor = SoupQuery::Notified(NotifiedQueryInner(Query::Sort(NotifiedAt, filter)));
             assert_eq!(builds_request(leg, &req), expected, "{leg:?}: {tree:?}");
         }
+    }
+}
+
+#[test]
+fn hidden_crm_company_exclusions_preserve_the_admin_check() {
+    for hidden in [true, false] {
+        let mut filter = filter_for(Leg::CrmCompany, &Expr::val(Uuid::nil()));
+        filter.crm_company_filter = filter.crm_company_filter.map(|ids| {
+            Arc::new(Expr::and(
+                Arc::unwrap_or_clone(ids),
+                Expr::val(CrmCompanyLiteral::Hidden(hidden)),
+            ))
+        });
+        for follow_up in [false, true] {
+            let req = request(Some(filter.clone()), follow_up);
+            assert_eq!(
+                builds_request(Leg::CrmCompany, &req),
+                hidden,
+                "hidden={hidden} (follow_up={follow_up})"
+            );
+        }
+    }
+}
+
+#[test]
+fn nil_channel_pins_skip_channel_threads() {
+    let filter = |channel: Uuid| EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ChannelId(
+            channel,
+        )))),
+        ..EntityFilterAst::default()
+    };
+    for follow_up in [false, true] {
+        let excluded = request(Some(filter(Uuid::nil())), follow_up);
+        assert!(!builds_request(Leg::ChannelThread, &excluded));
+        let included = request(Some(filter(id(1))), follow_up);
+        assert!(builds_request(Leg::ChannelThread, &included));
     }
 }
