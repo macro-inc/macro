@@ -210,7 +210,12 @@ it('shows the rows the server matched for the typed search, narrowing only an ea
   // Postgres folds 'İ' to 'i'; JavaScript folds it to 'i̇', which
   // 'istanbul' does not contain.
   team.contacts = [
-    { ...contacts[0], id: 'o', name: 'Istanbul office', email: 'o@example.com' },
+    {
+      ...contacts[0],
+      id: 'o',
+      name: 'Istanbul office',
+      email: 'o@example.com',
+    },
   ];
   const typeSearch = () =>
     fireEvent.input(screen.getByRole('textbox', { name: 'Search team' }), {
