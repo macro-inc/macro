@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use stripe::{EventId, SubscriptionId};
 use uuid::Uuid;
 
-use super::model::{EventType, SubscriptionFacts};
+use super::model::{EventType, PAYLOAD_RETENTION, SubscriptionFacts};
 use super::ports::{AuditRepo, DomainAudit, StripeReader};
 use super::translate;
 
@@ -28,8 +28,6 @@ const EVENT_LOOKBACK: chrono::Duration = chrono::Duration::hours(26);
 const IN_FLIGHT: chrono::Duration = chrono::Duration::minutes(5);
 /// Snapshots observed this recently may not match yet.
 const SNAPSHOT_SETTLE: chrono::Duration = chrono::Duration::minutes(10);
-/// Payloads are cleared after Stripe's own event retention.
-const PAYLOAD_RETENTION: chrono::Duration = chrono::Duration::days(30);
 /// Rows are kept long enough to dedupe every redelivery (Stripe retries for
 /// three days).
 const EVENT_RETENTION: chrono::Duration = chrono::Duration::days(90);

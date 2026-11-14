@@ -22,10 +22,12 @@ fn backoff_doubles_from_five_seconds_and_caps_at_an_hour() {
 }
 
 #[test]
-fn a_cursor_dead_letters_after_about_six_hours_of_retries() {
+fn a_cursor_retries_through_stripes_three_day_redelivery_window() {
     let total: i64 = (1..MAX_ATTEMPTS)
         .map(|attempts| backoff(attempts).num_seconds())
         .sum();
-    // Attempts 1–14 wait 19 515 s before jitter and at most a fifth more.
-    assert!((19_515..=23_418).contains(&total), "{total} seconds");
+    // Attempts 1–83 wait 267 915 s (74.4 h) before jitter and at most a
+    // fifth more: past the 72 hours Stripe redelivers for.
+    assert!(total > 72 * 3600, "{total} seconds");
+    assert!((267_915..=321_498).contains(&total), "{total} seconds");
 }

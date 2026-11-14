@@ -107,6 +107,7 @@ impl InboxRepo for PgInbox {
         event: &ReceivedEvent,
         wakes: &[CursorWake],
         traceparent: Option<&str>,
+        rewind_after: DateTime<Utc>,
     ) -> Result<Inserted, Self::Err> {
         let mut transaction = self.pool.begin().await?;
         let inserted = sqlx::query!(
@@ -145,8 +146,10 @@ impl InboxRepo for PgInbox {
         }
 
         // An idle cursor becomes due now; a due one keeps the earlier time;
-        // a failing one keeps its backoff; a dead one stays dead until
-        // replayed. Every event bumps the generation.
+        // a failing one keeps its backoff. A cursor whose retries ran out is
+        // re-armed from the event it is stuck on (the dependency may be
+        // back); a rejected one stays dead until replayed. Every event bumps
+        // the generation.
         let consumers: Vec<String> = wakes
             .iter()
             .map(|wake| wake.consumer.as_ref().to_owned())
@@ -159,15 +162,26 @@ impl InboxRepo for PgInbox {
             FROM UNNEST($1::text[], $3::timestamptz[]) AS wake(consumer, due_at)
             ON CONFLICT (consumer, ordering_key) DO UPDATE SET
                 generation = stripe_event_cursor.generation + 1,
-                state = CASE stripe_event_cursor.state
-                    WHEN 'idle' THEN 'dirty'::stripe_cursor_state
+                state = CASE
+                    WHEN stripe_event_cursor.state = 'idle'
+                        OR stripe_event_cursor.dead_cause = 'retries_exhausted'
+                        THEN 'dirty'::stripe_cursor_state
                     ELSE stripe_event_cursor.state
                 END,
-                next_attempt_at = CASE stripe_event_cursor.state
-                    WHEN 'idle' THEN EXCLUDED.next_attempt_at
-                    WHEN 'dirty' THEN LEAST(stripe_event_cursor.next_attempt_at, EXCLUDED.next_attempt_at)
+                next_attempt_at = CASE
+                    WHEN stripe_event_cursor.state = 'idle'
+                        OR stripe_event_cursor.dead_cause = 'retries_exhausted'
+                        THEN EXCLUDED.next_attempt_at
+                    WHEN stripe_event_cursor.state = 'dirty'
+                        THEN LEAST(stripe_event_cursor.next_attempt_at, EXCLUDED.next_attempt_at)
                     ELSE stripe_event_cursor.next_attempt_at
                 END,
+                attempts = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'
+                    THEN 0 ELSE stripe_event_cursor.attempts END,
+                dead_event_id = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'
+                    THEN NULL ELSE stripe_event_cursor.dead_event_id END,
+                dead_cause = CASE WHEN stripe_event_cursor.dead_cause = 'retries_exhausted'
+                    THEN NULL ELSE stripe_event_cursor.dead_cause END,
                 updated_at = now()
             "#,
             &consumers,
@@ -181,7 +195,10 @@ impl InboxRepo for PgInbox {
         // cursor already applied moves the cursor back to just before it,
         // so it and everything after it apply again, in order (consumers
         // are idempotent). With nothing before it, the cursor starts over:
-        // every event of the key sorts after this one.
+        // every event of the key sorts after this one. An event older than
+        // `rewind_after` (a resend from before retention) moves nothing:
+        // the events after it may have lost their payloads, and it is
+        // already reflected in what the cursor applied.
         sqlx::query!(
             r#"
             UPDATE stripe_event_cursor cursor
@@ -198,11 +215,13 @@ impl InboxRepo for PgInbox {
             WHERE cursor.ordering_key = $1
               AND cursor.consumer = ANY($2::text[]::stripe_consumer[])
               AND (cursor.applied_at, cursor.applied_event_id) > ($3, $4)
+              AND $3 >= $5
             "#,
             event.ordering_key.0,
             &consumers,
             event.created_at,
             event.id.as_str(),
+            rewind_after,
         )
         .execute(&mut *transaction)
         .await?;
@@ -407,6 +426,7 @@ impl InboxRepo for PgInbox {
                 next_attempt_at = $5,
                 last_error = $6,
                 dead_event_id = $7,
+                dead_cause = $8::text::stripe_dead_cause,
                 state = CASE WHEN $7::text IS NULL
                     THEN 'failing'::stripe_cursor_state
                     ELSE 'dead'::stripe_cursor_state
@@ -422,7 +442,8 @@ impl InboxRepo for PgInbox {
             i32::try_from(failure.attempts).unwrap_or(i32::MAX),
             failure.next_attempt_at,
             failure.error,
-            failure.dead_event.as_ref().map(EventId::as_str),
+            failure.dead.as_ref().map(|dead| dead.event.as_str()),
+            failure.dead.as_ref().map(|dead| dead.cause.as_ref()),
         )
         .execute(&self.pool)
         .await?
@@ -549,6 +570,7 @@ impl InboxRepo for PgInbox {
                 applied_at = CASE WHEN $3 AND dead.id IS NOT NULL THEN dead.created_at ELSE cursor.applied_at END,
                 applied_event_id = CASE WHEN $3 AND dead.id IS NOT NULL THEN dead.id ELSE cursor.applied_event_id END,
                 dead_event_id = NULL,
+                dead_cause = NULL,
                 locked_by = NULL,
                 locked_until = NULL,
                 updated_at = now()

@@ -228,6 +228,21 @@ pub struct ObjectSnapshot {
     pub deleted: bool,
 }
 
+/// How long a stored event keeps its payload: Stripe's own event
+/// retention. An event older than this never moves a cursor back, since the
+/// events after its position may already be cleared.
+pub const PAYLOAD_RETENTION: chrono::Duration = chrono::Duration::days(30);
+
+/// Why a cursor was dead-lettered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum DeadCause {
+    /// The consumer refused the event; only a replay re-arms the cursor.
+    Rejected,
+    /// Its retries ran out; the next event for the cursor re-arms it.
+    RetriesExhausted,
+}
+
 /// A verified event, parsed just enough to store and order it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReceivedEvent {
@@ -631,7 +646,8 @@ pub enum ApplyError {
 pub enum ApplyOutcome {
     /// Applied.
     Applied,
-    /// Skipped: superseded by a newer snapshot, or an invoice already paid.
+    /// Skipped: superseded by a newer snapshot, an invoice already paid, or
+    /// a payload cleared by retention.
     Skipped,
     /// Failed; will retry.
     Failed,

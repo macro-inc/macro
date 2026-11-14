@@ -10,11 +10,11 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use super::model::{
-    ApplyError, ApplyOutcome, BillingInboxEvent, ClaimedCursor, Consumer, Delivery, ObjectKind,
-    ObjectSnapshot, OrderingKey, StoredEvent, SubscriptionFacts,
+    ApplyError, ApplyOutcome, BillingInboxEvent, ClaimedCursor, Consumer, DeadCause, Delivery,
+    ObjectKind, ObjectSnapshot, OrderingKey, PAYLOAD_RETENTION, StoredEvent, SubscriptionFacts,
 };
 use super::ports::{
-    CursorFailure, CursorWake, EventConsumers, InboxRepo, Inserted, Replayed, StripeReadError,
+    CursorFailure, CursorWake, DeadLetter, EventConsumers, InboxRepo, Inserted, Replayed, StripeReadError,
     StripeReader,
 };
 use super::translate::{self, TranslateError, Translated};
@@ -32,9 +32,11 @@ pub const LEASE: chrono::Duration = chrono::Duration::seconds(60);
 const APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(40);
 /// Events loaded per query while a cursor is leased.
 const EVENT_PAGE: u32 = 100;
-/// Failed attempts after which a cursor is dead-lettered: about six hours
-/// of backoff, so an outage of a dependency is retried through.
-pub const MAX_ATTEMPTS: u32 = 15;
+/// Failed attempts after which a cursor is dead-lettered: attempts 1–83
+/// wait 267 915 s (74.4 h) of backoff before jitter, so a retried event
+/// outlasts Stripe's three days of redelivery and an outage of a dependency
+/// is retried through.
+pub const MAX_ATTEMPTS: u32 = 84;
 /// The first retry delay; it doubles per attempt.
 const BASE_BACKOFF: chrono::Duration = chrono::Duration::seconds(5);
 /// The longest retry delay.
@@ -124,7 +126,12 @@ where
         let traceparent = crate::telemetry::traceparent();
         let inserted = self
             .repo
-            .insert(&event, &wakes, traceparent.as_deref())
+            .insert(
+                &event,
+                &wakes,
+                traceparent.as_deref(),
+                Utc::now() - PAYLOAD_RETENTION,
+            )
             .await
             .map_err(|error| ReceiveError::Storage(rootcause::Report::new(error).into_dynamic()))?;
         span.record("duplicate", inserted == Inserted::Duplicate);
@@ -237,7 +244,7 @@ where
                     }
                     Err(error) => {
                         let failure = self.failure(&cursor, &event, &error);
-                        let outcome = if failure.dead_event.is_some() {
+                        let outcome = if failure.dead.is_some() {
                             tracing::error!(
                                 parent: &span,
                                 consumer = %cursor.consumer,
@@ -278,15 +285,20 @@ where
         error: &ApplyError,
     ) -> CursorFailure {
         let attempts = cursor.attempts + 1;
-        let dead = match error {
-            ApplyError::Reject(_) => true,
-            ApplyError::Retry(_) => attempts >= MAX_ATTEMPTS,
+        let cause = match error {
+            ApplyError::Reject(_) => Some(DeadCause::Rejected),
+            ApplyError::Retry(_) => {
+                (attempts >= MAX_ATTEMPTS).then_some(DeadCause::RetriesExhausted)
+            }
         };
         CursorFailure {
             attempts,
             next_attempt_at: Utc::now() + backoff(attempts),
             error: error.to_string(),
-            dead_event: dead.then(|| event.id.clone()),
+            dead: cause.map(|cause| DeadLetter {
+                event: event.id.clone(),
+                cause,
+            }),
         }
     }
 
@@ -297,9 +309,12 @@ where
         consumer: Consumer,
         event: &StoredEvent,
     ) -> Result<ApplyOutcome, ApplyError> {
-        let payload = event.payload.as_ref().ok_or_else(|| {
-            ApplyError::Reject(rootcause::report!("the event's payload passed retention"))
-        })?;
+        // Retention cleared it: the event is older than anything Stripe
+        // still redelivers, and a later snapshot carries its state.
+        let Some(payload) = event.payload.as_ref() else {
+            tracing::info!("stripe inbox event payload cleared by retention; skipping");
+            return Ok(ApplyOutcome::Skipped);
+        };
         let translated = translate::translate(event.event_type, payload).map_err(reject)?;
         let position = event.position();
 

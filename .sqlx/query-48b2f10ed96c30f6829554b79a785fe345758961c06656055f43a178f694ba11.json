@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE stripe_event_cursor\n            SET attempts = $4,\n                next_attempt_at = $5,\n                last_error = $6,\n                dead_event_id = $7,\n                dead_cause = $8::text::stripe_dead_cause,\n                state = CASE WHEN $7::text IS NULL\n                    THEN 'failing'::stripe_cursor_state\n                    ELSE 'dead'::stripe_cursor_state\n                END,\n                locked_by = NULL,\n                locked_until = NULL,\n                updated_at = now()\n            WHERE consumer = ($1::text)::stripe_consumer AND ordering_key = $2 AND locked_by = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int4",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48b2f10ed96c30f6829554b79a785fe345758961c06656055f43a178f694ba11"
+}

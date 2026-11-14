@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use super::audit::Mismatch;
 use super::model::{
-    ApplyError, ClaimedCursor, Consumer, Delivery, ObjectSnapshot, OrderingKey, Position,
-    ReceivedEvent, StoredEvent, SubscriptionFacts,
+    ApplyError, ClaimedCursor, Consumer, DeadCause, Delivery, ObjectSnapshot, OrderingKey,
+    Position, ReceivedEvent, StoredEvent, SubscriptionFacts,
 };
 
 /// A consumer's cursor to mark due when an event arrives.
@@ -38,7 +38,16 @@ pub struct CursorFailure {
     /// The error, for operators.
     pub error: String,
     /// Set when the cursor is dead-lettered on this event.
-    pub dead_event: Option<EventId>,
+    pub dead: Option<DeadLetter>,
+}
+
+/// The event a cursor is dead-lettered on, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeadLetter {
+    /// The event that failed.
+    pub event: EventId,
+    /// Why it is dead.
+    pub cause: DeadCause,
 }
 
 /// What a replay request did.
@@ -58,13 +67,16 @@ pub trait InboxRepo: Clone + Send + Sync + 'static {
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// Stores `event` unless already stored; when new, also projects its
-    /// snapshot (only if newer), marks `wakes` due and wakes the workers, all
-    /// in one transaction.
+    /// snapshot (only if newer), marks `wakes` due (re-arming a cursor whose
+    /// retries ran out) and wakes the workers, all in one transaction. An
+    /// event created before a cursor's position moves it back to just
+    /// before the event, unless it was created before `rewind_after`.
     fn insert(
         &self,
         event: &ReceivedEvent,
         wakes: &[CursorWake],
         traceparent: Option<&str>,
+        rewind_after: DateTime<Utc>,
     ) -> impl Future<Output = Result<Inserted, Self::Err>> + Send;
 
     /// Leases up to `limit` due cursors for `lease`.

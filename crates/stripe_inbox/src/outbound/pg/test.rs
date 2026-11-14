@@ -606,6 +606,145 @@ async fn retries_dead_letter_after_the_attempt_cap(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_new_event_rearms_a_cursor_whose_retries_ran_out(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    recorder
+        .failing
+        .lock()
+        .unwrap()
+        .insert(Consumer::TeamSubscription, Outcome::Retry);
+    inbox
+        .receive(&event(
+            "evt_Stuck",
+            "customer.subscription.created",
+            1_800_000_000,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    inbox.run_pass().await.unwrap();
+    // Skip to the last attempt.
+    sqlx::query!(
+        "UPDATE stripe_event_cursor SET attempts = $1, next_attempt_at = now()",
+        i32::try_from(MAX_ATTEMPTS - 1).unwrap()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    inbox.run_pass().await.unwrap();
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        (
+            "dead".to_owned(),
+            i32::try_from(MAX_ATTEMPTS).unwrap(),
+            None,
+            Some("evt_Stuck".to_owned())
+        )
+    );
+
+    // The dependency recovered; the next event re-arms the cursor, which
+    // applies from the stuck event.
+    recorder.failing.lock().unwrap().clear();
+    inbox
+        .receive(&event(
+            "evt_Next",
+            "customer.subscription.updated",
+            1_800_000_100,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("dirty".to_owned(), 0, None, None)
+    );
+    inbox.run_pass().await.unwrap();
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        vec!["evt_Stuck", "evt_Next"]
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("idle".to_owned(), 0, Some("evt_Next".to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_payload_cleared_by_retention_is_skipped_and_the_cursor_moves_past_it(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    for (id, created) in [("evt_Cleared", 1_800_000_000), ("evt_Kept", 1_800_000_100)] {
+        inbox
+            .receive(&event(
+                id,
+                "customer.subscription.updated",
+                created,
+                subscription("sub_Ordered", "active", 1_800_000_000),
+            ))
+            .await
+            .unwrap();
+    }
+    sqlx::query!("UPDATE stripe_events SET payload = NULL WHERE id = 'evt_Cleared'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    inbox.run_pass().await.unwrap();
+
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        vec!["evt_Kept"]
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("idle".to_owned(), 0, Some("evt_Kept".to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_resent_event_older_than_retention_does_not_rewind_the_cursor(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    inbox
+        .receive(&event(
+            "evt_Current",
+            "customer.subscription.updated",
+            1_800_000_000,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    inbox.run_pass().await.unwrap();
+
+    // A dashboard resend of an event from before the payload retention.
+    let resent_at = (Utc::now() - chrono::Duration::days(40)).timestamp();
+    assert_eq!(
+        inbox
+            .receive(&event(
+                "evt_Resent",
+                "customer.subscription.updated",
+                resent_at,
+                subscription("sub_Ordered", "past_due", 1_700_000_000),
+            ))
+            .await
+            .unwrap(),
+        Inserted::New
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await.2,
+        Some("evt_Current".to_owned())
+    );
+    inbox.run_pass().await.unwrap();
+
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        vec!["evt_Current"]
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("idle".to_owned(), 0, Some("evt_Current".to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_rejected_event_dead_letters_at_once_and_replay_can_skip_it(pool: PgPool) {
     let (inbox, _, recorder) = inbox(&pool);
     recorder

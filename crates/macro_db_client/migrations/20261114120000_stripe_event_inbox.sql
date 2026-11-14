@@ -14,6 +14,8 @@ CREATE TYPE stripe_consumer AS ENUM (
 
 CREATE TYPE stripe_cursor_state AS ENUM ('idle', 'dirty', 'failing', 'dead');
 
+CREATE TYPE stripe_dead_cause AS ENUM ('rejected', 'retries_exhausted');
+
 CREATE TYPE stripe_object_kind AS ENUM ('subscription', 'customer');
 
 CREATE TYPE stripe_audit_mismatch_kind AS ENUM (
@@ -66,6 +68,9 @@ CREATE TABLE stripe_event_cursor (
     locked_until TIMESTAMPTZ,
     last_error TEXT,
     dead_event_id TEXT,
+    -- set with dead_event_id: a cursor whose retries ran out is re-armed by
+    -- its next event, a rejected one only by a replay
+    dead_cause stripe_dead_cause,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (consumer, ordering_key)
 );
