@@ -1,8 +1,8 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-    CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanySummary, CrmCompanyWithContacts, CrmContact,
+    CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     DomainMetadata,
 };
 use chrono::{DateTime, Utc};
@@ -584,6 +584,17 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// The name and visibility of one of `team_id`'s companies, resolved as
+    /// [`Self::get_company_for_team`] resolves them. `Ok(None)` when the
+    /// company doesn't exist, belongs to another team, or is hidden and
+    /// `include_hidden` is false.
+    fn get_company_summary_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanySummary>, CrmError>> + Send;
 
     /// Searches the team's contacts whose email or name contains `query`
     /// (case-insensitive), most recently interacted first, at most `limit`

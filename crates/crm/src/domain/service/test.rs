@@ -374,6 +374,15 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn get_company_summary_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _include_hidden: bool,
+    ) -> Result<Option<crate::domain::model::CrmCompanySummary>, CrmError> {
+        unimplemented!()
+    }
+
     async fn search_contacts_for_team(
         &self,
         _team_id: &uuid::Uuid,

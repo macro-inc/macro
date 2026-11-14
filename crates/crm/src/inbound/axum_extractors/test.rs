@@ -36,8 +36,8 @@ use crate::{
         auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
         companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
         model::{
-            CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-            DepopulateContactOutcome,
+            CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
+            CrmScopePrecheck, DepopulateContactOutcome,
         },
         service::CrmService,
     },
@@ -467,7 +467,7 @@ impl CrmService for FakeCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         panic!("unexpected get_contact_for_team call")
     }
 

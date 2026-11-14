@@ -11,9 +11,10 @@ mod email_privacy;
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
-        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts,
-        CrmContact, CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
+        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanySummary,
+        CrmCompanyWithContacts, CrmContact, CrmDomain, CrmDomainStatus, CrmError,
+        CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
+        DepopulateContactOutcome, DomainMetadata,
     },
     stages::TeamSettingsStore,
 };
@@ -2561,6 +2562,47 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // admin/owner (`include_hidden = true`) every owned contact is
         // reachable so the admin can see and unhide it.
         Self::read_contact(&self.pool, team_id, contact_id, include_hidden).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_company_summary_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<CrmCompanySummary>, CrmError> {
+        // The name resolves as `get_company_for_team` resolves it: the team's
+        // override, else the directory name of the oldest domain, which is
+        // also the domain shown when the company has no name.
+        sqlx::query_as!(
+            CrmCompanySummary,
+            r#"
+            SELECT
+                c.id,
+                COALESCE(c.custom_name, primary_domain.name) AS name,
+                primary_domain.domain AS "domain?",
+                c.hidden
+            FROM crm_companies c
+            LEFT JOIN LATERAL (
+                SELECT d.domain, dd.name
+                FROM crm_domains d
+                LEFT JOIN crm_domain_directory dd
+                    ON LOWER(dd.domain) = LOWER(d.domain)
+                WHERE d.company_id = c.id
+                ORDER BY d.created_at ASC
+                LIMIT 1
+            ) primary_domain ON TRUE
+            WHERE c.id = $1
+              AND c.team_id = $2
+              AND ($3 OR c.hidden = FALSE)
+            "#,
+            company_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(skip(self), err)]
