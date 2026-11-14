@@ -27,3 +27,25 @@ fn image_names_take_incus_aliases_and_docker_tags_only() {
         assert!(GuestImage::try_new(invalid).is_err(), "{invalid}");
     }
 }
+
+#[test]
+fn an_agent_computer_gets_the_agent_image_and_any_other_the_regular_one() {
+    let images = GuestImages {
+        regular: GuestImage::try_new("macro-box/2026-11-10").unwrap(),
+        agent: GuestImage::try_new("macro-box-agent/2026-11-10").unwrap(),
+    };
+    let computer_id = crate::domain::ids::ComputerId::new_from_uuid(uuid::Uuid::from_u128(1));
+
+    assert_eq!(
+        images
+            .for_enrollment(&crate::domain::fakes::enrollment(computer_id, true))
+            .as_str(),
+        "macro-box-agent/2026-11-10"
+    );
+    assert_eq!(
+        images
+            .for_enrollment(&crate::domain::fakes::enrollment(computer_id, false))
+            .as_str(),
+        "macro-box/2026-11-10"
+    );
+}

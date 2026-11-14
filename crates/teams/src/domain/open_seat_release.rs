@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use std::convert::Infallible;
 
 /// Original provider facts for a newly activated team subscription.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SubscriptionStart {
     /// Original event time, retained on retries.
     pub at: DateTime<Utc>,

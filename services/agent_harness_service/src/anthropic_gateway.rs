@@ -33,6 +33,7 @@ use tracing::{Instrument, Span, field::Empty};
 
 use usage::{SseUsage, TokenUsage};
 
+pub(crate) mod brain;
 mod usage;
 
 #[cfg(test)]
@@ -138,6 +139,10 @@ pub(super) struct GatewayState<Sessions, Computers> {
     upstream_url: String,
     /// `None` when the service has no Anthropic key; every request is refused.
     api_key: Option<HeaderValue>,
+    /// Agent teammates' brains; `None` refuses every `/brain/anthropic` call.
+    brains: Option<Arc<dyn brain::BrainAuthenticator>>,
+    /// Whether agent teammates are on for the calling agent.
+    brain_rollout: brain::BrainRollout,
 }
 
 impl<Sessions, Computers> GatewayState<Sessions, Computers> {
@@ -167,9 +172,27 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
                 .build()?,
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
+            brains: None,
+            brain_rollout: brain::BrainRollout::default(),
         })
     }
+
+    /// Serve agent teammates' brains under `/brain/anthropic`, to agents with
+    /// `enable-agent-teammates` on for their creator.
+    pub(super) fn with_brains(
+        mut self,
+        brains: Arc<dyn brain::BrainAuthenticator>,
+        rollout: brain::BrainRollout,
+    ) -> Self {
+        self.brains = Some(brains);
+        self.brain_rollout = rollout;
+        self
+    }
 }
+
+/// Marks a request that came in under `/brain/anthropic`.
+#[derive(Clone, Copy)]
+struct BrainRoute;
 
 /// The gateway's routes, mounted at the listener root.
 pub(super) fn router<Sessions: AgentSessionRepo, Computers: BotComputers>(
@@ -185,6 +208,19 @@ pub(super) fn router<Sessions: AgentSessionRepo, Computers: BotComputers>(
             post(count_tokens::<Sessions, Computers>),
         )
         .route("/anthropic/{*rest}", any(unsupported))
+        .merge(
+            Router::new()
+                .route(
+                    "/brain/anthropic/v1/messages",
+                    post(messages::<Sessions, Computers>),
+                )
+                .route(
+                    "/brain/anthropic/v1/messages/count_tokens",
+                    post(count_tokens::<Sessions, Computers>),
+                )
+                .route("/brain/anthropic/{*rest}", any(unsupported))
+                .layer(axum::Extension(BrainRoute)),
+        )
         .with_state(Arc::new(state))
 }
 
@@ -299,25 +335,39 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     span: &Span,
 ) -> Result<Response, Rejection> {
     let (parts, body) = request.into_parts();
-    let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
-    span.record("agent.session.id", tracing::field::display(session.id));
-    span.record("agent.bot.id", tracing::field::display(session.bot_id));
-    span.record("agent.harness", session.harness.as_str());
-    let owner = session
-        .owner_user()
-        .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
-        .clone();
-    let computer = state
-        .computers
-        .computer_for(session.bot_id)
-        .await
-        .inspect_err(|error| tracing::warn!(error = ?error, "session computer lookup failed"))
-        .map_err(|_| Rejection::NOT_ON_A_COMPUTER)?
-        .ok_or(Rejection::NOT_ON_A_COMPUTER)?;
-    // The computer is the gate: the rollout limits selling computers, not
-    // using them, so a teammate outside it, or anyone once it is off, still
-    // runs Claude on a team computer.
-    span.record("agent.computer.id", tracing::field::display(computer));
+    let (owner, entity) = if parts.extensions.get::<BrainRoute>().is_some() {
+        let brain = authenticate_brain(state.brains.as_deref(), &parts.headers).await?;
+        span.record(
+            "agent.user.id",
+            agent_credentials::telemetry_id(brain.user_id.as_ref()),
+        );
+        span.record("agent.team.id", tracing::field::display(brain.team_id));
+        if !state.brain_rollout.enabled(&brain.user_id).await {
+            return Err(Rejection::AGENT_TEAMMATES_OFF);
+        }
+        (brain.user_id, None)
+    } else {
+        let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
+        span.record("agent.session.id", tracing::field::display(session.id));
+        span.record("agent.bot.id", tracing::field::display(session.bot_id));
+        span.record("agent.harness", session.harness.as_str());
+        let owner = session
+            .owner_user()
+            .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
+            .clone();
+        // The computer is the gate: the rollout limits selling computers, not
+        // using them, so a teammate outside it, or anyone once it is off, still
+        // runs Claude on a team computer.
+        let computer = state
+            .computers
+            .computer_for(session.bot_id)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "session computer lookup failed"))
+            .map_err(|_| Rejection::NOT_ON_A_COMPUTER)?
+            .ok_or(Rejection::NOT_ON_A_COMPUTER)?;
+        span.record("agent.computer.id", tracing::field::display(computer));
+        (owner, Some(session.id.as_uuid()))
+    };
 
     let body = to_bytes(body, MAX_REQUEST_BYTES)
         .await
@@ -329,7 +379,6 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     span.record("gen_ai.request.model", model.request_id());
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
-    let entity = Some(session.id.as_uuid());
     if endpoint == Endpoint::Messages {
         state
             .admission
@@ -401,6 +450,24 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     Ok(response)
+}
+
+async fn authenticate_brain(
+    brains: Option<&dyn brain::BrainAuthenticator>,
+    headers: &HeaderMap,
+) -> Result<brain::BrainCaller, Rejection> {
+    let brains = brains.ok_or(Rejection::NOT_CONFIGURED)?;
+    let bearer = headers
+        .typed_get::<Authorization<Bearer>>()
+        .ok_or(Rejection::BRAIN_UNAUTHENTICATED)?;
+    brains
+        .authenticate(bearer.token())
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "could not authenticate a brain");
+            Rejection::UPSTREAM_UNREACHABLE
+        })?
+        .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
 
 type UpstreamChunks =
@@ -561,6 +628,15 @@ struct Rejection {
 }
 
 impl Rejection {
+    const BRAIN_UNAUTHENTICATED: Self = Self {
+        status: StatusCode::UNAUTHORIZED,
+        kind: "authentication_error",
+        outcome: "unauthenticated",
+        message: std::borrow::Cow::Borrowed(
+            "send the agent teammate's Macro API key as `Authorization: Bearer`",
+        ),
+    };
+
     const UNAUTHENTICATED: Self = Self {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",
@@ -568,6 +644,15 @@ impl Rejection {
         message: std::borrow::Cow::Borrowed(
             "send the agent session's Macro token as `Authorization: Bearer`",
         ),
+    };
+
+    /// Fails closed: agent teammates are off for the calling agent, or its
+    /// flags could not be read.
+    const AGENT_TEAMMATES_OFF: Self = Self {
+        status: StatusCode::FORBIDDEN,
+        kind: "permission_error",
+        outcome: "agent_teammates_off",
+        message: std::borrow::Cow::Borrowed("agent teammates are not enabled for this agent"),
     };
 
     /// Fails closed: the session is not on a Macro computer, or its lookup

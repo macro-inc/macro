@@ -506,6 +506,58 @@ export type CommonChannelMetadata = {
 };
 
 /**
+ * The agent teammate a computer was bought for, so its inviter hears about
+ * the agent rather than the machine.
+ */
+export type ComputerSetupAgent = {
+    /**
+     * The agent's name.
+     */
+    name: string;
+    /**
+     * The agent's Macro user id, to open a DM with it.
+     */
+    userId: string;
+};
+
+/**
+ * A team's Macro computer finished first-time setup, or could not be set
+ * up. Sent to its buyer, who continues (or retries) from the setup flow.
+ */
+export type ComputerSetupMetadata = {
+    agent?: null | ComputerSetupAgent;
+    /**
+     * The computer that was set up.
+     */
+    computerId: string;
+    /**
+     * The computer's name when the notice was sent.
+     */
+    computerName: string;
+    /**
+     * The computer's harness, once macrod has connected.
+     */
+    harnessId?: string | null;
+    /**
+     * Ready, or why setup failed.
+     */
+    outcome: ComputerSetupOutcome;
+};
+
+/**
+ * How a computer's first setup ended.
+ */
+export type ComputerSetupOutcome = {
+    kind: 'ready';
+} | {
+    /**
+     * Why, in the words the computer's status shows.
+     */
+    failureReason: string;
+    kind: 'failed';
+};
+
+/**
  * Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.
  *
  * Used for OpenAPI schema generation — serializes identically to
@@ -1379,6 +1431,13 @@ export type NotifEvent = {
      */
     content: AgentSignInExpiryMetadata;
     tag: 'agent_sign_in_expiry';
+} | {
+    /**
+     * A Macro computer the user bought finished first-time setup, or
+     * could not be set up.
+     */
+    content: ComputerSetupMetadata;
+    tag: 'computer_setup';
 } | {
     /**
      * A runtime's owner removed the user's access to it, and agents of

@@ -126,6 +126,7 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
             bots::domain::service::BotServiceImpl::new(
                 bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
+                harnesses::domain::ports::MockHarnessTeamAgents::new(),
             ),
             bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()),
             crate::testing::postgres_sessions(pool.clone()),

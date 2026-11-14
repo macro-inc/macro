@@ -77,3 +77,18 @@ export function programSteps(options: {
   const steps = options.operations + options.calls;
   return steps === 0 && options.ended ? 1 : steps;
 }
+
+/**
+ * The failed steps among those a program shows: failed operations and
+ * calls, or its one row when it ended without any, unless it was stopped.
+ */
+export function programFailures(options: {
+  statuses: readonly string[];
+  ended: boolean;
+  cancelled: boolean;
+}): number {
+  if (options.statuses.length === 0) {
+    return options.ended && !options.cancelled ? 1 : 0;
+  }
+  return options.statuses.filter((status) => status === 'failed').length;
+}

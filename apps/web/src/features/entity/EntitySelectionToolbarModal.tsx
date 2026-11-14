@@ -25,7 +25,7 @@ export const EntitySelectionToolbarModal = (
           <div class="menu-surface text-sm font-bold flex flex-wrap flex-row items-center gap-2 p-2">
             <Button
               type="button"
-              size="icon-sm"
+              size="icon-md"
               variant="ghost"
               onClick={props.onClose}
             >

@@ -58,6 +58,7 @@ fn android_native_check() -> Job {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
@@ -92,6 +93,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name("Typecheck")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
@@ -103,15 +105,21 @@ fn typescript() -> Job {
                 .run("bun install --frozen-lockfile")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
+        // The agent runtime imports the SDK by its package exports, which
+        // point at `dist/`.
+        .add_step(
+            Step::new("Build SDK")
+                .run("bun run build")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk")),
+        )
         .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
 }
 
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
 /// installed tree and write nothing, so they run at once: in sequence they took
-/// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
-/// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 12] = [
+/// about 106 s of a 179 s job. The SDK is built first, for the agent runtime.
+const TYPECHECKS: [(&str, &str, &str); 14] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -171,6 +179,17 @@ const TYPECHECKS: [(&str, &str, &str); 12] = [
         "services/mcp-chatgpt-worker",
         "bun run type-check && bun run test",
     ),
+    (
+        "Check Agent Runtime",
+        "packages/muppet",
+        "bun run typecheck && bun run test",
+    ),
+    // The template's own lockfile is what an agent's image installs from.
+    (
+        "Check Starter Agent",
+        "packages/starter-agent",
+        "bun run check && ../../tooling/scripts/starter-agent-lock.sh --check",
+    ),
 ];
 
 /// Runs [`TYPECHECKS`] concurrently. Each check's output is printed as its own
@@ -228,7 +247,7 @@ fn generated_code() -> Job {
             "needs.path-check.outputs.codegen_changed == 'true'",
         ))
         .name("Generated Code Check")
-        .timeout_minutes(45u32)
+        .timeout_minutes(25u32)
         .runs_on(mid_web_runner())
         // The generators run once and are thrown away, so debug info is pure
         // cost: it made the 15 binaries 12.7 GB instead of 466 MB. Job-level,
@@ -266,6 +285,7 @@ fn generated_code() -> Job {
 
 fn biome_check() -> Job {
     gated_web_job("Biome Check")
+        .timeout_minutes(20u32)
         .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -278,6 +298,7 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test (${{ matrix.shard }}/6)")
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
@@ -299,6 +320,7 @@ fn test() -> Job {
 /// job restores or builds them; unchanged packages come from the shared cache.
 fn functional() -> Job {
     gated_web_job("Functional Tests")
+        .timeout_minutes(15u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
@@ -317,6 +339,7 @@ fn functional() -> Job {
 /// neither waits for them.
 fn browser() -> Job {
     gated_web_job("Browser Tests")
+        .timeout_minutes(20u32)
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
@@ -333,6 +356,7 @@ fn browser() -> Job {
 
 fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
+        .timeout_minutes(15u32)
         .add_step(checkout("Checkout", false))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix_with_seed())
@@ -347,6 +371,7 @@ fn cycles() -> Job {
 fn build() -> Job {
     let (preview_credentials, preview_steps) = preview::steps();
     let job = gated_web_job("Build")
+        .timeout_minutes(15u32)
         // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
         .runs_on(mid_web_runner())
         .permissions(
@@ -376,6 +401,7 @@ fn build() -> Job {
 fn status_check() -> Job {
     Job::default()
         .name("Web App Status Check")
+        .timeout_minutes(5u32)
         .cond(Expression::new("always()"))
         .needs(vec![
             "path-check".to_string(),
@@ -501,7 +527,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -749,25 +775,29 @@ fn check_job_results() -> Step<Run> {
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.functional.result }}" == "failure" ]] || \
-           [[ "${{ needs.browser.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
-          echo "One or more jobs failed"
+        # The Android check always runs, so it must succeed. For the rest only
+        # success and skipped are OK: a job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
+          echo "Android Native Check did not succeed"
           exit 1
         fi
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.typescript.result }}" \
+          "${{ needs.generated-code.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.functional.result }}" \
+          "${{ needs.browser.result }}" \
+          "${{ needs.cycles.result }}" \
+          "${{ needs.build.result }}" \
+          "${{ needs.ios-native-check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "All jobs passed or were skipped"
     "#})

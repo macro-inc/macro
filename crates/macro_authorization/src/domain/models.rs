@@ -43,6 +43,10 @@ pub enum CredentialOrigin {
     Session,
     /// A verified Macro API JWT (SDK, MCP), with or without agent attribution.
     MacroApiJwt,
+    /// A verified Macro API JWT that signs an agent session's scope
+    /// (`agent_scope`): a code-mode run held to that scope, which may not
+    /// create credentials or change who controls the account.
+    ScopedMacroApiJwt,
     /// A user API key.
     UserApiKey,
     /// A manager's credential for this account, held by another account.

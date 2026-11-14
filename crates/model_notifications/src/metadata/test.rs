@@ -1562,3 +1562,132 @@ fn agent_sign_in_expiry_titles_name_the_agent_the_computer_and_the_stage() {
         "Claude sign-in on Build box expired"
     );
 }
+
+#[test]
+fn computer_setup_serializes_with_the_computer_and_the_outcome() {
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::from_u128(1),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer kept crashing.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(&failed).unwrap(),
+        serde_json::json!({
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": null,
+            "computerName": "Build box",
+            "outcome": {
+                "kind": "failed",
+                "failureReason": "The computer kept crashing.",
+            },
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "computer_setup",
+        "content": {
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": "00000000-0000-0000-0000-000000000002",
+            "computerName": "Build box",
+            "outcome": { "kind": "ready" },
+        },
+    }))
+    .unwrap();
+    let NotifEvent::ComputerSetup(metadata) = event else {
+        panic!("expected a computer setup notice, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        ComputerSetupMetadata {
+            computer_id: Uuid::from_u128(1),
+            harness_id: Some(Uuid::from_u128(2)),
+            computer_name: "Build box".to_string(),
+            agent: None,
+            outcome: ComputerSetupOutcome::Ready,
+        }
+    );
+}
+
+#[test]
+fn computer_setup_titles_say_ready_or_name_the_computer_and_why_it_failed() {
+    let ready = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: Some(Uuid::nil()),
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Ready,
+    };
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer couldn't be created on the host.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        ready.format_title(None).unwrap(),
+        "Your computer is ready: connect your AI and finish setup"
+    );
+    assert_eq!(
+        ready.format_body(None).unwrap(),
+        "Build box is up. Bring your AI, then create an agent on it."
+    );
+    assert_eq!(
+        failed.format_title(None).unwrap(),
+        "Build box could not be set up"
+    );
+    assert_eq!(
+        failed.format_body(None).unwrap(),
+        "The computer couldn't be created on the host. Retry from the setup flow."
+    );
+}
+
+#[test]
+fn an_agent_teammates_computer_setup_names_the_agent() {
+    let ready = ComputerSetupMetadata {
+        computer_id: Uuid::from_u128(1),
+        harness_id: Some(Uuid::from_u128(2)),
+        computer_name: "Ada".to_string(),
+        agent: Some(ComputerSetupAgent {
+            user_id: "macro|ada@agents.macro.invalid".to_string(),
+            name: "Ada".to_string(),
+        }),
+        outcome: ComputerSetupOutcome::Ready,
+    };
+    let failed = ComputerSetupMetadata {
+        harness_id: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer couldn't be created on the host.".to_string(),
+        },
+        ..ready.clone()
+    };
+
+    assert_eq!(
+        serde_json::to_value(&ready).unwrap(),
+        serde_json::json!({
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": "00000000-0000-0000-0000-000000000002",
+            "computerName": "Ada",
+            "agent": { "userId": "macro|ada@agents.macro.invalid", "name": "Ada" },
+            "outcome": { "kind": "ready" },
+        })
+    );
+    assert_eq!(ready.format_title(None).unwrap(), "Ada is ready");
+    assert_eq!(
+        ready.format_body(None).unwrap(),
+        "Message Ada to get started."
+    );
+    assert_eq!(failed.format_title(None).unwrap(), "Ada couldn't be set up");
+    assert_eq!(
+        failed.format_body(None).unwrap(),
+        "The computer couldn't be created on the host. Retry from Ada's row in Members."
+    );
+}

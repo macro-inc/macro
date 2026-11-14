@@ -224,7 +224,7 @@
   fill: #000;
   font-family: body, sans-serif;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.01em;
   pointer-events: none;
   user-select: none;
@@ -325,7 +325,7 @@
   fill: var(--color-ink);
   font-family: Inter, body, sans-serif;
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: 0.08em;
 }
 @media (hover) {

@@ -202,9 +202,15 @@ vi.mock('./NewChatPage', () => ({
   NewChatPage: (props: {
     draft?: string;
     onDraftChange?: (draft: string) => void;
+    requestedAgent?: { agentId: string; request: string };
   }) => (
     <textarea
       aria-label="Message"
+      data-requested-agent={
+        props.requestedAgent
+          ? `${props.requestedAgent.agentId}@${props.requestedAgent.request}`
+          : undefined
+      }
       value={props.draft ?? ''}
       onInput={(event) => props.onDraftChange?.(event.currentTarget.value)}
     />
@@ -381,4 +387,26 @@ it('does not restore a sent Ask Macro draft when a stacked pane remounts without
   render(() => <AgentsView />);
 
   expect(composer().value).toBe('');
+});
+
+it('asks the composer for the agent a Try it opened it with, once per request', () => {
+  const tryIt = (request: string): FakeEntry => ({
+    content: {
+      type: 'component',
+      id: 'agents',
+      params: {
+        agentPage: 'new',
+        agentPageRequest: request,
+        composerAgentId: 'computer-agent',
+      },
+    },
+  });
+  const [current, setCurrent] = createSignal(tryIt('request-1'));
+  state.entry.current = current;
+  render(() => <AgentsView />);
+
+  expect(composer().dataset.requestedAgent).toBe('computer-agent@request-1');
+
+  setCurrent(tryIt('request-2'));
+  expect(composer().dataset.requestedAgent).toBe('computer-agent@request-2');
 });

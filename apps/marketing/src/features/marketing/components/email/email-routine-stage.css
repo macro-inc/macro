@@ -17,7 +17,7 @@
 .mail-routine-push-icon svg { width: 20px; height: 20px; }
 .mail-routine-push > div { min-width: 0; }
 .mail-routine-push p { display: flex; gap: 8px; margin: 0; }
-.mail-routine-push strong { flex: 1; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mail-routine-push strong { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .mail-routine-push p > span { flex: none; color: #ffffff8c; font-size: 12px; }
 @keyframes mail-routine-push { from { opacity: 0; transform: translateY(-14px) scale(.97); } }
 
