@@ -750,3 +750,61 @@ fn spend_per_minute_follows_usage_and_sums_to_the_reported_total() {
     let total: f64 = counts.values().map(|minute| minute.cost_usd).sum();
     assert_usd(Cost::Estimated(total), 15.0);
 }
+
+#[test]
+fn a_claude_transcript_without_a_registry_entry_joins_the_claude_terminal_in_its_directory() {
+    let now = at(5, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Reset(vec![
+            // Runs Claude Code behind a wrapper, so no registry pid matches.
+            Fact::Terminal(Box::new(TerminalFact {
+                program: Some("claude-code".to_owned()),
+                foreground_pid: Some(31),
+                ..terminal("t-wrapped", 31)
+            })),
+            // Already holds its session through the registry.
+            Fact::Terminal(Box::new(TerminalFact {
+                program: Some("claude-code".to_owned()),
+                ..terminal("t-registered", 32)
+            })),
+        ]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::ClaudeRegistry,
+        Change::Reset(vec![registry(32, "s-registered", false)]),
+        now,
+    );
+    let in_work = |fact: Fact| match fact {
+        Fact::Transcript(delta) => Fact::Transcript(TranscriptDelta {
+            cwd: Some(PathBuf::from("/work")),
+            ..delta
+        }),
+        other => other,
+    };
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![
+            in_work(transcript("s-registered", None, vec![usage(at(1, 0), 1, 1)])),
+            in_work(transcript("s-older", None, vec![usage(at(1, 0), 1, 1)])),
+            in_work(transcript("s-newer", None, vec![usage(at(3, 0), 1, 1)])),
+        ]),
+        now,
+    );
+
+    let built = build_agents(&facts, now);
+
+    let wrapped = &built.agents[&AgentId::terminal("t-wrapped")];
+    assert_eq!(wrapped.session.as_deref(), Some("s-newer"));
+    assert_eq!(
+        built.agents[&AgentId::terminal("t-registered")].session.as_deref(),
+        Some("s-registered")
+    );
+    assert!(built.agents.contains_key(&AgentId::claude_session("s-older")));
+    assert_eq!(built.agents.len(), 3);
+}
