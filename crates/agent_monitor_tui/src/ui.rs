@@ -19,7 +19,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-use agent_monitor::domain::model::{SourceKind, SourceState, Timestamp};
+use agent_monitor::domain::model::{SourceKind, SourceState, TapeKind, Timestamp};
 
 use crate::app::App;
 use crate::format;
@@ -89,36 +89,37 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
     if let Mode::Help { .. } = app.mode {
         draw_help(frame, body);
     }
+    theme::brackets(frame.buffer_mut(), area);
 }
 
 fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let totals = &app.view.totals;
+    let wide = area.width >= WIDE;
     let (link, link_style) = match &app.view.link {
         Link::Connecting => (String::from("○ CONNECTING"), theme::bold(theme::YELLOW)),
         Link::Live if clock.blink() => (String::from("○ LIVE"), theme::bold(theme::GREEN)),
         Link::Live => (String::from("● LIVE"), theme::bold(theme::GREEN)),
         Link::Reconnecting(_) => (String::from("● RECONNECTING"), theme::bold(theme::RED)),
-        Link::Incompatible(_) => (String::from("✖ UPDATE MACROD"), theme::bold(theme::RED)),
+        Link::Incompatible(_) => (String::from("✕ UPDATE MACROD"), theme::bold(theme::RED)),
     };
     let errors = totals.errors_24h + totals.failed_24h;
     let error_color = if errors > 0 { theme::RED } else { theme::GREEN };
-    let state = match (area.width >= WIDE, app.view.any_working()) {
+    let state = match (wide, app.view.any_working()) {
         (false, _) => "",
-        (true, true) => "ACTIVE  ",
-        (true, false) => "IDLE  ",
+        (true, true) => "ACTIVE ",
+        (true, false) => "IDLE ",
+    };
+    // Wide headers split their fields with slashes; narrow ones with spaces.
+    let gap = if wide { " ╱ " } else { "  " };
+    let field = |label: &str| {
+        vec![
+            Span::styled(gap.to_owned(), theme::ink(theme::FAINT)),
+            Span::styled(format!("{label} "), theme::ink(theme::DIM)),
+        ]
     };
 
-    let mut left = vec![
-        Span::styled(" MACROD ", theme::strip()),
-        Span::styled(
-            " MON ",
-            Style::new()
-                .fg(theme::STRIP)
-                .bg(theme::BG)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ),
-        Span::styled(">_ ", theme::bold(theme::YELLOW)),
-    ];
+    let mut left = theme::strip_title("MACROD://MON");
+    left.push(Span::styled(" >_ ", theme::bold(theme::YELLOW)));
     if let Some(label) = &app.label {
         left.push(Span::styled(
             format!(" {label} "),
@@ -129,53 +130,84 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         ));
         left.push(Span::raw(" "));
     }
-    left.extend([
-        Span::styled(state, theme::ink(theme::DIM)),
-        Span::styled(link, link_style),
-        Span::styled("  WORK ", theme::ink(theme::DIM)),
-        Span::styled(totals.working.to_string(), theme::bold(theme::GREEN)),
-        Span::styled("  WAIT ", theme::ink(theme::DIM)),
-        Span::styled(totals.waiting.to_string(), theme::bold(theme::YELLOW)),
-        Span::styled("  BLOCK ", theme::ink(theme::DIM)),
-        Span::styled(
-            totals.blocked.to_string(),
-            theme::bold(if totals.blocked > 0 {
-                theme::RED
-            } else {
-                theme::AMBER
-            }),
-        ),
-        Span::styled("  ERR ", theme::ink(theme::DIM)),
-        Span::styled(errors.to_string(), theme::bold(error_color)),
-        Span::styled("  DAY ", theme::ink(theme::DIM)),
-        Span::styled(format::cost(totals.cost_today), theme::bold(theme::YELLOW)),
-    ]);
-    if area.width >= WIDE {
+    left.push(Span::styled(state, theme::ink(theme::DIM)));
+    if wide {
+        left.push(Span::styled("SYS.LINK ", theme::ink(theme::CYAN_DIM)));
+    }
+    left.push(Span::styled(link, link_style));
+    left.extend(field("WORK"));
+    left.push(Span::styled(
+        totals.working.to_string(),
+        theme::bold(theme::GREEN),
+    ));
+    left.extend(field("WAIT"));
+    left.push(Span::styled(
+        totals.waiting.to_string(),
+        theme::bold(theme::YELLOW),
+    ));
+    left.extend(field("BLOCK"));
+    left.push(Span::styled(
+        totals.blocked.to_string(),
+        theme::bold(if totals.blocked > 0 {
+            theme::RED
+        } else {
+            theme::AMBER
+        }),
+    ));
+    left.extend(field("ERR"));
+    // The error count flickers while its newest failure is fresh.
+    let newest_failure = app
+        .view
+        .tape
+        .iter()
+        .rev()
+        .find(|event| matches!(event.kind, TapeKind::ToolError | TapeKind::Failure))
+        .map(|event| event.at);
+    let error_text = newest_failure.map_or_else(
+        || errors.to_string(),
+        |at| {
+            theme::glitch(
+                &errors.to_string(),
+                (clock.now - at).num_milliseconds(),
+                clock.now.timestamp_millis(),
+            )
+        },
+    );
+    left.push(Span::styled(error_text, theme::bold(error_color)));
+    left.extend(field("DAY"));
+    left.push(Span::styled(
+        format::cost(totals.cost_today),
+        theme::bold(theme::YELLOW),
+    ));
+    if wide {
+        left.extend(field("AGENTS"));
         left.push(Span::styled(
-            format!("  AGENTS {}", app.view.agents.len()),
-            theme::ink(theme::DIM),
+            app.view.agents.len().to_string(),
+            theme::bold(theme::AMBER),
         ));
         left.extend(host_spans(app));
+        left.push(Span::styled(gap, theme::ink(theme::FAINT)));
         left.push(Span::styled(
-            format!("  SEQ {}", app.view.seq),
-            theme::ink(theme::FAINT),
+            format!("SEQ 0x{:04X}", app.view.seq),
+            theme::ink(theme::CYAN_DIM),
         ));
     }
 
     let local = clock.now.with_timezone(&clock.offset);
     let separator = if clock.blink() { " " } else { ":" };
     let time = format!(
-        "{:02}:{:02}{separator}{:02} ",
+        "{:02}:{:02}{separator}{:02}",
         local.hour(),
         local.minute(),
         local.second()
     );
-    let date = if area.width >= WIDE {
+    let date = if wide {
         local.format("%a %d %b ").to_string().to_uppercase()
     } else {
         String::new()
     };
-    let right_width = time.len() + date.len();
+    // `⟦` and `⟧` around the time.
+    let right_width = date.chars().count() + time.len() + 4;
 
     let [left_area, right_area] = Layout::horizontal([
         Constraint::Min(0),
@@ -186,7 +218,9 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(date, theme::ink(theme::DIM)),
+            Span::styled("⟦ ", theme::ink(theme::CYAN_DIM)),
             Span::styled(time, theme::bold(theme::AMBER)),
+            Span::styled(" ⟧", theme::ink(theme::CYAN_DIM)),
         ])),
         right_area,
     );
@@ -202,7 +236,7 @@ fn host_spans(app: &App) -> Vec<Span<'static>> {
     let Some(health) = app.view.sources.get(&SourceKind::Daemon) else {
         return Vec::new();
     };
-    let label = Span::styled("  HOST ", theme::ink(theme::DIM));
+    let label = Span::styled(" ╱ HOST ", theme::ink(theme::DIM));
     let harness = health
         .detail
         .as_deref()
@@ -238,25 +272,31 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         ("w", "WALL", "WALL", *page == Page::Wall),
     ];
     let short = area.width < NARROW;
+    let active_style = Style::new()
+        .fg(theme::BG)
+        .bg(theme::AMBER)
+        .add_modifier(ratatui::style::Modifier::BOLD);
+    let slant = Style::new().fg(theme::AMBER).bg(theme::BG);
 
-    let mut spans = vec![Span::raw(" ")];
+    let mut spans = Vec::new();
     for (key, long_name, short_name, active) in tabs {
         let name = if short { short_name } else { long_name };
         if active {
-            spans.push(Span::styled(
-                format!("{key} {name}"),
-                Style::new()
-                    .fg(theme::BG)
-                    .bg(theme::AMBER)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            ));
+            spans.push(Span::styled("◢", slant));
+            spans.push(Span::styled(format!("{key} {name}"), active_style));
+            spans.push(Span::styled("◤", slant));
         } else {
+            spans.push(Span::raw(" "));
             spans.push(Span::styled(key, theme::bold(theme::YELLOW)));
             spans.push(Span::styled(format!(" {name}"), theme::ink(theme::AMBER)));
+            spans.push(Span::raw(" "));
         }
-        spans.push(Span::raw(if short { " " } else { "  " }));
+        if !short {
+            spans.push(Span::raw(" "));
+        }
     }
     if let Page::Agent(id) = page {
+        spans.push(Span::styled("◢", Style::new().fg(theme::YELLOW)));
         spans.push(Span::styled(
             format!("▸ {}", app.view.name_of(id)),
             Style::new()
@@ -264,13 +304,20 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 .bg(theme::YELLOW)
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
+        spans.push(Span::styled("◤", Style::new().fg(theme::YELLOW)));
     }
 
     let hints = if area.width >= WIDE {
-        "/ FIND  ? KEYS  ESC BACK "
+        " / FIND  ? KEYS  ESC BACK "
     } else {
         ""
     };
+    let used: usize = spans.iter().map(Span::width).sum();
+    let room = usize::from(area.width).saturating_sub(used + hints.len() + 1);
+    if room > 0 {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(rule(room), theme::ink(theme::CYAN_DARK)));
+    }
     let [left, right] = Layout::horizontal([
         Constraint::Min(0),
         Constraint::Length(u16::try_from(hints.len()).unwrap_or(0)),
@@ -281,6 +328,22 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         Paragraph::new(Span::styled(hints, theme::ink(theme::DIM))),
         right,
     );
+}
+
+/// Columns between the tick marks on a rule.
+const TICK_EVERY: usize = 8;
+
+/// A thin rule `width` wide with a tick mark every [`TICK_EVERY`] columns.
+fn rule(width: usize) -> String {
+    (0..width)
+        .map(|column| {
+            if column % TICK_EVERY == TICK_EVERY - 1 {
+                '┼'
+            } else {
+                '┄'
+            }
+        })
+        .collect()
 }
 
 /// Width above which the BODY pane grows with the terminal.
@@ -343,22 +406,27 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
 
 fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let line = match &app.mode {
-        Mode::Command { input, .. } => Line::from(vec![
-            Span::styled(" CMD ", theme::strip()),
-            Span::styled(format!(" {}", input.value()), theme::bold(theme::YELLOW)),
-            Span::styled("█", theme::ink(theme::YELLOW)),
-            Span::styled(
-                "   MON AGT TAPE SPND FAIL TREE SRC BODY WALL  + filter words",
-                theme::ink(theme::FAINT),
-            ),
-        ]),
-        Mode::Find { input, .. } => Line::from(vec![
-            Span::styled(" FIND ", theme::strip()),
-            Span::styled(format!(" /{}", input.value()), theme::bold(theme::YELLOW)),
-            Span::styled("█", theme::ink(theme::YELLOW)),
-        ]),
+        Mode::Command { input, .. } => Line::from(prompt(
+            "CMD",
+            vec![
+                Span::styled(format!(" {}", input.value()), theme::bold(theme::YELLOW)),
+                Span::styled("█", theme::ink(theme::YELLOW)),
+                Span::styled(
+                    "   MON AGT TAPE SPND FAIL TREE SRC BODY WALL  + filter words",
+                    theme::ink(theme::FAINT),
+                ),
+            ],
+        )),
+        Mode::Find { input, .. } => Line::from(prompt(
+            "FIND",
+            vec![
+                Span::styled(format!(" /{}", input.value()), theme::bold(theme::YELLOW)),
+                Span::styled("█", theme::ink(theme::YELLOW)),
+            ],
+        )),
         Mode::Base(_) | Mode::Help { .. } => {
-            let mut spans = vec![Span::styled(" > ", theme::strip()), Span::raw(" ")];
+            let mut spans = theme::strip_title(">_");
+            spans.push(Span::raw(" "));
             if let Some(message) = &app.message {
                 spans.push(Span::styled(message.clone(), theme::bold(theme::RED)));
                 spans.push(Span::raw("  "));
@@ -401,6 +469,13 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
         }
     };
     frame.render_widget(Paragraph::new(line), area);
+}
+
+/// A command-line prompt: a slanted strip, then `rest`.
+fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
+    let mut spans = theme::strip_title(label);
+    spans.extend(rest);
+    spans
 }
 
 const HELP: [(&str, &str); 17] = [

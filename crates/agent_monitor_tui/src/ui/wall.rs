@@ -4,7 +4,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use agent_monitor::domain::model::{Agent, Cost};
 
@@ -85,26 +85,22 @@ pub fn draw_card(
     agent: &Agent,
     selected: bool,
 ) {
-    let border = if selected {
-        theme::YELLOW
-    } else {
-        theme::FAINT
-    };
-    let title = Line::from(vec![
-        theme::status_square(agent.status, clock.blink()),
-        Span::styled(format!(" {} ", agent.name), theme::strip()),
-        Span::styled(format!(" {} ", agent.kind.label()), theme::ink(theme::DIM)),
-    ]);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(if selected {
-            BorderType::Thick
-        } else {
-            BorderType::Plain
-        })
-        .border_style(theme::ink(border))
-        .title(title)
-        .style(theme::base());
+    let border = if selected { theme::YELLOW } else { theme::EDGE };
+    let mut title = vec![theme::status_square(agent.status, clock.blink())];
+    title.extend(theme::strip_title(&agent.name));
+    title.push(Span::styled(
+        format!(" {} ", agent.kind.label()),
+        theme::ink(theme::DIM),
+    ));
+    let title = Line::from(title);
+    let id = format!(" {} ", short_id(agent));
+    // The id tag only where the title leaves room for it and a gap.
+    let fits = title.width() + id.len() + 4 <= usize::from(area.width);
+    let mut block = theme::frame(border).title(title);
+    if fits {
+        block =
+            block.title(Line::from(Span::styled(id, theme::ink(theme::CYAN_DIM))).right_aligned());
+    }
     let inner = block.inner(area);
     let width = usize::from(inner.width);
 
@@ -170,4 +166,17 @@ pub fn draw_card(
     }
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+/// A short hex tag for an agent, stable across frames and builds: the low
+/// 16 bits of an FNV-1a hash of its id.
+fn short_id(agent: &Agent) -> String {
+    let hash = agent
+        .id
+        .as_str()
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        });
+    format!("0x{:04X}", hash & 0xFFFF)
 }

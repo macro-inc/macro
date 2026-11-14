@@ -2,26 +2,26 @@
 source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
- MACROD  MON >_  DEMO  ACTIVE  ● LIVE  WORK 25  WAIT 0  BLOCK 1  ERR 50  DAY ~$25.28  AGENTS 34  SEQ 1                                                                              FRI 02 JAN 10:01:40 
- 0 MON  1 AGENTS  2 TAPE  3 SPEND  4 FAILURES  5 TREE  6 SOURCES  7 BODY  w WALL                                                                                               / FIND  ? KEYS  ESC BACK 
-┌ WORKING ──────────────┐┌ WAITING ──────────────┐┌ BLOCKED ──────────────┐┌ TURNS 24H ────────────┐┌ TOOLS 24H ────────────┐┌ ERR 24H ──────────────┐┌ TOK/MIN ──────────────┐┌ DAY ──────────────────┐
-│25                     ││0                      ││1                      ││234                    ││644                    ││50                     ││5.0M                   ││~$25.28                │
-│of 30 live · 4 idle    ││on a person            ││permission / stuck     ││9/h avg                ││7.5% failed            ││2 agents failed        ││▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ││▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁│
-└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘└───────────────────────┘
-┌ WALL  34 AGENTS · PAGE 1/2 · ←→↑↓ MOVE · ENTER OPEN ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│┏■ explore the reducer  subagent ━━━━━┓┌■ fix-19  builder ───────────────────┐┌■ rpc-server  builder ───────────────┐┌■ fix-16  builder ───────────────────┐┌■ release-train  manager ────────────┐   │
-│┃WORK   claude-haiku-5-5              ┃│WORK   claude-sonnet-5-5             ││WORK   claude-opus-5-5               ││WORK   claude-sonnet-5-5             ││WORK building  claude-opus-5-5       │   │
-│┃explore the reducer                  ┃│Follow-up from review                ││▶ Task explore the reducer           ││Follow-up from review                ││Ship the release branch              │   │
-│┃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█┃│▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▂▁█▅│   │
-│┃TRN 1 TLS 1 ERR 0 — 0s               ┃│TRN 2 TLS 4 ERR 0 ~$0.13 28s         ││TRN 18 TLS 52 ERR 3 ~$2.01 33m40s    ││TRN 9 TLS 24 ERR 2 ~$0.51 1m27s      ││TRN 14 TLS 38 ERR 6 ~$1.43 22m40s    │   │
-│┃10:01:40 TEND turn end               ┃│10:01:40 TURN turn start             ││10:01:40 TOOL Task explore the reduce││10:01:39 TOOL Bash just check        ││10:01:37 TOOL Grep Snapshot          │   │
-│┃10:01:40 TOOL Read store.rs          ┃│10:01:40 STAT working                ││10:01:37 TURN turn start             ││10:01:37 TOOL Task explore the reduce││10:01:36 STAT working (building)     │   │
-│┃10:01:40 SPWN subagent explore the re┃│10:01:34 TEND turn end               ││10:01:37 STAT working                ││10:01:34 TURN turn start             ││10:01:31 STAT blocked (permission)   │   │
-│┃                                     ┃│10:01:34 STAT idle                   ││10:01:37 TEND turn end               ││10:01:34 STAT working                ││10:01:27 TOOL Bash just check        │   │
-│┃                                     ┃│10:01:33 TOOL Grep subscribe         ││10:01:37 STAT idle                   ││10:01:34 TEND turn end               ││10:01:26 TURN turn start             │   │
-│┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │
-│┌■ scratch-notes  other ──────────────┐┌■ lint-sweep session  other ─────────┐┌■ fix-18  builder ───────────────────┐┌■ chat-desk  chatter ────────────────┐┌■ q4-roadmap  planner ───────────────┐   │
-││WORK   claude-sonnet-5-5             ││WORK                                 ││WORK   claude-sonnet-5-5             ││WORK   claude-opus-5-5               ││WORK   claude-fable-5-2              │   │
+◢ MACROD://MON ◤ >_  DEMO  ACTIVE SYS.LINK ● LIVE ╱ WORK 25 ╱ WAIT 0 ╱ BLOCK 1 ╱ ERR 50 ╱ DAY ~$25.28 ╱ AGENTS 34 ╱ SEQ 0x0001                                                   FRI 02 JAN ⟦ 10:01:40 ⟧
+ 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY  ◢w WALL◤  ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄ / FIND  ? KEYS  ESC BACK 
+┏▸WORKING ────────── Q1 ┓┏▸WAITING ────────── Q2 ┓┏▸BLOCKED ────────── Q3 ┓┏▸TURNS 24H ──────── Q4 ┓┏▸TOOLS 24H ──────── Q5 ┓┏▸ERR 24H ────────── Q6 ┓┏▸TOK/MIN ────────── Q7 ┓┏▸DAY ────────────── Q8 ┓
+┃25 ▰▰▰▰▰▰▰▰▰▰▱▱        ┃┃0 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃1 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃234                    ┃┃644                    ┃┃50                     ┃┃5.0M                   ┃┃~$25.28                ┃
+┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
+┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛
+┏━◢ WALL ◤ 34 AGENTS · PAGE 1/2 · ←→↑↓ MOVE · ENTER OPEN ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┓
+┃┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ fix-19 ◤ builder ───────── 0x2BC0 ┓┏◆◢ rpc-server ◤ builder ───── 0xC060 ┓┏◆◢ fix-16 ◤ builder ───────── 0x453D ┓┏◆◢ release-train ◤ manager ── 0xC579 ┓   ┃
+│┃WORK   claude-haiku-5-5              ┃┃WORK   claude-sonnet-5-5             ┃┃WORK   claude-opus-5-5               ┃┃WORK   claude-sonnet-5-5             ┃┃WORK building  claude-opus-5-5       ┃   │
+││explore the reducer                  ││Follow-up from review                ││▶ Task explore the reducer           ││Follow-up from review                ││Ship the release branch              │   │
+││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▂▁█▅│   │
+││TRN 1 TLS 1 ERR 0 — 0s               ││TRN 2 TLS 4 ERR 0 ~$0.13 28s         ││TRN 18 TLS 52 ERR 3 ~$2.01 33m40s    ││TRN 9 TLS 24 ERR 2 ~$0.51 1m27s      ││TRN 14 TLS 38 ERR 6 ~$1.43 22m40s    │   │
+││10:01:40 TEND turn end               ││10:01:40 TURN turn start             ││10:01:40 TOOL Task explore the reduce││10:01:39 TOOL Bash just check        ││10:01:37 TOOL Grep Snapshot          │   │
+││10:01:40 TOOL Read store.rs          ││10:01:40 STAT working                ││10:01:37 TURN turn start             ││10:01:37 TOOL Task explore the reduce││10:01:36 STAT working (building)     │   │
+││10:01:40 SPWN subagent explore the re││10:01:34 TEND turn end               ││10:01:37 STAT working                ││10:01:34 TURN turn start             ││10:01:31 STAT blocked (permission)   │   │
+││                                     ││10:01:34 STAT idle                   ││10:01:37 TEND turn end               ││10:01:34 STAT working                ││10:01:27 TOOL Bash just check        │   │
+│┃                                     ┃┃10:01:33 TOOL Grep subscribe         ┃┃10:01:37 STAT idle                   ┃┃10:01:34 TEND turn end               ┃┃10:01:26 TURN turn start             ┃   │
+│┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
+│┏◆◢ scratch-notes ◤ other ──── 0x7022 ┓┏◆◢ lint-sweep session ◤ other ────━━━┓┏◆◢ fix-18 ◤ builder ───────── 0x2D73 ┓┏◆◢ chat-desk ◤ chatter ────── 0x3958 ┓┏◆◢ q4-roadmap ◤ planner ───── 0x3E71 ┓   │
+│┃WORK   claude-sonnet-5-5             ┃┃WORK                                 ┃┃WORK   claude-sonnet-5-5             ┃┃WORK   claude-opus-5-5               ┃┃WORK   claude-fable-5-2              ┃   │
 ││scratch-notes session                ││lint-sweep session                   ││Follow-up from review                ││Answer questions                     ││Draft the quarter's plan             │   │
 ││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁█▆││▁▁▁▁▁▁▁▁▁▁▂▂▂▁▁▁▂▂▁▁▁▂▁▁▁▁▂▁▁▂▁▁▁▂▁██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃█││▂▁▁▂▁▁▂▁▁▂▁▂▁▁▁▂▁▁▁▂▂▁▂▁▁▂▂▁▂▁▁▁▂▂▂██││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▅█│   │
 ││TRN 20 TLS 65 ERR 8 ~$1.19 36m20s    ││TRN 14 TLS 39 ERR 4 — 26m20s         ││TRN 6 TLS 16 ERR 2 ~$0.32 54s        ││TRN 22 TLS 53 ERR 3 ~$2.47 46m40s    ││TRN 15 TLS 45 ERR 1 ~$3.58 21m40s    │   │
@@ -29,10 +29,10 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:38 TURN turn start             ││10:01:37 TOOL Grep subscribe         ││10:01:38 TURN turn start             ││10:01:32 TOOL Read server.rs         ││10:01:38 TURN turn start             │   │
 ││10:01:38 TEND turn end               ││10:01:35 TOOL Write README.md        ││10:01:38 STAT working                ││10:01:30 TOOL Edit pages.rs          ││10:01:38 STAT working                │   │
 ││10:01:36 TOOL Grep TapeEvent         ││10:01:33 TERR Read failed            ││10:01:37 TEND turn end               ││10:01:27 TOOL Edit store.rs          ││10:01:37 TEND turn end               │   │
-││10:01:33 TOOL Task explore the reduce││10:01:32 TOOL Read model.rs          ││10:01:37 STAT idle                   ││10:01:20 TOOL Bash just check        ││10:01:37 STAT idle                   │   │
-│└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │
-│┌■ fix-20  builder ───────────────────┐┌■ explore the reducer  subagent ─────┐┌■ mesh-plan  planner ────────────────┐┌■ explore the reducer  subagent ─────┐┌■ explore the reducer  subagent ─────┐   │
-││WORK   claude-sonnet-5-5             ││WORK   claude-haiku-5-5              ││WORK   claude-fable-5-2              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              │   │
+│┃10:01:33 TOOL Task explore the reduce┃┃10:01:32 TOOL Read model.rs          ┃┃10:01:37 STAT idle                   ┃┃10:01:20 TOOL Bash just check        ┃┃10:01:37 STAT idle                   ┃   │
+│┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
+│┏◆◢ fix-20 ◤ builder ───────── 0xC7F0 ┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ mesh-plan ◤ planner ────── 0xD15E ┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓   │
+│┃WORK   claude-sonnet-5-5             ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-fable-5-2              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃   │
 ││Follow-up from review                ││explore the reducer                  ││Plan the figure widget               ││explore the reducer                  ││explore the reducer                  │   │
 ││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█│   │
 ││TRN 1 TLS 2 ERR 0 ~$0.08 12s         ││TRN 1 TLS 1 ERR 0 — 2s               ││TRN 15 TLS 42 ERR 1 ~$3.26 31m40s    ││TRN 1 TLS 1 ERR 0 — 4s               ││TRN 1 TLS 1 ERR 0 — 4s               │   │
@@ -40,10 +40,10 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:38 STAT working                ││10:01:37 TOOL Read store.rs          ││10:01:36 STAT blocked (permission)   ││10:01:36 TOOL Read store.rs          ││10:01:35 TOOL Read store.rs          │   │
 ││10:01:37 TEND turn end               ││10:01:37 SPWN subagent explore the re││10:01:36 TOOL Edit store.rs          ││10:01:36 SPWN subagent explore the re││10:01:35 SPWN subagent explore the re│   │
 ││10:01:37 STAT idle                   ││                                     ││10:01:34 TOOL Bash just check        ││                                     ││                                     │   │
-││10:01:33 TOOL Bash just check        ││                                     ││10:01:32 TOOL Task explore the reduce││                                     ││                                     │   │
-│└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │
-│┌■ explore the reducer  subagent ─────┐┌■ explore the reducer  subagent ─────┐┌■ explore the reducer  subagent ─────┐┌■ explore the reducer  subagent ─────┐┌■ explore the reducer  subagent ─────┐   │
-││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              ││WORK   claude-haiku-5-5              │   │
+│┃10:01:33 TOOL Bash just check        ┃┃                                     ┃┃10:01:32 TOOL Task explore the reduce┃┃                                     ┃┃                                     ┃   │
+│┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
+│┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓   │
+│┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃   │
 ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  ││explore the reducer                  │   │
 ││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█│   │
 ││TRN 1 TLS 1 ERR 0 — 6s               ││TRN 1 TLS 1 ERR 0 — 8s               ││TRN 1 TLS 1 ERR 0 — 9s               ││TRN 1 TLS 1 ERR 0 — 13s              ││TRN 1 TLS 1 ERR 0 — 16s              │   │
@@ -51,10 +51,10 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:33 TOOL Read store.rs          ││10:01:32 TOOL Read store.rs          ││10:01:31 TOOL Read store.rs          ││10:01:26 TOOL Read store.rs          ││10:01:24 TOOL Read store.rs          │   │
 ││10:01:33 SPWN subagent explore the re││10:01:32 SPWN subagent explore the re││10:01:31 SPWN subagent explore the re││10:01:26 SPWN subagent explore the re││10:01:24 SPWN subagent explore the re│   │
 ││                                     ││                                     ││                                     ││                                     ││                                     │   │
-││                                     ││                                     ││                                     ││                                     ││                                     │   │
-│└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘└─────────────────────────────────────┘   │
+│┃                                     ┃┃                                     ┃┃                                     ┃┃                                     ┃┃                                     ┃   │
+│┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
 │                                                                                                                                                                                                      │
 │                                                                                                                                                                                                      │
-│                                                                                                                                                                                                      │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- >  TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
+┃                                                                                                                                                                                                      ┃
+┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛
+◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
