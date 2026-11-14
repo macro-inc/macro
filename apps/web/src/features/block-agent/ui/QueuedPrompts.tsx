@@ -27,6 +27,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
 import { Button, Surface, Tooltip } from '@ui';
@@ -37,6 +38,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -62,8 +64,12 @@ export interface QueuedPromptsProps {
   items: QueuedPromptItem[];
   /** Keep queued text visible without allowing changes. */
   disabled?: boolean;
-  /** Save a queued prompt's replacement text (Enter, or focus leaving it). */
-  onEdit: (actionId: string, prompt: string) => void;
+  /**
+   * Save a queued prompt's replacement text (Enter, or focus leaving it).
+   * Resolving to false means the server kept the old text; the row shows
+   * it again.
+   */
+  onEdit: (actionId: string, prompt: string) => void | Promise<boolean>;
   /** Remove a queued action before it dispatches. */
   onRemove: (actionId: string) => void;
   /**
@@ -173,7 +179,7 @@ type QueuedRowProps = {
   onMoveDown: () => void;
   /** Where focus goes when the row closes (the composer). */
   onLeave?: () => void;
-  onEdit: (prompt: string) => void;
+  onEdit: (prompt: string) => void | Promise<boolean>;
   onRemove: () => void;
   /** Interrupt the current turn and send this row next. */
   onSteer?: () => void;
@@ -385,9 +391,14 @@ function PromptBody(
   // to tell a real edit from an untouched round trip. After the editor is
   // set from outside (a restore, a server snapshot) it is unknown until the
   // editor reports the applied text through `onChange`: that report comes
-  // during `setMarkdown` outside a Lexical update and later inside one (an
-  // Escape command), so it is cleared before the set, never after.
+  // during `setMarkdown` outside a Lexical update, later inside one (an
+  // Escape command) or inside a Solid effect, and not at all when the
+  // written-out text is unchanged. So it is cleared before the set, never
+  // after, and a caller that can read the applied text reads it back.
   let baseline: string | undefined;
+  // The raw prompt the queue still carried when the last edit was sent;
+  // list snapshots that repeat it predate the echo and are not reverts.
+  let promptBeforeSave: string | undefined;
 
   const save = () => {
     if (props.disabled) return;
@@ -404,10 +415,28 @@ function PromptBody(
     if (text === baseline || text === synced) return;
     synced = text;
     baseline = text;
+    promptBeforeSave = props.item.prompt;
     // Keep the private prefix on the wire when saving the visible text.
     const raw = props.item.prompt ?? '';
     const visible = stripAgentContext(raw);
-    props.onEdit(raw.slice(0, raw.length - visible.length) + text);
+    const accepted = props.onEdit(
+      raw.slice(0, raw.length - visible.length) + text
+    );
+    if (accepted !== undefined)
+      fireAndForget(settle(accepted, text), 'agent-queue');
+  };
+
+  // A refused save: forget it and show the server's text again, unless the
+  // row has moved on to newer typing, or is gone.
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const settle = async (accepted: Promise<boolean>, text: string) => {
+    if ((await accepted) || disposed || synced !== text) return;
+    synced = stripAgentContext(props.item.prompt ?? '');
+    promptBeforeSave = undefined;
+    if (editor.controls.getMarkdown() === text) restore();
   };
 
   const restore = () => {
@@ -483,22 +512,38 @@ function PromptBody(
 
   // A server snapshot may carry someone else's edit. Apply it only while
   // this row is untouched — never over a focused editor or unsaved local
-  // changes, which are about to become the server's text anyway.
-  createEffect(() => {
-    const server = stripAgentContext(props.item.prompt ?? '');
-    if (server === synced) return;
-    const root = editor.lexical.getRootElement();
-    const focused = root?.contains(document.activeElement) ?? false;
-    const dirty = editor.controls.getMarkdown() !== synced;
-    if (focused || dirty) return;
-    baseline = undefined;
-    editor.controls.setMarkdown(server);
-    // Outside a Lexical update the set has applied by now; a snapshot that
-    // only differs in markup reports no change, so read it here.
-    if (baseline === undefined) baseline = editor.controls.getMarkdown();
-    props.onDraftChange(server);
-    synced = server;
-  });
+  // changes, which are about to become the server's text anyway. Only the
+  // prompt is tracked: reading the editor's text must not subscribe this
+  // effect to it, or it would re-run inside the editor's own update, where
+  // the set is deferred and the read below would be stale. The item itself
+  // is rebuilt from every list change, so a snapshot still carrying the
+  // prompt from before a save is not a revert; it is skipped until the
+  // server echoes the edit. Anything else is re-checked on every rebuild,
+  // so a snapshot skipped over an open row is applied on the next list
+  // rebuild after the row is left.
+  createEffect(
+    on(
+      () => props.item.prompt,
+      (prompt) => {
+        if (prompt === promptBeforeSave) return;
+        promptBeforeSave = undefined;
+        const server = stripAgentContext(prompt ?? '');
+        if (server === synced) return;
+        const root = editor.lexical.getRootElement();
+        const focused = root?.contains(document.activeElement) ?? false;
+        const dirty = editor.controls.getMarkdown() !== synced;
+        if (focused || dirty) return;
+        baseline = undefined;
+        editor.controls.setMarkdown(server);
+        // The set has applied (this effect never runs inside a Lexical
+        // update), and a snapshot the editor writes out unchanged reports
+        // no change at all, so read the applied text back here.
+        if (baseline === undefined) baseline = editor.controls.getMarkdown();
+        props.onDraftChange(server);
+        synced = server;
+      }
+    )
+  );
 
   return (
     <div

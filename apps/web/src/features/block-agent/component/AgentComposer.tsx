@@ -255,10 +255,9 @@ export function AgentComposer(props: {
             <QueuedPrompts
               items={queuedItems()}
               disabled={readOnly()}
-              onEdit={(actionId, prompt) => {
-                if (!readOnly())
-                  fireAndForget(queue.edit(actionId, prompt), 'agent-composer');
-              }}
+              onEdit={(actionId, prompt) =>
+                readOnly() ? undefined : queue.edit(actionId, prompt)
+              }
               onRemove={(actionId) => {
                 if (!readOnly())
                   fireAndForget(queue.remove(actionId), 'agent-composer');
