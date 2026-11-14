@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import LightningIcon from '@icon/system/regular/lightning.svg';
@@ -180,7 +181,7 @@ export function LiveQuestion(props: {
               </Show>
             </span>
             <Popover.Trigger class="shrink-0 rounded px-2 py-1 text-xs text-ink-muted">
-              Details
+              {t('databaseAnswers.details')}
             </Popover.Trigger>
           </div>
           <ResizableAnswer
