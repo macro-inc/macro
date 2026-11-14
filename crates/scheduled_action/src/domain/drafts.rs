@@ -1208,7 +1208,7 @@ Everything you need is here and in the prompt: the items the request names, alre
 Before you, the drafter looked up by name each item the request names, as the owner would see it. The prompt lists them.
 
 {items}
-- A name listed under \"Left for the owner\" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it. Leave it out (no `entities`, or a knob whose value is `\"\"`) and the owner picks it before saving. The one exception is an item the request asks to make new that no item has the name of: the program creates it once, before the check, named as the request names it, uses its id in the routine and lists it in `created`. Create nothing else.
+- A name listed under \"Left for the owner\" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it. Leave it out (no `entities`, or a knob whose value is `\"\"`) and the owner picks it before saving. The one exception is an item the request asks to make new that no item has the name of: the program creates it once, before the check, named as the request names it (a database with the table and columns the routine writes), lists it in `created`, and the routine uses it by the id the program got, written into the step's code, not by name in a knob. Create nothing else.
 - Anything else the code needs (the owner, a person by email address, their labels' or properties' ids), it reads from the SDK when it runs.
 
 ## The SDK reference
