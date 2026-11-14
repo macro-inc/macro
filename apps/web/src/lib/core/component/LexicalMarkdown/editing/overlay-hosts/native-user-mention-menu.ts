@@ -5,6 +5,7 @@ import { selectionMessage } from '@macro-inc/lexical-wasm-view/view/session-port
 import {
   type AgentSessionMentionInsertion,
   handleAgentSessionMentionWithInsertion,
+  handleBookingLinkMentionWithInsertion,
   handleDateMentionWithInsertion,
   handleEntityMentionWithInsertion,
   tracksMentions,
@@ -13,7 +14,10 @@ import {
   dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
 } from '../../plugins/group-b/command';
-import type { HandlerDependencies } from '../../utils/mentionsUtils';
+import type {
+  BookingLinkMentionItem,
+  HandlerDependencies,
+} from '../../utils/mentionsUtils';
 import {
   handleUserMentionWithInsertion,
   type UserMentionInsertion,
@@ -37,6 +41,44 @@ export function createNativeUserMentionMenuHost(
   const { blockName, sourceDocumentId, onUserMention, disableMentionTracking } =
     source;
   const active = () => alive() && view.isMounted;
+  /**
+   * Source handleBookingLinkMention: no tracking; the payload, including the
+   * url from the one shared builder, is built when the insert is admitted.
+   */
+  async function selectBookingLink(
+    item: BookingLinkMentionItem
+  ): Promise<void> {
+    const generation = view.mirror.keyGeneration;
+    if (!active() || generation === null) return;
+    const port = view.port;
+    if (!port.inputSettledIfSessionEdit)
+      throw new Error(
+        'Booking link mentions require settled session edit admission'
+      );
+    const inputSettled = port.inputSettledIfSessionEdit.bind(port);
+    const current = () => active() && view.mirror.keyGeneration === generation;
+    const command = async (name: string, buildPayload: () => unknown) => {
+      if (!current()) return false;
+      const result = await inputSettled(
+        () => ({
+          name,
+          json: JSON.stringify(buildPayload()),
+          generation,
+          selection: selectionMessage({ kind: 'keep' }),
+        }),
+        { admit: current }
+      );
+      if (result.status === 'error') throw result.error;
+      return result.status === 'success';
+    };
+    if (!(await command('group-a.search-remove', () => ({}))) || !current())
+      return;
+    await handleBookingLinkMentionWithInsertion(item, () => ({
+      async insert(buildPayload) {
+        await command('group-b.insert-booking-link-mention', buildPayload);
+      },
+    }));
+  }
   async function selectDate(dateOption: DateOption): Promise<void> {
     const generation = view.mirror.keyGeneration;
     if (!active() || generation === null) return;
@@ -184,9 +226,10 @@ export function createNativeUserMentionMenuHost(
       if (item.kind === 'date') return await selectDate(item.data);
       if (item.kind === 'agentSession')
         return await selectAgentSession({ id: item.id, name: item.data.name });
+      if (item.kind === 'bookingLink') return await selectBookingLink(item);
       if (item.kind !== 'user')
         throw new Error(
-          'This native mention stage supports user, date, agent session and document entity choices only'
+          'This native mention stage supports user, date, agent session, booking link and document entity choices only'
         );
       if (!active()) return;
       const removal = await dispatchApplicationCommandSettled(

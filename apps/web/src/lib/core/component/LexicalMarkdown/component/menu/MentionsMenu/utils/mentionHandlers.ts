@@ -5,6 +5,7 @@ import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
 import type {
   AgentSessionMentionInfo,
+  BookingLinkMentionInfo,
   DateMentionInfo,
   DocumentMentionInfo,
 } from '@macro-inc/lexical-core';
@@ -287,18 +288,43 @@ function buildBookingUrl(profileId: string, slug: string): string {
 /**
  * Handle booking link mention insertion.
  */
-async function handleBookingLinkMention(
+function handleBookingLinkMention(
   item: BookingLinkMentionItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  const { profileId, slug, title } = item.data;
-  editor.dispatchCommand(INSERT_BOOKING_LINK_MENTION_COMMAND, {
-    profileId,
-    slug,
-    label: title,
-    url: buildBookingUrl(profileId, slug),
+  return handleBookingLinkMentionWithInsertion(item, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(
+          INSERT_BOOKING_LINK_MENTION_COMMAND,
+          buildPayload()
+        );
+      },
+    };
   });
+}
+
+export type BookingLinkMentionInsertion = {
+  insert(buildPayload: () => BookingLinkMentionInfo): void | Promise<void>;
+};
+
+/** Share the booking payload and its one url builder without an editor facade. */
+export async function handleBookingLinkMentionWithInsertion(
+  item: BookingLinkMentionItem,
+  prepare: () => BookingLinkMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => {
+    const { profileId, slug, title } = item.data;
+    return {
+      profileId,
+      slug,
+      label: title,
+      url: buildBookingUrl(profileId, slug),
+    };
+  });
+  if (completion !== undefined) await completion;
 }
 
 /**
