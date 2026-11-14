@@ -1,0 +1,21 @@
+crates/agent_monitor_tui/src/ui/changes/layout.rs
+  s_9accbcd761184e::t_c8900104c4a21b 377-380,388-392
+crates/agent_monitor_tui/src/ui/changes/test.rs
+  s_9accbcd761184e::t_b87fa4f2ba46b5 209-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e1282db60d3bed5ccee3c92b4965b499cb601f51",
+  "prompts": {},
+  "sessions": {
+    "s_9accbcd761184e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2f6b3b32-0017-4fb1-872f-a56ce4ce858e",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
