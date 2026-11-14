@@ -7597,6 +7597,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_e2e"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "aws-sdk-sqs",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "crm",
+ "email",
+ "entity_access",
+ "entity_access_management",
+ "frecency",
+ "gmail_emulator",
+ "hex",
+ "lexical_client",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_event_topics",
+ "macro_user_id",
+ "outlook_emulator",
+ "rdkafka",
+ "redis",
+ "reqwest 0.13.4",
+ "rootcause",
+ "rustix 1.1.6",
+ "rustls",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sqs_client",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
