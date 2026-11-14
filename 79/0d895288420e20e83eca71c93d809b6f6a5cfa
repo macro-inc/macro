@@ -1,0 +1,27 @@
+packages/sdk-ocaml/test/test_config.ml
+  s_65316fb49f4b19::t_36f1e993ff9d49 157-161,165-166,173-175,180-183
+  s_65316fb49f4b19::t_177e34be7f6e2a 156,162-164,167-172,176,179,184
+packages/sdk-ocaml/test/operations/test_operations.ml
+  s_65316fb49f4b19::t_dbaa965c992448 6-8
+packages/sdk-ocaml/test/operations/spec_check.ml
+  s_65316fb49f4b19::t_36f1e993ff9d49 206-208,217-219,232-233,236-237,240-241,254-255,259-262,265-271,277-280,310-312,402-403,477-482,487-489
+  s_65316fb49f4b19::t_5590a611baaa5d 181-183,187,209,213
+  s_65316fb49f4b19::t_dbaa965c992448 303-309,313-314,473-476,483-486
+  s_65316fb49f4b19::t_2f4c4ba82a8677 174-180,184-186,188-189,196,198-204,210-212,214-216,220-221,223-225,227-231,234-235,238-239,242-253,256-258,263-264,272,274-276,281-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "790d895288420e20e83eca71c93d809b6f6a5cfa",
+  "prompts": {},
+  "sessions": {
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
