@@ -1,0 +1,29 @@
+packages/sdk-ocaml/README.md
+  s_65316fb49f4b19::t_623aa8c9158d1f 1-31,33-147
+  s_65316fb49f4b19::t_b1699a47cf00bc 32
+packages/sdk/AGENTS.md
+  s_65316fb49f4b19::t_c09c5ee75e6bb9 238-240
+.agents/rules/config-and-service-urls.md
+  s_65316fb49f4b19::t_1ec84a3809a535 59-60
+  s_65316fb49f4b19::t_c09c5ee75e6bb9 58
+packages/sdk-ocaml/AGENTS.md
+  s_65316fb49f4b19::t_73f3fcb8ca19ba 1-51
+packages/sdk-ocaml/CLAUDE.md
+  s_65316fb49f4b19::t_7a8941ab23ccd6 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ab1d16250aac13d0e74db7cc9594343eccdbfa3",
+  "prompts": {},
+  "sessions": {
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
