@@ -1,0 +1,21 @@
+crates/agent_monitor/src/outbound/demo/repo.rs
+  s_d3c0ee1e1835ed::t_753b37cfb30129 45-46,100-101
+  s_d3c0ee1e1835ed::t_098fb142473a64 188-261
+  s_d3c0ee1e1835ed::t_3bd42923469fe6 262-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5c42320fbe1475efd224e6662f659f3422fc19b9",
+  "prompts": {},
+  "sessions": {
+    "s_d3c0ee1e1835ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b58c49c-4e91-4ba4-b404-09b201a70ffd",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
