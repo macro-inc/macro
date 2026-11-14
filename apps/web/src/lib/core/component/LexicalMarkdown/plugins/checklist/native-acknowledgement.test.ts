@@ -15,7 +15,7 @@ import {
 import { checklistPlugin } from './checklistPlugin';
 import { registerNativeChecklist } from './native';
 
-beforeAll(initializeNativeKeyboardSurface);
+beforeAll(() => initializeNativeKeyboardSurface());
 afterEach(() => vi.restoreAllMocks());
 
 for (const entry of [
