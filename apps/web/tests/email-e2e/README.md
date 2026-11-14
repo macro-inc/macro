@@ -119,6 +119,13 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   database keeps the inboxes: inboxes left by an interrupted run keep failing
   to sync and slow every new one. Disconnect them, or start from a new
   instance.
+- The `full-stack-*.spec.ts` files are the functions only this tier reaches:
+  connecting through the authentication service and the providers' consent
+  (including administrator approval), search, notifications, sharing a
+  thread with another user, and a file too large to attach.
+  `askAs(user, path)` asks a service as another signed-in user.
+- The tier writes its evidence to `ledger-results/full-stack/`, and the
+  report counts it together with the per-test run's.
 
 CI: `Email end-to-end (full stack)` (`email_e2e_full_stack.rs`) runs the tier
 on pushes to `main` and nightly, not in `PR CI`.
