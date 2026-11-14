@@ -1,8 +1,8 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import {
-  DATABASE_LINK_PARAMS,
   databaseDetailSearch,
+  withDatabaseLinkParams,
 } from '@app/features/block-database/database-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
@@ -326,8 +326,8 @@ export const driveRootDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveFolderDocumentRoute = defineRoute({
@@ -346,8 +346,8 @@ export const driveFolderDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveTabDocumentRoute = defineRoute({
@@ -366,8 +366,8 @@ export const driveTabDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
-  toReference: ({ documentId, documentType }) =>
-    uuidRouteReference(documentId, documentType),
+  toReference: ({ documentId, documentType }, query) =>
+    withDatabaseLinkParams(uuidRouteReference(documentId, documentType), query),
 });
 
 export const driveFolderRoute = defineRoute({
@@ -412,7 +412,6 @@ export const driveSplitRoute = defineRoute({
     if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
     if (type === 'spreadsheet')
       return Object.values(SPREADSHEET_COMMENT_PARAMS);
-    if (type === 'database') return DATABASE_LINK_PARAMS;
     if (typeof routeParams(entry.location.route).callId === 'string')
       return [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId];
     return [];
@@ -1044,7 +1043,6 @@ export const legacyContentRoute = defineRoute({
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
     if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
-    if (type === 'database') return DATABASE_LINK_PARAMS;
     return [];
   },
   claim: ({ type, id }) => {
@@ -1069,13 +1067,13 @@ export const legacyContentRoute = defineRoute({
       id: `${content.aliasContext?.baseType ?? content.type}:${id}`,
     };
   },
-  toReference: ({ type, id }) => {
+  toReference: ({ type, id }, query) => {
     const project = type === 'component' ? parseProjectRoute(id) : undefined;
     // A project mention opens the project, not one of its discussions.
     if (project?.discussionId) return;
     return project
       ? uuidRouteReference(project.id, 'initiative')
-      : uuidRouteReference(id, type);
+      : withDatabaseLinkParams(uuidRouteReference(id, type), query);
   },
 });
 

@@ -52,8 +52,9 @@ export function selectLocation(
 /**
  * Open the table and view the route names, once, over the remembered
  * selection. It waits for the viewer's id, since their remembered selection
- * restores then, and `consume` clears the route afterwards, so a later
- * remount opens what the viewer chose since rather than the link again.
+ * restores then, and `consume` clears the route afterwards, so a remount in
+ * this session opens what the viewer chose since. Reloading the link's own
+ * URL opens the link again, like any deep link.
  */
 export function followRouteLocation(
   route: { tableId: Accessor<string>; viewId: Accessor<string> },
