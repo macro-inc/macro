@@ -97,7 +97,10 @@ tools/HTTP/GraphQL surfaces over them.
   and the records they name, so its cost follows those rows rather than the
   scope's contacts and addresses (at most one index-only read of the
   scope's companies); keep its visibility rules identical to the Activity
-  arm's.
+  arm's. Those rows are every team's, at a heap page and 5-9 us each: past
+  about 4k of them it costs more than per-id GIN probes for a team of 4k
+  companies and 10k contacts, and small teams already pay more. Production had
+  roughly 1.5k-7k on 2026-11-14 (at most 12k); revisit before 10k.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with

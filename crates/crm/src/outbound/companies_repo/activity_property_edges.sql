@@ -11,6 +11,12 @@
 -- them from the `property_definition_id` index; `test` pins them to
 -- `SystemPropertyKey`.
 --
+-- Bound: each such row of every team costs a heap page (a read when cold) and
+-- 5-9 us warm (79 ms at 10k rows, 465 ms at 100k), against about 2 us per scope
+-- record for per-id GIN probes: past about 4k rows this costs more for a team of
+-- 4k companies and 10k contacts, and small teams already pay more. Production had
+-- roughly 1.5k-7k such rows on 2026-11-14 (at most 12k): revisit before 10k.
+--
 -- A reference matches exactly when the old containment test
 -- `values->'value' @> [{"entity_id": "<id>"}]` would match the record's id: the
 -- value is an array, the element is an object, and its `entity_id` is the id's
