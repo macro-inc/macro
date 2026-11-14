@@ -43,6 +43,11 @@ export default async function globalSetup(): Promise<
     // The services it starts are built beside it.
     env: { EMAIL_E2E_BIN_DIR: dirname(binary), ...process.env },
   });
+  // Listened for from the start: the server may end before the run does,
+  // and an exit that has happened is not told again.
+  const exited = new Promise<void>((resolve) => {
+    server.once('exit', () => resolve());
+  });
   const url = await new Promise<string>((resolve, reject) => {
     server.once('error', reject);
     server.once('exit', (code) =>
@@ -54,9 +59,6 @@ export default async function globalSetup(): Promise<
   // The server ends the stacks it still holds before it exits: wait for it,
   // so nothing of this run is left when the next one starts.
   return async () => {
-    const exited = new Promise<void>((resolve) => {
-      server.once('exit', () => resolve());
-    });
     server.kill();
     await exited;
   };

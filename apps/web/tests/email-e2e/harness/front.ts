@@ -584,6 +584,10 @@ export async function startFront(options: FrontOptions): Promise<Front> {
           );
     service.on('error', () => socket.destroy());
     socket.on('error', () => service.destroy());
+    // Either side going away ends the other: a closed page must not leave
+    // its connection to the service open.
+    service.on('close', () => socket.destroy());
+    socket.on('close', () => service.destroy());
   });
 
   const sockets = new Set<Duplex>();

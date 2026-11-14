@@ -86,6 +86,10 @@ function command(redisUrl: string, words: string[]): Promise<Reply> {
       socket.destroy(new Error(`${redisUrl} did not answer ${words[0]}`));
     });
     socket.on('error', reject);
+    // Closed before a whole reply: nothing more will come.
+    socket.on('close', () =>
+      reject(new Error(`${redisUrl} closed before it answered ${words[0]}`))
+    );
     socket.on('connect', () => socket.write(request));
     socket.on('data', (chunk: Buffer) => {
       received = Buffer.concat([received, chunk]);

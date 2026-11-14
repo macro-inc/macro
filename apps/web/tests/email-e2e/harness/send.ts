@@ -109,7 +109,11 @@ export function htmlBody(raw: string): string {
   if (!part) throw new Error('the message has no HTML part');
   const [head, ...body] = part.split(/\r?\n\r?\n/);
   const text = body.join('\n\n');
-  return /quoted-printable/i.test(head) ? decodeQuotedPrintable(text) : text;
+  if (/quoted-printable/i.test(head)) return decodeQuotedPrintable(text);
+  if (/content-transfer-encoding:\s*base64/i.test(head)) {
+    return Buffer.from(text.replace(/\s+/g, ''), 'base64').toString('utf8');
+  }
+  return text;
 }
 
 /** How many times `needle` occurs in `text`. */
