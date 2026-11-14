@@ -91,12 +91,17 @@ const LOGS: xtask_paths::RuntimePath<'static> =
 const RESULTS: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/email-e2e-results");
 
+/// Where a job keeps the results of its run of the scenarios for known
+/// bugs, for the coverage job.
+const KNOWN_BUGS: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("target/email-e2e-known-bugs");
+
 /// Where the coverage job writes its report.
 const COVERAGE: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/email-e2e-coverage");
 
-/// The jobs whose scenarios gate, by id.
-const GATING_JOBS: [&str; 2] = ["email-e2e", "email-e2e-search"];
+/// The jobs the coverage job reads the results of, by id.
+const REPORTED_JOBS: [&str; 3] = ["email-e2e", "email-e2e-search", "email-e2e-known-bugs"];
 
 /// Build the workflow.
 pub fn email_e2e() -> Workflow {
@@ -148,6 +153,7 @@ fn job(name: &str) -> Job {
         .add_env(("EMAIL_E2E_SQS_URL", "http://127.0.0.1:9324"))
         .add_env(("EMAIL_E2E_KAFKA_BROKERS", "127.0.0.1:9092"))
         .add_env(("EMAIL_E2E_RESULTS", RESULTS.as_str()))
+        .add_env(("EMAIL_E2E_KNOWN_BUGS", KNOWN_BUGS.as_str()))
         .add_service("postgres", code_check_cloud_storage::postgres_service())
         .add_service("redis", code_check_cloud_storage::redis_service())
         .add_service("sqs", sqs_service())
@@ -213,34 +219,40 @@ fn search() -> Job {
         .add_step(run_scenarios())
         .map(|job| keep_results(job, "email-e2e-results-search"))
         .add_step(known_bugs())
+        .map(|job| keep_known_bug_results(job, "email-e2e-known-bugs-search"))
         .map(|job| finish(job, "email-e2e-logs-search"))
 }
 
 /// The scenarios kept for known, unfixed bugs, outside search. They fail by
 /// design and several wait out a timeout, so they have a job of their own
 /// that never fails for a scenario: it reports which still fail and which
-/// now pass.
+/// now pass, and keeps the results for the coverage job, which fails for
+/// one that passes.
 fn known_bug_scenarios() -> Job {
     job("Email end-to-end (known bugs)")
         .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
         .map(prepare)
         .add_step(known_bugs())
+        .map(|job| keep_known_bug_results(job, "email-e2e-known-bugs-rest"))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
-/// Reports what the gating scenarios cover, from the records the jobs kept.
-/// It runs when scenarios failed too: the report says which, and counts only
-/// the ones that passed. Gaps do not fail it; a list that no longer matches
-/// the code does.
+/// Reports what the gating scenarios cover, from the records the jobs kept,
+/// and fails on a gap: a scenario that failed, a function that is not proved
+/// and not waived, an entry point that is not reached and not waived, a
+/// scenario kept for a known bug that passes, or a list that no longer
+/// matches the code. It runs when scenarios failed too: the report says
+/// which.
 fn coverage() -> Job {
     Job::default()
         .name("Email end-to-end (coverage)")
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
-        .needs(GATING_JOBS.map(str::to_owned).to_vec())
+        .needs(REPORTED_JOBS.map(str::to_owned).to_vec())
         .cond(Expression::new("always()"))
         .add_env(("EMAIL_E2E_RESULTS", RESULTS.as_str()))
+        .add_env(("EMAIL_E2E_KNOWN_BUGS", KNOWN_BUGS.as_str()))
         .add_env(("EMAIL_E2E_COVERAGE", COVERAGE.as_str()))
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())
@@ -253,6 +265,16 @@ fn coverage() -> Job {
                 ) // v5
                 .add_with(("pattern", "email-e2e-results-*"))
                 .add_with(("path", RESULTS.as_str())),
+        )
+        .add_step(
+            Step::new("download the results of the scenarios for known bugs")
+                .uses(
+                    "actions",
+                    "download-artifact",
+                    "634f93cb2916e3fdff6788551b99b062d0335ce0",
+                ) // v5
+                .add_with(("pattern", "email-e2e-known-bugs-*"))
+                .add_with(("path", KNOWN_BUGS.as_str())),
         )
         .add_step(
             Step::new("report the coverage").run(include_str!("scripts/email_e2e_coverage.sh")),
@@ -274,6 +296,22 @@ fn keep_results(job: Job, name: &str) -> Job {
     )
     .add_step(
         steps::upload_artifact(name, RESULTS)
+            .add_with(("if-no-files-found", "ignore"))
+            .add_with(("retention-days", 7))
+            .if_condition(Expression::new("always()")),
+    )
+}
+
+/// Keeps the results of the run of the scenarios for known bugs for the
+/// coverage job.
+fn keep_known_bug_results(job: Job, name: &str) -> Job {
+    job.add_step(
+        Step::new("keep the results of the scenarios for known bugs")
+            .run(include_str!("scripts/email_e2e_known_bug_results.sh"))
+            .if_condition(Expression::new("always()")),
+    )
+    .add_step(
+        steps::upload_artifact(name, KNOWN_BUGS)
             .add_with(("if-no-files-found", "ignore"))
             .add_with(("retention-days", 7))
             .if_condition(Expression::new("always()")),

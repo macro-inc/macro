@@ -39,6 +39,7 @@ jobs:
       EMAIL_E2E_SQS_URL: http://127.0.0.1:9324
       EMAIL_E2E_KAFKA_BROKERS: '127.0.0.1:9092'
       EMAIL_E2E_RESULTS: target/email-e2e-results
+      EMAIL_E2E_KNOWN_BUGS: target/email-e2e-known-bugs
       EMAIL_E2E_SCENARIOS: not binary(search)
       EMAIL_E2E_PARTITION: slice:${{ matrix.partition }}/3
     timeout-minutes: 45
@@ -354,6 +355,7 @@ jobs:
       EMAIL_E2E_SQS_URL: http://127.0.0.1:9324
       EMAIL_E2E_KAFKA_BROKERS: '127.0.0.1:9092'
       EMAIL_E2E_RESULTS: target/email-e2e-results
+      EMAIL_E2E_KNOWN_BUGS: target/email-e2e-known-bugs
       EMAIL_E2E_OPENSEARCH_URL: http://127.0.0.1:9200
       EMAIL_E2E_SCENARIOS: binary(search)
       EMAIL_E2E_BUILD_INDEXER: 'true'
@@ -669,10 +671,38 @@ jobs:
       run: |
         set -euo pipefail
 
+        # The results step keeps only a results file written after this: `target/`
+        # comes from a cache volume and holds the files of earlier jobs.
+        touch "$RUNNER_TEMP/email-e2e-known-bugs-started"
+
         # The same flags as the build step, so nothing is built twice.
         crates/email_e2e/scripts/known_bugs.sh --locked --config 'profile.dev.package."*".debug=false' \
           -E "$EMAIL_E2E_SCENARIOS"
       continue-on-error: true
+    - name: keep the results of the scenarios for known bugs
+      if: always()
+      run: |
+        set -euo pipefail
+
+        # What the coverage job reads to tell whether a scenario kept for a known
+        # bug now passes: the results of the run that has just ended. A job in which
+        # that run did not happen keeps nothing, and the coverage job fails for it.
+        rm -rf "$EMAIL_E2E_KNOWN_BUGS"
+        mkdir -p "$EMAIL_E2E_KNOWN_BUGS"
+        started="$RUNNER_TEMP/email-e2e-known-bugs-started"
+        junit=target/nextest/email-e2e/junit.xml
+        if [ -f "$started" ] && [ -f "$junit" ] && [ "$junit" -nt "$started" ]; then
+          cp -p "$junit" "$EMAIL_E2E_KNOWN_BUGS/"
+        fi
+        echo "kept $(find "$EMAIL_E2E_KNOWN_BUGS" -name junit.xml | wc -l) results file(s) of the scenarios for known bugs"
+    - name: Upload email-e2e-known-bugs-search artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-known-bugs-search
+        path: target/email-e2e-known-bugs
+        if-no-files-found: ignore
+        retention-days: '7'
     - name: Upload email-e2e-logs-search artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -701,6 +731,7 @@ jobs:
       EMAIL_E2E_SQS_URL: http://127.0.0.1:9324
       EMAIL_E2E_KAFKA_BROKERS: '127.0.0.1:9092'
       EMAIL_E2E_RESULTS: target/email-e2e-results
+      EMAIL_E2E_KNOWN_BUGS: target/email-e2e-known-bugs
       EMAIL_E2E_SCENARIOS: not binary(search)
     timeout-minutes: 45
     services:
@@ -926,10 +957,38 @@ jobs:
       run: |
         set -euo pipefail
 
+        # The results step keeps only a results file written after this: `target/`
+        # comes from a cache volume and holds the files of earlier jobs.
+        touch "$RUNNER_TEMP/email-e2e-known-bugs-started"
+
         # The same flags as the build step, so nothing is built twice.
         crates/email_e2e/scripts/known_bugs.sh --locked --config 'profile.dev.package."*".debug=false' \
           -E "$EMAIL_E2E_SCENARIOS"
       continue-on-error: true
+    - name: keep the results of the scenarios for known bugs
+      if: always()
+      run: |
+        set -euo pipefail
+
+        # What the coverage job reads to tell whether a scenario kept for a known
+        # bug now passes: the results of the run that has just ended. A job in which
+        # that run did not happen keeps nothing, and the coverage job fails for it.
+        rm -rf "$EMAIL_E2E_KNOWN_BUGS"
+        mkdir -p "$EMAIL_E2E_KNOWN_BUGS"
+        started="$RUNNER_TEMP/email-e2e-known-bugs-started"
+        junit=target/nextest/email-e2e/junit.xml
+        if [ -f "$started" ] && [ -f "$junit" ] && [ "$junit" -nt "$started" ]; then
+          cp -p "$junit" "$EMAIL_E2E_KNOWN_BUGS/"
+        fi
+        echo "kept $(find "$EMAIL_E2E_KNOWN_BUGS" -name junit.xml | wc -l) results file(s) of the scenarios for known bugs"
+    - name: Upload email-e2e-known-bugs-rest artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-known-bugs-rest
+        path: target/email-e2e-known-bugs
+        if-no-files-found: ignore
+        retention-days: '7'
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -940,11 +999,13 @@ jobs:
     needs:
     - email-e2e
     - email-e2e-search
+    - email-e2e-known-bugs
     if: always()
     name: Email end-to-end (coverage)
     runs-on: namespace-profile-linux-small
     env:
       EMAIL_E2E_RESULTS: target/email-e2e-results
+      EMAIL_E2E_KNOWN_BUGS: target/email-e2e-known-bugs
       EMAIL_E2E_COVERAGE: target/email-e2e-coverage
     timeout-minutes: 15
     steps:
@@ -963,6 +1024,11 @@ jobs:
       with:
         pattern: email-e2e-results-*
         path: target/email-e2e-results
+    - name: download the results of the scenarios for known bugs
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: email-e2e-known-bugs-*
+        path: target/email-e2e-known-bugs
     - name: report the coverage
       run: |
         set -euo pipefail
@@ -973,12 +1039,14 @@ jobs:
         # is what the report counts against.
         "${xtask[@]}" list --check
 
-        # Report only: gaps are listed, not failed. `--enforce` on the next line
-        # makes a function or an entry point that is neither covered nor waived
-        # fail this job.
-        mkdir -p "$EMAIL_E2E_RESULTS"
+        # Enforced: a scenario that failed, a function that is not proved and not
+        # waived, an entry point that is not reached and not waived, a ledger line
+        # the records do not bear out, and a scenario kept for a known bug that
+        # passes each fail this job. The report is written and shown either way.
+        mkdir -p "$EMAIL_E2E_RESULTS" "$EMAIL_E2E_KNOWN_BUGS"
         status=0
-        "${xtask[@]}" report --results "$EMAIL_E2E_RESULTS" --out "$EMAIL_E2E_COVERAGE" || status=$?
+        "${xtask[@]}" report --enforce --results "$EMAIL_E2E_RESULTS" \
+          --known-bugs "$EMAIL_E2E_KNOWN_BUGS" --out "$EMAIL_E2E_COVERAGE" || status=$?
         if [ -f "$EMAIL_E2E_COVERAGE/coverage.md" ]; then
           cat "$EMAIL_E2E_COVERAGE/coverage.md" >> "$GITHUB_STEP_SUMMARY"
         fi

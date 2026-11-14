@@ -6,12 +6,14 @@ xtask=(cargo run --manifest-path tooling/xtask/Cargo.toml -- email-coverage)
 # is what the report counts against.
 "${xtask[@]}" list --check
 
-# Report only: gaps are listed, not failed. `--enforce` on the next line
-# makes a function or an entry point that is neither covered nor waived
-# fail this job.
-mkdir -p "$EMAIL_E2E_RESULTS"
+# Enforced: a scenario that failed, a function that is not proved and not
+# waived, an entry point that is not reached and not waived, a ledger line
+# the records do not bear out, and a scenario kept for a known bug that
+# passes each fail this job. The report is written and shown either way.
+mkdir -p "$EMAIL_E2E_RESULTS" "$EMAIL_E2E_KNOWN_BUGS"
 status=0
-"${xtask[@]}" report --results "$EMAIL_E2E_RESULTS" --out "$EMAIL_E2E_COVERAGE" || status=$?
+"${xtask[@]}" report --enforce --results "$EMAIL_E2E_RESULTS" \
+  --known-bugs "$EMAIL_E2E_KNOWN_BUGS" --out "$EMAIL_E2E_COVERAGE" || status=$?
 if [ -f "$EMAIL_E2E_COVERAGE/coverage.md" ]; then
   cat "$EMAIL_E2E_COVERAGE/coverage.md" >> "$GITHUB_STEP_SUMMARY"
 fi
