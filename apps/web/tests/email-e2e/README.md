@@ -123,7 +123,18 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
 - The `full-stack-*.spec.ts` files are the functions only this tier reaches:
   connecting through the authentication service and the providers' consent
   (including administrator approval), search, notifications, sharing a
-  thread with another user, and a file too large to attach.
+  thread with another user, a file too large to attach, mail on Home and
+  in a contact's record, a reminder coming due, and the calendar
+  (invitations, an event made from an email).
+- `test.use({ access: 'mail-and-calendar' })` links the mailbox with its
+  calendar too. The calendar is ready some moments after linking: wait for
+  it (`calendarReady` in `full-stack-calendar.spec.ts`) before using it.
+- `tickReminders` (`harness/organise.ts`) runs the reminder sweep there by
+  queueing it on the stack's own queue. It sweeps for every user, so a
+  test asserts only on its own threads.
+- A list keeps paging in older mail for a while after it opens, which also
+  brings in new mail. A test of the live update waits until that paging
+  has stopped (`backfillWatch` in `full-stack-notifications.spec.ts`).
   `askAs(user, path)` asks a service as another signed-in user.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's.

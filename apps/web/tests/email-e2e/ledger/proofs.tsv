@@ -1,5 +1,8 @@
 id	break
 F-001	the return from consent never sets up the inbox
+F-002	Outlook in the connect dialog starts nothing
+F-003	Copy admin approval link copies nothing
+F-004	a second connected inbox is missing from the inbox picker and the list of inboxes
 F-005	Share inbox closes the dialog and shares nothing
 F-006	a cancelled or failed connection says nothing
 F-007	Reconnect on the prompt starts nothing
@@ -8,13 +11,22 @@ F-009	removing an inbox removes nothing
 F-010	Connect work email in onboarding starts nothing
 F-014	no reconnect prompt is raised for an inbox that lost its access
 F-015	the From menu lists the inboxes without their aliases
+F-016	the service counts mail held before connecting as imported without storing it
+F-017	the service fetches a new message and does not store it
+F-018	new mail does not reach the open list until a reload
+F-019	the service does not apply a change made in the provider's client
 F-021	the Drafts tab lists no drafts
+F-022	the service does not store mail sent from the provider's client
+F-023	Force sync starts nothing
+F-025	the service files each message under a conversation of its own
+F-027	the service ignores how the provider classified the mail
 F-029	the Noise tab is never selected
 F-030	a tab other than the provider views is never selected
 F-031	the Trash and Spam tabs are never selected
 F-032	the Shared view lists nothing
 F-033	the inbox filter keeps every inbox
 F-034	the Read filter filters nothing
+F-035	picking an order in the Focus tab's Sort Focus menu does nothing
 F-036	the next page of a long list never loads
 F-037	pulling the list down refreshes nothing
 F-038	j and k do not move the cursor
@@ -29,6 +41,8 @@ F-046	clicking a saved view opens nothing
 F-047	saving the edit of a saved view fails
 F-048	deleting a saved view does nothing
 F-049	dropping a saved view moves nothing
+F-050	typing in the list's search searches nothing
+F-051	the global Search leaves mail out of its results
 F-052	a search hit opens the thread at its latest message
 F-053	a click on a row opens nothing
 F-054	Shift+click opens the thread in place, not in a new split
@@ -53,6 +67,7 @@ F-073	starring does nothing
 F-074	unstarring a row does nothing
 F-075	Trash does nothing
 F-076	restoring from Trash does nothing
+F-079	muting a thread from the list does nothing
 F-080	Block Sender does not block the sender
 F-081	Sender to Noise does not move the sender
 F-082	bulk Done does nothing
@@ -64,6 +79,7 @@ F-088	a property set in the side panel is not saved
 F-090	a reminder preset picked for a thread sets nothing
 F-091	Remove reminder removes nothing
 F-092	the Reminders tab does not list a thread with a reminder
+F-093	the open app ignores a reminder that came due: the thread does not return to Home
 F-094	a reminder cancelled by a reply stays in the Reminders tab
 F-095	New email opens no composer
 F-096	a mailto link opens no new email
@@ -84,6 +100,7 @@ F-110	Forward opens nothing
 F-111	the quoted or forwarded original cannot be shown in the editor
 F-112	an open reply does not become a forward
 F-113	the phone composer never opens
+F-114	the event composer opened from a draft or a thread comes without the email's people as guests
 F-115	typing saves no draft
 F-116	a saved draft cannot be read back into the composer
 F-117	Escape throws a reply away
@@ -94,6 +111,7 @@ F-121	Log out does not ask about drafts only this device holds
 F-122	a picked file is dropped
 F-123	Remove on an attachment pill removes nothing
 F-124	a forward leaves out the files of the message
+F-125	Share link uploads nothing
 F-126	a calendar file opens nothing
 F-127	Download saves nothing
 F-129	a cloud attachment does not open at the provider
@@ -111,15 +129,26 @@ F-142	Schedule send does nothing
 F-143	Update schedule does nothing
 F-144	Cancel scheduled send does nothing
 F-145	the Scheduled tab lists nothing
+F-146	the service never sends a scheduled message that is due
 F-147	Restore draft and Retry send on a failed scheduled send do nothing
 F-148	Save signature does nothing
 F-149	the signature preview renders nothing
 F-150	Clear signature clears nothing
+F-151	Import from Gmail brings nothing over
 F-152	the replies-and-forwards signature switch saves nothing
 F-153	an invitation shows no event card
+F-154	choosing an answer on an invitation in a thread does nothing
+F-155	Join on an invitation opens the app's own page instead of the meeting link, and Open in calendar does not open the calendar
+F-156	Add to calendar on a shared event in a thread does nothing
 F-157	turning the calendar off never asks the service
+F-158	sharing a thread with someone grants nothing
 F-159	a shared thread gets the controls of an own thread
 F-160	Grant access does nothing
+F-161	a new-mail notification shows nothing of the mail
+F-162	the New email switch saves nothing
+F-163	a notification row opens nothing
+F-164	Mark done on Home does nothing
+F-165	New email on a contact's record does nothing
 F-174	the refusal of a third inbox is not told
 F-177	Escape does not go back to the list
 F-178	Copy subject copies nothing
@@ -135,4 +164,5 @@ F-187	Copy ID copies nothing
 F-188	the thread offers no details panel
 F-189	Try again in the accounts settings does nothing
 F-191	a pasted thread link stays a plain link
+F-192	adding a domain to a CRM blacklist in Settings does nothing
 F-196	unblocking a sender does nothing

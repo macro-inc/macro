@@ -129,6 +129,13 @@ with `EMAIL_E2E_DIST=<bundle> EMAIL_E2E_BREAK=F-073`: they must fail at the
 function's own assertion, and pass on the clean bundle. Record the function
 and the break, in words, in `proofs.tsv`. The breaks are never committed.
 
+A function whose work is the service's (the sync functions) is proved by a
+break in the service code instead: the same kind of guard on the process
+environment variable `EMAIL_E2E_BREAK`, in a build of the services kept
+outside the tree and named by `EMAIL_E2E_BIN_DIR`. The stack starts the
+services with a cleared environment, so the uncommitted patch also forwards
+that one variable in `crates/email_e2e/src/process.rs`.
+
 ## Changing the manifest
 
 - Ids are stable: never renumber, never reuse. A new function takes the next
