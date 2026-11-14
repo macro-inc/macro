@@ -64,6 +64,11 @@ struct Call {
     paths: Option<&'static [RepoGlob<'static>]>,
 }
 
+/// TEMPORARY: see the `email-e2e-full-stack` call.
+const FULL_STACK_TRIAL_PATHS: &[RepoGlob<'static>] = &[xtask_paths::repo_glob!(
+    ".github/workflows/email_e2e_full_stack.yml"
+)];
+
 const CALLS: &[Call] = &[
     Call {
         id: "cloud-storage",
@@ -136,6 +141,14 @@ const CALLS: &[Call] = &[
         name: "Email end-to-end (browser)",
         file: "email_e2e_browser.yml",
         paths: Some(email_e2e_browser::PATHS),
+    },
+    // TEMPORARY, for timing the tier from a pull request: removed before
+    // this merges. The tier belongs to `main` and the nightly run.
+    Call {
+        id: "email-e2e-full-stack",
+        name: "Email end-to-end (full stack)",
+        file: "email_e2e_full_stack.yml",
+        paths: Some(FULL_STACK_TRIAL_PATHS),
     },
     Call {
         id: "observability-image",
