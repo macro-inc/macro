@@ -137,17 +137,21 @@ where
                 .session_billing(session)
                 .await
                 .map_err(HarnessError::Session)?;
+            // Nobody reads a background session (a routine draft) at all. A
+            // thread's reply is one message, rewritten only as each passage
+            // finishes; an opening line lands with what follows it.
+            let delivery = if row.is_background() {
+                ReplyDelivery::Unseen
+            } else if row.thread_id.is_some() {
+                ReplyDelivery::Whole
+            } else {
+                ReplyDelivery::Streamed
+            };
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 billing,
-                // A thread's reply is one message, rewritten only as each
-                // passage finishes; an opening line lands with what follows it.
-                delivery: if row.thread_id.is_some() {
-                    ReplyDelivery::Whole
-                } else {
-                    ReplyDelivery::Streamed
-                },
+                delivery,
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,

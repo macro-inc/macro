@@ -96,3 +96,59 @@ async fn summaries_and_other_owners_need_no_code_tools() {
     team.owner = Owner::Team(uuid::Uuid::now_v7());
     assert!(code_tools_listed(&team).is_ok());
 }
+
+/// An unseen turn advertises code mode's three tools and nothing else the
+/// servers list, with `ExecuteCode` stripped of what it would present, and
+/// refuses a call to any other tool.
+#[tokio::test]
+async fn unseen_turns_get_only_code_mode() {
+    let (server, tools) = remote(&[
+        "ExecuteCode",
+        "DescribeCodeTools",
+        "ReadCodeDocs",
+        "PresentReview",
+        "link_task",
+    ])
+    .await;
+    let set = mcp_select::CombinedToolSet::new(
+        Arc::new(AsyncToolCollection::<()>::new()),
+        unseen::CodeModeOnly::new(tools),
+    )
+    .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS);
+
+    let mut advertised: Vec<_> = AiToolSet::<()>::request_schemas(&set)
+        .unwrap()
+        .into_iter()
+        .map(|schema| (schema.name, schema.description))
+        .collect();
+    advertised.sort();
+    let names: Vec<_> = advertised.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "mcp__macro_internal__DescribeCodeTools",
+            "mcp__macro_internal__ExecuteCode",
+            "mcp__macro_internal__ReadCodeDocs",
+        ]
+    );
+    assert_eq!(
+        advertised[1].1,
+        agent_code_mode::inbound::toolset::unseen_execute_code_description()
+    );
+    assert!(AiToolSet::<()>::searchable_catalog(&set).is_empty());
+    assert!(AiToolSet::<()>::searchable_toolset_names(&set).is_empty());
+
+    let refused = AiToolSet::<()>::dispatch_tool_call(
+        &set,
+        (),
+        RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap()),
+        "mcp__macro_internal__PresentReview",
+        &serde_json::json!({}),
+    )
+    .await;
+    assert!(matches!(
+        refused,
+        Err(ai_toolset::ToolSetError::NotFound(_))
+    ));
+    server.cancel().await.unwrap();
+}
