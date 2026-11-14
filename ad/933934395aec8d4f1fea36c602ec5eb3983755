@@ -1,0 +1,55 @@
+crates/agent_monitor/src/outbound/hc.rs
+  s_7a07194ea723e2::t_d3b6ac5dea2d6a 52-53,61,130
+crates/agent_monitor/src/client.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-192
+crates/agent_monitor/src/domain/source.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 11,36-37
+crates/agent_monitor/src/domain/store/test.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-141
+crates/agent_monitor/src/domain/supervisor.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-80
+crates/agent_monitor/src/inbound.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-3
+crates/agent_monitor/src/lib.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 8-10,15-16,18-19,22
+crates/agent_monitor/src/outbound/demo.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-1177
+crates/agent_monitor/src/domain/clock.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-21
+crates/agent_monitor/src/outbound/demo/test.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-57
+crates/agent_monitor/Cargo.toml
+  s_7a07194ea723e2::t_d3b6ac5dea2d6a 15
+  s_7a07194ea723e2::t_48adc312fe5cca 9,13,17,32,36,38
+  s_7a07194ea723e2::t_f3df7f590a1d39 26
+crates/agent_monitor/src/domain.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 3,9-10
+crates/agent_monitor/src/domain/store.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-579
+crates/agent_monitor/src/domain/model.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 626-640
+crates/agent_monitor/src/inbound/grpc.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-287
+crates/agent_monitor/src/trace_context.rs
+  s_7a07194ea723e2::t_48adc312fe5cca 1-78
+crates/agent_monitor/src/outbound.rs
+  s_7a07194ea723e2::t_f3df7f590a1d39 6
+Cargo.lock
+  s_7a07194ea723e2::t_6d9fe73496e1ac 900,904,906,909,916,921,923
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ad933934395aec8d4f1fea36c602ec5eb3983755",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
