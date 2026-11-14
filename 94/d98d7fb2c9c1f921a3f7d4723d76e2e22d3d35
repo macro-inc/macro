@@ -1,0 +1,43 @@
+crates/agent_monitor_tui/src/ui/drill.rs
+  s_37ab47ec06e4df::t_63c26b51dd9e88 484-491,496-498
+crates/agent_monitor_tui/AGENTS.md
+  s_37ab47ec06e4df::t_0d55547cea1197 27-28,58-63
+crates/agent_monitor_tui/src/ui.rs
+  s_37ab47ec06e4df::t_51c59eb68c0d38 92
+crates/mesh_man/src/widget.rs
+  s_37ab47ec06e4df::t_6093badc4b5e28 7-9
+  s_37ab47ec06e4df::t_5fecf39c61854e 5-6
+  s_37ab47ec06e4df::t_57e203db9946aa 437-458,487,494-497
+crates/agent_monitor_tui/src/theme.rs
+  s_37ab47ec06e4df::t_51c59eb68c0d38 170-218
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__drill_in_200x56.snap
+  s_37ab47ec06e4df::t_90f2ef26cde8fc 17,26,33-35,37,39,41,43,45,47,49,51,53,55,57
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_200x56.snap
+  s_37ab47ec06e4df::t_4b1e8f50408092 31,33,35,37
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_wide_240x60_grows_the_body.snap
+  s_37ab47ec06e4df::t_07ea5ae798a866 33,35,37,39,41
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__tree_200x56.snap
+  s_37ab47ec06e4df::t_5273a50443a01e 47,49,51,53,55,57
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__wall_200x56.snap
+  s_37ab47ec06e4df::t_c0102a4d106186 21,43,53,57
+crates/mesh_man/src/snapshots/mesh_man__test__frame_zero_snapshot.snap
+  s_37ab47ec06e4df::t_de86f14561918c 31
+crates/mesh_man/src/snapshots/mesh_man__test__quarter_turn_snapshot.snap
+  s_37ab47ec06e4df::t_7c7226877a0189 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "94d98d7fb2c9c1f921a3f7d4723d76e2e22d3d35",
+  "prompts": {},
+  "sessions": {
+    "s_37ab47ec06e4df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bc0f25ca-e765-4c04-90a8-d1bd01c5a954",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
