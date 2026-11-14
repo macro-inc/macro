@@ -66,7 +66,7 @@ does:
 | --- | --- | --- |
 | Environment | `~env:Dev \| Prod \| Local` | `MACRO_ENV` (`dev`, `prod`, `local`), then `Prod` |
 | Credential | `~auth` | `MACRO_API_KEY` (user key or bearer token) or `MACRO_BOT_TOKEN`; both set is an error |
-| Service hosts | `~hosts:[ ("storage", "http://localhost:8086") ]` | the per-environment table in `runtime/config.ml` |
+| Service hosts | `~hosts:[ ("storage", "http://localhost:8086") ]` | the per-environment table in `runtime/config.ml` (the TypeScript SDK's `HOSTS`) |
 | Acting user (bots) | `~requested_as` | none |
 
 ```ocaml
@@ -81,6 +81,31 @@ Auth headers follow `packages/sdk/src/utils/client.ts`: a `mak_` key goes in
 bot token as `x-macro-bot-token` with `x-macro-bot-scope` (`user` when acting
 for someone, otherwise `team`). With no credential at all, sending a request
 raises.
+
+With `Local`, the TypeScript SDK also overlays the local stack's generated
+port map (`infra/local/generated/*/portmap.json`); this SDK does not. On a
+stack with remapped ports, pass the hosts with `~hosts`.
+
+### HTTPS
+
+`macro_sdk_eio` checks server certificates against the system trust store
+(or the `?authenticator` you pass to `create`) and against the host the
+request goes to: a DNS name through its certificate names, an IP address
+through its IP entries. A host that is neither is refused
+(`Unverifiable_host`, reported as a `Transport` error). `test/test_tls.ml`
+exercises all of this against a local HTTPS server with a throwaway CA.
+
+Against the dev gateway, with a made-up key (2026-11-14):
+
+```sh
+$ MACRO_ENV=dev MACRO_API_KEY=mak_bogus_not_a_real_key \
+    ./_build/default/examples/similar_tasks.exe "Fix login redirect"
+HTTP 401: {"message":"unauthorized"}
+```
+
+That is TLS to `dev-gateway.macro.com`, the `/dss` base path, the
+`x-macro-user-api-key` header and the typed `Error.Http` reply working
+together; nothing was created.
 
 ## Errors
 
@@ -104,21 +129,35 @@ raises.
   `null` when `None`. A field that is not required is `t option` and is left
   out when `None`. On the way in, absent and null both decode to `None`, as
   serde does.
+- **Limit:** a field that is both optional and nullable is sent as absent for
+  `None`; it cannot be sent as an explicit `null`. Most server fields treat
+  the two alike, but some update endpoints use "absent" to mean "leave as is"
+  and `null` to mean "clear" (`Option<Option<T>>` in the Rust service). From
+  this SDK such a field can be set or left alone, not cleared; use the
+  TypeScript SDK or a raw request for those clears.
 - `oneOf` with a tag property (any name: `type`, `kind`, `action`, ...,
   including the `allOf: [$ref, {tag}]` form and `discriminator` mappings) is a
   variant whose constructors carry inline records or the referenced type.
   Externally tagged unions (`"stop"` or `{"start": {...}}`) and untagged ones
   (a string or an object, say) are variants too; untagged members are tried in
   spec order.
-- String enums and tagged unions are open: a value this SDK version does not
-  know decodes to `Unknown`, so a newer server does not break decoding.
+- Every enum and every union kind (tagged, externally tagged, untagged) is
+  open: a value this SDK version does not know decodes to `Unknown`, so a
+  newer server does not break decoding. Set `Json.strict := true` to make
+  those values decode errors instead (the operation tests do).
 - `allOf` merges into one record; a union inside it becomes a flattened field.
-- Maps (`additionalProperties`) are `(string * t) list`; `int64` fields are
-  `int64`; other integers are `int`.
+- Maps (`additionalProperties`) are `(string * t) list`.
+- Integers: `format: int64` (including unsigned u64 fields) is `int64`; every
+  other integer is `int` (63 bits). A value outside that range, such as a u64
+  above 2^63-1 or an unformatted integer above 2^62, is a `Decode` error
+  naming the field, never a silently wrong number.
 - Operations with several 2xx shapes reply with a variant by status
   (`Ok_ of ...`, `Accepted`, ...). Raw request bodies are `~body:string`
-  (sent with the spec's content type), multipart parts are labelled string
-  arguments, and non-JSON replies are returned as `string`.
+  (sent with the spec's content type). In a multipart body, a binary part takes
+  a `Request.file` (`filename`, `content_type`, `data`) and a text part a
+  string; each request gets a random boundary that appears in no part, and
+  filenames are sent as UTF-8 with only `"` and CR/LF escaped (RFC 7578).
+  Non-JSON replies are returned as `string`.
 
 ### What stays untyped, and why
 
@@ -141,7 +180,9 @@ After `packages/sdk/specs` changes (see `packages/sdk/AGENTS.md`):
 nix-shell shell.nix --run "just generate && dune test"
 ```
 
-and commit `generated/`. `dune test` includes a drift check that regenerates
+and commit `generated/`. CI runs `dune build && dune test` in this shell
+(`OCaml SDK Check`) whenever `packages/sdk/specs` or this package changes.
+`dune test` includes a drift check that regenerates
 into a temporary directory and fails if `generated/` differs, and a test that
 calls every operation with sample arguments and checks the request and every
 declared reply against the spec.

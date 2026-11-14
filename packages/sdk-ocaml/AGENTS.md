@@ -38,6 +38,7 @@ encoding) and hands the reply to `interpret`.
 ## Checks
 
 - `nix-shell shell.nix --run "dune build && dune test"` (from this directory).
+  CI runs the same as `OCaml SDK Check` (`tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs`).
 - `dune fmt` for hand-written code.
 
 ## Gotchas
