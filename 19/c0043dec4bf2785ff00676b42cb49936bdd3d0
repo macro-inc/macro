@@ -1,0 +1,23 @@
+crates/mesh_man/src/palette.rs
+  s_ff1990c7efc01b::t_2833149589f802 131-133,199,241
+crates/mesh_man/src/widget.rs
+  s_ff1990c7efc01b::t_ac77f3e1238b79 357,359-360
+crates/mesh_man/src/figures/snapshots/mesh_man__figures__test__xray_frame_zero_snapshot.snap
+  s_ff1990c7efc01b::t_996f4845aed873 10-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "19c0043dec4bf2785ff00676b42cb49936bdd3d0",
+  "prompts": {},
+  "sessions": {
+    "s_ff1990c7efc01b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3a69d3a5-381a-4cba-ad93-c25d8fb5d45c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
