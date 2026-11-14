@@ -662,19 +662,27 @@ async fn drive_turn(
         };
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
-        // An unseen turn is routed the same way.
+        // An unseen turn is routed the same way, unless its opener gave the
+        // documentation (see `routes_documentation`).
         let routed = skills.entities;
-        let docs = agent_code_mode::domain::select_documentation(
-            &owner,
-            request,
-            base_context.cognition_tool_context.service.as_ref(),
-            if routed || unseen {
-                agent_code_mode::domain::Guidance::Selected
-            } else {
-                agent_code_mode::domain::Guidance::Inline
-            },
-            &cancel,
-        );
+        let picks = routes_documentation(delivery, instructions.as_deref());
+        let docs = async {
+            if !picks {
+                return String::new();
+            }
+            agent_code_mode::domain::select_documentation(
+                &owner,
+                request,
+                base_context.cognition_tool_context.service.as_ref(),
+                if routed || unseen {
+                    agent_code_mode::domain::Guidance::Selected
+                } else {
+                    agent_code_mode::domain::Guidance::Inline
+                },
+                &cancel,
+            )
+            .await
+        };
         let loaded_skills = async {
             if !skills.routes || unseen {
                 return Vec::new();
@@ -1029,6 +1037,10 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// Memory stays after the instructions so a remembered fact is never read as
 /// an instruction. The turn's documentation goes after everything the loop
 /// adds, because each turn picks different documentation.
+///
+/// An unseen turn splits after its identity and instructions instead: its
+/// opener gives every session of its kind the same ones (every routine
+/// draft's), so they are read back from the cache across those sessions.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     sdk_docs: &str,
@@ -1038,30 +1050,33 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    // A turn nobody watches has neither a conversation to write for nor the
-    // tools `tools_prompt` describes.
-    let shared = match delivery {
-        ReplyDelivery::Unseen => unseen::PROMPT.to_owned(),
-        ReplyDelivery::Streamed | ReplyDelivery::Whole => {
-            format!("{}{tools_prompt}", prompt::agent_session::PROMPT)
-        }
-    };
-    let mut rest = String::new();
-    if let Some(identity) = identity {
-        rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
-            &identity.name,
-            &identity.handle,
-        ));
-    }
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
-    if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        rest.push_str("\n<session_instructions>\n");
-        rest.push_str(instructions);
-        rest.push_str("\n</session_instructions>");
-    }
+    let instructions = instructions
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"))
+        .unwrap_or_default();
+    let identity = identity.map_or_else(String::new, |identity| {
+        format!(
+            "\n{}",
+            prompt::agent_identity::render(&identity.name, &identity.handle)
+        )
+    });
+    // A turn nobody watches has neither a conversation to write for nor the
+    // tools `tools_prompt` describes. Its opener sends every session of its
+    // kind (every routine draft) the same instructions, so they join the
+    // cached shared block and are read back across sessions.
+    let (shared, mut rest) = match delivery {
+        ReplyDelivery::Unseen => (
+            format!("{}{identity}{instructions}", unseen::PROMPT),
+            String::new(),
+        ),
+        ReplyDelivery::Streamed | ReplyDelivery::Whole => (
+            format!("{}{tools_prompt}", prompt::agent_session::PROMPT),
+            format!("{identity}{instructions}"),
+        ),
+    };
     // An unseen turn has no ContentSearch to look back with.
     if delivery != ReplyDelivery::Unseen {
         rest.push_str(&format!(
@@ -1081,6 +1096,14 @@ fn system_prompt(
         rest.push_str("\n</user_memory>");
     }
     SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+}
+
+/// Whether a turn's request picks the SDK documentation its prompt carries.
+/// A background session whose opener wrote its instructions was given the
+/// reference its work needs, in them and in its prompt: documentation picked
+/// again would repeat it, uncached, after a routing call.
+fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> bool {
+    delivery != ReplyDelivery::Unseen || instructions.is_none_or(|text| text.trim().is_empty())
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

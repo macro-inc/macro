@@ -82,7 +82,11 @@ A background session (`AgentSession::is_background`, such as a routine draft)
 runs on `ReplyDelivery::Unseen`: `outbound/rig_engine/unseen.md` as its whole
 shared prompt, selected guidance, no opener, skills or `<agent_session>`
 block, and only code mode's three tools plus `ReadToolResult`
-(`unseen::CodeModeOnly`), `ExecuteCode` without its reviews and views.
+(`unseen::CodeModeOnly`), `ExecuteCode` without its reviews and views. Its
+opener's instructions (`PrepareRoutineSession::instructions`) join that
+cached shared block, since the opener gives every session of its kind the
+same ones, and a session given instructions gets no picked documentation
+(`routes_documentation`): its opener supplies the reference.
 
 Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose

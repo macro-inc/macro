@@ -290,6 +290,7 @@ where
                     by: action.owner.clone(),
                 },
                 billing: agent_session::domain::model::SessionBilling::Billable,
+                instructions: None,
             })
             .await
             .map_err(|error| RunStartError::NotStarted(rootcause::report!("{error:?}")))?;

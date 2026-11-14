@@ -253,6 +253,64 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
     assert!(text.ends_with("<macro_sdk>routines</macro_sdk>"));
 }
 
+/// Every session one background opener starts gets the same instructions,
+/// so they sit in the cached shared block, read back across those sessions;
+/// only the owner's memory and the turn's documentation come after.
+#[test]
+fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        Some("draft routines"),
+        Some("prefers Rust"),
+    );
+
+    assert_eq!(
+        prompt.shared(),
+        Some(
+            format!(
+                "{}\n<session_instructions>\ndraft routines\n</session_instructions>",
+                unseen::PROMPT
+            )
+            .as_str()
+        )
+    );
+    assert_eq!(
+        prompt.rest(),
+        "\n<user_memory>\nprefers Rust\n</user_memory>"
+    );
+    let other = system_prompt(
+        &TOOLS,
+        "",
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        Some("draft routines"),
+        None,
+    );
+    assert_eq!(other.shared(), prompt.shared());
+}
+
+/// A background session given instructions brings its own reference; any
+/// other turn has its documentation picked for its request.
+#[test]
+fn only_a_background_session_with_instructions_skips_picked_documentation() {
+    assert!(!routes_documentation(
+        ReplyDelivery::Unseen,
+        Some("draft routines")
+    ));
+    assert!(routes_documentation(ReplyDelivery::Unseen, None));
+    assert!(routes_documentation(ReplyDelivery::Unseen, Some("  ")));
+    assert!(routes_documentation(
+        ReplyDelivery::Streamed,
+        Some("be terse")
+    ));
+    assert!(routes_documentation(ReplyDelivery::Whole, Some("be terse")));
+}
+
 /// A named agent is told who it is before its instructions, even when it
 /// has no session instructions — otherwise "who are you" has nothing to go on.
 #[test]
