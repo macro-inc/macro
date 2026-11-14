@@ -17,6 +17,11 @@ pub(super) struct ResolvedFilters {
     /// `t.link_id = ANY(…)` set and (for non-shared, non-project queries)
     /// the `matching_threads` link scope.
     team_link_ids: Option<Vec<Uuid>>,
+    /// The team links whose threads CRM may show when this resolution ran:
+    /// primary, not being deleted, with the owner's consent for this team
+    /// (`crm_email_thread_allowed`'s mailbox conditions). `Some` only for
+    /// team-scoped queries. The query rechecks them as it reads.
+    contributing_link_ids: Option<Vec<Uuid>>,
 }
 
 impl ResolvedFilters {
@@ -41,6 +46,11 @@ impl ResolvedFilters {
         self.team_link_ids.as_deref()
     }
 
+    /// The team links that contributed to CRM when this resolution ran.
+    pub(super) fn contributing_link_ids(&self) -> Option<&[Uuid]> {
+        self.contributing_link_ids.as_deref()
+    }
+
     /// True iff at least one Complete email address in the AST has any
     /// matching contact in the resolved scope. Used by `fold_unresolved`.
     fn has_contact_for(&self, lowered_email: &str) -> bool {
@@ -56,12 +66,19 @@ impl ResolvedFilters {
             include_trash: false,
             contact_ids: HashMap::new(),
             team_link_ids: None,
+            contributing_link_ids: None,
         }
     }
 
     #[cfg(test)]
     pub(super) fn with_team_links(mut self, ids: Vec<Uuid>) -> Self {
         self.team_link_ids = Some(ids);
+        self
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_contributing_links(mut self, ids: Vec<Uuid>) -> Self {
+        self.contributing_link_ids = Some(ids);
         self
     }
 
@@ -168,12 +185,21 @@ pub(super) async fn resolve_filters(
     // downstream lookup (and the main query's candidate WHERE / CTE link
     // scope) is a direct `link_id = ANY($ids)` instead of re-joining
     // email_links/team_user per query.
-    let team_link_ids: Option<Vec<Uuid>> = match team_id {
-        None => None,
-        Some(team_id) => Some(
-            sqlx::query_scalar!(
+    let (team_link_ids, contributing_link_ids) = match team_id {
+        None => (None, None),
+        Some(team_id) => {
+            // `contributing` restates crm_email_thread_allowed's mailbox
+            // conditions; the team-scoped CRM query reads only these inboxes.
+            let links = sqlx::query!(
                 r#"
-            SELECT el.id
+            SELECT el.id,
+                   (el.deleting_at IS NULL AND EXISTS (
+                       SELECT 1 FROM crm_email_consent consent
+                       WHERE consent.team_id = $1
+                         AND consent.user_id = el.macro_id
+                         AND consent.link_id = el.id
+                         AND consent.enabled
+                   )) AS "contributing!"
             FROM email_links el
             JOIN team_user tu ON tu.user_id = el.macro_id
             WHERE tu.team_id = $1 AND el.is_primary
@@ -181,8 +207,17 @@ pub(super) async fn resolve_filters(
                 team_id,
             )
             .fetch_all(pool)
-            .await?,
-        ),
+            .await?;
+            let contributing = links
+                .iter()
+                .filter(|link| link.contributing)
+                .map(|link| link.id)
+                .collect();
+            (
+                Some(links.into_iter().map(|link| link.id).collect()),
+                Some(contributing),
+            )
+        }
     };
     let scope_link_ids: &[Uuid] = team_link_ids.as_deref().unwrap_or(link_ids);
 
@@ -210,5 +245,6 @@ pub(super) async fn resolve_filters(
         include_trash: false,
         contact_ids,
         team_link_ids,
+        contributing_link_ids,
     })
 }

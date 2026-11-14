@@ -24,6 +24,7 @@ use uuid::Uuid;
 // SqlFragment: parameterized SQL builder that separates raw SQL from bind values
 // ---------------------------------------------------------------------------
 
+#[derive(Clone)]
 enum SqlSegment {
     Raw(String),
     BindViewer,
@@ -33,6 +34,7 @@ enum SqlSegment {
     BindUuidArray(Vec<Uuid>),
 }
 
+#[derive(Clone)]
 struct SqlFragment {
     segments: Vec<SqlSegment>,
 }

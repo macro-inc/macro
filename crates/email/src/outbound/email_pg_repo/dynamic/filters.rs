@@ -714,14 +714,33 @@ impl AddressKinds {
     }
 }
 
+/// The mailbox check each `matching_threads` branch applies to its messages.
+#[derive(Clone, Copy)]
+pub(super) enum BranchFacts<'a> {
+    /// Present, and outside trash unless the view is Trash.
+    Checked(&'a ResolvedFilters),
+    /// None: the branches list a superset of the candidate threads, which
+    /// the caller matches thread by thread with the full message check.
+    Skipped,
+}
+
+impl BranchFacts<'_> {
+    fn check(self) -> SqlFragment {
+        match self {
+            Self::Checked(resolved) => build_trash_check(resolved),
+            Self::Skipped => SqlFragment::raw("TRUE"),
+        }
+    }
+}
+
 /// Sender branch over resolved contact ids — probes
 /// `idx_email_messages_from_contact_id`.
-fn contacts_sender_branch(contact_ids: &[Uuid], resolved: &ResolvedFilters) -> SqlFragment {
+fn contacts_sender_branch(contact_ids: &[Uuid], facts: BranchFacts) -> SqlFragment {
     let mut f =
         SqlFragment::raw("SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ANY(");
     f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
     f.push_raw(") AND ");
-    f.extend(build_trash_check(resolved));
+    f.extend(facts.check());
     f
 }
 
@@ -730,7 +749,7 @@ fn contacts_sender_branch(contact_ids: &[Uuid], resolved: &ResolvedFilters) -> S
 fn contacts_recipient_branch(
     contact_ids: &[Uuid],
     kinds: &AddressKinds,
-    resolved: &ResolvedFilters,
+    facts: BranchFacts,
 ) -> SqlFragment {
     let mut f = SqlFragment::raw(
         "SELECT m.thread_id FROM email_message_recipients mr \
@@ -740,7 +759,7 @@ fn contacts_recipient_branch(
     f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
     f.push_raw(format!("){}", kinds.recipient_type_sql()));
     f.push_raw(" AND ");
-    f.extend(build_trash_check(resolved));
+    f.extend(facts.check());
     f
 }
 
@@ -783,7 +802,7 @@ fn matching_contacts_cte_body(
 /// Sender branch consuming a hoisted `matching_contacts_N` CTE.
 fn text_sender_branch(
     cte_name: &str,
-    resolved: &ResolvedFilters,
+    facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
     let mut f = SqlFragment::raw(format!(
@@ -791,7 +810,7 @@ fn text_sender_branch(
          JOIN email_messages m ON m.from_contact_id = c.id \
          WHERE "
     ));
-    f.extend(build_trash_check(resolved));
+    f.extend(facts.check());
     f.extend(link_scope_fragment("m", link_scope));
     f
 }
@@ -800,7 +819,7 @@ fn text_sender_branch(
 fn text_recipient_branch(
     cte_name: &str,
     kinds: &AddressKinds,
-    resolved: &ResolvedFilters,
+    facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> SqlFragment {
     let mut f = SqlFragment::raw(format!(
@@ -809,7 +828,7 @@ fn text_recipient_branch(
          JOIN email_messages m ON m.id = mr.message_id \
          WHERE "
     ));
-    f.extend(build_trash_check(resolved));
+    f.extend(facts.check());
     f.push_raw(kinds.recipient_type_sql());
     f.extend(link_scope_fragment("m", link_scope));
     f
@@ -820,7 +839,7 @@ fn text_recipient_branch(
 fn push_contact_group(
     contact_query: SqlFragment,
     kinds: &AddressKinds,
-    resolved: &ResolvedFilters,
+    facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
     contact_ctes: &mut Vec<(String, SqlFragment)>,
     branches: &mut Vec<SqlFragment>,
@@ -828,12 +847,10 @@ fn push_contact_group(
     let cte_name = format!("matching_contacts_{}", contact_ctes.len());
     contact_ctes.push((cte_name.clone(), contact_query));
     if kinds.sender {
-        branches.push(text_sender_branch(&cte_name, resolved, link_scope));
+        branches.push(text_sender_branch(&cte_name, facts, link_scope));
     }
     if kinds.any_recipient() {
-        branches.push(text_recipient_branch(
-            &cte_name, kinds, resolved, link_scope,
-        ));
+        branches.push(text_recipient_branch(&cte_name, kinds, facts, link_scope));
     }
 }
 
@@ -887,7 +904,12 @@ pub(super) fn build_matching_threads_ctes(
     if conjuncts.len() == 1
         && let Some(literals) = flatten_or_tree_of_address_literals(conjuncts[0])
     {
-        let (contact_ctes, branches) = address_groups::build(literals, resolved, link_scope);
+        let (contact_ctes, branches) = address_groups::build(
+            literals,
+            resolved,
+            BranchFacts::Checked(resolved),
+            link_scope,
+        );
 
         if !branches.is_empty() {
             let mut iter = branches.into_iter();
@@ -925,6 +947,52 @@ pub(super) fn build_matching_threads_ctes(
         contact_ctes: Vec::new(),
         body: f,
     })
+}
+
+/// The threads that may match a positive OR-tree of addresses: `SELECT
+/// m.thread_id` branches over the address indexes, without the mailbox facts
+/// probe, plus the hoisted contact CTEs they read. The team-scoped CRM query
+/// counts and sorts these threads, then gives each thread it reads the full
+/// message match (`build_thread_message_exists_filter`), which implies the
+/// branch condition: a thread's messages and contacts share its link.
+#[derive(Clone)]
+pub(super) struct AddressSuperset {
+    pub(super) contact_ctes: Vec<(String, SqlFragment)>,
+    pub(super) branches: Vec<SqlFragment>,
+}
+
+/// [`AddressSuperset`] for a tree whose only pure-address top-level conjunct
+/// is a flat OR-tree of positive address literals (a CRM record's addresses
+/// and domains), scoped to `links`. `None` for any other tree, and when no
+/// literal resolved to a branch.
+pub(super) fn build_address_superset(
+    ast: &Expr<EmailLiteral>,
+    resolved: &ResolvedFilters,
+    links: &[Uuid],
+) -> Option<AddressSuperset> {
+    let conjuncts = extract_address_only_conjuncts(ast);
+    let [conjunct] = conjuncts.as_slice() else {
+        return None;
+    };
+    let literals = flatten_or_tree_of_address_literals(conjunct)?;
+    let (contact_ctes, branches) =
+        address_groups::build(literals, resolved, BranchFacts::Skipped, Some(links));
+    (!branches.is_empty()).then_some(AddressSuperset {
+        contact_ctes,
+        branches,
+    })
+}
+
+/// The inboxes named by top-level `Owner` conjuncts: a thread outside any
+/// of them can't match the tree.
+pub(super) fn top_level_owners(ast: &Expr<EmailLiteral>) -> Vec<Uuid> {
+    top_level_conjuncts(ast)
+        .into_iter()
+        .filter_map(|term| match term {
+            Expr::Literal(EmailLiteral::Owner(link_id)) => Some(*link_id),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

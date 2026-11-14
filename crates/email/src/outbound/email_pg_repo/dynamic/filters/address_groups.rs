@@ -6,9 +6,9 @@ use item_filters::ast::email::Email;
 use uuid::Uuid;
 
 use super::{
-    AddressKind, AddressKinds, ResolvedFilters, SqlFragment, build_address_predicate_on_m,
-    contacts_recipient_branch, contacts_sender_branch, escape_like_pattern, link_scope_fragment,
-    matching_contacts_cte_body, push_contact_group,
+    AddressKind, AddressKinds, BranchFacts, ResolvedFilters, SqlFragment,
+    build_address_predicate_on_m, contacts_recipient_branch, contacts_sender_branch,
+    escape_like_pattern, link_scope_fragment, matching_contacts_cte_body, push_contact_group,
 };
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -79,6 +79,7 @@ fn group<'a>(literals: Vec<(AddressKind, &'a Email)>, resolved: &'a ResolvedFilt
 pub(super) fn build(
     literals: Vec<(AddressKind, &Email)>,
     resolved: &ResolvedFilters,
+    facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> (Vec<(String, SqlFragment)>, Vec<SqlFragment>) {
     let Groups {
@@ -95,7 +96,7 @@ pub(super) fn build(
                 link_scope,
             ),
             &kinds,
-            resolved,
+            facts,
             link_scope,
             &mut contact_ctes,
             &mut branches,
@@ -107,13 +108,13 @@ pub(super) fn build(
     for (kinds, members) in memberships {
         if !members.contact_ids.is_empty() {
             if kinds.sender {
-                branches.push(contacts_sender_branch(&members.contact_ids, resolved));
+                branches.push(contacts_sender_branch(&members.contact_ids, facts));
             }
             if kinds.any_recipient() {
                 branches.push(contacts_recipient_branch(
                     &members.contact_ids,
                     &kinds,
-                    resolved,
+                    facts,
                 ));
             }
         }
@@ -122,7 +123,7 @@ pub(super) fn build(
             push_contact_group(
                 contact_query,
                 &kinds,
-                resolved,
+                facts,
                 link_scope,
                 &mut contact_ctes,
                 &mut branches,
