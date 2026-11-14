@@ -1,0 +1,53 @@
+packages/sdk-ocaml/shell.nix
+  s_65316fb49f4b19::t_135128779c367f 13
+  s_65316fb49f4b19::t_b6e9695ad46a9c 1-12,14-28
+packages/sdk-ocaml/runtime/request.ml
+  s_65316fb49f4b19::t_14faab1d3973ca 35-45
+  s_65316fb49f4b19::t_a888abfd393003 1-34,46-126
+packages/sdk-ocaml/runtime/error.ml
+  s_65316fb49f4b19::t_d6548f61ed83e4 1-23
+packages/sdk-ocaml/macro_sdk.opam
+  s_65316fb49f4b19::t_ea208a30d80a1e 1-31
+packages/sdk-ocaml/runtime/dune
+  s_65316fb49f4b19::t_135128779c367f 1-4
+packages/sdk-ocaml/dune-project
+  s_65316fb49f4b19::t_28c64383ed5cae 32
+  s_65316fb49f4b19::t_b6e9695ad46a9c 1-31,33-40
+packages/sdk-ocaml/eio/dune
+  s_65316fb49f4b19::t_dd67e9a5280d9f 1-14
+packages/sdk-ocaml/.gitignore
+  s_65316fb49f4b19::t_ea208a30d80a1e 1-2
+packages/sdk-ocaml/.ocamlformat
+  s_65316fb49f4b19::t_b6e9695ad46a9c 1-4
+packages/sdk-ocaml/macro_sdk_eio.opam
+  s_65316fb49f4b19::t_ea208a30d80a1e 1-10,12-35
+  s_65316fb49f4b19::t_28c64383ed5cae 11
+packages/sdk-ocaml/runtime/config.ml
+  s_65316fb49f4b19::t_072354ed779b82 1-153
+packages/sdk-ocaml/eio/macro_sdk_eio.mli
+  s_65316fb49f4b19::t_dd67e9a5280d9f 1-7,9-12,14-17,19,21-23
+  s_65316fb49f4b19::t_5cebb65871ecc3 8,13,18,20,24-25
+packages/sdk-ocaml/dune-workspace
+  s_65316fb49f4b19::t_b6e9695ad46a9c 1
+packages/sdk-ocaml/eio/macro_sdk_eio.ml
+  s_65316fb49f4b19::t_018694931dfbe9 42-43,45-46
+  s_65316fb49f4b19::t_dd67e9a5280d9f 1-41,44,47-51
+packages/sdk-ocaml/runtime/json.ml
+  s_65316fb49f4b19::t_6fd08d38d27829 1-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "87975404a68810db34499b93a09aef92c8f64cdd",
+  "prompts": {},
+  "sessions": {
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
