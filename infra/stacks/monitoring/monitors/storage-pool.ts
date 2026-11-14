@@ -35,8 +35,9 @@
 // them enabled in Datadog first.
 //
 // The monitor takes the longest wait in each minute, counts a minute without
-// one as 0, and averages that over 10 minutes: one slow sample cannot fire
-// it, a pool that stays exhausted does. On dev in the first two hours of
+// one as 0, and averages that over 10 minutes: a brief wait cannot fire it, a
+// single probe that times out (30 s, so 3 s averaged) raises the warning, and
+// only a pool that stays exhausted reaches the critical. On dev in the first two hours of
 // data both pools filled for a second at a time (20 of 20 and 100 of 100),
 // the longest wait was 0.4 s and the 10-minute figure peaked at 0.08 s, so
 // neither threshold was reached. During the 2026-11-09 (prod, primary overloaded)
