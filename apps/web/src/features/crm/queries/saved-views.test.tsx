@@ -7,7 +7,13 @@ import type { CrmQueryDependencies } from './dependencies';
 import { useCrmLists } from './lists';
 import { usePersonalCrmViews } from './saved-views';
 
-afterEach(cleanup);
+let client: QueryClient | undefined;
+
+afterEach(() => {
+  cleanup();
+  client?.clear();
+  client = undefined;
+});
 
 const VIEWS: View[] = [
   {
@@ -24,7 +30,7 @@ const VIEWS: View[] = [
 
 it('serves CRM lists and personal views from one saved-views read', async () => {
   const getSavedViews = vi.fn(async () => ok({ views: VIEWS }));
-  const client = new QueryClient({
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   const deps = {
@@ -44,5 +50,4 @@ it('serves CRM lists and personal views from one saved-views read', async () => 
   );
   expect(personal?.views().map((view) => view.id)).toEqual(['view']);
   expect(getSavedViews).toHaveBeenCalledTimes(1);
-  client.clear();
 });
