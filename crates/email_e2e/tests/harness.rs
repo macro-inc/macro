@@ -74,7 +74,7 @@ async fn graphql_answers_as_the_user() -> Result<(), Report> {
     let data = ada
         .graphql("query { user { id } }", &serde_json::json!({}))
         .await?;
-    assert!(data["user"]["id"].is_string(), "{data}");
+    assert_eq!(data["user"]["id"], ada.macro_id(), "{data}");
 
     stack.finish().await
 }

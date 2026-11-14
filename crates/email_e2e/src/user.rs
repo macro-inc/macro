@@ -172,8 +172,10 @@ impl User {
         let handle = match provider {
             Provider::Gmail => ProviderHandle::Gmail(self.gmail.clone()),
             Provider::Outlook => {
-                // Token requests name the link from here on.
-                self.outlook.link_mailbox(&link_id.to_string(), address)?;
+                // Token requests name the link from here on, and are
+                // answered while a grant made for it is held.
+                self.outlook
+                    .link_attempt(&link_id.to_string(), &attempt.to_string())?;
                 ProviderHandle::Outlook(self.outlook.clone())
             }
         };

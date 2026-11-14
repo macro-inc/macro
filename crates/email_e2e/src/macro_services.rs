@@ -24,6 +24,9 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
+#[cfg(test)]
+mod test;
+
 /// The path prefix of the authentication service stand-in.
 const AUTHENTICATION: &str = "authentication";
 /// Where both emulators serve their authentication service stand-in.
@@ -58,6 +61,9 @@ struct Routes {
     requests: Arc<Mutex<Vec<ServiceRequest>>>,
     failures: Failures,
     holds: Holds,
+    /// Cancelled when the stand-in stops, so a request still held then is
+    /// let go.
+    stopping: CancellationToken,
     document_storage: RealService,
 }
 
@@ -136,6 +142,7 @@ impl MacroServices {
         let failures = Failures::default();
         let holds = Holds::default();
         let document_storage = RealService::default();
+        let cancel = CancellationToken::new();
         let routes = Routes {
             http: reqwest::Client::builder()
                 .timeout(FORWARD_TIMEOUT)
@@ -147,6 +154,7 @@ impl MacroServices {
             requests: requests.clone(),
             failures: failures.clone(),
             holds: holds.clone(),
+            stopping: cancel.clone(),
             document_storage: document_storage.clone(),
         };
 
@@ -156,7 +164,6 @@ impl MacroServices {
         let address = listener.local_addr()?;
         let app = Router::new().fallback(answer).with_state(routes);
 
-        let cancel = CancellationToken::new();
         let tracker = TaskTracker::new();
         let stopped = cancel.clone();
         tracker.spawn(async move {
@@ -301,9 +308,14 @@ async fn answer(State(routes): State<Routes>, request: Request) -> Response {
             .map(|index| holds.remove(index))
     };
     if let Some(hold) = hold {
-        // A scenario that no longer waits has let the request go.
+        // A scenario that no longer waits has let the request go, and so
+        // has a stand-in that is stopping: its shutdown waits for every
+        // request in flight.
         hold.arrived.send(()).ok();
-        hold.release.await.ok();
+        tokio::select! {
+            _ = hold.release => {}
+            () = routes.stopping.cancelled() => {}
+        }
     }
     let failure = {
         let mut failures = routes

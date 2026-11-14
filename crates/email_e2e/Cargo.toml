@@ -21,7 +21,7 @@ gmail_emulator = { path = "../gmail_emulator" }
 macro_aws_config = { path = "../macro_aws_config", features = ["sqs"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
+macro_user_id = { workspace = true }
 outlook_emulator = { path = "../outlook_emulator" }
 rdkafka = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
