@@ -644,12 +644,10 @@ where
         // One guard over every pipeline read, held until their cells are
         // read: a pipeline trashed since the lookup has no entries, and none
         // is written while its schema and cells are read.
+        // `referencing_rows` already kept pipelines of `record_type`, which is
+        // set when a pipeline is created and never changes.
         let (_guard, pipelines) = self.repo.lock_live_many(&holders).await.map_err(storage)?;
-        let pipelines: HashMap<_, _> = pipelines
-            .into_iter()
-            .filter(|p| p.record_type == Some(record_type))
-            .map(|p| (p.id, p))
-            .collect();
+        let pipelines: HashMap<_, _> = pipelines.into_iter().map(|p| (p.id, p)).collect();
         let groups: Vec<_> = references
             .chunk_by(|a, b| a.pipeline_id == b.pipeline_id)
             .filter_map(|group| {
