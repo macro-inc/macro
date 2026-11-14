@@ -198,6 +198,8 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
+  A channel-mention program is refused the send and any event with guests
+  (their invitations are email); an event without guests is created.
   A scoped hidden session's or a channel-mention program's chat messages and
   structured completions take no tools
   (`tool_selection::tools_refused_to_current_session`): tools run with the
