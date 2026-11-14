@@ -73,6 +73,13 @@ async fn set_property(
 
 /// What the activity association found before: the scope's record ids, then
 /// every item whose Companies or Contacts property contains one of them.
+///
+/// The SQL is a frozen copy of the company and contact arms of Soup's
+/// `pg_soup_repo::crm_association::property_edges` as it stood when
+/// `activity_property_edges` took over the activity scope, plus the
+/// kind filter applied after it. Its database-row arm is left out: a request
+/// that reads database rows still takes the old path. It is the reference the
+/// new statement must match, so don't keep it in step with later changes.
 async fn old_edges(
     repo: &CompaniesRepositoryImpl,
     pool: &PgPool,
@@ -454,6 +461,55 @@ async fn no_item_kinds_run_no_query(pool: PgPool) {
             .unwrap(),
         Vec::<CrmActivityEdge>::new()
     );
+}
+
+/// With a replica set, the edges read it and only it: they still answer once
+/// the primary is closed, on a read-only connection, while the scope read,
+/// which stays on the primary, fails.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn a_replica_serves_the_edges_and_nothing_else(pool: PgPool) {
+    let viewer = viewer(&pool).await;
+    add_records(&pool).await;
+    add_items(&pool).await;
+    let expected: BTreeSet<_> = new_edges(
+        &CompaniesRepositoryImpl::new(pool.clone()),
+        CrmContactListScope::Viewer(&viewer),
+        &ALL_TYPES,
+    )
+    .await
+    .into_iter()
+    .collect();
+    assert!(!expected.is_empty());
+    let replica = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            pool.connect_options()
+                .as_ref()
+                .clone()
+                .options([("default_transaction_read_only", "on")]),
+        )
+        .await
+        .unwrap();
+    let repo = CompaniesRepositoryImpl::new(pool.clone())
+        .with_activity_edges_replica(readonly_pool::ReadOnlyPool(replica.clone()));
+    pool.close().await;
+
+    assert_eq!(
+        new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+            .await
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        expected
+    );
+    assert!(
+        repo.resolve_activity(CrmContactListScope::Viewer(&viewer))
+            .await
+            .is_err()
+    );
+    replica.close().await;
 }
 
 #[test]
