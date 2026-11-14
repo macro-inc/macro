@@ -35,6 +35,21 @@ clean:
 build:
     SQLX_OFFLINE=true cargo build
 
+# The end-to-end email suite (crates/email_e2e/AGENTS.md): the real
+# email_service and its workers against the provider emulators. Needs
+# EMAIL_E2E_SQS_URL (ElasticMQ) and EMAIL_E2E_KAFKA_BROKERS besides Postgres
+# and Redis. Arguments go to
+# nextest, e.g. `just email-e2e gmail::` or `just email-e2e --stress-count 20`.
+email-e2e *args:
+    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler
+    SQLX_OFFLINE=true cargo nextest run -P email-e2e -p email_e2e {{ args }}
+
+# The scenarios kept for known, unfixed bugs (`#[ignore = "known bug: <class id>"]`):
+# which still fail, and which now pass and should start gating.
+email-e2e-known-bugs *args:
+    SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler
+    SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
+
 # Build dev service Docker images to pre-warm the cache used by root `run_local`.
 build_dev_service_images:
   docker build -f docker/Dockerfile.dev --target services_bundle -t macro-local-rust-services:dev .
