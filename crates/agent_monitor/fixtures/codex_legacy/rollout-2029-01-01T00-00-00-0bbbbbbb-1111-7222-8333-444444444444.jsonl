@@ -1,0 +1,4 @@
+{"timestamp":"2029-01-01T00:00:00.000Z","type":"turn_context","payload":{"model":"gpt-6-luna"}}
+{"timestamp":"2029-01-01T00:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":10}}}}
+{"timestamp":"2029-01-01T00:00:02.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":250,"cached_input_tokens":40,"output_tokens":30}}}}
+{"timestamp":"2029-01-01T00:00:03.000Z","type":"event_msg","payload":{"type":"token_count","info":null}}
