@@ -56,6 +56,12 @@ const CALENDAR: &str = "calendar_service";
 const APP: &str = "app";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
+/// The Lambda binary of the daily cleanup of unfinished sign-ins.
+const LINK_CLEANUP_HANDLER: &str = "user_link_cleanup_handler";
+/// The Lambda binary of the daily cleanup of stored attachment files.
+const SFS_DELETE_HANDLER: &str = "email_sfs_delete_handler";
+/// The Lambda binary that records bounces and complaints.
+const SUPPRESSION_HANDLER: &str = "email_suppression_handler";
 /// The topic the email services publish their events to.
 const EMAIL_EVENTS: &str = "macro.email";
 /// What the name of a queue's dead-letter queue ends with, in the evidence.
@@ -610,6 +616,63 @@ impl Stack {
         env.insert("DATABASE_URL".to_owned(), self.database().url());
         let ran = crate::lambda::invoke_scheduled(SCHEDULED_HANDLER, &env, &self.log_dir).await;
         self.recorder.lambda_ran(SCHEDULED_HANDLER, ran.is_ok());
+        ran
+    }
+
+    /// Runs the daily cleanup of unfinished sign-ins once, as the cron does
+    /// in production: the real `user_link_cleanup_handler` removes the
+    /// attempts to connect an inbox that were started more than a day ago.
+    pub async fn run_link_cleanup(&self) -> Result<(), Report> {
+        self.run_lambda(LINK_CLEANUP_HANDLER, None).await
+    }
+
+    /// Runs the daily cleanup of stored attachment files once, as the cron
+    /// does in production: the real `email_sfs_delete_handler` finds the
+    /// stored files no attachment refers to any more and enqueues their
+    /// deletion on `sfs-delete`. Returns when it has finished; the workers
+    /// then delete what it enqueued.
+    pub async fn run_stored_file_cleanup(&self) -> Result<(), Report> {
+        self.run_lambda(SFS_DELETE_HANDLER, None).await
+    }
+
+    /// Hands the real `email_suppression_handler` one notification of the
+    /// mail-sending service about mail Macro sent (a bounce or a complaint,
+    /// in that service's JSON), wrapped in the event its topic delivers.
+    pub async fn notify_of_mail_feedback(
+        &self,
+        notification: &serde_json::Value,
+    ) -> Result<(), Report> {
+        let event = serde_json::json!({ "Records": [{
+            "EventSource": "aws:sns",
+            "EventVersion": "1.0",
+            "EventSubscriptionArn": "arn:aws:sns:us-east-1:000000000000:email-e2e:subscription",
+            "Sns": {
+                "Type": "Notification",
+                "MessageId": Uuid::now_v7(),
+                "TopicArn": "arn:aws:sns:us-east-1:000000000000:email-e2e",
+                "Message": notification.to_string(),
+                "Timestamp": "2026-01-01T00:00:00Z",
+                "SignatureVersion": "1",
+                "Signature": "email-e2e",
+                "SigningCertUrl": "https://example.com/cert",
+                "UnsubscribeUrl": "https://example.com/unsubscribe",
+                "MessageAttributes": {},
+            },
+        }] });
+        self.run_lambda(SUPPRESSION_HANDLER, Some(event.to_string()))
+            .await
+    }
+
+    /// Runs one Lambda binary on the scenario's database and queues for
+    /// `event`, or for the event a schedule sends.
+    async fn run_lambda(&self, name: &'static str, event: Option<String>) -> Result<(), Report> {
+        let mut env = self.worker_env.clone();
+        env.insert("DATABASE_URL".to_owned(), self.database().url());
+        let ran = match event {
+            Some(event) => crate::lambda::invoke(name, event, &env, &self.log_dir).await,
+            None => crate::lambda::invoke_scheduled(name, &env, &self.log_dir).await,
+        };
+        self.recorder.lambda_ran(name, ran.is_ok());
         ran
     }
 

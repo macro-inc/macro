@@ -529,6 +529,9 @@ jobs:
           email_e2e:
             - 'services/email_service/**'
             - 'services/email_scheduled_handler/**'
+            - 'services/user_link_cleanup_handler/**'
+            - 'services/email_sfs_delete_handler/**'
+            - 'services/email_suppression_handler/**'
             - 'crates/email/**'
             - 'crates/email_*/**'
             - 'crates/graphql_email/**'

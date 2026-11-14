@@ -1,9 +1,9 @@
-//! One invocation of a scheduled handler.
+//! One invocation of a Lambda handler.
 //!
 //! The work the crons do in production lives in Lambda binaries. This module
 //! runs one of them as it is deployed: it serves the Lambda runtime API,
-//! hands the binary one EventBridge event, and reports how the handler
-//! answered it.
+//! hands the binary one event (the one EventBridge sends on a schedule, or
+//! one the scenario gives), and reports how the handler answered it.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -41,7 +41,7 @@ type Outcome = Result<String, String>;
 #[derive(Clone)]
 struct Runtime {
     /// Taken by the first poll for work; later polls wait for ever.
-    event: Arc<Mutex<Option<&'static str>>>,
+    event: Arc<Mutex<Option<String>>>,
     outcome: Arc<Mutex<Option<oneshot::Sender<Outcome>>>>,
 }
 
@@ -61,11 +61,23 @@ pub(crate) async fn invoke_scheduled(
     env: &BTreeMap<String, String>,
     log_dir: &Path,
 ) -> Result<(), Report> {
+    invoke(name, SCHEDULED_EVENT.to_owned(), env, log_dir).await
+}
+
+/// Runs the handler binary `name` for one `event`, the JSON its trigger
+/// sends, with `env` and what the Lambda runtime needs on top, and fails
+/// when the handler does.
+pub(crate) async fn invoke(
+    name: &'static str,
+    event: String,
+    env: &BTreeMap<String, String>,
+    log_dir: &Path,
+) -> Result<(), Report> {
     crate::process::ensure_built(&[name])?;
 
     let (sender, receiver) = oneshot::channel();
     let runtime = Runtime {
-        event: Arc::new(Mutex::new(Some(SCHEDULED_EVENT))),
+        event: Arc::new(Mutex::new(Some(event))),
         outcome: Arc::new(Mutex::new(Some(sender))),
     };
     let listener = TcpListener::bind("127.0.0.1:0")
