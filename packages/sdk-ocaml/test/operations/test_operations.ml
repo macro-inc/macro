@@ -3,6 +3,9 @@
    unchanged. *)
 
 let () =
+  (* An Unknown case in a reply built from the spec means a wrong tag or
+     enum mapping. *)
+  Macro_sdk.Json.strict := true;
   let dir = Filename.concat (Sys.getenv "DUNE_SOURCEROOT") "../sdk/specs" in
   let spec_names =
     Sys.readdir dir |> Array.to_list

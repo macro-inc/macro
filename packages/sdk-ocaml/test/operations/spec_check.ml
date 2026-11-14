@@ -171,88 +171,115 @@ let merge objects =
   `Assoc
     (List.concat_map (function `Assoc fields -> fields | _ -> []) objects)
 
-let rec sample spec ?(depth = 0) schema : json =
+(* Which sample to build: round [r] takes member [r mod n] of every union
+   and value [r mod n] of every enum it meets near the top, so successive
+   rounds cover every member and value; [nulls] puts null wherever the
+   schema allows it. [widest] records the most choices met, which says how
+   many rounds cover them all. *)
+type choice = { round : int; nulls : bool; widest : int ref }
+
+(* Past [choice_depth], always the first member, which is known to end. *)
+let choice_depth = 8
+
+let pick choice ~deep items =
+  let n = List.length items in
+  if n > !(choice.widest) then choice.widest := n;
+  if deep then List.hd items else List.nth items (choice.round mod n)
+
+let rec sample spec choice ?(depth = 0) schema : json =
   if depth > 40 then failwith "sample: schema never ends";
   let deep = depth > shallow in
   match schema with
   | `Bool true -> `Assoc []
   | _ -> (
       match string "$ref" schema with
-      | Some _ -> sample spec ~depth:(depth + 1) (resolve spec schema)
+      | Some _ -> sample spec choice ~depth:(depth + 1) (resolve spec schema)
       | None -> (
-          let members =
-            List.filter (fun m -> not (is_null m)) (union_members schema)
+          let all_members = union_members schema in
+          let members = List.filter (fun m -> not (is_null m)) all_members in
+          let types =
+            match member "type" schema with
+            | Some (`String t) -> [ t ]
+            | Some (`List _) -> strings "type" schema
+            | _ -> []
           in
-          match (members, list "allOf" schema) with
-          | first :: _, _ -> (
-              match member "discriminator" schema with
-              | Some discriminator -> (
-                  (* The tag value is the mapping key for the first member. *)
-                  let tag = Option.get (string "propertyName" discriminator) in
-                  let reference = Option.get (string "$ref" first) in
-                  let value =
-                    match
-                      List.find_opt
-                        (fun (_, target) -> target = `String reference)
-                        (assoc "mapping" discriminator)
-                    with
-                    | Some (key, _) -> key
-                    | None -> List.nth (String.split_on_char '/' reference) 3
-                  in
-                  match sample spec ~depth first with
-                  | `Assoc fields ->
-                      `Assoc
-                        ((tag, `String value) :: List.remove_assoc tag fields)
-                  | other -> other)
-              | None -> sample spec ~depth first)
-          | [], (_ :: _ as all_of) ->
-              merge (List.map (sample spec ~depth) all_of)
-          | [], [] -> (
-              match member "enum" schema with
-              | Some (`List (first :: _)) -> first
-              | _ -> (
-                  let types =
-                    match member "type" schema with
-                    | Some (`String t) -> [ t ]
-                    | Some (`List _) -> strings "type" schema
-                    | _ -> []
-                  in
-                  match List.filter (( <> ) "null") types with
-                  | "string" :: _ -> `String "sample"
-                  | "integer" :: _ -> `Int 1
-                  | "number" :: _ -> `Float 1.5
-                  | "boolean" :: _ -> `Bool true
-                  | "array" :: _ ->
-                      if deep then `List []
-                      else
-                        `List
-                          [
-                            sample spec ~depth:(depth + 1)
-                              (Option.value (member "items" schema)
-                                 ~default:(`Bool true));
-                          ]
-                  | _ -> (
-                      let required = strings "required" schema in
+          let nullable =
+            List.mem "null" types || List.exists is_null all_members
+          in
+          if choice.nulls && nullable && depth <= choice_depth then `Null
+          else
+            match (members, list "allOf" schema) with
+            | _ :: _, _ -> (
+                let chosen = pick choice ~deep:(depth > choice_depth) members in
+                match member "discriminator" schema with
+                | Some discriminator -> (
+                    (* The tag value is the chosen member's mapping key. *)
+                    let tag =
+                      Option.get (string "propertyName" discriminator)
+                    in
+                    let reference = Option.get (string "$ref" chosen) in
+                    let value =
                       match
-                        ( assoc "properties" schema,
-                          member "additionalProperties" schema )
+                        List.find_opt
+                          (fun (_, target) -> target = `String reference)
+                          (assoc "mapping" discriminator)
                       with
-                      | [], Some (`Assoc _ as values) ->
-                          if deep then `Assoc []
-                          else
+                      | Some (key, _) -> key
+                      | None -> List.nth (String.split_on_char '/' reference) 3
+                    in
+                    match sample spec choice ~depth chosen with
+                    | `Assoc fields ->
+                        `Assoc
+                          ((tag, `String value) :: List.remove_assoc tag fields)
+                    | other -> other)
+                | None -> sample spec choice ~depth chosen)
+            | [], (_ :: _ as all_of) ->
+                merge (List.map (sample spec choice ~depth) all_of)
+            | [], [] -> (
+                match member "enum" schema with
+                | Some (`List (_ :: _ as values)) ->
+                    pick choice ~deep:(depth > choice_depth) values
+                | _ -> (
+                    match List.filter (( <> ) "null") types with
+                    | "string" :: _ -> `String "sample"
+                    | "integer" :: _ -> `Int 1
+                    | "number" :: _ -> `Float 1.5
+                    | "boolean" :: _ -> `Bool true
+                    | "array" :: _ ->
+                        if deep then `List []
+                        else
+                          `List
+                            [
+                              sample spec choice ~depth:(depth + 1)
+                                (Option.value (member "items" schema)
+                                   ~default:(`Bool true));
+                            ]
+                    | _ -> (
+                        let required = strings "required" schema in
+                        match
+                          ( assoc "properties" schema,
+                            member "additionalProperties" schema )
+                        with
+                        | [], Some (`Assoc _ as values) ->
+                            if deep then `Assoc []
+                            else
+                              `Assoc
+                                [
+                                  ( "key",
+                                    sample spec choice ~depth:(depth + 1) values
+                                  );
+                                ]
+                        | properties, _ ->
                             `Assoc
-                              [ ("key", sample spec ~depth:(depth + 1) values) ]
-                      | properties, _ ->
-                          `Assoc
-                            (List.filter_map
-                               (fun (key, property) ->
-                                 if List.mem key required || not deep then
-                                   Some
-                                     ( key,
-                                       sample spec ~depth:(depth + 1) property
-                                     )
-                                 else None)
-                               properties))))))
+                              (List.filter_map
+                                 (fun (key, property) ->
+                                   if List.mem key required || not deep then
+                                     Some
+                                       ( key,
+                                         sample spec choice ~depth:(depth + 1)
+                                           property )
+                                   else None)
+                                 properties))))))
 
 (* ---------- one operation ---------- *)
 
@@ -273,7 +300,18 @@ let parameters spec item op =
     (List.map (resolve spec) (list "parameters" item))
   @ op_params
 
-let canonical json = Yojson.Safe.sort json
+(* Null and absent fields mean the same to the server (serde), and an
+   optional field set to None is left out, so compare without null fields. *)
+let rec canonical (json : json) : json =
+  match json with
+  | `Assoc fields ->
+      `Assoc
+        (List.sort compare
+           (List.filter_map
+              (fun (k, v) -> if v = `Null then None else Some (k, canonical v))
+              fields))
+  | `List items -> `List (List.map canonical items)
+  | other -> other
 
 let short json =
   let s = Yojson.Safe.to_string json in
@@ -361,6 +399,8 @@ let check spec (case : Cases_support.t) =
       in
       (match (member "requestBody" op, wire.wire_body) with
       | None, None -> ()
+      | None, Some "" ->
+          () (* a body-less POST, PUT or PATCH says content-length: 0 *)
       | None, Some _ -> fail "sends a body the spec does not declare"
       | Some _, None -> fail "sends no body"
       | Some request_body, Some body -> (
@@ -430,7 +470,23 @@ let check spec (case : Cases_support.t) =
           | Some json_content -> (
               match member "schema" json_content with
               | Some schema ->
-                  let value = sample spec schema in
+                  (* Every union member and enum value, then nulls. *)
+                  let widest = ref 1 in
+                  let rec rounds round =
+                    if round < !widest then begin
+                      let value =
+                        sample spec { round; nulls = false; widest } schema
+                      in
+                      expect
+                        (Yojson.Safe.to_string value)
+                        (if success then `Json value else `Api value);
+                      rounds (round + 1)
+                    end
+                  in
+                  rounds 0;
+                  let value =
+                    sample spec { round = 0; nulls = true; widest } schema
+                  in
                   expect
                     (Yojson.Safe.to_string value)
                     (if success then `Json value else `Api value)

@@ -153,13 +153,35 @@ let () =
   check "override" (Config.host config "storage" = "http://localhost:9999");
   check "search on the storage host"
     (Config.host config "search" = "https://dev-gateway.macro.com/dss");
-  let expected = typescript_hosts () in
-  check "parsed config.ts" (List.length expected = 42);
+  let typescript = List.sort compare (typescript_hosts ()) in
+  let env_name = function
+    | Config.Dev -> "dev"
+    | Prod -> "prod"
+    | Local -> "local"
+  in
+  let ocaml =
+    List.sort compare
+      (List.concat_map
+         (fun (env, hosts) ->
+           List.map (fun (service, url) -> (env_name env, service, url)) hosts)
+         Config.hosts)
+  in
+  check "parsed config.ts" (List.length typescript = 42);
   List.iter
     (fun (env, service, url) ->
-      let actual = Config.default_host (Config.env_of_string env) service in
-      check (Printf.sprintf "host %s %s" env service) (actual = Some url))
-    expected;
+      if not (List.mem (env, service, url) ocaml) then
+        check
+          (Printf.sprintf "OCaml host table lacks %s %s %s" env service url)
+          false)
+    typescript;
+  List.iter
+    (fun (env, service, url) ->
+      if not (List.mem (env, service, url) typescript) then
+        check
+          (Printf.sprintf "OCaml host %s %s %s is not in config.ts" env service
+             url)
+          false)
+    ocaml;
 
   if !failures > 0 then exit 1;
   print_endline "config: all checks passed"
