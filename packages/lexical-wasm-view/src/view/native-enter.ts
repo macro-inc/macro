@@ -707,6 +707,33 @@ export class NativeEnterDispatcher {
     );
   }
 
+  /** Existing reported causes belong to an older drain, not the current input. */
+  hasUnreportedFailures(
+    owner: bigint,
+    reported: readonly {
+      readonly invocation: bigint;
+      readonly scope: bigint;
+    }[]
+  ): boolean {
+    for (const [scope, failure] of this.failures) {
+      if (
+        failure.owner === owner &&
+        !reported.some(
+          (report) =>
+            report.scope === scope && report.invocation === failure.invocation
+        )
+      )
+        return true;
+    }
+    return false;
+  }
+
+  /** Retire only the exact cause whose issued output lease was resolved. */
+  clearFailure(owner: bigint, invocation: bigint, scope: bigint): void {
+    if (this.active()) throw new Error('Cannot clear an active callback cause');
+    if (this.failure(owner, invocation, scope)) this.failures.delete(scope);
+  }
+
   /** Only after the owner has drained output and resolved every issued lease. */
   clearFailures(owner: bigint): void {
     if (this.active()) throw new Error('Cannot clear an active callback cause');

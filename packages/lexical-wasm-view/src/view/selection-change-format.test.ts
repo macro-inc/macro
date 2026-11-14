@@ -137,7 +137,7 @@ test('a same-caret selectionchange after the mark expires restores the anchor te
 });
 
 // Source onSelectionChange runs its format rule even when the caret did not move.
-test('a same-caret selectionchange after the mark expires restores the anchor text format', () => {
+test('a second independent same-caret selectionchange after the mark expires restores the anchor text format', () => {
   Object.defineProperty(navigator, 'platform', {
     configurable: true,
     value: 'Linux x86_64',

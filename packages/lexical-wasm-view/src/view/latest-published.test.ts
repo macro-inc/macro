@@ -374,6 +374,31 @@ for (const cause of [undefined, null, { kind: 'original drain' }]) {
       ]);
       expect(observed.retired()).toBe(1);
       armed = false;
+      // This completed model write remains real; only the prior cleanup failed.
+      let nextResult: ExecutorSettlement | undefined;
+      runtime.executor.runSettled(
+        () =>
+          runtime.executor.session.input(
+            SessionInputMsg.encode({
+              ...emptyInput(2),
+              editor: EditorInputMsg.fromEditorSetState({
+                json: documentState('next healthy'),
+              }),
+            }),
+            runtime.executor.now(),
+            Date.now()
+          ),
+        (value) => {
+          nextResult = value;
+        }
+      );
+      expect(nextResult).toMatchObject({ status: 'success' });
+      expect(runtime.root.textContent).toBe('next healthy');
+      expect(observed.texts).toEqual([]);
+      expect(observed.failures).toEqual([
+        { kind: 'cleanup', failure: { error: cause } },
+      ]);
+      expect(observed.retired()).toBe(1);
     } finally {
       armed = false;
       await runtime.close();

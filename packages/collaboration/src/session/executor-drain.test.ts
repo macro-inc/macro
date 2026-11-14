@@ -20,6 +20,9 @@ import {
 } from './abi.generated';
 import {
   type ExecutorFailure,
+  type ExecutorDrain,
+  type ExecutorSettlement,
+  type ExecutorCompletion,
   type ExecutorOptions,
   SessionExecutor,
 } from './executor';
@@ -748,6 +751,331 @@ test.each([undefined, null, { reason: 'opaque-primary' }])(
       expect(healthy).toBe(1);
     } finally {
       armed = false;
+      try {
+        restoreReport();
+      } finally {
+        await executor.close();
+      }
+    }
+  }
+);
+
+// Real synchronous SettledEntry ownership, not native publication/semantic evidence.
+test.each([undefined, null, { opaque: 'owned-completion' }])(
+  'sync drain partitions actual started entries and fences late completion failure %j',
+  async (cause) => {
+    let armed = false;
+    let reentered = false;
+    let outer: ExecutorCompletion | undefined;
+    let inner: ExecutorCompletion | undefined;
+    const executor = createExecutor({
+      afterDrain: (_, drain) => {
+        if (!armed || !drain) return;
+        if (!reentered) {
+          reentered = true;
+          if (!outer) throw new Error('Missing actual outer completion');
+          expect(outer.running).toBe(false);
+          expect(drain.ownsCompletion(outer)).toBe(true);
+          executor.tryRunSync(
+            (completion) => {
+              inner = completion;
+              expect(completion.running).toBe(true);
+              return executor.session.tick(executor.now(), Date.now());
+            },
+            undefined,
+            () => {
+              expect(inner?.running).toBe(true);
+            }
+          );
+          if (!inner) throw new Error('Missing actual inner completion');
+          expect(drain.ownsCompletion(inner)).toBe(false);
+          outer.fail(cause);
+        } else {
+          if (!inner || !outer) throw new Error('Missing real completions');
+          expect(drain.ownsCompletion(inner)).toBe(true);
+          expect(drain.ownsCompletion(outer)).toBe(false);
+        }
+      },
+    });
+    try {
+      armed = true;
+      let thrown: ExecutorFailure | undefined;
+      try {
+        executor.tryRunSync(
+          (completion) => {
+            outer = completion;
+            expect(completion.running).toBe(true);
+            return executor.session.tick(executor.now(), Date.now());
+          },
+          undefined,
+          () => {
+            expect(outer?.running).toBe(true);
+          }
+        );
+      } catch (error) {
+        thrown = { error };
+      }
+      expect(thrown).toBeDefined();
+      expect(thrown?.error).toBe(cause);
+      expect(reentered).toBe(true);
+      expect(outer?.running).toBe(false);
+      expect(inner?.running).toBe(false);
+      expect(() => outer?.fail('late')).toThrow('already delivered');
+      expect(() => inner?.fail('late')).toThrow('already delivered');
+      armed = false;
+      expect(
+        executor.tryRunSync(
+          () => executor.session.tick(executor.now(), Date.now()),
+          undefined,
+          () => {}
+        )
+      ).toEqual({ status: 'completed' });
+    } finally {
+      armed = false;
+      await executor.close();
+    }
+  }
+);
+
+test.each([undefined, null, { opaque: 'legacy-entry' }])(
+  'mixed actual owned and queued legacy work shares only its creation drain %j',
+  async (cause) => {
+    let armed = false;
+    let frame: ExecutorDrain | undefined;
+    let completion: ExecutorCompletion | undefined;
+    let afterDrain = 0;
+    const executor = createExecutor({
+      afterDrain: (failure, drain) => {
+        if (!armed) return;
+        afterDrain++;
+        expect(drain).toBe(frame);
+        expect(executor.runningDrain).toBe(frame);
+        expect(failure).toBeDefined();
+        expect(failure?.error).toBe(cause);
+        if (!completion || !drain) throw new Error('Missing real owned drain');
+        expect(drain.ownsCompletion(completion)).toBe(true);
+        expect(completion.running).toBe(false);
+      },
+    });
+    try {
+      armed = true;
+      let thrown: ExecutorFailure | undefined;
+      try {
+        executor.tryRunSync(
+          (actual) => {
+            completion = actual;
+            frame = executor.runningDrain;
+            expect(frame).toBeDefined();
+            expect(Object.isFrozen(frame)).toBe(true);
+            expect(frame?.ownsCompletion(actual)).toBe(true);
+            executor.run(() => {
+              expect(executor.runningDrain).toBe(frame);
+              expect(actual.running).toBe(false);
+              throw cause;
+            });
+            return executor.session.tick(executor.now(), Date.now());
+          },
+          undefined,
+          () => {
+            expect(executor.runningDrain).toBe(frame);
+            expect(completion?.running).toBe(true);
+          }
+        );
+      } catch (error) {
+        thrown = { error };
+      }
+      expect(thrown).toBeDefined();
+      expect(thrown?.error).toBe(cause);
+      expect(afterDrain).toBe(1);
+      expect(executor.runningDrain).toBeUndefined();
+      expect(completion?.running).toBe(false);
+      expect(() => completion?.fail('late')).toThrow('already delivered');
+      armed = false;
+      expect(
+        executor.tryRunSync(
+          () => executor.session.tick(executor.now(), Date.now()),
+          undefined,
+          () => {}
+        )
+      ).toEqual({ status: 'completed' });
+      expect(executor.runningDrain).toBeUndefined();
+    } finally {
+      armed = false;
+      await executor.close();
+    }
+  }
+);
+
+test('legacy-only drain has an actual immutable fence without a manufactured completion', async () => {
+  let armed = false;
+  let frame: ExecutorDrain | undefined;
+  let historical: ExecutorCompletion | undefined;
+  const executor = createExecutor({
+    afterDrain: (_, drain) => {
+      if (!armed) return;
+      expect(drain).toBe(frame);
+      expect(executor.runningDrain).toBe(frame);
+      if (!historical || !drain) throw new Error('Missing historical control');
+      expect(drain.ownsCompletion(historical)).toBe(false);
+    },
+  });
+  try {
+    executor.tryRunSync(
+      (completion) => {
+        historical = completion;
+        return executor.session.tick(executor.now(), Date.now());
+      },
+      undefined,
+      () => {}
+    );
+    armed = true;
+    executor.run(() => {
+      frame = executor.runningDrain;
+      expect(frame).toBeDefined();
+      expect(Object.isFrozen(frame)).toBe(true);
+      executor.run(() => {
+        expect(executor.runningDrain).toBe(frame);
+        return executor.session.tick(executor.now(), Date.now());
+      });
+      return executor.session.tick(executor.now(), Date.now());
+    });
+    expect(executor.runningDrain).toBeUndefined();
+  } finally {
+    armed = false;
+    await executor.close();
+  }
+});
+
+test.each([undefined, null, { opaque: 'drain-callback' }])(
+  'afterDrain and settlement reentry restore the actual outer fence through callback faults %j',
+  async (cause) => {
+    let phase: 'idle' | 'outer' | 'after-drain' | 'settlement' = 'idle';
+    let outer: ExecutorDrain | undefined;
+    const nested: ExecutorDrain[] = [];
+    let settlementResult: ExecutorSettlement | undefined;
+    let settlementBefore: ExecutorDrain | undefined;
+    let settlementAfter: ExecutorDrain | undefined;
+    const executor = createExecutor({
+      afterDrain: (_, drain) => {
+        if (phase === 'idle') return;
+        expect(executor.runningDrain).toBe(drain);
+        if (phase !== 'outer') {
+          expect(drain).not.toBe(outer);
+          if (!drain) throw new Error('Missing nested drain');
+          nested.push(drain);
+          return;
+        }
+        expect(drain).toBe(outer);
+        phase = 'after-drain';
+        executor.runSync(() => {
+          expect(executor.runningDrain).not.toBe(outer);
+          return executor.session.tick(executor.now(), Date.now());
+        });
+        expect(executor.runningDrain).toBe(outer);
+        phase = 'outer';
+        throw cause;
+      },
+    });
+    try {
+      phase = 'outer';
+      let thrown: ExecutorFailure | undefined;
+      try {
+        executor.runSettled(
+          () => {
+            outer = executor.runningDrain;
+            expect(outer).toBeDefined();
+            return executor.session.tick(executor.now(), Date.now());
+          },
+          (result) => {
+            settlementBefore = executor.runningDrain;
+            settlementResult = result;
+            phase = 'settlement';
+            executor.runSync(() => {
+              expect(executor.runningDrain).not.toBe(outer);
+              return executor.session.tick(executor.now(), Date.now());
+            });
+            settlementAfter = executor.runningDrain;
+            phase = 'outer';
+          }
+        );
+      } catch (error) {
+        thrown = { error };
+      }
+      expect(thrown).toBeDefined();
+      expect(thrown?.error).toBe(cause);
+      expect(settlementBefore).toBe(outer);
+      expect(settlementAfter).toBe(outer);
+      expect(settlementResult).toBeDefined();
+      expect(settlementResult?.status).toBe('error');
+      if (settlementResult?.status === 'error')
+        expect(settlementResult.error).toBe(cause);
+      expect(nested).toHaveLength(2);
+      expect(nested[0]).not.toBe(nested[1]);
+      expect(executor.runningDrain).toBeUndefined();
+      phase = 'idle';
+      executor.runSync(() => executor.session.tick(executor.now(), Date.now()));
+      expect(executor.runningDrain).toBeUndefined();
+    } finally {
+      phase = 'idle';
+      await executor.close();
+    }
+  }
+);
+
+test.each([undefined, null, { opaque: 'finish-only' }])(
+  'real sync finish failure settles error and the next actual input is healthy %j',
+  async (cause) => {
+    const executor = createExecutor({});
+    let completion: ExecutorCompletion | undefined;
+    let after = 0;
+    let finish = 0;
+    let restoreReport = () => {};
+    try {
+      const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+      restoreReport = () => report.mockRestore();
+      let caught: ExecutorFailure | undefined;
+      try {
+        executor.tryRunSync(
+          (actual) => {
+            completion = actual;
+            return executor.session.input(
+              SessionInputMsg.encode(emptyInput(1)),
+              executor.now(),
+              Date.now()
+            );
+          },
+          () => after++,
+          () => {
+            finish++;
+            expect(completion?.running).toBe(true);
+            throw cause;
+          }
+        );
+      } catch (error) {
+        caught = { error };
+      }
+      expect(after).toBe(1);
+      expect(finish).toBe(1);
+      expect(caught).toBeDefined();
+      expect(caught?.error).toBe(cause);
+      expect(completion?.running).toBe(false);
+      expect(() => completion?.failSecondary('late')).toThrow(
+        'already delivered'
+      );
+      expect(report).toHaveBeenCalledExactlyOnceWith(cause, {
+        surface: 'session.sync-entry.cleanup',
+      });
+      expect(
+        executor.tryRunSync(
+          () => executor.session.tick(executor.now(), Date.now()),
+          () => after++,
+          () => finish++
+        )
+      ).toEqual({ status: 'completed' });
+      expect(after).toBe(2);
+      expect(finish).toBe(2);
+      expect(executor.runningDrain).toBeUndefined();
+    } finally {
       try {
         restoreReport();
       } finally {

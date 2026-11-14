@@ -14,7 +14,7 @@ afterAll(() => restore?.());
 afterEach(() => vi.restoreAllMocks());
 
 test('metadata-only text echo acknowledges the actual UTF-16 input without masking flags', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   const original = fixture.session.textFromView.bind(fixture.session);
   const flags: number[] = [];
   fixture.session.textFromView = (...args) => {
@@ -45,7 +45,7 @@ test('metadata-only text echo acknowledges the actual UTF-16 input without maski
 test.each([false, true])(
   'metadata-only selection echo acknowledges its actual route (cold=%s)',
   async (cold) => {
-    const fixture = nativeAcknowledgementSurface();
+    const fixture = await nativeAcknowledgementSurface();
     const ack = vi.spyOn(fixture.view, 'acknowledgeSelection');
     const selection = {
       kind: 'range' as const,
@@ -63,7 +63,7 @@ test.each([false, true])(
 );
 
 test('an actual consumed acknowledgement ticket cannot be replayed before another getter', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   const consume = NativeEnterOutput.prototype.consumeAcknowledgement;
   let accepted = 0;
   vi.spyOn(
@@ -92,7 +92,7 @@ test('an actual consumed acknowledgement ticket cannot be replayed before anothe
 });
 
 test('an injected wrong ticket burns the real proof rather than acknowledging another entry', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   const consume = NativeEnterOutput.prototype.consumeAcknowledgement;
   vi.spyOn(
     NativeEnterOutput.prototype,
@@ -127,8 +127,8 @@ test.each(['same-owner', 'other-owner'] as const)(
   async (mode) => {
     let armed = false;
     let completed = false;
-    const other = nativeAcknowledgementSurface();
-    const fixture = nativeAcknowledgementSurface((session) => {
+    const other = await nativeAcknowledgementSurface();
+    const fixture = await nativeAcknowledgementSurface((session) => {
       if (!armed || completed) return;
       completed = true;
       // Actual existing native call, not synthetic flags. Same-owner replaces the
@@ -162,7 +162,7 @@ test('a queued selection entry uses its own acknowledgement after the text entry
   let armed = false;
   let queued = false;
   let enqueue: (() => void) | undefined;
-  const fixture = nativeAcknowledgementSurface(() => {
+  const fixture = await nativeAcknowledgementSurface(() => {
     if (armed && !queued) {
       queued = true;
       enqueue?.();
@@ -195,7 +195,7 @@ test('a queued selection entry uses its own acknowledgement after the text entry
 });
 
 test('an authoritative read-only repair does not acquire a metadata-only text acknowledgement', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   fixture.executor.run(() =>
     fixture.session.authorization(
       true,
@@ -224,7 +224,7 @@ test('an authoritative read-only repair does not acquire a metadata-only text ac
 });
 
 test('an injected truncated transfer cannot leak its ticket into the next healthy echo', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   const capture = NativeEnterOutput.prototype.captureAcknowledgement;
   const tickets: (object | undefined)[] = [];
   vi.spyOn(

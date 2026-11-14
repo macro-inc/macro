@@ -17,7 +17,7 @@ afterAll(() => restore?.());
 afterEach(() => vi.restoreAllMocks());
 
 test('DEV production mount accepts a DOM echo and the next healthy echo without a cause lookup', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   const lookup = vi.spyOn(fixture.session, 'takeCodeTokenFailure');
   const acknowledge = vi.spyOn(fixture.view, 'acknowledgeText');
   try {
@@ -48,7 +48,7 @@ test.each([
 ])(
   'the real executor binds a View-only follow-up $label cause exactly once',
   async ({ cause }) => {
-    const fixture = nativeAcknowledgementSurface(undefined, {
+    const fixture = await nativeAcknowledgementSurface(undefined, undefined, undefined, {
       primeEcho: false,
       codeTokens: {
         profile: 'native-ack-cause-control',

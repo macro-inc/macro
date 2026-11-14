@@ -169,7 +169,7 @@ test.each([
   },
   { rows: [{ command: 'KeyDown', priority: 32 }] },
 ])(
-  'rejecting malformed metadata invalidates an already fresh cache',
+  'rejecting malformed metadata invalidates an already fresh cache (case %#)',
   ({ rows }) => {
     const cache = new ListenerMetadataCache(
       () => 1n,

@@ -1,3 +1,4 @@
+import { executeSyncInput } from './sync-input';
 import {
   Access,
   ClipboardDomMsg,
@@ -18,6 +19,7 @@ import type {
   CommentMarkReply,
   FlushReply,
   SessionExecutor,
+  SyncEntrySchedule,
 } from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
@@ -42,6 +44,8 @@ import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
 import type {
   EditorPort,
+  SyncInputOptions,
+  SyncApplicationOptions,
   InputSettlement,
   NativeBlockNavigationPort,
   NativeEnterPort,
@@ -106,7 +110,7 @@ export class SessionPort implements EditorPort {
       Partial<
         Pick<
           SessionExecutor<EditorSession>,
-          'runSync' | 'runSettled' | 'comment' | 'flush'
+          'runSync' | 'tryRunSync' | 'runSettled' | 'comment' | 'flush'
         >
       >,
     private readonly view: ViewSink,
@@ -483,6 +487,105 @@ export class SessionPort implements EditorPort {
       run.call(this.executor, operation.call, complete);
     } else this.executor.run(operation.call, complete);
   }
+  inputApplicationSync<Proof>(
+    factory: () => ProgrammaticApplicationInput,
+    options: SyncApplicationOptions<Proof>
+  ): SyncEntrySchedule {
+    return this.syncInput(
+      (policy, generation) => {
+        const application = factory();
+        if (application.generation !== generation)
+          throw new Error(
+            'Application input generation changed during preparation'
+          );
+        if (
+          policy === 'table-selection' &&
+          (application.name !== 'group-b.table-pointer-down' ||
+            options.event !== undefined ||
+            application.selection.kind !== 0)
+        )
+          throw new Error(
+            'Table pointer input requires its closed KeepModel command'
+          );
+        const event = options.event;
+        return EditorInputMsg.fromEditorApplication({
+          ...application,
+          keyboard: event !== undefined,
+          key: event?.key ?? '',
+          mods: event
+            ? Number(event.shiftKey) |
+              (Number(event.altKey) << 1) |
+              (Number(event.ctrlKey) << 2) |
+              (Number(event.metaKey) << 3) |
+              (Number(event.repeat) << 4) |
+              (Number(event.isComposing) << 5)
+            : 0,
+          code: event?.keyCode ?? 0,
+        });
+      },
+      options,
+      () => options.admission,
+      options.event
+    );
+  }
+
+  pasteSync<Proof>(
+    factory: () => EditorInputMsg,
+    options: SyncInputOptions<Proof>
+  ): SyncEntrySchedule {
+    return this.syncInput(
+      () => {
+        const input = factory();
+        if (!input.isEditorPaste() && !input.isEditorPasteWithIntent())
+          throw new Error(
+            'Paste preparation must return the existing typed paste input'
+          );
+        return input;
+      },
+      options,
+      () => 'session-edit'
+    );
+  }
+
+  private syncInput<Proof>(
+    factory: (
+      policy: 'session-edit' | 'table-selection',
+      generation: number
+    ) => EditorInputMsg,
+    options: SyncInputOptions<Proof>,
+    admission: () => 'session-edit' | 'table-selection',
+    event?: KeyboardEvent
+  ): SyncEntrySchedule {
+    return executeSyncInput(
+      {
+        port: this,
+        executor: this.executor,
+        commands: this.commands,
+        assertRootAdmission: () => this.assertRootAdmission(),
+        effectiveAccess: () => this.effectiveAccess(),
+        invoke: (call) => {
+          if (
+            (event?.key === 'Enter' ||
+              (event?.key === 'Escape' && this.nativeEscape) ||
+              ((event?.key === 'ArrowUp' || event?.key === 'ArrowDown') &&
+                this.nativeBlockNavigation)) &&
+            this.commands
+          ) {
+            return this.commands.dispatcher.withKeyboardEvent(
+              this.commands.owner,
+              event,
+              call
+            );
+          }
+          return call();
+        },
+      },
+      factory,
+      options,
+      admission
+    );
+  }
+
   /** Root admission only; a native dispatcher callback must use its issued scope. */
   inputSettled(
     factory: () => ProgrammaticApplicationInput,

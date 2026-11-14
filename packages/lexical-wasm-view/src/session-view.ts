@@ -1,3 +1,4 @@
+import type { IViewEffectMsg } from '@macro-inc/collaboration/session/abi.generated';
 import {
   type ExecutorDrain,
   type ExecutorFailure,
@@ -52,6 +53,9 @@ export function mountSessionView(
     | undefined;
   let unsubscribeAuthorization: (() => void) | undefined;
   let commands: NativeEnterBinding | undefined;
+  let commandOwner:
+    | Pick<NativeEnterBinding, 'dispatcher' | 'owner'>
+    | undefined;
   let deferredAbort: ExecutorFailure | undefined;
   let applyingOutput = false;
   const publications = latestPublished?.length
@@ -66,7 +70,10 @@ export function mountSessionView(
     if (!publicationFailure || publicationFailure.kind === 'native-error')
       publicationFailure = reason;
   };
-  const finishTeardowns = (aborted?: ExecutorFailure) => {
+  const finishTeardowns = (
+    aborted?: ExecutorFailure,
+    drain?: ExecutorDrain
+  ) => {
     const previous = deferredAbort;
     deferredAbort ??= aborted;
     try {
@@ -75,7 +82,8 @@ export function mountSessionView(
           cleanup();
         } catch (error) {
           if (!commands) throw error;
-          commands.output.recordSecondary(error);
+          if (drain) commands.output.recordDrainSecondary(error, drain);
+          else commands.output.recordSecondary(error, true);
         }
       }
     } finally {
@@ -90,19 +98,42 @@ export function mountSessionView(
       session.afterDrain?.(failure, drain);
       return;
     }
+    commands.output.beginDrain(drain);
     const aborted = failure;
     const inherited = deferredAbort;
-    finishTeardowns(failure);
+    finishTeardowns(failure, drain);
     try {
       session.afterDrain?.(failure, drain);
     } catch (error) {
-      commands.output.recordSecondary(error);
+      commands.output.recordDrainSecondary(error, drain);
     }
     commands.output.afterDrain(inherited ?? aborted, drain);
     if (!failure && aborted) throw aborted.error;
   };
+  let ownedPacket:
+    | { readonly effects: readonly IViewEffectMsg[]; readonly flags: number }
+    | undefined;
   const sink: ViewSink = {
+    ownedTransfer(transfer) {
+      ownedPacket = { effects: transfer.effects, flags: transfer.flags };
+      try {
+        commands?.output.observeOwnedTransfer(transfer);
+      } catch (error) {
+        // A decoder/DOM delivery fault cannot drop native output or replace its
+        // original failure. Associate it with the actual running entry instead.
+        if (!commands) throw error;
+        commands.output.recordSecondary(error, true);
+      }
+    },
     apply(words, strings, effects) {
+      const packet = ownedPacket;
+      ownedPacket = undefined;
+      const ownPacket = packet?.effects === effects;
+      const hadDom = effects.some(
+        (effect) =>
+          effect.kind === 6 && (effect.code === 12 || effect.code === 2)
+      );
+
       // No arbitrary output callback precedes this transfer-linked token capture.
       const observed = commands
         ? commands.output.observeListenerMetadata(words, strings, effects)
@@ -119,10 +150,26 @@ export function mountSessionView(
                   effect.kind === 6 && effect.code === 11 && !effect.flag
               ),
           };
-      const filtered = commands
+      // Error lease ordinals refer to the native packet including DOM records.
+      const leased = commands
         ? commands.output.filter(observed.effects)
         : observed.effects;
+      const filtered = commands
+        ? commands.output.syncEffects(leased)
+        : leased.filter((effect) => effect.kind !== 6 || effect.code !== 12);
       if (disposed) return;
+      // Only a pure DOM transport packet is suppressed. Real empty commits,
+      // status/IO/error and mixed packets retain the existing apply path.
+      if (
+        ownPacket &&
+        hadDom &&
+        packet !== undefined &&
+        !(packet.flags & (Flag.Io | Flag.Error | Flag.NeedPeerIds)) &&
+        words.length === 0 &&
+        strings.length === 0 &&
+        filtered.length === 0
+      )
+        return;
       if (
         observed?.metadataOnly &&
         words.length === 0 &&
@@ -241,6 +288,7 @@ export function mountSessionView(
     executor = running;
     if (dispatcher) {
       const owner = dispatcher.owner(running.session);
+      commandOwner = { dispatcher, owner };
       commands = {
         dispatcher,
         owner,
@@ -249,7 +297,8 @@ export function mountSessionView(
           dispatcher,
           owner,
           options.onError,
-          () => running.metadataReadIdle
+          () => running.metadataReadIdle,
+          () => running.runningDrain
         ),
       };
     }
@@ -274,7 +323,7 @@ export function mountSessionView(
                 options.onError(error);
               } catch (failure) {
                 if (!applyingOutput || !commands) throw failure;
-                commands.output.recordSecondary(failure);
+                commands.output.recordApplyFailure(failure);
               }
             },
           }
@@ -388,17 +437,20 @@ export function mountSessionView(
     };
   } catch (error) {
     disposed = true;
-    commands?.output.beginTeardown();
     publications?.retired();
     authorization.length = 0;
     const failed = view;
     view = undefined;
     for (const cleanup of [
+      () => commands?.output.beginTeardown(),
       retire,
       () => failed?.dispose(),
       () => {
-        if (commands && executor)
-          commands.dispatcher.unregisterOwner(executor.session, commands.owner);
+        if (commandOwner && executor)
+          commandOwner.dispatcher.unregisterOwner(
+            executor.session,
+            commandOwner.owner
+          );
       },
     ]) {
       try {
@@ -415,8 +467,11 @@ export function mountSessionView(
     const running = executor;
     if (running) {
       const release = () => {
-        if (commands)
-          commands.dispatcher.releaseOwner(running.session, commands.owner);
+        if (commandOwner)
+          commandOwner.dispatcher.releaseOwner(
+            running.session,
+            commandOwner.owner
+          );
       };
       running.close().then(
         () => {

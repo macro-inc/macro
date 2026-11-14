@@ -103,7 +103,7 @@ test('another owner receipt read/free cannot bless an earlier metadata echo tick
   let armed = false;
   let interposed = false;
   let entryId: bigint | undefined;
-  const fixture = nativeAcknowledgementSurface(() => {
+  const fixture = await nativeAcknowledgementSurface(() => {
     if (!armed || interposed || entryId === undefined) return;
     interposed = true;
     const receipt = other.executor.session.readInputCommitReceipt(`${entryId}`);

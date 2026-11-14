@@ -395,3 +395,398 @@ test('existing static validation shares admission, cleanup and completion observ
   expect(calls).toBe(2);
   expect(guard.takeCleanupFailure()).toBeUndefined();
 });
+
+// UNAPPLIED/UNRUN. Guard sequence controls over the actual generated module.
+// `wake` here selects the guard protocol sequence, not a fabricated native flag.
+// Actual NativeEnterOutput derives this boolean ONLY from its own returned flags.
+test.each([
+  'none',
+  'wake',
+  'query',
+  'other-wake',
+  'other-take',
+  'extra-query',
+  'throw-wake',
+  'throw-take',
+] as const)('exact transfer descriptor witness: %s', async (mode) => {
+  const { ctor, create } = await fixture();
+  const guard = installNativeSessionReceiverGuard(ctor, {
+    active: () => false,
+  });
+  const first = create();
+  const other = create();
+  try {
+    invoke(first, 'input', [SessionInputMsg.encode(emptyInput(1)), 100, 100]);
+    const returned = guard.completedInputReturn(first);
+    if (returned === undefined)
+      throw new Error('Actual input return was not captured');
+    const pointer = Object.getOwnPropertyDescriptor(first, '__wbg_ptr');
+    const fault = (operation: 'wakeAt' | 'takeOutput') => {
+      if (!pointer || !('value' in pointer))
+        throw new Error('Missing actual native pointer descriptor');
+      // Explicit fixture injection: original guarded callable really throws at bindgen.
+      Object.defineProperty(first, '__wbg_ptr', { ...pointer, value: 0 });
+      try {
+        expect(() => invoke(first, operation)).toThrow();
+      } finally {
+        Object.defineProperty(first, '__wbg_ptr', pointer);
+      }
+    };
+    if (mode === 'query') invoke(first, 'effectiveAccess');
+    else if (mode === 'other-wake') invoke(other, 'wakeAt');
+    else if (mode === 'throw-wake') fault('wakeAt');
+    else if (mode !== 'none') invoke(first, 'wakeAt');
+    if (mode === 'extra-query') invoke(first, 'effectiveAccess');
+    if (mode === 'throw-take') fault('takeOutput');
+    else invoke(mode === 'other-take' ? other : first, 'takeOutput');
+    const wake = mode !== 'none';
+    const matched = guard.completedOutputTransfer(returned, first, wake);
+    if (mode === 'none' || mode === 'wake')
+      expect(matched).toBe(guard.completedEntryToken());
+    else {
+      expect(matched).toBeUndefined();
+      if (mode !== 'extra-query')
+        // Counter-only +2 would incorrectly accept these substitutions/throws.
+        expect(guard.completedEntryToken()).toBe(returned + 2n);
+    }
+    invoke(first, 'input', [SessionInputMsg.encode(emptyInput(1)), 101, 101]);
+    const healthy = guard.completedInputReturn(first);
+    if (healthy === undefined)
+      throw new Error('Next actual input was not healthy');
+    invoke(first, 'takeOutput');
+    expect(guard.completedOutputTransfer(healthy, first, false)).toBe(
+      guard.completedEntryToken()
+    );
+  } finally {
+    try {
+      invoke(first, 'free');
+    } finally {
+      invoke(other, 'free');
+    }
+  }
+});
+
+test('descriptor alias reuse cannot qualify as an unambiguous transfer operation', async () => {
+  const { ctor, create } = await fixture();
+  const descriptor = Object.getOwnPropertyDescriptor(
+    ctor.prototype,
+    'takeOutput'
+  );
+  if (!descriptor || typeof descriptor.value !== 'function')
+    throw new Error('Missing actual transfer descriptor');
+  Object.defineProperty(ctor.prototype, 'transferAlias', {
+    ...descriptor,
+    configurable: true,
+  });
+  const guard = installNativeSessionReceiverGuard(ctor, {
+    active: () => false,
+  });
+  const session = create();
+  try {
+    invoke(session, 'input', [SessionInputMsg.encode(emptyInput(1)), 100, 100]);
+    const returned = guard.completedInputReturn(session);
+    if (returned === undefined) throw new Error('Missing actual input return');
+    invoke(session, 'transferAlias');
+    expect(guard.completedEntryToken()).toBe(returned + 1n);
+    expect(
+      guard.completedOutputTransfer(returned, session, false)
+    ).toBeUndefined();
+  } finally {
+    invoke(session, 'free');
+  }
+  // Alias-bearing constructor stays conservative; fresh qualified modules are
+  // covered by the normal actual-descriptor controls above, never wildcarded.
+});
+
+// Attribution controls; these rows grant no output/publication or semantic proof.
+test('owned cleanup rows survive legacy reads and interleaved actual receivers', async () => {
+  const { ctor, create } = await fixture();
+  let fault: { readonly error: unknown } | undefined;
+  const guard = installNativeSessionReceiverGuard(ctor, {
+    active: () => false,
+    afterReturn() {
+      if (fault) {
+        const current = fault;
+        fault = undefined;
+        throw current.error;
+      }
+    },
+  });
+  const own = create();
+  const other = create();
+  const cause = { own: 'cleanup' };
+  const otherCause = { other: 'cleanup' };
+  const completion = {};
+  const ticket = guard.beginCleanupEntry(own, completion);
+  try {
+    fault = { error: cause };
+    invoke(own, 'tick', [2, 2]);
+    fault = { error: otherCause };
+    invoke(other, 'tick', [2, 2]);
+    expect(guard.takeCleanupFailure(own)).toBeUndefined();
+    expect(() => guard.finishCleanupEntry(ticket, {})).toThrow('not owned');
+    expect(guard.takeCleanupFailure(own)).toBeUndefined();
+    const rows = guard.finishCleanupEntry(ticket, completion);
+    expect(rows).toEqual([{ error: cause }]);
+    // Private original callable references and completion metadata never escape.
+    expect(Reflect.ownKeys(rows[0])).toEqual(['error']);
+    expect(guard.takeCleanupFailure(other)?.error).toBe(otherCause);
+    expect(guard.takeCleanupFailure()).toBeUndefined();
+    const next = {};
+    const healthy = guard.beginCleanupEntry(own, next);
+    invoke(own, 'tick', [3, 3]);
+    expect(guard.finishCleanupEntry(healthy, next)).toEqual([]);
+  } finally {
+    invoke(own, 'free');
+    invoke(other, 'free');
+  }
+});
+
+test.each([undefined, null, { opaque: 'native' }])(
+  'owned real wrapper preserves opaque native failure and independent cleanup %j',
+  async (primary) => {
+    const { ctor, create } = await fixture();
+    let fault: { readonly error: unknown } | undefined;
+    const guard = installNativeSessionReceiverGuard(ctor, {
+      active: () => false,
+      afterReturn() {
+        if (fault) {
+          const current = fault;
+          fault = undefined;
+          throw current.error;
+        }
+      },
+    });
+    const session = create();
+    try {
+      for (const secondary of [undefined, null, { opaque: 'cleanup' }]) {
+        const completion = {};
+        const ticket = guard.beginCleanupEntry(session, completion);
+        const badNow = {
+          [Symbol.toPrimitive]() {
+            throw primary;
+          },
+        };
+        fault = { error: secondary };
+        let caught: { readonly error: unknown } | undefined;
+        try {
+          invoke(session, 'viewCommandEnter', [badNow, 3]);
+        } catch (error) {
+          caught = { error };
+        }
+        expect(caught).toBeDefined();
+        expect(caught?.error).toBe(primary);
+        expect(guard.takeCleanupFailure(session)).toBeUndefined();
+        expect(guard.finishCleanupEntry(ticket, completion)).toEqual([
+          { error: secondary },
+        ]);
+        const next = {};
+        const healthy = guard.beginCleanupEntry(session, next);
+        invoke(session, 'tick', [4, 4]);
+        expect(guard.finishCleanupEntry(healthy, next)).toEqual([]);
+        expect(guard.takeCleanupFailure()).toBeUndefined();
+      }
+    } finally {
+      invoke(session, 'free');
+    }
+  }
+);
+
+test('aliased actual descriptor keeps cleanup ownership without claiming a transfer role', async () => {
+  const { ctor, create } = await fixture();
+  const original = Object.getOwnPropertyDescriptor(ctor.prototype, 'input');
+  if (!original) throw new Error('Missing actual input descriptor');
+  Object.defineProperty(ctor.prototype, 'inputAlias', original);
+  let fail = false;
+  const cause = { alias: 'cleanup' };
+  const guard = installNativeSessionReceiverGuard(ctor, {
+    active: () => false,
+    afterReturn() {
+      if (fail) {
+        fail = false;
+        throw cause;
+      }
+    },
+  });
+  const session = create();
+  try {
+    const completion = {};
+    const ticket = guard.beginCleanupEntry(session, completion);
+    fail = true;
+    invoke(session, 'inputAlias', [
+      SessionInputMsg.encode(emptyInput(0)),
+      2,
+      2,
+    ]);
+    expect(guard.completedInputReturn(session)).toBeUndefined();
+    expect(guard.takeCleanupFailure(session)).toBeUndefined();
+    expect(guard.finishCleanupEntry(ticket, completion)).toEqual([
+      { error: cause },
+    ]);
+    const next = {};
+    const healthy = guard.beginCleanupEntry(session, next);
+    invoke(session, 'tick', [3, 3]);
+    expect(guard.finishCleanupEntry(healthy, next)).toEqual([]);
+  } finally {
+    invoke(session, 'free');
+  }
+});
+
+test('installation rollback fault remains unowned and exposes no entry lease', () => {
+  // Descriptor-only injected failure, not a generated native or proxy-transparency claim.
+  class DescriptorFixture {
+    static createA() {}
+    static createB() {}
+  }
+  const primary = { install: 'fault' };
+  const secondary = { rollback: 'fault' };
+  let writes = 0;
+  let armed = true;
+  const constructor = new Proxy(DescriptorFixture, {
+    defineProperty(target, key, descriptor) {
+      writes++;
+      if (armed && writes === 2) throw primary;
+      if (armed && writes === 3) throw secondary;
+      return Reflect.defineProperty(target, key, descriptor);
+    },
+  });
+  const hooks = { active: () => false };
+  let caught: { readonly error: unknown } | undefined;
+  try {
+    installNativeSessionReceiverGuard(constructor, hooks);
+  } catch (error) {
+    caught = { error };
+  }
+  expect(caught).toBeDefined();
+  expect(caught?.error).toBe(primary);
+  armed = false;
+  const guard = installNativeSessionReceiverGuard(constructor, hooks);
+  const receiver = new DescriptorFixture();
+  const completion = {};
+  const ticket = guard.beginCleanupEntry(receiver, completion);
+  expect(guard.finishCleanupEntry(ticket, completion)).toEqual([]);
+  expect(guard.takeCleanupFailure()).toBeUndefined();
+});
+
+test('drain cleanup association belongs to each actual receiver and retires independently', async () => {
+  const { ctor, create } = await fixture();
+  let fault: { error: unknown } | undefined;
+  const guard = installNativeSessionReceiverGuard(ctor, {
+    active: () => false,
+    afterReturn() {
+      if (fault) {
+        const current = fault;
+        fault = undefined;
+        throw current.error;
+      }
+    },
+  });
+  const first = create();
+  const second = create();
+  const outer = Object.freeze({ label: 'outer' });
+  const inner = Object.freeze({ label: 'inner' });
+  let firstDrain: object | undefined = outer;
+  let secondDrain: object | undefined = inner;
+  const firstCause = { receiver: 'first' };
+  const secondCause = { receiver: 'second' };
+  const outsideCause = { outside: true };
+  const releaseFirst = guard.bindCleanupDrain(first, () => firstDrain);
+  const releaseSecond = guard.bindCleanupDrain(second, () => secondDrain);
+  try {
+    expect(() => guard.bindCleanupDrain(first, () => inner)).toThrow(
+      'already bound'
+    );
+    fault = { error: firstCause };
+    invoke(first, 'tick', [2, 2]);
+    fault = { error: secondCause };
+    invoke(second, 'tick', [2, 2]);
+    expect(guard.takeCleanupFailure(first)).toBeUndefined();
+    expect(guard.takeCleanupFailure(first, inner)).toBeUndefined();
+    expect(guard.takeCleanupFailure(second, outer)).toBeUndefined();
+    expect(guard.takeCleanupFailure(second, inner)?.error).toBe(secondCause);
+    // Collecting the nested receiver/fence never sweeps an older outer row.
+    expect(guard.takeCleanupFailure(first, outer)?.error).toBe(firstCause);
+    firstDrain = undefined;
+    fault = { error: outsideCause };
+    invoke(first, 'tick', [3, 3]);
+    firstDrain = outer;
+    expect(guard.takeCleanupFailure(first, outer)).toBeUndefined();
+    expect(guard.takeCleanupFailure(first)?.error).toBe(outsideCause);
+    releaseFirst();
+    const replacement = guard.bindCleanupDrain(first, () => inner);
+    try {
+      releaseFirst(); // Old cleanup cannot retire the replacement binding.
+      fault = { error: firstCause };
+      invoke(first, 'tick', [4, 4]);
+      expect(guard.takeCleanupFailure(first, inner)?.error).toBe(firstCause);
+      fault = { error: secondCause };
+      invoke(second, 'tick', [4, 4]);
+      expect(guard.takeCleanupFailure(second, inner)?.error).toBe(secondCause);
+      secondDrain = undefined;
+      expect(guard.takeCleanupFailure(first)).toBeUndefined();
+    } finally {
+      replacement();
+    }
+  } finally {
+    releaseFirst();
+    releaseSecond();
+    try {
+      invoke(first, 'free');
+    } finally {
+      invoke(second, 'free');
+    }
+  }
+});
+
+test.each([undefined, null, { opaque: 'drain-getter' }])(
+  'throwing drain getter preserves the original cleanup fault and does not tag older diagnostics %j',
+  async (getterCause) => {
+    const { ctor, create } = await fixture();
+    let fault: { error: unknown } | undefined;
+    const guard = installNativeSessionReceiverGuard(ctor, {
+      active: () => false,
+      afterReturn() {
+        if (fault) {
+          const current = fault;
+          fault = undefined;
+          throw current.error;
+        }
+      },
+    });
+    const session = create();
+    const outside = { older: true };
+    const primary = { actual: 'cleanup' };
+    const frame = Object.freeze({ actual: 'drain' });
+    let throws = true;
+    try {
+      fault = { error: outside };
+      invoke(session, 'tick', [2, 2]);
+      const release = guard.bindCleanupDrain(session, () => {
+        if (throws) throw getterCause;
+        return frame;
+      });
+      try {
+        fault = { error: primary };
+        invoke(session, 'tick', [3, 3]);
+        expect(guard.takeCleanupFailure(session, frame)).toBeUndefined();
+        expect(guard.takeCleanupFailure(session)?.error).toBe(outside);
+        expect(guard.takeCleanupFailure(session)?.error).toBe(primary);
+        const getterFailure = guard.takeCleanupFailure(session);
+        expect(getterFailure).toBeDefined();
+        expect(getterFailure?.error).toBe(getterCause);
+        expect(guard.takeCleanupFailure(session)).toBeUndefined();
+        throws = false;
+        invoke(session, 'tick', [4, 4]);
+        expect(guard.takeCleanupFailure(session, frame)).toBeUndefined();
+        fault = { error: primary };
+        invoke(session, 'tick', [5, 5]);
+        expect(guard.takeCleanupFailure(session, frame)?.error).toBe(primary);
+        expect(guard.takeCleanupFailure(session)).toBeUndefined();
+      } finally {
+        release();
+      }
+    } finally {
+      invoke(session, 'free');
+    }
+  }
+);

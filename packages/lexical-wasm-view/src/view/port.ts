@@ -1,3 +1,9 @@
+import type { InputDomDisposition } from './input-dom-disposition';
+import type {
+  ExecutorOwnedTransfer,
+  SyncEntrySchedule,
+} from '@macro-inc/collaboration/session/executor';
+import type { EditorView } from './editor-view';
 import type {
   EditorInputMsg,
   IClipboardMsg,
@@ -16,12 +22,36 @@ import type {
 import type { NativeEnterScope } from './native-enter';
 import type { NativeCallbackFailure } from './native-enter-output';
 import type { EditorThemeClasses } from './registry';
-import type { NodeKey, TypeRow, ViewSelection } from './types';
+import type { JsonValue, NodeKey, TypeRow, ViewSelection } from './types';
 
 /** A deferred application command has no invocation-scoped DOM event. */
 export type ProgrammaticApplicationInput = Readonly<
   Pick<IEditorApplication, 'name' | 'json' | 'generation' | 'selection'>
 >;
+
+/** Actual entry observation; decoded values confer no native mutation authority. */
+export interface SyncInputOptions<Proof> {
+  readonly view: EditorView;
+  readonly generation: number;
+  /** Pure JS application lease check, including optional binding retirement. */
+  readonly current: () => boolean;
+  readonly domRefused: () => void;
+  /** The actual event being synchronously dispatched by this originating listener. */
+  readonly domEvent: Event;
+  readonly observation?: {
+    readonly name: string;
+    readonly decode: (payload: JsonValue) => Proof | undefined;
+  };
+  readonly after: (
+    handled: boolean,
+    proof: Proof | undefined,
+    disposition: InputDomDisposition
+  ) => void;
+}
+export interface SyncApplicationOptions<Proof> extends SyncInputOptions<Proof> {
+  readonly admission: 'session-edit' | 'table-selection';
+  readonly event?: KeyboardEvent;
+}
 
 export type ProgrammaticApplicationOptions =
   | {
@@ -86,6 +116,7 @@ export interface TextFromView {
   readonly compositionData?: string;
 }
 export interface ViewSink {
+  readonly ownedTransfer?: (transfer: ExecutorOwnedTransfer) => void;
   apply(
     words: Uint32Array,
     strings: Uint8Array,
@@ -149,6 +180,14 @@ export interface EditorPort {
     after?: (handled: boolean) => void,
     event?: KeyboardEvent
   ): void;
+  inputApplicationSync?<Proof>(
+    factory: () => ProgrammaticApplicationInput,
+    options: SyncApplicationOptions<Proof>
+  ): SyncEntrySchedule;
+  pasteSync?<Proof>(
+    factory: () => EditorInputMsg,
+    options: SyncInputOptions<Proof>
+  ): SyncEntrySchedule;
   inputSettled?(
     factory: () => ProgrammaticApplicationInput,
     options?: ProgrammaticApplicationOptions

@@ -66,7 +66,7 @@ for (const entry of [
     expect(sourceMutations).toEqual([]);
     expect(sourceItem.getAttribute('tabindex')).toBe('-1');
 
-    const fixture = nativeAcknowledgementSurface();
+    const fixture = await nativeAcknowledgementSurface();
     let cleanup = () => {};
     try {
       fixture.port.setState(JSON.stringify(initial));
@@ -125,7 +125,7 @@ for (const entry of [
 }
 
 test('a text echo in an ordinary paragraph creates no checklist attributes', async () => {
-  const fixture = nativeAcknowledgementSurface();
+  const fixture = await nativeAcknowledgementSurface();
   try {
     fixture.port.setState(
       JSON.stringify({

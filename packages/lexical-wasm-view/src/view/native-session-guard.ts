@@ -14,8 +14,34 @@ export interface NativeSessionReceiverHooks {
 export interface NativeSessionReceiverGuard {
   /** Pure JS accepted-wrapper completion count; not native admission or output ACK. */
   readonly completedEntryToken: () => bigint;
+  /** Actual successful guarded input return, including its cleanup boundary. */
+  readonly completedInputReturn: (session: object) => bigint | undefined;
+  /** Exact local transfer sequence; not native handling or publication evidence. */
+  readonly completedOutputTransfer: (
+    returned: bigint,
+    session: object,
+    wakeChanged: boolean
+  ) => bigint | undefined;
   /** Read secondary cleanup failures only after the normal native output drain. */
-  readonly takeCleanupFailure: () => { readonly error: unknown } | undefined;
+  readonly takeCleanupFailure: (
+    receiver?: object,
+    drain?: object
+  ) => { readonly error: unknown } | undefined;
+  /** Fixed receiver ownership; never native admission or publication authority. */
+  readonly bindCleanupDrain: (
+    receiver: object,
+    current: () => object | undefined
+  ) => () => void;
+  /** Attribution only: no receipt, publication, editing or native authority. */
+  readonly beginCleanupEntry: (receiver: object, completion: object) => object;
+  readonly takeCleanupEntryFailures: (
+    ticket: object,
+    completion: object
+  ) => readonly { readonly error: unknown }[];
+  readonly finishCleanupEntry: (
+    ticket: object,
+    completion: object
+  ) => readonly { readonly error: unknown }[];
 }
 
 type Callable = (this: unknown, ...args: unknown[]) => unknown;
@@ -92,11 +118,139 @@ export function installNativeSessionReceiverGuard(
 
   let depth = 0;
   let cleaning = false;
-  const cleanupFailures: { readonly error: unknown }[] = [];
+  interface CleanupEntry {
+    readonly receiver: object;
+    readonly completion: object;
+    readonly start: bigint;
+  }
+  interface CleanupFailure {
+    readonly error: unknown;
+    /** Only runtime wrapper failures have a completion; installation faults do not. */
+    readonly call?: {
+      readonly receiver: unknown;
+      readonly operation: Callable;
+      readonly token: bigint;
+      readonly returned: boolean;
+    };
+    readonly entry?: object;
+    readonly drain?: object;
+  }
+  const cleanupDrains = new WeakMap<object, () => object | undefined>();
+  const cleanupFailures: CleanupFailure[] = [];
+  const cleanupEntries = new Map<object, CleanupEntry>();
   let completedEntries = 0n;
+  const transferKinds = new WeakMap<
+    Callable,
+    'input' | 'wakeAt' | 'takeOutput'
+  >();
+  const ambiguousTransfers = new WeakSet<Callable>();
+  const descriptorUses = new WeakMap<Callable, number>();
+  const recentCompletions: {
+    token: bigint;
+    receiver: unknown;
+    kind: 'input' | 'wakeAt' | 'takeOutput' | undefined;
+    succeeded: boolean;
+  }[] = [];
+  function cleanupEntryFailures(
+    ticket: object,
+    completion: object,
+    close: boolean
+  ) {
+    const entry = cleanupEntries.get(ticket);
+    if (!entry || entry.completion !== completion)
+      throw new Error('Native cleanup entry is not owned');
+    const end = completedEntries;
+    if (close) cleanupEntries.delete(ticket);
+    const selected: CleanupFailure[] = [];
+    for (let index = cleanupFailures.length - 1; index >= 0; index--) {
+      const row = cleanupFailures[index];
+      if (row.entry !== ticket) continue;
+      if (
+        !row.call ||
+        row.call.receiver !== entry.receiver ||
+        row.call.token <= entry.start ||
+        row.call.token > end
+      )
+        throw new Error('Native cleanup completion is outside its entry');
+      selected.unshift(...cleanupFailures.splice(index, 1));
+    }
+    // Original native callable identities remain private to the guard closure.
+    return selected.map((row) => ({ error: row.error }));
+  }
   const controller: NativeSessionReceiverGuard = Object.freeze({
     completedEntryToken: () => completedEntries,
-    takeCleanupFailure: () => cleanupFailures.shift(),
+    completedInputReturn: (session: object) => {
+      const completion = recentCompletions.at(-1);
+      return completion?.token === completedEntries &&
+        completion.receiver === session &&
+        completion.kind === 'input' &&
+        completion.succeeded
+        ? completedEntries
+        : undefined;
+    },
+    completedOutputTransfer: (
+      returned: bigint,
+      session: object,
+      wakeChanged: boolean
+    ) => {
+      const count = wakeChanged ? 2 : 1;
+      if (completedEntries !== returned + BigInt(count)) return undefined;
+      const sequence = recentCompletions.slice(-count);
+      if (sequence.length !== count) return undefined;
+      for (let index = 0; index < count; index++) {
+        const completion = sequence[index];
+        const kind = wakeChanged && index === 0 ? 'wakeAt' : 'takeOutput';
+        if (
+          completion.token !== returned + BigInt(index + 1) ||
+          completion.receiver !== session ||
+          completion.kind !== kind ||
+          !completion.succeeded
+        )
+          return undefined;
+      }
+      return completedEntries;
+    },
+    takeCleanupFailure: (receiver?: object, drain?: object) => {
+      const index = cleanupFailures.findIndex(
+        (row) =>
+          row.entry === undefined &&
+          row.drain === drain &&
+          (receiver === undefined ||
+            row.call === undefined ||
+            row.call.receiver === receiver)
+      );
+      if (index === -1) return;
+      const row = cleanupFailures.splice(index, 1)[0];
+      return { error: row.error };
+    },
+    bindCleanupDrain: (receiver: object, current: () => object | undefined) => {
+      if (cleanupDrains.has(receiver))
+        throw new Error('Native cleanup receiver already bound');
+      cleanupDrains.set(receiver, current);
+      return () => {
+        if (cleanupDrains.get(receiver) === current)
+          cleanupDrains.delete(receiver);
+      };
+    },
+    beginCleanupEntry: (receiver: object, completion: object) => {
+      if (
+        [...cleanupEntries.values()].some(
+          (entry) => entry.receiver === receiver
+        )
+      )
+        throw new Error('Native cleanup entry already active');
+      const ticket = {};
+      cleanupEntries.set(ticket, {
+        receiver,
+        completion,
+        start: completedEntries,
+      });
+      return ticket;
+    },
+    takeCleanupEntryFailures: (ticket: object, completion: object) =>
+      cleanupEntryFailures(ticket, completion, false),
+    finishCleanupEntry: (ticket: object, completion: object) =>
+      cleanupEntryFailures(ticket, completion, true),
   });
   const wrappers = new Map<Callable, Callable>();
   const inputCommitReceivers = new WeakSet<Callable>();
@@ -113,23 +267,75 @@ export function installNativeSessionReceiverGuard(
         if (inputCommitReceivers.has(original))
           recordGuardedInputCommitCorrelation(this, args[3]);
         depth++;
+        let succeeded = false;
+        const cleanupCount = cleanupFailures.length;
         try {
-          return Reflect.apply(original, this, args);
+          const result = Reflect.apply(original, this, args);
+          succeeded = true;
+          return result;
         } finally {
           depth--;
           if (depth === 0) {
+            // cleaning forbids guarded reentry; assign THIS wrapper's completion
+            // before its cleanup runs, never from a later caller's token read.
+            const token = completedEntries + 1n;
             if (afterReturn !== undefined) {
               cleaning = true;
               try {
                 afterReturn();
               } catch (error) {
                 // Preserve both native return flags and primary opaque exceptions.
-                cleanupFailures.push({ error });
+                const entry = [...cleanupEntries].find(
+                  ([, owner]) => owner.receiver === this
+                )?.[0];
+                let drain: object | undefined;
+                let contextFailure: { readonly error: unknown } | undefined;
+                if (
+                  !entry &&
+                  ((typeof this === 'object' && this !== null) ||
+                    typeof this === 'function')
+                ) {
+                  try {
+                    drain = cleanupDrains.get(this)?.();
+                  } catch (error) {
+                    contextFailure = { error };
+                  }
+                }
+                cleanupFailures.push({
+                  error,
+                  entry,
+                  drain,
+                  call: {
+                    receiver: this,
+                    operation: original,
+                    token,
+                    returned: succeeded,
+                  },
+                });
+                // A context getter failure cannot replace the original opaque
+                // cleanup fault or falsely assign either diagnostic to an input.
+                if (contextFailure)
+                  cleanupFailures.push({
+                    error: contextFailure.error,
+                    call: {
+                      receiver: this,
+                      operation: original,
+                      token,
+                      returned: succeeded,
+                    },
+                  });
               } finally {
                 cleaning = false;
               }
             }
-            completedEntries += 1n;
+            completedEntries = token;
+            recentCompletions.push({
+              token: completedEntries,
+              receiver: this,
+              kind: transferKinds.get(original),
+              succeeded: succeeded && cleanupFailures.length === cleanupCount,
+            });
+            if (recentCompletions.length > 2) recentCompletions.shift();
           }
         }
       },
@@ -150,10 +356,22 @@ export function installNativeSessionReceiverGuard(
     const set: unknown = original.set;
     let replacement: PropertyDescriptor;
     if (callable(value)) {
+      const uses = (descriptorUses.get(value) ?? 0) + 1;
+      descriptorUses.set(value, uses);
+      if (uses > 1) {
+        ambiguousTransfers.add(value);
+        transferKinds.delete(value);
+      }
       if (!original.configurable && !original.writable)
         throw new Error('Native session method cannot be guarded');
       if (target === prototype && key === 'inputObserved')
         inputCommitReceivers.add(value);
+      if (
+        target === prototype &&
+        (key === 'input' || key === 'wakeAt' || key === 'takeOutput') &&
+        !ambiguousTransfers.has(value)
+      )
+        transferKinds.set(value, key);
       replacement = { ...original, value: wrap(value) };
     } else if (callable(get) || callable(set)) {
       if (!original.configurable)
