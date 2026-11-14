@@ -14,7 +14,8 @@ Stripe ──POST /webhooks/user/stripe──► verify signature
                                         200
                     │
                     ▼  every replica: LISTEN stripe_inbox, poll every 5 s
-   lease due (consumer, customer) cursors   FOR UPDATE SKIP LOCKED, 60 s lease
+   lease due (consumer, customer) cursors   FOR UPDATE SKIP LOCKED, 60 s lease,
+                                            up to 8 draining at once; a freed slot claims the next
    load the customer's next events          ORDER BY created_at, id
    translate to typed facts                 one translator, every API version
    apply through the consumer               advance the cursor after success
@@ -69,8 +70,13 @@ writes carry `Idempotency-Key = <consumer>:<event_id>:<action>`.
   decision reads all of the customer's subscriptions; the inbox reads Stripe
   only to fill a snapshot it never held, to list a customer's subscriptions
   once, to page items past ten (for every consumer that reads periods,
-  value or computers), or to find the email of a customer no
-  account names.
+  value or computers), to find the email of a customer no
+  account names, or to confirm a duplicate subscription on Stripe's live
+  list right before canceling it (a cancel cannot be undone, and the held
+  snapshots may not have the older subscription's end yet).
+- A slow apply holds one of a replica's eight drain slots, not the others:
+  the worker claims another cursor as each drain finishes. GA and Meta calls
+  time out after 5 s.
 
 ## Identity
 

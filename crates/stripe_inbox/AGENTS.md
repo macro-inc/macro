@@ -14,7 +14,9 @@ holds. Design: `docs/architecture/stripe-event-inbox.md`.
   prod) and API reads (`async-stripe`'s `2023-10-16`) become the same facts.
 - `src/domain/model.rs`: `Consumer` (who applies which event types),
   `BillingInboxEvent`, `Delivery`.
-- `src/domain/service.rs`: `receive` (webhook) and `run_pass` (worker).
+- `src/domain/service.rs`: `receive` (webhook), `claim` and `drain` (the
+  worker in `src/inbound/worker.rs` keeps up to `CLAIM_BATCH` drains in a
+  `JoinSet`, claiming as each finishes), and `run_pass` (tests).
 - `src/outbound/pg.rs`: tables, leasing, the generation check on release.
 
 ## Scope
