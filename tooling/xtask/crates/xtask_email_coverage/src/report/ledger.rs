@@ -124,7 +124,11 @@ impl Atom {
             Condition::Pointer(pointer, wanted) => hit
                 .body
                 .and_then(|body| body.pointer(pointer))
-                .is_some_and(|found| wanted.as_ref().is_none_or(|wanted| &scalar(found) == wanted)),
+                .is_some_and(|found| {
+                    wanted
+                        .as_ref()
+                        .is_none_or(|wanted| &scalar(found) == wanted)
+                }),
             Condition::Query(key, wanted) => hit.query.split('&').any(|pair| {
                 let (found, value) = pair.split_once('=').unwrap_or((pair, ""));
                 found == key && wanted.as_ref().is_none_or(|wanted| value == wanted)
@@ -264,7 +268,10 @@ pub(crate) fn functions(text: &str) -> Result<Vec<Function>, Report> {
         .into_iter()
         .map(|columns| {
             let [id, area, wording, gmail, outlook, _ui, _checked_at] = columns[..] else {
-                bail!("{FUNCTIONS_PATH}: a row has {} columns, not 7", columns.len());
+                bail!(
+                    "{FUNCTIONS_PATH}: a row has {} columns, not 7",
+                    columns.len()
+                );
             };
             Ok(Function {
                 id: id.to_owned(),
@@ -283,9 +290,9 @@ pub(crate) fn map(text: &str) -> Result<Map, Report> {
     let mut map = Map::default();
     for (name, table) in tables {
         if name == PLUMBING {
-            map.plumbing = table
-                .try_into()
-                .context(format!("{MAP_PATH}: [{PLUMBING}] is not entry points with reasons"))?;
+            map.plumbing = table.try_into().context(format!(
+                "{MAP_PATH}: [{PLUMBING}] is not entry points with reasons"
+            ))?;
             continue;
         }
         let raw: RawMapping = table

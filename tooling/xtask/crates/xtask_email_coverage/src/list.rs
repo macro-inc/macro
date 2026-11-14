@@ -137,13 +137,18 @@ fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<En
         .routes
         .iter()
         .map(|route| {
-            let path = route.split_once(' ').map_or(route.as_str(), |(_, path)| path);
+            let path = route
+                .split_once(' ')
+                .map_or(route.as_str(), |(_, path)| path);
             let line = path
                 .match_indices('/')
                 .map(|(start, _)| format!("\"{}\"", &path[start..]))
                 .find_map(|literal| text.lines().position(|line| line.contains(&literal)))
                 .ok_or_else(|| {
-                    report!("{}: no string literal ends the path of `{route}`", source.file)
+                    report!(
+                        "{}: no string literal ends the path of `{route}`",
+                        source.file
+                    )
                 })?;
             Ok(Entry {
                 key: format!("{} {route}", source.service),

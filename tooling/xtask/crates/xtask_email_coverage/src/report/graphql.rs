@@ -83,8 +83,7 @@ impl Schema {
     /// The `Type.field` coordinates `query` selects, or why it cannot be
     /// read.
     pub(crate) fn coordinates(&self, query: &str) -> Result<BTreeSet<String>, String> {
-        let document: ExecutableDocument =
-            parse_query(query).map_err(|error| error.to_string())?;
+        let document: ExecutableDocument = parse_query(query).map_err(|error| error.to_string())?;
         let mut found = BTreeSet::new();
         let operations: Vec<_> = match &document.operations {
             DocumentOperations::Single(operation) => vec![operation],
@@ -96,7 +95,13 @@ impl Schema {
                 OperationType::Mutation => &self.mutation,
                 OperationType::Subscription => &self.subscription,
             };
-            self.walk(&document, root, &operation.node.selection_set.node, &mut found, 0);
+            self.walk(
+                &document,
+                root,
+                &operation.node.selection_set.node,
+                &mut found,
+                0,
+            );
         }
         Ok(found)
     }
@@ -123,13 +128,25 @@ impl Schema {
                         continue;
                     };
                     found.insert(format!("{on}.{name}"));
-                    self.walk(document, returns, &field.node.selection_set.node, found, depth + 1);
+                    self.walk(
+                        document,
+                        returns,
+                        &field.node.selection_set.node,
+                        found,
+                        depth + 1,
+                    );
                 }
                 Selection::FragmentSpread(spread) => {
                     if let Some(fragment) = document.fragments.get(&spread.node.fragment_name.node)
                     {
                         let on = fragment.node.type_condition.node.on.node.as_str();
-                        self.walk(document, on, &fragment.node.selection_set.node, found, depth + 1);
+                        self.walk(
+                            document,
+                            on,
+                            &fragment.node.selection_set.node,
+                            found,
+                            depth + 1,
+                        );
                     }
                 }
                 Selection::InlineFragment(fragment) => {
@@ -138,7 +155,13 @@ impl Schema {
                         .type_condition
                         .as_ref()
                         .map_or(on, |condition| condition.node.on.node.as_str());
-                    self.walk(document, on, &fragment.node.selection_set.node, found, depth + 1);
+                    self.walk(
+                        document,
+                        on,
+                        &fragment.node.selection_set.node,
+                        found,
+                        depth + 1,
+                    );
                 }
             }
         }

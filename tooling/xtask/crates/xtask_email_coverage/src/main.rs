@@ -9,7 +9,9 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use rootcause::prelude::*;
-use xtask_email_coverage::{ENTRYPOINTS_PATH, ReportOptions, diff, generate, read_tsv, render_tsv, report};
+use xtask_email_coverage::{
+    ENTRYPOINTS_PATH, ReportOptions, diff, generate, read_tsv, render_tsv, report,
+};
 
 #[derive(Parser)]
 #[command(

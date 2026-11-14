@@ -307,11 +307,8 @@ pub(crate) fn build(
 
     let mut broken = Vec::new();
     let mut stale = Vec::new();
-    let by_entry: BTreeMap<String, &Row> = reader
-        .rows
-        .iter()
-        .map(|row| (entry(row), row))
-        .collect();
+    let by_entry: BTreeMap<String, &Row> =
+        reader.rows.iter().map(|row| (entry(row), row)).collect();
 
     // Which entry points each scenario reached.
     let reached: Vec<BTreeSet<String>> = scenarios
@@ -432,7 +429,11 @@ pub(crate) fn build(
     }
 
     // Functions.
-    let listed: BTreeSet<&str> = ledger.functions.iter().map(|function| function.id.as_str()).collect();
+    let listed: BTreeSet<&str> = ledger
+        .functions
+        .iter()
+        .map(|function| function.id.as_str())
+        .collect();
     for id in ledger.map.functions.keys() {
         if !listed.contains(id.as_str()) {
             broken.push(format!(
@@ -526,7 +527,8 @@ pub(crate) fn build(
             let performed: Vec<&Scenario> = scenarios
                 .iter()
                 .filter(|scenario| {
-                    scenario.is_of(provider) && performs(scenario, mapping, provider, reader, &by_entry)
+                    scenario.is_of(provider)
+                        && performs(scenario, mapping, provider, reader, &by_entry)
                 })
                 .collect();
             let names: Vec<String> = performed.iter().map(|scenario| scenario.name()).collect();

@@ -148,8 +148,7 @@ pub(crate) fn files_named(dirs: &[PathBuf], name: &str) -> Result<Vec<PathBuf>, 
 }
 
 fn find(dir: &Path, name: &str, files: &mut Vec<PathBuf>) -> Result<(), Report> {
-    let entries =
-        std::fs::read_dir(dir).context(format!("could not read {}", dir.display()))?;
+    let entries = std::fs::read_dir(dir).context(format!("could not read {}", dir.display()))?;
     for entry in entries {
         let path = entry
             .context(format!("could not read {}", dir.display()))?

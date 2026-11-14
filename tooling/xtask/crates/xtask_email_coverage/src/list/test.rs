@@ -70,8 +70,12 @@ fn a_route_listed_by_hand_must_be_in_its_file() {
         routes: routes.iter().map(|route| (*route).to_owned()).collect(),
     };
 
-    let rows = routes_elsewhere(&repo_root, &source(&["PUT /reminders/email/{thread_id}"])).unwrap();
-    assert_eq!(rows[0].key, "document_storage_service PUT /reminders/email/{thread_id}");
+    let rows =
+        routes_elsewhere(&repo_root, &source(&["PUT /reminders/email/{thread_id}"])).unwrap();
+    assert_eq!(
+        rows[0].key,
+        "document_storage_service PUT /reminders/email/{thread_id}"
+    );
 
     let error = routes_elsewhere(&repo_root, &source(&["PUT /reminders/email/gone"])).unwrap_err();
     assert!(error.to_string().contains("no string literal"), "{error}");

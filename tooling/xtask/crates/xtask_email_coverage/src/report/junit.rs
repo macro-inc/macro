@@ -46,8 +46,8 @@ pub(crate) struct Results {
 pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
     let mut results = Results::default();
     for file in files {
-        let text = std::fs::read_to_string(file)
-            .context(format!("could not read {}", file.display()))?;
+        let text =
+            std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
         results.runs.push(read(file, &text, &mut results.outcomes));
     }
     Ok(results)
@@ -73,8 +73,10 @@ fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Ru
     for case in regex!(r#"(?s)<testcase\b([^>]*?)(/>|>(.*?)</testcase>)"#).captures_iter(text) {
         let attributes = &case[1];
         let body = case.get(3).map_or("", |body| body.as_str());
-        let (Some(name), Some(class)) = (attribute(attributes, "name"), attribute(attributes, "classname"))
-        else {
+        let (Some(name), Some(class)) = (
+            attribute(attributes, "name"),
+            attribute(attributes, "classname"),
+        ) else {
             continue;
         };
         // nextest names a binary `package::binary`.

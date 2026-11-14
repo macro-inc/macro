@@ -78,17 +78,27 @@ pub(crate) fn markdown(model: &Model) -> String {
          checking it.\n",
         model.functions_listed, model.functions_outside
     );
-    let _ = writeln!(out, "| Functions | total | covered | performed only | waived | open |");
+    let _ = writeln!(
+        out,
+        "| Functions | total | covered | performed only | waived | open |"
+    );
     let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: | ---: |");
     let _ = writeln!(out, "| Gmail | {} |", tally_cells(&model.functions_gmail));
-    let _ = writeln!(out, "| Outlook | {} |\n", tally_cells(&model.functions_outlook));
+    let _ = writeln!(
+        out,
+        "| Outlook | {} |\n",
+        tally_cells(&model.functions_outlook)
+    );
 
     let _ = writeln!(out, "### Entry points reached\n");
     let _ = writeln!(
         out,
         "| Kind | Gmail total | reached | waived | open | Outlook total | reached | waived | open |"
     );
-    let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
+    let _ = writeln!(
+        out,
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    );
     for kind in &model.entry_points {
         let _ = writeln!(
             out,
@@ -107,7 +117,10 @@ pub(crate) fn markdown(model: &Model) -> String {
     let _ = writeln!(out);
 
     let _ = writeln!(out, "### Scenarios\n");
-    let _ = writeln!(out, "| Run | scenarios | failed | needed a retry | seconds |");
+    let _ = writeln!(
+        out,
+        "| Run | scenarios | failed | needed a retry | seconds |"
+    );
     let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: |");
     for run in &model.suite.runs {
         let _ = writeln!(
@@ -116,11 +129,23 @@ pub(crate) fn markdown(model: &Model) -> String {
             run.name, run.tests, run.failed, run.flaky, run.seconds
         );
     }
-    let _ = writeln!(out, "\n{} scenarios left a record that counts.\n", model.suite.recorded);
+    let _ = writeln!(
+        out,
+        "\n{} scenarios left a record that counts.\n",
+        model.suite.recorded
+    );
     list(&mut out, "Needed a retry", &model.suite.flaky);
     list(&mut out, "Failed", &model.suite.failed);
-    list(&mut out, "The ledger is broken (this fails the job)", &model.broken);
-    list(&mut out, "Checks and waivers the records do not bear out", &model.stale);
+    list(
+        &mut out,
+        "The ledger is broken (this fails the job)",
+        &model.broken,
+    );
+    list(
+        &mut out,
+        "Checks and waivers the records do not bear out",
+        &model.stale,
+    );
 
     let functions = open_functions(model);
     let _ = writeln!(
@@ -327,7 +352,11 @@ pub(crate) fn html(model: &Model) -> String {
             .ui_only
             .as_ref()
             .map(|reason| ("no backend part", reason))
-            .or_else(|| row.outside.as_ref().map(|service| ("another service", service)));
+            .or_else(|| {
+                row.outside
+                    .as_ref()
+                    .map(|service| ("another service", service))
+            });
         match elsewhere {
             Some((label, reason)) => {
                 let _ = write!(
@@ -380,7 +409,11 @@ pub(crate) fn html(model: &Model) -> String {
         let _ = write!(out, "</table></div></details>");
     }
 
-    html_list(&mut out, "Background loops (listed, not counted)", &model.loops);
+    html_list(
+        &mut out,
+        "Background loops (listed, not counted)",
+        &model.loops,
+    );
     html_list(
         &mut out,
         "Requests scenarios made that are in no list",

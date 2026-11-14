@@ -89,7 +89,10 @@ fn an_atom_reads_its_conditions() {
     let atom: Atom = "http GET /email/threads/previews/cursor/{view} where view=starred, ?limit"
         .parse()
         .unwrap();
-    assert_eq!(atom.entry(), "http GET /email/threads/previews/cursor/{view}");
+    assert_eq!(
+        atom.entry(),
+        "http GET /email/threads/previews/cursor/{view}"
+    );
     let hit = |view, query| Hit {
         params: vec![("view", view)],
         query,
@@ -158,15 +161,24 @@ fn functions_and_entry_points_are_counted_per_provider() {
             row.outlook.as_ref().map(|cell| cell.status),
         )
     };
-    assert_eq!(status("F-001"), (Some(Status::Covered), Some(Status::Performed)));
+    assert_eq!(
+        status("F-001"),
+        (Some(Status::Covered), Some(Status::Performed))
+    );
     // Nobody unstarred: the check that says so is stale.
     assert_eq!(status("F-002"), (Some(Status::Open), Some(Status::Open)));
     assert_eq!(model.stale.len(), 1);
     assert_eq!(status("F-003"), (None, None));
-    assert_eq!(status("F-004"), (Some(Status::Performed), Some(Status::Performed)));
+    assert_eq!(
+        status("F-004"),
+        (Some(Status::Performed), Some(Status::Performed))
+    );
     // A route of another service a stack records performs a function too;
     // one no stack records is set apart, not counted as open.
-    assert_eq!(status("F-005"), (Some(Status::Performed), Some(Status::Performed)));
+    assert_eq!(
+        status("F-005"),
+        (Some(Status::Performed), Some(Status::Performed))
+    );
     assert_eq!(status("F-006"), (None, None));
     assert_eq!(model.functions_outside, 1);
     assert_eq!(model.functions_ui_only, 1);
@@ -189,8 +201,14 @@ fn functions_and_entry_points_are_counted_per_provider() {
         (Some(Status::Open), Some(Status::Open))
     );
     // A message on the retry queue is a message of the queue.
-    assert_eq!(entry("gmail-ops:ModifyMessageLabels"), (Some(Status::Covered), None));
-    assert_eq!(entry("outlook:messages.update"), (None, Some(Status::Covered)));
+    assert_eq!(
+        entry("gmail-ops:ModifyMessageLabels"),
+        (Some(Status::Covered), None)
+    );
+    assert_eq!(
+        entry("outlook:messages.update"),
+        (None, Some(Status::Covered))
+    );
     assert_eq!(model.loops, vec!["mailbox_sync_worker::run".to_owned()]);
     assert!(model.unlisted.is_empty(), "{:?}", model.unlisted);
 }
@@ -215,9 +233,15 @@ fn a_ledger_that_contradicts_the_list_is_broken() {
     };
     let model = build(&reader, &ledger, Vec::new(), &Results::default());
     let broken = model.broken.join("\n");
-    assert!(broken.contains("`http GET /email/gone`, which is not in"), "{broken}");
+    assert!(
+        broken.contains("`http GET /email/gone`, which is not in"),
+        "{broken}"
+    );
     assert!(broken.contains("[F-009] is not a function"), "{broken}");
-    assert!(broken.contains("F-002 (Unstar a thread) has no entry"), "{broken}");
+    assert!(
+        broken.contains("F-002 (Unstar a thread) has no entry"),
+        "{broken}"
+    );
     assert!(
         broken.contains("`http PATCH /email/threads/{id}/state` belongs to no function"),
         "{broken}"

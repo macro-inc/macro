@@ -219,9 +219,10 @@ impl Scenario {
                 .iter()
                 .filter(|call| {
                     call.status < 400
-                        && call.route.as_ref().is_some_and(|route| {
-                            format!("{}:{route}", call.provider) == row.key
-                        })
+                        && call
+                            .route
+                            .as_ref()
+                            .is_some_and(|route| format!("{}:{route}", call.provider) == row.key)
                 })
                 .map(|_| Hit::default())
                 .collect(),
@@ -321,10 +322,11 @@ fn params<'a>(key: &'a str, path: &'a str) -> Vec<(&'a str, &'a str)> {
 /// The webhook case a request to a provider webhook is, as its handler
 /// tells them apart: `outlook:validation`, `outlook:lifecycle:missed`, ….
 fn webhook_case(request: &Http, sources: &Sources) -> Option<String> {
-    let webhook = sources
-        .webhook
-        .iter()
-        .find(|webhook| request.path.starts_with(&format!("/{}/webhook", webhook.prefix)))?;
+    let webhook = sources.webhook.iter().find(|webhook| {
+        request
+            .path
+            .starts_with(&format!("/{}/webhook", webhook.prefix))
+    })?;
     let prefix = &webhook.prefix;
     if request
         .query
