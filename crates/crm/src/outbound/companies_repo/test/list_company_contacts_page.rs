@@ -1,3 +1,5 @@
+mod http;
+
 use super::helpers::*;
 use crate::domain::companies_repo::*;
 use crate::domain::model::{CrmCompanyContactsQuery, CrmError};
@@ -5,6 +7,9 @@ use crate::outbound::companies_repo::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+/// More pages than any test company holds at one contact per page.
+const MAX_PAGES: usize = 64;
 
 fn query(archived: bool, search: &str, limit: i64) -> CrmCompanyContactsQuery {
     CrmCompanyContactsQuery {
@@ -15,7 +20,8 @@ fn query(archived: bool, search: &str, limit: i64) -> CrmCompanyContactsQuery {
     }
 }
 
-/// Every page of one filter, followed through its cursors.
+/// Every page of one filter, followed through its cursors. Gives up after
+/// [`MAX_PAGES`], so a cursor that stops advancing fails instead of hanging.
 async fn all_pages(
     repo: &CompaniesRepositoryImpl,
     team_id: Uuid,
@@ -24,7 +30,7 @@ async fn all_pages(
     mut query: CrmCompanyContactsQuery,
 ) -> anyhow::Result<Vec<Uuid>> {
     let mut ids = Vec::new();
-    loop {
+    for _ in 0..MAX_PAGES {
         let page = repo
             .list_company_contacts_page(&team_id, &company_id, include_hidden, &query)
             .await?;
@@ -35,6 +41,7 @@ async fn all_pages(
             None => return Ok(ids),
         }
     }
+    anyhow::bail!("the pages did not end after {MAX_PAGES} requests")
 }
 
 async fn insert_named(
@@ -44,22 +51,21 @@ async fn insert_named(
     name: Option<&str>,
 ) -> anyhow::Result<Uuid> {
     let id = Uuid::now_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO crm_contacts (id, company_id, email, name, first_interaction, last_interaction)
            VALUES ($1, $2, $3, $4, now(), now())"#,
+        id,
+        company_id,
+        email,
+        name,
     )
-    .bind(id)
-    .bind(company_id)
-    .bind(email)
-    .bind(name)
     .execute(pool)
     .await?;
     Ok(id)
 }
 
 async fn hide_contact(pool: &PgPool, id: Uuid) -> anyhow::Result<()> {
-    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
-        .bind(id)
+    sqlx::query!(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#, id,)
         .execute(pool)
         .await?;
     Ok(())
@@ -230,10 +236,12 @@ async fn search_matches_name_or_primary_email_ignoring_case(pool: PgPool) -> any
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn archived_company_lists_every_contact_as_archived(pool: PgPool) -> anyhow::Result<()> {
     let (team_id, company_id, _) = seed_company(&pool).await?;
-    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
-        .bind(company_id)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#,
+        company_id,
+    )
+    .execute(&pool)
+    .await?;
     let repo = CompaniesRepositoryImpl::new(pool);
 
     // Admin: nothing active; every contact, hidden or not, archived.
@@ -292,5 +300,169 @@ async fn other_team_and_unknown_company_are_not_found(pool: PgPool) -> anyhow::R
         .list_company_contacts_page(&team_a, &Uuid::now_v7(), true, &query(false, "", 10))
         .await;
     assert!(matches!(result, Err(CrmError::CompanyNotFoundForTeam)));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn search_pages_follow_their_cursor_to_the_filtered_list(pool: PgPool) -> anyhow::Result<()> {
+    let (team_id, company_id, hidden) = seed_company(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let full = repo
+        .list_contacts_for_company(&team_id, &company_id, true)
+        .await?;
+
+    for search in ["anna", "ACME.TEST", "o"] {
+        let needle = search.to_lowercase();
+        for archived in [false, true] {
+            // The full list narrowed the way the web client narrowed it.
+            let expected: Vec<Uuid> = full
+                .iter()
+                .filter(|c| hidden.contains(&c.id) == archived)
+                .filter(|c| {
+                    [&c.name, &c.email].into_iter().any(|text| {
+                        text.as_deref()
+                            .is_some_and(|text| text.to_lowercase().contains(&needle))
+                    })
+                })
+                .map(|c| c.id)
+                .collect();
+            for limit in [1, 2] {
+                let pages = all_pages(
+                    &repo,
+                    team_id,
+                    company_id,
+                    true,
+                    query(archived, search, limit),
+                )
+                .await?;
+                assert_eq!(
+                    pages, expected,
+                    "search={search}, archived={archived}, limit={limit}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_names_the_list_it_continues(pool: PgPool) -> anyhow::Result<()> {
+    let (team_id, company_id, _) = seed_company(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool);
+
+    let list = query(false, "anna", 1);
+    let cursor = repo
+        .list_company_contacts_page(&team_id, &company_id, true, &list)
+        .await?
+        .next_cursor
+        .expect("three active Annas make several pages");
+    assert_eq!(cursor.company_id, company_id);
+    assert!(!cursor.archived);
+    assert!(cursor.continues(company_id, &list));
+    assert!(!cursor.continues(Uuid::now_v7(), &list));
+    assert!(!cursor.continues(company_id, &query(true, "anna", 1)));
+    assert!(!cursor.continues(company_id, &query(false, "ann", 1)));
+    // The page size is not part of the list.
+    assert!(cursor.continues(company_id, &query(false, "anna", 50)));
+    Ok(())
+}
+
+/// Adds `email` to the contact's addresses, recorded `days_ago` days before
+/// a fixed instant, so equal days tie exactly.
+async fn add_address(
+    pool: &PgPool,
+    contact_id: Uuid,
+    email: &str,
+    days_ago: i32,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO crm_contact_emails (contact_id, email, created_at)
+           VALUES ($1, $2, '2026-01-10T00:00:00Z'::timestamptz - make_interval(days => $3))
+           ON CONFLICT (contact_id, email) DO UPDATE SET created_at = EXCLUDED.created_at"#,
+        contact_id,
+        email,
+        days_ago,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// The page path builds each contact exactly as the full read does: every
+/// field, the address order, and which addresses are on a domain of the
+/// contact's own company in its own team.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn page_contacts_equal_the_full_read(pool: PgPool) -> anyhow::Result<()> {
+    let (team_id, company_id, _) = seed_company(&pool).await?;
+    // Another company of the team, and another team, each with a domain the
+    // contact holds an address at. The other team's row names this company,
+    // so only its team keeps it from counting.
+    insert_company(&pool, team_id, true, &["other.test"]).await?;
+    let other_team = Uuid::now_v7();
+    seed_team(&pool, other_team, "macro|owner@other.test").await?;
+    sqlx::query!(
+        r#"INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, 'foreign.test')"#,
+        company_id,
+        other_team,
+    )
+    .execute(&pool)
+    .await?;
+
+    let pat = insert_named(&pool, company_id, Some("pat@acme.test"), Some("Pat")).await?;
+    // The primary is the newest address, yet it comes first; the rest go
+    // oldest first, ties by address.
+    add_address(&pool, pat, "pat@acme.test", 0).await?;
+    add_address(&pool, pat, "pat@other.test", 2).await?;
+    add_address(&pool, pat, "pat@foreign.test", 2).await?;
+    add_address(&pool, pat, "b.pat@acme.test", 1).await?;
+    add_address(&pool, pat, "a.pat@acme.test", 3).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let full = repo
+        .list_contacts_for_company(&team_id, &company_id, true)
+        .await?;
+    let mut paged = Vec::new();
+    for archived in [false, true] {
+        let mut list = query(archived, "", 2);
+        for _ in 0..MAX_PAGES {
+            let page = repo
+                .list_company_contacts_page(&team_id, &company_id, true, &list)
+                .await?;
+            paged.extend(page.contacts);
+            match page.next_cursor {
+                Some(cursor) => list.cursor = Some(cursor),
+                None => break,
+            }
+        }
+    }
+    assert_eq!(paged.len(), full.len());
+    for contact in &full {
+        let page_contact = paged
+            .iter()
+            .find(|c| c.id == contact.id)
+            .expect("every contact is on a page");
+        assert_eq!(
+            serde_json::to_value(page_contact)?,
+            serde_json::to_value(contact)?,
+            "contact {:?}",
+            contact.email
+        );
+    }
+
+    let pat = paged.iter().find(|c| c.id == pat).expect("Pat is listed");
+    assert_eq!(
+        pat.emails,
+        [
+            "pat@acme.test",
+            "a.pat@acme.test",
+            "pat@foreign.test",
+            "pat@other.test",
+            "b.pat@acme.test",
+        ]
+    );
+    assert_eq!(
+        pat.company_domain_emails,
+        ["a.pat@acme.test", "b.pat@acme.test", "pat@acme.test"]
+    );
     Ok(())
 }
