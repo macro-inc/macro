@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (pg_current_wal_lsn() - '0/0'::pg_lsn)::bigint AS \"position!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "18c2d0f7663cb84190740241f528e87eee9dd4eb8dc63f5cf6f8cf0c80a363b4"
+}

@@ -5,12 +5,98 @@ mod events;
 mod fakes;
 
 #[test]
-fn default_pacing_keeps_the_existing_thresholds_and_pause() {
+fn default_pacing_sizes_batches_and_bounds_the_wal_rate() {
     let pacing = PurgePacing::default();
     assert_eq!(pacing.messages.get(), 500);
     assert_eq!(pacing.threads.get(), 2_000);
-    assert_eq!(pacing.contacts.get(), 5_000);
+    assert_eq!(pacing.contacts.get(), 1_000);
     assert_eq!(pacing.pause, Duration::from_secs(2));
+    assert_eq!(pacing.wal_budget.get(), 16 * 1024 * 1024);
+    assert_eq!(pacing.max_pause, Duration::from_secs(30));
+}
+
+/// Two full message batches then an empty one, with no threads or contacts left after.
+fn two_full_message_batches() -> (LinkPurgeService<Fake>, Fake) {
+    let (service, fake) = service();
+    {
+        let mut state = fake.0.lock().unwrap();
+        state
+            .messages
+            .push_back(vec![message(1, 10), message(2, 20)]);
+        state
+            .messages
+            .push_back(vec![message(3, 30), message(4, 40)]);
+    }
+    (service, fake)
+}
+
+fn budgeted(pause: Duration, bytes_per_second: u64, max_pause: Duration) -> PurgePacing {
+    PurgePacing {
+        wal_budget: NonZeroU64::new(bytes_per_second).unwrap(),
+        max_pause,
+        ..pacing(pause)
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_batch_over_the_wal_budget_waits_until_the_rate_is_back_within_it() {
+    let (service, fake) = two_full_message_batches();
+    // Each batch writes 10 MB at a 1 MB/s budget, so each waits 10 s from its start: the
+    // 2 s pause, then the 8 s it was still early. The next read sees no new WAL.
+    fake.0.lock().unwrap().wal = [0, 10_000_000, 10_000_000, 10_000_000].map(Some).into();
+    let before = tokio::time::Instant::now();
+    service
+        .purge_link(
+            LINK,
+            budgeted(Duration::from_secs(2), 1_000_000, Duration::from_secs(60)),
+        )
+        .await
+        .unwrap();
+    // The second batch started at 10 MB and wrote nothing, so it waits only the pause.
+    assert_eq!(
+        tokio::time::Instant::now() - before,
+        Duration::from_secs(12)
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_wait_after_a_batch_stops_at_max_pause() {
+    let (service, fake) = two_full_message_batches();
+    // Other work keeps the server writing 100 MB between every read.
+    fake.0.lock().unwrap().wal = (0..20).map(|n| Some(n * 100_000_000)).collect();
+    let before = tokio::time::Instant::now();
+    service
+        .purge_link(
+            LINK,
+            budgeted(Duration::from_secs(1), 1_000_000, Duration::from_secs(5)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        tokio::time::Instant::now() - before,
+        Duration::from_secs(10)
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unreadable_wal_position_leaves_only_the_fixed_pause() {
+    for wal in [vec![None], vec![Some(0), None]] {
+        let (service, fake) = two_full_message_batches();
+        fake.0.lock().unwrap().wal = wal.into();
+        let before = tokio::time::Instant::now();
+        let summary = service
+            .purge_link(
+                LINK,
+                budgeted(Duration::from_secs(2), 1, Duration::from_secs(60)),
+            )
+            .await
+            .unwrap();
+        assert_eq!(summary.messages, 4);
+        assert_eq!(
+            tokio::time::Instant::now() - before,
+            Duration::from_secs(2) + Duration::from_secs(2)
+        );
+    }
 }
 
 #[tokio::test]

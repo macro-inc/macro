@@ -269,7 +269,8 @@ the gateway `/email` prefix.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
-  `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
+  `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's batch
+  sizes and the server-wide WAL rate its pauses wait for.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is
   redelivered toward the DLQ, only for transient failures. An `AuthRequired`

@@ -106,7 +106,7 @@ pub(super) fn expected_calls(reason: &str, promoted: bool) -> Vec<Call> {
         ),
         Call::Team(OWNER.into()),
         Call::CrmDelete(TEAM, LINK),
-        Call::Purge(LINK, 500, 2000, 5000, std::time::Duration::from_secs(2)),
+        Call::Purge(LINK, 500, 2000, 1000, std::time::Duration::from_secs(2)),
         Call::LinkRemoved(OWNER.into(), LINK),
         Call::Event(
             serde_json::json!({"schema_version": 1, "event_type":"email.link_disconnected", "metadata": {
