@@ -80,6 +80,53 @@ fn a_message_is_handled_once_it_is_deleted() {
     );
 }
 
+/// A batch answers 200 when only some of its entries went through: the
+/// ones it says failed were neither sent nor handled.
+#[test]
+fn a_failed_entry_of_a_batch_is_not_counted() {
+    let recorder = Recorder::default();
+    let queue = "http://sqs/000000000000/e2e-1-gmail-ops";
+    let body = json!({ "operation": "archive" }).to_string();
+    let entries = |key: &str| {
+        json!({
+            "QueueUrl": queue,
+            "Entries": [{ "Id": "0", key: body }, { "Id": "1", key: body }],
+        })
+        .to_string()
+    };
+    let one_failed =
+        json!({ "Successful": [{ "Id": "0" }], "Failed": [{ "Id": "1" }] }).to_string();
+    recorder.queue_call(
+        "SendMessageBatch",
+        entries("MessageBody").as_bytes(),
+        one_failed.as_bytes(),
+    );
+    let receive = json!({ "QueueUrl": queue }).to_string();
+    let received = json!({
+        "Messages": [
+            { "Body": body, "ReceiptHandle": body },
+        ]
+    })
+    .to_string();
+    recorder.queue_call("ReceiveMessage", receive.as_bytes(), received.as_bytes());
+    let failed = json!({ "Successful": [], "Failed": [{ "Id": "0" }, { "Id": "1" }] }).to_string();
+    recorder.queue_call(
+        "DeleteMessageBatch",
+        entries("ReceiptHandle").as_bytes(),
+        failed.as_bytes(),
+    );
+
+    let seen = recorder.seen();
+    let shape = json!({ "operation": "archive" }).to_string();
+    let count = |step| {
+        seen.queue
+            .get(&(queue.to_owned(), step, shape.clone()))
+            .copied()
+    };
+    assert_eq!(count(QueueStep::Sent), Some(1));
+    assert_eq!(count(QueueStep::Handled), None);
+}
+
 #[test]
 fn a_graphql_request_is_kept_by_its_query() {
     let recorder = Recorder::default();

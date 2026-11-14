@@ -211,7 +211,11 @@ impl Recorder {
                     .or_default() += 1;
             }
             "SendMessageBatch" => {
+                let failed = failed_entries(answer);
                 for entry in request["Entries"].as_array().into_iter().flatten() {
+                    if is_among(entry, &failed) {
+                        continue;
+                    }
                     let shape = shape_of_text(entry["MessageBody"].as_str());
                     *seen
                         .queue
@@ -241,8 +245,11 @@ impl Recorder {
                 }
             }
             "DeleteMessageBatch" => {
+                let failed = failed_entries(answer);
                 for entry in request["Entries"].as_array().into_iter().flatten() {
-                    if let Some(handle) = entry["ReceiptHandle"].as_str() {
+                    if !is_among(entry, &failed)
+                        && let Some(handle) = entry["ReceiptHandle"].as_str()
+                    {
                         handled(&mut seen, handle);
                     }
                 }
@@ -345,6 +352,27 @@ fn handled(seen: &mut Seen, handle: &str) {
             .entry((queue, QueueStep::Handled, shape))
             .or_default() += 1;
     }
+}
+
+/// The ids of the entries a batch call's answer says failed: SQS answers
+/// 200 to a batch of which only some entries went through.
+fn failed_entries(answer: &[u8]) -> Vec<String> {
+    let Ok(answer) = serde_json::from_slice::<Value>(answer) else {
+        return Vec::new();
+    };
+    answer["Failed"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry["Id"].as_str().map(str::to_owned))
+        .collect()
+}
+
+/// Whether a batch request's entry is one of those that failed.
+fn is_among(entry: &Value, failed: &[String]) -> bool {
+    entry["Id"]
+        .as_str()
+        .is_some_and(|id| failed.iter().any(|failed| failed == id))
 }
 
 /// What a stack reads off its other parts when it finishes.

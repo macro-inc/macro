@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use lazy_regex::regex;
 use rootcause::prelude::*;
+use syn::visit::Visit;
 
 use super::junit::{self, Outcome};
 use super::ledger::{self, Ledger};
@@ -166,7 +166,8 @@ pub(super) fn unkept_bugs(root: &Path, ledger: &Ledger) -> Result<Vec<String>, R
         }
         let text =
             std::fs::read_to_string(&path).context(format!("could not read {}", path.display()))?;
-        let (ids, others) = ignored(&text);
+        let (ids, others) =
+            ignored(&text).context(format!("could not parse {}", path.display()))?;
         kept.extend(ids);
         if others > 0 {
             // The known-bug runs take every ignored scenario.
@@ -194,17 +195,43 @@ pub(super) fn unkept_bugs(root: &Path, ledger: &Ledger) -> Result<Vec<String>, R
 
 /// The bug ids the `#[ignore]`s of a scenario file name, and how many of
 /// its `#[ignore]`s name none.
-pub(crate) fn ignored(text: &str) -> (Vec<String>, usize) {
-    let mut ids = Vec::new();
-    let mut others = 0;
-    for found in regex!(r#"#\[ignore(?:\s*=\s*"([^"]*)")?\s*\]"#).captures_iter(text) {
-        match found
-            .get(1)
-            .and_then(|reason| reason.as_str().strip_prefix(KEPT_FOR))
+/// Only attributes count: one written in a comment or a string ignores
+/// nothing.
+pub(crate) fn ignored(text: &str) -> Result<(Vec<String>, usize), syn::Error> {
+    let file = syn::parse_file(text)?;
+    let mut ignores = Ignores::default();
+    ignores.visit_file(&file);
+    Ok((ignores.ids, ignores.others))
+}
+
+#[derive(Default)]
+struct Ignores {
+    ids: Vec<String>,
+    others: usize,
+}
+
+impl<'ast> Visit<'ast> for Ignores {
+    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+        if !attribute.path().is_ident("ignore") {
+            return;
+        }
+        let reason = match &attribute.meta {
+            syn::Meta::NameValue(syn::MetaNameValue {
+                value:
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(reason),
+                        ..
+                    }),
+                ..
+            }) => Some(reason.value()),
+            _ => None,
+        };
+        match reason
+            .as_deref()
+            .and_then(|reason| reason.strip_prefix(KEPT_FOR))
         {
-            Some(id) => ids.push(id.to_owned()),
-            None => others += 1,
+            Some(id) => self.ids.push(id.to_owned()),
+            None => self.others += 1,
         }
     }
-    (ids, others)
 }

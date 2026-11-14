@@ -791,7 +791,7 @@ fn every_known_bug_job_must_leave_results() {
 #[test]
 fn the_ignored_scenarios_name_their_bugs() {
     let (ids, others) = ignored(
-        r#"
+        r##"
 #[tokio::test]
 #[ignore = "known bug: labels-wrong"]
 async fn one() {}
@@ -801,8 +801,14 @@ async fn two() {}
 
 #[ignore = "slow"]
 async fn three() {}
-"#,
-    );
+
+// #[ignore = "known bug: only-in-a-comment"]
+async fn four() {
+    let _ = "#[ignore = \"known bug: only-in-a-string\"]";
+}
+"##,
+    )
+    .unwrap();
     assert_eq!(ids, ["labels-wrong"]);
     assert_eq!(others, 2);
 }

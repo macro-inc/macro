@@ -28,7 +28,10 @@ use crate::workflows::{
 };
 
 /// Files whose change makes `PR CI` call this workflow: email and calendar code,
-/// the provider emulators, the schema, and the suite.
+/// the provider emulators, the schema, and the suite. Every crate the entry
+/// point list is read from (the `source` column of
+/// `crates/email_e2e/coverage/entrypoints.tsv`) must be here: a new entry
+/// point in a crate that is not would pass `PR CI` unseen by the coverage job.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("services/email_service/**"),
     xtask_paths::repo_glob!("services/email_scheduled_handler/**"),
@@ -36,6 +39,13 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("services/email_sfs_delete_handler/**"),
     xtask_paths::repo_glob!("services/email_suppression_handler/**"),
     xtask_paths::repo_glob!("services/email_focus_worker/**"),
+    xtask_paths::repo_glob!("services/email_refresh_handler/**"),
+    xtask_paths::repo_glob!("crates/models_email/**"),
+    xtask_paths::repo_glob!("crates/complete_graph/**"),
+    xtask_paths::repo_glob!("crates/sqs_client/**"),
+    xtask_paths::repo_glob!("crates/reminders/**"),
+    xtask_paths::repo_glob!("crates/properties/**"),
+    xtask_paths::repo_glob!("crates/soup/**"),
     xtask_paths::repo_glob!("crates/jev/**"),
     xtask_paths::repo_glob!("crates/email/**"),
     xtask_paths::repo_glob!("crates/email_*/**"),
