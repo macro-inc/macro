@@ -5,11 +5,13 @@
 //! pr_poll_secs` (with jitter) while a viewer is subscribed, and at most every
 //! [`IDLE_POLL`] otherwise, this source resolves each branch's working
 //! directory to its `origin` repository (`git remote get-url origin`, cached)
-//! and asks GitHub about everything in one batched GraphQL query through the
-//! `gh` CLI (`gh api graphql --input -`), so it uses whatever account `gh` is
-//! signed in to. A newly named pull request is looked up within seconds while
-//! someone watches. Without `gh` the source reports itself absent and looks
-//! again later; a failed query marks it unhealthy and keeps what it reported.
+//! and asks GitHub about everything in one batched GraphQL query per 100
+//! lookups through the `gh` CLI (`gh api graphql --input -`), so it uses
+//! whatever account `gh` is signed in to. A newly named pull request is
+//! looked up within seconds while someone watches. Without `gh` the source
+//! reports itself absent and looks again later; a failed query marks it
+//! unhealthy and keeps what it reported, and what the other queries of that
+//! poll answered.
 
 mod query;
 #[cfg(test)]
@@ -66,6 +68,12 @@ pub enum GithubError {
     /// `gh` ran but returned no usable answer.
     #[error("gh api failed: {0}")]
     Failed(String),
+}
+
+/// What one poll's queries answered, and the first failure if any failed.
+struct Answers {
+    statuses: Vec<PrStatusFact>,
+    failure: Option<GithubError>,
 }
 
 /// How this source reaches GitHub and git. Behind a trait so tests answer
@@ -332,7 +340,7 @@ impl<B: GithubBackend> Poller<B> {
 
         let branches = self.branches(wanted).instrument(span.clone()).await;
         self.send_checkouts().await?;
-        let result = self
+        let Answers { statuses, failure } = self
             .query(wanted, &branches, &span)
             .instrument(span.clone())
             .await;
@@ -340,19 +348,21 @@ impl<B: GithubBackend> Poller<B> {
             "duration_ms",
             u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         );
-        match result {
-            Ok(statuses) => {
-                span.record("prs", statuses.len());
+        let count = statuses.len();
+        span.record("prs", count);
+        // What the queries that succeeded answered is kept even when a later
+        // one fails.
+        for status in statuses {
+            self.send(Change::Upsert(Fact::PrStatus(Box::new(status))))
+                .await?;
+        }
+        match failure {
+            None => {
                 span.record("outcome", "ok");
                 self.reported_absent = false;
-                let count = statuses.len();
-                for status in statuses {
-                    self.send(Change::Upsert(Fact::PrStatus(Box::new(status))))
-                        .await?;
-                }
                 self.health(SourceState::Healthy, count, None).await
             }
-            Err(GithubError::NotFound) => {
+            Some(GithubError::NotFound) => {
                 span.record("outcome", "absent");
                 // Look again later, as for a fresh start.
                 self.gap = self.gap.max(DISCOVERY_RETRY);
@@ -360,13 +370,13 @@ impl<B: GithubBackend> Poller<B> {
                     return Ok(());
                 }
                 self.reported_absent = true;
-                self.health(SourceState::Absent, 0, Some("gh not found"))
+                self.health(SourceState::Absent, count, Some("gh not found"))
                     .await
             }
-            Err(GithubError::Failed(reason)) => {
+            Some(GithubError::Failed(reason)) => {
                 span.record("outcome", "failed");
                 tracing::warn!(parent: &span, error = %reason, "github query failed");
-                self.health(SourceState::Unhealthy, 0, Some("gh api failed"))
+                self.health(SourceState::Unhealthy, count, Some("gh api failed"))
                     .await
             }
         }
@@ -383,24 +393,42 @@ impl<B: GithubBackend> Poller<B> {
         branches
     }
 
-    /// Runs the queries and parses them.
+    /// Runs the queries and parses them. A query that fails does not throw
+    /// away the others' answers; without `gh` the rest are not tried.
     async fn query(
         &self,
         wanted: &PrWanted,
         branches: &BTreeSet<(RepoName, String)>,
         span: &tracing::Span,
-    ) -> Result<Vec<PrStatusFact>, GithubError> {
+    ) -> Answers {
         let queries = queries(&wanted.refs, branches);
         span.record("queries", queries.len());
         let mut statuses: BTreeMap<PrRef, PrStatusFact> = BTreeMap::new();
+        let mut failure = None;
         for query in queries {
-            let body = self.source.backend.graphql(query.text.clone()).await?;
-            let parsed = parse_response(&query, &body)?;
-            for status in parsed {
-                statuses.insert(status.pr.clone(), status);
+            let parsed = match self.source.backend.graphql(query.text.clone()).await {
+                Ok(body) => parse_response(&query, &body),
+                Err(error) => Err(error),
+            };
+            match parsed {
+                Ok(parsed) => {
+                    for status in parsed {
+                        statuses.insert(status.pr.clone(), status);
+                    }
+                }
+                Err(GithubError::NotFound) => {
+                    failure = Some(GithubError::NotFound);
+                    break;
+                }
+                Err(error) => {
+                    failure.get_or_insert(error);
+                }
             }
         }
-        Ok(statuses.into_values().collect())
+        Answers {
+            statuses: statuses.into_values().collect(),
+            failure,
+        }
     }
 
     async fn repo_of(&mut self, cwd: &Path) -> Option<RepoName> {

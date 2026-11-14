@@ -74,8 +74,9 @@ pub struct MonitorSettings {
     /// hc terminal labels whose value is a work run's id, joining the run to
     /// its terminal.
     pub run_id_labels: Vec<String>,
-    /// Seconds between pull request status queries to GitHub (through the
-    /// `gh` CLI) while a viewer watches; at most every 5 minutes with none.
+    /// Seconds between pull request status polls of GitHub (through the `gh`
+    /// CLI, one batched query per 100 lookups) while a viewer watches; at
+    /// most every 5 minutes with none.
     /// 0 turns pull request status off.
     pub pr_poll_secs: u32,
 }

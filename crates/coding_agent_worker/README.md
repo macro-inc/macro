@@ -250,8 +250,8 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   manager; and an agent whose working directory is a clone of a GitHub
   repository, on a PR's head branch, works on it. Their status (state, CI
   as the `CI gate` status or else the check rollup, review, conflicts) is
-  the one polled source, `github`: one batched GraphQL query through the
-  `gh` CLI (`gh api graphql`, as whatever account `gh` is signed in to)
+  the one polled source, `github`: one batched GraphQL query per 100
+  lookups through the `gh` CLI (`gh api graphql`, as whatever account `gh` is signed in to)
   every `[monitor] pr_poll_secs` (60 by default, with jitter) while a viewer
   watches and at most every 5 minutes otherwise; 0 turns it off. Without
   `gh` the source shows absent. Merged and closed PRs older than

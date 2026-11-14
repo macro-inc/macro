@@ -30,8 +30,9 @@ subscriber gets a fresh snapshot.
   the agent's `transcript` file, then appends woken by a directory watch).
 - `src/outbound/github.rs`: the one polled source. PR status for what the
   store wants (`Store::pr_interest`: PRs named by transcripts and managers'
-  `prs` files, plus agent branches) in one batched GraphQL query through
-  `gh api graphql` (`github/query.rs`); `gh` and `git` sit behind
+  `prs` files, plus agent branches) in one batched GraphQL query per 100
+  lookups through `gh api graphql` (`github/query.rs`); a failed query keeps
+  the other queries' answers; `gh` and `git` sit behind
   `GithubBackend` so tests answer from `fixtures/github/`.
 - `src/outbound/local.rs`: every real-machine source from a few roots. File
   sources share `outbound/transcripts.rs` (tailed JSON lines) or

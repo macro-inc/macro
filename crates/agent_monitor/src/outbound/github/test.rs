@@ -190,13 +190,22 @@ fn remote_urls_name_their_github_repository() {
 struct FakeGithub {
     calls: Arc<Mutex<Vec<Instant>>>,
     absent: bool,
+    /// Calls after this many fail.
+    fail_after: Option<usize>,
 }
 
 impl GithubBackend for FakeGithub {
     async fn graphql(&self, _query: String) -> Result<Vec<u8>, GithubError> {
-        self.calls.lock().expect("calls").push(Instant::now());
+        let made = {
+            let mut calls = self.calls.lock().expect("calls");
+            calls.push(Instant::now());
+            calls.len()
+        };
         if self.absent {
             return Err(GithubError::NotFound);
+        }
+        if self.fail_after.is_some_and(|limit| made > limit) {
+            return Err(GithubError::Failed(String::from("HTTP 502")));
         }
         Ok(std::fs::read(fixtures().join("github/response.json")).expect("fixture"))
     }
@@ -217,12 +226,23 @@ struct Harness {
 }
 
 fn run_fake(watchers: usize, absent: bool) -> Harness {
+    run_backend(watchers, absent, None, std::iter::empty())
+}
+
+/// `extra` refs are looked up after the fixture's.
+fn run_backend(
+    watchers: usize,
+    absent: bool,
+    fail_after: Option<usize>,
+    extra: impl IntoIterator<Item = PrRef>,
+) -> Harness {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let backend = FakeGithub {
         calls: Arc::clone(&calls),
         absent,
+        fail_after,
     };
-    let wanted = PrWanted {
+    let mut wanted = PrWanted {
         // What the fixture answers.
         refs: [
             pr("example-org/widgets", 42),
@@ -244,6 +264,7 @@ fn run_fake(watchers: usize, absent: bool) -> Harness {
         .into_iter()
         .collect(),
     };
+    wanted.refs.extend(extra);
     let (sender, receiver) = watch::channel(Arc::new(wanted));
     let subscribers = Arc::new(AtomicUsize::new(watchers));
     let count = Arc::clone(&subscribers);
@@ -347,5 +368,25 @@ async fn without_gh_the_source_is_absent_once_and_looks_again_later() {
     tokio::time::sleep(DISCOVERY_RETRY / 10).await;
     assert_eq!(harness.calls.lock().expect("calls").len(), 2);
     assert!(harness.observations.try_recv().is_err());
+    harness.cancel.cancel();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_later_query_keeps_what_the_earlier_one_answered() {
+    // The fixture's 4 lookups plus 120 in a repository sorted after them make
+    // two queries; the second fails.
+    let extra = (1..=120).map(|number| pr("example-org/zzz", number));
+    let mut harness = run_backend(1, false, Some(1), extra);
+
+    let (changes, health) = harness.until_health().await;
+    assert_eq!(harness.calls.lock().expect("calls").len(), 2);
+    let statuses = changes
+        .iter()
+        .filter(|change| matches!(change, Change::Upsert(Fact::PrStatus(_))))
+        .count();
+    assert_eq!(statuses, 3);
+    assert_eq!(health.state, SourceState::Unhealthy);
+    assert_eq!(health.items, 3);
+    assert_eq!(health.detail.as_deref(), Some("gh api failed"));
     harness.cancel.cancel();
 }
