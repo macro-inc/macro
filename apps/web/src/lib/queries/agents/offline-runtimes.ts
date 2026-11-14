@@ -1,5 +1,5 @@
 import { queryReadyGate } from '@queries/gate';
-import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import type { Harness } from '@service-storage/client';
 import { type Accessor, createMemo } from 'solid-js';
 import { useAgentsQuery } from './agents';
@@ -47,7 +47,7 @@ export function offlineAgentBotIds(
  */
 export function useOfflineAgentBotIds(): Accessor<ReadonlySet<string>> {
   const agentsQuery = useAgentsQuery();
-  const harnessesQuery = useHarnessDirectoryQuery();
+  const harnessesQuery = useRunnableHarnessDirectoryQuery();
   return createMemo(() => {
     // Until the runtimes are known, nothing is offline. Treating a pending
     // list as empty would flash "Offline" across a healthy roster on load.

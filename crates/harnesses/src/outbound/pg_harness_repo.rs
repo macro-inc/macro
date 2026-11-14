@@ -162,6 +162,8 @@ impl TryFrom<HarnessRow> for Harness {
             connected,
             last_connected_at: row.last_connected_at,
             computer_id: row.computer_id.map(ComputerId::new_from_uuid),
+            // The computer service owns this link; the harness service adds it.
+            team_agent_user_id: None,
             claude_mode: if row.has_claude_login {
                 ClaudeMode::OwnAccount
             } else {

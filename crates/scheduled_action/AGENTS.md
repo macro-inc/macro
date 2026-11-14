@@ -63,20 +63,28 @@ each run.
   the row every `POLL` and the session's turn every few polls (it reads the
   whole log); the first passing check ends the draft, else the turn ending
   does (all bounded by `DRAFT_TIMEOUT`). It turns the last
-  passing check (else the last check) into the draft, then stops and deletes
+  passing check (else the last check) into the draft (a single agent task,
+  which the SDK still accepts, becomes one agent step holding its prompt
+  and user prompt, or fails the draft if it declares apps, which a draft
+  can't hold, or that step breaks a program's
+  rules), then stops and deletes
   the session and the row, also once it sees the request dropped mid-draft
   (the web composer, given no answer, sends the draft once more,
   `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items
-  created, the session's tool calls and turns, status reads and outcome
+  created, the session's tool calls and turns, status reads, whether a
+  single agent task became steps (`routine.draft.agent_task`) and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send. `bench/`
-  times drafting on a local stack against the live model, phase by phase,
-  and checks the drafts (see its README); rerun it when changing the brief
-  or the wait.
+  is the drafting eval: 20 requests on a seeded workspace, drafted by Draft
+  it and by a bare agent session on a local stack against the live model,
+  timed phase by phase and checked three ways (the draft's shape, one run of
+  the routine, a blind judge); `compare` says win, loss or noise against a
+  baseline (see its README). Run it before and after a change to the brief,
+  the wait or anything else on the drafting path.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for

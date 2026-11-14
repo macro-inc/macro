@@ -70,6 +70,19 @@ function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
   return !request.answered && ownerChanging;
 }
 
+/** Someone is waiting on the rows of a typed search, so their reads run
+ * with it rather than behind the lists already on screen. */
+export function searchRowHost(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  query: string
+): Pick<CacheHost, 'readRecordsByKeys'> {
+  if (!query) return host;
+  return {
+    readRecordsByKeys: (args) =>
+      host.readRecordsByKeys({ ...args, priority: 'typed-search' }),
+  };
+}
+
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
@@ -86,7 +99,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   sourceAttributes?: Accessor<Record<string, number>>;
   /** Keep already-materialized matches visible while a new query is pending. */
   filterPreviousItems?: (items: T[], query: string) => T[];
-  materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
+  /** `query` is the typed text the documents answer; empty when browsing. */
+  materialize: (documents: SearchDocumentWire[], query: string) => Promise<T[]>;
 }) {
   const buckets = () => {
     const requested = options.buckets;
@@ -208,7 +222,7 @@ export function createProjectedList<T extends { id: string }>(options: {
           'quick_access.materialize',
           async (span) => {
             span.setAttr('search.result_count', page.documents.length);
-            return options.materialize(page.documents);
+            return options.materialize(page.documents, request.query);
           }
         );
         if (current !== request) return;

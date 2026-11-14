@@ -67,7 +67,7 @@ function _ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '42px' : '36px',
         'justify-content': 'center',
@@ -149,7 +149,7 @@ function _GithubStarButton() {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '14px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '9px',
         height: mobile() ? '40px' : '38px',
         'justify-content': 'center',
@@ -191,7 +191,7 @@ function _GithubStarButton() {
                 display: 'inline-flex',
                 'font-family': 'Inter, body',
                 'font-size': mobile() ? '15px' : '16px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '5px',
                 'letter-spacing': '0.02em',
               }}
@@ -224,7 +224,7 @@ function Avatar(props: { initials: string; size?: number; color?: string }) {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         'place-items': 'center',
         width: `${s}px`,
@@ -563,7 +563,7 @@ function VideoTile(props: { initials: string; hue: number; muted?: boolean }) {
           color: '#fff',
           'font-family': appFont,
           'font-size': '8.5px',
-          'font-weight': '600',
+          'font-weight': '500',
           left: '5px',
           padding: '1px 5px',
           position: 'absolute',
@@ -598,7 +598,7 @@ function StatusBadge(props: { status: CallStatus }) {
         'justify-self': 'start',
         'font-family': "'Inter', body",
         'font-size': '9.5px',
-        'font-weight': '700',
+        'font-weight': '500',
         'letter-spacing': '0.07em',
         'line-height': 1,
         padding: '4px 6px 3px',
@@ -651,7 +651,7 @@ function AvatarStack(props: {
             display: 'inline-flex',
             'font-family': appFont,
             'font-size': `${Math.round(s * 0.42)}px`,
-            'font-weight': '600',
+            'font-weight': '500',
             height: `${s}px`,
             'justify-content': 'center',
             'margin-left': '-7px',
@@ -949,7 +949,7 @@ export function HeroCallsWindow() {
                   style={{
                     color: 'var(--c1)',
                     'font-size': '15px',
-                    'font-weight': '600',
+                    'font-weight': '500',
                   }}
                 >
                   All caught up
@@ -1025,7 +1025,7 @@ export function HeroCallsWindow() {
                           color: 'var(--c1)',
                           'font-family': appFont,
                           'font-size': compact() ? '13px' : '14px',
-                          'font-weight': callUnread(item.call) ? '700' : '500',
+                          'font-weight': '500',
                         }}
                       >
                         {item.call.title}
@@ -1141,7 +1141,7 @@ export function TranscriptGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
               overflow: 'hidden',
               'text-overflow': 'ellipsis',
               'white-space': 'nowrap',
@@ -1254,7 +1254,7 @@ export function TranscriptGraphic() {
               display: 'flex',
               'font-family': "'Inter', body",
               'font-size': '11px',
-              'font-weight': '700',
+              'font-weight': '500',
               gap: '7px',
               'letter-spacing': '0.08em',
               'text-transform': 'uppercase',
@@ -1292,7 +1292,7 @@ export function TranscriptGraphic() {
                         color: 'var(--c1)',
                         'font-family': appFont,
                         'font-size': '13px',
-                        'font-weight': '600',
+                        'font-weight': '500',
                       }}
                     >
                       {row.who}
@@ -1452,7 +1452,7 @@ function NotesSection(props: { heading: string; items: string[] }) {
           color: '#f4f4f5',
           'font-family': appFont,
           'font-size': '13px',
-          'font-weight': '600',
+          'font-weight': '500',
         }}
       >
         {props.heading}
@@ -1605,7 +1605,7 @@ export function CallStageGraphic() {
                 color: '#fff',
                 'font-family': "'Inter', body",
                 'font-size': '11px',
-                'font-weight': '700',
+                'font-weight': '500',
                 'letter-spacing': '0.08em',
               }}
             >
@@ -1649,7 +1649,7 @@ export function CallStageGraphic() {
                 color: '#fff',
                 'font-family': appFont,
                 'font-size': '10px',
-                'font-weight': '600',
+                'font-weight': '500',
                 left: '6px',
                 padding: '2px 6px',
                 position: 'absolute',
@@ -1678,7 +1678,7 @@ export function CallStageGraphic() {
               style={{
                 'font-family': appFont,
                 'font-size': '13.5px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'text-shadow': '0 1px 4px rgb(0 0 0 / 0.5)',
               }}
             >
@@ -1730,7 +1730,7 @@ export function CallStageGraphic() {
                 color: '#f6f6f7',
                 'font-family': appFont,
                 'font-size': '18px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'line-height': 1.25,
               }}
             >
@@ -1841,7 +1841,7 @@ export function SummaryGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '16px' : '18px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'line-height': 1.25,
               }}
             >
@@ -1914,7 +1914,7 @@ export function SummaryGraphic() {
                 display: 'inline-flex',
                 'font-family': "'Inter', body",
                 'font-size': '11px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '6px',
                 'letter-spacing': '0.08em',
                 'text-transform': 'uppercase',
@@ -1998,7 +1998,7 @@ function MacroMention() {
       style={{
         color: 'var(--a0)',
         'font-family': appFont,
-        'font-weight': '600',
+        'font-weight': '500',
         'white-space': 'nowrap',
       }}
     >
@@ -2183,7 +2183,7 @@ export function AgentContextGraphic() {
               }}
             >
               Assigned it to{' '}
-              <span style={{ color: 'var(--c1)', 'font-weight': '600' }}>
+              <span style={{ color: 'var(--c1)', 'font-weight': '500' }}>
                 Evan
               </span>
               . In the{' '}
@@ -2342,7 +2342,7 @@ export function SharingGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Sharing
@@ -2372,7 +2372,7 @@ export function SharingGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '14px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Share with team
@@ -2405,7 +2405,7 @@ export function SharingGraphic() {
           display: 'flex',
           'font-family': "'Inter', body",
           'font-size': '10px',
-          'font-weight': '700',
+          'font-weight': '500',
           gap: '8px',
           'letter-spacing': '0.1em',
           'text-transform': 'uppercase',
@@ -2452,7 +2452,7 @@ export function SharingGraphic() {
                 color: 'var(--c2)',
                 'font-family': appFont,
                 'font-size': '14px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Private to you
@@ -2752,7 +2752,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -2779,7 +2779,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,
