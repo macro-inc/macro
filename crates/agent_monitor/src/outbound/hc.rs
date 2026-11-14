@@ -21,7 +21,6 @@ use tokio::io::{AsyncBufReadExt as _, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::Instrument as _;
 
 use crate::domain::model::{SourceHealth, SourceKind, SourceState};
 use crate::domain::observation::{Change, Observation};
@@ -58,8 +57,7 @@ impl AgentSource for HcSource {
         out: mpsc::Sender<Observation>,
         cancel: CancellationToken,
     ) -> Result<(), SourceError> {
-        let span = tracing::info_span!("macrod.monitor.source.run", source = SourceKind::Hc.name());
-        self.follow(out, cancel).instrument(span).await
+        self.follow(out, cancel).await
     }
 }
 
