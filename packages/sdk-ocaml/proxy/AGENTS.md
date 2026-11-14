@@ -20,7 +20,8 @@ contract with its clients is the plan's D1, D3 and D4.
 ## Scope
 
 - Owns: `/v1/executions`, `/api/...`, `/v1/decide`, the fake upstream.
-- Not here: the operation table and its permissions → `../spec`.
+- Not here: the operation table and its permissions → `../spec`; OCaml
+  bindings → `../generator`.
 
 ## Checks
 

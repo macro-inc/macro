@@ -1,9 +1,9 @@
 # Macro SDK for OCaml
 
-The permission layer for programs that call Macro's services: every
-OpenAPI operation of every service has a group and an action, and an HTTP
-proxy checks each call a program makes against a permission endpoint before
-forwarding it to the service as the caller.
+Typed OCaml bindings to Macro's services, for programs whose operations are
+read off the compiled program before it runs. Every operation is an OpenAPI
+operation of one service, called as a blocking OCaml function through the
+SDK proxy, which checks it and forwards it to the service as the caller.
 
 ## Operation permissions (`spec/`)
 
@@ -70,6 +70,125 @@ overwritten on the next sync. The long-term home is an extension on each
 operation (for example `x-macro-permission: {group, action}`) emitted by the services
 themselves, at which point `permissions.json` goes away.
 
+## Client (`lib/`, dune library `macro_sdk`)
+
+A typed client generated from the OpenAPI specs (`packages/sdk/specs/*.json`,
+OpenAPI 3.1): one module per service, one function per operation, all 913 of
+them. A program is one file defining `let main () : Macro.Json.t`. The
+duplicate-check example (`test/duplicate_check.ml`) calls the endpoints
+behind the TypeScript SDK's `Task.findSimilar` and `tasks.create`:
+
+```ocaml
+open Macro.Storage
+
+let main () : Macro.Json.t =
+  let title = "Fix login redirect loop" in
+  let similar =
+    task_similarity_search_handler ~body:(Types.make_task_similarity_search_request ~task_name:title ()) ()
+  in
+  match List.filter (fun (r : Types.task_similarity_result) -> r.vector_score >= 0.85) similar.results with
+  | [] ->
+      let created = create_task_handler ~body:(Types.make_create_task_request ~task_name:title ()) () in
+      Macro.Json.obj [ ("created", Macro.Json.string created.document_id) ]
+  | r :: _ -> Macro.Json.obj [ ("duplicate", Macro.Json.string r.task_id) ]
+```
+
+- **Modules.** `Macro.<Service>` per spec file (`storage.json` is
+  `Macro.Storage`, `agent-harness.json` `Macro.Agent_harness`), each with
+  its schemas in `Macro.<Service>.Types`. A function's name is its
+  operationId (after `spec/renames.json`); an OCaml keyword takes a trailing
+  `_`. An operationId two services share is told apart by the module.
+- **Arguments.** Path parameters are labelled (`~document_id`), in path
+  order; query and header parameters are labelled when required and
+  optional (`?limit`) otherwise; a JSON body is `~body` (`?body` when the
+  spec doesn't require it), typed by its schema. Every function ends with
+  `()`. A text, binary or audio body is `~body:string`, sent with the spec's
+  content type; a multipart body is a record whose binary fields go as file
+  parts.
+- **Encoding.** Path values are percent-encoded as one segment; a value the
+  proxy would refuse (empty, `.`/`..`, or containing `/`, `\`, `%` or a
+  control character) raises `Macro.Error` with code `invalid` before any
+  request. Query values are percent-encoded, an array repeats the key, and
+  an absent optional argument is left out.
+- **Types.** Records for object schemas, each with a `make_<type>`
+  constructor (required fields labelled, the rest optional) and
+  `<type>_to_json` / `<type>_of_json`. A field that is not required, or is
+  nullable, is an `option`; `None` leaves a non-required field out. String
+  and integer enums are polymorphic variants (`` `Not_started ``, `` `N1 ``).
+  `oneOf` is a variant: tagged when a discriminator or a required constant
+  field tells the members apart (the tag field is left out of each member's
+  record and written by the encoder), otherwise decoded by trying each member,
+  most required fields first; a union whose members can't be told apart is
+  `Macro.Json.t` (none today). `allOf` objects are merged; an `allOf` over a
+  union distributes over its members. `additionalProperties` is a
+  `(string * t) list`. `integer` is `int`, `number` `float`, `format`s
+  (dates, uuids) `string`. A schema that allows any value (`{}`, an object
+  without properties) is `Macro.Json.t` (`Yojson.Safe.t`).
+- **Results** come from the success response's schema: a 2xx with JSON is
+  its type; a 204 or a response without content is `unit`; a JSON 2xx next
+  to a 204 is an `option`; 2xx responses with different schemas are a
+  variant by status (`` `Http_200 of ... | `Http_202 of ... ``); a non-JSON
+  body (text, calendar, audio, bytes) is a `string`. Record labels live in
+  `Types`, so annotate the value (`fun (r : Types.task_similarity_result) ->`)
+  or open the service module. A reply that doesn't match its type raises
+  `Macro.Error` with code `decode`.
+- **Failures** raise `Macro.Error { code; message; status }`, with the HTTP
+  status (0 when there was no reply). A refusal by the proxy itself
+  (`x-macro-proxy: refused`) keeps the proxy's code: `blocked`,
+  `not_analyzed`, `unknown_operation`, `unauthorized`, `invalid_target`, ...
+  A service's error maps its status: `invalid` (400, 422), `unauthorized`
+  (401), `forbidden` (403), `not_found` (404, 410), `conflict` (409, 412),
+  `rate_limited` (429), `internal` (5xx), `failed` (others), with the
+  service's `message` or text. `unreachable` when the proxy can't be reached.
+- **Attributes.** Each operation function carries
+  `[@@macro.op "<service>.<operationId>"]`, and every other exported value
+  `[@@macro.pure]` (codecs and constructors are pure), so a program's possible
+  operations can be read off its compiled code. `Macro_runtime` (the
+  transport) carries neither, so programs can't use it, and nothing exported sends an arbitrary request.
+- **Transport.** A blocking HTTP/1.1 request (Unix sockets and yojson only)
+  to `$MACRO_SDK_PROXY_URL/api/<service><path>?<query>` with
+  `authorization: Bearer $MACRO_SDK_RUN_TOKEN` (the run token registered
+  for this run, never the execution token). The reply is read to its
+  Content-Length or last chunk, never to end of file: the proxy keeps
+  connections open.
+- **Layout.** `lib/macro_<service>.ml(i)` per service and `lib/macro.mli`,
+  whose `module Storage : module type of Macro_storage` copies each
+  service's signature into `Macro`. Only `macro_runtime.ml`, `macro_json.ml`
+  and `macro_error.ml` are written by hand.
+
+## Generator (`generator/`)
+
+```sh
+bun generator/generate.ts   # from packages/sdk-ocaml
+```
+
+It reads the specs through `spec/specs.ts` (names, with `spec/renames.json`
+applied) and groups and actions from `spec/operations.json`, and writes the
+client, `lib/operations.json` and the test fixtures
+`test/all_operations_calls.ml` and `test/all_operations.json`. All of these
+are generated, never committed (`.gitignore`). It emits every operation and
+throws on anything it can't emit (an unsupported schema keyword, parameter
+style or content type, a name collision) instead of skipping it, then prints
+how much fell back to `Macro.Json.t` or `string` and why. It takes about
+0.2 s; the client is about 5.6 MB of OCaml and builds cold in about 6 s.
+
+`lib/operations.json`, installed beside the package's `.cmi` files, is
+`spec/operations.json` (contract D1) plus each operation's OCaml path:
+`{"operations": [{"name": "storage.create_task_handler", "service": "storage", "operationId": "create_task_handler", "method": "POST", "path": "/documents/create_task", "group": "tasks", "action": "create", "headers": [], "ocaml": "Macro.Storage.create_task_handler"}]}`.
+
+**Why our own emitter.** Two OCaml generators were tried against these specs
+(November 2026). `ocaml_openapi_generator` 0.17.0 (in nixpkgs) rejects the
+specs outright: it reads OpenAPI 3.0.3 and fails on the first 3.1 type array
+(`"type": ["string", "null"]`), and its output is Jane Street Async/httpaf
+code with its own transport, which the attributes could not bound. OooapI
+(GitHub `XFFS/OooapI`, last change February 2024) is not in nixpkgs or
+opam-free, targets OpenAPI 3.0, degrades `oneOf`/`allOf` and recursive
+schemas to untyped JSON by its own account, and is hard-wired to Cohttp and
+Lwt. Neither can mark each operation `[@@macro.op]` and everything else
+`[@@macro.pure]` without post-processing their output, so `emit.ts` (which
+keeps the previous generator's naming, records, codecs, variants and
+warning-free output) generates the client directly.
+
 ## Proxy and permission endpoint
 
 `proxy/` holds the SDK HTTP proxy (`/api/<service><path>`, the only way a
@@ -95,11 +214,38 @@ Binding each run to the operations it may call:
   call. Every response the proxy produces itself carries
   `x-macro-proxy: refused`; a service's own answers pass through unchanged.
 
-## Checks
+## Building and testing
 
-From the repository root, after `bun install --frozen-lockfile` at the root:
+Toolchain: `shell.nix` (OCaml 5.4, dune, findlib, yojson, bun, curl). The
+client comes first (it is not committed); from the repository root, after
+`bun install --frozen-lockfile` at the root:
 
 ```sh
-nix shell nixpkgs#bun -c sh -c 'cd packages/sdk-ocaml && bun spec/build.ts && bun test spec'
-nix shell nixpkgs#bun -c sh -c 'cd packages/sdk-ocaml/proxy && bun run test && bun run type-check'
+nix-shell packages/sdk-ocaml/shell.nix --run 'cd packages/sdk-ocaml && bun generator/generate.ts && dune build @install && dune test && bun test generator spec'
 ```
+
+The client's checks:
+
+- `dune test`: `check_interface` reads the compiled `Macro` interface and
+  checks one `[@@macro.op]` value per `operations.json` entry at its path,
+  every other value `[@@macro.pure]`. `all_operations` calls every operation
+  twice (required arguments only, then all of them) against a fake proxy,
+  checks the method, encoded path, query, header parameters, run token,
+  content type and body against `test/all_operations.json`, and decodes a
+  reply generated from the response schema (first members of unions, then
+  last). `test_duplicate_check` runs the duplicate-check program against a
+  fake proxy that keeps connections open: its requests and result, a chunked
+  reply, proxy refusals, service errors, a decode error, no proxy, and a path
+  value with a slash failing before any request.
+- `bun test generator`: `lib/operations.json` has one entry per operation in
+  the specs with spec/operations.json's fields; every sample target passes
+  the proxy's own target checks and routes to its operation
+  (`proxy/src/router.ts`); every sample body and reply validates against its
+  schema.
+
+`dune build @install` installs `macro_sdk` as a findlib package with
+`operations.json` beside its `.cmi` files.
+
+
+A static analyzer that reads a program's operations off its typed tree, and
+a runner that checks them before running it, come next.

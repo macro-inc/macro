@@ -31,7 +31,8 @@ bun run packages/sdk-ocaml/proxy/src/permissions.ts \
 ```
 
 `fixtures/operations.json` is a small hand-written table in D1 format for
-tests and demos. Extra keys in a table are ignored.
+tests and demos. The installed copy beside the OCaml SDK (D1 entries plus
+`ocaml`) works too; extra keys are ignored.
 
 Rules file:
 
