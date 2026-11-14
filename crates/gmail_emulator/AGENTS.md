@@ -118,6 +118,9 @@ a local stack, without Google accounts.
   Provider failure: `POST /_emulator/faults` (`inject_fault`) with a `route`
   such as `messages.get` and an `error` such as `rate_limit`. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`.
+- The signature of a mailbox's primary address: `PUT
+  /_emulator/mailboxes/{email}/signature` with `{"signature": "<html>"}`
+  (`set_signature`); `settings.sendAs.list` answers it. It is empty until set.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
