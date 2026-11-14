@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 /// The company's domain. The CRM keeps nobody under a reserved name such
 /// as `.test`, so this is one a company could have.
-const COMPANY: &str = "acmewidgets.co";
+const COMPANY: &str = "acme.com";
 
 /// A team of the two users with `COMPANY` among its CRM companies, each
 /// member sharing their primary inbox's mail with the team.

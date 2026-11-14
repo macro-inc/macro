@@ -566,6 +566,50 @@ F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
     assert!(render::html(&model).contains("<small>known bug BUG-7</small>"));
 }
 
+/// A bug on one provider leaves the function as its scenarios show it on the
+/// other.
+#[test]
+fn a_known_bug_on_one_provider_leaves_the_other_alone() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(&MAP.replace(
+            "[F-001]\n",
+            "[F-001]\nbug = \"BUG-7\"\nbug_on = \"outlook\"\n",
+        ))
+        .unwrap(),
+        checks: checks("function\tscenario\nF-001\tstate gmail_stars\n").unwrap(),
+        proofs: proofs(
+            "function\tprovider\tscenario\tbreak\n\
+F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
+        )
+        .unwrap(),
+        waivers: Waivers::default(),
+    };
+    let records = vec![
+        record("gmail_stars", "gmail", true),
+        record("outlook_stars", "outlook", true),
+    ];
+    let model = build(&reader, &ledger, records, &Results::default());
+
+    assert_eq!(model.broken, Vec::<String>::new());
+    assert_eq!(model.stale, Vec::<String>::new());
+    let row = model
+        .functions
+        .iter()
+        .find(|row| row.id == "F-001")
+        .unwrap();
+    assert_eq!(row.gmail.as_ref().unwrap().status, Status::Proved);
+    assert_eq!(row.outlook.as_ref().unwrap().status, Status::Open);
+}
+
 /// An entry point another product's functions own is in none of email's
 /// counts, reached or not, and is listed with whether a scenario reached it.
 #[test]

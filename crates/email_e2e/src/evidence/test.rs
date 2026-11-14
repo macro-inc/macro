@@ -148,3 +148,13 @@ fn a_graphql_document_loses_what_was_written_into_it() {
         r#"query { search(text: "") { id } tag(name: "") }"#
     );
 }
+
+#[test]
+fn a_graphql_document_loses_its_block_strings_and_comments() {
+    assert_eq!(
+        without_literals(
+            "query {\n  # find \"May\" plans\n  search(text: \"\"\"say \"hello world\" now\"\"\") { id }\n  tag(name: \"x\")\n}"
+        ),
+        "query {\n  \n  search(text: \"\"\"\"\"\") { id }\n  tag(name: \"\")\n}"
+    );
+}

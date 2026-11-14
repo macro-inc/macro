@@ -341,7 +341,7 @@ async fn address_book_names_the_people_the_user_writes_to(
         provider,
         ada.email(),
         "grace@example.com",
-        "Grace Brewster Hopper",
+        "Grace Example",
     )?;
     let inbox = ada.link(provider, ada.email()).await?;
 
@@ -368,7 +368,7 @@ async fn address_book_names_the_people_the_user_writes_to(
         .await?;
     assert_eq!(
         wait_for_picker_name(&inbox, "grace@example.com").await?,
-        "Grace Brewster Hopper"
+        "Grace Example"
     );
 
     // A person saved after linking arrives with the periodic refresh.
@@ -377,7 +377,7 @@ async fn address_book_names_the_people_the_user_writes_to(
         provider,
         ada.email(),
         "linus@example.com",
-        "Linus Benedict Torvalds",
+        "Linus Example",
     )?;
     stack
         .send_to_queue(
@@ -394,7 +394,7 @@ async fn address_book_names_the_people_the_user_writes_to(
         .await?;
     assert_eq!(
         wait_for_picker_name(&inbox, "linus@example.com").await?,
-        "Linus Benedict Torvalds"
+        "Linus Example"
     );
 
     stack.finish().await

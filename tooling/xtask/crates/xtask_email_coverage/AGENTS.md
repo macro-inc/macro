@@ -85,7 +85,8 @@
   functions" and in `coverage.json` (`owned`, with whether a scenario
   reached it). One that is also waived, deferred, dead code, mapped in
   `functions.toml` or missing from the list is a ledger error.
-- `bug = "<id>"` in a function's mapping keeps it open: its scenarios,
+- `bug = "<id>"` in a function's mapping keeps it open (on one provider with
+  `bug_on = "gmail"` or `"outlook"`): its scenarios,
   checks and proofs are not looked at.
 - A record counts only when its scenario passed. A scenario that linked no
   inbox counts for both providers, and so does one that linked both.

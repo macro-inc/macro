@@ -1,10 +1,11 @@
 # The scenarios that check a function's result: where the function list says
 # it shows (at the provider, in what the service returns), not merely that
-# the request was accepted. A function is covered on a provider when one of
+# the request was accepted. A function is claimed on a provider when one of
 # these scenarios passed on an inbox of that provider and its record shows it
 # performing the function (functions.toml). `scenario` is `<test binary>
 # <test>`, as nextest prints it. A row whose scenario no longer performs the
-# function is reported as stale.
+# function is reported as stale. It is covered only when proofs.tsv also names
+# a break in product code that made the scenario fail on that provider.
 function	scenario
 F-001	sync_linking gmail_linked_inbox_is_listed
 F-002	sync_linking outlook_linked_inbox_is_listed

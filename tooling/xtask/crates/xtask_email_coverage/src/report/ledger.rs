@@ -59,6 +59,7 @@ struct RawMapping {
     ui: Option<String>,
     outside: Option<String>,
     bug: Option<String>,
+    bug_on: Option<String>,
 }
 
 /// How the backend carries one function out, parsed.
@@ -79,6 +80,8 @@ pub(crate) struct Mapping {
     pub(crate) outside: Option<String>,
     /// The known product bug that keeps the function open, when one does.
     pub(crate) bug: Option<String>,
+    /// The one provider the bug is on; both when absent.
+    pub(crate) bug_on: Option<String>,
 }
 
 impl Mapping {
@@ -378,7 +381,15 @@ pub(crate) fn map(text: &str) -> Result<Map, Report> {
             ui: raw.ui,
             outside: raw.outside,
             bug: raw.bug,
+            bug_on: raw.bug_on,
         };
+        if let Some(provider) = &mapping.bug_on
+            && (mapping.bug.is_none() || !["gmail", "outlook"].contains(&provider.as_str()))
+        {
+            bail!(
+                "{MAP_PATH}: [{name}] bug_on is `{provider}`: it names gmail or outlook, next to a bug"
+            );
+        }
         map.functions.insert(name, mapping);
     }
     Ok(map)

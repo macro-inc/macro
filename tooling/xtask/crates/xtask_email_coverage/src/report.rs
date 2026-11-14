@@ -767,7 +767,9 @@ pub(crate) fn build(
             }
             // A known product bug keeps the function open whatever the
             // scenarios do: one that passes with the bug in shows nothing.
-            if let Some(bug) = &mapping.bug {
+            if let Some(bug) = &mapping.bug
+                && mapping.bug_on.as_deref().is_none_or(|on| on == provider)
+            {
                 let reason = format!("known bug {bug}");
                 return Some(cell_of(Status::Open, &[], Some(&reason)));
             }
@@ -847,9 +849,14 @@ pub(crate) fn build(
             .get(id)
             .is_some_and(|mapping| mapping.bug.is_some())
     };
+    let has_bug_on = |id: &str, provider: &str| {
+        ledger.map.functions.get(id).is_some_and(|mapping| {
+            mapping.bug.is_some() && mapping.bug_on.as_deref().is_none_or(|on| on == provider)
+        })
+    };
     for proof in proofs {
         let used = used_proofs.contains(&(&proof.function, &proof.provider, &proof.scenario));
-        if !used && !has_bug(&proof.function) {
+        if !used && !has_bug_on(&proof.function, &proof.provider) {
             stale.push(format!(
                 "{}: breaking the product is said to fail `{}` for {} on {}, and no record \
                  shows that scenario performing and checking the function there",

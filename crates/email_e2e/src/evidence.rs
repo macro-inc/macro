@@ -441,23 +441,49 @@ fn is_tag(text: &str) -> bool {
             .all(|character| character.is_ascii_alphabetic() || "_.-".contains(character))
 }
 
-/// A GraphQL document with the text of its string literals removed: the
-/// fields asked for stay, and what was written into them does not.
+/// A GraphQL document with the text of its string literals, block strings
+/// and comments removed: the fields asked for stay, and what was written
+/// into them does not.
 fn without_literals(document: &str) -> String {
+    const BLOCK: &str = "\"\"\"";
     let mut kept = String::with_capacity(document.len());
-    let mut in_literal = false;
-    let mut escaped = false;
-    for character in document.chars() {
-        if !in_literal {
-            kept.push(character);
-            in_literal = character == '"';
-        } else if escaped {
-            escaped = false;
-        } else if character == '\\' {
-            escaped = true;
-        } else if character == '"' {
-            kept.push(character);
-            in_literal = false;
+    let mut rest = document;
+    while let Some(first) = rest.chars().next() {
+        if let Some(after) = rest.strip_prefix(BLOCK) {
+            // A block string ends at the next `"""` no backslash precedes.
+            let mut end = None;
+            let mut from = 0;
+            while let Some(found) = after[from..].find(BLOCK) {
+                let at = from + found;
+                if !after[..at].ends_with('\\') {
+                    end = Some(at);
+                    break;
+                }
+                from = at + BLOCK.len();
+            }
+            kept.push_str(BLOCK);
+            kept.push_str(BLOCK);
+            rest = end.map_or("", |at| &after[at + BLOCK.len()..]);
+        } else if first == '"' {
+            let mut escaped = false;
+            let mut end = None;
+            for (at, character) in rest.char_indices().skip(1) {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == '"' || character == '\n' {
+                    end = Some(at);
+                    break;
+                }
+            }
+            kept.push_str("\"\"");
+            rest = end.map_or("", |at| &rest[at + 1..]);
+        } else if first == '#' {
+            rest = rest.find('\n').map_or("", |at| &rest[at..]);
+        } else {
+            kept.push(first);
+            rest = &rest[first.len_utf8()..];
         }
     }
     kept

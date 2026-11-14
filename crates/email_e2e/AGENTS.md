@@ -68,7 +68,7 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - Observe through the API first; then the provider (`provider_messages`), what
   the services told other services (`stack.service_requests()`,
   `stack.stored_objects()`, `stack.take_queue_messages(queue)`,
-  `stack.dead_letters(queue)`), and the database (`stack.db()`) last.
+  `stack.dead_letters(queue)`, `stack.email_events(link_id)`), and the database (`stack.db()`) last.
 - Wait with the `wait_for_*` methods or `eventually`; never sleep. A wait
   ends when its condition holds, so the 120 s limit only costs time on failure.
 - To prove something does *not* happen, make a later event happen and wait

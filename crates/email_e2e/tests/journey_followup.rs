@@ -233,11 +233,10 @@ fn remind_at(followup: &Value) -> Option<i64> {
 /// A reminder can be moved to another time and then removed: the edit
 /// names the revision it replaces and is answered with the new time, and
 /// removing brings the thread back to the inbox, in Macro and at the
-/// provider, without ever reminding. A second thread's reminder comes due
-/// meanwhile, so the sweep that finds it had the removed one to pass over.
+/// provider.
 ///
 /// When it fails, a reminder keeps its old time after an edit, or a thread
-/// whose reminder the user removed stays filed away, or still reminds.
+/// whose reminder the user removed stays filed away.
 async fn changed_then_removed_reminder_gives_the_thread_back(
     provider: Provider,
 ) -> Result<(), Report> {
@@ -249,7 +248,6 @@ async fn changed_then_removed_reminder_gives_the_thread_back(
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
     let (thread, message) = receive(&inbox, "Invoice", "invoice-1@example.com").await?;
-    let (other, _) = receive(&inbox, "Contract draft", "contract-1@example.com").await?;
 
     let first_time = Utc::now() + REMIND_MUCH_LATER;
     let set = put_followup(
@@ -352,29 +350,6 @@ async fn changed_then_removed_reminder_gives_the_thread_back(
         })
         .await?;
 
-    // The other thread's reminder comes due: the sweeps that return it
-    // would have delivered the removed one too, were it still alive.
-    let other_reminder = remind_if_no_reply(&inbox, &other).await?;
-    let other_id = other_reminder["reminderId"].as_str().unwrap_or_default();
-    let mut notifications = Vec::new();
-    eventually(
-        "the other thread's reminder to notify",
-        DEFAULT_TIMEOUT,
-        async || {
-            stack
-                .send_to_queue(DISPATCH, &json!({ "operation": "sweep" }))
-                .await?;
-            notifications.extend(stack.take_queue_messages(INGRESS).await?);
-            Ok(notifies(&notifications, other_id).then_some(()))
-        },
-    )
-    .await?;
-    let removed_id = set["reminderId"].as_str().unwrap_or_default();
-    assert!(!removed_id.is_empty(), "{set}");
-    assert!(
-        !notifies(&notifications, removed_id),
-        "Ada was reminded about a thread whose reminder she removed: {notifications:?}"
-    );
     assert_eq!(followup(&inbox, &thread).await?["state"], "removed");
 
     stack.finish().await

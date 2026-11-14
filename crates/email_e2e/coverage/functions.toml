@@ -17,6 +17,8 @@
 #   bug     a known product bug keeps the function open; the value is its
 #           short id. The function is never proved or claimed, and checks
 #           and proofs that name it are not looked at, until the line goes.
+#   bug_on  the one provider (gmail or outlook) the bug is on, when the
+#           function works on the other; both when absent.
 #
 # Conditions:
 #   /json/pointer=value, /json/pointer   on the request body shape (http,
@@ -1133,6 +1135,7 @@ also = ["http GET /internal/recent_messages/{user_id}"]
 
 [F-176]  # Enrich CRM contacts from mail and clean up after removal
 bug = "outlook-crm-cleanup"
+bug_on = "outlook"
 by = [
   "queue backfill:PopulateCrmContact",
   "queue backfill:PopulateCrmForUser",
