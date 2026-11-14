@@ -80,6 +80,8 @@ async fn google_events_arrive_on_import_and_by_push() -> Result<(), Report> {
         "{item}"
     );
 
+    // The first import may still be running: a push during it is dropped.
+    calendar.wait_until_synced(ada.email()).await?;
     let retro = events::google("Retro", events::hour_in_days(2));
     stack.gmail().add_event(ada.email(), PRIMARY, retro)?;
     calendar.wait_for_event("Retro").await?;
@@ -348,6 +350,7 @@ async fn a_refused_google_watch_is_not_retried_on_every_sync() -> Result<(), Rep
     ada.link_gmail_with_calendar().await?;
     let calendar = ada.calendar()?;
     calendar.wait_for_event("Holiday").await?;
+    calendar.wait_until_synced(ada.email()).await?;
 
     // Each event added to the primary calendar is pushed and starts a sync
     // round of the whole account.

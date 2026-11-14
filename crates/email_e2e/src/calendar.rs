@@ -187,6 +187,10 @@ impl Calendar {
     /// or the round a change at the provider started. Google's push only
     /// starts a round when the last one is over, so call this between one
     /// change at Google and the next.
+    ///
+    /// An account that is idle passes at once, so call it after the change
+    /// has been seen in Macro (`wait_for_event`, `wait_until_gone`): a push
+    /// that has not arrived yet has started no round to wait for.
     pub async fn wait_until_synced(&self, address: &str) -> Result<(), Report> {
         let mut last_seen = String::new();
         let waited = eventually(

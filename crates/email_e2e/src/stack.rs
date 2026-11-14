@@ -1273,8 +1273,12 @@ async fn start_calendar(
     let team_sharing = env
         .get(calendar_environment::TEAM_SHARING)
         .is_some_and(|value| value == "true");
-    let reads =
-        CalendarReads::start(db.clone(), environment::INTERNAL_API_KEY, team_sharing).await?;
+    // The key the services were started with, which a scenario may have
+    // replaced.
+    let internal_api_key = email_env
+        .get("INTERNAL_API_KEY")
+        .map_or(environment::INTERNAL_API_KEY, String::as_str);
+    let reads = CalendarReads::start(db.clone(), internal_api_key, team_sharing).await?;
     Ok(CalendarPart {
         service,
         url: calendar_environment::gateway_url(port),

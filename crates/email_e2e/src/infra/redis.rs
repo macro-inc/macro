@@ -36,6 +36,19 @@ end
 return 0
 "#;
 
+/// Empties the leased database only while this scenario still owns the
+/// lease, and renews it: a scenario that stalled past its lease must not
+/// empty the database of the one that took it over.
+const EMPTY: &str = r#"
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    redis.call('PEXPIRE', KEYS[1], ARGV[2])
+    redis.call('SELECT', ARGV[3])
+    redis.call('FLUSHDB')
+    return 1
+end
+return 0
+"#;
+
 /// A leased logical database, emptied when it was taken.
 pub(crate) struct RedisDatabase {
     url: String,
@@ -82,15 +95,19 @@ impl RedisDatabase {
         let index = lease_index(&mut registry, count, &owner).await?;
         let url = database_url(server_url, index)?;
 
-        let mut database = redis::Client::open(url.as_str())?
-            .get_multiplexed_async_connection()
-            .await?;
-        redis::cmd("FLUSHDB")
-            .query_async::<()>(&mut database)
+        let lease_key = lease_key(index);
+        let emptied: i32 = redis::Script::new(EMPTY)
+            .key(&lease_key)
+            .arg(&owner)
+            .arg(LEASE.as_millis() as u64)
+            .arg(index)
+            .invoke_async(&mut registry)
             .await
             .context("could not empty the scenario's Redis database")?;
+        if emptied == 0 {
+            bail!("the lease on Redis database {index} ran out before the database was emptied");
+        }
 
-        let lease_key = lease_key(index);
         let cancel = CancellationToken::new();
         let tracker = TaskTracker::new();
         let lost = Arc::new(AtomicBool::new(false));
