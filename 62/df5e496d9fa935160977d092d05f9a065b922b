@@ -1,0 +1,27 @@
+crates/agent_monitor/fixtures/codex/2030/01/01/rollout-2030-01-01T10-00-00-0aaaaaaa-1111-7222-8333-444444444444.jsonl
+  s_7a07194ea723e2::t_25d4585f6701a8 1-9
+crates/agent_monitor/fixtures/codex_legacy/rollout-2029-01-01T00-00-00-0bbbbbbb-1111-7222-8333-444444444444.jsonl
+  s_7a07194ea723e2::t_590c2c68f02252 1-4
+crates/agent_monitor/src/outbound.rs
+  s_7a07194ea723e2::t_231cfddaf8428f 7
+crates/agent_monitor/src/outbound/codex_rollouts.rs
+  s_7a07194ea723e2::t_0cef1fa56025cf 1-262
+crates/agent_monitor/src/outbound/codex_rollouts/test.rs
+  s_7a07194ea723e2::t_2edefcd32760f0 1-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "62df5e496d9fa935160977d092d05f9a065b922b",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
