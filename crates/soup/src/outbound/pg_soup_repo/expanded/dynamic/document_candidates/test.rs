@@ -349,3 +349,47 @@ async fn the_arm_counts_ids_and_participant_rows_against_the_limit(
     }
     Ok(())
 }
+
+/// The candidates are the ids and the documents whose participants match a
+/// domain or a whole address. The arm rechecks the filter on each, so a set
+/// wider than this costs reads without changing a page; only this test sees
+/// it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_candidates_are_the_ids_and_the_participants_they_name(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let documents = ["to-pat", "to-sam", "from-lee", "from-kim"].map(String::from);
+    let addresses = [
+        "pat@acme.test",
+        "sam@acme.test",
+        "lee@other.test",
+        "kim@third.test",
+    ]
+    .map(String::from);
+    sqlx::query!(
+        "INSERT INTO document_email_participants (document_id, address)
+         SELECT * FROM unnest($1::text[], $2::text[])",
+        &documents,
+        &addresses,
+    )
+    .execute(&db)
+    .await?;
+    let mut arrays = DocumentIdArrays::starting_at(1);
+    let union = candidates(&[DOC_A], &["other.test"], &["pat@acme.test"]).union(&mut arrays);
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "runs SQL generated from the candidates"
+    )]
+    let mut query = sqlx::query_scalar::<_, String>(&union);
+    for array in arrays.into_binds() {
+        query = query.bind(array);
+    }
+    let mut named = query.fetch_all(&db).await?;
+    named.sort();
+    assert_eq!(
+        named,
+        [DOC_A.to_string(), "from-lee".into(), "to-pat".into()]
+    );
+    Ok(())
+}
