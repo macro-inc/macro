@@ -8,6 +8,7 @@ use crate::domain::pipelines::{
 };
 use chrono::{DateTime, Utc};
 use databases::domain::provisioning::DatabaseStorageProvisioner;
+use entity_access::domain::telemetry::span_count;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use models_databases::OptionId;
 use models_databases::{ColumnId, DatabaseId, RowId, TableId};
@@ -167,7 +168,7 @@ where
         .collect()
     }
 
-    #[tracing::instrument(skip_all, err, fields(records = records.len()))]
+    #[tracing::instrument(skip_all, err, fields(records = span_count(records.len())))]
     async fn referencing_rows(
         &self,
         record_type: PipelineRecordType,
@@ -229,7 +230,7 @@ where
 
     type Guard = Transaction<'static, Postgres>;
 
-    #[tracing::instrument(skip_all, err, fields(pipelines = ids.len()))]
+    #[tracing::instrument(skip_all, err, fields(pipelines = span_count(ids.len())))]
     async fn lock_live_many(
         &self,
         ids: &[Uuid],

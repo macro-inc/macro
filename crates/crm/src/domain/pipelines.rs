@@ -30,6 +30,7 @@ use entity_access::domain::{
         MemberTeamRole, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
     },
     ports::{AccessiblePipelines, EntityAccessService},
+    telemetry::span_count,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::{
@@ -612,7 +613,7 @@ where
             .collect())
     }
 
-    #[tracing::instrument(name = "crm.pipeline.entries", skip_all, fields(record_type = record_type.as_str(), records = records.len(), pipelines = tracing::field::Empty, entries = tracing::field::Empty), err)]
+    #[tracing::instrument(name = "crm.pipeline.entries", skip_all, fields(record_type = record_type.as_str(), records = span_count(records.len()), pipelines = tracing::field::Empty, entries = tracing::field::Empty), err)]
     async fn entries(
         &self,
         viewer: &MacroUserIdStr<'static>,
@@ -637,7 +638,7 @@ where
             self.access.pipelines_access(viewer, &holders).await?
         };
         holders.retain(|id| grants.contains_key(id));
-        tracing::Span::current().record("pipelines", holders.len());
+        tracing::Span::current().record("pipelines", span_count(holders.len()));
         if holders.is_empty() {
             return Ok(Vec::new());
         }
@@ -696,7 +697,7 @@ where
                 })
             }));
         }
-        tracing::Span::current().record("entries", entries.len());
+        tracing::Span::current().record("entries", span_count(entries.len()));
         Ok(entries)
     }
 
