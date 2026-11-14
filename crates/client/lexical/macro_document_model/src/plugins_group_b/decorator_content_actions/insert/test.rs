@@ -818,3 +818,235 @@ fn document_mention_agent_branch_still_collapses_and_adds_a_space() -> Result<()
     );
     Ok(())
 }
+
+// Source INSERT_BOOKING_LINK_MENTION (mentionsPlugin.ts:746-760): the same
+// insertion as the agent-session command; the payload is the Source handler's
+// handleBookingLinkMention one, with the url from buildBookingUrl.
+const BOOKING_URL: &str = "https://dev.macro.com/app/book/fixture-profile/30min";
+const BOOKING_FULL: &str = r#"{"profileId":"fixture-profile","slug":"30min","label":"Intro call","url":"https://dev.macro.com/app/book/fixture-profile/30min"}"#;
+
+fn booking_insert(editor: &mut Editor, json: &str) -> Result<(Handled, Commit), Error> {
+    let command = surface::decode_command(
+        "group-b.insert-booking-link-mention",
+        json,
+        editor.state().max_key().generation(),
+        None,
+    )?
+    .expect("dedicated booking-link insertion must decode");
+    editor.dispatch(&command)
+}
+
+fn booking_mention() -> serde_json::Value {
+    serde_json::json!({
+        "type": "booking-link-mention", "version": 1,
+        "profileId": "fixture-profile", "slug": "30min",
+        "label": "Intro call", "url": BOOKING_URL
+    })
+}
+
+#[test]
+fn booking_link_insert_at_a_caret_splits_the_text() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+    let (handled, commit) = booking_insert(&mut editor, BOOKING_FULL)?;
+    assert_eq!(handled, Handled::Yes);
+    // Source dispatches inside its own update: no extra tags.
+    assert_eq!(commit.tags.iter().count(), 0, "{:?}", commit.tags);
+    assert_eq!(
+        agent_children(&editor)?,
+        [
+            agent_text("Hello "),
+            booking_mention(),
+            agent_text(" world")
+        ]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 2], true, 0));
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_replaces_a_forward_range_without_a_space() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(1), text, Utf16Offset(6)))?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("H"), booking_mention(), agent_text(" world")]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 2], true, 0));
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_replaces_a_backward_range_without_a_space() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(5), text, Utf16Offset(0)))?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [booking_mention(), agent_text("  world")]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0, 1], true, 0));
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_at_an_element_caret_appends_and_selects_the_paragraph_end()
+-> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (paragraph, _) = agent_seed(&mut editor)?;
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(paragraph, ChildIndex(1)),
+            Point::element(paragraph, ChildIndex(1)),
+        ))))
+    })?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("Hello  world"), booking_mention()]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0], false, 2));
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_without_a_selection_appends_and_selects_the_paragraph_end()
+-> Result<(), Error> {
+    let mut editor = agent_editor();
+    agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_selection(None))?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?,
+        [agent_text("Hello  world"), booking_mention()]
+    );
+    assert_eq!(agent_caret(&editor), (vec![0], false, 2));
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_keeps_its_payload_exactly() -> Result<(), Error> {
+    for (json, expected) in [
+        (
+            r#"{"profileId":"fixture-profile","url":"https://dev.macro.com/app/book/fixture-profile"}"#,
+            serde_json::json!({"type":"booking-link-mention","version":1,"profileId":"fixture-profile","url":"https://dev.macro.com/app/book/fixture-profile"}),
+        ),
+        (
+            r#"{"profileId":"fixture-profile","slug":"","label":"","url":"https://dev.macro.com/app/book/fixture-profile/"}"#,
+            serde_json::json!({"type":"booking-link-mention","version":1,"profileId":"fixture-profile","slug":"","label":"","url":"https://dev.macro.com/app/book/fixture-profile/"}),
+        ),
+        (BOOKING_FULL, booking_mention()),
+    ] {
+        let mut editor = agent_editor();
+        let (_, text) = agent_seed(&mut editor)?;
+        editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+        assert_eq!(booking_insert(&mut editor, json)?.0, Handled::Yes);
+        assert_eq!(agent_children(&editor)?[1], expected, "{json}");
+    }
+    Ok(())
+}
+
+#[test]
+fn booking_link_insert_rejects_unknown_or_missing_fields_and_stale_generations() -> Result<(), Error>
+{
+    for json in [
+        r#"{"profileId":"fixture-profile","url":"https://dev.macro.com/app/book/fixture-profile","title":"Intro"}"#,
+        r#"{"profileId":"fixture-profile"}"#,
+        r#"{"url":"https://dev.macro.com/app/book/fixture-profile"}"#,
+    ] {
+        assert!(
+            surface::decode_command("group-b.insert-booking-link-mention", json, 0, None).is_err(),
+            "{json}"
+        );
+    }
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+    let stale = surface::decode_command(
+        "group-b.insert-booking-link-mention",
+        BOOKING_FULL,
+        editor.state().max_key().generation() + 1,
+        None,
+    )?
+    .expect("dedicated booking-link insertion must decode");
+    assert_eq!(editor.dispatch(&stale)?.0, Handled::No);
+    assert_eq!(agent_children(&editor)?, [agent_text("Hello  world")]);
+    Ok(())
+}
+
+// The rendered component's existing label update still applies to a node this
+// command inserted.
+#[test]
+fn booking_link_insert_node_takes_the_existing_label_update() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    let (_, text) = agent_seed(&mut editor)?;
+    editor.update(|tx| tx.set_text_node_range(text, Utf16Offset(6), text, Utf16Offset(6)))?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    let view = editor.state().view();
+    let paragraph = view.first_child(NodeKey::ROOT).expect("paragraph");
+    let key = view.children_keys(paragraph)?[1];
+    let label = surface::decode_command(
+        "group-b.booking-mention-label",
+        &serde_json::json!({ "key": key.index(), "label": "Resolved label" }).to_string(),
+        key.generation(),
+        None,
+    )?
+    .expect("booking label decoder");
+    assert_eq!(editor.dispatch(&label)?.0, Handled::Yes);
+    assert_eq!(
+        agent_children(&editor)?[1],
+        serde_json::json!({
+            "type": "booking-link-mention", "version": 1,
+            "profileId": "fixture-profile", "slug": "30min",
+            "label": "Resolved label", "url": BOOKING_URL
+        })
+    );
+    Ok(())
+}
+
+// A root-level element caret: Source's root-anchor insertParagraph
+// (Lexical.dev.mjs:8471-8477, :8553-8557) puts the mention in a NEW paragraph at
+// root(1) and selectNext(0,0) selects after it.
+#[test]
+fn booking_link_insert_at_a_root_caret_lands_in_a_new_paragraph() -> Result<(), Error> {
+    let mut editor = agent_editor();
+    agent_seed(&mut editor)?;
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))
+    })?;
+    assert_eq!(booking_insert(&mut editor, BOOKING_FULL)?.0, Handled::Yes);
+    let view = editor.state().view();
+    let blocks = view.children_keys(NodeKey::ROOT)?;
+    assert_eq!(blocks.len(), 2);
+    let block = |key: NodeKey| -> Result<serde_json::Value, Error> {
+        let mut json = view.export_json(key)?;
+        json.retain(|name, _| !name.starts_with('$'));
+        let children = view
+            .children_keys(key)?
+            .into_iter()
+            .map(|child| {
+                let mut json = view.export_json(child)?;
+                json.retain(|name, _| !name.starts_with('$'));
+                Ok(serde_json::Value::Object(json))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        Ok(serde_json::json!({ "type": json["type"], "children": children }))
+    };
+    assert_eq!(
+        block(blocks[0])?,
+        serde_json::json!({ "type": "paragraph", "children": [agent_text("Hello  world")] })
+    );
+    assert_eq!(
+        block(blocks[1])?,
+        serde_json::json!({ "type": "paragraph", "children": [booking_mention()] })
+    );
+    assert_eq!(agent_caret(&editor), (vec![1], false, 1));
+    Ok(())
+}
