@@ -1,10 +1,10 @@
 //! The engine the small-record adapters share: a few directories of small
 //! files (one record per file or directory), read whole on every change.
 //!
-//! A record is read again only when its stat fingerprint changes, and sent
-//! only when the fact it decodes to changes. A 30 s reconcile lists the
-//! directories again and compares fingerprints, in case a notification was
-//! dropped or a watched directory appeared.
+//! A record is read again when a notification names it, and sent only when
+//! the fact it decodes to changes. A 30 s reconcile lists the directories
+//! again and re-reads only records whose stat fingerprint changed, in case a
+//! notification was dropped or a watched directory appeared.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -115,12 +115,22 @@ pub(crate) async fn run<F: RecordFormat>(
                 if changes.rescan {
                     engine.reconcile().await?;
                 } else {
-                    engine.refresh(records).await?;
+                    engine.refresh(records, Reread::Always).await?;
                 }
             }
             _ = reconcile.tick() => engine.reconcile().await?,
         }
     }
+}
+
+/// When a record is read again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Reread {
+    /// On a notification: two writes within the file system's timestamp
+    /// granularity can leave length and modification time unchanged.
+    Always,
+    /// On a reconcile, which must stay a cheap `stat` sweep.
+    IfChanged,
 }
 
 struct Engine<F: RecordFormat> {
@@ -206,8 +216,13 @@ impl<F: RecordFormat> Engine<F> {
         Ok(facts)
     }
 
-    /// Re-reads the given records where their fingerprint changed.
-    async fn refresh(&mut self, records: BTreeSet<PathBuf>) -> Result<(), SourceError> {
+    /// Re-reads the given records, or with [`Reread::IfChanged`] only those
+    /// whose fingerprint changed.
+    async fn refresh(
+        &mut self,
+        records: BTreeSet<PathBuf>,
+        reread: Reread,
+    ) -> Result<(), SourceError> {
         if records.is_empty() {
             return Ok(());
         }
@@ -224,7 +239,7 @@ impl<F: RecordFormat> Engine<F> {
                 .into_iter()
                 .filter_map(|(record, before)| {
                     let now = format.fingerprint(&record);
-                    if now.is_some() && now == before {
+                    if reread == Reread::IfChanged && now.is_some() && now == before {
                         return None;
                     }
                     let fact = now.as_ref().and_then(|_| format.read(&record));
@@ -281,7 +296,7 @@ impl<F: RecordFormat> Engine<F> {
             .map_err(internal)?;
         let mut records: BTreeSet<PathBuf> = listed.into_iter().collect();
         records.extend(self.known.keys().cloned());
-        self.refresh(records).await
+        self.refresh(records, Reread::IfChanged).await
     }
 }
 
