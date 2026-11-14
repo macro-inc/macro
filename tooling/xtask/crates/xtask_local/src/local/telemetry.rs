@@ -59,6 +59,8 @@ pub(super) const LOCALSTACK_LANE: &str = "localstack";
 const CONTAINERS_LANE: &str = "containers";
 /// The lane of a build's compilation units, which cargo runs in parallel.
 const CARGO_LANE: &str = "cargo";
+/// The run event's `<start>/<run_id>/<machine>`, see [`bring_up_key`].
+const BRING_UP_FIELD: &str = "bring_up";
 /// Cargo's timing report of the last build, relative to the workspace root.
 const CARGO_TIMINGS: &str = "target/cargo-timings/cargo-timing.html";
 /// Compilation units shorter than this get no `crate` event.
@@ -528,6 +530,9 @@ impl Shared {
     fn close_run(&self, mut fields: BTreeMap<String, Value>, ended: SystemTime, wait: Duration) {
         fields.insert("steps".to_owned(), Value::from(self.state().steps));
         if let Some(recorder) = self.take_recorder() {
+            if let Some(key) = bring_up_key(self.kind, &fields, &recorder) {
+                fields.insert(BRING_UP_FIELD.to_owned(), Value::from(key));
+            }
             recorder.finish(fields, ended, wait);
         }
     }
@@ -553,6 +558,27 @@ impl Shared {
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// `<start>/<run_id>/<machine>` for a bring-up that got ready: one span
+/// attribute whose values a dashboard variable can filter by start and machine
+/// and sort newest first (run ids sort by time), since Tempo's variables list an
+/// attribute's values without a query to narrow them.
+fn bring_up_key(
+    kind: RunKind,
+    fields: &BTreeMap<String, Value>,
+    recorder: &Recorder,
+) -> Option<String> {
+    let ready = fields.get("outcome").and_then(Value::as_str) == Some(outcome(true));
+    if kind != RunKind::Up || !ready {
+        return None;
+    }
+    let start = fields.get("start").and_then(Value::as_str)?;
+    Some(format!(
+        "{start}/{}/{}",
+        recorder.run_id(),
+        recorder.machine()?
+    ))
 }
 
 fn outcome(succeeded: bool) -> &'static str {

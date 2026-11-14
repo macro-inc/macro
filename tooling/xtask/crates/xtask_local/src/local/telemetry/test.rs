@@ -360,3 +360,35 @@ fn hardware_fields_parse_proc() {
     );
     assert_eq!(parse_cpuinfo_model("processor\t: 0\n"), None);
 }
+
+/// A ready bring-up names its start, trace and machine in one field, which the
+/// dashboard's run pickers list; other runs don't.
+#[test]
+fn a_ready_bring_up_carries_its_picker_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = opted_in(dir.path());
+    let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
+    let telemetry = RunTelemetry::begin_in(
+        &paths,
+        Some(&instance),
+        RunKind::Up,
+        SystemTime::now(),
+        false,
+    )
+    .expect("on");
+    telemetry.shared.state().shape =
+        std::collections::BTreeMap::from([("start".to_owned(), json!("resume"))]);
+    telemetry.finish(true, None, Duration::from_secs(5));
+
+    let records = buffered_records(&paths);
+    let run = records
+        .iter()
+        .find(|line| line["event"] == json!("run"))
+        .expect("a buffered run event");
+    let key = run["fields"]["bring_up"].as_str().expect("a bring_up key");
+    let parts: Vec<&str> = key.split('/').collect();
+    assert_eq!(parts.first(), Some(&"resume"));
+    let run_id = parts.get(1).expect("a run id");
+    assert!(run_id.len() == 32 && run_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert!(parts.get(2).is_some_and(|machine| !machine.is_empty()));
+}

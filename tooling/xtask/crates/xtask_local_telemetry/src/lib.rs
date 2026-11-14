@@ -342,6 +342,16 @@ impl Recorder {
         &self.shared.begin.run_id
     }
 
+    /// The name this run's machine is grouped by, the `machine` field of every
+    /// event: its readable name, else the hashed host.
+    pub fn machine(&self) -> Option<&str> {
+        self.shared
+            .begin
+            .common
+            .get(MACHINE_LABEL_FIELD)
+            .and_then(Value::as_str)
+    }
+
     /// Note that a step began. Only an interrupted run reports it, as the step it
     /// was in when it stopped.
     pub fn step_started(&self, step: &str) {
