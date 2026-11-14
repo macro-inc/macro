@@ -312,6 +312,7 @@ impl MacroApiTokenSigner {
             agent_via: None,
             agent_session_id: None,
             agent_correlation_id: None,
+            agent_scope: None,
             routine_id: None,
             channel_mention_id: Some(channel_mention_id),
         };
