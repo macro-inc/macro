@@ -1138,6 +1138,35 @@ async fn create_private_channel_allows_no_invited_participants() {
 }
 
 #[tokio::test]
+async fn create_team_channel_allows_no_invited_participants() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@example.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel(
+        sender("macro|sender@example.com"),
+        None,
+        CreateChannelRequest {
+            name: Some("planning".to_string()),
+            channel_type: ChannelType::Team,
+            team_id: Some(Uuid::new_v4()),
+            auto_join_team: false,
+            participants: HashSet::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated { participant_user_ids, .. }]
+            if participant_user_ids == &[macro_id("macro|sender@example.com")]
+    ));
+}
+
+#[tokio::test]
 async fn create_auto_join_team_channel_event_includes_current_team_members() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

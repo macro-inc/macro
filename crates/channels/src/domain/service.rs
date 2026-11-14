@@ -243,7 +243,11 @@ where
         }
 
         let org_id = None;
-        if req.participants.is_empty() && req.channel_type != ChannelType::Private {
+        // Participants exclude the owner, whom the repository adds, so private
+        // and team channels may start with the owner alone.
+        if req.participants.is_empty()
+            && !matches!(req.channel_type, ChannelType::Private | ChannelType::Team)
+        {
             return Err(ChannelMutationErr::BadRequest(
                 "participants must be a non-empty list of 'macro|<email>'".to_string(),
             ));

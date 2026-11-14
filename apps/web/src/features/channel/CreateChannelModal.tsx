@@ -1,7 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
@@ -42,7 +41,6 @@ export function openNewChannelModal() {
 
 export function CreateChannelModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
-  const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
   const agentsQuery = useAgentsQuery(
     () => newChannelModalOpen() && step() === 'invite'
@@ -128,16 +126,11 @@ export function CreateChannelModal() {
       return;
     }
 
-    // Team channels require a participant in the request; the API filters out
-    // the owner after validating the list.
-    const participants =
-      selectedVisibility === 'team' && userId() ? [userId()!] : [];
-
     try {
       const { id } = await createChannelMutation.mutateAsync({
         channel_type: selectedVisibility,
         name: channelName(),
-        participants,
+        participants: [],
         team_id: selectedVisibility === 'team' ? selectedTeam?.id : undefined,
         // Apply the invite-page switch after creation so turning it off never
         // leaves the current team pre-added to the channel.

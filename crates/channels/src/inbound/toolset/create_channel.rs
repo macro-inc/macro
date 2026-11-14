@@ -93,7 +93,7 @@ where
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         let name = channel_name(&self.name)?;
-        let mut participants = parse_participants(&self.participants)?;
+        let participants = parse_participants(&self.participants)?;
         let team_id = match self.channel_type {
             NewChannelType::Private => None,
             NewChannelType::Team => {
@@ -108,9 +108,6 @@ where
                             .to_string(),
                     internal_error: anyhow::anyhow!("create team channel without a team"),
                 })?;
-                if participants.is_empty() {
-                    participants.push(request_context.user_id.clone());
-                }
                 Some(team.team_id)
             }
         };
