@@ -1,0 +1,23 @@
+packages/sdk-mcp/scripts/generate.ts
+  s_5ca986659ec018::t_b2b7d01abd5bec 651-652,825-830,853-856,869-871,882
+  s_5ca986659ec018::t_f7fce41988f529 730,739-741,831-852,857-868,872-881
+  s_5ca986659ec018::t_2477c27a83ad7a 883
+packages/sdk-mcp/src/catalog.ts
+  s_5ca986659ec018::t_f7fce41988f529 82-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "45ab3f61078e64b723d9d21e26e6a3527fe262d7",
+  "prompts": {},
+  "sessions": {
+    "s_5ca986659ec018": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c7da77a-16e4-4827-998b-5ac08cab78d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
