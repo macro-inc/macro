@@ -213,7 +213,9 @@ async fn rare_and_old_companies_match(pool: Pool<Postgres>) -> anyhow::Result<()
 )]
 async fn blocked_domains_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // Team blocklist, a hidden company's subdomain, and u1's personal list.
-    for domain in ["blocked.test", "mail.hidden.test"] {
+    // The privacy rule ignores drafts, so the one thread whose only
+    // blocked.test participants are on a draft still shows.
+    for (domain, shown) in [("blocked.test", 1), ("mail.hidden.test", 0)] {
         let rows = assert_parity(
             &pool,
             TEAM_GAMMA_ID,
@@ -223,7 +225,7 @@ async fn blocked_domains_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
             100,
         )
         .await?;
-        assert_eq!(rows, 0, "{domain} is blocked for the whole team");
+        assert_eq!(rows, shown, "{domain} is blocked for the whole team");
     }
     let personal = company(&["personal.test"]);
     let rows = assert_parity(&pool, TEAM_GAMMA_ID, &[link(1)], &user(1), &personal, 5).await?;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::outbound::email_pg_repo::dynamic::resolve::ResolvedFilters;
+use crate::outbound::email_pg_repo::dynamic::resolve::{ResolvedFilters, resolve_filters};
 use chrono::{TimeZone, Utc};
 use item_filters::ast::email::Email;
 use macro_user_id::cowlike::CowLike;
@@ -249,9 +249,59 @@ fn record_without_contacts_in_the_inboxes_has_no_superset() {
     assert!(read.superset.branches.is_empty());
 }
 
+const GAMMA: &str = "e0000003-0000-0000-0000-000000000003";
+
+/// Link `i` of the `email_crm_team_read` fixture.
+fn gamma_link(i: u128) -> Uuid {
+    Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | i)
+}
+
+/// The inboxes a team read takes are the ones `crm_email_thread_allowed`
+/// lets contribute. In the fixture the primary inboxes of u5, u6 and u7
+/// each miss one of its mailbox conditions (consent naming another inbox,
+/// an inbox being deleted, consent off), and u3's has no consent.
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
+)]
+async fn contributing_inboxes_restate_the_privacy_function(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::parse_str(GAMMA)?;
+    let resolved = resolve_filters(
+        &pool,
+        &[gamma_link(0)],
+        Some(team),
+        &any_direction("dense.test"),
+    )
+    .await?;
+    let mut contributing = resolved.contributing_link_ids().unwrap().to_vec();
+    contributing.sort();
+    let allowed = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT t.link_id AS "link_id!" FROM email_threads t
+        WHERE crm_email_thread_allowed($1, t.id)
+        ORDER BY 1
+        "#,
+        team,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(contributing, allowed);
+    assert_eq!(allowed, [0, 1, 2].map(gamma_link));
+
+    // Every member's primary inbox, contributing or not.
+    let mut team_links = resolved.team_link_ids().unwrap().to_vec();
+    team_links.sort();
+    assert_eq!(team_links, [0, 1, 2, 3, 6, 8, 9].map(gamma_link));
+    Ok(())
+}
+
 /// The inline privacy rule agrees with `crm_email_thread_allowed` on every
 /// thread. Every inbox is offered, so the `contributing` CTE's own mailbox
 /// conditions decide, and some addresses sit at the edges of the suffix test.
+/// The fixture's hand-made threads are where only a draft or a spam message
+/// carries a participant.
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
@@ -274,10 +324,32 @@ async fn allowed_restates_the_privacy_function(pool: sqlx::PgPool) -> anyhow::Re
     .execute(&pool)
     .await?;
 
-    let team = Uuid::parse_str("e0000003-0000-0000-0000-000000000003")?;
-    let links: Vec<Uuid> = (0..6)
-        .map(|i| Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | i))
+    let team = Uuid::parse_str(GAMMA)?;
+    let hand_made = sqlx::query!(
+        r#"
+        SELECT t.provider_id AS "provider_id!", crm_email_thread_allowed($1, t.id) AS "allowed!"
+        FROM email_threads t WHERE t.provider_id LIKE 'ph:%'
+        ORDER BY 1
+        "#,
+        team,
+    )
+    .fetch_all(&pool)
+    .await?;
+    let hand_made: Vec<(&str, bool)> = hand_made
+        .iter()
+        .map(|thread| (thread.provider_id.as_str(), thread.allowed))
         .collect();
+    assert_eq!(
+        hand_made,
+        [
+            ("ph:blocked-draft", true),
+            ("ph:blocked-spam", false),
+            ("ph:dense-spam", true),
+            ("ph:draft-only", false),
+        ]
+    );
+
+    let links: Vec<Uuid> = (0..10).map(gamma_link).collect();
     let view = all_mail();
     let filter = any_direction("dense.test");
     let mut params = params(SimpleSortMethod::UpdatedAt);
