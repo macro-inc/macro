@@ -42,7 +42,12 @@ pub(super) fn channel(filter: Option<&EntityFilterAst>) -> bool {
 pub(super) fn channel_thread(filter: Option<&EntityFilterAst>) -> bool {
     excludes_all(
         filter.and_then(|filter| filter.channel_thread_filter.as_deref()),
-        |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) if id.is_nil()),
+        |literal| {
+            matches!(
+                literal,
+                ChannelThreadLiteral::ThreadId(id) | ChannelThreadLiteral::ChannelId(id) if id.is_nil()
+            )
+        },
     )
 }
 

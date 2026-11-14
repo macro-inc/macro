@@ -106,6 +106,19 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`agent_session_follower`, people who prompted the session from the session
   itself), who may also read them through the thread's parent. The notified
   and work feeds share that rule through `notified::agent_session_gate`.
+- A source pinned to the nil id (how CRM tabs, Home, Tasks, and GraphQL
+  hydration leave a source out) runs no statement: `exclusions.rs` drops the
+  email, channel, channel-thread (by thread or channel id), call, and
+  foreign-entity requests, the calendar and agent-session legs return early,
+  and a dynamic query that can return no row (`DynamicArms::can_match`) skips
+  its transaction and source-id read. A project parent pinned to nil counts
+  only there: a union with another live arm keeps that project arm, because
+  dropping it leaves one read of `TopItems`, Postgres inlines the CTE, and
+  CRM record Files then scanned `document_sub_type` once per page row.
+  The CRM company request is dropped when the ids its extractor collects are
+  all nil, read from the extract because it unions `And`ed ids; a
+  hidden-company request keeps the leg so the admin check still answers it.
+  Prove a new pin impossible the same way; `nil OR real id` must keep its leg.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
