@@ -10,6 +10,10 @@ if [ -n "${EMAIL_E2E_PARTITION:-}" ]; then
   scenarios+=(--partition "$EMAIL_E2E_PARTITION")
 fi
 
+# The results step keeps only what is written after this: `target/` comes
+# from a cache volume and holds the records of earlier jobs.
+touch "$RUNNER_TEMP/email-e2e-started"
+
 started=$(date +%s)
 cargo nextest run -P email-e2e -p email_e2e "${flags[@]}" "${scenarios[@]}"
 echo "Email end-to-end scenarios: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -861,6 +861,10 @@ impl Stack {
     }
 
     /// Writes what the scenario made the services do to its log directory.
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "test support: the harness's own reads are not checked against the query cache"
+    )]
     async fn write_evidence(&self) -> Result<(), Report> {
         // Work that stays due (a scenario that leaves a provider failing) is
         // not waited out: the record is then of what happened until now.
