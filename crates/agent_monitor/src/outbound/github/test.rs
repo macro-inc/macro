@@ -198,6 +198,7 @@ struct Harness {
     observations: mpsc::Receiver<Observation>,
     subscribers: Arc<AtomicUsize>,
     cancel: CancellationToken,
+    arrivals: watch::Sender<u64>,
     _wanted: watch::Sender<Arc<PrWanted>>,
 }
 
@@ -232,9 +233,11 @@ fn run_fake(watchers: usize, absent: bool) -> Harness {
     let (sender, receiver) = watch::channel(Arc::new(wanted));
     let subscribers = Arc::new(AtomicUsize::new(watchers));
     let count = Arc::clone(&subscribers);
+    let (arrivals, arrived) = watch::channel(0);
     let interest = PrInterest {
         wanted: receiver,
         subscribers: Arc::new(move || count.load(Ordering::SeqCst)),
+        arrivals: arrived,
     };
     let source = GithubSource::new(backend, interest, Duration::from_secs(60));
     let (out, observations) = mpsc::channel(1024);
@@ -245,6 +248,7 @@ fn run_fake(watchers: usize, absent: bool) -> Harness {
         observations,
         subscribers,
         cancel,
+        arrivals,
         _wanted: sender,
     }
 }
@@ -302,6 +306,14 @@ async fn a_poll_reports_checkouts_and_statuses_then_repeats_each_minute_while_wa
     harness.until_health().await;
     let last = *harness.gaps().last().expect("a gap");
     assert!(last >= IDLE_POLL, "{last:?}");
+
+    // A viewer arriving a minute and a half in brings the next query forward.
+    tokio::time::sleep(Duration::from_secs(90)).await;
+    harness.subscribers.store(1, Ordering::SeqCst);
+    harness.arrivals.send_modify(|count| *count += 1);
+    harness.until_health().await;
+    let last = *harness.gaps().last().expect("a gap");
+    assert!(last < Duration::from_secs(100), "{last:?}");
     harness.cancel.cancel();
 }
 

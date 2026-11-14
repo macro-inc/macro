@@ -251,6 +251,8 @@ impl<B: GithubBackend> Poller<B> {
         let mut wanted = self.source.interest.wanted.clone();
         // The first poll is due at once and reads the current value.
         wanted.borrow_and_update();
+        let mut arrivals = self.source.interest.arrivals.clone();
+        arrivals.borrow_and_update();
 
         loop {
             let due = self.due();
@@ -265,6 +267,14 @@ impl<B: GithubBackend> Poller<B> {
                     let current = wanted.borrow_and_update().clone();
                     if self.new_since.is_none() && has_new(&current, &self.polled) {
                         self.new_since = Some(Instant::now());
+                    }
+                }
+                // A viewer arrived: the next query is due on the watched
+                // schedule, which `due` recomputes.
+                arrived = arrivals.changed() => {
+                    if arrived.is_err() {
+                        cancel.cancelled().await;
+                        return Ok(());
                     }
                 }
                 () = tokio::time::sleep_until(due) => {

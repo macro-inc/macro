@@ -88,6 +88,9 @@ pub struct PrInterest {
     pub wanted: watch::Receiver<Arc<PrWanted>>,
     /// How many viewers are subscribed now.
     pub subscribers: Arc<dyn Fn() -> usize + Send + Sync>,
+    /// Counts subscriptions as they arrive, so a source that waits longer
+    /// while nobody watches wakes when someone starts to.
+    pub arrivals: watch::Receiver<u64>,
 }
 
 impl std::fmt::Debug for PrInterest {

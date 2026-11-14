@@ -111,6 +111,7 @@ struct Shared {
     updates: broadcast::Sender<Arc<Update>>,
     totals: watch::Sender<Arc<Totals>>,
     wanted: watch::Sender<Arc<PrWanted>>,
+    arrivals: watch::Sender<u64>,
 }
 
 impl Shared {
@@ -211,6 +212,7 @@ pub fn replay(
         updates,
         totals,
         wanted,
+        arrivals: watch::channel(0).0,
     });
     let clock = Arc::new(ReplayClock(Mutex::new(Timestamp::default())));
     let mut reducer = Reducer::new(shared.clone(), clock.clone());
@@ -260,6 +262,7 @@ impl Store {
             updates,
             totals,
             wanted,
+            arrivals: watch::channel(0).0,
         });
 
         let reducer = Reducer::new(shared.clone(), clock);
@@ -278,6 +281,7 @@ impl Store {
     /// The current snapshot and every update after it.
     pub fn subscribe(&self) -> Subscription {
         let state = self.shared.lock();
+        self.shared.arrivals.send_modify(|count| *count += 1);
         Subscription {
             snapshot: self.shared.snapshot(&state),
             updates: self.shared.updates.subscribe(),
@@ -315,6 +319,7 @@ impl Store {
         PrInterest {
             wanted: self.pr_wanted(),
             subscribers: Arc::new(move || updates.receiver_count()),
+            arrivals: self.shared.arrivals.subscribe(),
         }
     }
 
