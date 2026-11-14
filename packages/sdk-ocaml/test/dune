@@ -1,0 +1,38 @@
+; check_interface: the compiled Macro interface has one [@@macro.op] value
+; per operations.json entry, at the path it names, and every other value is
+; [@@macro.pure].
+(test
+ (name check_interface)
+ (modules check_interface)
+ (libraries compiler-libs.common yojson)
+ (deps
+  %{cmi:../lib/macro}
+  ../lib/operations.json)
+ (action
+  (run %{test} %{cmi:../lib/macro} %{dep:../lib/operations.json})))
+
+(library
+ (name fake_proxy)
+ (modules fake_proxy)
+ (libraries unix yojson))
+
+; all_operations: every operation called with sample arguments against the
+; fake proxy; checks each request against the spec-derived fixture and
+; decodes a reply generated from the response schema. The calls and the
+; fixture are generated (bun generator/generate.ts).
+(test
+ (name all_operations)
+ (modules all_operations all_operations_calls)
+ (libraries macro_sdk fake_proxy unix yojson)
+ (deps all_operations.json)
+ (action
+  (run %{test} %{dep:all_operations.json})))
+
+
+; test_duplicate_check: the duplicate-check example program against a fake
+; proxy that keeps connections open: its requests, its result, chunked
+; replies, and how proxy refusals and service errors surface.
+(test
+ (name test_duplicate_check)
+ (modules duplicate_check test_duplicate_check)
+ (libraries macro_sdk fake_proxy unix yojson))
