@@ -37,8 +37,8 @@ requests mapping to nothing keep the typed text and show a red error. The box ke
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
-The desktop sidebar's Search icon, immediately left of collapse, opens the
-search field above New. It shares the current Tasks or Projects list query.
+Search the Tasks or Projects list from the header's expandable Search icon; the
+desktop sidebar has no search field.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
@@ -698,7 +698,7 @@ review requests.
 `Authored by me`, `Assigned to me`, and `Review requests` match the linked
 GitHub user ID. If the link-status endpoint has no identity, the list explains
 why the tab is unavailable.
-The sidebar offers **Search reviews** above its navigation. On desktop the
+On touch the sidebar offers **Search reviews** above its navigation. On desktop the
 **List**/**Board** icon group lives in the header; List is the default and the
 choice is remembered. The desktop header always offers an expandable Search icon; Command-F expands and
 focuses it. The single row contains the selected scope, status tabs, grouped

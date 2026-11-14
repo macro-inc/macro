@@ -311,19 +311,7 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header
-        searchLabel="Search reviews"
-        search={() => (
-          <SearchBar
-            label="Search reviews"
-            placeholder="Search reviews"
-            autocomplete="off"
-            value={props.search}
-            onValueChange={props.onSearchChange}
-            onEscape={() => props.onSearchChange('')}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>
