@@ -1,3 +1,4 @@
+import type { ThreadId } from '@core/comments/commentType';
 import { HostedFloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { toast } from '@core/component/Toast/Toast';
@@ -15,6 +16,7 @@ import { createNativeAiEditSlot } from './native-ai-edit-slot';
 import { NativeBodyFormatPopup } from './native-body-popup';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import { NativeSnippetLinkControl } from './native-snippet';
+import { createNativeBodyTouchActions } from './native-touch-actions';
 
 /** Own only the optional body menu; the document owns its actual native view. */
 export function createNativeBodyFormattingOverlay(options: {
@@ -27,6 +29,17 @@ export function createNativeBodyFormattingOverlay(options: {
     readonly canComment: Accessor<boolean>;
     /** Source CREATE_DRAFT_COMMENT_COMMAND result. */
     readonly insert: () => boolean;
+  };
+  /** Touch devices: what Source's TouchSelectionToolbar acts on. */
+  touch?: {
+    readonly documentId: Accessor<string>;
+    /** The mounted native view, if any. */
+    readonly view: Accessor<EditorView | undefined>;
+    /** Source commentState.highlightedCommentThreads and its activation. */
+    readonly comments: {
+      readonly highlighted: Accessor<readonly ThreadId[]>;
+      activate(thread: ThreadId): void;
+    };
   };
   /** Source AI edit selection action. */
   aiEdit?: {
@@ -62,6 +75,19 @@ export function createNativeBodyFormattingOverlay(options: {
       createNativeAiEditSlot({
         ...aiEdit,
         enabled: () => options.alive() && aiEdit.enabled(),
+      });
+    const touchOptions = options.touch;
+    const touch =
+      touchOptions &&
+      createNativeBodyTouchActions({
+        ...touchOptions,
+        canEdit: options.canEdit,
+        alive: options.alive,
+        comment: comment && {
+          canComment: () => commentAction?.canComment() ?? false,
+          insert: () => comment.insert(),
+        },
+        snippetLink: () => formatting.snippetLink(),
       });
     let disposed = false;
     const dispose = () => {
@@ -107,6 +133,7 @@ export function createNativeBodyFormattingOverlay(options: {
                 popup={controller().bodyPopup}
                 commentAction={commentAction}
                 slots={ai ? [ai.slot] : []}
+                touch={touch}
                 onToolbarClosed={ai?.popupClosed}
                 snippetLinkAction={
                   formatting.snippetLink()
@@ -128,6 +155,7 @@ export function createNativeBodyFormattingOverlay(options: {
             )}
           </Show>
           {ai?.Highlight()}
+          {ai?.Drawer()}
         </FloatingMenuGroup>
       </ErrorBoundary>
     );

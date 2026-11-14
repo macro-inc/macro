@@ -38,6 +38,9 @@ export interface BodyPopupPromptSlotSpec<Captured> {
   /** Any prompt was dismissed (Source dismissPrompt clears every prompt's
    *  input, not only the open one's). */
   dismissed?(): void;
+  /** The touch toolbar's option for this slot (Source TouchSelectionToolbar
+   *  onEditWithAi / onCreateTask); `hide` hides the popup. */
+  select?(hide: () => void): void;
 }
 
 /** A slot with only a button. */
@@ -45,6 +48,12 @@ export interface BodyPopupButtonSlotSpec {
   readonly id: BodyPopupSlotId;
   readonly available: Accessor<boolean>;
   button(control: BodyPopupButtonControl): JSX.Element;
+  select?(hide: () => void): void;
+  /** The touch option's exact Source label (Task: createTaskLabel); a
+   *  touch-selectable slot without one is not offered on touch. */
+  readonly touchLabel?: Accessor<string>;
+  /** Source isConverting for the Task option. */
+  readonly converting?: Accessor<boolean>;
 }
 
 /** A prompt opened by `open`: its capture already taken. */
@@ -60,6 +69,9 @@ export interface BodyPopupSlot {
   button?(control: BodyPopupButtonControl): JSX.Element;
   open?(): BodyPopupOpenedPrompt;
   dismissed?(): void;
+  select?(hide: () => void): void;
+  readonly touchLabel?: Accessor<string>;
+  readonly converting?: Accessor<boolean>;
 }
 
 export function promptSlot<Captured>(
@@ -70,6 +82,7 @@ export function promptSlot<Captured>(
     available: spec.available,
     button: spec.button,
     dismissed: spec.dismissed,
+    select: spec.select,
     open: () => {
       const value = spec.capture();
       return (exits) =>
@@ -79,5 +92,12 @@ export function promptSlot<Captured>(
 }
 
 export function buttonSlot(spec: BodyPopupButtonSlotSpec): BodyPopupSlot {
-  return { id: spec.id, available: spec.available, button: spec.button };
+  return {
+    id: spec.id,
+    available: spec.available,
+    button: spec.button,
+    select: spec.select,
+    touchLabel: spec.touchLabel,
+    converting: spec.converting,
+  };
 }

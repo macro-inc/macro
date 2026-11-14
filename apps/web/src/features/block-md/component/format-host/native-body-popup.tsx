@@ -1,3 +1,4 @@
+import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { PopupPositioner } from '@core/component/GeneralizedPopup/PopupPositioner';
 import {
   createMenuOpenSignal,
@@ -5,7 +6,9 @@ import {
 } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { setNativeEditMenuSuppressed } from '@core/mobile/nativeEditMenu';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Toolbar } from '@ui';
@@ -20,11 +23,41 @@ import {
   untrack,
 } from 'solid-js';
 import { FormatTools } from '../FormatTools';
+import { TouchSelectionToolbar } from '../TouchSelectionToolbar';
 import type { BodyPopupSlot } from './body-popup-slots';
 import { NativeBodyToolbar } from './native-body-toolbar';
 import type { BodyFormattingPopupHost, DocumentFormattingHost } from './types';
 
-/** Desktop body popup: the actual MarkdownPopup FormatTools subtree and positioning shell. */
+/** What the touch toolbar needs beyond the shared slots (Source
+ *  MarkdownPopup's touch handlers, over the native view). */
+export interface NativeBodyTouchActions {
+  /** The block id for the touch popup's GeneralizedPopup anchor. */
+  readonly documentId: Accessor<string>;
+  /** Source ENABLE_MARKDOWN_COMMENTS && canComment. */
+  readonly canComment: Accessor<boolean>;
+  /** Source handleInsertComment; `hide` on success. */
+  insertComment(hide: () => void): void;
+  /** Source "Show comment": a range touching a comment thread; `hide`
+   *  hides the popup (Source setPopupVisible(false)). */
+  readonly openComment: {
+    readonly available: Accessor<boolean>;
+    open(hide: () => void): void;
+  };
+  /** Source handleShare: copy the snippet link; `copied` flips the icon. */
+  readonly share: Accessor<
+    { readonly copied: Accessor<boolean>; copy(): Promise<void> } | undefined
+  >;
+  /** Source list-to-table on the convertible list at the current generation. */
+  readonly table: {
+    readonly available: Accessor<boolean>;
+    convert(): boolean;
+  };
+  /** Source handlePaste (iOS native edit menu only); `hide` after the insert. */
+  paste(hide: () => void): Promise<void>;
+}
+
+/** Body popup: on desktop the actual MarkdownPopup FormatTools subtree and
+ *  positioning shell; on touch Source's TouchSelectionToolbar. */
 export function NativeBodyFormatPopup(props: {
   host: DocumentFormattingHost;
   popup: BodyFormattingPopupHost;
@@ -36,6 +69,8 @@ export function NativeBodyFormatPopup(props: {
   slots?: readonly BodyPopupSlot[];
   /** The toolbar went away (Source PopupToolbar onCleanup). */
   onToolbarClosed?: () => void;
+  /** Touch devices: Source TouchSelectionToolbar's actions. */
+  touch?: NativeBodyTouchActions;
   /** Source Copy link to snippet: last, without a divider, never closing. */
   snippetLinkAction?: {
     readonly available: Accessor<boolean>;
@@ -98,6 +133,10 @@ export function NativeBodyFormatPopup(props: {
     }
   });
   onCleanup(() => setVisible(false));
+  // Source MarkdownPopup: keep the iOS selection menu from stacking on the
+  // popup while it shows (a no-op outside the iOS app).
+  createEffect(() => setNativeEditMenuSuppressed(visible()));
+  onCleanup(() => setNativeEditMenuSuppressed(false));
   const commentControls = () =>
     props.host.root() !== null && props.commentAction?.canComment();
   const snippetLinkControls = () =>
@@ -112,10 +151,29 @@ export function NativeBodyFormatPopup(props: {
     commentControls() ||
     snippetLinkControls() ||
     slotControls();
+  // Source's touch toolbar always carries Copy and Share, so any live root
+  // with touch actions shows it.
+  const touchControls = () =>
+    isTouchDevice() && props.touch !== undefined && props.host.root() !== null;
+  const hide = () => setVisible(false);
+  const touchSlot = (id: 'ai' | 'task') =>
+    (props.slots ?? []).find(
+      (slot) => slot.id === id && slot.select && slot.available()
+    );
+  // Source's Task option only with the slot's exact label
+  // (C-TOUCH-TASK-LABEL-01: never a guessed one).
+  const taskOption = () => {
+    const slot = touchSlot('task');
+    const label = slot?.touchLabel?.();
+    return label === undefined
+      ? undefined
+      : { label, converting: slot?.converting?.() ?? false };
+  };
   const position = createMemo(() => {
     const rect = rectangle();
     const scope = portalRect();
-    if (!controls() || !showPopup() || !rect || !scope) return undefined;
+    if ((!controls() && !touchControls()) || !showPopup() || !rect || !scope)
+      return undefined;
     return {
       left: rect.left - scope.left,
       top: rect.top - contentTop() + untrack(scrollY),
@@ -181,6 +239,62 @@ export function NativeBodyFormatPopup(props: {
               />
             </PopupPositioner>
           </ScopedPortal>
+        )}
+      </Show>
+      {/* Source PopupToolbar touch branch: TouchSelectionToolbar in a
+          GeneralizedPopup, in a global portal above the mobile chrome. */}
+      <Show when={touchControls() && showPopup() && props.touch}>
+        {(touchActions) => (
+          <Show when={anchor()}>
+            {(reference) => {
+              const touch = touchActions();
+              // Source PopupToolbar onCleanup, shared by both toolbars.
+              onCleanup(() => props.onToolbarClosed?.());
+              return (
+                <ScopedPortal scope="global">
+                  <GeneralizedPopup
+                    class="z-action-menu"
+                    anchor={{
+                      ref: reference(),
+                      blockId: touch.documentId(),
+                      blockType: 'md',
+                    }}
+                    useBlockBoundary={true}
+                    ref={setMenu}
+                  >
+                    <TouchSelectionToolbar
+                      canEdit={props.host.interactable()}
+                      canComment={touch.canComment()}
+                      hasSelection={true}
+                      showCreateTaskOption={taskOption() !== undefined}
+                      createTaskLabel={taskOption()?.label ?? ''}
+                      isConverting={taskOption()?.converting ?? false}
+                      showTableOption={touch.table.available()}
+                      showEditWithAiOption={touchSlot('ai') !== undefined}
+                      showOpenCommentOption={touch.openComment.available()}
+                      locationCopied={touch.share()?.copied() ?? false}
+                      setPopupVisible={setVisible}
+                      onCreateTask={() => touchSlot('task')?.select?.(hide)}
+                      onConvertListToTable={() => {
+                        if (touch.table.convert()) hide();
+                      }}
+                      onOpenComment={() => touch.openComment.open(hide)}
+                      onShare={() => {
+                        const link = touch.share();
+                        if (link)
+                          fireAndForget(link.copy(), 'native-snippet-link');
+                      }}
+                      onInsertComment={() => touch.insertComment(hide)}
+                      onPaste={() =>
+                        fireAndForget(touch.paste(hide), 'markdown-editor')
+                      }
+                      onEditWithAi={() => touchSlot('ai')?.select?.(hide)}
+                    />
+                  </GeneralizedPopup>
+                </ScopedPortal>
+              );
+            }}
+          </Show>
         )}
       </Show>
     </>

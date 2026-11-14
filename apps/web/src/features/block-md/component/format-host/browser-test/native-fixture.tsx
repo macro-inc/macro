@@ -4,12 +4,16 @@ import { HostedFloatingFormatMenu } from '@core/component/LexicalMarkdown/compon
 import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { theme } from '@core/component/LexicalMarkdown/theme';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  CommandCode,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
+import { Telemetry } from '@macro-inc/observability';
 import { Toolbar } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -18,8 +22,11 @@ import { MarkdownDocumentProvider } from '../../../context/markdown-document-con
 import { createMarkdownDocumentState } from '../../../context/markdown-document-state';
 import { FormatTools } from '../../FormatTools';
 import { promptSlot } from '../body-popup-slots';
+import { createNativeAiEditSlot } from '../native-ai-edit-slot';
 import { NativeBodyFormatPopup } from '../native-body-popup';
 import { createNativeDocumentFormattingObserver } from '../native-observer';
+import { readNativeSelectionSnippet } from '../native-snippet';
+import { createNativeBodyTouchActions } from '../native-touch-actions';
 import '@app/index.css';
 
 await native.default();
@@ -45,7 +52,18 @@ function NativeFormattingFixture() {
   const bodyPopup = new URLSearchParams(location.search).has('body');
   // Source's AI edit selection action, as a fixture slot with Source's
   // prompt markup (MarkdownPopup.tsx:743-760).
-  const aiSlots = new URLSearchParams(location.search).has('ai')
+  const withAi = new URLSearchParams(location.search).has('ai');
+  let body: HTMLDivElement | undefined;
+  let runtime: ReturnType<typeof mountLocalSessionView> | undefined;
+  // The real AI slot's touch path (tap-time origin, drawer, highlight); the
+  // desktop button and prompt below stay the fixture's.
+  const realAi = createNativeAiEditSlot({
+    documentId: () => 'formatting-component',
+    view: () => runtime?.view,
+    enabled: () => withAi,
+    parentSpan: Telemetry.span('native-fixture-ai-edit'),
+  });
+  const aiSlots = withAi
     ? [
         promptSlot<string>({
           id: 'ai',
@@ -56,6 +74,7 @@ function NativeFormattingFixture() {
             </button>
           ),
           capture: () => document.getSelection()?.toString() ?? '',
+          select: realAi.slot.select,
           prompt: (control) => (
             <textarea
               aria-label="Describe changes"
@@ -73,8 +92,6 @@ function NativeFormattingFixture() {
         }),
       ]
     : [];
-  let body: HTMLDivElement | undefined;
-  let runtime: ReturnType<typeof mountLocalSessionView> | undefined;
   let closed = false;
   const canInteract = () =>
     canEdit() &&
@@ -84,6 +101,16 @@ function NativeFormattingFixture() {
   const formatting = createNativeDocumentFormattingObserver({
     canEdit: canInteract,
     alive: () => !closed,
+    snippetLink: { documentId: () => 'formatting-component' },
+  });
+  // The product's touch actions: no comment capability, no threads.
+  const touch = createNativeBodyTouchActions({
+    documentId: () => 'formatting-component',
+    view: () => runtime?.view,
+    canEdit: canInteract,
+    alive: () => !closed,
+    comments: { highlighted: () => [], activate: () => {} },
+    snippetLink: () => formatting.snippetLink(),
   });
   onMount(() => {
     if (!body) throw new Error('Missing actual native document root');
@@ -117,11 +144,16 @@ function NativeFormattingFixture() {
             published(view) {
               setLive(view.query.serializedState());
               const facts = formatting.controller()?.host.selection();
+              const info = view.selection();
               setSelectionFacts(
                 JSON.stringify({
-                  format: view.selection().format,
+                  format: info.format,
                   hasLinks: facts?.hasLinks,
                   elementsInRange: [...(facts?.elementsInRange ?? [])],
+                  // The native MODEL selection as published at this commit.
+                  model: info.selection,
+                  generation: view.mirror.keyGeneration,
+                  selectedText: readNativeSelectionSnippet(view)?.text ?? null,
                 })
               );
             },
@@ -134,6 +166,11 @@ function NativeFormattingFixture() {
       }
     );
     runtime.port.setState(documentJSON([paragraph('Select this phrase')]));
+    // As a real open: the loaded document is not an undo step. The native
+    // DocumentSession builds a fresh UndoManager after the initial projection
+    // ("Initialization's ClearHistory boundary", document_session editor.rs
+    // :350-363); this local session takes the editor's own boundary.
+    runtime.port.command(CommandCode.ClearHistory);
     document.documentElement.dataset.ready = 'true';
   });
   onCleanup(() => {
@@ -316,8 +353,14 @@ function NativeFormattingFixture() {
                     host={controller().host}
                     popup={controller().bodyPopup}
                     slots={aiSlots}
+                    touch={touch}
+                    onToolbarClosed={realAi.popupClosed}
                   />
                 )}
+              </Show>
+              <Show when={bodyPopup && withAi}>
+                {realAi.Highlight()}
+                {realAi.Drawer()}
               </Show>
             </div>
           </FloatingMenuGroup>

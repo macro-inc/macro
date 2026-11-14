@@ -215,3 +215,278 @@ test('body popup AI edit slot comes first and swaps to its prompt at the toolbar
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// Source MarkdownPopup on a touch device (PopupToolbar touch branch):
+// TouchSelectionToolbar in a GeneralizedPopup, whose "Edit with AI" opens the
+// AI MobileDrawer and hides the popup. Expected order: the Source control
+// (touch-toolbar-order.source-controls.test.tsx) for the fixture's
+// capabilities: canEdit, no comment capability, no user, no list, not iOS,
+// the AI flag on, a snippet-link host.
+const SOURCE_TOUCH_ORDER = ['Copy', 'Cut', 'Share', 'Edit with AI'];
+
+for (const device of [
+  { name: 'phone', viewport: { width: 390, height: 844 }, scale: 3 },
+  { name: 'tablet', viewport: { width: 820, height: 1180 }, scale: 2 },
+]) {
+  test.describe(`touch ${device.name}`, () => {
+    test.use({
+      viewport: device.viewport,
+      deviceScaleFactor: device.scale,
+      isMobile: true,
+      hasTouch: true,
+    });
+
+    test(`body popup on a touch ${device.name} shows the Source touch toolbar and opens the AI drawer`, async ({
+      page,
+    }, info) => {
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/?body&ai');
+      await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+      // isTouchDevice() reads (pointer: coarse); without it this is not a
+      // touch run at all.
+      if (!(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)))
+        throw new Error('SETUP: (pointer: coarse) is not emulated');
+      const body = page.locator('#body');
+      await body.tap();
+      await body.evaluate((root) => {
+        const text = document
+          .createTreeWalker(root, NodeFilter.SHOW_TEXT)
+          .nextNode();
+        if (!text) throw new Error('SETUP: missing actual native text');
+        root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 18);
+      });
+      // The native fixture is mounted and its MODEL selection, published at
+      // the current generation, is a non-collapsed range over the exact text;
+      // otherwise a broken selection setup would pass as the missing toolbar.
+      await expect
+        .poll(
+          async () => {
+            const facts = JSON.parse(
+              (await page.locator('#selection-facts').textContent()) || '{}'
+            );
+            const model = facts.model;
+            return {
+              mounted: typeof facts.generation === 'number',
+              range: model?.kind === 'range',
+              collapsed:
+                model?.kind === 'range' &&
+                JSON.stringify(model.anchor) === JSON.stringify(model.focus),
+              selectedText: facts.selectedText,
+            };
+          },
+          { message: 'SETUP: native model selection not admitted' }
+        )
+        .toEqual({
+          mounted: true,
+          range: true,
+          collapsed: false,
+          selectedText: 'Select this phrase',
+        });
+      expect(errors, 'SETUP: page errors before the toolbar wait').toEqual([]);
+      // The visible toolbar shows after the popup's 100 ms visibility lag.
+      const firstOption = page
+        .getByRole('button', { name: SOURCE_TOUCH_ORDER[0], exact: true })
+        .filter({ visible: true });
+      // A page error during the wait makes this a SETUP failure, never the
+      // missing-toolbar RED: it replaces the expected assertion's error,
+      // which is otherwise rethrown unchanged.
+      let waitError: unknown;
+      try {
+        await expect(firstOption, 'TOUCH TOOLBAR NOT SHOWN').toBeVisible();
+      } catch (error) {
+        waitError = error;
+      }
+      await info.attach(`touch-${device.name}-page-errors`, {
+        body: JSON.stringify(errors),
+        contentType: 'application/json',
+      });
+      if (errors.length > 0)
+        throw new Error(
+          `SETUP: page errors during the toolbar wait: ${JSON.stringify(errors)}`
+        );
+      if (waitError !== undefined) throw waitError;
+      await info.attach(`touch-${device.name}-toolbar`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+      // Read every page of the actual toolbar, following the chevrons. The
+      // root is TouchSelectionToolbar's own container, anchored independently
+      // of whichever option is on screen; off-page options are inert and the
+      // measuring row is aria-hidden.
+      const toolbar = page.locator('div.relative.touch-pan-y');
+      await expect(toolbar).toHaveCount(1);
+      const pageOptions = () =>
+        toolbar.evaluate((root) =>
+          [...root.querySelectorAll('button')]
+            .filter(
+              (button) =>
+                !button.closest('[inert], [aria-hidden="true"]') &&
+                button.getBoundingClientRect().width > 0 &&
+                !['Previous options', 'More options'].includes(
+                  button.getAttribute('aria-label') ?? ''
+                )
+            )
+            .map((button) => button.textContent?.trim() ?? '')
+        );
+      const order: string[] = [];
+      const more = toolbar.getByRole('button', { name: 'More options' });
+      const previous = toolbar.getByRole('button', {
+        name: 'Previous options',
+      });
+      const MAX_PAGES = 10;
+      for (let index = 0; ; index++) {
+        if (index >= MAX_PAGES)
+          throw new Error('Touch toolbar pages did not end');
+        // Pages are disjoint; every occurrence is kept, in page order.
+        order.push(...(await pageOptions()));
+        if (!(await more.isVisible())) break;
+        await more.tap();
+      }
+      await info.attach(`touch-${device.name}-order`, {
+        body: JSON.stringify(order),
+        contentType: 'application/json',
+      });
+      expect(order).toEqual(SOURCE_TOUCH_ORDER);
+      // Named gap C-TOUCH-TASK-LABEL-01 (owner t1zz, Task packet 3): the Task
+      // option is omitted until Source's exact label lands, never guessed.
+      expect(
+        order.filter((option) =>
+          /^(Task|\d+ tasks|Converting\.\.\.)$/.test(option)
+        ),
+        'C-TOUCH-TASK-LABEL-01: Task option absent'
+      ).toEqual([]);
+      // Back to the first page, then page forward to Edit with AI.
+      for (let index = 0; await previous.isVisible(); index++) {
+        if (index >= MAX_PAGES)
+          throw new Error('Touch toolbar did not page back');
+        await previous.tap();
+      }
+      const editWithAi = toolbar
+        .getByRole('button', { name: 'Edit with AI', exact: true })
+        .filter({ visible: true });
+      for (let index = 0; !(await editWithAi.isVisible()); index++) {
+        if (index >= MAX_PAGES) throw new Error('Edit with AI not reached');
+        await more.tap();
+      }
+      await editWithAi.tap();
+      const drawer = page.getByRole('dialog', { name: 'Edit with AI' });
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByPlaceholder('Describe changes')).toBeVisible();
+      // Source hides the popup when the drawer opens.
+      await expect(firstOption).toHaveCount(0);
+      await info.attach(`touch-${device.name}-ai-drawer`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+      expect(errors).toEqual([]);
+    });
+
+    // Source TouchSelectionToolbar's Copy and Cut run execCommand on the
+    // editor; they must reach the native body's own clipboard handlers with
+    // the keyboard shortcuts' payload, model and single history step.
+    test(`Copy and Cut on a touch ${device.name} equal the keyboard shortcuts`, async ({
+      page,
+    }, info) => {
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page
+        .context()
+        .grantPermissions(['clipboard-read', 'clipboard-write']);
+      const open = async () => {
+        await page.goto('/?body&ai');
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-ready',
+          'true'
+        );
+        if (
+          !(await page.evaluate(() => matchMedia('(pointer: coarse)').matches))
+        )
+          throw new Error('SETUP: (pointer: coarse) is not emulated');
+      };
+      const body = page.locator('#body');
+      const selectPhrase = async () => {
+        await body.tap();
+        await body.evaluate((root) => {
+          const text = document
+            .createTreeWalker(root, NodeFilter.SHOW_TEXT)
+            .nextNode();
+          if (!text) throw new Error('SETUP: missing actual native text');
+          root.ownerDocument.getSelection()?.setBaseAndExtent(text, 0, text, 7);
+        });
+        await expect
+          .poll(
+            async () =>
+              JSON.parse(
+                (await page.locator('#selection-facts').textContent()) || '{}'
+              ).selectedText,
+            { message: 'SETUP: native model selection not admitted' }
+          )
+          .toBe('Select ');
+      };
+      const clipboard = () =>
+        page.evaluate(async () => {
+          const items = await navigator.clipboard.read();
+          const payload: Record<string, string> = {};
+          for (const item of items)
+            for (const type of item.types)
+              payload[type] = await (await item.getType(type)).text();
+          return payload;
+        });
+      const resetClipboard = () =>
+        page.evaluate(() => navigator.clipboard.writeText('sentinel'));
+      const live = async () =>
+        (await page.locator('#live-state').textContent()) ?? '';
+      const touchOption = (name: string) =>
+        page
+          .getByRole('button', { name, exact: true })
+          .filter({ visible: true });
+
+      // Copy: the keyboard payload, then the touch Copy payload.
+      await open();
+      await selectPhrase();
+      await resetClipboard();
+      await page.keyboard.press('Control+c');
+      const keyboardCopy = await clipboard();
+      expect(keyboardCopy['text/plain']).toBe('Select ');
+      await resetClipboard();
+      await selectPhrase();
+      await expect(touchOption('Copy')).toBeVisible();
+      await touchOption('Copy').tap();
+      const touchCopy = await clipboard();
+      await info.attach(`touch-${device.name}-copy-payloads`, {
+        body: JSON.stringify({ keyboardCopy, touchCopy }),
+        contentType: 'application/json',
+      });
+      expect(touchCopy).toEqual(keyboardCopy);
+
+      // Cut: the keyboard result and its one undo step, then the touch Cut.
+      // The seed is not undoable (the fixture's open clears history), so each
+      // Cut is its own undo step by construction. The baseline is the
+      // canonical live state published with the selection, not the seed.
+      await open();
+      await selectPhrase();
+      const beforeCut = await live();
+      await page.keyboard.press('Control+x');
+      await expect.poll(live).not.toBe(beforeCut);
+      const keyboardCut = await live();
+      const keyboardCutClipboard = await clipboard();
+      await page.keyboard.press('Control+z');
+      await expect.poll(live).toBe(beforeCut);
+      // The touch Cut on the same page and document (node ids are minted per
+      // load), from the same baseline.
+      await selectPhrase();
+      await resetClipboard();
+      await expect(touchOption('Cut')).toBeVisible();
+      await touchOption('Cut').tap();
+      await expect.poll(live).not.toBe(beforeCut);
+      expect(await live()).toBe(keyboardCut);
+      expect(await clipboard()).toEqual(keyboardCutClipboard);
+      // One history step: a single undo restores the pre-cut baseline.
+      await body.focus();
+      await page.keyboard.press('Control+z');
+      await expect.poll(live).toBe(beforeCut);
+      expect(errors).toEqual([]);
+    });
+  });
+}

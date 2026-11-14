@@ -207,6 +207,15 @@ export default function RustMarkdownEditor(props: {
     canEdit: canInteractWithMedia,
     alive: () => !abort.signal.aborted,
     snippetLink: { documentId },
+    touch: {
+      documentId,
+      view: () => runtime()?.view,
+      comments: {
+        highlighted: () => state.comments.highlightedCommentThreads,
+        activate: (thread) =>
+          state.setCommentState('activeCommentThread', thread),
+      },
+    },
     aiEdit: {
       documentId,
       view: () => runtime()?.view,
