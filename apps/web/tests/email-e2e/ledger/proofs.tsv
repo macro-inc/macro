@@ -82,9 +82,11 @@ F-119	discarding a draft does nothing
 F-120	Retry on a refused draft save does nothing
 F-121	Log out does not ask about drafts only this device holds
 F-122	a picked file is dropped
+F-123	Remove on an attachment pill removes nothing
 F-124	a forward leaves out the files of the message
 F-126	a calendar file opens nothing
 F-127	Download saves nothing
+F-129	a cloud attachment does not open at the provider
 F-131	Send on a new message does nothing
 F-132	Send on a reply does nothing
 F-133	send and mark done does not mark the thread done
@@ -99,8 +101,11 @@ F-142	Schedule send does nothing
 F-143	Update schedule does nothing
 F-144	Cancel scheduled send does nothing
 F-145	the Scheduled tab lists nothing
+F-147	Restore draft and Retry send on a failed scheduled send do nothing
 F-148	Save signature does nothing
 F-149	the signature preview renders nothing
+F-150	Clear signature clears nothing
+F-152	the replies-and-forwards signature switch saves nothing
 F-153	an invitation shows no event card
 F-157	turning the calendar off never asks the service
 F-177	Escape does not go back to the list
@@ -111,6 +116,7 @@ F-181	Hide navigation leaves the sidebar in place
 F-182	a folder name on a row opens nothing
 F-183	the tutorial row opens no video
 F-184	the question-mark key opens no shortcuts sheet
+F-185	an attachment pill of a forward opens no preview
 F-186	the watermark opens no upgrade prompt
 F-187	Copy ID copies nothing
 F-188	the thread offers no details panel

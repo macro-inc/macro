@@ -1274,5 +1274,25 @@ export const settings = {
       trigger: 'after the action succeeds',
       source: ['src/features/email-view/components/EmailInboxSelector.tsx'],
     },
+    {
+      id: 'STX-966',
+      surface: 'SX-04',
+      fn: ['F-152'],
+      state:
+        'result: the switch Add to replies & forwards shows the chosen setting',
+      trigger: 'after the action succeeds',
+      source: ['src/features/settings/components/signature-form.tsx'],
+      viewports: BOTH_VIEWPORTS,
+      flag: 'enable-email-signatures',
+    },
+    {
+      id: 'STX-967',
+      surface: 'SX-01',
+      fn: ['F-005'],
+      state:
+        'result: the shared inbox is listed among the accounts with the chip "Shared"',
+      trigger: 'after "Share inbox" succeeds',
+      source: ['src/features/settings/Email.tsx'],
+    },
   ],
 } as const satisfies Group;
