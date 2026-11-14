@@ -31,18 +31,42 @@ use parse::{Line, Terminals};
 /// hc sends a heartbeat every 15 s; three missed ones mean the feed is stuck.
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// How long to wait before looking for `hc` again when none was found: it
+/// may be installed while the collector runs.
+const DISCOVERY_RETRY: Duration = Duration::from_secs(5 * 60);
+
 /// Reads every hc terminal from `hc events --json`.
 #[derive(Clone, Debug)]
 pub struct HcSource {
-    program: PathBuf,
+    programs: Vec<PathBuf>,
     labels: HcLabels,
 }
 
 impl HcSource {
-    /// A source that runs `program` (normally `hc`, found on `PATH`) and
-    /// decodes the given extra labels.
-    pub fn new(program: PathBuf, labels: HcLabels) -> Self {
-        Self { program, labels }
+    /// A source that runs the first of `programs` that exists (a bare name is
+    /// looked up on `PATH`) and decodes the given extra labels.
+    pub fn new(programs: Vec<PathBuf>, labels: HcLabels) -> Self {
+        Self { programs, labels }
+    }
+
+    /// `hc events --json` from the first program that exists, or `None`
+    /// when none does.
+    fn spawn(&self) -> std::io::Result<Option<tokio::process::Child>> {
+        for program in &self.programs {
+            let spawned = Command::new(program)
+                .args(["events", "--json"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .spawn();
+            match spawned {
+                Ok(child) => return Ok(Some(child)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -82,22 +106,23 @@ impl HcSource {
         out: mpsc::Sender<Observation>,
         cancel: CancellationToken,
     ) -> Result<(), SourceError> {
-        let spawned = Command::new(&self.program)
-            .args(["events", "--json"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .spawn();
-        let mut child = match spawned {
-            Ok(child) => child,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                // No hc on this machine: report it once and stay quiet.
-                send(&out, health(SourceState::Absent, 0, Some("hc not found"))).await?;
-                cancel.cancelled().await;
-                return Ok(());
+        // No hc on this machine: report it once, then look again now and
+        // then, quietly.
+        let mut reported_absent = false;
+        let mut child = loop {
+            match self.spawn() {
+                Ok(Some(child)) => break child,
+                Ok(None) => {}
+                Err(error) => return Err(report!(error).into_dynamic().into()),
             }
-            Err(error) => return Err(report!(error).into_dynamic().into()),
+            if !reported_absent {
+                send(&out, health(SourceState::Absent, 0, Some("hc not found"))).await?;
+                reported_absent = true;
+            }
+            tokio::select! {
+                () = cancel.cancelled() => return Ok(()),
+                () = tokio::time::sleep(DISCOVERY_RETRY) => {}
+            }
         };
         let stdout = child
             .stdout
@@ -136,7 +161,9 @@ impl HcSource {
                     send(&out, health(SourceState::Healthy, count, None)).await?;
                 }
                 Line::Missed => snapshot_due = true,
-                _ if snapshot_due => return Err(feed_error(FeedError::NoSnapshotAfterMissed)),
+                Line::Event(_) if snapshot_due => {
+                    return Err(feed_error(FeedError::NoSnapshotAfterMissed));
+                }
                 Line::Event(event) => match terminals.apply(event, &self.labels) {
                     Ok(Some(change)) => send(&out, change).await?,
                     Ok(None) => {}

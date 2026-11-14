@@ -33,7 +33,7 @@ fn labels() -> HcLabels {
 
 async fn run_capture() -> (Vec<Change>, Result<(), SourceError>) {
     let dir = tempfile::tempdir().expect("tempdir");
-    let source = Box::new(HcSource::new(fake_hc(dir.path()), labels()));
+    let source = Box::new(HcSource::new(vec![fake_hc(dir.path())], labels()));
     let (out, mut observations) = mpsc::channel(64);
 
     let result = source.run(out, CancellationToken::new()).await;
@@ -190,7 +190,7 @@ async fn an_event_for_an_unknown_terminal_restarts_the_feed() {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     let (out, _observations) = mpsc::channel(64);
 
-    let result = Box::new(HcSource::new(program, labels()))
+    let result = Box::new(HcSource::new(vec![program], labels()))
         .run(out, CancellationToken::new())
         .await;
 
@@ -208,7 +208,7 @@ async fn a_machine_without_hc_reports_the_source_absent_and_waits() {
     let (out, mut observations) = mpsc::channel(4);
     let cancel = CancellationToken::new();
     let source = Box::new(HcSource::new(
-        PathBuf::from("/nonexistent/hc"),
+        vec![PathBuf::from("/nonexistent/hc")],
         HcLabels::default(),
     ));
     let task = tokio::spawn(source.run(out, cancel.clone()));
@@ -221,4 +221,61 @@ async fn a_machine_without_hc_reports_the_source_absent_and_waits() {
 
     cancel.cancel();
     assert!(task.await.expect("joined").is_ok());
+}
+
+#[tokio::test]
+async fn hc_is_found_at_a_later_candidate_when_the_first_is_missing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source = Box::new(HcSource::new(
+        vec![PathBuf::from("/nonexistent/hc"), fake_hc(dir.path())],
+        labels(),
+    ));
+    let (out, mut observations) = mpsc::channel(64);
+
+    let _ = source.run(out, CancellationToken::new()).await;
+
+    let first = observations.try_recv().expect("an observation");
+    assert!(
+        matches!(first.change, Change::Reset(_)),
+        "the fallback's snapshot arrives first, not an absent report: {:?}",
+        first.change
+    );
+}
+
+#[tokio::test]
+async fn a_heartbeat_between_missed_and_the_new_snapshot_keeps_the_feed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let capture = dir.path().join("capture.jsonl");
+    std::fs::write(
+        &capture,
+        "{\"seq\":1,\"terminals\":[]}\n\
+         {\"jsonrpc\":\"2.0\",\"method\":\"missed\",\"params\":{\"seq\":2}}\n\
+         {\"jsonrpc\":\"2.0\",\"method\":\"heartbeat\",\"params\":{\"seq\":3}}\n\
+         {\"seq\":4,\"terminals\":[]}\n",
+    )
+    .expect("write");
+    let program = dir.path().join("hc");
+    std::fs::write(
+        &program,
+        format!("#!/bin/sh\nexec cat '{}'\n", capture.display()),
+    )
+    .expect("write script");
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let (out, mut observations) = mpsc::channel(64);
+
+    let result = Box::new(HcSource::new(vec![program], labels()))
+        .run(out, CancellationToken::new())
+        .await;
+
+    let mut resets = 0;
+    while let Ok(observation) = observations.try_recv() {
+        if matches!(observation.change, Change::Reset(_)) {
+            resets += 1;
+        }
+    }
+    assert_eq!(resets, 2, "both snapshots are applied");
+    let Err(SourceError::Internal(report)) = result else {
+        panic!("the feed ends only when the capture does, got {result:?}");
+    };
+    assert!(format!("{report:?}").contains("Exited"), "{report:?}");
 }

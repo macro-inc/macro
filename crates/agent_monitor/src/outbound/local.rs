@@ -18,8 +18,8 @@ pub type SourceMaker = Box<dyn Fn() -> Box<dyn AgentSource> + Send>;
 /// Where this machine's agents leave their facts.
 #[derive(Clone, Debug)]
 pub struct LocalSources {
-    /// The `hc` program; a bare name is looked up on `PATH`.
-    pub hc: PathBuf,
+    /// Where to look for `hc`, in order; a bare name is looked up on `PATH`.
+    pub hc: Vec<PathBuf>,
     /// Extra hc labels to decode.
     pub hc_labels: HcLabels,
     /// Claude Code's directory (`~/.claude`).
@@ -41,7 +41,9 @@ impl LocalSources {
     /// given separately (it can be moved).
     pub fn in_home(home: PathBuf, macrod: PathBuf, history: Duration) -> Self {
         Self {
-            hc: PathBuf::from("hc"),
+            // `PATH` first; `~/.local/bin`, where herdr installs it, is often
+            // not on the `PATH` of a unit or a bare shell.
+            hc: vec![PathBuf::from("hc"), home.join(".local/bin/hc")],
             hc_labels: HcLabels::default(),
             claude: home.join(".claude"),
             codex: home.join(".codex"),
