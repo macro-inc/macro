@@ -908,6 +908,10 @@ outlook = ["provider outlook:attachments.value"]
 ui = "a cloud attachment is a link the browser opens"
 
 [F-130]  # Clean up stored files of discarded drafts
+# Proved on Outlook for a file taken out of a draft; a discarded draft's
+# file is kept, so the function stays open there.
+bug = "outlook-discarded-draft-file-kept"
+bug_on = "outlook"
 by = ["lambda email_sfs_delete_handler", "queue sfs-delete:SFSDeleteMessage"]
 also = ["loop mailbox_sync_worker::run_attachment_cleanup"]
 
@@ -1119,8 +1123,12 @@ outlook = ["provider outlook:rules.create"]
 # ------------------------------------------------------------ maintenance
 
 [F-172]  # Remove a user's mail and links when the account is deleted
-by = ["http DELETE /internal/delete_user/{id}", "queue link-manager:DeleteUser"]
-also = ["queue link-manager:DeleteLink", "kafka macro.email:LinkDisconnected"]
+# The route only queues DeleteLink for each inbox; the DeleteUser message is
+# what removes the user's mail and access.
+by = ["queue link-manager:DeleteUser"]
+also = [
+  "http DELETE /internal/delete_user/{id}",
+  "queue link-manager:DeleteLink", "kafka macro.email:LinkDisconnected"]
 
 [F-173]  # Stop sending to addresses that bounced or complained
 by = ["lambda email_suppression_handler"]
