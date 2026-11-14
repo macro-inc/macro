@@ -197,7 +197,7 @@ function rowsOf(
 }
 
 /** Finds the REST operation a request is, the most literal match first. */
-function restMatcher(
+export function restMatcher(
   operations: readonly Operation[]
 ): (method: string, path: string) => string | undefined {
   const patterns = operations
