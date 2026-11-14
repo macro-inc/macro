@@ -988,3 +988,89 @@ fn spend_since_splits_by_transcript_and_adds_up_to_the_minutes() {
     assert_usd(Cost::Estimated(parts), 4.0);
     assert_usd(Cost::Estimated(minutes), 4.0);
 }
+
+#[test]
+fn prune_drops_old_ended_agents_and_keeps_what_is_live() {
+    let day_later = at(0, 0) + TimeDelta::hours(30);
+    let history = TimeDelta::hours(24);
+    let mut facts = Facts::default();
+    // Two sessions written at the start; only "s-live" still has a process.
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![
+            transcript("s-old", None, vec![usage(at(1, 0), 10, 10)]),
+            transcript("s-live", None, vec![usage(at(1, 0), 10, 10)]),
+        ]),
+        at(2, 0),
+    );
+    observe(
+        &mut facts,
+        SourceKind::ClaudeRegistry,
+        Change::Reset(vec![registry(42, "s-live", false)]),
+        at(2, 0),
+    );
+    let mut finished = terminal("t-done", 7);
+    finished.state = TerminalState::Finished;
+    finished.finished = Some(at(3, 0));
+    let mut runner = terminal("t-run", 8);
+    runner.name = "runner".to_owned();
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Reset(vec![
+            Fact::Terminal(Box::new(finished)),
+            Fact::Terminal(Box::new(runner)),
+        ]),
+        at(3, 0),
+    );
+    let record = |id: &str, terminal: Option<&str>| {
+        Fact::RunRecord(RunRecordFact {
+            id: id.to_owned(),
+            task: None,
+            label: None,
+            status: Some("done".to_owned()),
+            started: Some(at(0, 0)),
+            pid: None,
+            terminal: terminal.map(str::to_owned),
+            cost: None,
+        })
+    };
+    observe(
+        &mut facts,
+        SourceKind::RunRecord,
+        Change::Reset(vec![
+            record("run-old", None),
+            record("run-held", Some("runner")),
+        ]),
+        at(3, 0),
+    );
+
+    // Within the window nothing goes.
+    assert_eq!(facts.prune(at(30, 0), history), 0);
+
+    let dropped = facts.prune(day_later, history);
+    let built = build_agents(&facts, day_later);
+
+    assert_eq!(dropped, 3, "the old session, the finished terminal, the old run");
+    assert!(!built.agents.contains_key(&AgentId::claude_session("s-old")));
+    assert!(!built.agents.contains_key(&AgentId::terminal("t-done")));
+    assert!(!built.agents.contains_key(&AgentId::run("run-old")));
+    assert!(
+        built
+            .owners
+            .contains_key(&FactKey::Transcript(TranscriptKey {
+                program: TranscriptProgram::Claude,
+                session: "s-live".to_owned(),
+                subagent: None,
+            })),
+        "a session with a running process is kept"
+    );
+    assert!(built.agents.contains_key(&AgentId::terminal("t-run")));
+    assert!(
+        built
+            .owners
+            .contains_key(&FactKey::RunRecord("run-held".to_owned())),
+        "a run its live terminal runs is kept"
+    );
+}

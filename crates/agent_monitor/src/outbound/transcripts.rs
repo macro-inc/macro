@@ -321,7 +321,7 @@ pub(crate) async fn run<F: TranscriptFormat>(
     let mut engine = Engine {
         format,
         root: config.root.clone(),
-        horizon,
+        history: config.history,
         sender,
         files: HashMap::new(),
         queue: VecDeque::new(),
@@ -400,7 +400,8 @@ impl Sender {
 struct Engine<F: TranscriptFormat> {
     format: Arc<F>,
     root: PathBuf,
-    horizon: SystemTime,
+    /// How far back files are indexed and kept (`[monitor] history_hours`).
+    history: Duration,
     sender: Sender,
     files: HashMap<PathBuf, Slot<F::Parser>>,
     queue: VecDeque<PathBuf>,
@@ -531,7 +532,7 @@ impl<F: TranscriptFormat> Engine<F> {
         // files; a rescan after dropped events looks at everything recent.
         for directory in new_directories {
             let horizon = if directory == self.root {
-                self.horizon
+                self.horizon()
             } else {
                 SystemTime::UNIX_EPOCH
             };
@@ -552,7 +553,16 @@ impl<F: TranscriptFormat> Engine<F> {
         Ok(())
     }
 
-    /// `stat`s every idle file and queues the ones that changed unnoticed.
+    /// The oldest modification time still indexed and kept.
+    fn horizon(&self) -> SystemTime {
+        SystemTime::now()
+            .checked_sub(self.history)
+            .unwrap_or(SystemTime::UNIX_EPOCH)
+    }
+
+    /// `stat`s every idle file: queues the ones that changed unnoticed, and
+    /// forgets the ones not written within the history window (the store
+    /// drops their facts too; a later write reads the file from the start).
     async fn reconcile(&mut self) -> Result<(), SourceError> {
         let positions: Vec<(PathBuf, TailPosition)> = self
             .files
@@ -562,18 +572,28 @@ impl<F: TranscriptFormat> Engine<F> {
                 Slot::Busy { .. } => None,
             })
             .collect();
-        let stale = tokio::task::spawn_blocking(move || {
-            positions
-                .into_iter()
-                .filter(|(path, position)| {
-                    std::fs::metadata(path).map_or(true, |metadata| position.is_stale(&metadata))
-                })
-                .map(|(path, _)| path)
-                .collect::<Vec<_>>()
+        let horizon = self.horizon();
+        let (stale, expired) = tokio::task::spawn_blocking(move || {
+            let mut stale = Vec::new();
+            let mut expired = Vec::new();
+            for (path, position) in positions {
+                match std::fs::metadata(&path) {
+                    Ok(metadata) if position.is_stale(&metadata) => stale.push(path),
+                    Ok(metadata) if metadata.modified().is_ok_and(|at| at < horizon) => {
+                        expired.push(path);
+                    }
+                    Ok(_) => {}
+                    Err(_) => stale.push(path),
+                }
+            }
+            (stale, expired)
         })
         .await
         .map_err(internal)?;
 
+        for path in expired {
+            self.files.remove(&path);
+        }
         for path in stale {
             self.enqueue(path, true);
         }

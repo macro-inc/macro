@@ -61,7 +61,9 @@ pub struct MonitorSettings {
     /// Host the collector in this macrod (the panel or `macrod service`),
     /// unless another process already serves the machine.
     pub enabled: bool,
-    /// Hours of transcripts indexed at startup, and of finished runs kept.
+    /// Hours of history: transcripts are indexed back this far at startup,
+    /// and an agent that ended (or last wrote) longer ago, with no live
+    /// terminal or running process, is dropped.
     pub history_hours: u32,
     /// The viewer's frames per second while something animates; 0 stops
     /// animation.

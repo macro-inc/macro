@@ -330,6 +330,89 @@ impl Facts {
         }
     }
 
+    /// Drops what ended more than `history` ago and nothing live still
+    /// holds, so a long-running collector stays bounded:
+    ///
+    /// - finished terminals that finished (or were created) before then;
+    /// - transcripts last written before then whose session has no running
+    ///   process in the Claude Code registry;
+    /// - work runs started before then that no live terminal runs;
+    /// - macrod sessions started before then with no transcript or live
+    ///   terminal left to enrich.
+    ///
+    /// Every transcript's per-minute counts are trimmed to the last day too.
+    /// Returns how many facts were dropped.
+    pub fn prune(&mut self, now: Timestamp, history: TimeDelta) -> usize {
+        let horizon = now - history;
+        let before = self.len();
+        let old = |at: Option<Timestamp>| at.is_none_or(|at| at < horizon);
+
+        self.terminals.retain(|_, owned| {
+            let terminal = &owned.fact;
+            terminal.state == TerminalState::Live || !old(terminal.finished.or(terminal.created))
+        });
+
+        let running_sessions: BTreeSet<&str> = self
+            .claude_sessions
+            .values()
+            .map(|owned| owned.fact.session_id.as_str())
+            .collect();
+        self.transcripts.retain(|key, owned| {
+            running_sessions.contains(key.session.as_str()) || !old(owned.fact.last_at)
+        });
+        let minutes_horizon = now - HISTORY;
+        for owned in self.transcripts.values_mut() {
+            owned.fact.minutes.retain(|minute, _| *minute >= minutes_horizon);
+        }
+
+        let live_terminals: Vec<&TerminalFact> = self
+            .terminals
+            .values()
+            .map(|owned| &owned.fact)
+            .filter(|terminal| terminal.state == TerminalState::Live)
+            .collect();
+        self.run_records.retain(|id, owned| {
+            let record = &owned.fact;
+            let running = live_terminals.iter().any(|terminal| {
+                terminal.run_id.as_deref() == Some(id.as_str())
+                    || record.terminal.as_deref() == Some(terminal.name.as_str())
+            });
+            running || !old(record.started)
+        });
+
+        let transcripts = &self.transcripts;
+        self.macrod_sessions.retain(|id, owned| {
+            let session = &owned.fact;
+            let enriches = transcripts.iter().any(|(key, transcript)| {
+                session.native_id.as_deref() == Some(key.session.as_str())
+                    || session.transcript.as_ref() == Some(&transcript.fact.path)
+            }) || live_terminals
+                .iter()
+                .any(|terminal| terminal.macrod_session.as_deref() == Some(id.as_str()));
+            enriches || !old(session.started)
+        });
+
+        before - self.len()
+    }
+
+    /// Whether a transcript fact is still filed; other keys always count.
+    pub fn holds(&self, key: &FactKey) -> bool {
+        match key {
+            FactKey::Transcript(key) => self.transcripts.contains_key(key),
+            _ => true,
+        }
+    }
+
+    /// How many facts are filed.
+    fn len(&self) -> usize {
+        self.terminals.len()
+            + self.claude_sessions.len()
+            + self.transcripts.len()
+            + self.macrod_sessions.len()
+            + self.managers.len()
+            + self.run_records.len()
+    }
+
     fn forget(&mut self, source: SourceKind) {
         self.terminals.retain(|_, owned| owned.source != source);
         self.claude_sessions

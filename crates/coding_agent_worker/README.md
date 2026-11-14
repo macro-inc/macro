@@ -259,6 +259,10 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   `[monitor]` table; new configs leave it out (hosting is on by default),
   because a macrod older than the monitor rejects a file that has one.
   `history_hours`, `fps` and `run_record_dirs` take effect on the next start.
+- **History is bounded**: transcripts are indexed back `history_hours`
+  (24 by default), and an agent that ended or last wrote longer ago is
+  dropped unless a live terminal or running process still holds it, so a
+  collector left running for weeks stays the size of one window.
 - `macrod monitor serve` and `macrod service` export `macrod.monitor*` spans
   when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Rows, spans and logs carry ids
   and counts, never transcript text.

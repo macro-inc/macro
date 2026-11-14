@@ -246,7 +246,10 @@ impl Collector {
         let tracker = TaskTracker::new();
         let cancel = CancellationToken::new();
         let store = Store::start(
-            StoreConfig::default(),
+            StoreConfig {
+                history: chrono::TimeDelta::hours(i64::from(settings.history_hours)),
+                ..StoreConfig::default()
+            },
             Arc::new(SystemClock),
             &tracker,
             cancel.clone(),

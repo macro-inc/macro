@@ -59,6 +59,9 @@ pub struct StoreConfig {
     /// machine's local time zone. Fixed in tests so totals do not depend on
     /// where they run.
     pub day_offset: Option<FixedOffset>,
+    /// How long an ended agent's facts are kept (`[monitor] history_hours`):
+    /// older ones that nothing live holds are dropped on the tick.
+    pub history: TimeDelta,
 }
 
 impl Default for StoreConfig {
@@ -73,6 +76,7 @@ impl Default for StoreConfig {
             heartbeat: Duration::from_secs(15),
             tape_recent: TimeDelta::minutes(5),
             day_offset: None,
+            history: TimeDelta::hours(24),
         }
     }
 }
@@ -342,6 +346,7 @@ impl Reducer {
                     }
                 }
                 _ = tick.tick() => {
+                    self.prune();
                     self.reduce();
                     self.publish_totals();
                     self.publish_health();
@@ -527,6 +532,18 @@ impl Reducer {
 
         let agent = owners.get(&event.key)?;
         Some(line(event.at, agent, kind, text, severity))
+    }
+
+    /// Drops facts of agents that ended longer ago than the history window.
+    fn prune(&mut self) {
+        let dropped = self
+            .facts
+            .prune(self.clock.now(), self.shared.config.history);
+        if dropped > 0 {
+            let facts = &self.facts;
+            self.tool_names.retain(|(key, _), _| facts.holds(key));
+            tracing::debug!(dropped, "pruned ended agents' facts");
+        }
     }
 
     fn publish_totals(&mut self) {
