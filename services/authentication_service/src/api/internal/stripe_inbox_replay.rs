@@ -100,10 +100,7 @@ pub(crate) async fn handler(
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(request): Json<ReplayRequest>,
 ) -> Result<Response, Response> {
-    let consumer: Consumer = request
-        .consumer
-        .parse()
-        .map_err(|_| unknown_consumer())?;
+    let consumer: Consumer = request.consumer.parse().map_err(|_| unknown_consumer())?;
     let replayed = ctx
         .stripe_inbox
         .replay(

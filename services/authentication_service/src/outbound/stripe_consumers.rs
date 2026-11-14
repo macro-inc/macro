@@ -324,11 +324,7 @@ where
         match update.access {
             PersonalAccess::Grant(tier) => self
                 .roles
-                .update_user_roles_and_permissions_for_subscription(
-                    user,
-                    RoleStatus::Active,
-                    tier,
-                )
+                .update_user_roles_and_permissions_for_subscription(user, RoleStatus::Active, tier)
                 .await
                 .map_err(retry)?,
             // Every tier's role goes, whatever the price: a revoke never

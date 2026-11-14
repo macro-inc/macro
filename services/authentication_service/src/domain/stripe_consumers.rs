@@ -481,8 +481,7 @@ pub fn analytics_conversion(
     if change.subscription.team_id.is_some() {
         return conversion(change, None);
     }
-    match decide_personal_subscription(event_id, event_at, change, customer_subscriptions, prices)
-    {
+    match decide_personal_subscription(event_id, event_at, change, customer_subscriptions, prices) {
         Ok(personal) => conversion(change, Some(&personal)),
         Err(error) => {
             tracing::info!(error = %error, "skipping analytics tracking: unknown price");

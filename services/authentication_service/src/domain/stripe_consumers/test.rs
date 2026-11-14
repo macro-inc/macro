@@ -660,7 +660,12 @@ fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
         );
     }
 
-    let person = facts(subscription("sub_Person", "active", 1_700_000_000, UNLISTED_PRICE));
+    let person = facts(subscription(
+        "sub_Person",
+        "active",
+        1_700_000_000,
+        UNLISTED_PRICE,
+    ));
     let PersonalDecision::Apply(failed) = decide_personal_invoice(
         &event_id(),
         event_at(),
@@ -677,7 +682,12 @@ fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
 
 #[test]
 fn an_unknown_price_dead_letters_a_paid_renewal() {
-    let person = facts(subscription("sub_Person", "active", 1_700_000_000, UNLISTED_PRICE));
+    let person = facts(subscription(
+        "sub_Person",
+        "active",
+        1_700_000_000,
+        UNLISTED_PRICE,
+    ));
     assert_eq!(
         decide_personal_invoice(
             &event_id(),
@@ -735,9 +745,15 @@ fn a_deleted_team_ignores_its_subscription_events() {
     let deleted = change(EventType::CustomerSubscriptionDeleted, object, Value::Null);
     let update = decide_team_subscription(&event_id(), event_at(), &deleted).unwrap();
 
-    assert_eq!(decide_team_binding(&update, TeamState::Missing), TeamBinding::TeamGone);
     assert_eq!(
-        decide_team_binding(&update, TeamState::Bound(Some("sub_Other".parse().unwrap()))),
+        decide_team_binding(&update, TeamState::Missing),
+        TeamBinding::TeamGone
+    );
+    assert_eq!(
+        decide_team_binding(
+            &update,
+            TeamState::Bound(Some("sub_Other".parse().unwrap()))
+        ),
         TeamBinding::IgnoreLapse
     );
     assert_eq!(

@@ -14,8 +14,8 @@ use super::model::{
     ObjectKind, ObjectSnapshot, OrderingKey, PAYLOAD_RETENTION, StoredEvent, SubscriptionFacts,
 };
 use super::ports::{
-    CursorFailure, CursorWake, DeadLetter, EventConsumers, InboxRepo, Inserted, Replayed, StripeReadError,
-    StripeReader,
+    CursorFailure, CursorWake, DeadLetter, EventConsumers, InboxRepo, Inserted, Replayed,
+    StripeReadError, StripeReader,
 };
 use super::translate::{self, TranslateError, Translated};
 

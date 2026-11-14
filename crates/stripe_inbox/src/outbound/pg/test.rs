@@ -829,7 +829,10 @@ async fn dead_cursors_replay_in_bulk_by_consumer(pool: PgPool) {
         .unwrap();
     inbox.run_pass().await.unwrap();
     assert_eq!(cursor_state(&pool, Consumer::PersonalPlan).await.0, "dead");
-    assert_eq!(cursor_state(&pool, Consumer::TeamSubscription).await.0, "dead");
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await.0,
+        "dead"
+    );
 
     recorder.failing.lock().unwrap().clear();
     assert_eq!(
@@ -843,7 +846,10 @@ async fn dead_cursors_replay_in_bulk_by_consumer(pool: PgPool) {
         cursor_state(&pool, Consumer::PersonalPlan).await,
         ("dirty".to_owned(), 0, None, None)
     );
-    assert_eq!(cursor_state(&pool, Consumer::TeamSubscription).await.0, "dead");
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await.0,
+        "dead"
+    );
 
     // Skipping moves every remaining dead cursor past its event.
     assert_eq!(inbox.replay_dead(None, true, 100).await.unwrap(), 1);
