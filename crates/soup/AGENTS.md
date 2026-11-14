@@ -91,6 +91,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
   record into client-side filters or raise ingress limits to fit them.
+- Property edges reach database-row cells from the requested records through
+  `idx_ep_database_row_references_gin`: keep that arm's literal
+  `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
+  partial index applies, and join the row by the guarded uuid cast, never
+  `r.id::text = ep.entity_id`, which reads every row cell of every database.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the
