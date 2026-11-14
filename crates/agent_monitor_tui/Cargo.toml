@@ -17,9 +17,11 @@ rootcause = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }
+tonic = { workspace = true }
 tui-input = { workspace = true }
 tui-tree-widget = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+clap = { workspace = true }
 insta = "1.48.0"
