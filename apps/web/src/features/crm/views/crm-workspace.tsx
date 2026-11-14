@@ -527,10 +527,7 @@ export function CrmWorkspaceView(props: {
             </Show>
           </Show>
           <Show when={itemKey()} keyed>
-            <CrmItemDetail
-              sourceName={activePipeline()?.name ?? title()}
-              navigation={<CrmNavigationControls />}
-            />
+            <CrmItemDetail sourceName={activePipeline()?.name ?? title()} />
           </Show>
           <Show when={recordOpen()}>
             <CrmRecordDetail

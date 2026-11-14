@@ -20,12 +20,11 @@ import { createRecordName } from './record-detail';
 
 type DocumentTarget = Extract<EntityDetailTarget, { type: 'document' }>;
 
-/** A linked item retains the Customers shell and its route-owned source trail. */
-export function CrmItemDetail(props: {
-  sourceName: string;
-  /** Leading controls for the preview headers; the top bar has its own. */
-  navigation: JSX.Element;
-}) {
+/**
+ * A linked item retains the Customers shell and its route-owned source trail.
+ * Its headers are top bars, which carry the shell's navigation controls.
+ */
+export function CrmItemDetail(props: { sourceName: string }) {
   const route = useCrmWorkspace().host.record;
   const panel = useSplitPanelOrThrow();
   const item = () => route.item()!;
@@ -153,13 +152,10 @@ export function CrmItemDetail(props: {
                 <EntityDetail
                   target={target()}
                   previewHeaderLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet
-                        aria-label="CRM item location"
-                        class="max-w-[min(40vw,24rem)] overflow-hidden"
-                      />
-                    </>
+                    <ViewBreadcrumbs.Outlet
+                      aria-label="CRM item location"
+                      class="max-w-[min(40vw,24rem)] overflow-hidden"
+                    />
                   }
                 />
               }
@@ -170,10 +166,7 @@ export function CrmItemDetail(props: {
                   value={value()}
                   order={records().length + 1}
                   headerLeading={
-                    <>
-                      {props.navigation}
-                      <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
-                    </>
+                    <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
                   }
                 />
               )}
