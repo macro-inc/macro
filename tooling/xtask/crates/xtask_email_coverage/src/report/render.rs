@@ -97,7 +97,10 @@ fn summary_cell(row: &FunctionRow, cell: Option<&Cell>) -> String {
         return "deferred".to_owned();
     }
     match &row.bug {
-        Some(bug) if cell.is_some() => format!("open (known bug {bug})"),
+        // A bug on one provider leaves the other as it stands.
+        Some(bug) if cell.is_some_and(|cell| cell.status == Status::Open) => {
+            format!("open (known bug {bug})")
+        }
         _ => status_word(cell).to_owned(),
     }
 }

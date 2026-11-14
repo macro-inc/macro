@@ -608,6 +608,11 @@ F-001\tgmail\tstate gmail_stars\tthe label change is not sent to Gmail\n",
         .unwrap();
     assert_eq!(row.gmail.as_ref().unwrap().status, Status::Proved);
     assert_eq!(row.outlook.as_ref().unwrap().status, Status::Open);
+    let summary = render::markdown(&model);
+    assert!(
+        summary.contains("| F-001 | Star a thread | proved | open (known bug BUG-7) |"),
+        "{summary}"
+    );
 }
 
 /// An entry point another product's functions own is in none of email's
