@@ -55,3 +55,25 @@ fn the_fleet_drives_every_pane() {
     );
     assert!(tape_events > 100);
 }
+
+#[test]
+fn the_snapshot_is_deterministic_and_has_a_tape() {
+    let step = Duration::from_millis(250);
+    let first = snapshot(7, start(), step, 400);
+    assert_eq!(first, snapshot(7, start(), step, 400));
+    assert!(first.agents.len() >= 15);
+    assert!(first.tape.len() > 50, "{} tape lines", first.tape.len());
+    assert!(first.totals.tools_24h > 0);
+    assert!(first.totals.working + first.totals.waiting + first.totals.blocked > 0);
+}
+
+#[test]
+fn the_fleet_stays_bounded() {
+    let step = Duration::from_millis(250);
+    let long_run = snapshot(7, start(), step, 4000);
+    assert!(
+        long_run.agents.len() <= 40,
+        "{} agents after a long run",
+        long_run.agents.len()
+    );
+}

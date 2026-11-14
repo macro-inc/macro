@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use chrono::{Local, TimeDelta, Timelike};
+use chrono::{FixedOffset, Local, Offset as _, TimeDelta, Timelike};
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
@@ -45,11 +45,16 @@ pub struct StoreConfig {
     /// How often time-driven state (activity minutes, recency, totals,
     /// source health) is recomputed.
     pub tick: Duration,
-    /// How often an idle store publishes a heartbeat.
+    /// How often the store publishes a heartbeat, so viewers can tell a
+    /// quiet collector from a stalled one.
     pub heartbeat: Duration,
     /// Transcript records older than this do not become tape lines, so a
     /// startup index does not flood the tape.
     pub tape_recent: TimeDelta,
+    /// The UTC offset whose midnight starts "today" for spend; `None` uses the
+    /// machine's local time zone. Fixed in tests so totals do not depend on
+    /// where they run.
+    pub day_offset: Option<FixedOffset>,
 }
 
 impl Default for StoreConfig {
@@ -63,6 +68,7 @@ impl Default for StoreConfig {
             tick: Duration::from_secs(1),
             heartbeat: Duration::from_secs(15),
             tape_recent: TimeDelta::minutes(5),
+            day_offset: None,
         }
     }
 }
@@ -167,6 +173,53 @@ pub struct Store {
     observations: mpsc::Sender<Observation>,
 }
 
+/// Runs observations through the store's reducer synchronously at a fixed
+/// clock and returns the state it would publish. Each step is a time and the
+/// observations that arrived by then; the reducer rebuilds agents once per
+/// step and recomputes totals and source health after it, as a live store
+/// does once per coalescing window and tick. For tests and recordings that
+/// need a fixed state.
+pub fn replay(
+    config: StoreConfig,
+    steps: impl IntoIterator<Item = (Timestamp, Vec<Observation>)>,
+) -> Snapshot {
+    let (updates, _) = broadcast::channel(1);
+    let (totals, _) = watch::channel(Arc::new(Totals::default()));
+    let shared = Arc::new(Shared {
+        config,
+        state: Mutex::new(State::default()),
+        updates,
+        totals,
+    });
+    let clock = Arc::new(ReplayClock(Mutex::new(Timestamp::default())));
+    let mut reducer = Reducer::new(shared.clone(), clock.clone());
+
+    for (now, observations) in steps {
+        *clock.0.lock().unwrap_or_else(PoisonError::into_inner) = now;
+        for observation in observations {
+            reducer.apply(observation);
+        }
+        reducer.reduce();
+        reducer.publish_totals();
+        reducer.publish_health();
+    }
+
+    let state = shared.lock();
+    match &shared.snapshot(&state).kind {
+        UpdateKind::Snapshot(snapshot) => snapshot.clone(),
+        _ => Snapshot::default(),
+    }
+}
+
+/// The clock a replay sets before each step.
+struct ReplayClock(Mutex<Timestamp>);
+
+impl Clock for ReplayClock {
+    fn now(&self) -> Timestamp {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
 impl Store {
     /// Starts the reducer on `tracker`; it runs until `cancel` fires or every
     /// observation sender is dropped.
@@ -242,8 +295,9 @@ struct Reducer {
     health: BTreeMap<SourceKind, SourceHealth>,
     last_event: BTreeMap<SourceKind, Timestamp>,
     published_health: BTreeMap<SourceKind, SourceHealth>,
-    /// Open tool calls' names by id, so a failure line can name its tool.
-    tool_names: HashMap<String, String>,
+    /// Recent open tool calls' names by transcript and call id, so a failure
+    /// line can name its tool.
+    tool_names: HashMap<(FactKey, String), String>,
 }
 
 impl Reducer {
@@ -332,13 +386,33 @@ impl Reducer {
             return;
         }
 
+        let is_reset = matches!(observation.change, Change::Reset(_));
+        if let Change::Remove(key) = &observation.change {
+            self.tool_names.retain(|(owner, _), _| owner != key);
+        }
+        if is_reset {
+            self.tool_names.clear();
+        }
+
         let events = self.facts.apply(observation, now);
-        self.pending_events.extend(events);
+        // A reset re-sends what a source already reported (a restart re-reads
+        // its files), so its records are counted but not written to the tape again.
+        if !is_reset {
+            self.pending_events.extend(events);
+        }
     }
 
     /// Rebuilds every agent, diffs against the published rows, and publishes
     /// the changed rows and the tape lines they imply.
     fn reduce(&mut self) {
+        let span = tracing::debug_span!(
+            "macrod.monitor.store.reduce",
+            agents = tracing::field::Empty,
+            upserts = tracing::field::Empty,
+            removed = tracing::field::Empty,
+            tape = tracing::field::Empty,
+        );
+        let _entered = span.enter();
         let now = self.clock.now();
         let built = build_agents(&self.facts, now);
         let recent = now - self.shared.config.tape_recent;
@@ -387,6 +461,15 @@ impl Reducer {
             tape.extend(tape_line);
         }
 
+        let upserts = updates
+            .iter()
+            .filter(|update| matches!(update, UpdateKind::Upsert(_)))
+            .count();
+        span.record("agents", built.agents.len());
+        span.record("upserts", upserts);
+        span.record("removed", updates.len() - upserts);
+        span.record("tape", tape.len());
+
         updates.extend(tape.into_iter().map(UpdateKind::Event));
         self.shared.publish(updates);
         self.published = built.agents;
@@ -398,6 +481,11 @@ impl Reducer {
         event: FactEvent,
         recent: Timestamp,
     ) -> Option<TapeEvent> {
+        // Older records (a startup index) are counted but write no tape line.
+        if event.at < recent {
+            return None;
+        }
+
         let (kind, text, severity) = match event.kind {
             TranscriptEventKind::TurnStart => (
                 TapeKind::TurnStart,
@@ -412,11 +500,11 @@ impl Reducer {
                     Some(gist) => format!("{name} {gist}"),
                     None => name.clone(),
                 };
-                self.tool_names.insert(id, name);
+                self.tool_names.insert((event.key.clone(), id), name);
                 (TapeKind::ToolStart, text, Severity::Info)
             }
             TranscriptEventKind::ToolEnd { id, is_error } => {
-                let name = self.tool_names.remove(&id);
+                let name = self.tool_names.remove(&(event.key.clone(), id));
                 if !is_error {
                     return None;
                 }
@@ -429,16 +517,23 @@ impl Reducer {
             TranscriptEventKind::Usage(_) | TranscriptEventKind::Cost(_) => return None,
         };
 
-        if event.at < recent {
-            return None;
-        }
         let agent = owners.get(&event.key)?;
         Some(line(event.at, agent, kind, text, severity))
     }
 
     fn publish_totals(&mut self) {
         let now = self.clock.now();
-        let totals = totals(&self.published, &minute_counts(&self.facts, now), now);
+        let offset = self
+            .shared
+            .config
+            .day_offset
+            .unwrap_or_else(|| now.with_timezone(&Local).offset().fix());
+        let totals = totals(
+            &self.published,
+            &minute_counts(&self.facts, now),
+            now,
+            offset,
+        );
         if **self.shared.totals.borrow() == totals {
             return;
         }
@@ -517,6 +612,7 @@ fn totals(
     agents: &BTreeMap<AgentId, Agent>,
     minutes: &BTreeMap<Timestamp, MinuteCounts>,
     now: Timestamp,
+    offset: FixedOffset,
 ) -> Totals {
     let mut totals = Totals::default();
     let day_ago = now - TimeDelta::hours(24);
@@ -533,7 +629,7 @@ fn totals(
         }
     }
 
-    let local_now = now.with_timezone(&Local);
+    let local_now = now.with_timezone(&offset);
     let midnight = local_now
         .with_hour(0)
         .and_then(|at| at.with_minute(0))
@@ -557,7 +653,7 @@ fn totals(
         }
 
         if *minute >= midnight {
-            let hour = minute.with_timezone(&Local).hour();
+            let hour = minute.with_timezone(&offset).hour();
             if let Some(slot) = usize::try_from(hour)
                 .ok()
                 .and_then(|hour| totals.cost_by_hour.get_mut(hour))

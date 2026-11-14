@@ -905,6 +905,7 @@ dependencies = [
  "hyper-util",
  "notify",
  "opentelemetry",
+ "opentelemetry_sdk",
  "prost 0.14.3",
  "protox",
  "rand 0.9.4",
@@ -922,6 +923,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 

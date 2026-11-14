@@ -38,10 +38,6 @@ tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-[dev-dependencies]
-clap = { workspace = true }
-tempfile = { workspace = true }
-
 [build-dependencies]
 protox = { workspace = true }
 tonic-prost-build = { workspace = true }
@@ -49,3 +45,10 @@ tonic-prost-build = { workspace = true }
 [package.metadata.cargo-shear]
 # Used by the code `build.rs` generates into `OUT_DIR`.
 ignored = ["prost", "tonic-prost"]
+
+[dev-dependencies]
+clap = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tracing-subscriber = { workspace = true }
