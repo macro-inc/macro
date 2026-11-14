@@ -122,7 +122,10 @@ fn a_leading_tilde_in_a_directory_is_the_home_directory() {
         expand_home(Path::new("~/runs/work"), home),
         PathBuf::from("/home/someone/runs/work")
     );
-    assert_eq!(expand_home(Path::new("~"), home), PathBuf::from("/home/someone"));
+    assert_eq!(
+        expand_home(Path::new("~"), home),
+        PathBuf::from("/home/someone")
+    );
     assert_eq!(
         expand_home(Path::new("/var/runs"), home),
         PathBuf::from("/var/runs")
@@ -270,7 +273,10 @@ async fn hosting_takes_over_when_the_other_collector_exits() {
     assert!(claims.try_recv().is_err());
 
     drop(other);
-    claims.recv().await.expect("claimed once the other collector is gone");
+    claims
+        .recv()
+        .await
+        .expect("claimed once the other collector is gone");
 
     cancel.cancel();
     task.await.unwrap();

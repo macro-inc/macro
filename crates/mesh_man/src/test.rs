@@ -218,9 +218,18 @@ fn quarter_turn_snapshot() {
 
 #[test]
 fn colorterm_announces_truecolor_only_for_its_two_values() {
-    assert_eq!(ColorDepth::from_colorterm(Some("truecolor")), ColorDepth::TrueColor);
-    assert_eq!(ColorDepth::from_colorterm(Some("24bit")), ColorDepth::TrueColor);
-    assert_eq!(ColorDepth::from_colorterm(Some("256color")), ColorDepth::Indexed);
+    assert_eq!(
+        ColorDepth::from_colorterm(Some("truecolor")),
+        ColorDepth::TrueColor
+    );
+    assert_eq!(
+        ColorDepth::from_colorterm(Some("24bit")),
+        ColorDepth::TrueColor
+    );
+    assert_eq!(
+        ColorDepth::from_colorterm(Some("256color")),
+        ColorDepth::Indexed
+    );
     assert_eq!(ColorDepth::from_colorterm(None), ColorDepth::Indexed);
 }
 
@@ -250,5 +259,10 @@ fn an_indexed_body_draws_only_indexed_colours() {
             .all(|cell| !matches!(cell.fg, Color::Rgb(..))),
         "no truecolor cell"
     );
-    assert!(buffer.content().iter().any(|cell| matches!(cell.fg, Color::Indexed(_))));
+    assert!(
+        buffer
+            .content()
+            .iter()
+            .any(|cell| matches!(cell.fg, Color::Indexed(_)))
+    );
 }

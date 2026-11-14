@@ -220,7 +220,10 @@ impl Vitals {
         if event.kind == TapeKind::ToolStart {
             let name = event.text.split_whitespace().next().unwrap_or_default();
             if !name.is_empty() {
-                self.tools.entry(name.to_owned()).or_default().hit(event.at, live);
+                self.tools
+                    .entry(name.to_owned())
+                    .or_default()
+                    .hit(event.at, live);
             }
         }
     }

@@ -16,10 +16,10 @@ use ratatui::symbols::Marker;
 use ratatui::widgets::Widget;
 use ratatui::widgets::canvas::{Canvas, Line};
 
-use crate::{Body, ColorDepth};
 use crate::model::Tissue;
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
 use crate::pulse::{FLASH_SECONDS, PulseKind};
+use crate::{Body, ColorDepth};
 
 type Rgb = (u8, u8, u8);
 
@@ -89,7 +89,11 @@ pub(crate) fn indexed(rgb: Rgb) -> u8 {
             .min_by_key(|(_, level)| level.abs_diff(value))
             .map_or(0, |(index, _)| index)
     };
-    let (r, g, b) = (nearest_level(rgb.0), nearest_level(rgb.1), nearest_level(rgb.2));
+    let (r, g, b) = (
+        nearest_level(rgb.0),
+        nearest_level(rgb.1),
+        nearest_level(rgb.2),
+    );
     let level = |index: usize| CUBE_LEVELS.get(index).copied().unwrap_or(0);
     let cube = (level(r), level(g), level(b));
 

@@ -1052,7 +1052,10 @@ fn prune_drops_old_ended_agents_and_keeps_what_is_live() {
     let dropped = facts.prune(day_later, history);
     let built = build_agents(&facts, day_later);
 
-    assert_eq!(dropped, 3, "the old session, the finished terminal, the old run");
+    assert_eq!(
+        dropped, 3,
+        "the old session, the finished terminal, the old run"
+    );
     assert!(!built.agents.contains_key(&AgentId::claude_session("s-old")));
     assert!(!built.agents.contains_key(&AgentId::terminal("t-done")));
     assert!(!built.agents.contains_key(&AgentId::run("run-old")));

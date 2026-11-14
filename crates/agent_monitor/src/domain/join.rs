@@ -362,7 +362,10 @@ impl Facts {
         });
         let minutes_horizon = now - HISTORY;
         for owned in self.transcripts.values_mut() {
-            owned.fact.minutes.retain(|minute, _| *minute >= minutes_horizon);
+            owned
+                .fact
+                .minutes
+                .retain(|minute, _| *minute >= minutes_horizon);
         }
 
         let live_terminals: Vec<&TerminalFact> = self

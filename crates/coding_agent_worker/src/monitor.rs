@@ -345,22 +345,29 @@ impl Host {
         let settings = settings.clone();
         let daemon = self.link.subscribe();
         let serving = cancel.clone();
-        let task = tokio::spawn(hold_socket(socket, cancel.clone(), CLAIM_RETRY, move |bound| {
-            let settings = settings.clone();
-            let daemon = daemon.clone();
-            let serving = serving.clone();
-            async move {
-                match Collector::start(bound, &settings, Some(daemon)) {
-                    Ok(collector) => {
-                        tracing::info!("hosting the agent monitor");
-                        serving.cancelled().await;
-                        collector.stop().await;
-                        tracing::info!("stopped hosting the agent monitor");
+        let task = tokio::spawn(hold_socket(
+            socket,
+            cancel.clone(),
+            CLAIM_RETRY,
+            move |bound| {
+                let settings = settings.clone();
+                let daemon = daemon.clone();
+                let serving = serving.clone();
+                async move {
+                    match Collector::start(bound, &settings, Some(daemon)) {
+                        Ok(collector) => {
+                            tracing::info!("hosting the agent monitor");
+                            serving.cancelled().await;
+                            collector.stop().await;
+                            tracing::info!("stopped hosting the agent monitor");
+                        }
+                        Err(error) => {
+                            tracing::warn!(error = ?error, "could not host the agent monitor")
+                        }
                     }
-                    Err(error) => tracing::warn!(error = ?error, "could not host the agent monitor"),
                 }
-            }
-        }));
+            },
+        ));
         self.hosting = Some(Hosting { cancel, task });
     }
 
@@ -376,8 +383,12 @@ impl Host {
 /// Claims `socket` and runs `serve` while holding it; while another process
 /// holds it (or claiming fails), tries again every `retry`. Ends when
 /// `cancel` fires, after `serve` returns.
-async fn hold_socket<F, Serve>(socket: PathBuf, cancel: CancellationToken, retry: Duration, mut serve: F)
-where
+async fn hold_socket<F, Serve>(
+    socket: PathBuf,
+    cancel: CancellationToken,
+    retry: Duration,
+    mut serve: F,
+) where
     F: FnMut(BoundSocket) -> Serve,
     Serve: Future<Output = ()>,
 {
@@ -391,11 +402,15 @@ where
                 }
             }
             Ok(Claim::Served) if !said_served => {
-                tracing::info!("another process hosts the agent monitor; taking over when it exits");
+                tracing::info!(
+                    "another process hosts the agent monitor; taking over when it exits"
+                );
                 said_served = true;
             }
             Ok(Claim::Served) => {}
-            Err(error) => tracing::warn!(error = %error, "could not claim the agent monitor socket"),
+            Err(error) => {
+                tracing::warn!(error = %error, "could not claim the agent monitor socket")
+            }
         }
         tokio::select! {
             () = cancel.cancelled() => return,
@@ -536,7 +551,11 @@ async fn dump_transcript(
 
 /// `macrod monitor`: the viewer, on the demo fleet or on the machine's
 /// collector, starting a detached one when nothing answers.
-async fn view(socket: Option<PathBuf>, config: &MonitorConfig, demo: bool) -> rootcause::Result<()> {
+async fn view(
+    socket: Option<PathBuf>,
+    config: &MonitorConfig,
+    demo: bool,
+) -> rootcause::Result<()> {
     let settings = config.settings()?;
     let feed = if demo {
         agent_monitor_tui::FeedChoice::Demo {
