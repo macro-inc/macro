@@ -17,15 +17,25 @@ export type ThreadMessage = {
 /**
  * Delivers `bodies.length` messages as one conversation, each a reply to the
  * one before, and waits until Macro holds them all. The thread is named after
- * its latest message: `Re: <subject>` once there is a reply.
+ * its latest message: `Re: <subject>` once there is a reply. With
+ * `aSecondApart` each message arrives in a later second than the one before:
+ * a thread orders its messages by their date, which Outlook keeps to the
+ * second.
  */
 export async function deliverThread(
   mailbox: Mailbox,
   subject: string,
-  bodies: (Pick<Mail, 'text' | 'html'> & Partial<Pick<Mail, 'from'>>)[]
+  bodies: (Pick<Mail, 'text' | 'html'> & Partial<Pick<Mail, 'from'>>)[],
+  options: { aSecondApart?: boolean } = {}
 ): Promise<ThreadPreview> {
   const key = subject.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   for (const [index, body] of bodies.entries()) {
+    if (options.aSecondApart && index > 0) {
+      const before = Math.floor(Date.now() / 1000);
+      await expect
+        .poll(() => Math.floor(Date.now() / 1000), { intervals: [100] })
+        .toBeGreaterThan(before);
+    }
     await mailbox.deliver({
       from: 'Grace <grace@example.com>',
       ...body,

@@ -6,8 +6,11 @@ F-021	the Drafts tab lists no drafts
 F-029	the Noise tab is never selected
 F-030	a tab other than the provider views is never selected
 F-031	the Trash and Spam tabs are never selected
+F-032	the Shared view lists nothing
 F-033	the inbox filter keeps every inbox
 F-034	the Read filter filters nothing
+F-036	the next page of a long list never loads
+F-037	pulling the list down refreshes nothing
 F-038	j and k do not move the cursor
 F-039	a row's checkbox selects nothing
 F-040	the reading pane never opens
@@ -18,10 +21,18 @@ F-044	undo of Done does nothing
 F-048	deleting a saved view does nothing
 F-052	a search hit opens the thread at its latest message
 F-053	a click on a row opens nothing
+F-054	Shift+click opens the thread in place, not in a new split
+F-055	a link to a message does not open the thread at that message
 F-056	an opened message shows no body
 F-058	a message's header does not collapse it
+F-059	Show quoted text does not unfold the quote
 F-060	the hidden-messages chip shows nothing
 F-061	j and k in an open thread do not move to the next thread
+F-062	the arrow keys do not move between the messages of a thread
+F-063	the more-people control does not list the other recipients
+F-064	Download as .eml saves no file
+F-065	Copy Link copies nothing
+F-066	a sent message does not say whether it was opened
 F-067	the read receipts switch changes nothing
 F-068	mark as read does nothing
 F-069	mark as unread does nothing
@@ -79,8 +90,14 @@ F-149	the signature preview renders nothing
 F-153	an invitation shows no event card
 F-157	turning the calendar off never asks the service
 F-177	Escape does not go back to the list
+F-178	Copy subject copies nothing
 F-179	a right-click on a row opens no menu
 F-180	Settings does not list a sender block that waits for the mailbox
+F-181	Hide navigation leaves the sidebar in place
 F-182	a folder name on a row opens nothing
+F-183	the tutorial row opens no video
+F-184	the question-mark key opens no shortcuts sheet
+F-187	Copy ID copies nothing
+F-188	the thread offers no details panel
 F-189	Try again in the accounts settings does nothing
 F-196	unblocking a sender does nothing
