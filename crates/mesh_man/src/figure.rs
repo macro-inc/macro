@@ -332,5 +332,7 @@ impl FigureBuilder {
 pub fn catalog() -> Vec<Figure> {
     let mut figures = vec![crate::model::mesh_man()];
     figures.extend(crate::figures::procedural());
+    #[cfg(feature = "demo-assets")]
+    figures.extend(crate::assets::figures());
     figures
 }

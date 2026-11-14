@@ -26,6 +26,8 @@
 use std::f32::consts::TAU;
 use std::time::Duration;
 
+#[cfg(feature = "demo-assets")]
+mod assets;
 mod figure;
 mod figures;
 mod model;

@@ -70,3 +70,5 @@ gha-creds-*.json
 # Python bytecode from tooling/pii and other scripts.
 **/__pycache__/
 **/*.pyc
+crates/mesh_man/assets-raw/
+crates/mesh_man/convert/target/
