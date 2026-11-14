@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{Agent, SourceKind, TranscriptItem};
-use crate::domain::observation::{Observation, PrWanted};
+use crate::domain::observation::{GitWanted, Observation, PrWanted};
 
 /// Why a source stopped.
 #[derive(Debug, thiserror::Error)]
@@ -97,6 +97,25 @@ impl std::fmt::Debug for PrInterest {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PrInterest")
+            .field("wanted", &self.wanted)
+            .finish_non_exhaustive()
+    }
+}
+
+/// What the git source needs from the store: which directories and branches
+/// to map, and whether anyone is watching (it gathers less often when nobody is).
+#[derive(Clone)]
+pub struct GitInterest {
+    /// What to map, republished after each reduce that changes it.
+    pub wanted: watch::Receiver<Arc<GitWanted>>,
+    /// How many viewers are subscribed now.
+    pub subscribers: Arc<dyn Fn() -> usize + Send + Sync>,
+}
+
+impl std::fmt::Debug for GitInterest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GitInterest")
             .field("wanted", &self.wanted)
             .finish_non_exhaustive()
     }

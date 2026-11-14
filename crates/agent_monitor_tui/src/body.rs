@@ -162,7 +162,11 @@ impl Vitals {
             TapeKind::Spawned | TapeKind::PrOpened => 2,
             TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => 3,
             TapeKind::Finished | TapeKind::Removed | TapeKind::PrMerged => 4,
-            TapeKind::Status | TapeKind::PrCiPassed | TapeKind::PrClosed => return None,
+            TapeKind::Status
+            | TapeKind::PrCiPassed
+            | TapeKind::PrClosed
+            | TapeKind::Commit
+            | TapeKind::Rewritten => return None,
         };
         Some(index)
     }

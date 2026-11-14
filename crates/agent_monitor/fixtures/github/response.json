@@ -3,7 +3,7 @@
     "r0": {
       "p0": {
         "number": 7, "url": "https://github.com/example-org/gadgets/pull/7", "title": "fix: gadget hinge",
-        "state": "MERGED", "isDraft": false, "headRefName": "fix/hinge", "mergeable": "UNKNOWN",
+        "state": "MERGED", "isDraft": false, "headRefName": "fix/hinge", "headRefOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "baseRefName": "main", "mergeCommit": { "oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" }, "mergeable": "UNKNOWN",
         "reviewDecision": "APPROVED", "createdAt": "2030-01-02T10:03:05Z", "updatedAt": "2030-01-02T12:00:00Z",
         "mergedAt": "2030-01-02T12:00:00Z", "closedAt": "2030-01-02T12:00:00Z",
         "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "FAILURE" }, "status": { "context": { "state": "SUCCESS" } } } } ] }
@@ -13,7 +13,7 @@
       "p0": null,
       "p1": {
         "number": 42, "url": "https://github.com/example-org/widgets/pull/42", "title": "perf: faster widgets",
-        "state": "OPEN", "isDraft": false, "headRefName": "feat/faster", "mergeable": "CONFLICTING",
+        "state": "OPEN", "isDraft": false, "headRefName": "feat/faster", "headRefOid": "cccccccccccccccccccccccccccccccccccccccc", "baseRefName": "main", "mergeCommit": null, "mergeable": "CONFLICTING",
         "reviewDecision": "CHANGES_REQUESTED", "createdAt": "2030-01-02T10:02:05Z", "updatedAt": "2030-01-02T11:00:00Z",
         "mergedAt": null, "closedAt": null,
         "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "FAILURE" }, "status": null } } ] }
@@ -22,7 +22,7 @@
         "nodes": [
           {
             "number": 44, "url": "https://github.com/example-org/widgets/pull/44", "title": "feat: codex widgets",
-            "state": "OPEN", "isDraft": true, "headRefName": "feat/codex", "mergeable": "MERGEABLE",
+            "state": "OPEN", "isDraft": true, "headRefName": "feat/codex", "headRefOid": "dddddddddddddddddddddddddddddddddddddddd", "baseRefName": "feat/faster", "mergeCommit": null, "mergeable": "MERGEABLE",
             "reviewDecision": null, "createdAt": "2030-01-02T10:05:00Z", "updatedAt": "2030-01-02T10:06:00Z",
             "mergedAt": null, "closedAt": null,
             "commits": { "nodes": [ { "commit": { "statusCheckRollup": { "state": "PENDING" }, "status": null } } ] }

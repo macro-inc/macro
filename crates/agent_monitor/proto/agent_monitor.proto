@@ -54,6 +54,10 @@ message Update {
     PullRequest pr_upsert = 9;
     // The id of a pull request that is gone.
     string pr_removed = 10;
+    // A whole repository graph; replaces the one with the same id.
+    RepoGraph repo_upsert = 11;
+    // The id of a repository that is gone.
+    string repo_removed = 12;
   }
 }
 
@@ -64,6 +68,7 @@ message Snapshot {
   Totals totals = 3;
   repeated SourceHealth sources = 4;
   repeated PullRequest prs = 5;
+  repeated RepoGraph repos = 6;
 }
 
 message Heartbeat {
@@ -84,6 +89,8 @@ enum Source {
   SOURCE_DAEMON = 9;
   // Pull request status, polled from GitHub through the gh CLI.
   SOURCE_GITHUB = 10;
+  // Local git repositories, woken by ref watches.
+  SOURCE_GIT = 11;
 }
 
 enum AgentKind {
@@ -199,6 +206,8 @@ enum TapeKind {
   TAPE_KIND_PR_CI_FAILED = 13;
   TAPE_KIND_PR_MERGED = 14;
   TAPE_KIND_PR_CLOSED = 15;
+  TAPE_KIND_COMMIT = 16;
+  TAPE_KIND_REWRITTEN = 17;
 }
 
 enum Severity {
@@ -341,4 +350,78 @@ message PullRequest {
   optional int64 opened_at_ms = 13;
   optional int64 updated_at_ms = 14;
   optional int64 closed_at_ms = 15;
+  optional string head_oid = 16;
+  optional string merge_oid = 17;
+  optional string base_branch = 18;
+}
+
+// One repository's trunk and the branches drawn against it.
+message RepoGraph {
+  // The canonical git common directory.
+  string id = 1;
+  // `owner/name` of origin, else the directory's name.
+  string name = 2;
+  optional string remote = 3;
+  Trunk trunk = 4;
+  // Ranked: live agent, open pull request, newest commit.
+  repeated Lane lanes = 5;
+  uint32 hidden_lanes = 6;
+  // Agents in a checkout of the trunk's local branch.
+  repeated string trunk_agents = 7;
+}
+
+message Trunk {
+  // Such as `origin/main`.
+  string name = 1;
+  // First-parent, newest first.
+  repeated Commit commits = 2;
+  optional LocalTrunk local = 3;
+  optional int64 fetched_at_ms = 4;
+  repeated string worktrees = 5;
+}
+
+message LocalTrunk {
+  string name = 1;
+  uint32 ahead = 2;
+  uint32 behind = 3;
+}
+
+message Lane {
+  string branch = 1;
+  repeated string aliases = 2;
+  oneof base {
+    TrunkBase trunk_base = 3;
+    LaneBase lane_base = 4;
+  }
+  uint32 ahead = 5;
+  uint32 behind = 6;
+  // Its own commits, newest first.
+  repeated Commit commits = 7;
+  uint32 elided = 8;
+  optional string pushed = 9;
+  optional string worktree = 10;
+  // The pull request's author first, managers last.
+  repeated string agents = 11;
+  optional string pr = 12;
+  // The trunk commit its merged pull request became.
+  optional string landed = 13;
+}
+
+message TrunkBase {
+  string oid = 1;
+  int64 at_ms = 2;
+}
+
+message LaneBase {
+  string branch = 1;
+  string oid = 2;
+}
+
+message Commit {
+  string oid = 1;
+  int64 at_ms = 2;
+  string author = 3;
+  string subject = 4;
+  bool merge = 5;
+  optional uint32 pr = 6;
 }

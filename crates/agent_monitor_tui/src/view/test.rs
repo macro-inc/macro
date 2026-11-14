@@ -365,6 +365,9 @@ fn pr(number: u32, state: PrState, ci: CiState, updated: u32) -> Pr {
         opened_at: Some(at(0)),
         updated_at: Some(at(updated)),
         closed_at: None,
+        head_oid: None,
+        merge_oid: None,
+        base_branch: None,
     }
 }
 

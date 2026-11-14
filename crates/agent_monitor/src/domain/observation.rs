@@ -15,12 +15,14 @@
 //! | PR ↔ author | [`TranscriptEventKind::PrOpened`] in the agent's transcript |
 //! | PR ↔ manager | [`ManagerFact::prs`] |
 //! | PR ↔ branch | agent `cwd` → [`CheckoutFact::repo`], agent branch = [`PrStatusFact::branch`] |
+//! | agent ↔ lane | agent `cwd` under [`Lane::worktree`](crate::domain::model::Lane::worktree) (longest prefix), else branch and [`CheckoutFact::repo`] = [`RepoGraph::remote`] |
+//! | PR ↔ lane | [`PrStatusFact::branch`] = lane branch or alias, in [`RepoGraph::remote`] |
 
 use std::path::PathBuf;
 
 use crate::domain::model::{
-    AgentKind, CiState, Cost, Mergeable, PrId, PrRef, PrState, RepoName, ReviewState, SourceHealth,
-    SourceKind, Timestamp, Tokens,
+    AgentKind, CiState, Cost, Mergeable, Oid, PrId, PrRef, PrState, RepoGraph, RepoId, RepoName,
+    ReviewState, SourceHealth, SourceKind, Timestamp, Tokens,
 };
 
 /// One message from a source to the store.
@@ -66,6 +68,9 @@ pub enum Fact {
     PrStatus(Box<PrStatusFact>),
     /// A working directory resolved to its GitHub repository.
     Checkout(CheckoutFact),
+    /// A local repository's trunk and branches, with the joined fields
+    /// (agents, pull requests, landings) left empty.
+    RepoGraph(Box<RepoGraph>),
 }
 
 impl Fact {
@@ -80,6 +85,7 @@ impl Fact {
             Fact::RunRecord(record) => FactKey::RunRecord(record.id.clone()),
             Fact::PrStatus(status) => FactKey::Pr(status.pr.id()),
             Fact::Checkout(checkout) => FactKey::Checkout(checkout.cwd.clone()),
+            Fact::RepoGraph(graph) => FactKey::Repo(graph.id.clone()),
         }
     }
 }
@@ -103,6 +109,8 @@ pub enum FactKey {
     Pr(PrId),
     /// A working directory.
     Checkout(PathBuf),
+    /// A repository's common directory.
+    Repo(RepoId),
 }
 
 /// Whether an hc terminal's process is still running.
@@ -377,6 +385,12 @@ pub struct PrStatusFact {
     pub updated: Option<Timestamp>,
     /// When it was merged or closed.
     pub closed: Option<Timestamp>,
+    /// Its head commit on GitHub.
+    pub head_oid: Option<Oid>,
+    /// The commit it became on its base branch, once merged.
+    pub merge_oid: Option<Oid>,
+    /// The branch it merges into.
+    pub base_branch: Option<String>,
 }
 
 /// A working directory inside a clone of a GitHub repository.
@@ -407,4 +421,15 @@ pub struct PrWanted {
     pub refs: std::collections::BTreeSet<PrRef>,
     /// Agent branches to resolve.
     pub branches: std::collections::BTreeSet<BranchCandidate>,
+}
+
+/// What the git source should map: every working directory an agent has
+/// (live, or ended inside the history window), and the head branches of the
+/// pull requests the store holds. The store publishes it after each reduce.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GitWanted {
+    /// Agent working directories, each with whether a live agent sits there.
+    pub cwds: std::collections::BTreeMap<PathBuf, bool>,
+    /// Pull request head branches by repository.
+    pub pr_branches: std::collections::BTreeMap<RepoName, std::collections::BTreeSet<String>>,
 }

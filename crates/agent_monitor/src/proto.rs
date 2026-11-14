@@ -8,10 +8,11 @@ use std::path::PathBuf;
 use chrono::DateTime;
 
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, AgentMinutes, CiState, Cost, HOURS_PER_DAY,
-    Mergeable, Pr, PrId, PrState, Progress, RepoName, ReviewState, Severity, Snapshot,
-    SourceHealth, SourceKind, SourceSet, SourceState, Status, TapeEvent, TapeKind, Timestamp,
-    Tokens, Totals, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, AgentMinutes, CiState, Commit, Cost,
+    HOURS_PER_DAY, Lane, LaneBase, LocalTrunk, Mergeable, Oid, Pr, PrId, PrState, Progress,
+    RepoGraph, RepoId, RepoName, ReviewState, Severity, Snapshot, SourceHealth, SourceKind,
+    SourceSet, SourceState, Status, TapeEvent, TapeKind, Timestamp, Tokens, Totals, TranscriptItem,
+    TranscriptItemKind, Trunk, Update, UpdateKind,
 };
 
 #[expect(
@@ -27,7 +28,7 @@ mod generated {
 pub use generated::r#macro::agent_monitor::v1 as wire;
 
 /// The wire protocol version. Bump it on any incompatible change to the proto.
-pub const PROTOCOL: u32 = 2;
+pub const PROTOCOL: u32 = 3;
 
 /// A wire message the domain cannot represent.
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -49,6 +50,9 @@ pub enum WireError {
     /// A repository name that is not `<owner>/<name>`.
     #[error("invalid repository `{0}`")]
     Repo(String),
+    /// A git object id that is not 40 or 64 hex digits.
+    #[error("invalid object id in `{0}`")]
+    Oid(&'static str),
     /// A fixed-length series had the wrong length.
     #[error("`{field}` has {len} values")]
     SeriesLength {
@@ -89,6 +93,7 @@ impl From<SourceKind> for wire::Source {
             SourceKind::Demo => Self::Demo,
             SourceKind::Daemon => Self::Daemon,
             SourceKind::Github => Self::Github,
+            SourceKind::Git => Self::Git,
         }
     }
 }
@@ -109,6 +114,7 @@ fn source_from_wire(value: i32) -> Result<SourceKind, WireError> {
         wire::Source::Demo => Ok(SourceKind::Demo),
         wire::Source::Daemon => Ok(SourceKind::Daemon),
         wire::Source::Github => Ok(SourceKind::Github),
+        wire::Source::Git => Ok(SourceKind::Git),
         wire::Source::Unspecified => Err(unknown),
     }
 }
@@ -400,6 +406,8 @@ impl From<TapeKind> for wire::TapeKind {
             TapeKind::PrCiFailed => Self::PrCiFailed,
             TapeKind::PrMerged => Self::PrMerged,
             TapeKind::PrClosed => Self::PrClosed,
+            TapeKind::Commit => Self::Commit,
+            TapeKind::Rewritten => Self::Rewritten,
         }
     }
 }
@@ -425,6 +433,8 @@ fn tape_kind_from_wire(value: i32) -> Result<TapeKind, WireError> {
         wire::TapeKind::PrCiFailed => Ok(TapeKind::PrCiFailed),
         wire::TapeKind::PrMerged => Ok(TapeKind::PrMerged),
         wire::TapeKind::PrClosed => Ok(TapeKind::PrClosed),
+        wire::TapeKind::Commit => Ok(TapeKind::Commit),
+        wire::TapeKind::Rewritten => Ok(TapeKind::Rewritten),
         wire::TapeKind::Unspecified => Err(unknown),
     }
 }
@@ -609,6 +619,7 @@ impl From<&Snapshot> for wire::Snapshot {
             totals: Some((&snapshot.totals).into()),
             sources: snapshot.sources.iter().map(Into::into).collect(),
             prs: snapshot.prs.iter().map(Into::into).collect(),
+            repos: snapshot.repos.iter().map(Into::into).collect(),
         }
     }
 }
@@ -642,6 +653,11 @@ impl TryFrom<wire::Snapshot> for Snapshot {
                 .into_iter()
                 .map(Pr::try_from)
                 .collect::<Result<_, _>>()?,
+            repos: snapshot
+                .repos
+                .into_iter()
+                .map(RepoGraph::try_from)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -660,6 +676,8 @@ impl From<&Update> for wire::Update {
             }
             UpdateKind::PrUpsert(pr) => wire::update::Kind::PrUpsert(pr.into()),
             UpdateKind::PrRemoved(id) => wire::update::Kind::PrRemoved(id.as_str().to_owned()),
+            UpdateKind::RepoUpsert(graph) => wire::update::Kind::RepoUpsert(graph.into()),
+            UpdateKind::RepoRemoved(id) => wire::update::Kind::RepoRemoved(id.as_str().to_owned()),
         };
         Self {
             seq: update.seq,
@@ -684,6 +702,8 @@ impl TryFrom<wire::Update> for Update {
             }
             wire::update::Kind::PrUpsert(pr) => UpdateKind::PrUpsert(pr.try_into()?),
             wire::update::Kind::PrRemoved(id) => UpdateKind::PrRemoved(PrId::from_wire(id)),
+            wire::update::Kind::RepoUpsert(graph) => UpdateKind::RepoUpsert(graph.try_into()?),
+            wire::update::Kind::RepoRemoved(id) => UpdateKind::RepoRemoved(RepoId::from_wire(id)),
         };
         Ok(Self {
             seq: update.seq,
@@ -867,6 +887,9 @@ impl From<&Pr> for wire::PullRequest {
             opened_at_ms: pr.opened_at.map(to_ms),
             updated_at_ms: pr.updated_at.map(to_ms),
             closed_at_ms: pr.closed_at.map(to_ms),
+            head_oid: pr.head_oid.as_ref().map(|oid| oid.as_str().to_owned()),
+            merge_oid: pr.merge_oid.as_ref().map(|oid| oid.as_str().to_owned()),
+            base_branch: pr.base_branch.clone(),
         }
     }
 }
@@ -891,6 +914,181 @@ impl TryFrom<wire::PullRequest> for Pr {
             opened_at: from_ms_opt("opened_at_ms", pr.opened_at_ms)?,
             updated_at: from_ms_opt("updated_at_ms", pr.updated_at_ms)?,
             closed_at: from_ms_opt("closed_at_ms", pr.closed_at_ms)?,
+            head_oid: oid_opt("head_oid", pr.head_oid)?,
+            merge_oid: oid_opt("merge_oid", pr.merge_oid)?,
+            base_branch: pr.base_branch,
+        })
+    }
+}
+
+fn oid(field: &'static str, text: &str) -> Result<Oid, WireError> {
+    Oid::parse(text).ok_or(WireError::Oid(field))
+}
+
+fn oid_opt(field: &'static str, text: Option<String>) -> Result<Option<Oid>, WireError> {
+    text.map(|text| oid(field, &text)).transpose()
+}
+
+fn ids(ids: &[AgentId]) -> Vec<String> {
+    ids.iter().map(|id| id.as_str().to_owned()).collect()
+}
+
+impl From<&Commit> for wire::Commit {
+    fn from(commit: &Commit) -> Self {
+        Self {
+            oid: commit.oid.as_str().to_owned(),
+            at_ms: to_ms(commit.at),
+            author: commit.author.clone(),
+            subject: commit.subject.clone(),
+            merge: commit.merge,
+            pr: commit.pr,
+        }
+    }
+}
+
+impl TryFrom<wire::Commit> for Commit {
+    type Error = WireError;
+
+    fn try_from(commit: wire::Commit) -> Result<Self, WireError> {
+        Ok(Self {
+            oid: oid("commit oid", &commit.oid)?,
+            at: from_ms("commit at_ms", commit.at_ms)?,
+            author: commit.author,
+            subject: commit.subject,
+            merge: commit.merge,
+            pr: commit.pr,
+        })
+    }
+}
+
+fn commits_from_wire(commits: Vec<wire::Commit>) -> Result<Vec<Commit>, WireError> {
+    commits.into_iter().map(Commit::try_from).collect()
+}
+
+impl From<&Lane> for wire::Lane {
+    fn from(lane: &Lane) -> Self {
+        let base = match &lane.base {
+            LaneBase::Trunk { oid, at } => wire::lane::Base::TrunkBase(wire::TrunkBase {
+                oid: oid.as_str().to_owned(),
+                at_ms: to_ms(*at),
+            }),
+            LaneBase::Lane { branch, oid } => wire::lane::Base::LaneBase(wire::LaneBase {
+                branch: branch.clone(),
+                oid: oid.as_str().to_owned(),
+            }),
+        };
+        Self {
+            branch: lane.branch.clone(),
+            aliases: lane.aliases.clone(),
+            base: Some(base),
+            ahead: lane.ahead,
+            behind: lane.behind,
+            commits: lane.commits.iter().map(Into::into).collect(),
+            elided: lane.elided,
+            pushed: lane.pushed.as_ref().map(|oid| oid.as_str().to_owned()),
+            worktree: path_to_wire(&lane.worktree),
+            agents: ids(&lane.agents),
+            pr: lane.pr.as_ref().map(|id| id.as_str().to_owned()),
+            landed: lane.landed.as_ref().map(|oid| oid.as_str().to_owned()),
+        }
+    }
+}
+
+impl TryFrom<wire::Lane> for Lane {
+    type Error = WireError;
+
+    fn try_from(lane: wire::Lane) -> Result<Self, WireError> {
+        let base = match lane.base.ok_or(WireError::Missing("lane base"))? {
+            wire::lane::Base::TrunkBase(base) => LaneBase::Trunk {
+                oid: oid("trunk base oid", &base.oid)?,
+                at: from_ms("trunk base at_ms", base.at_ms)?,
+            },
+            wire::lane::Base::LaneBase(base) => LaneBase::Lane {
+                branch: base.branch,
+                oid: oid("lane base oid", &base.oid)?,
+            },
+        };
+        Ok(Self {
+            branch: lane.branch,
+            aliases: lane.aliases,
+            base,
+            ahead: lane.ahead,
+            behind: lane.behind,
+            commits: commits_from_wire(lane.commits)?,
+            elided: lane.elided,
+            pushed: oid_opt("pushed", lane.pushed)?,
+            worktree: lane.worktree.map(PathBuf::from),
+            agents: lane.agents.into_iter().map(AgentId::from_wire).collect(),
+            pr: lane.pr.map(PrId::from_wire),
+            landed: oid_opt("landed", lane.landed)?,
+        })
+    }
+}
+
+impl From<&RepoGraph> for wire::RepoGraph {
+    fn from(graph: &RepoGraph) -> Self {
+        let trunk = &graph.trunk;
+        Self {
+            id: graph.id.as_str().to_owned(),
+            name: graph.name.clone(),
+            remote: graph.remote.as_ref().map(|repo| repo.as_str().to_owned()),
+            trunk: Some(wire::Trunk {
+                name: trunk.name.clone(),
+                commits: trunk.commits.iter().map(Into::into).collect(),
+                local: trunk.local.as_ref().map(|local| wire::LocalTrunk {
+                    name: local.name.clone(),
+                    ahead: local.ahead,
+                    behind: local.behind,
+                }),
+                fetched_at_ms: trunk.fetched_at.map(to_ms),
+                worktrees: trunk
+                    .worktrees
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect(),
+            }),
+            lanes: graph.lanes.iter().map(Into::into).collect(),
+            hidden_lanes: graph.hidden_lanes,
+            trunk_agents: ids(&graph.trunk_agents),
+        }
+    }
+}
+
+impl TryFrom<wire::RepoGraph> for RepoGraph {
+    type Error = WireError;
+
+    fn try_from(graph: wire::RepoGraph) -> Result<Self, WireError> {
+        let trunk = graph.trunk.ok_or(WireError::Missing("trunk"))?;
+        let remote = graph
+            .remote
+            .map(|remote| RepoName::parse(&remote).ok_or(WireError::Repo(remote)))
+            .transpose()?;
+        Ok(Self {
+            id: RepoId::from_wire(graph.id),
+            name: graph.name,
+            remote,
+            trunk: Trunk {
+                name: trunk.name,
+                commits: commits_from_wire(trunk.commits)?,
+                local: trunk.local.map(|local| LocalTrunk {
+                    name: local.name,
+                    ahead: local.ahead,
+                    behind: local.behind,
+                }),
+                fetched_at: from_ms_opt("fetched_at_ms", trunk.fetched_at_ms)?,
+                worktrees: trunk.worktrees.into_iter().map(PathBuf::from).collect(),
+            },
+            lanes: graph
+                .lanes
+                .into_iter()
+                .map(Lane::try_from)
+                .collect::<Result<_, _>>()?,
+            hidden_lanes: graph.hidden_lanes,
+            trunk_agents: graph
+                .trunk_agents
+                .into_iter()
+                .map(AgentId::from_wire)
+                .collect(),
         })
     }
 }

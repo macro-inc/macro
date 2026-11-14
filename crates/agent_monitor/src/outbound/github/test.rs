@@ -77,6 +77,10 @@ fn one_query_asks_every_repository_for_its_numbers_and_branches() {
             .contains("b2: pullRequests(headRefName: \"feat/codex\"")
     );
     assert!(query.text.contains("context(name: \"CI gate\")"));
+    // The commit ids the CHANGES graph ties pull requests to.
+    for field in ["headRefOid", "baseRefName", "mergeCommit { oid }"] {
+        assert!(query.text.contains(field), "{field}");
+    }
 }
 
 #[test]
@@ -121,6 +125,9 @@ fn an_answer_parses_state_ci_review_and_conflicts_and_skips_what_github_lacks() 
                 created: Some(at("2030-01-02T10:03:05Z")),
                 updated: Some(at("2030-01-02T12:00:00Z")),
                 closed: Some(at("2030-01-02T12:00:00Z")),
+                head_oid: Some(oid("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")),
+                merge_oid: Some(oid("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")),
+                base_branch: Some(String::from("main")),
             },
             PrStatusFact {
                 pr: pr("example-org/widgets", 42),
@@ -134,6 +141,9 @@ fn an_answer_parses_state_ci_review_and_conflicts_and_skips_what_github_lacks() 
                 created: Some(at("2030-01-02T10:02:05Z")),
                 updated: Some(at("2030-01-02T11:00:00Z")),
                 closed: None,
+                head_oid: Some(oid("cccccccccccccccccccccccccccccccccccccccc")),
+                merge_oid: None,
+                base_branch: Some(String::from("main")),
             },
             PrStatusFact {
                 pr: pr("example-org/widgets", 44),
@@ -147,6 +157,9 @@ fn an_answer_parses_state_ci_review_and_conflicts_and_skips_what_github_lacks() 
                 created: Some(at("2030-01-02T10:05:00Z")),
                 updated: Some(at("2030-01-02T10:06:00Z")),
                 closed: None,
+                head_oid: Some(oid("dddddddddddddddddddddddddddddddddddddddd")),
+                merge_oid: None,
+                base_branch: Some(String::from("feat/faster")),
             },
         ]
     );
@@ -456,4 +469,8 @@ async fn a_directory_that_becomes_a_checkout_is_noticed() {
     // The known checkout was never looked up again.
     assert_eq!(harness.origin_calls.load(Ordering::SeqCst), 3);
     harness.cancel.cancel();
+}
+
+fn oid(text: &str) -> crate::domain::model::Oid {
+    crate::domain::model::Oid::parse(text).expect("an oid")
 }

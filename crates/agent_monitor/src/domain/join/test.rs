@@ -1106,6 +1106,9 @@ fn pr_status(
         created: Some(at(1, 0)),
         updated: closed.or(Some(at(2, 0))),
         closed,
+        head_oid: None,
+        merge_oid: None,
+        base_branch: None,
     }))
 }
 
@@ -1294,4 +1297,232 @@ fn a_merged_pr_older_than_the_window_is_retired_and_not_asked_for_again() {
         "an open, named PR stays"
     );
     assert_eq!(facts.wanted(&built).refs, [open].into_iter().collect());
+}
+
+fn oid(n: u64) -> crate::domain::model::Oid {
+    crate::domain::model::Oid::parse(&format!("{n:040x}")).expect("an oid")
+}
+
+fn graph_commit(n: u64, pr: Option<u32>) -> crate::domain::model::Commit {
+    crate::domain::model::Commit {
+        oid: oid(n),
+        at: at(0, 0),
+        author: "t".to_owned(),
+        subject: format!("commit {n}"),
+        merge: false,
+        pr,
+    }
+}
+
+fn graph_lane(branch: &str, worktree: Option<&str>, tip: u64) -> crate::domain::model::Lane {
+    crate::domain::model::Lane {
+        branch: branch.to_owned(),
+        aliases: Vec::new(),
+        base: crate::domain::model::LaneBase::Trunk {
+            oid: oid(1),
+            at: at(0, 0),
+        },
+        ahead: 1,
+        behind: 0,
+        commits: vec![graph_commit(tip, None)],
+        elided: 0,
+        pushed: None,
+        worktree: worktree.map(PathBuf::from),
+        agents: Vec::new(),
+        pr: None,
+        landed: None,
+    }
+}
+
+fn repo_fact() -> Fact {
+    let mut feat = graph_lane("feat", Some("/wt/feat"), 10);
+    feat.aliases = vec!["feat-copy".to_owned()];
+    Fact::RepoGraph(Box::new(crate::domain::model::RepoGraph {
+        id: crate::domain::model::RepoId::from_wire("/repo/.git".to_owned()),
+        name: "example-org/widgets".to_owned(),
+        remote: RepoName::parse("example-org/widgets"),
+        trunk: crate::domain::model::Trunk {
+            name: "origin/main".to_owned(),
+            commits: vec![graph_commit(3, Some(13)), graph_commit(2, None)],
+            local: Some(crate::domain::model::LocalTrunk {
+                name: "main".to_owned(),
+                ahead: 0,
+                behind: 4,
+            }),
+            fetched_at: None,
+            worktrees: vec![PathBuf::from("/repo")],
+        },
+        lanes: vec![
+            feat,
+            graph_lane("done", None, 20),
+            graph_lane("landed-by-subject", None, 30),
+            graph_lane("side", None, 40),
+        ],
+        hidden_lanes: 0,
+        trunk_agents: Vec::new(),
+    }))
+}
+
+#[test]
+fn a_repository_graph_joins_agents_by_worktree_and_branch_and_prs_by_branch() {
+    let now = at(10, 0);
+    let mut facts = Facts::default();
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Reset(vec![
+            // A manager in the main checkout, on the trunk's local branch.
+            Fact::Terminal(Box::new(TerminalFact {
+                cwd: Some(PathBuf::from("/repo")),
+                kind: Some(AgentKind::Manager),
+                parent: None,
+                ..terminal("t1", 1)
+            })),
+            // The author, in a subdirectory of the lane's worktree.
+            Fact::Terminal(Box::new(TerminalFact {
+                cwd: Some(PathBuf::from("/wt/feat/crates/x")),
+                ..terminal("t2", 4242)
+            })),
+            // A second agent on the same worktree.
+            Fact::Terminal(Box::new(TerminalFact {
+                cwd: Some(PathBuf::from("/wt/feat")),
+                ..terminal("t4", 77)
+            })),
+            // An agent in another clone of the repository, on `side`.
+            Fact::Terminal(Box::new(TerminalFact {
+                cwd: Some(PathBuf::from("/clone")),
+                ..terminal("t3", 99)
+            })),
+        ]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::ClaudeRegistry,
+        Change::Reset(vec![
+            registry(4242, "s-author", true),
+            registry(99, "s-side", true),
+        ]),
+        now,
+    );
+    let opened = transcript(
+        "s-author",
+        None,
+        vec![TranscriptEvent {
+            at: at(3, 0),
+            kind: TranscriptEventKind::PrOpened(pr_ref("example-org/widgets", 42)),
+        }],
+    );
+    let mut side = transcript("s-side", None, Vec::new());
+    if let Fact::Transcript(delta) = &mut side {
+        delta.branch = Some("side".to_owned());
+    }
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![opened, side]),
+        now,
+    );
+    let mut merged = pr_status(
+        pr_ref("example-org/widgets", 12),
+        PrState::Merged,
+        CiState::Passed,
+        "done",
+        Some(at(4, 0)),
+    );
+    if let Fact::PrStatus(status) = &mut merged {
+        status.merge_oid = Some(oid(99));
+    }
+    let mut feat_pr = pr_status(
+        pr_ref("example-org/widgets", 42),
+        PrState::Open,
+        CiState::Failed,
+        "feat-copy",
+        None,
+    );
+    if let Fact::PrStatus(status) = &mut feat_pr {
+        status.head_oid = Some(oid(9));
+    }
+    observe(
+        &mut facts,
+        SourceKind::Github,
+        Change::Reset(vec![
+            feat_pr,
+            merged,
+            pr_status(
+                pr_ref("example-org/widgets", 13),
+                PrState::Merged,
+                CiState::Passed,
+                "landed-by-subject",
+                Some(at(4, 0)),
+            ),
+            Fact::Checkout(CheckoutFact {
+                cwd: PathBuf::from("/clone"),
+                repo: RepoName::parse("example-org/widgets").expect("a repo"),
+            }),
+        ]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::Git,
+        Change::Reset(vec![repo_fact()]),
+        now,
+    );
+
+    let built = build_agents(&facts, now);
+    let graph = built.repos.values().next().expect("a graph");
+    assert_eq!(graph.trunk_agents, vec![AgentId::terminal("t1")]);
+    let lane = |branch: &str| {
+        graph
+            .lanes
+            .iter()
+            .find(|lane| lane.branch == branch)
+            .expect("a lane")
+    };
+    let feat = lane("feat");
+    // The author first, through the alias's pull request.
+    assert_eq!(
+        feat.agents,
+        vec![AgentId::terminal("t2"), AgentId::terminal("t4")]
+    );
+    assert_eq!(feat.pr, Some(pr_ref("example-org/widgets", 42).id()));
+    assert_eq!(feat.pushed, Some(oid(9)));
+    assert_eq!(feat.landed, None);
+    assert_eq!(lane("done").landed, Some(oid(99)));
+    assert_eq!(lane("landed-by-subject").landed, Some(oid(3)));
+    assert_eq!(lane("side").agents, vec![AgentId::terminal("t3")]);
+
+    // What the git source is asked to map.
+    let wanted = git_wanted(&built);
+    assert!(
+        wanted
+            .cwds
+            .contains_key(&PathBuf::from("/wt/feat/crates/x"))
+    );
+    assert_eq!(
+        wanted.pr_branches[&RepoName::parse("example-org/widgets").expect("a repo")],
+        ["done", "feat-copy", "landed-by-subject"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    );
+
+    // An agent going idle does not change the graph.
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Upsert(Fact::Terminal(Box::new(TerminalFact {
+            cwd: Some(PathBuf::from("/wt/feat")),
+            activity: Some(TerminalActivity::Idle),
+            ..terminal("t4", 77)
+        }))),
+        now,
+    );
+    let again = build_agents(&facts, now);
+    assert_ne!(
+        built.agents[&AgentId::terminal("t4")].status,
+        again.agents[&AgentId::terminal("t4")].status
+    );
+    assert_eq!(built.repos, again.repos);
 }

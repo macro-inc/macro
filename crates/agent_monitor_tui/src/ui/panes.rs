@@ -554,6 +554,8 @@ pub fn tape_tag(kind: TapeKind) -> (&'static str, Token) {
         TapeKind::PrCiFailed => ("CI✕ ", Token::Alert),
         TapeKind::PrMerged => ("MRGD", Token::Ok),
         TapeKind::PrClosed => ("CLSD", Token::Rule),
+        TapeKind::Commit => ("CMIT", Token::Ok),
+        TapeKind::Rewritten => ("RWRT", Token::Attention),
     }
 }
 
