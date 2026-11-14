@@ -235,8 +235,10 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   without a viewer. The viewer reconnects by itself when its collector goes
   away, and a collector started by a later `macrod monitor` takes over.
   Its colours come from `[monitor] theme` (`classic`, the default, `ember`,
-  `phosphor` or `dusk`; `--theme` overrides it), and `t` in the viewer
-  cycles through them.
+  `phosphor` or `dusk`, in any case; `--theme` overrides it). A name that is
+  no theme draws in `classic` with a warning on the command line; the
+  collector ignores the key. In the viewer, Ctrl-T cycles the themes and the
+  `THEME [name]` command picks one.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
   or the `--config` / `--profile` it is given (resolved as for
