@@ -194,7 +194,7 @@ fn arrays_follow_each_querys_fixed_binds() {
                 Expr::is_not(any_of(&absent(2, count))),
             ));
             let mut flat_ids = DocumentIdArrays::starting_at(flat_first);
-            let flat = build_query(&filter, false, sort, &mut flat_ids)
+            let flat = build_query(&filter, false, sort, &mut flat_ids, None)
                 .sql()
                 .to_owned();
             let grouping = GroupingConfig {
