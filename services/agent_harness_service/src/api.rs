@@ -89,6 +89,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     session_tasks: Router,
     updates: Router,
     auto_archive: Router,
+    thread_replies: Router,
     work_registrations: Router,
     tool_approvals: Router,
     app_connections: Router,
@@ -147,6 +148,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             session_tasks: Router::new(),
             updates: Router::new(),
             auto_archive: Router::new(),
+            thread_replies: Router::new(),
             work_registrations: Router::new(),
             tool_approvals: Router::new(),
             app_connections: Router::new(),
@@ -287,6 +289,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the caller's auto-archive defaults and per-session choices.
     pub fn with_auto_archive(mut self, router: Router) -> Self {
         self.auto_archive = router;
+        self
+    }
+
+    /// Attach the routes pausing a session's unmentioned thread replies.
+    pub fn with_thread_replies(mut self, router: Router) -> Self {
+        self.thread_replies = router;
         self
     }
 
@@ -459,6 +467,7 @@ where
         .merge(agent_sandbox_size_router(states.read.clone()))
         .merge(agent_coding_preferences_router(states.read))
         .merge(states.auto_archive)
+        .merge(states.thread_replies)
         .merge(states.work_registrations)
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))

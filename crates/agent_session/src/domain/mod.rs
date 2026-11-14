@@ -32,6 +32,7 @@ pub mod session;
 pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
+pub mod thread_replies;
 pub mod updates;
 
 pub mod credentials;

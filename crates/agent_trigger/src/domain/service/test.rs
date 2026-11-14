@@ -631,7 +631,7 @@ fn implicit_sessions(found: Vec<AgentSession>) -> MockAgentSessionRepo {
         .once()
         .return_once(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     sessions
-        .expect_find_all_for_thread()
+        .expect_find_replying_in_thread()
         .with(mockall::predicate::eq(Uuid::from_u128(3)))
         .once()
         .return_once(move |_| Box::pin(async move { Ok(found) }));

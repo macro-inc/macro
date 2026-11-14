@@ -580,7 +580,7 @@ where
             return Ok(None);
         };
         let mut candidates = Vec::new();
-        for session in self.sessions.find_all_for_thread(thread_id).await? {
+        for session in self.sessions.find_replying_in_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
                 && session.thread_id == Some(thread_id)
                 && !is_own_message(session.bot_id, &posted.sender)

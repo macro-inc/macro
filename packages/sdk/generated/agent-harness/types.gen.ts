@@ -2962,6 +2962,25 @@ export type SessionStatusDto = {
 };
 
 /**
+ * Whether a session answers unmentioned replies in the thread it was started from.
+ */
+export type SessionThreadRepliesResponse = {
+    /**
+     * The caller may pause or resume it: edit access to the session.
+     */
+    canChange: boolean;
+    /**
+     * The session was started from a thread. Only such a session answers replies there, so
+     * only it can be paused.
+     */
+    fromThread: boolean;
+    /**
+     * The agent answers only messages that mention it.
+     */
+    paused: boolean;
+};
+
+/**
  * Request body for archiving or unarchiving an agent session.
  */
 export type SetAgentSessionArchivedRequest = {
@@ -2969,6 +2988,16 @@ export type SetAgentSessionArchivedRequest = {
      * Archive the session, or restore it.
      */
     archived: boolean;
+};
+
+/**
+ * Pause or resume a session's unmentioned thread replies.
+ */
+export type SetSessionThreadRepliesRequest = {
+    /**
+     * Answer only messages that mention the agent, or resume answering replies.
+     */
+    paused: boolean;
 };
 
 export type SharePermissionV2 = {
@@ -4811,6 +4840,64 @@ export type LinkAgentSessionTaskResponses = {
 };
 
 export type LinkAgentSessionTaskResponse = LinkAgentSessionTaskResponses[keyof LinkAgentSessionTaskResponses];
+
+export type GetAgentSessionThreadRepliesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/thread-replies';
+};
+
+export type GetAgentSessionThreadRepliesErrors = {
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentSessionThreadRepliesError = GetAgentSessionThreadRepliesErrors[keyof GetAgentSessionThreadRepliesErrors];
+
+export type GetAgentSessionThreadRepliesResponses = {
+    200: SessionThreadRepliesResponse;
+};
+
+export type GetAgentSessionThreadRepliesResponse = GetAgentSessionThreadRepliesResponses[keyof GetAgentSessionThreadRepliesResponses];
+
+export type PutAgentSessionThreadRepliesData = {
+    body: SetSessionThreadRepliesRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/thread-replies';
+};
+
+export type PutAgentSessionThreadRepliesErrors = {
+    401: string;
+    403: string;
+    404: string;
+    /**
+     * The session was not started from a thread
+     */
+    409: string;
+    500: string;
+};
+
+export type PutAgentSessionThreadRepliesError = PutAgentSessionThreadRepliesErrors[keyof PutAgentSessionThreadRepliesErrors];
+
+export type PutAgentSessionThreadRepliesResponses = {
+    200: SetSessionThreadRepliesRequest;
+};
+
+export type PutAgentSessionThreadRepliesResponse = PutAgentSessionThreadRepliesResponses[keyof PutAgentSessionThreadRepliesResponses];
 
 export type AnswerAgentSessionToolApprovalData = {
     body: AnswerToolApprovalRequest;

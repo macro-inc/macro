@@ -2292,8 +2292,8 @@ where
         self.repo.find_for_thread(thread_id, bot_id).await
     }
 
-    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
-        self.repo.find_all_for_thread(thread_id).await
+    async fn find_replying_in_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        self.repo.find_replying_in_thread(thread_id).await
     }
 
     async fn set_acp_session_id(

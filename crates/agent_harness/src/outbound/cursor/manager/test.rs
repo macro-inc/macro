@@ -142,7 +142,7 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never routes channel events")
     }
 
-    async fn find_all_for_thread(
+    async fn find_replying_in_thread(
         &self,
         _thread_id: macro_uuid::Uuid,
     ) -> SessionResult<Vec<AgentSession>> {
