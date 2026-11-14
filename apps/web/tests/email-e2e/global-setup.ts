@@ -16,9 +16,12 @@ const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 export default async function globalSetup(): Promise<
   (() => Promise<void>) | undefined
 > {
-  // What an earlier run recorded is not this run's evidence.
+  // What an earlier run recorded is not this run's evidence, and neither is
+  // its report: a run that ends before it writes its own would be read with
+  // the results of the one before.
   const recorded = runPaths(currentRun());
   rmSync(recorded.evidence, { recursive: true, force: true });
+  rmSync(recorded.playwright, { force: true });
 
   // The local stack is already running, and so is a named stack server.
   const local = localStackAddresses();
