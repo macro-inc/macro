@@ -553,7 +553,9 @@ async fn blocked_by<T>(
         scripts("purge_link")
     )
 )]
-async fn a_link_in_flight_waits_for_the_batch_and_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn a_link_in_flight_waits_for_the_batch_and_fails(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     use anyhow::Context as _;
     mark_link_deleting(&pool, PURGED).await?;
     let attachment = sqlx::query_scalar!(
