@@ -76,7 +76,9 @@ import type {
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
+  SessionThreadRepliesResponse,
   SetAgentSessionArchivedRequest,
+  SetSessionThreadRepliesRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
   UiCommandOutcome,
@@ -3956,6 +3958,156 @@ export const linkAgentSessionTask = async (
     status: res.status,
     headers: res.headers,
   } as linkAgentSessionTaskResponse;
+};
+
+/**
+ * @summary Read whether a session answers unmentioned replies in its thread.
+ */
+export type getAgentSessionThreadRepliesResponse200 = {
+  data: SessionThreadRepliesResponse;
+  status: 200;
+};
+
+export type getAgentSessionThreadRepliesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionThreadRepliesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionThreadRepliesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getAgentSessionThreadRepliesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionThreadRepliesResponseSuccess =
+  getAgentSessionThreadRepliesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionThreadRepliesResponseError = (
+  | getAgentSessionThreadRepliesResponse401
+  | getAgentSessionThreadRepliesResponse403
+  | getAgentSessionThreadRepliesResponse404
+  | getAgentSessionThreadRepliesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionThreadRepliesResponse =
+  | getAgentSessionThreadRepliesResponseSuccess
+  | getAgentSessionThreadRepliesResponseError;
+
+export const getGetAgentSessionThreadRepliesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/thread-replies`;
+};
+
+export const getAgentSessionThreadReplies = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionThreadRepliesResponse> => {
+  const res = await fetch(getGetAgentSessionThreadRepliesUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionThreadRepliesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionThreadRepliesResponse;
+};
+
+/**
+ * @summary Pause or resume a session's unmentioned replies in its thread. While paused, the agent
+answers only messages that mention it. Edit access.
+ */
+export type putAgentSessionThreadRepliesResponse200 = {
+  data: SetSessionThreadRepliesRequest;
+  status: 200;
+};
+
+export type putAgentSessionThreadRepliesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentSessionThreadRepliesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type putAgentSessionThreadRepliesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type putAgentSessionThreadRepliesResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type putAgentSessionThreadRepliesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentSessionThreadRepliesResponseSuccess =
+  putAgentSessionThreadRepliesResponse200 & {
+    headers: Headers;
+  };
+export type putAgentSessionThreadRepliesResponseError = (
+  | putAgentSessionThreadRepliesResponse401
+  | putAgentSessionThreadRepliesResponse403
+  | putAgentSessionThreadRepliesResponse404
+  | putAgentSessionThreadRepliesResponse409
+  | putAgentSessionThreadRepliesResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentSessionThreadRepliesResponse =
+  | putAgentSessionThreadRepliesResponseSuccess
+  | putAgentSessionThreadRepliesResponseError;
+
+export const getPutAgentSessionThreadRepliesUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/thread-replies`;
+};
+
+export const putAgentSessionThreadReplies = async (
+  sessionId: string,
+  setSessionThreadRepliesRequest: SetSessionThreadRepliesRequest,
+  options?: RequestInit
+): Promise<putAgentSessionThreadRepliesResponse> => {
+  const res = await fetch(getPutAgentSessionThreadRepliesUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setSessionThreadRepliesRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentSessionThreadRepliesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentSessionThreadRepliesResponse;
 };
 
 /**

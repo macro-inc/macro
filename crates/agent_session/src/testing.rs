@@ -365,7 +365,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .cloned())
     }
 
-    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+    async fn find_replying_in_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
         let mut found: Vec<AgentSession> = self
             .sessions
             .lock()

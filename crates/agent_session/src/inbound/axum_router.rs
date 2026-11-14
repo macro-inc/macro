@@ -78,6 +78,9 @@ pub mod auto_archive;
 /// Linking a session to the Macro task it works on.
 pub mod task;
 
+/// Pausing an agent's unmentioned replies in its session's thread.
+pub mod thread_replies;
+
 /// The caller's coding sessions waiting for them or stalled.
 pub mod updates;
 
@@ -444,8 +447,9 @@ impl IntoResponse for AgentSessionApiError {
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
             Self::Domain(
-                error
-                @ (AgentSessionError::Archived(_) | AgentSessionError::AnswersConversation(_)),
+                error @ (AgentSessionError::Archived(_)
+                | AgentSessionError::AnswersConversation(_)
+                | AgentSessionError::NotFromThread(_)),
             ) => (StatusCode::CONFLICT, error.to_string()).into_response(),
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.

@@ -49,3 +49,11 @@ export const agentSessionAutoArchiveKeys = createQueryKeys(
     detail: (sessionId: string) => ({ queryKey: [sessionId] }),
   }
 );
+
+/** Whether a session answers unmentioned replies in its thread. */
+export const agentSessionThreadRepliesKeys = createQueryKeys(
+  'agentSessionThreadReplies',
+  {
+    detail: (sessionId: string) => ({ queryKey: [sessionId] }),
+  }
+);

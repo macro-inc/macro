@@ -2,6 +2,7 @@ import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
+import agentThreadReplies from './en/agent-thread-replies';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
 import calls from './en/calls';
@@ -48,6 +49,7 @@ export default {
   agentNavigation,
   accountManager,
   agentSetup,
+  agentThreadReplies,
   agentWork,
   calls,
   channelComposer,

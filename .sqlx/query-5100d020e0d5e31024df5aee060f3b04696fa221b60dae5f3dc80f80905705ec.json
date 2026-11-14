@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                session.thread_id IS NOT NULL AS \"from_thread!\",\n                EXISTS (\n                    SELECT 1 FROM agent_session_thread_reply_pause pause\n                    WHERE pause.session_id = session.id\n                ) AS \"paused!\"\n            FROM agent_session session\n            WHERE session.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "from_thread!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "paused!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5100d020e0d5e31024df5aee060f3b04696fa221b60dae5f3dc80f80905705ec"
+}
