@@ -6,19 +6,29 @@ import type { CrmRecordDependencies } from './dependencies';
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
+vi.mock('@service-storage/crm-contacts', () => ({
+  invalidateCachedCrmContacts: vi.fn(async () => undefined),
+}));
 
 import {
   useCreateCompanyMutation,
   useCreateContactMutation,
+  useSetCompanyNameMutation,
 } from './companies';
+import { crmKeys } from './keys';
 
-const storage = { createCompany: vi.fn(), createContact: vi.fn() };
+const storage = {
+  createCompany: vi.fn(),
+  createContact: vi.fn(),
+  setCompanyName: vi.fn(),
+};
 let client: QueryClient;
 
 beforeEach(() => {
   track.mockReset();
   storage.createCompany.mockReset();
   storage.createContact.mockReset();
+  storage.setCompanyName.mockReset();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 });
 afterEach(() => {
@@ -31,11 +41,13 @@ function mount() {
   let mutations!: {
     company: ReturnType<typeof useCreateCompanyMutation>;
     contact: ReturnType<typeof useCreateContactMutation>;
+    rename: ReturnType<typeof useSetCompanyNameMutation>;
   };
   function Probe() {
     mutations = {
       company: useCreateCompanyMutation(deps),
       contact: useCreateContactMutation(deps),
+      rename: useSetCompanyNameMutation(deps),
     };
     return null;
   }
@@ -84,4 +96,18 @@ it('reports nothing when creation fails', async () => {
   ).rejects.toBeDefined();
 
   expect(track).not.toHaveBeenCalled();
+});
+
+it("refreshes the details of the renamed company's contacts only", async () => {
+  storage.setCompanyName.mockResolvedValue(ok({}));
+  const own = crmKeys.contact('contact-1').queryKey;
+  const other = crmKeys.contact('contact-2').queryKey;
+  client.setQueryData(own, { id: 'contact-1', companyId: 'company-1' });
+  client.setQueryData(other, { id: 'contact-2', companyId: 'company-2' });
+  const mutations = mount();
+
+  await mutations.rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
+
+  expect(client.getQueryState(own)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(other)?.isInvalidated).toBe(false);
 });

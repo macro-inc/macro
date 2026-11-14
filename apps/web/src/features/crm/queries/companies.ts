@@ -296,11 +296,25 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
+          // Contact details carry the company name too.
+          deps.client.invalidateQueries({
+            queryKey: crmKeys.contact._def,
+            predicate: (query) => contactOfCompany(query.state.data, companyId),
+          }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },
     }),
     () => deps.client
+  );
+}
+
+function contactOfCompany(data: unknown, companyId: string): boolean {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'companyId' in data &&
+    data.companyId === companyId
   );
 }
 

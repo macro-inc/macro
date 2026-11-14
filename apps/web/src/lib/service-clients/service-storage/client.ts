@@ -95,6 +95,7 @@ import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
+import type { CrmContactDetailResponse } from './generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
@@ -2955,9 +2956,12 @@ export const storageServiceClient = {
     );
   },
   async getContact({ contactId }: { contactId: string }) {
-    return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
-      method: 'GET',
-    });
+    return await dssFetch<CrmContactDetailResponse>(
+      `/crm/contacts/${contactId}`,
+      {
+        method: 'GET',
+      }
+    );
   },
   async getContactByEmail({
     email,
