@@ -1,0 +1,100 @@
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1/subagents/agent-abc.meta.json
+  s_cfe0e68707efd8::t_6ce06fed842f10 1
+crates/agent_monitor/src/outbound/claude_transcripts.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-388
+crates/agent_monitor/src/outbound/codex_rollouts/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-140
+crates/agent_monitor/examples/sources_dump.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-211
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1/subagents/agent-abc.jsonl
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-2
+crates/agent_monitor/src/outbound/test_support.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-95
+crates/agent_monitor/src/outbound/watch/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-22
+crates/agent_monitor/src/outbound/run_records/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-58
+crates/agent_monitor/src/domain/pricing.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-189
+crates/agent_monitor/src/outbound/watch.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-86
+crates/agent_monitor/src/lib.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 11
+crates/agent_monitor/fixtures/codex/2030/01/01/rollout-2030-01-01T10-00-00-0aaaaaaa-1111-7222-8333-444444444444.jsonl
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-9
+crates/agent_monitor/src/domain/join/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 220-810
+crates/agent_monitor/Cargo.toml
+  s_cfe0e68707efd8::t_6ce06fed842f10 14,19-20,22-31,41-43
+  s_cfe0e68707efd8::t_177af118657217 44
+crates/agent_monitor/src/outbound/macrod_sessions.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-142
+crates/agent_monitor/src/outbound/local.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-76
+crates/agent_monitor/src/outbound/managers.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-138
+crates/agent_monitor/src/outbound/tail/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-105
+crates/agent_monitor/src/domain.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 7
+crates/agent_monitor/fixtures/claude/proj-alpha/s-1.jsonl
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-10
+crates/agent_monitor/src/outbound/hc/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-218
+Cargo.toml
+  s_cfe0e68707efd8::t_6ce06fed842f10 380
+crates/agent_monitor/src/outbound/claude_registry/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-72
+crates/agent_monitor/src/outbound/claude_transcripts/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-279
+crates/agent_monitor/src/outbound/claude_registry.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-138
+crates/agent_monitor/src/outbound/codex_rollouts.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-262
+crates/agent_monitor/src/outbound/macrod_sessions/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-43
+crates/agent_monitor/fixtures/codex_legacy/rollout-2029-01-01T00-00-00-0bbbbbbb-1111-7222-8333-444444444444.jsonl
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-4
+crates/agent_monitor/src/outbound/records.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-305
+crates/agent_monitor/src/outbound/run_records.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-167
+crates/agent_monitor/src/outbound/transcripts.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-671
+crates/agent_monitor/src/outbound/tail.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-153
+crates/agent_monitor/src/outbound/transcripts/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-60
+crates/agent_monitor/src/outbound.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-4,6-8,10-20
+crates/agent_monitor/src/outbound/hc/parse.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-333
+crates/agent_monitor/src/outbound/hc.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-171
+crates/agent_monitor/fixtures/hc_events.jsonl
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-12
+crates/agent_monitor/src/domain/pricing/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-102
+crates/agent_monitor/src/domain/join.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 9,22,36-39,81-91,105-108,111,127-128,181-185,188-191,199-207,219-221,236-238,337-342,345-357,359-370,376-386,392-393,395-405,471-486,494-498,505,511-519,525,531-533,538-540,547,549-761,892,921
+crates/agent_monitor/src/outbound/managers/test.rs
+  s_cfe0e68707efd8::t_6ce06fed842f10 1-45
+Cargo.lock
+  s_cfe0e68707efd8::t_b23d61c0334cf4 905,911-912,11421-11440,11979-11998,14521-14548,14859-14868
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4f38751fa4ad8d950410182707d9367753d188f3",
+  "prompts": {},
+  "sessions": {
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
