@@ -24,8 +24,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::domain::clock::Clock;
 use crate::domain::model::{
-    Agent, AgentKind, Cost, Snapshot, SourceKind, Timestamp, Tokens, TranscriptItem,
-    TranscriptItemKind,
+    Agent, AgentKind, Cost, Snapshot, SourceHealth, SourceKind, SourceState, Timestamp, Tokens,
+    TranscriptItem, TranscriptItemKind,
 };
 use crate::domain::observation::{
     Change, ClaudeSessionFact, Fact, FactKey, FinishReason, ManagerFact, Observation,
@@ -104,6 +104,12 @@ impl AgentSource for DemoSource {
         self.transcripts.clear();
         self.transcripts.append(reset.items);
         send(&out, Change::Reset(reset.facts)).await?;
+        let health = SourceHealth {
+            state: SourceState::Healthy,
+            items: u32::try_from(fleet.agents.len()).unwrap_or(u32::MAX),
+            ..SourceHealth::starting(SourceKind::Demo)
+        };
+        send(&out, Change::Health(health)).await?;
 
         let mut ticker = tokio::time::interval(self.config.step);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
