@@ -124,8 +124,53 @@ for (const provider of PROVIDERS) {
 test.describe('the signature Gmail keeps', () => {
   test.use({ provider: 'GMAIL' });
 
-  // The Gmail emulator keeps no signature for the address of the inbox, so
-  // an import that brings one over is not driven here: only its other ends.
+  // When this fails, the signature someone wrote in Gmail is not brought
+  // over: Import from Gmail saves nothing, or not what Gmail holds.
+  test('importing brings over the signature Gmail holds for the inbox', async ({
+    page,
+    mailbox,
+  }) => {
+    const work = 'work@example.com';
+    const held = '<div>Grace Hopper<br>Rear Admiral</div>';
+    const added = await fetch(
+      `${mailbox.stack.info.gmailUrl}/_emulator/mailboxes`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: work, signature: held }),
+      }
+    );
+    expect(added.ok, await added.text()).toBe(true);
+    await mailbox.stack.link(mailbox.user, 'GMAIL', work);
+    const stored = async () => {
+      const response = await mailbox.api('/email/email/links');
+      const { links } = (await response.json()) as {
+        links: { email_address: string; settings?: SignatureSettings }[];
+      };
+      return (
+        links.find((link) => link.email_address === work)?.settings
+          ?.signature ?? ''
+      );
+    };
+    expect(await stored()).toBe('');
+
+    await mailbox.open(SETTINGS);
+    // Each inbox has its own Import button, just above its signature.
+    await page
+      .getByRole('tablist', { name: `Signature views for ${work}` })
+      .locator(
+        'xpath=preceding::button[normalize-space()="Import from Gmail"][1]'
+      )
+      .click();
+    did('AX-026');
+    await expect(notice(page, 'Signature imported from Gmail')).toBeVisible();
+    saw('STX-016');
+    await expect.poll(stored).toContain('Grace Hopper');
+    await expect.poll(stored).toContain('Rear Admiral');
+    confirmed('F-151');
+    await expect(page.getByText('Rear Admiral').first()).toBeVisible();
+  });
+
   test('importing says when Gmail has no signature and when Gmail fails', async ({
     page,
     mailbox,

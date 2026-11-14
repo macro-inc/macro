@@ -36,7 +36,8 @@ many tests run at once (4); each runs three services and a browser.
   `/auth` calls the app needs at startup are answered there, and `front.stub`
   answers more.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the
-  page's own origin.
+  page's own origin, with the inbox re-sync control switched on
+  (`VITE_ENABLE_INBOX_RESYNC`), which is off in a normal build.
 - The connection gateway is not run. The fixture answers the browser's gateway
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
