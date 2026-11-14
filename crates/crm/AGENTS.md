@@ -92,6 +92,11 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+  `activity_property_edges` returns the items whose Companies or Contacts
+  property names a record of the same scope, starting from those property rows
+  and probing each named record by key, so its cost does not follow the
+  scope's record count; keep its visibility rules identical to the Activity
+  arm's.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with
