@@ -890,3 +890,30 @@ async fn a_link_share_opens_the_session_by_id(pool: PgPool) -> anyhow::Result<()
     );
     Ok(())
 }
+
+#[test]
+fn only_a_filter_pinned_to_the_nil_id_skips_the_leg() {
+    let nil = || Expr::val(AgentSessionLiteral::Id(Uuid::nil()));
+    let include = || Expr::val(AgentSessionLiteral::Include);
+    assert!(names_only_the_nil_id(&nil()));
+    assert!(names_only_the_nil_id(&Expr::and(nil(), include())));
+    assert!(!names_only_the_nil_id(&include()));
+    assert!(!names_only_the_nil_id(&Expr::or(nil(), include())));
+    assert!(!names_only_the_nil_id(&Expr::val(AgentSessionLiteral::Id(
+        Uuid::from_u128(1)
+    ))));
+    assert!(!names_only_the_nil_id(&Expr::is_not(nil())));
+}
+
+#[tokio::test]
+async fn a_session_pin_to_the_nil_id_runs_no_statement() {
+    let pool = PgPool::connect_lazy("postgres://soup@localhost/closed").unwrap();
+    pool.close().await;
+    let page = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Id(Uuid::nil())))),
+    )
+    .await
+    .expect("a nil session pin must not reach the database");
+    assert!(page.is_empty());
+}
