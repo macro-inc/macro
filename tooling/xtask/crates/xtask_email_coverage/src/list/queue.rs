@@ -18,6 +18,9 @@ const QUEUE_TYPES_CRATE: &str = "macro_queues";
 /// The type the worker binary builds once per queue it consumes.
 const WORKER_TYPE: &str = "SQSWorker";
 
+#[cfg(test)]
+mod test;
+
 /// Lists the message types of the configured queues.
 pub(crate) fn list(
     repo: &Repo,
@@ -114,9 +117,17 @@ struct ConsumedQueues {
     worker_queues: Vec<(String, proc_macro2::Span)>,
     /// The first variable name bound to two different queue types.
     ambiguous: Option<(String, proc_macro2::Span)>,
+    /// Other names the worker type is imported under (`use .. as Worker`).
+    worker_aliases: Vec<String>,
 }
 
 impl<'ast> Visit<'ast> for ConsumedQueues {
+    fn visit_use_rename(&mut self, rename: &'ast syn::UseRename) {
+        if rename.ident == WORKER_TYPE {
+            self.worker_aliases.push(rename.rename.to_string());
+        }
+    }
+
     fn visit_local(&mut self, local: &'ast Local) {
         if let Pat::Ident(variable) = &local.pat
             && let Some(init) = &local.init
@@ -139,7 +150,7 @@ impl<'ast> Visit<'ast> for ConsumedQueues {
 
     fn visit_expr_call(&mut self, call: &'ast ExprCall) {
         if let [.., worker, constructor] = call_path(call).as_slice()
-            && worker == WORKER_TYPE
+            && (worker == WORKER_TYPE || self.worker_aliases.contains(worker))
             && constructor == "new"
         {
             // The queue is the second argument, written `x.to_string()`.

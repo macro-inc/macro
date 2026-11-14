@@ -8,10 +8,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use async_graphql_parser::types::{
-    BaseType, DocumentOperations, ExecutableDocument, OperationType, Selection, SelectionSet,
-    ServiceDocument, Type, TypeKind, TypeSystemDefinition,
+    BaseType, Directive, DocumentOperations, ExecutableDocument, OperationType, Selection,
+    SelectionSet, ServiceDocument, Type, TypeKind, TypeSystemDefinition,
 };
-use async_graphql_parser::{parse_query, parse_schema};
+use async_graphql_parser::{Positioned, parse_query, parse_schema};
 use rootcause::prelude::*;
 
 /// The schema the GraphQL API publishes.
@@ -122,6 +122,9 @@ impl Schema {
         for selection in &selections.items {
             match &selection.node {
                 Selection::Field(field) => {
+                    if !runs(&field.node.directives) {
+                        continue;
+                    }
                     let name = field.node.name.node.as_str();
                     let Some(returns) = self.fields.get(on).and_then(|fields| fields.get(name))
                     else {
@@ -137,6 +140,9 @@ impl Schema {
                     );
                 }
                 Selection::FragmentSpread(spread) => {
+                    if !runs(&spread.node.directives) {
+                        continue;
+                    }
                     if let Some(fragment) = document.fragments.get(&spread.node.fragment_name.node)
                     {
                         let on = fragment.node.type_condition.node.on.node.as_str();
@@ -150,6 +156,9 @@ impl Schema {
                     }
                 }
                 Selection::InlineFragment(fragment) => {
+                    if !runs(&fragment.node.directives) {
+                        continue;
+                    }
                     let on = fragment
                         .node
                         .type_condition
@@ -166,6 +175,25 @@ impl Schema {
             }
         }
     }
+}
+
+/// Whether a selection with these directives is certain to have run: not
+/// when `@skip` or `@include` is on it, unless its condition is written out
+/// and lets it. A condition in a variable is not known here, since a record
+/// keeps the shape of the variables and not their values, so a selection
+/// that depends on one is not counted.
+fn runs(directives: &[Positioned<Directive>]) -> bool {
+    directives.iter().all(|directive| {
+        let wanted = match directive.node.name.node.as_str() {
+            "skip" => "false",
+            "include" => "true",
+            _ => return true,
+        };
+        directive
+            .node
+            .get_argument("if")
+            .is_some_and(|condition| condition.node.to_string() == wanted)
+    })
 }
 
 /// The named type inside any lists.

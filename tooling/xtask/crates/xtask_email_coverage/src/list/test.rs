@@ -1,4 +1,4 @@
-use super::{apply_overrides, default_providers, routes_elsewhere};
+use super::{apply_overrides, default_providers, names_a_route, routes_elsewhere};
 use crate::row::{Kind, Providers, Row};
 use crate::sources::{ElsewhereSource, ProvidersOverride};
 
@@ -79,4 +79,10 @@ fn a_route_listed_by_hand_must_be_in_its_file() {
 
     let error = routes_elsewhere(&repo_root, &source(&["PUT /reminders/email/gone"])).unwrap_err();
     assert!(error.to_string().contains("no string literal"), "{error}");
+
+    // The file holds `"/email/{thread_id}"`, which does not make any path
+    // that ends in a parameter a route of it.
+    assert!(names_a_route("/email/{thread_id}"));
+    assert!(!names_a_route("/{thread_id}"));
+    assert!(!names_a_route("/{entity_type}/{entity_id}"));
 }

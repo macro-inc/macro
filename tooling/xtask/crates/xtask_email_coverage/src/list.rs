@@ -129,7 +129,9 @@ fn named(prefix: &str, messages: Vec<wire::Message>) -> Vec<Entry> {
 
 /// The routes of another service that `sources.toml` lists by hand. The
 /// file must hold the end of each route's path as a string literal, so
-/// that a route that is renamed or removed does not stay listed.
+/// that a route that is renamed or removed does not stay listed. An end made
+/// of parameters alone (`"/{id}"`) says nothing of which route it is, so it
+/// does not count unless it is the whole path.
 fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<Entry>, Report> {
     let text = std::fs::read_to_string(repo_root.join(&source.file))
         .context(format!("could not read {}", source.file))?;
@@ -142,7 +144,9 @@ fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<En
                 .map_or(route.as_str(), |(_, path)| path);
             let line = path
                 .match_indices('/')
-                .map(|(start, _)| format!("\"{}\"", &path[start..]))
+                .map(|(start, _)| &path[start..])
+                .filter(|end| *end == path || names_a_route(end))
+                .map(|end| format!("\"{end}\""))
                 .find_map(|literal| text.lines().position(|line| line.contains(&literal)))
                 .ok_or_else(|| {
                     report!(
@@ -160,6 +164,12 @@ fn routes_elsewhere(repo_root: &Path, source: &ElsewhereSource) -> Result<Vec<En
             })
         })
         .collect()
+}
+
+/// Whether a path has a segment that is not a parameter.
+fn names_a_route(path: &str) -> bool {
+    path.split('/')
+        .any(|segment| !segment.is_empty() && !segment.starts_with('{'))
 }
 
 /// The providers a row applies to unless `sources.toml` says otherwise: the

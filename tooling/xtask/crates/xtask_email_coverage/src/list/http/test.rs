@@ -183,3 +183,34 @@ pub fn app() -> Router {
         "{error}"
     );
 }
+
+#[test]
+fn fails_on_a_let_that_assigns_to_the_router() {
+    let root = tempfile::tempdir().unwrap();
+    write(root.path(), "services/svc/Cargo.toml", "");
+    write(
+        root.path(),
+        "services/svc/src/api.rs",
+        r#"
+pub fn app() -> Router {
+    let mut router = Router::new();
+    let changed = {
+        if enabled() {
+            router = router.route("/beta", get(beta));
+        }
+        true
+    };
+    router
+}
+"#,
+    );
+
+    let error = list(&Repo::new(root.path()), &source()).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("services/svc/src/api.rs:6: `app` assigns inside a `let`"),
+        "{error}"
+    );
+}

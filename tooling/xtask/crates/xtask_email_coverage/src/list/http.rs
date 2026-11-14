@@ -177,6 +177,18 @@ impl Walker<'_> {
                 && let Some(init) = &local.init
                 && init.diverge.is_none()
             {
+                // An initializer that assigns (`let done = { router =
+                // router.route(..); true };`) changes a router the walker
+                // has already read.
+                let mut assigns = Assignments::default();
+                assigns.visit_expr(&init.expr);
+                if let Some(span) = assigns.first {
+                    bail!(
+                        "{}: `{name}` assigns inside a `let` the walker cannot follow; \
+                         build the router in `let` bindings and one final expression",
+                        Loc::new(file, span)
+                    );
+                }
                 scope.bindings.push((bound, Binding::Init(&init.expr)));
                 continue;
             }
@@ -433,6 +445,19 @@ fn nested_path(prefix: &str, path: &str) -> String {
         prefix.to_owned()
     } else {
         format!("{prefix}{path}")
+    }
+}
+
+/// Finds the first assignment.
+#[derive(Default)]
+struct Assignments {
+    first: Option<proc_macro2::Span>,
+}
+
+impl<'ast> Visit<'ast> for Assignments {
+    fn visit_expr_assign(&mut self, assign: &'ast syn::ExprAssign) {
+        self.first.get_or_insert(assign.span());
+        syn::visit::visit_expr_assign(self, assign);
     }
 }
 

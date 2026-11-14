@@ -187,10 +187,7 @@ pub(crate) fn markdown(model: &Model) -> String {
     let _ = writeln!(out);
 
     let _ = writeln!(out, "### Scenarios\n");
-    let _ = writeln!(
-        out,
-        "| Run | scenarios | failed | needed a retry | seconds |"
-    );
+    let _ = writeln!(out, "| Run | scenarios | failed | flaky | seconds |");
     let _ = writeln!(out, "| --- | ---: | ---: | ---: | ---: |");
     for run in &model.suite.runs {
         let _ = writeln!(
@@ -204,7 +201,11 @@ pub(crate) fn markdown(model: &Model) -> String {
         "\n{} scenarios left a record that counts.\n",
         model.suite.recorded
     );
-    list(&mut out, "Needed a retry", &model.suite.flaky);
+    list(
+        &mut out,
+        "Flaky: passed only on a retry, and counted as covered",
+        &model.suite.flaky,
+    );
     list(&mut out, "Failed", &model.suite.failed);
     list(
         &mut out,
@@ -423,7 +424,7 @@ pub(crate) fn html(model: &Model) -> String {
     let _ = write!(
         out,
         "<h2>Scenarios</h2><div class=\"scroll\"><table><tr><th>run</th><th>scenarios</th>\
-         <th>failed</th><th>needed a retry</th><th>seconds</th></tr>"
+         <th>failed</th><th>flaky</th><th>seconds</th></tr>"
     );
     for run in &model.suite.runs {
         let _ = write!(
@@ -438,7 +439,11 @@ pub(crate) fn html(model: &Model) -> String {
     }
     let _ = write!(out, "</table></div>");
     html_list(&mut out, "Failed", &model.suite.failed);
-    html_list(&mut out, "Needed a retry", &model.suite.flaky);
+    html_list(
+        &mut out,
+        "Flaky: passed only on a retry, and counted as covered",
+        &model.suite.flaky,
+    );
     html_list(&mut out, "The ledger is broken", &model.broken);
     html_list(
         &mut out,

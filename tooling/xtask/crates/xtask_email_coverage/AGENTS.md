@@ -60,7 +60,16 @@
 - `list --check` compares everything but the line numbers in `source`: a
   line moves whenever its file changes above it. `list` refreshes them.
 - The report fails without a `junit.xml`: nothing else says which records
-  are of scenarios that passed.
+  are of scenarios that passed. It also fails on one that is cut short or
+  holds fewer tests than it says. Of two results for one scenario the worse
+  counts.
+- A scenario that passed only on a retry counts as passed and is listed
+  under "Flaky".
+- A GraphQL field counts as reached when an answered query selected it. One
+  under `@skip` or `@include` counts only when the condition is written out
+  and lets it run; a record keeps no variable values. A record keeps no
+  answers either, so a field selected under a parent that came back null
+  still counts as reached.
 - A GraphQL field is looked up in `static_assets/schema.graphql`; export the
   SDL first when a resolver is new.
 - The report exits non-zero when the ledger contradicts the code or itself

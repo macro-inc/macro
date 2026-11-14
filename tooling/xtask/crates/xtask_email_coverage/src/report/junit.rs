@@ -48,18 +48,24 @@ pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
     for file in files {
         let text =
             std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
-        let run = read(file, &text, &mut results.outcomes);
-        // A file cut short or empty would otherwise pass for a run in
-        // which nothing failed.
-        if run.tests == 0 {
-            bail!("{} holds no test results", file.display());
-        }
+        let run = read(file, &text, &mut results.outcomes)?;
         results.runs.push(run);
     }
     Ok(results)
 }
 
-fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Run {
+/// Reads one results file, which must be whole: a file cut short or empty
+/// would otherwise pass for a run in which nothing failed.
+fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Result<Run, Report> {
+    if !text.trim_end().ends_with("</testsuites>") {
+        bail!(
+            "{} is cut short: it does not end with </testsuites>",
+            file.display()
+        );
+    }
+    let declared: Option<usize> = regex!(r#"<testsuites\b[^>]*\btests="([0-9]+)""#)
+        .captures(text)
+        .and_then(|found| found[1].parse().ok());
     let seconds = regex!(r#"<testsuites\b[^>]*\btime="([0-9.]+)""#)
         .captures(text)
         .and_then(|found| found[1].parse().ok())
@@ -101,9 +107,38 @@ fn read(file: &Path, text: &str, outcomes: &mut BTreeMap<String, Outcome>) -> Ru
             Outcome::Flaky(_) => run.flaky += 1,
             Outcome::Passed => {}
         }
-        outcomes.insert(format!("{binary} {name}"), outcome);
+        // Of two runs of one scenario the worse counts: which file is read
+        // last says nothing of which run was later.
+        outcomes
+            .entry(format!("{binary} {name}"))
+            .and_modify(|known| *known = worse(*known, outcome))
+            .or_insert(outcome);
     }
-    run
+    if run.tests == 0 {
+        bail!("{} holds no test results", file.display());
+    }
+    if let Some(declared) = declared
+        && declared != run.tests
+    {
+        bail!(
+            "{} says it holds {declared} tests and holds {}",
+            file.display(),
+            run.tests
+        );
+    }
+    Ok(run)
+}
+
+/// The worse of two outcomes: failed, then flaky with the most failed
+/// attempts, then passed.
+fn worse(one: Outcome, other: Outcome) -> Outcome {
+    match (one, other) {
+        (Outcome::Failed, _) | (_, Outcome::Failed) => Outcome::Failed,
+        (Outcome::Flaky(one), Outcome::Flaky(other)) => Outcome::Flaky(one.max(other)),
+        (Outcome::Flaky(attempts), Outcome::Passed)
+        | (Outcome::Passed, Outcome::Flaky(attempts)) => Outcome::Flaky(attempts),
+        (Outcome::Passed, Outcome::Passed) => Outcome::Passed,
+    }
 }
 
 fn attribute(attributes: &str, name: &str) -> Option<String> {

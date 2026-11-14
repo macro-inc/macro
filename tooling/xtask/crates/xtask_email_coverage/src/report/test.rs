@@ -289,17 +289,64 @@ fn results_tell_flaky_from_passed_and_failed() {
     assert!((run.seconds - 12.5).abs() < f64::EPSILON);
 }
 
-/// A results file with no test in it is not a run in which nothing failed.
+/// A results file with no test in it, or cut short, is not a run in which
+/// nothing failed.
 #[test]
-fn a_results_file_without_tests_is_an_error() {
+fn a_results_file_that_is_not_whole_is_an_error() {
+    const PASSED: &str =
+        r#"<testcase name="gmail_stars" classname="email_e2e::state" time="1.0"/>"#;
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("junit.xml");
-    std::fs::write(&file, "<testsuites name=\"nextest-run\" tests=\"3\"").unwrap();
-    let error = super::junit::load(&[file]).unwrap_err();
+    let error_of = |text: String| {
+        std::fs::write(&file, text).unwrap();
+        super::junit::load(std::slice::from_ref(&file))
+            .unwrap_err()
+            .to_string()
+    };
+
+    let error = error_of("<testsuites name=\"nextest-run\" tests=\"3\"".to_owned());
+    assert!(error.contains("is cut short"), "{error}");
+    // Cut after the first whole test.
+    let error = error_of(format!(
+        "<testsuites tests=\"2\"><testsuite>{PASSED}<testcase name=\"outlook_st"
+    ));
+    assert!(error.contains("is cut short"), "{error}");
+    let error = error_of("<testsuites tests=\"0\"></testsuites>".to_owned());
+    assert!(error.contains("holds no test results"), "{error}");
+    // Closed, and still not all the tests it says it holds.
+    let error = error_of(format!(
+        "<testsuites tests=\"2\"><testsuite>{PASSED}</testsuite></testsuites>"
+    ));
     assert!(
-        error.to_string().contains("holds no test results"),
+        error.contains("says it holds 2 tests and holds 1"),
         "{error}"
     );
+}
+
+/// A scenario two results files tell of ended as the worse of the two says,
+/// whichever file is read last.
+#[test]
+fn the_worse_of_two_runs_of_a_scenario_counts() {
+    use super::junit::Outcome;
+    let dir = tempfile::tempdir().unwrap();
+    let write = |name: &str, body: &str| {
+        let job = dir.path().join(name);
+        std::fs::create_dir(&job).unwrap();
+        std::fs::write(
+            job.join("junit.xml"),
+            format!(
+                "<testsuites tests=\"1\"><testsuite><testcase name=\"gmail_stars\" \
+                 classname=\"email_e2e::state\">{body}</testcase></testsuite></testsuites>"
+            ),
+        )
+        .unwrap();
+    };
+    write("new", "<failure message=\"m\">boom</failure>");
+    write("old", "");
+
+    let files = super::evidence::files_named(&[dir.path().to_owned()], "junit.xml").unwrap();
+    let results = super::junit::load(&files).unwrap();
+    assert_eq!(results.outcomes["state gmail_stars"], Outcome::Failed);
 }
 
 /// A function counts as covered only where a break in product code made
@@ -810,4 +857,41 @@ owner = "calendar"
             model.broken
         );
     }
+}
+
+/// A selection that `@skip` or `@include` may have left out did not
+/// certainly run: it counts only when its condition is written out and lets
+/// it run.
+#[test]
+fn a_selection_a_directive_may_leave_out_is_not_counted() {
+    let schema = Schema::parse(
+        "type Query { thread: Thread }\n\
+         type Thread { subject: String, labels: [Label], owner: Owner, snippet: String }\n\
+         type Label { name: String }\n\
+         type Owner { name: String }",
+    )
+    .unwrap();
+
+    let found = schema
+        .coordinates(
+            "query($with: Boolean!) { thread { \
+               subject @skip(if: true) \
+               snippet @include(if: true) \
+               labels @include(if: $with) { name } \
+               ... on Thread @skip(if: false) { owner { name } } \
+               ...Rest @include(if: false) \
+             } } \
+             fragment Rest on Thread { labels { name } }",
+        )
+        .unwrap();
+
+    assert_eq!(
+        found.into_iter().collect::<Vec<_>>(),
+        [
+            "Owner.name",
+            "Query.thread",
+            "Thread.owner",
+            "Thread.snippet"
+        ]
+    );
 }
