@@ -1,0 +1,173 @@
+# Where `cargo x email-coverage list` looks for the backend email entry points
+# it writes to entrypoints.tsv, plus the few facts it cannot read from code.
+#
+# The generator fails, naming the file and line, on anything here that no
+# longer matches the code. Paths are relative to the repository root; an item
+# is written `path/to/file.rs::Ident`.
+
+# kind `http`: every route of the router `root` builds, followed through
+# `.route`, `.nest`, `.merge` and calls of router functions in any crate.
+[http]
+root = "services/email_service/src/api.rs::app"
+# Router functions left out: the Swagger UI serves documentation.
+skip = ["swagger_ui"]
+# Functions that mount the router they are given a second time under a prefix
+# (the gateway's `/email`). Only the root mount is listed.
+mounted_again = ["mount_at_root_and_prefix"]
+
+# kind `webhook`: the cases a provider webhook handler tells apart. A request
+# carrying `validation_field` is `<prefix>:validation`; the arms of the
+# handler's match on `lifecycle_field` give `<prefix>:change` (`None`) and
+# `<prefix>:lifecycle:<event>` (`Some("<event>")`).
+[[webhook]]
+prefix = "outlook"
+handler = "services/email_service/src/api/outlook.rs::handler"
+validation_field = "validation_token"
+lifecycle_field = "lifecycle_event"
+
+# kind `graphql`: resolvers (methods of `#[Object]`, `#[ComplexObject]` and
+# `#[Subscription]` impls that take a `Context`), keyed `<SDL type>.<field>`
+# by looking the field up in `schema`. With `only`, a crate contributes just
+# the resolvers whose name or impl type contains that text, ignoring case.
+[graphql]
+schema = "static_assets/schema.graphql"
+crates = [
+  { dir = "crates/graphql_email" },
+  { dir = "crates/complete_graph", only = "email" },
+]
+
+# Add `[[graphql_type]] rust = "<Rust type>", graphql = "<SDL type>"` when the
+# generator reports that it cannot tell which SDL type a resolver's field is on.
+
+# `SoupEmailThreadEdges` is flattened into the Soup email thread through an
+# associated type (`SoupEntityEdges::EmailThreadEdges`) in another crate.
+[[graphql_type]]
+rust = "SoupEmailThreadEdges"
+graphql = "GraphqlSoupEmailThread"
+
+# kind `queue`: one row per message type per queue. The generator checks that
+# the `macro_queues` types this file hands to an `SQSWorker` are exactly the
+# ones listed under `consumes` below, so a new worker cannot go unlisted.
+[queue_workers]
+file = "services/email_service/src/bin/pubsub_workers/pubsub_workers.rs"
+
+# `name` and `aliases` are the harness's names for the queue (`QueueSpec` in
+# crates/email_e2e/src/infra/sqs.rs); an alias carries the same messages.
+# `type` is the enum whose variants are the message types, or the message
+# struct. `envelope` is the struct that wraps the enum on the wire; without
+# one, `at` is the enum's JSON pointer in the body ("" for the body itself).
+[[queue]]
+name = "gmail-inbox-sync"
+aliases = ["gmail-inbox-sync-retry"]
+consumes = ["GmailInboxSyncQueue", "GmailInboxSyncRetryQueue"]
+type = "crates/models_email/src/gmail/inbox_sync.rs::InboxSyncOperation"
+envelope = "crates/models_email/src/gmail/inbox_sync.rs::InboxSyncPubsubMessage"
+
+[[queue]]
+name = "gmail-ops"
+aliases = ["gmail-ops-retry"]
+consumes = ["GmailOpsQueue", "GmailOpsRetryQueue"]
+type = "crates/models_email/src/gmail/gmail_ops.rs::GmailOpsOperation"
+envelope = "crates/models_email/src/gmail/gmail_ops.rs::GmailOpsPubsubMessage"
+
+[[queue]]
+name = "backfill"
+consumes = ["EmailBackfillQueue"]
+type = "crates/models_email/src/email/service/backfill.rs::BackfillOperation"
+envelope = "crates/models_email/src/email/service/backfill.rs::BackfillPubsubMessage"
+
+[[queue]]
+name = "crm-cleanup"
+consumes = ["EmailCrmCleanupQueue"]
+type = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupOperation"
+envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubsubMessage"
+
+[[queue]]
+name = "link-manager"
+consumes = ["LinkManagerQueue"]
+type = "crates/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
+at = ""
+
+[[queue]]
+name = "scheduled"
+consumes = ["EmailScheduledQueue"]
+type = "crates/models_email/src/email/service/pubsub.rs::ScheduledPubsubMessage"
+at = ""
+
+[[queue]]
+name = "sfs-uploader"
+consumes = ["SfsUploaderQueue"]
+type = "crates/models_email/src/email/service/pubsub.rs::SFSUploaderMessage"
+at = ""
+
+[[queue]]
+name = "sfs-delete"
+consumes = ["SfsDeleteQueue"]
+type = "crates/sqs_client/src/email.rs::SFSDeleteMessage"
+at = ""
+
+# Email follow-up reminders. document_storage_service consumes this queue, not
+# the email worker binary, so it has no `consumes` to check.
+[[queue]]
+name = "reminder-dispatch"
+type = "crates/reminders/src/domain/models.rs::ReminderDispatchOperation"
+envelope = "crates/reminders/src/domain/models.rs::ReminderDispatchMessage"
+
+# kind `kafka`: the events published to a topic, one row per enum variant.
+[[kafka]]
+topic = "macro.email"
+type = "crates/email/src/domain/events.rs::EmailTopicEvent"
+
+# kind `gateway`: pushes to the connection gateway under message type `name`,
+# one row per enum variant. The `match` column is relative to the event JSON,
+# which is the `message` field of the request the gateway receives.
+[[gateway]]
+name = "refresh_email"
+type = "crates/models_email/src/email/api/refresh.rs::RefreshEmailEvent"
+
+# kind `tool`: the agent tools registered with `add_tool` / `add_user_tool`.
+[[tool]]
+file = "crates/email/src/inbound/toolset.rs"
+
+# kind `lambda`: one row per service directory, keyed by its package name.
+[[lambda]]
+glob = "services/email_*_handler"
+
+[[lambda]]
+glob = "services/user_link_cleanup_handler"
+
+# kind `provider`: the provider API methods the emulators tell apart, by the
+# name their request logs print.
+[[provider]]
+prefix = "gmail"
+type = "crates/gmail_emulator/src/fault.rs::Route"
+
+[[provider]]
+prefix = "outlook"
+type = "crates/outlook_emulator/src/fault.rs::Route"
+
+# kind `loop`: background loops, the `pub` and `pub(crate)` `run*` functions
+# of these files. Listed for the report, not counted.
+[[loop]]
+file = "services/email_service/src/mailbox_sync_worker.rs"
+
+[[loop]]
+file = "services/email_service/src/backfill_outbox.rs"
+
+[[loop]]
+file = "services/email_service/src/crm_enrichment_worker.rs"
+
+# Providers a row applies to, where the default is wrong. The default is the
+# provider the row's key names, else the one its source path names, else
+# both. A `key` ending in `*` covers every key that starts with the rest.
+[[applies]]
+kind = "queue"
+key = "backfill:*"
+providers = "gmail"
+reason = "The backfill queue pages through the Gmail API; Outlook mail arrives through mailbox sync."
+
+[[applies]]
+kind = "lambda"
+key = "email_refresh_handler"
+providers = "gmail"
+reason = "It selects Gmail links only, to renew their watches and probe their grants."

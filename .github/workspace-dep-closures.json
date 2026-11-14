@@ -17432,6 +17432,10 @@
       "tooling/xtask/crates/xtask_graph",
       "tooling/xtask/crates/xtask_paths"
     ],
+    "xtask_email_coverage": [
+      "tooling/xtask/crates/xtask_email_coverage",
+      "tooling/xtask/crates/xtask_paths"
+    ],
     "xtask_graph": [
       "tooling/xtask/crates/xtask_graph",
       "tooling/xtask/crates/xtask_paths"

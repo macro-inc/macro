@@ -24051,6 +24051,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask_email_coverage"
+version = "0.1.0"
+dependencies = [
+ "async-graphql-parser",
+ "clap",
+ "glob",
+ "heck 0.5.0",
+ "proc-macro2",
+ "rootcause",
+ "serde",
+ "strum 0.27.2",
+ "syn 2.0.117",
+ "tempfile",
+ "toml 0.8.23",
+ "xtask_paths",
+]
+
+[[package]]
 name = "xtask_graph"
 version = "0.1.0"
 dependencies = [

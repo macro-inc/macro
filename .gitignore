@@ -19,6 +19,8 @@ run-local.fish
 **/coverage
 !packages/sdk/src/coverage/
 !packages/sdk/src/coverage/**
+!crates/email_e2e/coverage/
+!crates/email_e2e/coverage/**
 **/.nyc_output
 **/.cache
 **/.vite
