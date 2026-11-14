@@ -34,6 +34,9 @@ mod notified;
 mod touched;
 mod unexpanded;
 
+#[cfg(test)]
+mod test;
+
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,

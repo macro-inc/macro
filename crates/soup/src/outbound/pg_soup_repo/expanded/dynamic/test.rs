@@ -3,7 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 #[test]
-fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
+fn nil_project_and_parent_ids_are_impossible_but_negated_filters_are_not() {
     let nil = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
     let real = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::from_u128(1)));
     assert!(project_filter_is_impossible(Some(&nil)));
@@ -17,8 +17,12 @@ fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
     ))));
     assert!(!project_filter_is_impossible(Some(&Expr::is_not(nil))));
     assert!(!project_filter_is_impossible(Some(&real)));
-    assert!(!project_filter_is_impossible(Some(&Expr::val(
+    // `parentId` references `Project(id)`, so no project has the nil parent.
+    assert!(project_filter_is_impossible(Some(&Expr::val(
         ProjectLiteral::ProjectId(Uuid::nil())
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::val(
+        ProjectLiteral::ProjectId(Uuid::from_u128(1))
     ))));
     assert!(!project_filter_is_impossible(None));
 }

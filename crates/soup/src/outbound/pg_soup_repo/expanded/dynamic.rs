@@ -1656,7 +1656,11 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
             filter_ast::ExprFrame::And(a, b) => a || b,
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
-            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(id)) => id.is_nil(),
+            // A parent id references `Project(id)`, so the nil parent is as
+            // impossible as the nil project.
+            filter_ast::ExprFrame::Literal(
+                ProjectLiteral::ProjectIdSelf(id) | ProjectLiteral::ProjectId(id),
+            ) => id.is_nil(),
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })
@@ -1675,6 +1679,43 @@ pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
             filter_ast::ExprFrame::Literal(_) => false,
         })
     })
+}
+
+/// The union arms a dynamic query reads for a filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DynamicArms {
+    documents: bool,
+    chats: bool,
+    projects: bool,
+    initiatives: bool,
+    database_rows: bool,
+}
+
+impl DynamicArms {
+    fn new(filter_ast: &EntityFilterAst) -> Self {
+        let properties = filter_ast.properties_filter.as_deref();
+        Self {
+            documents: !document_filter_is_impossible(filter_ast.document_filter.as_deref())
+                && properties_filter_can_apply_to(
+                    properties,
+                    &[PropertyEntityType::Document, PropertyEntityType::Task],
+                ),
+            chats: !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Chat]),
+            projects: !project_filter_is_impossible(filter_ast.project_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Project]),
+            initiatives: initiative_opted_in(filter_ast.initiative_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::Initiative]),
+            database_rows: database_row_opted_in(filter_ast.database_row_filter.as_deref())
+                && properties_filter_can_apply_to(properties, &[PropertyEntityType::DatabaseRow]),
+        }
+    }
+
+    /// Whether any arm can return a row. With none, the query is a `WHERE
+    /// false` placeholder, so callers skip it and its transaction.
+    fn any(self) -> bool {
+        self.documents || self.chats || self.projects || self.initiatives || self.database_rows
+    }
 }
 
 fn push_union_separator(builder: &mut QueryBuilder<'_, Postgres>, needs_separator: &mut bool) {
@@ -1789,31 +1830,13 @@ fn build_query<'a>(
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
-    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Initiative],
-        );
-    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::DatabaseRow],
-        );
-    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Document, PropertyEntityType::Task],
-        );
-    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Chat],
-        );
-    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Project],
-        );
+    let DynamicArms {
+        documents: include_documents,
+        chats: include_chats,
+        projects: include_projects,
+        initiatives: include_initiatives,
+        database_rows: include_database_rows,
+    } = DynamicArms::new(filter_ast);
 
     let document_notification = filter_ast.document_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
@@ -2468,6 +2491,12 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    // A filter that pins every arm to nothing (CRM tabs, the pipeline card)
+    // would read the caller's sources only to run a `WHERE false` query.
+    if !DynamicArms::new(cursor.filter()).any() {
+        return Ok(Vec::new());
+    }
+
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
@@ -2706,32 +2735,13 @@ fn build_grouped_query<'a>(
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
-    // Determine which entity types to include based on filters (same logic as build_query)
-    let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Initiative],
-        );
-    let include_database_rows = database_row_opted_in(filter_ast.database_row_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::DatabaseRow],
-        );
-    let include_documents = !document_filter_is_impossible(filter_ast.document_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Document, PropertyEntityType::Task],
-        );
-    let include_chats = !chat_filter_is_impossible(filter_ast.chat_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Chat],
-        );
-    let include_projects = !project_filter_is_impossible(filter_ast.project_filter.as_deref())
-        && properties_filter_can_apply_to(
-            filter_ast.properties_filter.as_deref(),
-            &[PropertyEntityType::Project],
-        );
+    let DynamicArms {
+        documents: include_documents,
+        chats: include_chats,
+        projects: include_projects,
+        initiatives: include_initiatives,
+        database_rows: include_database_rows,
+    } = DynamicArms::new(filter_ast);
     // Gated like the other three legs. Beyond skipping a union branch that can
     // never match, this keeps the NIL-id exclusion every Soup query now sends
     // from reaching `push_filter` below — see the bind-numbering note there.
