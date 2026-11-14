@@ -3,7 +3,7 @@ source: crates/agent_monitor_tui/src/ui/test.rs
 expression: "render(&mut app, 200, 56)"
 ---
 ◢ MACROD://MON ◤ >_  DEMO  ACTIVE SYS.LINK ● LIVE ╱ WORK 25 ╱ WAIT 0 ╱ BLOCK 1 ╱ ERR 50 ╱ DAY ~$25.28 ╱ AGENTS 34 ╱ SEQ 0x0001                                                   FRI 02 JAN ⟦ 10:01:40 ⟧
- 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY   w WALL  ◢▸ release-train◤ ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄ / FIND  ? KEYS  ESC BACK 
+ 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES   5 TREE   6 SOURCES   7 BODY   8 PRS   w WALL  ◢▸ release-train◤ ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄ / FIND  ? KEYS  ESC BACK 
 ┏▸WORKING ────────── Q1 ┓┏▸WAITING ────────── Q2 ┓┏▸BLOCKED ────────── Q3 ┓┏▸TURNS 24H ──────── Q4 ┓┏▸TOOLS 24H ──────── Q5 ┓┏▸ERR 24H ────────── Q6 ┓┏▸TOK/MIN ────────── Q7 ┓┏▸DAY ────────────── Q8 ┓
 ┃25 ▰▰▰▰▰▰▰▰▰▰▱▱        ┃┃0 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃1 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃234                    ┃┃644                    ┃┃50                     ┃┃5.0M                   ┃┃~$25.28                ┃
 ┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
@@ -33,9 +33,11 @@ expression: "render(&mut app, 200, 56)"
 │10:00:42 TOOL Read        src/store.rs                                                                            0.3s ◆ OK   ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                         ◇ …      ││                                                                      │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
-│                                                                                                                              ││                                                                      │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              │┃                                                                      ┃
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┗━━━────────────────────────────────────────────────────────────────━━━┛
+│                                                                                                                              │┏━◢ PRS ◤ 2 · ENTER OPENS ITS OTHER AGENT ──────────────────────────━━━┓
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┃◆ #4211  app        feat(monitor): serve the store… REQ     13m open  ┃
+│                                                                                                                              │┃◆ #4207  app        feat(monitor): single-writer s… APPR    19m open  ┃
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┗━━━────────────────────────────────────────────────────────────────━━━┛
 │                                                                                                                              │┏━◢ TAPE ◤──────────────────────────────────────────────────────────━━━┓
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┃10:01:37 release-t… TOOL Grep Snapshot                                ┃
@@ -53,8 +55,6 @@ expression: "render(&mut app, 200, 56)"
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:09 release-t… TOOL Edit client.rs                               │
 │                                                                                                                              ││10:01:07 release-t… TURN turn start                                   │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:07 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:04 release-t… TEND turn end                                     │
-│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:04 release-t… STAT idle (building)                              │
-┃                                                                                                                              ┃┃10:01:01 release-t… TOOL Bash git status                              ┃
+┃                                                                                                                              ┃┃10:01:04 release-t… TEND turn end                                     ┃
 ┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛┗━━━────────────────────────────────────────────────────────────────━━━┛
-◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT
+◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-8 PAGE  w WALL  q QUIT

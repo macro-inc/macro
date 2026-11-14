@@ -4,7 +4,7 @@
 
 The collector behind the macrod agent monitor: one normalized model of every
 agent on the machine (hc terminals, Claude and Codex sessions, macrod sessions,
-managers, work runs), reduced from source observations by a single-writer
+managers, work runs) and the pull requests they open, reduced from source observations by a single-writer
 store and served to viewers over gRPC on a user-only Unix socket.
 
 ## How it works
@@ -28,6 +28,11 @@ subscriber gets a fresh snapshot.
 - `src/outbound/transcript_feed.rs`: `LocalTranscripts`, the drill-in's
   `TranscriptFeed` for Claude Code transcripts and Codex rollouts (tail of
   the agent's `transcript` file, then appends woken by a directory watch).
+- `src/outbound/github.rs`: the one polled source. PR status for what the
+  store wants (`Store::pr_interest`: PRs named by transcripts and managers'
+  `prs` files, plus agent branches) in one batched GraphQL query through
+  `gh api graphql` (`github/query.rs`); `gh` and `git` sit behind
+  `GithubBackend` so tests answer from `fixtures/github/`.
 - `src/outbound/local.rs`: every real-machine source from a few roots. File
   sources share `outbound/transcripts.rs` (tailed JSON lines) or
   `outbound/records.rs` (small whole-file records).
@@ -74,7 +79,14 @@ subscriber gets a fresh snapshot.
 - Sources never build `Agent`s and never decode another source's facts; label
   and file-format meanings are decoded in the adapter.
 - Sources are push-driven: `hc events` stdout and `notify` watches. The only
-  timers are hc's 45 s silence watchdog and the 30 s reconcile `stat` sweep.
+  timers are hc's 45 s silence watchdog, the 30 s reconcile `stat` sweep, and
+  the `github` source, which polls GitHub every `[monitor] pr_poll_secs` while
+  a viewer is subscribed and at most every 5 minutes otherwise.
+- PR authorship comes from transcripts, never from GitHub: Claude Code's
+  `toolUseResult.gitOperation.pr` (`action: created`), else a `gh pr create`
+  call paired with the PR URL in its result. A PR's agents list its author
+  first and managers last; merged and closed PRs older than the history
+  window are retired (`Facts::prune`) and never asked for again.
   `notify`'s inotify mask includes `IN_OPEN`, so busy transcript directories
   wake the watcher often; those are real writes, not polling.
 - Startup indexes only transcripts modified within the history window, newest

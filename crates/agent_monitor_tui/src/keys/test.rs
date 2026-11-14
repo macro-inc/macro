@@ -34,6 +34,7 @@ fn number_keys_open_pages_and_drop_focus() {
         ('5', Page::Tree),
         ('6', Page::Zoom(Pane::Sources)),
         ('7', Page::Zoom(Pane::Body)),
+        ('8', Page::Zoom(Pane::Prs)),
     ];
     for (digit, page) in cases {
         assert_eq!(
@@ -42,7 +43,7 @@ fn number_keys_open_pages_and_drop_focus() {
         );
     }
     assert_eq!(
-        step(idle(), Key::Char('8'), &Page::Monitor),
+        step(idle(), Key::Char('9'), &Page::Monitor),
         (idle(), Action::None)
     );
 }
@@ -53,7 +54,7 @@ fn tab_cycles_the_monitor_panes_both_ways() {
     let (mode, _) = run(idle(), &[Key::Tab], &page);
     assert_eq!(mode, Mode::Base(Base::Pane(Pane::Agents)));
 
-    let (mode, _) = run(idle(), &[Key::Tab; 7], &page);
+    let (mode, _) = run(idle(), &[Key::Tab; 8], &page);
     assert_eq!(mode, Mode::Base(Base::Pane(Pane::Agents)));
 
     let (mode, _) = run(idle(), &[Key::BackTab], &page);
@@ -68,6 +69,8 @@ fn tab_cycles_drill_in_sections_and_does_nothing_on_flat_pages() {
     let agent = Page::Agent(AgentId::from_wire(String::from("demo:1")));
     let (mode, _) = run(idle(), &[Key::Tab, Key::Tab], &agent);
     assert_eq!(mode, Mode::Base(Base::Pane(Pane::Children)));
+    let (mode, _) = run(idle(), &[Key::Tab; 3], &agent);
+    assert_eq!(mode, Mode::Base(Base::Pane(Pane::AgentPrs)));
 
     assert_eq!(step(idle(), Key::Tab, &Page::Wall), (idle(), Action::None));
     assert_eq!(step(idle(), Key::Tab, &Page::Tree), (idle(), Action::None));
@@ -300,6 +303,8 @@ fn every_mnemonic_parses_case_insensitively() {
         ("SRC", Page::Zoom(Pane::Sources)),
         ("BODY", Page::Zoom(Pane::Body)),
         ("WALL", Page::Wall),
+        ("PRS", Page::Zoom(Pane::Prs)),
+        ("pr", Page::Zoom(Pane::Prs)),
     ];
     for (line, page) in cases {
         assert_eq!(

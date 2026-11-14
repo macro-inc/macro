@@ -43,6 +43,10 @@ pub struct Cursors {
     pub expanded: HashSet<String>,
     /// The selected drill-in child.
     pub child: usize,
+    /// The selected PRS row.
+    pub pr: usize,
+    /// The selected pull request in the drill-in.
+    pub agent_pr: usize,
 }
 
 /// Everything the viewer draws from.
@@ -149,6 +153,7 @@ impl App {
         if let Page::Agent(_) = page {
             self.cursors.transcript = None;
             self.cursors.child = 0;
+            self.cursors.agent_pr = 0;
         }
         self.pages.push(page);
     }
@@ -170,6 +175,15 @@ impl App {
                 self.cursors.spend = moved(self.cursors.spend, len, motion);
             }
             (Some(Pane::Body), _) => {}
+            (Some(Pane::Prs), _) => {
+                let len = self.view.sorted_prs(&self.filter).len();
+                self.cursors.pr = moved(self.cursors.pr, len, motion);
+            }
+            (Some(Pane::AgentPrs), Page::Agent(id)) => {
+                let len = self.view.agents.get(id).map_or(0, |agent| agent.prs.len());
+                self.cursors.agent_pr = moved(self.cursors.agent_pr, len, motion);
+            }
+            (Some(Pane::AgentPrs), _) => {}
             (Some(Pane::Transcript), _) => self.move_transcript(motion),
             (Some(Pane::Children), Page::Agent(id)) => {
                 let len = self
@@ -290,6 +304,22 @@ impl App {
                 .agents
                 .get(id)
                 .and_then(|agent| agent.children.get(self.cursors.child).cloned()),
+            (Some(Pane::Prs), _) => self
+                .view
+                .sorted_prs(&self.filter)
+                .get(self.cursors.pr)
+                .and_then(|pr| ViewState::pr_agent(pr).cloned()),
+            // Another agent tied to the pull request: its author when this
+            // agent is not, else the next tied agent.
+            (Some(Pane::AgentPrs), Page::Agent(id)) => {
+                let id = id.clone();
+                self.view
+                    .agents
+                    .get(&id)
+                    .and_then(|agent| agent.prs.get(self.cursors.agent_pr))
+                    .and_then(|pr| self.view.prs.get(pr))
+                    .and_then(|pr| pr.agents.iter().find(|other| **other != id).cloned())
+            }
             (Some(Pane::Transcript), _) => {
                 self.toggle_expanded();
                 None

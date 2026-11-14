@@ -81,7 +81,7 @@ impl Key {
 pub enum Page {
     /// The monitor grid of every pane (`0`).
     Monitor,
-    /// One pane zoomed to the whole screen (`1`-`7`).
+    /// One pane zoomed to the whole screen (`1`-`8`).
     Zoom(Pane),
     /// The parent/child tree (`5`).
     Tree,
@@ -101,9 +101,10 @@ impl Page {
                 Pane::Spend,
                 Pane::Sources,
                 Pane::Tape,
+                Pane::Prs,
                 Pane::Failures,
             ],
-            Page::Agent(_) => &[Pane::Transcript, Pane::Children],
+            Page::Agent(_) => &[Pane::Transcript, Pane::Children, Pane::AgentPrs],
             Page::Zoom(_) | Page::Tree | Page::Wall => &[],
         }
     }
@@ -129,6 +130,7 @@ impl Page {
             '5' => Page::Tree,
             '6' => Page::Zoom(Pane::Sources),
             '7' => Page::Zoom(Pane::Body),
+            '8' => Page::Zoom(Pane::Prs),
             _ => return None,
         };
         Some(page)
@@ -150,10 +152,14 @@ pub enum Pane {
     Sources,
     /// 7 BODY.
     Body,
+    /// 8 PRS.
+    Prs,
     /// The drill-in's transcript tail.
     Transcript,
     /// The drill-in's children list.
     Children,
+    /// The drill-in's pull requests.
+    AgentPrs,
 }
 
 /// Where the cursor moves.
@@ -202,6 +208,7 @@ impl Command {
             "SRC" => Page::Zoom(Pane::Sources),
             "BODY" => Page::Zoom(Pane::Body),
             "WALL" => Page::Wall,
+            "PRS" | "PR" => Page::Zoom(Pane::Prs),
             _ => return None,
         };
         let filter = words.map(str::to_lowercase).collect();

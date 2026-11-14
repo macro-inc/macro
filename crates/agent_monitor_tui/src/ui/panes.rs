@@ -1,5 +1,5 @@
-//! The numbered panes: 1 AGENTS, 2 TAPE, 3 SPEND, 4 FAILURES, 6 SOURCES and
-//! 7 BODY, each drawn in a monitor grid cell or zoomed to a page.
+//! The numbered panes: 1 AGENTS, 2 TAPE, 3 SPEND, 4 FAILURES, 6 SOURCES,
+//! 7 BODY and 8 PRS, each drawn in a monitor grid cell or zoomed to a page.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -7,13 +7,17 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Cell, Paragraph, Row, Table, TableState};
 
-use agent_monitor::domain::model::{Agent, AgentKind, SourceState, TapeEvent, TapeKind, Timestamp};
+use agent_monitor::domain::model::{
+    Agent, AgentKind, CiState, Mergeable, Pr, PrState, ReviewState, SourceState, TapeEvent,
+    TapeKind, Timestamp,
+};
 
 use crate::app::App;
 use crate::format;
 use crate::keys::{Base, Pane};
 use crate::theme;
 use crate::ui::Clock;
+use crate::view::{ViewState, pr_state_word};
 
 /// Draws `pane` into `area`; `zoomed` when it fills the page.
 pub fn draw(
@@ -32,7 +36,8 @@ pub fn draw(
         Pane::Failures => failures(frame, area, app, clock, focused),
         Pane::Sources => sources(frame, area, app, clock, focused),
         Pane::Body => body(frame, area, app, clock, focused),
-        Pane::Transcript | Pane::Children => {}
+        Pane::Prs => prs(frame, area, app, clock, focused),
+        Pane::Transcript | Pane::Children | Pane::AgentPrs => {}
     }
 }
 
@@ -92,8 +97,14 @@ impl AgentColumns {
     }
 }
 
-/// One AGENTS row.
-fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) -> Row<'static> {
+/// One AGENTS row; `badge` marks the agent's pull requests.
+fn agent_row(
+    agent: &Agent,
+    name: String,
+    badge: Option<Span<'static>>,
+    clock: Clock,
+    columns: &AgentColumns,
+) -> Row<'static> {
     let doing = match (&agent.doing, agent.status) {
         (Some(doing), _) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
         (None, status) => match (&agent.status_detail, &agent.task) {
@@ -121,7 +132,19 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
             theme::ink(theme::DIM),
         )));
     }
-    cells.push(Cell::from(Span::styled(name, theme::bold(theme::AMBER))));
+    let name_cell = match badge {
+        Some(badge) => {
+            // The table may give the column a cell less than asked.
+            let room = usize::from(NAME_WIDTH).saturating_sub(badge.width() + 2);
+            Line::from(vec![
+                Span::styled(format::cell(&name, room), theme::bold(theme::AMBER)),
+                Span::raw(" "),
+                badge,
+            ])
+        }
+        None => Line::from(Span::styled(name, theme::bold(theme::AMBER))),
+    };
+    cells.push(Cell::from(name_cell));
     if !columns.compact {
         cells.push(Cell::from(Span::styled(
             theme::status_word(agent.status),
@@ -263,7 +286,10 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
 
     let table_rows: Vec<Row<'static>> = rows
         .iter()
-        .map(|agent| agent_row(agent, row_name(app, agent), clock, &columns))
+        .map(|agent| {
+            let badge = pr_badge(&app.view, agent);
+            agent_row(agent, row_name(app, agent), badge, clock, &columns)
+        })
         .collect();
     let header_row = Row::new(
         header
@@ -284,6 +310,211 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
     frame.render_stateful_widget(table, area, &mut state);
 }
 
+/// An agent's pull request badge: `#<number>` for one, `⎇<count>` for
+/// several, coloured by the worst CI among the open ones.
+fn pr_badge(view: &ViewState, agent: &Agent) -> Option<Span<'static>> {
+    let prs = view.agent_prs(agent);
+    let first = prs.first()?;
+    let text = if prs.len() == 1 {
+        format!("#{}", first.number)
+    } else {
+        format!("⎇{}", prs.len())
+    };
+    let open: Vec<&&Pr> = prs.iter().filter(|pr| !pr.state.is_final()).collect();
+    let color = if open.iter().any(|pr| pr.ci == CiState::Failed) {
+        theme::RED
+    } else if open.iter().any(|pr| pr.ci == CiState::Running) {
+        theme::YELLOW
+    } else if !open.is_empty() && open.iter().all(|pr| pr.ci == CiState::Passed) {
+        theme::GREEN
+    } else {
+        theme::CYAN_DIM
+    };
+    Some(Span::styled(text, theme::bold(color)))
+}
+
+/// A pull request's CI glyph: ◆ passed, ◌ running, ✕ failed, · none.
+pub fn ci_glyph(ci: CiState) -> Span<'static> {
+    match ci {
+        CiState::Passed => Span::styled("◆", theme::bold(theme::GREEN)),
+        CiState::Running => Span::styled("◌", theme::bold(theme::YELLOW)),
+        CiState::Failed => Span::styled("✕", theme::bold(theme::RED)),
+        CiState::None => Span::styled("·", theme::ink(theme::DIM)),
+        CiState::Unknown => Span::styled("·", theme::ink(theme::FAINT)),
+    }
+}
+
+/// A review decision as a short word and colour.
+fn review_word(review: ReviewState) -> Span<'static> {
+    match review {
+        ReviewState::Approved => Span::styled("APPR", theme::bold(theme::GREEN)),
+        ReviewState::ChangesRequested => Span::styled("CHG ", theme::bold(theme::RED)),
+        ReviewState::ReviewRequired => Span::styled("REQ ", theme::ink(theme::YELLOW)),
+        ReviewState::None => Span::styled("—   ", theme::ink(theme::FAINT)),
+    }
+}
+
+/// A pull request state's colour.
+fn pr_state_color(state: PrState) -> ratatui::style::Color {
+    match state {
+        PrState::Open => theme::AMBER,
+        PrState::Draft => theme::DIM,
+        PrState::Merged => theme::GREEN,
+        PrState::Closed | PrState::Unknown => theme::FAINT,
+    }
+}
+
+/// One pull request line: CI, number, repository, title, agent, review,
+/// conflicts, age and state. `agent` is left out where the agent is known.
+pub fn pr_line(
+    app: &App,
+    clock: Clock,
+    pr: &Pr,
+    width: usize,
+    with_agent: bool,
+    highlight: bool,
+) -> Line<'static> {
+    let agent = ViewState::pr_agent(pr).map_or_else(|| String::from("—"), |id| app.view.name_of(id));
+    // CI, number, repo, review, conflict, age and state, with spacing.
+    let agent_width = if with_agent { 15 } else { 0 };
+    let branch_width = branch_width(width);
+    let fixed = 2 + 7 + 11 + 5 + 2 + 5 + 7 + agent_width + branch_width;
+    let title_width = width.saturating_sub(fixed).max(8);
+    let title = pr
+        .title
+        .clone()
+        .or_else(|| pr.branch.clone())
+        .unwrap_or_else(|| String::from("…"));
+    let conflict = if pr.mergeable == Mergeable::Conflicting {
+        Span::styled("⚠ ", theme::bold(theme::RED))
+    } else {
+        Span::raw("  ")
+    };
+    let mut spans = vec![
+        ci_glyph(pr.ci),
+        Span::raw(" "),
+        Span::styled(
+            format::cell(&format!("#{}", pr.number), 7),
+            theme::bold(theme::YELLOW),
+        ),
+        Span::styled(format::cell(pr.repo.name(), 11), theme::ink(theme::CYAN_DIM)),
+        Span::styled(
+            format::cell(&title, title_width),
+            theme::ink(if pr.state.is_final() {
+                theme::DIM
+            } else {
+                theme::AMBER
+            }),
+        ),
+    ];
+    if branch_width > 0 {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            format::cell(pr.branch.as_deref().unwrap_or("—"), branch_width - 1),
+            theme::ink(theme::CYAN_DIM),
+        ));
+    }
+    if with_agent {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(format::cell(&agent, 14), theme::bold(theme::AMBER)));
+    }
+    spans.extend([
+        Span::raw(" "),
+        review_word(pr.review),
+        Span::raw(" "),
+        conflict,
+        Span::styled(
+            format::right(&age_since(clock, pr.opened_at), 4),
+            theme::ink(theme::DIM),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            format::cell(pr_state_word(pr.state), 6),
+            theme::ink(pr_state_color(pr.state)),
+        ),
+    ]);
+    let line = Line::from(spans);
+    if highlight {
+        line.style(theme::selected())
+    } else {
+        line
+    }
+}
+
+/// The PRS BRANCH column's width with its spacing; only wide panes show it.
+fn branch_width(width: usize) -> usize {
+    if width >= 140 { 29 } else { 0 }
+}
+
+fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
+    let rows = app.view.sorted_prs(&app.filter);
+    let open = rows.iter().filter(|pr| !pr.state.is_final()).count();
+    let failing = rows
+        .iter()
+        .filter(|pr| pr.ci == CiState::Failed && !pr.state.is_final())
+        .count();
+    let mut extra = vec![count_span(format!("{open} OPEN · {} ALL", rows.len()))];
+    if failing > 0 {
+        extra.push(Span::styled(
+            format!(" ✕ {failing} FAILING "),
+            theme::bold(theme::RED),
+        ));
+    }
+    if let Some(health) = app.view.sources.get(&agent_monitor::domain::model::SourceKind::Github)
+        && let Some(every) = health.poll_every
+    {
+        extra.push(Span::styled(
+            format!(" ◷ {}s ", every.as_secs()),
+            theme::ink(theme::CYAN_DIM),
+        ));
+    }
+    let block = theme::pane("8 PRS", extra, focused);
+    let inner = block.inner(area);
+    let width = usize::from(inner.width);
+    let height = usize::from(inner.height).saturating_sub(1);
+    let cursor = app.cursors.pr.min(rows.len().saturating_sub(1));
+    let skip = scroll(cursor, height);
+    let with_agent = width >= 64;
+
+    let agent_header = if with_agent { "AGENT           " } else { "" };
+    let branches = branch_width(width);
+    let branch_header = if branches > 0 {
+        format!(" {}", format::cell("BRANCH", branches - 1))
+    } else {
+        String::new()
+    };
+    let title_width = width
+        .saturating_sub(2 + 7 + 11 + 5 + 2 + 5 + 7 + branches + if with_agent { 15 } else { 0 })
+        .max(8);
+    let mut lines = vec![Line::from(Span::styled(
+        format::cell(
+            &format!(
+                "  {}{}{}{branch_header}{}{agent_header}REV    AGE STATE",
+                format::cell("PR", 7),
+                format::cell("REPO", 11),
+                format::cell("TITLE", title_width),
+                if with_agent { " " } else { "" },
+            ),
+            width,
+        ),
+        theme::bold(theme::FAINT),
+    ))];
+    lines.extend(
+        rows.iter()
+            .enumerate()
+            .skip(skip)
+            .take(height)
+            .map(|(index, pr)| pr_line(app, clock, pr, width, with_agent, focused && index == cursor)),
+    );
+    if rows.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  no pull requests yet: agents' gh pr create and managers' prs files show here",
+            theme::ink(theme::FAINT),
+        )));
+    }
+    frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
 /// A tape kind's short tag and colour.
 pub fn tape_tag(kind: TapeKind) -> (&'static str, Color) {
     match kind {
@@ -297,6 +528,11 @@ pub fn tape_tag(kind: TapeKind) -> (&'static str, Color) {
         TapeKind::Failure => ("FAIL", theme::RED),
         TapeKind::Finished => ("DONE", theme::GREEN),
         TapeKind::Removed => ("GONE", theme::FAINT),
+        TapeKind::PrOpened => ("PR+ ", theme::GREEN),
+        TapeKind::PrCiPassed => ("CI◆ ", theme::GREEN),
+        TapeKind::PrCiFailed => ("CI✕ ", theme::RED),
+        TapeKind::PrMerged => ("MRGD", theme::GREEN),
+        TapeKind::PrClosed => ("CLSD", theme::FAINT),
     }
 }
 
@@ -311,12 +547,12 @@ pub fn tape_line(
     let (tag, tag_color) = tape_tag(event.kind);
     let text_color = match event.kind {
         TapeKind::ToolStart | TapeKind::ToolEnd => theme::CYAN,
-        TapeKind::ToolError | TapeKind::Failure => theme::RED,
+        TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => theme::RED,
         _ => theme::severity_color(event.severity),
     };
     // An error flickers for a moment as it lands.
     let text = match event.kind {
-        TapeKind::ToolError | TapeKind::Failure => theme::glitch(
+        TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => theme::glitch(
             &event.text,
             (clock.now - event.at).num_milliseconds(),
             clock.now.timestamp_millis(),
@@ -516,10 +752,10 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
                 Span::raw(" "),
                 Span::styled(
                     format::cell(
-                        if row.what == "tool" {
-                            "✕ tool"
-                        } else {
-                            "▲ agent"
+                        match row.what {
+                            "tool" => "✕ tool",
+                            "ci" => "✕ ci",
+                            _ => "▲ agent",
                         },
                         8,
                     ),
@@ -601,12 +837,14 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
             |health| format::thousands(u64::from(health.items)),
         );
         let last = age_since(clock, row.health.and_then(|health| health.last_event));
+        // A polled source says how often it asks.
+        let name = match row.health.and_then(|health| health.poll_every) {
+            Some(every) => format!("{} ◷ {}s", row.source.name(), every.as_secs()),
+            None => row.source.name().to_owned(),
+        };
         let mut spans = vec![
             Span::styled(format!("{dot} "), theme::bold(color)),
-            Span::styled(
-                format::cell(row.source.name(), name_width),
-                theme::ink(theme::AMBER),
-            ),
+            Span::styled(format::cell(&name, name_width), theme::ink(theme::AMBER)),
             Span::styled(
                 format::right(&row.agents.to_string(), 5),
                 theme::bold(theme::YELLOW),

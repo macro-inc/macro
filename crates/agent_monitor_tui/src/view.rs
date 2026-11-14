@@ -10,8 +10,9 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use chrono::TimeDelta;
 
 use agent_monitor::domain::model::{
-    Agent, AgentId, AgentKind, Cost, Severity, Snapshot, SourceHealth, SourceKind, Status,
-    TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem, Update, UpdateKind,
+    Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity, Snapshot,
+    SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem,
+    Update, UpdateKind,
 };
 
 use crate::body::BodyPane;
@@ -48,7 +49,8 @@ pub struct Failure {
     pub at: Timestamp,
     /// Which agent.
     pub agent: AgentId,
-    /// `tool` for a failed call, `agent` for a failed agent.
+    /// `tool` for a failed call, `ci` for a pull request's failed CI,
+    /// `agent` for a failed agent.
     pub what: &'static str,
     /// The tape text.
     pub detail: String,
@@ -86,6 +88,8 @@ pub struct ViewState {
     pub totals: Totals,
     /// Source health by source.
     pub sources: BTreeMap<SourceKind, SourceHealth>,
+    /// Every pull request by id.
+    pub prs: BTreeMap<PrId, Pr>,
     /// The sequence number of the last update applied.
     pub seq: u64,
     /// The collector link.
@@ -108,6 +112,7 @@ impl ViewState {
             tape: VecDeque::new(),
             totals: Totals::default(),
             sources: BTreeMap::new(),
+            prs: BTreeMap::new(),
             seq: 0,
             link: Link::Connecting,
             heartbeat: None,
@@ -154,6 +159,12 @@ impl ViewState {
             UpdateKind::Source(health) => {
                 self.sources.insert(health.source, health);
             }
+            UpdateKind::PrUpsert(pr) => {
+                self.prs.insert(pr.id.clone(), pr);
+            }
+            UpdateKind::PrRemoved(id) => {
+                self.prs.remove(&id);
+            }
             UpdateKind::Heartbeat(at) => {
                 self.heartbeat = Some(at);
                 return;
@@ -180,6 +191,11 @@ impl ViewState {
             .sources
             .into_iter()
             .map(|health| (health.source, health))
+            .collect();
+        self.prs = snapshot
+            .prs
+            .into_iter()
+            .map(|pr| (pr.id.clone(), pr))
             .collect();
     }
 
@@ -320,6 +336,8 @@ impl ViewState {
             let what = if event.kind == TapeKind::ToolError {
                 *tool_lines.entry(&event.agent).or_default() += 1;
                 "tool"
+            } else if event.kind == TapeKind::PrCiFailed {
+                "ci"
             } else {
                 seen.insert(&event.agent);
                 "agent"
@@ -421,6 +439,47 @@ impl ViewState {
             .collect()
     }
 
+    /// Pull requests for the PRS pane: failing CI first, then open ones
+    /// before merged and closed, each newest first. Filter words and the
+    /// find query match the title, repository, branch, state or an agent's
+    /// name.
+    pub fn sorted_prs(&self, filter: &Filter) -> Vec<&Pr> {
+        let mut prs: Vec<&Pr> = self
+            .prs
+            .values()
+            .filter(|pr| filter.matches_pr(pr, |id| self.name_of(id)))
+            .collect();
+        let rank = |pr: &Pr| {
+            let failing = pr.ci == CiState::Failed && !pr.state.is_final();
+            (!failing, pr.state.is_final())
+        };
+        prs.sort_by(|a, b| {
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| {
+                    b.updated_at
+                        .or(b.opened_at)
+                        .cmp(&a.updated_at.or(a.opened_at))
+                })
+                .then_with(|| b.number.cmp(&a.number))
+        });
+        prs
+    }
+
+    /// The agent a pull request row opens: its author, else its first agent.
+    pub fn pr_agent(pr: &Pr) -> Option<&AgentId> {
+        pr.author_agent.as_ref().or(pr.agents.first())
+    }
+
+    /// An agent's pull requests that the view holds, newest first.
+    pub fn agent_prs(&self, agent: &Agent) -> Vec<&Pr> {
+        agent
+            .prs
+            .iter()
+            .filter_map(|id| self.prs.get(id))
+            .collect()
+    }
+
     /// Whether any agent is working, so status squares blink.
     pub fn any_working(&self) -> bool {
         self.agents
@@ -485,6 +544,27 @@ impl Filter {
         words && (self.find.is_empty() || self.find_matches(agent))
     }
 
+    /// Whether a pull request row shows; `name_of` names its agents.
+    pub fn matches_pr(&self, pr: &Pr, name_of: impl Fn(&AgentId) -> String) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+        let state = pr_state_word(pr.state);
+        let haystack = [
+            pr.title.clone().unwrap_or_default(),
+            pr.repo.as_str().to_owned(),
+            pr.branch.clone().unwrap_or_default(),
+            format!("#{}", pr.number),
+            state.to_owned(),
+        ]
+        .into_iter()
+        .chain(pr.agents.iter().map(&name_of))
+        .map(|text| text.to_lowercase())
+        .collect::<Vec<_>>();
+        let has = |needle: &str| haystack.iter().any(|text| text.contains(needle));
+        self.words.iter().all(|word| has(word)) && (self.find.is_empty() || has(&self.find))
+    }
+
     /// Whether a tape line shows; `agent` is its agent's row, if known.
     pub fn matches_event(&self, event: &TapeEvent, agent: Option<&Agent>) -> bool {
         if self.is_empty() {
@@ -502,5 +582,16 @@ impl Filter {
             || event.text.to_lowercase().contains(&self.find)
             || agent.is_some_and(|agent| self.find_matches(agent));
         words && find
+    }
+}
+
+/// A pull request state as the PRS pane writes it.
+pub fn pr_state_word(state: PrState) -> &'static str {
+    match state {
+        PrState::Unknown => "…",
+        PrState::Open => "open",
+        PrState::Draft => "draft",
+        PrState::Merged => "merged",
+        PrState::Closed => "closed",
     }
 }

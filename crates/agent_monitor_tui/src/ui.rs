@@ -1,6 +1,6 @@
 //! Drawing: the header, the quote board, the page body and the command line.
 //! Layout degrades by width: under 140 columns BODY and SOURCES drop, under
-//! 100 everything stacks in one column; under 40 rows the board shrinks to
+//! 100 everything stacks in one column (PRS and FAILURES share a row); under 40 rows the board shrinks to
 //! one line. Above 200 columns BODY takes a quarter of the width.
 
 mod board;
@@ -261,7 +261,7 @@ fn host_spans(app: &App) -> Vec<Span<'static>> {
 
 fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let page = app.page();
-    let tabs: [(&str, &str, &str, bool); 9] = [
+    let tabs: [(&str, &str, &str, bool); 10] = [
         ("0", "MON", "MON", *page == Page::Monitor),
         ("1", "AGENTS", "AGT", *page == Page::Zoom(Pane::Agents)),
         ("2", "TAPE", "TAPE", *page == Page::Zoom(Pane::Tape)),
@@ -270,6 +270,7 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
         ("5", "TREE", "TREE", *page == Page::Tree),
         ("6", "SOURCES", "SRC", *page == Page::Zoom(Pane::Sources)),
         ("7", "BODY", "BODY", *page == Page::Zoom(Pane::Body)),
+        ("8", "PRS", "PRS", *page == Page::Zoom(Pane::Prs)),
         ("w", "WALL", "WALL", *page == Page::Wall),
     ];
     let short = area.width < NARROW;
@@ -362,15 +363,17 @@ fn body_width(width: u16) -> u16 {
 
 fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     if area.width < NARROW {
-        let [agents, tape, failures, spend] = Layout::vertical([
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
+        let [agents, tape, prs, failures, spend] = Layout::vertical([
+            Constraint::Percentage(35),
+            Constraint::Percentage(25),
             Constraint::Percentage(15),
-            Constraint::Percentage(15),
+            Constraint::Percentage(12),
+            Constraint::Percentage(13),
         ])
         .areas(area);
         panes::draw(frame, agents, app, clock, Pane::Agents, false);
         panes::draw(frame, tape, app, clock, Pane::Tape, false);
+        panes::draw(frame, prs, app, clock, Pane::Prs, false);
         panes::draw(frame, failures, app, clock, Pane::Failures, false);
         panes::draw(frame, spend, app, clock, Pane::Spend, false);
         return;
@@ -399,9 +402,12 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
         panes::draw(frame, sources, app, clock, Pane::Sources, false);
     }
 
-    let [tape, failures] =
-        Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)]).areas(lower);
+    let [tape, right] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(lower);
+    let [prs, failures] =
+        Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(right);
     panes::draw(frame, tape, app, clock, Pane::Tape, false);
+    panes::draw(frame, prs, app, clock, Pane::Prs, false);
     panes::draw(frame, failures, app, clock, Pane::Failures, false);
 }
 
@@ -413,7 +419,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 Span::styled(format!(" {}", input.value()), theme::bold(theme::YELLOW)),
                 Span::styled("█", theme::ink(theme::YELLOW)),
                 Span::styled(
-                    "   MON AGT TAPE SPND FAIL TREE SRC BODY WALL  + filter words",
+                    "   MON AGT TAPE SPND FAIL TREE SRC BODY PRS WALL  + filter words",
                     theme::ink(theme::FAINT),
                 ),
             ],
@@ -453,7 +459,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 ("ENTER", "OPEN"),
                 ("TAB", "PANE"),
                 ("↑↓", "MOVE"),
-                ("0-7", "PAGE"),
+                ("0-8", "PAGE"),
                 ("w", "WALL"),
                 ("q", "QUIT"),
             ] {
@@ -481,8 +487,8 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
 
 const HELP: [(&str, &str); 17] = [
     (
-        "0 … 7",
-        "monitor, then the numbered pane full screen (5 = tree)",
+        "0 … 8",
+        "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
     ),
     ("w", "wall: a card per agent"),
     ("TAB  S-TAB", "focus the next or previous pane"),
@@ -491,7 +497,7 @@ const HELP: [(&str, &str); 17] = [
     ("PGUP PGDN HOME END", "page, first, last"),
     (
         "ENTER",
-        "open the agent under the cursor; expand a tool call",
+        "open the agent under the cursor (a PR's author); expand a tool call",
     ),
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
@@ -502,8 +508,8 @@ const HELP: [(&str, &str); 17] = [
     ("TYPE A LETTER", "command line, then ENTER:"),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
     (
-        "FAIL TREE SRC BODY WALL",
-        "failures, tree, sources, body, wall",
+        "FAIL TREE SRC BODY PRS WALL",
+        "failures, tree, sources, body, pull requests, wall",
     ),
     (
         "AGT builder working",

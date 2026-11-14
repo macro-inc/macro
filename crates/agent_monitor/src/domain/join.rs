@@ -796,7 +796,9 @@ fn draft_of<'a>(
 ///    (the earliest such, when several did);
 /// 2. a manager that recorded one ties it to the manager's agent;
 /// 3. an agent whose working directory is a checkout of the pull request's
-///    repository, on its head branch, works on it.
+///    repository, on its head branch, works on it (subagents excepted).
+///
+/// A pull request's agents list its author first and managers last.
 ///
 /// Retired pull requests are left out. Each tied agent lists its pull
 /// requests, newest first.
@@ -838,7 +840,11 @@ fn join_prs(facts: &Facts, built: &mut Built) {
                 .push(id.clone());
         }
     }
+    // A subagent shares its session's checkout; its parent stands for it.
     for agent in built.agents.values() {
+        if agent.kind == AgentKind::Subagent {
+            continue;
+        }
         let (Some(cwd), Some(branch)) = (&agent.cwd, &agent.branch) else {
             continue;
         };
@@ -869,6 +875,14 @@ fn join_prs(facts: &Facts, built: &mut Built) {
                 .filter(|agent| Some(agent) != entry.author.as_ref().map(|(author, _)| author)),
         );
         agents.retain(|agent| built.agents.contains_key(agent));
+        // Managers last: after the author, the agents on the branch did the work.
+        agents.sort_by_key(|agent| {
+            built
+                .agents
+                .get(agent)
+                .is_some_and(|agent| agent.kind == AgentKind::Manager)
+                && entry.author.as_ref().is_none_or(|(author, _)| author != agent)
+        });
 
         let pr = Pr {
             id: id.clone(),

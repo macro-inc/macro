@@ -158,10 +158,10 @@ impl Vitals {
         let index = match kind {
             TapeKind::ToolStart | TapeKind::ToolEnd => 0,
             TapeKind::TurnStart | TapeKind::TurnEnd => 1,
-            TapeKind::Spawned => 2,
-            TapeKind::ToolError | TapeKind::Failure => 3,
-            TapeKind::Finished | TapeKind::Removed => 4,
-            TapeKind::Status => return None,
+            TapeKind::Spawned | TapeKind::PrOpened => 2,
+            TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => 3,
+            TapeKind::Finished | TapeKind::Removed | TapeKind::PrMerged => 4,
+            TapeKind::Status | TapeKind::PrCiPassed | TapeKind::PrClosed => return None,
         };
         Some(index)
     }

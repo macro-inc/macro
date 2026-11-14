@@ -1199,12 +1199,13 @@ fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
     assert_eq!(pr.state, PrState::Open);
     assert_eq!(pr.ci, CiState::Failed);
     assert_eq!(pr.branch.as_deref(), Some("feat/x"));
+    // The author first, the manager last.
     assert_eq!(
         pr.agents,
         vec![
             AgentId::terminal("t2"),
-            AgentId::terminal("t1"),
-            AgentId::terminal("t3")
+            AgentId::terminal("t3"),
+            AgentId::terminal("t1")
         ]
     );
     assert_eq!(built.agents[&AgentId::terminal("t2")].prs, vec![id.clone()]);

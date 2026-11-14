@@ -1,8 +1,8 @@
 use chrono::{TimeDelta, TimeZone, Utc};
 
 use agent_monitor::domain::model::{
-    Agent, AgentId, AgentKind, Severity, Snapshot, Status, TapeEvent, TapeKind, Timestamp,
-    TranscriptItem, TranscriptItemKind, Update, UpdateKind,
+    Agent, AgentId, AgentKind, CiState, Pr, PrState, Severity, Snapshot, Status, TapeEvent,
+    TapeKind, Timestamp, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
 };
 
 use super::*;
@@ -341,4 +341,77 @@ fn a_snapshots_tape_is_history_and_only_live_lines_are_events() {
         kind: UpdateKind::Event(event(11, "hc:t1", TapeKind::ToolStart, Severity::Info)),
     });
     assert_eq!(*recorder.calls.lock().expect("lock"), (1, 2));
+}
+
+fn pr(number: u32, state: PrState, ci: CiState, updated: u32) -> Pr {
+    let repo = agent_monitor::domain::model::RepoName::parse("example-org/widgets").expect("repo");
+    let reference = agent_monitor::domain::model::PrRef {
+        repo: repo.clone(),
+        number,
+    };
+    Pr {
+        id: reference.id(),
+        url: reference.url(),
+        repo,
+        number,
+        title: Some(format!("change {number}")),
+        state,
+        ci,
+        review: agent_monitor::domain::model::ReviewState::None,
+        mergeable: agent_monitor::domain::model::Mergeable::Mergeable,
+        author_agent: Some(AgentId::from_wire(String::from("a"))),
+        agents: vec![AgentId::from_wire(String::from("a"))],
+        branch: Some(format!("feat/{number}")),
+        opened_at: Some(at(0)),
+        updated_at: Some(at(updated)),
+        closed_at: None,
+    }
+}
+
+#[test]
+fn failing_prs_sort_first_then_open_ones_newest_first_then_finished() {
+    let mut view = ViewState::new(Box::new(Vitals::default()));
+    let mut snapshot = Snapshot::default();
+    snapshot.agents.push(agent("a", Status::Working, 1));
+    snapshot.prs = vec![
+        pr(1, PrState::Merged, CiState::Failed, 50),
+        pr(2, PrState::Open, CiState::Passed, 40),
+        pr(3, PrState::Open, CiState::Failed, 10),
+        pr(4, PrState::Draft, CiState::Running, 30),
+        pr(5, PrState::Closed, CiState::None, 20),
+    ];
+    view.apply(Update {
+        seq: 1,
+        kind: UpdateKind::Snapshot(snapshot),
+    });
+
+    let order: Vec<u32> = view
+        .sorted_prs(&Filter::default())
+        .iter()
+        .map(|pr| pr.number)
+        .collect();
+    assert_eq!(order, vec![3, 2, 4, 1, 5]);
+
+    // An update replaces the row; a removal drops it.
+    view.apply(Update {
+        seq: 2,
+        kind: UpdateKind::PrUpsert(pr(3, PrState::Open, CiState::Passed, 55)),
+    });
+    view.apply(Update {
+        seq: 3,
+        kind: UpdateKind::PrRemoved(pr(5, PrState::Closed, CiState::None, 0).id),
+    });
+    let order: Vec<u32> = view
+        .sorted_prs(&Filter::default())
+        .iter()
+        .map(|pr| pr.number)
+        .collect();
+    assert_eq!(order, vec![3, 2, 4, 1]);
+
+    let filter = Filter {
+        words: vec![String::from("draft")],
+        ..Filter::default()
+    };
+    let drafts: Vec<u32> = view.sorted_prs(&filter).iter().map(|pr| pr.number).collect();
+    assert_eq!(drafts, vec![4]);
 }

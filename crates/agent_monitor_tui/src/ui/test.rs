@@ -131,6 +131,21 @@ fn tree_200x56() {
 }
 
 #[test]
+fn prs_page_200x56_and_enter_drills_into_the_author() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    insta::assert_snapshot!(render(&mut app, 200, 56));
+
+    // Failing CI sorts first: the demo's ui-pages PR at this step.
+    let first = app.view.sorted_prs(&app.filter)[0].clone();
+    assert_eq!(first.ci, agent_monitor::domain::model::CiState::Failed);
+    app.key(Key::Enter);
+    let author = first.author_agent.expect("the demo PR has an author");
+    assert_eq!(*app.page(), Page::Agent(author.clone()));
+    assert_eq!(app.view.name_of(&author), "ui-pages");
+}
+
+#[test]
 fn drill_in_200x56() {
     let mut app = app();
 

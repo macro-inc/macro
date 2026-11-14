@@ -49,9 +49,13 @@ impl BodyPane for MeshBody {
         let kind = match event.kind {
             TapeKind::ToolStart => PulseKind::ToolStart,
             TapeKind::ToolEnd => PulseKind::ToolResult,
-            TapeKind::ToolError | TapeKind::Failure => PulseKind::Error,
+            TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => PulseKind::Error,
             TapeKind::TurnEnd => PulseKind::TurnEnd,
             TapeKind::Spawned
+            | TapeKind::PrOpened
+            | TapeKind::PrCiPassed
+            | TapeKind::PrMerged
+            | TapeKind::PrClosed
             | TapeKind::Status
             | TapeKind::TurnStart
             | TapeKind::Finished

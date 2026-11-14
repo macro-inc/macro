@@ -1,5 +1,5 @@
-//! The agent drill-in: header, stats, a timeline strip, the transcript tail
-//! and the children list.
+//! The agent drill-in: header, stats, a timeline strip, the transcript tail,
+//! the children list and the agent's pull requests.
 
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ use crate::format;
 use crate::keys::{Base, Pane};
 use crate::theme;
 use crate::ui::Clock;
-use crate::ui::panes::tape_line;
+use crate::ui::panes::{pr_line, tape_line};
 
 /// Gaps longer than this are squeezed to one column in the timeline.
 const SQUEEZE: TimeDelta = TimeDelta::seconds(120);
@@ -58,9 +58,15 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, id: 
     };
     draw_transcript(frame, transcript, app, clock);
     if side.width > 0 {
-        let [children, tape] =
-            Layout::vertical([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(side);
+        let pr_rows = u16::try_from(agent.prs.len().clamp(1, 6)).unwrap_or(1) + 2;
+        let [children, prs, tape] = Layout::vertical([
+            Constraint::Percentage(40),
+            Constraint::Length(pr_rows),
+            Constraint::Min(0),
+        ])
+        .areas(side);
         draw_children(frame, children, app, &agent, clock);
+        draw_prs(frame, prs, app, &agent, clock);
         draw_agent_tape(frame, tape, app, &agent, clock);
     }
 }
@@ -261,7 +267,9 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
                     TapeKind::TurnStart => ('▲', theme::YELLOW, 2),
                     TapeKind::TurnEnd => ('▪', theme::AMBER, 1),
                     TapeKind::ToolStart | TapeKind::ToolEnd => ('▮', theme::CYAN, 3),
-                    TapeKind::ToolError | TapeKind::Failure => ('✖', theme::RED, 4),
+                    TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => {
+                        ('✖', theme::RED, 4)
+                    }
                     _ => ('◆', theme::GREEN, 2),
                 };
                 Mark {
@@ -605,6 +613,42 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no children",
+            theme::ink(theme::FAINT),
+        )));
+    }
+    frame.render_widget(Paragraph::new(lines).block(block), area);
+}
+
+fn draw_prs(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: Clock) {
+    let focused = app.mode.base() == Base::Pane(Pane::AgentPrs);
+    let block = theme::pane(
+        "PRS",
+        vec![Span::styled(
+            format!(" {} · ENTER OPENS ITS OTHER AGENT ", agent.prs.len()),
+            theme::ink(theme::DIM),
+        )],
+        focused,
+    );
+    let width = usize::from(block.inner(area).width);
+    let mut lines: Vec<Line<'static>> = app
+        .view
+        .agent_prs(agent)
+        .into_iter()
+        .enumerate()
+        .map(|(index, pr)| {
+            pr_line(
+                app,
+                clock,
+                pr,
+                width,
+                false,
+                focused && index == app.cursors.agent_pr,
+            )
+        })
+        .collect();
+    if lines.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  no pull requests",
             theme::ink(theme::FAINT),
         )));
     }
