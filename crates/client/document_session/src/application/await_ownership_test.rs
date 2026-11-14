@@ -71,8 +71,11 @@ fn authored_await_gets_current_peer_and_local_status() {
     );
 }
 
+// Was on_open_await_derives_ownership_without_writing_raw_local_state; renamed once the
+// reader-8 Source control (manifest 5a4699a2, classification 367f0cbf) showed a foreign Edit
+// open stores its derived local.
 #[test]
-fn on_open_await_derives_ownership_without_writing_raw_local_state() {
+fn on_open_await_derives_ownership_writing_only_source_open_state() {
     let source = stored_await();
     let snapshot = source.export(loro::ExportMode::Snapshot).unwrap();
     let now = Now {
@@ -101,11 +104,17 @@ fn on_open_await_derives_ownership_without_writing_raw_local_state() {
             peer::get_peer_id(surface.state().view(), NodeKey::ROOT).unwrap(),
             None
         );
-        // An Edit open writes only the parsed null metadata slot (first open 605dfc47,
-        // reopen 5486fba0); ownership derivation writes nothing.
+        // An Edit open writes the parsed null metadata slot (first open 605dfc47, reopen
+        // 5486fba0). A foreign Edit reader's derived local rides in that same open commit, as
+        // in Source: reader-8 Source control, manifest 5a4699a2, classification 367f0cbf
+        // (STALE TEST under rule v4). Read opens write nothing.
         let mut expected = raw.clone();
         if access == Access::Edit {
             expected.root["$"]["documentMetadata"]["environmentTags"] = serde_json::Value::Null;
+        }
+        if (reader, access) == (8, Access::Edit) {
+            expected.root["children"][0]["children"][0]["$"]["local"] =
+                serde_json::Value::Bool(false);
         }
         assert_eq!(
             lexical_loro::reconstruct_state(&doc, &lexical_loro::PlainPolicy).unwrap(),
