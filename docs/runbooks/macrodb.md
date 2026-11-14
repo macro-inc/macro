@@ -113,7 +113,10 @@ class that reports no balance, is not covered.
 cloud-storage-service took long to hand out a connection from one of its sqlx
 pools (`primary`, or `readonly` for the replica). The alert names the pool.
 Each task samples each pool every second and records a wait only when no
-connection is idle, so the alert means the pool was exhausted. This is time queued inside the service before any SQL runs; slow SQL shows in
+connection is idle, so the alert means the pool was exhausted. Its value is
+the longest wait in each minute, averaged over 10 minutes: a brief wait does
+not raise it, one probe that times out raises the warning, and the critical
+needs the pool to stay exhausted. This is time queued inside the service before any SQL runs; slow SQL shows in
 the `sqlx::query` slow-statement logs and Database Monitoring instead. Open the
 [Search and database saturation](../../infra/stacks/monitoring/monitors/storage-pool.ts)
 dashboard, linked from the alert, and decide which of two causes it is:
