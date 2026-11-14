@@ -430,7 +430,7 @@ describe('folder uploads', () => {
 
   it('does not promise a resumed folder will show up soon', async () => {
     rememberPendingFolderUpload(USER_ID, {
-      requestId: 'earlier-request',
+      requestId: 'unconfirmed-request',
       name: 'Records',
       sentAt: Date.now(),
     });
@@ -446,6 +446,9 @@ describe('folder uploads', () => {
 
   it('follows a folder once in the tab that sent it', async () => {
     mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    mocks.createUploadZipRequest.mockResolvedValue(
+      ok({ presignedUrl: 'https://example.com/zip', requestId: 'sent-here' })
+    );
     let finish!: (outcome: unknown) => void;
     mocks.waitForFolderUpload.mockReturnValue(
       new Promise((resolve) => {
@@ -460,6 +463,25 @@ describe('folder uploads', () => {
     finish({ status: 'completed', projectId: 'project' });
     if (result.type !== 'folder') throw new Error('expected a folder');
     await result.projectId;
+  });
+
+  it('shows how a folder ended once even if another tab writes its record back', async () => {
+    const record = {
+      requestId: 'settled-request',
+      name: 'Records',
+      sentAt: Date.now(),
+    };
+    rememberPendingFolderUpload(USER_ID, record);
+    mocks.waitForFolderUpload.mockResolvedValue({
+      status: 'completed',
+      projectId: 'project',
+    });
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    rememberPendingFolderUpload(USER_ID, record);
+
+    expect(resumePendingFolderUploads(USER_ID)).toEqual([]);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledOnce();
   });
 
   it('refuses a zip the app did not prepare before asking for an upload URL', async () => {

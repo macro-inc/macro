@@ -1,5 +1,6 @@
-import { Kind, print, visit } from 'graphql';
+import { type FieldNode, Kind, print, visit } from 'graphql';
 import { describe, expect, it } from 'vitest';
+import { CHANNEL_MENTION_EDGE_LIMIT } from '../../../queries/channel/mention-edge';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -9,23 +10,59 @@ import {
 
 describe('bounded channel unread projection', () => {
   it.each([ChannelListSoupDocument, ChannelListItemFieldsFragmentDoc])(
-    'keeps the limited edge aliased in both query and reconciliation',
+    'keeps the limited edges aliased in both query and reconciliation',
     (document) => {
-      let count = 0;
+      const edges = new Map<string, FieldNode>();
       visit(document, {
         Field(field) {
           if (field.name.value !== 'notifications') return;
-          count += 1;
-          expect(field.alias?.value).toBe('unreadNotifications');
-          expect(
-            field.arguments?.find((arg) => arg.name.value === 'limit')?.value
-          ).toMatchObject({ kind: Kind.INT, value: '1' });
-          expect(print(field)).toContain('states: [UNSEEN]');
-          expect(print(field)).toContain('topLevelMessagesOnly: true');
-          expect(print(field)).not.toContain('metadata');
+          edges.set(field.alias?.value ?? '', field);
         },
       });
-      expect(count).toBe(1);
+      expect([...edges.keys()].sort()).toEqual([
+        'unreadMentions',
+        'unreadNotifications',
+      ]);
+
+      const printed = (alias: string) => {
+        const field = edges.get(alias);
+        return field ? print(field) : '';
+      };
+      const limit = (alias: string) =>
+        edges
+          .get(alias)
+          ?.arguments?.find((argument) => argument.name.value === 'limit')
+          ?.value;
+
+      expect(limit('unreadNotifications')).toMatchObject({
+        kind: Kind.INT,
+        value: '1',
+      });
+      expect(printed('unreadNotifications')).toContain('states: [UNSEEN]');
+      expect(printed('unreadNotifications')).toContain(
+        'topLevelMessagesOnly: true'
+      );
+      expect(printed('unreadNotifications')).not.toContain('metadata');
+
+      // Thread mentions count too, so the mention edge has no top-level filter.
+      expect(limit('unreadMentions')).toMatchObject({
+        kind: Kind.INT,
+        value: String(CHANNEL_MENTION_EDGE_LIMIT),
+      });
+      expect(printed('unreadMentions')).toContain('states: [UNSEEN]');
+      expect(printed('unreadMentions')).toContain(
+        'eventTypes: ["channel_mention"]'
+      );
+      expect(printed('unreadMentions')).not.toContain('topLevelMessagesOnly');
+      expect(
+        edges
+          .get('unreadMentions')
+          ?.selectionSet?.selections.map((selection) =>
+            selection.kind === Kind.FIELD
+              ? selection.name.value
+              : selection.kind
+          )
+      ).toEqual(['id', 'state']);
       expect(print(document)).not.toContain('ChannelListNotificationFields');
       expect(print(document)).not.toContain(
         'SoupNotificationNavigationMetadataFields'

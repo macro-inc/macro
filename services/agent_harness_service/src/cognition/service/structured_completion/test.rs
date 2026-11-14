@@ -130,6 +130,7 @@ async fn real_completion_entrypoint_retains_activated_financial_scope() {
                     description: None,
                 },
                 thinking: CompletionThinking::Default,
+                session: None,
             },
         ))
         .await

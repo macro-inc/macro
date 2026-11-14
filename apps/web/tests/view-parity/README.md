@@ -57,7 +57,14 @@ A dev build serves thousands of modules per page, so the first run is slow.
 Chromium drops in-flight requests whenever a network interface changes
 (`net::ERR_NETWORK_CHANGED`), which leaves the page blank; on a machine running
 several Docker stacks that happens often, so a view is retried up to three
-times.
+times. On Linux, `isolated-network.sh` avoids the drops: it runs the command in
+its own network namespace and forwards the two frontends' ports into it.
+
+```sh
+tests/view-parity/isolated-network.sh "<baseline port> <proxy port>" \
+  bunx playwright test --config tests/view-parity/playwright.config.ts
+```
+
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` where the bundled Chromium cannot
 start. On a machine with no system fonts text has no size, so every
 visibility wait fails: point `FONTCONFIG_FILE` at a config that lists a font
@@ -68,11 +75,21 @@ directory.
 Add an entry to `views.ts` in the change that splits the view: where it opens,
 how to tell it has loaded, and the states worth comparing (a detail opened from
 its list, the title menu, the details sheet). Write the steps as a person would
-perform them, so they also run against the build from before the split.
+perform them, so they also run against the build from before the split. Mark a
+step only a touch device can take, such as tapping the title for its menu, with
+`only: 'touch'`.
 
-A failure prints the difference between the two builds. Decide whether it is a
-regression or a change you meant to make; an intended mobile change belongs in
-the pull request's description, not in a looser comparison.
+A failure prints the difference between the two builds, for every state, not
+only the first that differs. Decide whether it is a regression or a change you
+meant to make; an intended mobile change belongs in the pull request's
+description, not in a looser comparison.
+
+The harness opens a view the way its list does. A desktop block header is not
+on that path: desktop opens documents, tasks and threads inline in their list
+view, and mounts the block only for a preview. Compare it by hand at
+`/app/home/<block-type>/<id>`, where Home previews the item in its block. A
+document or task needs `?s0.drive.commentId=<any uuid>` as well; without it
+Home shows its inline detail.
 
 ## What it cannot see
 

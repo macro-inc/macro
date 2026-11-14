@@ -82,7 +82,7 @@ export function searchNeedsKeywords(
   query: string
 ): boolean {
   return (
-    query.trim().length < 3 &&
+    query.trim().length === 0 &&
     ((state.type === 'channels' && state.channels.from.length > 0) ||
       (state.type === 'calls' && state.calls.from.length > 0))
   );

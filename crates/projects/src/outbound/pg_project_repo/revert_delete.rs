@@ -175,14 +175,12 @@ async fn clear_registered_entities(
     transaction: &mut Transaction<'_, Postgres>,
     ids: &[String],
 ) -> Result<(), sqlx::Error> {
-    for id in ids {
-        let uuid = id
-            .parse()
-            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
-        entity_registry_db_utils::clear_deleted(transaction, uuid)
-            .await
-            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-    }
+    entity_registry_db_utils::clear_deleted_many(
+        transaction,
+        &super::delete::parse_entity_ids(ids)?,
+    )
+    .await
+    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     Ok(())
 }
 

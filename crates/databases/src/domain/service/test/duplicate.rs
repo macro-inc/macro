@@ -569,6 +569,7 @@ async fn relations_into_other_databases_follow_what_the_duplicator_can_see() {
             name: "Venues".into(),
             owner_id: user(OWNER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();
