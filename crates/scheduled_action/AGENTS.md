@@ -44,7 +44,7 @@ each run.
   (source `user`, origin `requested`) but hidden, a background session
   (`AgentSession::is_background`) that notifies nobody and
   only the scheduler may delete, never counted as a routine's run. It runs
-  as the person, with its usual tools, on the model their Ask AI steps use
+  as the person, with code mode's tools, on the model their Ask AI steps use
   (`DraftContext::agent_model`), and the session admits and bills its
   turns as agent session usage. In the harness the drafter first finds
   what the words name (`drafts/finding.rs`, `RoutineDrafts::with_finding`):

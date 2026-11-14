@@ -949,7 +949,7 @@ never does the routine's own work now ("every Monday make a task" makes no
 task). It hands the routine back by checking it with `macro.routines.check`
 (`POST /scheduled-actions/check`: saving's checks, including the type check
 of its code steps together, with nothing saved), naming what it created, and
-fixes what the check reports. The last check is
+fixes what the check reports. The last passing check (else the last check) is
 the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and

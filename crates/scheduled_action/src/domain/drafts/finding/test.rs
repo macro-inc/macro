@@ -583,6 +583,27 @@ async fn the_prompt_carries_the_areas_the_routine_uses() {
     }
 }
 
+/// A routine that needs only the areas the instructions carry is given no
+/// others.
+#[tokio::test(start_paused = true)]
+async fn a_routine_needing_only_ai_gets_no_area_reference() {
+    let model = Arc::new(Model::finding(json!({ "names": [], "sdk": ["ai"] })));
+    let (drafts, sessions, _) = finding(
+        &model,
+        &Arc::new(Names::default()),
+        Box::new(|_| Vec::new()),
+    );
+
+    draft(
+        &drafts,
+        routine("every morning write me a motivational quote"),
+    )
+    .await;
+
+    let (_, prompt) = briefs(&sessions);
+    assert!(!prompt.contains("<sdk>"), "{prompt}");
+}
+
 #[test]
 fn the_answer_is_the_first_json_object_past_any_prose() {
     assert_eq!(

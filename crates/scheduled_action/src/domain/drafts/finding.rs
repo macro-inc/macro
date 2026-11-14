@@ -464,15 +464,24 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
     }
 
     /// The reference of the areas the fast call named, past the ones the
-    /// instructions carry; with none the SDK has, the commonest ones.
+    /// instructions carry; with none the SDK has, the commonest ones. A
+    /// routine that needs only the instructions' areas gets no more.
     fn areas_reference(&self, named: &Named) -> String {
-        let areas: Vec<String> = named
+        let named: Vec<String> = named
             .sdk
             .iter()
             .map(|area| area.trim().to_owned())
-            .filter(|area| !area.is_empty() && area != AI_AREA && area != ROUTINES_AREA)
-            .take(MAX_AREAS)
+            .filter(|area| !area.is_empty())
             .collect();
+        let areas: Vec<String> = named
+            .iter()
+            .filter(|area| *area != AI_AREA && *area != ROUTINES_AREA)
+            .take(MAX_AREAS)
+            .cloned()
+            .collect();
+        if areas.is_empty() && !named.is_empty() {
+            return String::new();
+        }
         match self.code.area_reference(&areas) {
             reference if reference.trim().is_empty() => {
                 let fallback: Vec<String> = FALLBACK_AREAS
