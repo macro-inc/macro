@@ -457,3 +457,302 @@ test.each([undefined, null, { reason: 'opaque' }])(
     }
   }
 );
+
+// Uses the real native executor; scheduling lifetime proof, not PluginEvent policy proof.
+// Scheduling RED only; observer calls below are not claimed native PluginEvent proofs.
+test.each([undefined, null, { reason: 'opaque-consume' }])(
+  'failed consume invalidates entry observer before afterDrain reentry: %j',
+  async (cause) => {
+    const order: string[] = [];
+    let armed = false;
+    let reentered = false;
+    let oldSubscribed = false;
+    let staleObserved = false;
+    let thrown: { error: unknown } | undefined;
+    const executor = createExecutor(
+      {
+        afterDrain: (failure) => {
+          if (!armed || reentered || !failure) return;
+          reentered = true;
+          order.push('afterDrain-reentry');
+          // Actual second entry executes while the legacy caller finally has not run.
+          executor.runSync(() => {
+            if (oldSubscribed) staleObserved = true;
+            order.push('second-native-call');
+            return executor.session.input(
+              SessionInputMsg.encode(emptyInput(1)),
+              executor.now(),
+              Date.now()
+            );
+          });
+        },
+      },
+      () => {
+        if (armed && !reentered) {
+          order.push('consume-throws');
+          throw cause;
+        }
+      }
+    );
+    try {
+      armed = true;
+      try {
+        oldSubscribed = true;
+        try {
+          executor.tryRunSync(
+            () =>
+              executor.session.input(
+                SessionInputMsg.encode(emptyInput(1)),
+                executor.now(),
+                Date.now()
+              ),
+            undefined,
+            () => {
+              oldSubscribed = false;
+            }
+          );
+        } finally {
+          oldSubscribed = false;
+          order.push('caller-unsubscribe');
+        }
+      } catch (error) {
+        thrown = { error };
+      }
+      expect(thrown).toBeDefined();
+      expect(thrown?.error).toBe(cause);
+      expect(order).toEqual([
+        'consume-throws',
+        'afterDrain-reentry',
+        'second-native-call',
+        'caller-unsubscribe',
+      ]);
+      // Baseline RED: legacy caller-finally is later than actual reentry.
+      expect(staleObserved).toBe(false);
+    } finally {
+      armed = false;
+      await executor.close();
+    }
+  }
+);
+
+test.each([undefined, null, { reason: 'opaque-entry' }])(
+  'sync terminal covers receiver, beforeConsume, consume and after faults: %j',
+  async (cause) => {
+    for (const phase of [
+      'receiver',
+      'beforeConsume',
+      'consume',
+      'after',
+    ] as const) {
+      let armed = false;
+      let reentered = false;
+      let active = false;
+      let stale = 0;
+      let healthy = 0;
+      const order: string[] = [];
+      let primary: { error: unknown } | undefined;
+      const executor = createExecutor(
+        {
+          beforeConsume: () => {
+            if (armed && !reentered && phase === 'beforeConsume') throw cause;
+          },
+          afterDrain: (failure) => {
+            if (!armed || reentered || !failure) return;
+            reentered = true;
+            order.push('reentry');
+            executor.runSync(() =>
+              executor.session.input(
+                SessionInputMsg.encode(emptyInput(1)),
+                executor.now(),
+                Date.now()
+              )
+            );
+          },
+        },
+        () => {
+          if (armed && !reentered && phase === 'consume') throw cause;
+          if (reentered && active) stale++;
+        }
+      );
+      try {
+        armed = true;
+        try {
+          executor.tryRunSync(
+            () => {
+              active = true;
+              if (phase === 'receiver') throw cause;
+              return executor.session.input(
+                SessionInputMsg.encode(emptyInput(1)),
+                executor.now(),
+                Date.now()
+              );
+            },
+            () => {
+              if (phase === 'after') throw cause;
+            },
+            () => {
+              active = false;
+              order.push('terminal');
+            }
+          );
+        } catch (error) {
+          primary = { error };
+        }
+        expect(primary).toBeDefined();
+        expect(primary?.error).toBe(cause);
+        expect(order).toEqual(['terminal', 'reentry']);
+        expect(stale).toBe(0);
+        armed = false;
+        expect(
+          executor.tryRunSync(
+            () =>
+              executor.session.input(
+                SessionInputMsg.encode(emptyInput(1)),
+                executor.now(),
+                Date.now()
+              ),
+            () => healthy++,
+            () => {}
+          )
+        ).toEqual({ status: 'completed' });
+        expect(healthy).toBe(1);
+      } finally {
+        armed = false;
+        await executor.close();
+      }
+    }
+  }
+);
+
+test('sync busy refusal is typed and performs no factory, after or finish', async () => {
+  const executor = createExecutor({});
+  let calls = 0;
+  let after = 0;
+  let finish = 0;
+  try {
+    executor.runSync(() => {
+      expect(
+        executor.tryRunSync(
+          () => {
+            calls++;
+            return executor.session.tick(executor.now(), Date.now());
+          },
+          () => after++,
+          () => finish++
+        )
+      ).toEqual({
+        status: 'refused',
+        reason: 'busy-queued',
+      });
+      expect(() =>
+        executor.runSync(() =>
+          executor.session.tick(executor.now(), Date.now())
+        )
+      ).toThrow('busy');
+      return executor.session.tick(executor.now(), Date.now());
+    });
+    expect([calls, after, finish]).toEqual([0, 0, 0]);
+    await executor.close();
+    expect(() =>
+      executor.tryRunSync(
+        () => {
+          calls++;
+          return executor.session.tick(executor.now(), Date.now());
+        },
+        undefined,
+        () => finish++
+      )
+    ).toThrow('closed');
+    expect([calls, after, finish]).toEqual([0, 0, 0]);
+  } finally {
+    await executor.close();
+  }
+});
+
+test.each([undefined, null, { reason: 'opaque-primary' }])(
+  'sync finish and telemetry faults cannot replace the primary %j',
+  async (cause) => {
+    const cleanup = { reason: 'unsubscribe' };
+    const reporter = { reason: 'reporter' };
+    let active = false;
+    let stale = false;
+    let reentered = false;
+    let armed = false;
+    let primary: { error: unknown } | undefined;
+    let restoreReport = () => {};
+    const executor = createExecutor(
+      {
+        afterDrain: (failure) => {
+          if (!armed || reentered || !failure) return;
+          reentered = true;
+          executor.runSync(() => {
+            stale = active;
+            return executor.session.input(
+              SessionInputMsg.encode(emptyInput(1)),
+              executor.now(),
+              Date.now()
+            );
+          });
+        },
+      },
+      () => {
+        if (armed && !reentered) throw cause;
+      }
+    );
+    try {
+      const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {
+        throw reporter;
+      });
+      restoreReport = () => report.mockRestore();
+      armed = true;
+      try {
+        executor.tryRunSync(
+          () => {
+            active = true;
+            return executor.session.input(
+              SessionInputMsg.encode(emptyInput(1)),
+              executor.now(),
+              Date.now()
+            );
+          },
+          undefined,
+          () => {
+            active = false;
+            throw cleanup;
+          }
+        );
+      } catch (error) {
+        primary = { error };
+      }
+      expect(primary).toBeDefined();
+      expect(primary?.error).toBe(cause);
+      expect(report).toHaveBeenCalledExactlyOnceWith(cleanup, {
+        surface: 'session.sync-entry.cleanup',
+      });
+      expect(reentered).toBe(true);
+      expect(stale).toBe(false);
+      armed = false;
+      let healthy = 0;
+      expect(
+        executor.tryRunSync(
+          () =>
+            executor.session.input(
+              SessionInputMsg.encode(emptyInput(1)),
+              executor.now(),
+              Date.now()
+            ),
+          () => healthy++,
+          () => {}
+        )
+      ).toEqual({ status: 'completed' });
+      expect(healthy).toBe(1);
+    } finally {
+      armed = false;
+      try {
+        restoreReport();
+      } finally {
+        await executor.close();
+      }
+    }
+  }
+);

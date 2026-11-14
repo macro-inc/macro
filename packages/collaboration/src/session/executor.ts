@@ -48,6 +48,10 @@ export interface ViewApplier {
 export interface ExecutorFailure {
   readonly error: unknown;
 }
+/** Actual pre-entry scheduling result; completed grants no native authority. */
+export type SyncEntrySchedule =
+  | { readonly status: 'refused'; readonly reason: 'busy-queued' }
+  | { readonly status: 'completed' };
 /** Terminal observation of this entry, not durability or native quiescence. */
 export type ExecutorSettlement =
   | { readonly status: 'success'; readonly flags: number }
@@ -376,18 +380,32 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private enqueue(
     call: () => number,
     after?: (flags: number) => void,
-    entry?: SettledEntry
+    entry?: SettledEntry,
+    finish?: () => void
   ): void {
     if (this.closed) return;
     const execute = () => {
-      const flags = call();
-      const tickSequence = this.pendingTickSequence;
-      this.pendingTickSequence = undefined;
-      if (entry) entry.flags = flags;
-      if (entry) this.options.beforeConsume?.(flags, entry.completion);
-      else this.options.beforeConsume?.(flags);
-      this.consume(flags, entry, tickSequence);
-      after?.(flags);
+      try {
+        const flags = call();
+        const tickSequence = this.pendingTickSequence;
+        this.pendingTickSequence = undefined;
+        if (entry) entry.flags = flags;
+        if (entry) this.options.beforeConsume?.(flags, entry.completion);
+        else this.options.beforeConsume?.(flags);
+        this.consume(flags, entry, tickSequence);
+        after?.(flags);
+      } finally {
+        // Entry cleanup must precede FIFO continuation and unlocked afterDrain.
+        try {
+          finish?.();
+        } catch (error) {
+          try {
+            Telemetry.error(error, { surface: 'session.sync-entry.cleanup' });
+          } catch {
+            // Cleanup cannot replace the entry's opaque primary failure.
+          }
+        }
+      }
     };
     const queued = entry
       ? () => {
@@ -499,6 +517,19 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (this.busy || this.queue.length)
       throw new Error('Session executor is busy');
     this.run(call, after);
+  }
+  /** Scheduling outcome only; never native handling or commit evidence. */
+  tryRunSync(
+    call: () => number,
+    after: ((flags: number) => void) | undefined,
+    finish: () => void
+  ): SyncEntrySchedule {
+    if (this.closed || this.closing)
+      throw new Error('Session executor is closed or closing');
+    if (this.busy || this.queue.length)
+      return { status: 'refused', reason: 'busy-queued' };
+    this.enqueue(call, after, undefined, finish);
+    return { status: 'completed' };
   }
   start(): void {
     if (this.started) return;

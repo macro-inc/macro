@@ -58,8 +58,12 @@ Take native tokenizer causes only for an Error packet or an actual FollowUpFaile
 Use `runSettled` for terminal per-entry observation after the outer drain; preserve opaque errors and accepted FIFO, cancel never-started entries at the final closed fence, and never treat settlement as durability or a handoff grant. An opted-in session-authority predicate runs in the queued entry before its call; false settles as session-access cancellation after the outer drain without native input, fabricated flags or consume hooks. Check optional caller admitEntry only after authority; require synchronous primitive booleans and settle false as entry-admission cancellation without changing opaque-error or FIFO behavior.
 Time actual native ticks synchronously through the Telemetry facade; correlate returned snapshot-count spans by document and admission sequence, clear packet context before consumption, and distinguish native tick duration from pure export time.
 Use `runSync` for synchronous compatibility transactions; it rejects busy,
-queued, closing or closed executors before admitting or invoking the call. DOM text
-rejection returns authoritative repair/error output, including malformed UTF-16.
+queued, closing or closed executors before admitting or invoking the call. Use
+`tryRunSync` only when a caller needs the actual pre-entry busy/queued refusal;
+its completed result grants no native handling or commit authority. Finish each
+accepted entry before FIFO continuation and unlocked after-drain callbacks; keep
+cleanup faults secondary to the original failure. DOM text rejection returns
+authoritative repair/error output, including malformed UTF-16.
 
 `ExecutorOptions.onStatus` observes native connection/save status for application
 chrome; keep retry, authorization and persistence decisions in the native core.
