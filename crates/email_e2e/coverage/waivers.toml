@@ -147,6 +147,33 @@ reason = "served by the emulator, never called by the product: an upload session
 entry = "http GET /health"
 reason = "the load balancer's health check, not a function of email; the harness polls it on the service's own port to wait for the start, past the proxy that records"
 
+# ------------------------------------------------------- not reached yet
+#
+# The product does call these; the harness or an emulator cannot yet make
+# the call succeed. Each goes when what its reason names is built.
+
+[[entry_point]]
+entry = "lambda email_refresh_handler"
+reason = "not reached yet: the harness has no runner for this lambda; scenarios put the Refresh and HealthCheck messages it sends on the queue themselves"
+
+[[entry_point]]
+entry = "queue sfs-uploader:SFSUploaderMessage"
+reason = "not reached yet: the worker fetches a contact's photo from a public host only, and a stack has none to offer, so the message can be sent but never handled"
+
+[[entry_point]]
+entry = "gateway refresh_email:PhotoSynced"
+provider = "gmail"
+reason = "not reached yet: on Gmail it follows the photo upload of sfs-uploader:SFSUploaderMessage, which a stack cannot complete"
+
+[[entry_point]]
+entry = "provider outlook:contacts.photo"
+reason = "not reached yet: the Outlook emulator holds no contact photos and answers 404 to every request for one"
+
+[[entry_point]]
+entry = "http PATCH /email/messages/labels"
+provider = "outlook"
+reason = "not reached yet: the route queues its change for the Gmail label worker only, so no Outlook scenario can check a result at the provider"
+
 # ---------------------------------------------------- sign-in, full stack
 
 [[deferred]]
