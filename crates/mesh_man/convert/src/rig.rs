@@ -80,7 +80,13 @@ impl Rig {
                     name(nerve),
                     self.from_cord(
                         neck_y,
-                        &[plexus[0], plexus[1], side.elbow + offset, side.wrist + offset, tip],
+                        &[
+                            plexus[0],
+                            plexus[1],
+                            side.elbow + offset,
+                            side.wrist + offset,
+                            tip,
+                        ],
                     ),
                 ));
             }
@@ -105,7 +111,11 @@ impl Rig {
                 out.push((name(&format!("intercostal_{index}")), path));
             }
 
-            let lumbar = Vec3::new(s * 0.04, bottom + 0.02, self.spine.last().map_or(0.0, |p| p.z));
+            let lumbar = Vec3::new(
+                s * 0.04,
+                bottom + 0.02,
+                self.spine.last().map_or(0.0, |p| p.z),
+            );
             let lumbar_y = lumbar.y + 0.03;
             let back = Vec3::new(0.0, 0.0, -0.035);
             let sciatic = [
@@ -115,7 +125,11 @@ impl Rig {
                 side.knee + back,
             ];
             let mut tibial = sciatic.to_vec();
-            tibial.extend([side.ankle + back * 0.8, side.heel, side.toe + Vec3::new(-s * 0.02, 0.0, -0.02)]);
+            tibial.extend([
+                side.ankle + back * 0.8,
+                side.heel,
+                side.toe + Vec3::new(-s * 0.02, 0.0, -0.02),
+            ]);
             out.push((name("tibial"), self.from_cord(lumbar_y, &tibial)));
             let mut peroneal = sciatic.to_vec();
             peroneal.extend([

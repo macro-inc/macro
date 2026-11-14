@@ -30,6 +30,9 @@ the cell, so layer order is the depth cue.
   CYBORG, NEURAL), drafted in `common.rs` helpers (joints, branching nerve
   trees, a seeded random source) and turned into `Figure`s by `finish`.
 - `src/palette.rs`: each figure's `Look` and its colours.
+- `src/assets.rs` (feature `demo-assets`): decodes the figures made from
+  downloaded meshes, `assets/*.mmf`, written by the standalone `convert/`
+  tool (outside the workspace; format in `convert/src/format.rs`).
 
 ## Recipes
 
@@ -41,6 +44,14 @@ the cell, so layer order is the depth cue.
 - Preview a figure as frames: `cargo run --release -p mesh_man --example
   frames -- XRAY 50 36 4 3750 > x.cast`, then `agg` (nixpkgs
   `asciinema-agg`) to a GIF; it prints the worst render time.
+- Rebuild an asset figure: download the raw assets into the git-ignored
+  `assets-raw/` (BodyParts3D `partof_BP3D_4.0_obj_99.zip` unzipped to
+  `assets-raw/bp3d/obj` plus its `partof_*` lists; three.js `Xbot.glb`,
+  `Soldier.glb`, `Michelle.glb`), then from `crates/mesh_man/convert`
+  `cargo run --release -- anatomical ../assets-raw/bp3d ../assets/anatomical.mmf`
+  or `rigged ../assets-raw/Xbot.glb ../assets/rigged.mmf --animation idle
+  --time 1.0` (`inspect` lists a glTF's animations and joints). Asset
+  nerves keep the mesh man's names, so firing by name works on every figure.
 - Add a nerve: `side_nerves` (or `mesh_man`) in `src/model.rs`; it must
   start at `BRAIN` and stay inside the unit cube (tests check both). Update the
   name list in `Body::nerve_names`' doc. A new nerve moves every hashed key (`Body::nerve_for`).

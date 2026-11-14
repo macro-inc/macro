@@ -9,8 +9,8 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use glam::Vec3;
 
 use super::common::{
-    BRAIN, Draft, HEAD, Rng, SPINE, Seg, Side, TORSO, arc, ellipse, frame, limbs, line,
-    profile_at, ring, simple_bones, spine_at,
+    BRAIN, Draft, HEAD, Rng, SPINE, Seg, Side, TORSO, arc, ellipse, frame, limbs, line, profile_at,
+    ring, simple_bones, spine_at,
 };
 use crate::figure::Core;
 use crate::palette::Look;
@@ -51,7 +51,15 @@ fn torso(draft: &mut Draft) {
     let mut steel: Vec<Vec<Vec3>> = Vec::new();
     for &(y, rx, rz, z) in &TORSO {
         let centre = Vec3::new(0.0, y, z);
-        flesh.push(arc(centre, Vec3::X, Vec3::Z, (rx, rz), -FRAC_PI_2, FRAC_PI_2, 6));
+        flesh.push(arc(
+            centre,
+            Vec3::X,
+            Vec3::Z,
+            (rx, rz),
+            -FRAC_PI_2,
+            FRAC_PI_2,
+            6,
+        ));
         steel.push(arc(
             centre,
             Vec3::X,
@@ -134,7 +142,10 @@ fn head(draft: &mut Draft) {
             centre,
             Vec3::X,
             Vec3::Z,
-            (radii.x * 1.05 * f32::sin(polar), radii.z * 1.05 * f32::sin(polar)),
+            (
+                radii.x * 1.05 * f32::sin(polar),
+                radii.z * 1.05 * f32::sin(polar),
+            ),
             FRAC_PI_2,
             PI + FRAC_PI_2,
             3,
@@ -199,7 +210,10 @@ fn gear(out: &mut Vec<Seg>, centre: Vec3, axis: Vec3, radius: f32) {
         let out_dir = u * angle.cos() + v * angle.sin();
         out.push((centre + out_dir * radius, centre + out_dir * radius * 1.35));
     }
-    ring(out, &ellipse(centre, u, v, (radius * 0.35, radius * 0.35), 6));
+    ring(
+        out,
+        &ellipse(centre, u, v, (radius * 0.35, radius * 0.35), 6),
+    );
 }
 
 /// A piston between two points: a cylinder and a thinner rod with a collar.
@@ -277,10 +291,7 @@ fn machine_limbs(out: &mut Vec<Seg>, side: &Side) {
         };
         let bend = root.lerp(*tip, 0.5) + Vec3::new(s * 0.012, 0.0, 0.0);
         line(out, &[*root, bend, *tip]);
-        ring(
-            out,
-            &ellipse(bend, Vec3::X, Vec3::Y, (0.006, 0.006), 4),
-        );
+        ring(out, &ellipse(bend, Vec3::X, Vec3::Y, (0.006, 0.006), 4));
     }
 
     // Boot: a wedge.
@@ -322,7 +333,11 @@ fn truss(out: &mut Vec<Seg>, a: Vec3, b: Vec3, width: f32, bays: usize) {
     for k in 0..bays {
         let from = a.lerp(b, k as f32 / bays as f32);
         let to = a.lerp(b, (k + 1) as f32 / bays as f32);
-        let (p, q) = if k % 2 == 0 { (left, right) } else { (right, left) };
+        let (p, q) = if k % 2 == 0 {
+            (left, right)
+        } else {
+            (right, left)
+        };
         out.push((from + p, to + q));
     }
 }
@@ -345,11 +360,18 @@ fn machine_bones(out: &mut Vec<Seg>, side: &Side) {
     }
     line(
         out,
-        &[Vec3::new(s * 0.015, 0.62, 0.08), side.shoulder + Vec3::Y * 0.02],
+        &[
+            Vec3::new(s * 0.015, 0.62, 0.08),
+            side.shoulder + Vec3::Y * 0.02,
+        ],
     );
     line(
         out,
-        &[Vec3::new(s * 0.02, 0.1, -0.06), Vec3::new(s * 0.14, 0.09, 0.0), side.hip],
+        &[
+            Vec3::new(s * 0.02, 0.1, -0.06),
+            Vec3::new(s * 0.14, 0.09, 0.0),
+            side.hip,
+        ],
     );
     truss(out, side.shoulder, side.elbow, 0.008, 4);
     truss(out, side.elbow, side.wrist, 0.006, 3);
@@ -513,8 +535,14 @@ fn brain() -> Vec<Seg> {
     ring(&mut out, &corners);
     for k in 1..4 {
         let t = k as f32 / 4.0;
-        out.push((corners[0].lerp(corners[1], t), corners[3].lerp(corners[2], t)));
-        out.push((corners[0].lerp(corners[3], t), corners[1].lerp(corners[2], t)));
+        out.push((
+            corners[0].lerp(corners[1], t),
+            corners[3].lerp(corners[2], t),
+        ));
+        out.push((
+            corners[0].lerp(corners[3], t),
+            corners[1].lerp(corners[2], t),
+        ));
     }
     for k in 0..6 {
         let t = (k as f32 + 0.5) / 6.0;

@@ -63,7 +63,11 @@ fn main() {
                     body.fire(nerve, PulseKind::ToolStart);
                 }
                 if let Some(nerve) = nerves.get((next + nerves.len() / 2) % nerves.len()) {
-                    let kind = if clock.is_multiple_of(3000) { PulseKind::Error } else { PulseKind::ToolResult };
+                    let kind = if clock.is_multiple_of(3000) {
+                        PulseKind::Error
+                    } else {
+                        PulseKind::ToolResult
+                    };
                     body.fire(nerve, kind);
                 }
             }

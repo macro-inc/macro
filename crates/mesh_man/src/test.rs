@@ -274,7 +274,10 @@ fn every_catalog_figure_fits_the_unit_cube_and_has_nerves() {
         let name = figure.name().to_owned();
         assert!(!figure.nerves.is_empty(), "{name} has no nerves");
         for segment in &figure.segments {
-            assert!(inside(segment.a) && inside(segment.b), "{name}: {segment:?}");
+            assert!(
+                inside(segment.a) && inside(segment.b),
+                "{name}: {segment:?}"
+            );
         }
         for (a, b) in figure.brain.iter().chain(&figure.nerve_lines) {
             assert!(inside(*a) && inside(*b), "{name}: {a} {b}");
@@ -299,7 +302,10 @@ fn the_default_figure_is_the_mesh_man() {
 fn cycling_figures_wraps_and_drops_pulses() {
     let a = crate::Figure::builder("A")
         .bone(Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0))
-        .nerve("cord", vec![Vec3::new(0.0, 0.9, 0.0), Vec3::new(0.0, -0.5, 0.0)])
+        .nerve(
+            "cord",
+            vec![Vec3::new(0.0, 0.9, 0.0), Vec3::new(0.0, -0.5, 0.0)],
+        )
         .build();
     let b = crate::Figure::builder("B")
         .skin(Vec3::new(0.0, -1.0, 0.0), Vec3::new(0.0, 1.0, 0.0))
@@ -334,7 +340,10 @@ fn cycling_figures_wraps_and_drops_pulses() {
 fn normalising_scales_to_two_tall_on_the_pelvis() {
     let figure = crate::Figure::builder("N")
         .skin(Vec3::new(10.0, 0.0, 5.0), Vec3::new(10.0, 170.0, 5.0))
-        .nerve("n", vec![Vec3::new(10.0, 160.0, 5.0), Vec3::new(30.0, 100.0, 5.0)])
+        .nerve(
+            "n",
+            vec![Vec3::new(10.0, 160.0, 5.0), Vec3::new(30.0, 100.0, 5.0)],
+        )
         .build_normalised(Vec3::new(10.0, 90.0, 5.0));
     let (low, high) = figure.bounds();
     assert!((low.y + 1.0).abs() < 1e-5 && (high.y - 1.0).abs() < 1e-5);

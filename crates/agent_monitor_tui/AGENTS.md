@@ -55,6 +55,9 @@ times a second, and ticks at `fps` only while something animates.
   and UTC offset; never render with the system clock in a test.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
+- `b` / `B` cycle the BODY figure only on pages that show BODY (monitor and
+  BODY); elsewhere `b` still starts the command line. The `demo-assets`
+  feature (default on this demo branch) adds the mesh man's asset figures.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
 - Box every pane with `theme::pane` or `theme::frame`: `ui::draw` finishes

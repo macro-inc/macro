@@ -8,8 +8,8 @@ use std::f32::consts::{PI, TAU};
 use glam::Vec3;
 
 use super::common::{
-    BRAIN, Branching, Draft, HEAD, HEART, Rng, SPINE, Seg, Side, cord_to, ellipse, frame,
-    limbs, line, profile_at, ring, simple_bones, spine_at, sprout, torso_at,
+    BRAIN, Branching, Draft, HEAD, HEART, Rng, SPINE, Seg, Side, cord_to, ellipse, frame, limbs,
+    line, profile_at, ring, simple_bones, spine_at, sprout, torso_at,
 };
 use crate::figure::Core;
 use crate::palette::Look;
@@ -51,10 +51,7 @@ fn ghost_skin(out: &mut Vec<Seg>, sides: &[Side; 2]) {
         );
         y += 0.12;
     }
-    ring(
-        out,
-        &ellipse(HEAD, Vec3::X, Vec3::Z, (0.085, 0.1), 12),
-    );
+    ring(out, &ellipse(HEAD, Vec3::X, Vec3::Z, (0.085, 0.1), 12));
     for side in sides {
         for (a, b, reference, profile) in limbs(side) {
             let (u, v) = frame(b - a, reference);
@@ -100,7 +97,11 @@ fn arm(side: &Side) -> Limb {
         trunk,
         split: side.elbow + Vec3::new(0.0, 0.02, 0.0),
         hubs: [wrist(0.02), wrist(0.0), wrist(-0.02)],
-        tips: [vec![tips[0], tips[1]], vec![tips[2]], vec![tips[3], tips[4]]],
+        tips: [
+            vec![tips[0], tips[1]],
+            vec![tips[2]],
+            vec![tips[3], tips[4]],
+        ],
         labels: ["radial", "median", "ulnar"],
     }
 }
@@ -120,7 +121,11 @@ fn leg(side: &Side) -> Limb {
         trunk,
         split: side.knee + Vec3::new(0.0, 0.03, -0.02),
         hubs: [ankle(-0.015, 0.02), ankle(0.0, -0.03), ankle(0.02, 0.01)],
-        tips: [vec![toes[0], toes[1]], vec![side.heel], vec![toes[3], toes[4]]],
+        tips: [
+            vec![toes[0], toes[1]],
+            vec![side.heel],
+            vec![toes[3], toes[4]],
+        ],
         labels: ["femoral", "tibial", "peroneal"],
     }
 }
@@ -148,7 +153,10 @@ fn network(draft: &mut Draft, sides: &[Side; 2]) {
             let own_from = limb.trunk.len().saturating_sub(3);
             let own = limb.trunk.get(own_from..).unwrap_or(&[]).to_vec();
             line(&mut draft.nerves, &own);
-            line(&mut draft.nerves, &[*own.last().unwrap_or(&limb.split), limb.split]);
+            line(
+                &mut draft.nerves,
+                &[*own.last().unwrap_or(&limb.split), limb.split],
+            );
 
             for ((hub, tips), label) in limb.hubs.iter().zip(&limb.tips).zip(limb.labels) {
                 line(&mut draft.nerves, &[limb.split, *hub]);
@@ -179,7 +187,12 @@ fn network(draft: &mut Draft, sides: &[Side; 2]) {
                     &mut leaves,
                 );
                 let step = (leaves.len() / TWIGS_PER_GROUP).max(1);
-                for (k, leaf) in leaves.iter().step_by(step).take(TWIGS_PER_GROUP).enumerate() {
+                for (k, leaf) in leaves
+                    .iter()
+                    .step_by(step)
+                    .take(TWIGS_PER_GROUP)
+                    .enumerate()
+                {
                     let mut points = limb.trunk.clone();
                     points.push(limb.split);
                     points.extend(leaf.iter().copied());
@@ -250,15 +263,24 @@ fn network(draft: &mut Draft, sides: &[Side; 2]) {
         for (name, rest) in [
             (
                 "optic",
-                vec![Vec3::new(s * 0.022, 0.89, 0.045), Vec3::new(s * 0.032, 0.885, 0.085)],
+                vec![
+                    Vec3::new(s * 0.022, 0.89, 0.045),
+                    Vec3::new(s * 0.032, 0.885, 0.085),
+                ],
             ),
             (
                 "facial",
-                vec![Vec3::new(s * 0.06, 0.85, 0.01), Vec3::new(s * 0.05, 0.81, 0.07)],
+                vec![
+                    Vec3::new(s * 0.06, 0.85, 0.01),
+                    Vec3::new(s * 0.05, 0.81, 0.07),
+                ],
             ),
             (
                 "trigeminal",
-                vec![Vec3::new(s * 0.05, 0.87, 0.04), Vec3::new(s * 0.03, 0.84, 0.09)],
+                vec![
+                    Vec3::new(s * 0.05, 0.87, 0.04),
+                    Vec3::new(s * 0.03, 0.84, 0.09),
+                ],
             ),
         ] {
             let mut points = vec![BRAIN];
@@ -345,10 +367,7 @@ fn brain() -> Vec<Seg> {
             ),
         );
     }
-    line(
-        &mut out,
-        &[BRAIN, Vec3::new(0.0, 0.85, -0.025), SPINE[0]],
-    );
+    line(&mut out, &[BRAIN, Vec3::new(0.0, 0.85, -0.025), SPINE[0]]);
     let _ = TAU;
     out
 }

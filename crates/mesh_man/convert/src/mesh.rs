@@ -22,7 +22,11 @@ pub struct SliceSpec {
 }
 
 impl Mesh {
-    pub fn append(&mut self, points: impl Iterator<Item = Vec3>, triangles: impl Iterator<Item = [u32; 3]>) {
+    pub fn append(
+        &mut self,
+        points: impl Iterator<Item = Vec3>,
+        triangles: impl Iterator<Item = [u32; 3]>,
+    ) {
         let base = self.positions.len() as u32;
         self.positions.extend(points);
         self.triangles
@@ -49,7 +53,8 @@ impl Mesh {
                 *v = remap[*v as usize];
             }
         }
-        self.triangles.retain(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2]);
+        self.triangles
+            .retain(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2]);
     }
 
     pub fn map(&mut self, f: impl Fn(Vec3) -> Vec3) {
@@ -84,7 +89,11 @@ impl Mesh {
     /// mesh's height: a long bone's joint end.
     pub fn end_centroid(&self, top: bool, share: f32) -> Vec3 {
         let (lo, hi) = self.bounds();
-        let cut = if top { hi.y - (hi.y - lo.y) * share } else { lo.y + (hi.y - lo.y) * share };
+        let cut = if top {
+            hi.y - (hi.y - lo.y) * share
+        } else {
+            lo.y + (hi.y - lo.y) * share
+        };
         let picked: Vec<Vec3> = self
             .positions
             .iter()
@@ -128,7 +137,13 @@ impl Mesh {
 
     /// Outlines of one part: a slice through its centre on each axis in
     /// `axes`, plus more every `step` along an axis where the part is long.
-    pub fn part_outlines(&self, axes: [bool; 3], step: f32, tolerance: f32, min_extent: f32) -> Vec<Vec<Vec3>> {
+    pub fn part_outlines(
+        &self,
+        axes: [bool; 3],
+        step: f32,
+        tolerance: f32,
+        min_extent: f32,
+    ) -> Vec<Vec<Vec3>> {
         let (lo, hi) = self.bounds();
         let centre = (lo + hi) * 0.5;
         let mut out = Vec::new();
@@ -137,7 +152,11 @@ impl Mesh {
                 continue;
             }
             let half = (hi[axis] - lo[axis]) / 2.0;
-            let extra = if step > 0.0 { ((half - step * 0.5) / step).floor().max(0.0) as i32 } else { 0 };
+            let extra = if step > 0.0 {
+                ((half - step * 0.5) / step).floor().max(0.0) as i32
+            } else {
+                0
+            };
             for k in -extra..=extra {
                 let value = centre[axis] + k as f32 * step;
                 for line in self.slice(axis, value) {
@@ -222,7 +241,10 @@ pub fn simplify(points: &[Vec3], tolerance: f32) -> Vec<Vec3> {
     if points.len() < 3 {
         return points.to_vec();
     }
-    let closed = points.first().zip(points.last()).is_some_and(|(a, b)| a.distance(*b) < 1e-6);
+    let closed = points
+        .first()
+        .zip(points.last())
+        .is_some_and(|(a, b)| a.distance(*b) < 1e-6);
     if closed {
         // Split at the point farthest from the start, simplify both halves.
         let far = points

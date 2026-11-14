@@ -56,7 +56,13 @@ fn contours(out: &mut Vec<Seg>, sides: &[Side; 2]) {
         let (rx, rz, z) = torso_at(y);
         ring(
             out,
-            &ellipse(Vec3::new(0.0, y, z), Vec3::X, Vec3::Z, (rx, rz), TORSO_SLICE),
+            &ellipse(
+                Vec3::new(0.0, y, z),
+                Vec3::X,
+                Vec3::Z,
+                (rx, rz),
+                TORSO_SLICE,
+            ),
         );
         y += SLICE_STEP;
     }
@@ -327,7 +333,10 @@ fn ribcage(out: &mut Vec<Seg>) {
             Vec3::new(-0.022, 0.625, 0.08),
         ],
     );
-    out.push((Vec3::new(-0.016, 0.585, 0.088), Vec3::new(0.016, 0.585, 0.088)));
+    out.push((
+        Vec3::new(-0.016, 0.585, 0.088),
+        Vec3::new(0.016, 0.585, 0.088),
+    ));
 
     for side in Side::both() {
         let s = side.s;
@@ -380,17 +389,11 @@ fn pelvis(out: &mut Vec<Seg>) {
         for point in crest.iter().step_by(2) {
             out.push((*point, socket.lerp(*point, 0.15)));
         }
-        ring(
-            out,
-            &ellipse(socket, Vec3::Y, Vec3::Z, (0.026, 0.026), 8),
-        );
+        ring(out, &ellipse(socket, Vec3::Y, Vec3::Z, (0.026, 0.026), 8));
 
         // Pubis to the symphysis, ischium below, and the hole between.
         let symphysis = Vec3::new(s * 0.008, -0.075, 0.065);
-        line(
-            out,
-            &[socket + Vec3::new(-s * 0.02, 0.0, 0.02), symphysis],
-        );
+        line(out, &[socket + Vec3::new(-s * 0.02, 0.0, 0.02), symphysis]);
         line(
             out,
             &[
@@ -493,7 +496,10 @@ fn leg_bones(out: &mut Vec<Seg>, side: &Side) {
     // Femur: head in the socket, neck to the trochanter, shaft to the knee.
     let head = side.hip + Vec3::new(-s * 0.012, 0.0, 0.0);
     let trochanter = Vec3::new(s * 0.135, -0.07, -0.005);
-    line(out, &[head, head + Vec3::new(s * 0.03, -0.02, 0.0), trochanter]);
+    line(
+        out,
+        &[head, head + Vec3::new(s * 0.03, -0.02, 0.0), trochanter],
+    );
     ring(out, &ellipse(head, Vec3::X, Vec3::Y, (0.018, 0.018), 8));
     let condyles = side.knee + Vec3::Y * 0.025;
     long_bone(out, trochanter, condyles, 0.009, 0.014);
@@ -527,7 +533,13 @@ fn leg_bones(out: &mut Vec<Seg>, side: &Side) {
         plateau + Vec3::new(-0.035, 0.0, 0.0),
         plateau + Vec3::new(0.035, 0.0, 0.0),
     ));
-    long_bone(out, plateau, side.ankle + Vec3::new(-s * 0.01, 0.0, 0.0), 0.007, 0.012);
+    long_bone(
+        out,
+        plateau,
+        side.ankle + Vec3::new(-s * 0.01, 0.0, 0.0),
+        0.007,
+        0.012,
+    );
     line(
         out,
         &[
@@ -742,7 +754,11 @@ fn brain_stem() -> Vec<Seg> {
     let mut out = Vec::new();
     line(
         &mut out,
-        &[BRAIN, Vec3::new(0.0, 0.86, -0.02), Vec3::new(0.0, 0.81, -0.02)],
+        &[
+            BRAIN,
+            Vec3::new(0.0, 0.86, -0.02),
+            Vec3::new(0.0, 0.81, -0.02),
+        ],
     );
     ring(
         &mut out,

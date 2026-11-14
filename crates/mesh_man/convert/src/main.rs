@@ -163,7 +163,10 @@ impl Bp3d {
                     .positions
                     .chunks_exact(3)
                     .map(|p| Vec3::new(p[0], p[2], -p[1]));
-                mesh.append(points, m.indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]));
+                mesh.append(
+                    points,
+                    m.indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]),
+                );
             }
         }
         mesh.weld();
@@ -172,11 +175,46 @@ impl Bp3d {
 }
 
 const BONE_WORDS: &[&str] = &[
-    "bone", "vertebra", " rib", "femur", "tibia", "fibula", "patella", "humerus", "radius",
-    "ulna", "scapula", "clavicle", "sternum", "sacrum", "coccyx", "phalanx", "metacarpal",
-    "metatarsal", "scaphoid", "lunate", "triquetral", "pisiform", "trapezium", "trapezoid",
-    "capitate", "hamate", "talus", "calcaneus", "cuboid", "cuneiform", "navicular", "maxilla",
-    "mandible", "vomer", "ethmoid", "xiphoid", "costal cartilage", "manubrium", "atlas", "axis",
+    "bone",
+    "vertebra",
+    " rib",
+    "femur",
+    "tibia",
+    "fibula",
+    "patella",
+    "humerus",
+    "radius",
+    "ulna",
+    "scapula",
+    "clavicle",
+    "sternum",
+    "sacrum",
+    "coccyx",
+    "phalanx",
+    "metacarpal",
+    "metatarsal",
+    "scaphoid",
+    "lunate",
+    "triquetral",
+    "pisiform",
+    "trapezium",
+    "trapezoid",
+    "capitate",
+    "hamate",
+    "talus",
+    "calcaneus",
+    "cuboid",
+    "cuneiform",
+    "navicular",
+    "maxilla",
+    "mandible",
+    "vomer",
+    "ethmoid",
+    "xiphoid",
+    "costal cartilage",
+    "manubrium",
+    "atlas",
+    "axis",
 ];
 const NOT_BONE: &[&str] = &[
     "artery", "vein", "muscle", "nerve", "ligament", "branch", "disk", "fascia", "tract",
@@ -218,7 +256,11 @@ fn anatomical(root: &Path, out_path: &Path, name: &str) -> Result<(), Box<dyn st
     let brain_ids: Vec<String> = nervous
         .iter()
         .filter(|id| {
-            let n = bp.names.get(*id).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+            let n = bp
+                .names
+                .get(*id)
+                .map(|s| s.to_ascii_lowercase())
+                .unwrap_or_default();
             !n.contains("ventricle") && !n.contains("canal") && !n.contains("aqueduct")
         })
         .cloned()
@@ -243,8 +285,14 @@ fn anatomical(root: &Path, out_path: &Path, name: &str) -> Result<(), Box<dyn st
         let femur = piece(&format!("{label} femur"));
         let tibia = piece(&format!("{label} tibia"));
         let calcaneus = piece(&format!("{label} calcaneus"));
-        let fingers = ["thumb", "index finger", "middle finger", "ring finger", "little finger"]
-            .map(|f| piece(&format!("distal phalanx of {label} {f}")).lowest());
+        let fingers = [
+            "thumb",
+            "index finger",
+            "middle finger",
+            "ring finger",
+            "little finger",
+        ]
+        .map(|f| piece(&format!("distal phalanx of {label} {f}")).lowest());
         let toe = piece(&format!("distal phalanx of {label} big toe")).centroid();
         Side {
             shoulder: humerus.end_centroid(true, 0.06),
@@ -263,7 +311,9 @@ fn anatomical(root: &Path, out_path: &Path, name: &str) -> Result<(), Box<dyn st
     let right = side("right");
 
     let mut spine: Vec<Vec3> = bp
-        .ids_where(|n| n.ends_with(" vertebra") && !n.contains("disk") || n == "atlas" || n == "axis")
+        .ids_where(|n| {
+            n.ends_with(" vertebra") && !n.contains("disk") || n == "atlas" || n == "axis"
+        })
         .iter()
         .map(|id| {
             let mut m = bp.load(std::slice::from_ref(id));
@@ -332,24 +382,45 @@ fn inspect(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 .sampler()
                 .input()
                 .max()
-                .and_then(|v| v.as_array().and_then(|a| a.first()).and_then(|x| x.as_f64()))
+                .and_then(|v| {
+                    v.as_array()
+                        .and_then(|a| a.first())
+                        .and_then(|x| x.as_f64())
+                })
                 .unwrap_or(0.0) as f32;
             end = end.max(max);
         }
         println!("animation {:?} {end:.2}s", animation.name());
     }
     for skin in doc.skins() {
-        let joints: Vec<String> = skin.joints().map(|j| j.name().unwrap_or("?").to_owned()).collect();
-        println!("skin {:?}: {} joints: {}", skin.name(), joints.len(), joints.join(" "));
+        let joints: Vec<String> = skin
+            .joints()
+            .map(|j| j.name().unwrap_or("?").to_owned())
+            .collect();
+        println!(
+            "skin {:?}: {} joints: {}",
+            skin.name(),
+            joints.len(),
+            joints.join(" ")
+        );
     }
     for mesh in doc.meshes() {
-        println!("mesh {:?} {} primitives", mesh.name(), mesh.primitives().count());
+        println!(
+            "mesh {:?} {} primitives",
+            mesh.name(),
+            mesh.primitives().count()
+        );
     }
     Ok(())
 }
 
 /// Local transforms of every node, at an animation time.
-fn posed_locals(doc: &gltf::Document, buffers: &[gltf::buffer::Data], animation: Option<&str>, time: f32) -> Vec<(Vec3, Quat, Vec3)> {
+fn posed_locals(
+    doc: &gltf::Document,
+    buffers: &[gltf::buffer::Data],
+    animation: Option<&str>,
+    time: f32,
+) -> Vec<(Vec3, Quat, Vec3)> {
     let mut locals: Vec<(Vec3, Quat, Vec3)> = doc
         .nodes()
         .map(|node| {
@@ -366,16 +437,25 @@ fn posed_locals(doc: &gltf::Document, buffers: &[gltf::buffer::Data], animation:
     };
     for channel in anim.channels() {
         let reader = channel.reader(|b| Some(&buffers[b.index()]));
-        let Some(inputs) = reader.read_inputs() else { continue };
+        let Some(inputs) = reader.read_inputs() else {
+            continue;
+        };
         let inputs: Vec<f32> = inputs.collect();
-        let Some(outputs) = reader.read_outputs() else { continue };
+        let Some(outputs) = reader.read_outputs() else {
+            continue;
+        };
         // Find the keyframe pair around `time`.
         let k = inputs.iter().rposition(|t| *t <= time).unwrap_or(0);
         let k1 = (k + 1).min(inputs.len().saturating_sub(1));
         let span = inputs[k1] - inputs[k];
-        let f = if span > 0.0 { ((time - inputs[k]) / span).clamp(0.0, 1.0) } else { 0.0 };
+        let f = if span > 0.0 {
+            ((time - inputs[k]) / span).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         let node = channel.target().node().index();
-        let cubic = channel.sampler().interpolation() == gltf::animation::Interpolation::CubicSpline;
+        let cubic =
+            channel.sampler().interpolation() == gltf::animation::Interpolation::CubicSpline;
         let pick = |i: usize| if cubic { i * 3 + 1 } else { i };
         match outputs {
             gltf::animation::util::ReadOutputs::Translations(it) => {
@@ -419,7 +499,12 @@ fn rigged(
         }
     }
     let mut global = vec![None::<Mat4>; parent.len()];
-    fn resolve(i: usize, parent: &[Option<usize>], locals: &[(Vec3, Quat, Vec3)], global: &mut [Option<Mat4>]) -> Mat4 {
+    fn resolve(
+        i: usize,
+        parent: &[Option<usize>],
+        locals: &[(Vec3, Quat, Vec3)],
+        global: &mut [Option<Mat4>],
+    ) -> Mat4 {
         if let Some(m) = global[i] {
             return m;
         }
@@ -435,7 +520,10 @@ fn rigged(
     for i in 0..parent.len() {
         resolve(i, &parent, &locals, &mut global);
     }
-    let global: Vec<Mat4> = global.into_iter().map(|m| m.unwrap_or(Mat4::IDENTITY)).collect();
+    let global: Vec<Mat4> = global
+        .into_iter()
+        .map(|m| m.unwrap_or(Mat4::IDENTITY))
+        .collect();
 
     // Skinned mesh vertices.
     let mut mesh = Mesh::default();
@@ -453,17 +541,23 @@ fn rigged(
                     .unwrap_or_default();
                 skin.joints()
                     .enumerate()
-                    .map(|(k, j)| global[j.index()] * ibms.get(k).copied().unwrap_or(Mat4::IDENTITY))
+                    .map(|(k, j)| {
+                        global[j.index()] * ibms.get(k).copied().unwrap_or(Mat4::IDENTITY)
+                    })
                     .collect()
             }
             None => Vec::new(),
         };
         for primitive in gmesh.primitives() {
             let reader = primitive.reader(|b| Some(&buffers[b.index()]));
-            let Some(positions) = reader.read_positions() else { continue };
+            let Some(positions) = reader.read_positions() else {
+                continue;
+            };
             let positions: Vec<Vec3> = positions.map(Vec3::from).collect();
-            let joints: Option<Vec<[u16; 4]>> = reader.read_joints(0).map(|j| j.into_u16().collect());
-            let weights: Option<Vec<[f32; 4]>> = reader.read_weights(0).map(|w| w.into_f32().collect());
+            let joints: Option<Vec<[u16; 4]>> =
+                reader.read_joints(0).map(|j| j.into_u16().collect());
+            let weights: Option<Vec<[f32; 4]>> =
+                reader.read_weights(0).map(|w| w.into_f32().collect());
             let posed: Vec<Vec3> = positions
                 .iter()
                 .enumerate()
@@ -485,12 +579,19 @@ fn rigged(
                 Some(it) => it.into_u32().collect(),
                 None => (0..posed.len() as u32).collect(),
             };
-            mesh.append(posed.into_iter(), indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]));
+            mesh.append(
+                posed.into_iter(),
+                indices.chunks_exact(3).map(|t| [t[0], t[1], t[2]]),
+            );
         }
         if let Some(skin) = skin {
             let joint_set: HashSet<usize> = skin.joints().map(|j| j.index()).collect();
             for j in skin.joints() {
-                let name = j.name().unwrap_or("").replace("mixamorig:", "").replace("mixamorig_", "");
+                let name = j
+                    .name()
+                    .unwrap_or("")
+                    .replace("mixamorig:", "")
+                    .replace("mixamorig_", "");
                 let p = global[j.index()].transform_point3(Vec3::ZERO);
                 joint_world.insert(name, p);
                 if let Some(pi) = parent[j.index()]
@@ -505,7 +606,10 @@ fn rigged(
 
     // Normalise on the mesh height, centred on the hips joint.
     let (low, high) = mesh.bounds();
-    let hips = joint_world.get("Hips").copied().unwrap_or((low + high) * 0.5);
+    let hips = joint_world
+        .get("Hips")
+        .copied()
+        .unwrap_or((low + high) * 0.5);
     let scale = 2.0 / (high.y - low.y);
     let to_figure = move |p: Vec3| {
         let q = (p - Vec3::new(hips.x, low.y, hips.z)) * scale;
@@ -515,14 +619,22 @@ fn rigged(
     for p in joint_world.values_mut() {
         *p = to_figure(*p);
     }
-    let bones: Vec<(Vec3, Vec3)> = bones.into_iter().map(|(a, b)| (to_figure(a), to_figure(b))).collect();
+    let bones: Vec<(Vec3, Vec3)> = bones
+        .into_iter()
+        .map(|(a, b)| (to_figure(a), to_figure(b)))
+        .collect();
 
-    let j = |n: &str| joint_world.get(n).copied().unwrap_or_else(|| {
-        eprintln!("missing joint {n}");
-        Vec3::ZERO
-    });
+    let j = |n: &str| {
+        joint_world.get(n).copied().unwrap_or_else(|| {
+            eprintln!("missing joint {n}");
+            Vec3::ZERO
+        })
+    };
     let head = j("Head");
-    let top = joint_world.get("HeadTop_End").copied().unwrap_or(head + Vec3::Y * 0.2);
+    let top = joint_world
+        .get("HeadTop_End")
+        .copied()
+        .unwrap_or(head + Vec3::Y * 0.2);
     let side = |l: &str| Side {
         shoulder: j(&format!("{l}Arm")),
         elbow: j(&format!("{l}ForeArm")),
@@ -538,8 +650,13 @@ fn rigged(
         knee: j(&format!("{l}Leg")),
         ankle: j(&format!("{l}Foot")),
         heel: j(&format!("{l}Foot")) + Vec3::new(0.0, -0.04, -0.03),
-        toe: joint_world.get(&format!("{l}Toe_End")).copied().unwrap_or(j(&format!("{l}ToeBase"))),
-        eye: head.lerp(top, 0.45) + Vec3::Z * 0.09 + Vec3::X * if l == "Left" { 0.03 } else { -0.03 },
+        toe: joint_world
+            .get(&format!("{l}Toe_End"))
+            .copied()
+            .unwrap_or(j(&format!("{l}ToeBase"))),
+        eye: head.lerp(top, 0.45)
+            + Vec3::Z * 0.09
+            + Vec3::X * if l == "Left" { 0.03 } else { -0.03 },
     };
     let brain = head.lerp(top, 0.6);
     let spine = vec![
@@ -571,8 +688,24 @@ fn rigged(
     let joint_mark = 0.018;
     let mut bone_lines: Vec<Vec<Vec3>> = bones.iter().map(|(a, b)| vec![*a, *b]).collect();
     for name in [
-        "Hips", "Spine", "Spine1", "Spine2", "Neck", "Head", "LeftArm", "LeftForeArm", "LeftHand", "RightArm",
-        "RightForeArm", "RightHand", "LeftUpLeg", "LeftLeg", "LeftFoot", "RightUpLeg", "RightLeg", "RightFoot",
+        "Hips",
+        "Spine",
+        "Spine1",
+        "Spine2",
+        "Neck",
+        "Head",
+        "LeftArm",
+        "LeftForeArm",
+        "LeftHand",
+        "RightArm",
+        "RightForeArm",
+        "RightHand",
+        "LeftUpLeg",
+        "LeftLeg",
+        "LeftFoot",
+        "RightUpLeg",
+        "RightLeg",
+        "RightFoot",
     ] {
         if let Some(p) = joint_world.get(name) {
             let d = joint_mark;
@@ -591,7 +724,11 @@ fn rigged(
     for (u, v) in [(Vec3::X, Vec3::Z), (Vec3::Y, Vec3::Z), (Vec3::X, Vec3::Y)] {
         bone_lines.push(rig::ellipse(skull_centre, u, v, 0.075, 0.09, 18));
     }
-    bone_lines.extend(rig::rib_cage(j("Spine2") - Vec3::Z * 0.02, j("Spine") - Vec3::Z * 0.02, &mesh));
+    bone_lines.extend(rig::rib_cage(
+        j("Spine2") - Vec3::Z * 0.02,
+        j("Spine") - Vec3::Z * 0.02,
+        &mesh,
+    ));
     out.lines(Kind::Bone, &bone_lines);
     // A small brain: three wavy loops in the skull.
     out.lines(Kind::Brain, &rig::brain_loops(brain, 0.055));
