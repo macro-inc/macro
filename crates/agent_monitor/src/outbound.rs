@@ -3,6 +3,7 @@
 //! them are push-driven (a child process's stdout, or file-system
 //! notifications); a 30 s reconcile only re-checks what is already known.
 
+pub mod demo;
 pub mod hc;
 mod tail;
 mod watch;

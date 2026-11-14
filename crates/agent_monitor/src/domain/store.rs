@@ -1,0 +1,579 @@
+//! The single-writer store. Sources send observations into one bounded mpsc;
+//! one reducer task applies them to [`Facts`], rebuilds agents, diffs them
+//! against the rows it published, and publishes sequenced updates on a
+//! broadcast channel. Board totals also go out on a `watch` channel.
+//!
+//! A subscriber copies the snapshot and subscribes to the broadcast under the
+//! same lock the reducer publishes under, so it never misses an update between
+//! the two.
+
+#[cfg(test)]
+mod test;
+
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
+
+use chrono::{Local, TimeDelta, Timelike};
+use tokio::sync::{broadcast, mpsc, watch};
+use tokio::time::{Instant, MissedTickBehavior};
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+use crate::domain::clock::Clock;
+use crate::domain::join::{FactEvent, Facts, MinuteCounts, build_agents, minute_counts};
+use crate::domain::model::{
+    ACTIVITY_MINUTES, Agent, AgentId, Cost, Severity, Snapshot, SourceHealth, SourceKind, Status,
+    TapeEvent, TapeKind, Timestamp, Totals, Update, UpdateKind,
+};
+use crate::domain::observation::{Change, FactKey, Observation, TranscriptEventKind};
+
+/// Store sizes and timings.
+#[derive(Clone, Debug)]
+pub struct StoreConfig {
+    /// Observations buffered between sources and the reducer.
+    pub observation_capacity: usize,
+    /// Updates buffered per subscriber before it lags and is re-snapshotted.
+    pub update_capacity: usize,
+    /// Tape lines kept.
+    pub tape_capacity: usize,
+    /// Tape lines a new subscriber receives.
+    pub snapshot_tape: usize,
+    /// How long the reducer gathers a burst before publishing it, so a busy
+    /// agent yields one upsert per window.
+    pub coalesce: Duration,
+    /// How often time-driven state (activity minutes, recency, totals,
+    /// source health) is recomputed.
+    pub tick: Duration,
+    /// How often an idle store publishes a heartbeat.
+    pub heartbeat: Duration,
+    /// Transcript records older than this do not become tape lines, so a
+    /// startup index does not flood the tape.
+    pub tape_recent: TimeDelta,
+}
+
+impl Default for StoreConfig {
+    fn default() -> Self {
+        Self {
+            observation_capacity: 4096,
+            update_capacity: 4096,
+            tape_capacity: 5000,
+            snapshot_tape: 500,
+            coalesce: Duration::from_millis(50),
+            tick: Duration::from_secs(1),
+            heartbeat: Duration::from_secs(15),
+            tape_recent: TimeDelta::minutes(5),
+        }
+    }
+}
+
+/// What a new subscriber starts from.
+#[derive(Debug)]
+pub struct Subscription {
+    /// The current state as a [`UpdateKind::Snapshot`]; its `seq` is the last
+    /// update it includes.
+    pub snapshot: Arc<Update>,
+    /// Every update after the snapshot, in order.
+    pub updates: broadcast::Receiver<Arc<Update>>,
+}
+
+/// The published state.
+#[derive(Debug, Default)]
+struct State {
+    seq: u64,
+    agents: BTreeMap<AgentId, Agent>,
+    tape: VecDeque<TapeEvent>,
+    totals: Totals,
+    sources: BTreeMap<SourceKind, SourceHealth>,
+}
+
+#[derive(Debug)]
+struct Shared {
+    config: StoreConfig,
+    state: Mutex<State>,
+    updates: broadcast::Sender<Arc<Update>>,
+    totals: watch::Sender<Arc<Totals>>,
+}
+
+impl Shared {
+    fn lock(&self) -> MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Applies each change to the published state and broadcasts it, under
+    /// one lock so subscribers see a gapless sequence.
+    fn publish(&self, kinds: Vec<UpdateKind>) {
+        if kinds.is_empty() {
+            return;
+        }
+
+        let mut state = self.lock();
+        for kind in kinds {
+            state.seq += 1;
+            let seq = state.seq;
+            let kind = match kind {
+                UpdateKind::Event(mut event) => {
+                    event.seq = seq;
+                    if state.tape.len() == self.config.tape_capacity {
+                        state.tape.pop_front();
+                    }
+                    state.tape.push_back(event.clone());
+                    UpdateKind::Event(event)
+                }
+                kind => {
+                    apply_to_state(&mut state, &kind);
+                    kind
+                }
+            };
+            // No receivers is fine: nobody is watching yet.
+            let _ = self.updates.send(Arc::new(Update { seq, kind }));
+        }
+    }
+
+    fn snapshot(&self, state: &State) -> Arc<Update> {
+        let skip = state.tape.len().saturating_sub(self.config.snapshot_tape);
+        Arc::new(Update {
+            seq: state.seq,
+            kind: UpdateKind::Snapshot(Snapshot {
+                agents: state.agents.values().cloned().collect(),
+                tape: state.tape.iter().skip(skip).cloned().collect(),
+                totals: state.totals.clone(),
+                sources: state.sources.values().cloned().collect(),
+            }),
+        })
+    }
+}
+
+fn apply_to_state(state: &mut State, kind: &UpdateKind) {
+    match kind {
+        UpdateKind::Upsert(agent) => {
+            state.agents.insert(agent.id.clone(), agent.clone());
+        }
+        UpdateKind::Removed(id) => {
+            state.agents.remove(id);
+        }
+        UpdateKind::Totals(totals) => state.totals = totals.clone(),
+        UpdateKind::Source(health) => {
+            state.sources.insert(health.source, health.clone());
+        }
+        UpdateKind::Snapshot(_) | UpdateKind::Event(_) | UpdateKind::Heartbeat(_) => {}
+    }
+}
+
+/// A handle to the store: cheap to clone, shared by sources and the server.
+#[derive(Clone, Debug)]
+pub struct Store {
+    shared: Arc<Shared>,
+    observations: mpsc::Sender<Observation>,
+}
+
+impl Store {
+    /// Starts the reducer on `tracker`; it runs until `cancel` fires or every
+    /// observation sender is dropped.
+    pub fn start(
+        config: StoreConfig,
+        clock: Arc<dyn Clock>,
+        tracker: &TaskTracker,
+        cancel: CancellationToken,
+    ) -> Self {
+        let (observations, receiver) = mpsc::channel(config.observation_capacity);
+        let (updates, _) = broadcast::channel(config.update_capacity);
+        let (totals, _) = watch::channel(Arc::new(Totals::default()));
+        let shared = Arc::new(Shared {
+            config,
+            state: Mutex::new(State::default()),
+            updates,
+            totals,
+        });
+
+        let reducer = Reducer::new(shared.clone(), clock);
+        tracker.spawn(reducer.run(receiver, cancel));
+        Self {
+            shared,
+            observations,
+        }
+    }
+
+    /// Where sources send observations.
+    pub fn observations(&self) -> mpsc::Sender<Observation> {
+        self.observations.clone()
+    }
+
+    /// The current snapshot and every update after it.
+    pub fn subscribe(&self) -> Subscription {
+        let state = self.shared.lock();
+        Subscription {
+            snapshot: self.shared.snapshot(&state),
+            updates: self.shared.updates.subscribe(),
+        }
+    }
+
+    /// The board numbers, recomputed at most once a tick.
+    pub fn totals(&self) -> watch::Receiver<Arc<Totals>> {
+        self.shared.totals.subscribe()
+    }
+
+    /// One agent's current row.
+    pub fn agent(&self, id: &AgentId) -> Option<Agent> {
+        self.shared.lock().agents.get(id).cloned()
+    }
+
+    /// Every source's health.
+    pub fn sources(&self) -> Vec<SourceHealth> {
+        self.shared.lock().sources.values().cloned().collect()
+    }
+
+    /// How many subscribers are attached.
+    pub fn subscribers(&self) -> usize {
+        self.shared.updates.receiver_count()
+    }
+}
+
+/// The single writer.
+struct Reducer {
+    shared: Arc<Shared>,
+    clock: Arc<dyn Clock>,
+    facts: Facts,
+    /// The rows last published.
+    published: BTreeMap<AgentId, Agent>,
+    /// Transcript records not yet turned into tape lines.
+    pending_events: Vec<FactEvent>,
+    /// Source health as reported, merged with when each last sent anything.
+    health: BTreeMap<SourceKind, SourceHealth>,
+    last_event: BTreeMap<SourceKind, Timestamp>,
+    published_health: BTreeMap<SourceKind, SourceHealth>,
+    /// Open tool calls' names by id, so a failure line can name its tool.
+    tool_names: HashMap<String, String>,
+}
+
+impl Reducer {
+    fn new(shared: Arc<Shared>, clock: Arc<dyn Clock>) -> Self {
+        Self {
+            shared,
+            clock,
+            facts: Facts::default(),
+            published: BTreeMap::new(),
+            pending_events: Vec::new(),
+            health: BTreeMap::new(),
+            last_event: BTreeMap::new(),
+            published_health: BTreeMap::new(),
+            tool_names: HashMap::new(),
+        }
+    }
+
+    async fn run(mut self, mut receiver: mpsc::Receiver<Observation>, cancel: CancellationToken) {
+        let config = self.shared.config.clone();
+        let mut tick = tokio::time::interval(config.tick);
+        tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        let mut heartbeat =
+            tokio::time::interval_at(Instant::now() + config.heartbeat, config.heartbeat);
+        heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+        loop {
+            tokio::select! {
+                () = cancel.cancelled() => break,
+                observation = receiver.recv() => {
+                    let Some(observation) = observation else { break };
+                    let open = self.gather(observation, &mut receiver, config.coalesce).await;
+                    self.reduce();
+                    if !open {
+                        break;
+                    }
+                }
+                _ = tick.tick() => {
+                    self.reduce();
+                    self.publish_totals();
+                    self.publish_health();
+                }
+                _ = heartbeat.tick() => {
+                    let now = self.clock.now();
+                    self.shared.publish(vec![UpdateKind::Heartbeat(now)]);
+                }
+            }
+        }
+    }
+
+    /// Applies `first` and everything else that arrives within the coalescing
+    /// window. Returns false once every sender is gone.
+    async fn gather(
+        &mut self,
+        first: Observation,
+        receiver: &mut mpsc::Receiver<Observation>,
+        window: Duration,
+    ) -> bool {
+        self.apply(first);
+        let deadline = tokio::time::sleep(window);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                biased;
+                () = &mut deadline => return true,
+                observation = receiver.recv() => match observation {
+                    Some(observation) => self.apply(observation),
+                    None => return false,
+                },
+            }
+        }
+    }
+
+    fn apply(&mut self, observation: Observation) {
+        let now = self.clock.now();
+        self.last_event.insert(observation.source, now);
+
+        if let Change::Health(health) = &observation.change {
+            let restarts = self
+                .health
+                .get(&health.source)
+                .map_or(0, |previous| previous.restarts);
+            let mut health = health.clone();
+            health.restarts = health.restarts.max(restarts);
+            self.health.insert(health.source, health);
+            self.publish_health();
+            return;
+        }
+
+        let events = self.facts.apply(observation, now);
+        self.pending_events.extend(events);
+    }
+
+    /// Rebuilds every agent, diffs against the published rows, and publishes
+    /// the changed rows and the tape lines they imply.
+    fn reduce(&mut self) {
+        let now = self.clock.now();
+        let built = build_agents(&self.facts, now);
+        let recent = now - self.shared.config.tape_recent;
+        let mut updates = Vec::new();
+        let mut tape = Vec::new();
+
+        for (id, agent) in &built.agents {
+            match self.published.get(id) {
+                Some(previous) if previous == agent => {}
+                Some(previous) => {
+                    if previous.status != agent.status {
+                        tape.push(status_line(agent, now));
+                    }
+                    updates.push(UpdateKind::Upsert(agent.clone()));
+                }
+                None => {
+                    if agent.started.is_some_and(|started| started >= recent) {
+                        tape.push(line(
+                            now,
+                            id,
+                            TapeKind::Spawned,
+                            spawned_text(agent),
+                            Severity::Info,
+                        ));
+                    }
+                    updates.push(UpdateKind::Upsert(agent.clone()));
+                }
+            }
+        }
+
+        for id in self.published.keys() {
+            if !built.agents.contains_key(id) {
+                tape.push(line(
+                    now,
+                    id,
+                    TapeKind::Removed,
+                    String::from("removed"),
+                    Severity::Info,
+                ));
+                updates.push(UpdateKind::Removed(id.clone()));
+            }
+        }
+
+        for event in std::mem::take(&mut self.pending_events) {
+            let tape_line = self.event_line(&built.owners, event, recent);
+            tape.extend(tape_line);
+        }
+
+        updates.extend(tape.into_iter().map(UpdateKind::Event));
+        self.shared.publish(updates);
+        self.published = built.agents;
+    }
+
+    fn event_line(
+        &mut self,
+        owners: &BTreeMap<FactKey, AgentId>,
+        event: FactEvent,
+        recent: Timestamp,
+    ) -> Option<TapeEvent> {
+        let (kind, text, severity) = match event.kind {
+            TranscriptEventKind::TurnStart => (
+                TapeKind::TurnStart,
+                String::from("turn start"),
+                Severity::Info,
+            ),
+            TranscriptEventKind::TurnEnd => {
+                (TapeKind::TurnEnd, String::from("turn end"), Severity::Info)
+            }
+            TranscriptEventKind::ToolStart { id, name, gist } => {
+                let text = match gist {
+                    Some(gist) => format!("{name} {gist}"),
+                    None => name.clone(),
+                };
+                self.tool_names.insert(id, name);
+                (TapeKind::ToolStart, text, Severity::Info)
+            }
+            TranscriptEventKind::ToolEnd { id, is_error } => {
+                let name = self.tool_names.remove(&id);
+                if !is_error {
+                    return None;
+                }
+                let text = match name {
+                    Some(name) => format!("{name} failed"),
+                    None => String::from("tool failed"),
+                };
+                (TapeKind::ToolError, text, Severity::Warning)
+            }
+            TranscriptEventKind::Usage(_) | TranscriptEventKind::Cost(_) => return None,
+        };
+
+        if event.at < recent {
+            return None;
+        }
+        let agent = owners.get(&event.key)?;
+        Some(line(event.at, agent, kind, text, severity))
+    }
+
+    fn publish_totals(&mut self) {
+        let now = self.clock.now();
+        let totals = totals(&self.published, &minute_counts(&self.facts, now), now);
+        if **self.shared.totals.borrow() == totals {
+            return;
+        }
+        self.shared.totals.send_replace(Arc::new(totals.clone()));
+        self.shared.publish(vec![UpdateKind::Totals(totals)]);
+    }
+
+    fn publish_health(&mut self) {
+        let mut updates = Vec::new();
+        for (source, health) in &self.health {
+            let mut health = health.clone();
+            health.last_event = self.last_event.get(source).copied();
+            if self.published_health.get(source) != Some(&health) {
+                self.published_health.insert(*source, health.clone());
+                updates.push(UpdateKind::Source(health));
+            }
+        }
+        self.shared.publish(updates);
+    }
+}
+
+fn line(
+    at: Timestamp,
+    agent: &AgentId,
+    kind: TapeKind,
+    text: String,
+    severity: Severity,
+) -> TapeEvent {
+    TapeEvent {
+        // Assigned when published.
+        seq: 0,
+        at,
+        agent: agent.clone(),
+        kind,
+        text,
+        severity,
+    }
+}
+
+fn spawned_text(agent: &Agent) -> String {
+    format!("{} {}", agent.kind.label(), agent.name)
+}
+
+fn status_line(agent: &Agent, now: Timestamp) -> TapeEvent {
+    let detail = agent
+        .status_detail
+        .as_deref()
+        .map(|detail| format!(" ({detail})"))
+        .unwrap_or_default();
+    let (kind, severity) = match agent.status {
+        Status::Done => (TapeKind::Finished, Severity::Notice),
+        Status::Stopped => (TapeKind::Finished, Severity::Warning),
+        Status::Failed => (TapeKind::Failure, Severity::Error),
+        Status::Blocked => (TapeKind::Status, Severity::Warning),
+        Status::Waiting => (TapeKind::Status, Severity::Notice),
+        Status::Working | Status::Idle => (TapeKind::Status, Severity::Info),
+    };
+    let text = format!("{}{detail}", status_word(agent.status));
+    line(agent.ended.unwrap_or(now), &agent.id, kind, text, severity)
+}
+
+fn status_word(status: Status) -> &'static str {
+    match status {
+        Status::Working => "working",
+        Status::Waiting => "waiting",
+        Status::Blocked => "blocked",
+        Status::Idle => "idle",
+        Status::Done => "done",
+        Status::Failed => "failed",
+        Status::Stopped => "stopped",
+    }
+}
+
+/// The board numbers from the published rows and the per-minute counts.
+fn totals(
+    agents: &BTreeMap<AgentId, Agent>,
+    minutes: &BTreeMap<Timestamp, MinuteCounts>,
+    now: Timestamp,
+) -> Totals {
+    let mut totals = Totals::default();
+    let day_ago = now - TimeDelta::hours(24);
+
+    for agent in agents.values() {
+        match agent.status {
+            Status::Working => totals.working += 1,
+            Status::Waiting => totals.waiting += 1,
+            Status::Blocked => totals.blocked += 1,
+            Status::Failed if agent.ended.is_none_or(|ended| ended >= day_ago) => {
+                totals.failed_24h += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let local_now = now.with_timezone(&Local);
+    let midnight = local_now
+        .with_hour(0)
+        .and_then(|at| at.with_minute(0))
+        .and_then(|at| at.with_second(0))
+        .and_then(|at| at.with_nanosecond(0))
+        .map_or(now, |at| at.to_utc());
+    let current_minute = now.timestamp().div_euclid(60);
+    let mut spend_today = 0.0;
+
+    for (minute, counts) in minutes {
+        totals.turns_24h += counts.turns;
+        totals.tools_24h += counts.tools;
+        totals.errors_24h += counts.errors;
+
+        let minutes_ago = current_minute - minute.timestamp().div_euclid(60);
+        if let Ok(minutes_ago) = usize::try_from(minutes_ago)
+            && minutes_ago < ACTIVITY_MINUTES
+        {
+            let slot = &mut totals.tokens_per_min[ACTIVITY_MINUTES - 1 - minutes_ago];
+            *slot = slot.saturating_add(u32::try_from(counts.tokens).unwrap_or(u32::MAX));
+        }
+
+        if *minute >= midnight {
+            let hour = minute.with_timezone(&Local).hour();
+            if let Some(slot) = usize::try_from(hour)
+                .ok()
+                .and_then(|hour| totals.cost_by_hour.get_mut(hour))
+            {
+                *slot += counts.cost_usd as f32;
+            }
+            spend_today += counts.cost_usd;
+        }
+    }
+
+    // Spend is summed from reported totals that may be estimates, so the day's
+    // figure is an estimate; with no spend reported at all it is unknown, not $0.
+    totals.cost_today = if spend_today > 0.0 {
+        Cost::Estimated(spend_today)
+    } else {
+        Cost::Unpriced
+    };
+    totals
+}

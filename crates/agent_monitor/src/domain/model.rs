@@ -623,3 +623,18 @@ pub struct TranscriptItem {
     /// How long the tool call took, on result rows.
     pub duration_ms: Option<u64>,
 }
+
+/// The collector's own status, for `Status` and the viewer's header.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MonitorStatus {
+    /// The wire protocol version the collector speaks.
+    pub protocol: u32,
+    /// The collector's build version.
+    pub version: String,
+    /// How long the collector has run.
+    pub uptime: std::time::Duration,
+    /// Every source's health.
+    pub sources: Vec<SourceHealth>,
+    /// Viewers subscribed now.
+    pub subscribers: u32,
+}
