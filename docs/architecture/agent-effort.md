@@ -25,6 +25,7 @@ provider serialization tests when adding support.
 | Routed model | Explicit effort values |
 | --- | --- |
 | anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
+| openai/gpt-6.1-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
 | openai/gpt-5.5 | none, low, medium, high, xhigh |
 | openai/gpt-5-mini | minimal, low, medium, high |
 | Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
@@ -37,9 +38,10 @@ value. Anthropic receives `output_config.effort`; OpenAI Responses receives
 native OpenAI capabilities merely because its model name resembles GPT.
 Thinking token budgets are not exposed as effort levels.
 
-Sources checked September 21, 2026:
+Sources checked September 21, 2026 (GPT-6 rows November 12, 2026):
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
-[GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), and
+[GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5),
+[OpenAI models](https://developers.openai.com/api/docs/models), and
 [OpenAI reasoning](https://developers.openai.com/api/docs/guides/reasoning).
 
 ## Session lifecycle
@@ -92,9 +94,9 @@ an external harness result.
 
 ## Model menu interaction
 
-The selected model also has a **speedometer-style effort** button beside its model selector
-in new-chat and running-session composers. It opens a compact desktop popover
-or a dedicated bottom sheet on mobile. Its needle reflects the selected level. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
+The selected model also has a labeled **Effort** button (dial icon and current
+level) beside its model selector in new-chat and running-session composers. It
+opens a titled desktop menu or a dedicated bottom sheet on mobile. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
 
 On desktop, effort remains available in each model’s submenu.
 Discovery runs when the submenu opens, scoped to that model and harness;

@@ -2,18 +2,19 @@ import { promptActionOf } from '@app/features/block-agent/component/prompt-actio
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
 import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { t } from '@app/lib/i18n';
 import {
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
 import { modelLabel } from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -45,6 +46,7 @@ import {
   type EffortChoice,
   effortConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import { type AgentKind, kindForMode } from '../core/agent-kind';
@@ -155,6 +157,7 @@ export function NewChatPage(props: {
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
+  const [speedPickerOpen, setSpeedPickerOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   const preferredRepository = createPreferredRepository(userId());
   // An explicit Auto-detect pick must override a saved repository, too.
@@ -223,6 +226,27 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
+  /** The selected model's tier option, when Macro's agent offers more than standard. */
+  const speedOption = () => {
+    if (capabilityTarget()?.harness !== 'in-memory') return;
+    const option = selectConfigOption(
+      capabilities.isSuccess ? capabilities.data.configOptions : [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { option, offered } : undefined;
+  };
+  const speedOverride = () => {
+    const tiers = speedOption();
+    if (!tiers) return;
+    return {
+      configId: tiers.option.id,
+      value: resolveSpeed(preferredSpeed(), tiers.offered),
+    };
+  };
   /** The last effort picked for the selected runtime and model, while it is still offered. */
   const selectedEffort = () => {
     const target = capabilityTarget();
@@ -268,6 +292,15 @@ export function NewChatPage(props: {
     const agent = selected();
     if (!agent) return 'Choose an agent to start';
     if (agent.unavailableReason) return agent.unavailableReason;
+    // A paid tier would otherwise be dropped silently while the model's
+    // options are still loading.
+    if (
+      capabilityTarget()?.harness === 'in-memory' &&
+      capabilities.isPending &&
+      preferredSpeed() !== 'standard'
+    ) {
+      return t('agentControls.loadingTiers');
+    }
     if (canSelectRepository() && repoUrl()) {
       if (reachable.loading()) return 'Loading repositories';
       if (reachable.error()) return 'Retry loading repositories before sending';
@@ -420,13 +453,8 @@ export function NewChatPage(props: {
         ? { modelFallback: true }
         : {}),
       effortOverride: coder ? undefined : effortOverride(),
-      ...(model && inMemory && acceleratedSpeed(model)
-        ? {
-            speedOverride: {
-              configId: 'speed',
-              value: speedForModel(model, fastModeEnabled()),
-            },
-          }
+      ...(inMemory && speedOverride()
+        ? { speedOverride: speedOverride() }
         : {}),
     });
     // Macro's preferred model and the picked efforts stay; coding-agent model
@@ -545,7 +573,9 @@ export function NewChatPage(props: {
     <ChatComposer
       autoFocus={props.autoFocus}
       collapseOnBlur={props.compact}
-      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
+      controlsOpen={
+        repositoryPickerOpen() || effortPickerOpen() || speedPickerOpen()
+      }
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);
@@ -565,13 +595,14 @@ export function NewChatPage(props: {
             disabled={Boolean(blocked())}
             onChange={rememberEffort}
           />
-          <Show
-            when={['macro-inmem', 'in-memory'].includes(
-              selected()?.harness ?? ''
-            )}
-          >
-            <SpeedToggle model={composerModelOverride() ?? ''} />
-          </Show>
+          <SpeedSelector
+            onCloseAutoFocus={restoreInputFocus}
+            onOpenChange={setSpeedPickerOpen}
+            offered={speedOption()?.option.options ?? []}
+            value={speedOverride()?.value ?? 'standard'}
+            disabled={Boolean(blocked())}
+            onChange={setPreferredSpeed}
+          />
         </div>
       }
       drawer={

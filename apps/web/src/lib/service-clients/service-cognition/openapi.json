@@ -5929,7 +5929,7 @@
       "ModelSpeed": {
         "type": "string",
         "description": "The requested inference speed. Standard is backward compatible with old clients.",
-        "enum": ["standard", "fast", "ultrafast"]
+        "enum": ["standard", "priority", "fast", "ultrafast"]
       },
       "NewAttachment": {
         "type": "object",

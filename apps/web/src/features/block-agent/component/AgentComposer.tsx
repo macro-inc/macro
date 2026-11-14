@@ -1,10 +1,10 @@
-import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
 import { modelLabel } from '@core/component/AI/constant/model-label';
+import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
-  acceleratedSpeed,
-  speedForModel,
-} from '@core/component/AI/constant/speed';
-import { fastModeEnabled } from '@core/component/AI/signal/speed';
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
@@ -12,6 +12,7 @@ import { fastModeEnabled } from '@core/component/AI/signal/speed';
  * combined model-and-effort change waits for runtime confirmation.
  */
 
+import { isMacroHarness } from '@app/features/agents-view/core/agent-kind';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
   type InputAttachmentData,
@@ -38,6 +39,7 @@ import {
   type EffortSelection,
   effortConfigOption,
   effortLabel,
+  selectConfigOption,
 } from '../state/session-config';
 import {
   AgentInput,
@@ -124,6 +126,24 @@ export function AgentComposer(props: {
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  /** Macro's tier option, when the current model offers more than standard.
+   * Other harnesses' speed values are theirs to interpret, so they are left alone. */
+  const speedOption = () => {
+    if (!isMacroHarness(session()?.harness)) return;
+    const option = selectConfigOption(
+      metadata()?.configOptions ?? [],
+      'speed',
+      'speed'
+    );
+    const offered = nativeSpeeds(
+      option?.options.map((choice) => choice.value) ?? []
+    );
+    return option && offered ? { id: option.id, option, offered } : undefined;
+  };
+  const speed = () => {
+    const tiers = speedOption();
+    return tiers ? resolveSpeed(preferredSpeed(), tiers.offered) : undefined;
+  };
   const changingEffort = () => {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
@@ -180,17 +200,12 @@ export function AgentComposer(props: {
   const send = async (markdown: string, attachments: InputAttachmentData[]) => {
     if (readOnly() || configuring()) return;
     const meta = metadata();
-    if (
-      meta?.model &&
-      acceleratedSpeed(meta.model) &&
-      meta.configOptions.some((option) => option.id === 'speed')
-    ) {
+    const tiers = speedOption();
+    const tier = speed();
+    if (meta?.model && tiers && tier && tiers.option.currentValue !== tier) {
       setConfiguring(true);
       try {
-        await selectModel(meta.model, {
-          configId: 'speed',
-          value: speedForModel(meta.model, fastModeEnabled()),
-        });
+        await selectModel(meta.model, { configId: tiers.id, value: tier });
       } catch {
         persistedDraft.setDraft(markdown);
         toast.failure('The speed setting could not be applied. Please retry.');
@@ -414,13 +429,13 @@ export function AgentComposer(props: {
               }}
             />
 
-            <Show
-              when={metadata()?.configOptions.some(
-                (option) => option.id === 'speed'
-              )}
-            >
-              <SpeedToggle model={metadata()?.model ?? ''} />
-            </Show>
+            <SpeedSelector
+              onCloseAutoFocus={restoreInputFocus}
+              offered={speedOption()?.option.options ?? []}
+              value={speed() ?? 'standard'}
+              disabled={readOnly() || configuring()}
+              onChange={setPreferredSpeed}
+            />
           </div>
         }
       />

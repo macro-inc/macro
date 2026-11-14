@@ -303,13 +303,21 @@ Auto/Chat/Code stays in the inset bar above the input on phones, as icons only.
 Repository controls appear alongside it in Code mode.
 Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
-Dismissing the model or effort selector on mobile returns focus to the message input.
+Dismissing the model, effort, or priority tier selector on mobile returns focus to the message input.
 Active sessions use the same compact mobile model drawer: focused search, Suggested
 with Gemini last, and More models for the complete provider catalog.
-In new and active agent composers, check that the model selector and lightning
-speed toggle share a height and vertical center: 32px on desktop and 36px with
-touch emulation. Open the model picker and toggle fast mode to verify both
-controls remain interactive at desktop, phone, and tablet widths.
+Beside the model selector, the composer shows **Effort** (a dial plus the
+current level, such as *High*) for models that advertise reasoning effort, and
+**Priority tier** (a lightning bolt plus *Standard*, *Priority* or *Ultrafast*)
+for models with a tier beyond standard: GPT-6.1 Sol and GPT-6 Astra today. On
+touch both are icon buttons that open a bottom sheet. The tier is one browser
+preference shared by every composer (`macro:ai-speed`); a model that doesn't
+offer it runs at standard, and the agent composer applies it before the next
+prompt only when the session reports a different tier. Priority sends
+`service_tier: "priority"` to OpenAI and bills the `:priority` price rows.
+In new and active agent composers, check that the model selector and these
+controls share a height and vertical center: 32px on desktop and 36px with
+touch emulation, and stay interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
@@ -765,7 +773,7 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- A compact **speedometer-style effort** button with a simple arc and needle beside the model selector opens a simple list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
+- A labeled **Effort** button (dial icon and current level, e.g. `Effort: High` to screen readers) beside the model selector opens a titled list of effort levels with a check beside the current choice: a popover centered below the button on desktop, or its own bottom sheet on mobile. Choosing a level applies it and closes the menu. Mobile shows it alongside the model control after the input expands. It is hidden when the model has fewer than two effort choices.
   Model-specific effort choices remain available in desktop model submenus.
   New conversations remember the last effort picked for each runtime and model,
   per signed-in user, across sends, mode switches, and reloads, while that model
@@ -2597,23 +2605,26 @@ to a text-only model is rejected by the backend when sending, with guidance to
 choose a vision model or start a conversation without images.
 
 
-## Accelerated model speed
+## Priority tier
 
-The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
-and GPT-6.1 Sol (6× token pricing). Its tooltip shows the mode, state, and usage
-multiplier before sending. Claude models, including Opus 5.5, stay on standard
-speed until Anthropic approves fast mode for this account. Other models keep
-standard speed. The preference is saved in browser local storage and shared by
-legacy chat and native Macro agent composers. External coding agents use their
-own speed controls.
+The **Priority tier** menu beside the model selector picks how a model's requests
+are processed: *Standard*; *Priority* (OpenAI priority processing, 2× usage) and
+*Ultrafast* (6× usage) for GPT-6 Astra and GPT-6.1 Sol. Each choice shows its
+usage multiplier before sending. Claude models, including Opus 5.5, stay on
+standard speed until Anthropic fast mode is enabled for this deployment
+(Anthropic's own Priority Tier doesn't support Opus 5.5 or Sonnet 5.5). Other
+models keep standard speed and show no menu. The preference is saved in browser
+local storage and shared by legacy chat and native Macro agent composers; an old
+saved "fast mode on" becomes Ultrafast. External coding agents use their own
+speed controls.
 
-Preview the controls at `/app/debug/ui?ui=speed-toggle`.
-Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Preview the control at `/app/debug/ui?ui=speed-selector`.
+Pick Priority and verify the trigger reads *Priority*.
 Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the bolt is hidden; switching back restores
-the preference. With reduced motion enabled, toggling changes the state without
-animation. Native sessions confirm speed configuration before sending the prompt;
-a rejected configuration must retain the unsent draft and attachments.
+Select an unsupported model and verify the menu is hidden; switching back restores
+the preference. Native sessions confirm the tier before sending the prompt when
+the session reports a different one; a rejected configuration must retain the
+unsent draft and attachments.
 
 Usage records follow the provider's delivered speed for each call, including tool
 loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that

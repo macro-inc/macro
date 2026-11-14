@@ -862,7 +862,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             }
                             state.set_model(value.to_string());
                         }
-                        "speed" => {
+                        crate::domain::model_options::SPEED_CONFIG_ID => {
                             let speed = ModelSpeed::parse(&value.to_string());
                             let Some(speed) = speed else {
                                 return responder.respond_with_error(
