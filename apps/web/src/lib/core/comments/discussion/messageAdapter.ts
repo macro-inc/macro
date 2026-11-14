@@ -19,6 +19,7 @@ export function discussionCommentToMessageData(
 ): MessageData {
   return {
     id: comment.id,
+    thread_id: comment.threadId,
     content: comment.text,
     sender_id: comment.authorId,
     created_at: comment.createdAt,

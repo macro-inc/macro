@@ -22,12 +22,18 @@ const message: MessageData = {
   reactions: [],
 };
 
-function ReplyFocusHarness() {
+const replyInThread: MessageData = {
+  ...message,
+  id: 'comment-1',
+  thread_id: 'thread-1',
+};
+
+function ReplyFocusHarness(props: { message: MessageData; threadId: string }) {
   const [replying, setReplying] = createSignal(false);
   return (
     <>
       <Root
-        message={message}
+        message={props.message}
         actions={{
           onReply: () => {
             setReplying(true);
@@ -38,7 +44,7 @@ function ReplyFocusHarness() {
         <ActionMenu />
       </Root>
       <Show when={replying()}>
-        <div data-input-id={threadReplyInputId(message.id)}>
+        <div data-input-id={threadReplyInputId(props.threadId)}>
           <div
             contentEditable
             tabindex="0"
@@ -61,8 +67,7 @@ describe('ActionMenu Reply focus', () => {
     vi.useRealTimers();
   });
 
-  it('moves the cursor into the reply composer after Reply is clicked', async () => {
-    const { container } = render(() => <ReplyFocusHarness />);
+  async function clickReplyAndFlush(container: HTMLElement) {
     const root = container.querySelector<HTMLElement>('[data-message]')!;
     fireEvent.pointerEnter(root);
     const reply = container.querySelector<HTMLButtonElement>(
@@ -74,6 +79,24 @@ describe('ActionMenu Reply focus', () => {
 
     await Promise.resolve();
     vi.runAllTimers();
+  }
+
+  it('moves the cursor into the reply composer after Reply is clicked', async () => {
+    const { container } = render(() => (
+      <ReplyFocusHarness message={message} threadId={message.id} />
+    ));
+    await clickReplyAndFlush(container);
+
+    expect(document.activeElement).toBe(
+      container.querySelector('[data-testid="reply-editor"]')
+    );
+  });
+
+  it('looks up the composer by thread_id when it differs from the message id', async () => {
+    const { container } = render(() => (
+      <ReplyFocusHarness message={replyInThread} threadId="thread-1" />
+    ));
+    await clickReplyAndFlush(container);
 
     expect(document.activeElement).toBe(
       container.querySelector('[data-testid="reply-editor"]')
