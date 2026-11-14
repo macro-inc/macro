@@ -203,12 +203,18 @@ for (const provider of PROVIDERS) {
     }) => {
       await mailbox.deliver({ from, subject: 'Alpha', text: 'Body of Alpha.' });
       const alpha = await mailbox.synced('Alpha');
+      // The list is read by its own request (Soup) and filled in the
+      // background by others (…Backfill). The background ones stay down for
+      // the whole test: they are tried again for ever, and would list the
+      // thread without anyone asking.
       let failing = true;
+      let lastListRequest = Date.now();
       await page.route(/\/graphql(\?|$)/, (route) => {
         const sent = route.request().postData() ?? '';
-        if (failing && sent.includes('"operationName":"Soup"')) {
+        const operation = /"operationName":"(\w+)"/.exec(sent)?.[1] ?? '';
+        if (operation === 'Soup') lastListRequest = Date.now();
+        if (operation.endsWith('Backfill') || (failing && operation === 'Soup'))
           return route.fulfill({ status: 500, body: '{}' });
-        }
         return route.fallback();
       });
       const list = page.getByRole('grid', { name: 'Email' });
@@ -219,6 +225,12 @@ for (const provider of PROVIDERS) {
         list.getByRole('button', { name: 'Try again' })
       ).toBeVisible();
       saw('STL-003');
+      // The app asks a few more times by itself while it already says so.
+      // Once it has given up, only Try again asks again.
+      await expect
+        .poll(() => Date.now() - lastListRequest, { timeout: 30_000 })
+        .toBeGreaterThan(5_000);
+      await expect(list.getByText('Email couldn’t be loaded.')).toBeVisible();
       failing = false;
       await list.getByRole('button', { name: 'Try again' }).click();
       did('AL-059');

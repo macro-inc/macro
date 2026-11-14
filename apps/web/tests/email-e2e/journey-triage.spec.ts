@@ -37,7 +37,15 @@ for (const provider of PROVIDERS) {
       mailbox,
     }) => {
       const from = 'Grace <grace@example.com>';
-      const subjects = ['Agenda', 'Minutes', 'Old invoice', 'Question'];
+      // 'Standup' is left alone: it stays in the inbox, so a tab that lists
+      // one thread is not the inbox under another name.
+      const subjects = [
+        'Agenda',
+        'Minutes',
+        'Old invoice',
+        'Question',
+        'Standup',
+      ];
       for (const subject of subjects) {
         await mailbox.deliver({ from, subject, text: `About ${subject}.` });
       }

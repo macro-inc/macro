@@ -1,1 +1,71 @@
 id	break
+F-001	the return from consent never sets up the inbox
+F-006	a cancelled or failed connection says nothing
+F-009	removing an inbox removes nothing
+F-021	the Drafts tab lists no drafts
+F-029	the Noise tab is never selected
+F-030	a tab other than the provider views is never selected
+F-031	the Trash and Spam tabs are never selected
+F-033	the inbox filter keeps every inbox
+F-034	the Read filter filters nothing
+F-038	j and k do not move the cursor
+F-039	a row's checkbox selects nothing
+F-040	the reading pane never opens
+F-041	a row shows another subject
+F-042	the Mail badge never lights
+F-043	Try again on a failed list does nothing
+F-044	undo of Done does nothing
+F-048	deleting a saved view does nothing
+F-052	a search hit opens the thread at its latest message
+F-053	a click on a row opens nothing
+F-056	an opened message shows no body
+F-058	a message's header does not collapse it
+F-060	the hidden-messages chip shows nothing
+F-061	j and k in an open thread do not move to the next thread
+F-067	the read receipts switch changes nothing
+F-068	mark as read does nothing
+F-069	mark as unread does nothing
+F-070	opening a thread does not mark it read
+F-071	Done does nothing
+F-073	starring does nothing
+F-075	Trash does nothing
+F-076	restoring from Trash does nothing
+F-082	bulk Done does nothing
+F-087	moving to a folder moves nothing
+F-095	New email opens no composer
+F-097	an added recipient is not added
+F-099	Cc is not added
+F-100	the inbox chosen in From is ignored
+F-101	the typed subject is dropped
+F-102	the typed body is not sent
+F-104	a typed address is not sent as a link
+F-105	an inserted picture is not sent
+F-107	the signature cannot be left out
+F-108	Reply opens nothing
+F-109	Reply all writes to the sender alone
+F-110	Forward opens nothing
+F-112	an open reply does not become a forward
+F-113	the phone composer never opens
+F-115	typing saves no draft
+F-117	Escape throws a reply away
+F-118	a reload does not reopen the draft
+F-119	discarding a draft does nothing
+F-122	a picked file is dropped
+F-124	a forward leaves out the files of the message
+F-126	a calendar file opens nothing
+F-127	Download saves nothing
+F-131	Send on a new message does nothing
+F-132	Send on a reply does nothing
+F-134	Undo send does nothing
+F-135	a failed send does not offer what was written
+F-142	Schedule send does nothing
+F-143	Update schedule does nothing
+F-144	Cancel scheduled send does nothing
+F-145	the Scheduled tab lists nothing
+F-148	Save signature does nothing
+F-149	the signature preview renders nothing
+F-153	an invitation shows no event card
+F-157	turning the calendar off never asks the service
+F-177	Escape does not go back to the list
+F-182	a folder name on a row opens nothing
+F-189	Try again in the accounts settings does nothing

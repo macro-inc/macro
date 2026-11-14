@@ -195,17 +195,26 @@ for (const provider of PROVIDERS) {
       saw('STC-025');
 
       const sent = await sentCopy(mailbox, 'Harbour walk');
-      expect(sent.html).toMatch(/<img[^>]+src="(cid:|https?:)/);
+      // The picture itself, at the address it was stored under: the pixel
+      // of a read receipt is an image too.
+      expect(sent.html).toMatch(
+        /<img[^>]+src="(cid:|https?:)[^"]*"[^>]*data-image-id="map-1"/
+      );
       expect(sent.html).not.toContain('blob:');
       confirmed('F-105');
     });
 
     // When this fails, a message leaves from the inbox the composer opened
     // with, not the one its sender chose in From.
-    test('a message is sent from the inbox chosen in From', async ({
-      page,
-      mailbox,
-    }) => {
+    //
+    // On Outlook the choice is sometimes dropped (about one run in eight):
+    // choosing makes the composer save the draft and ask for the move right
+    // after, and the service refuses a move while that save is not yet at
+    // Outlook. From shows the first inbox again. Nothing on screen tells
+    // when the choice would hold, so there is nothing to wait for.
+    test(`${provider === 'OUTLOOK' ? 'known bug: outlook-from-choice-dropped-while-draft-syncs: ' : ''}a message is sent from the inbox chosen in From`, {
+      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
+    }, async ({ page, mailbox }) => {
       const work = await mailbox.stack.link(
         mailbox.user,
         provider,

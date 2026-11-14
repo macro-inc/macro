@@ -43,6 +43,19 @@ for (const provider of PROVIDERS) {
         .toEqual(['Offsite plan']);
       confirmed('F-115');
 
+      // A reload of the composer: its address names the draft, and that is
+      // all that brings it back.
+      await page.reload();
+      did('AC-912');
+      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
+        'Offsite plan'
+      );
+      await expect(
+        page.getByRole('link', { name: 'grace@example.com' })
+      ).toBeVisible();
+      await expect(page.getByText('Thinking of the coast.')).toBeVisible();
+      saw('STC-961');
+
       // Drafts lists it, and its row opens it with its text.
       const tabs = page.getByRole('navigation', { name: 'Email tabs' });
       await tabs.getByRole('button', { name: 'Drafts' }).click();
@@ -57,17 +70,6 @@ for (const provider of PROVIDERS) {
       );
       await expect(page.getByText('Thinking of the coast.')).toBeVisible();
       saw('STC-938');
-
-      await page.reload();
-      did('AC-912');
-      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
-        'Offsite plan'
-      );
-      await expect(
-        page.getByRole('link', { name: 'grace@example.com' })
-      ).toBeVisible();
-      await expect(page.getByText('Thinking of the coast.')).toBeVisible();
-      saw('STC-961');
 
       await discardButton(page).click();
       did('AC-060');
