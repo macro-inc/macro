@@ -13,6 +13,10 @@ import LockIcon from '@icon/system/regular/lock.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+} from '@queries/auth/account-scope';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import {
   useCreateChannelMutation,
@@ -151,6 +155,9 @@ export function CreateChannelModal() {
     const participants =
       selectedVisibility === 'team' && userId() ? [userId()!] : [];
 
+    // The picture write has no account fence of its own: skip it if another
+    // account signed in while the channel was being created.
+    const account = currentQueryAccount();
     try {
       const { id } = await createChannelMutation.mutateAsync({
         channel_type: selectedVisibility,
@@ -163,7 +170,7 @@ export function CreateChannelModal() {
       });
       setCreatedChannelId(id);
       const chosenPicture = picture();
-      if (chosenPicture)
+      if (chosenPicture && isCurrentQueryAccount(account))
         fireAndForget(
           pictureEditor.upload(id, chosenPicture),
           'create-channel'

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   createChannel: vi.fn(),
   setPicture: vi.fn(),
   chosenFiles: [] as File[],
+  account: undefined as { userId: string; session: number } | undefined,
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
 
@@ -31,6 +32,11 @@ vi.mock('@core/util/create', () => ({ createStaticFile: vi.fn() }));
 vi.mock('@core/util/upload', () => ({
   openFilePicker: (_options: unknown, onFiles: (files: File[]) => void) =>
     onFiles(mocks.chosenFiles),
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => mocks.account,
+  isCurrentQueryAccount: (account: unknown) =>
+    account !== undefined && account === mocks.account,
 }));
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({ isSuccess: true, data: [] }),
@@ -87,6 +93,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   // The dialog's scroll lock restores the page position as it closes.
   vi.stubGlobal('scrollTo', vi.fn());
+  mocks.account = { userId: 'user-1', session: 1 };
   mocks.createChannel.mockResolvedValue({ id: 'channel-1' });
   mocks.setPicture.mockResolvedValue(undefined);
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:channel-picture');
@@ -131,6 +138,22 @@ describe('CreateChannelModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(screen.getByRole('button', { name: 'Upload' })).toBeTruthy();
+    create();
+
+    await waitFor(() => expect(mocks.createChannel).toHaveBeenCalled());
+    await screen.findByText(/Add people or agents to/);
+    expect(mocks.setPicture).not.toHaveBeenCalled();
+  });
+
+  it('skips the picture when another account signs in during creation', async () => {
+    mocks.chosenFiles = [picture];
+    mocks.createChannel.mockImplementation(async () => {
+      mocks.account = { userId: 'user-2', session: 2 };
+      return { id: 'channel-1' };
+    });
+    await openModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
     create();
 
     await waitFor(() => expect(mocks.createChannel).toHaveBeenCalled());
