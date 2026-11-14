@@ -1,0 +1,29 @@
+packages/sdk-ocaml/proxy/fixtures/operations.json
+  s_f9f0485c5813a5::t_a367ff2ceacddb 2-129
+packages/sdk-ocaml/proxy/src/router.test.ts
+  s_f9f0485c5813a5::t_776d710fcc413e 1-3,6,11-12,16,20-22,25-150,153-219
+  s_f9f0485c5813a5::t_83a54d53d431b2 4-5,7-10,13-15,17-19,23-24,151-152,220
+packages/sdk-ocaml/proxy/src/operations.ts
+  s_f9f0485c5813a5::t_10f820d9db7eec 1-6,9,11,13-16,24-38,40,54-56,58
+  s_f9f0485c5813a5::t_776d710fcc413e 7-8,10,12,17-23,39,41-53,57
+packages/sdk-ocaml/proxy/src/router.ts
+  s_f9f0485c5813a5::t_896946fea5d0e1 1-8,11-26,28-30,38-40,43-44,51-53,55-57,59,85-92,134-137,142-144,148-159,169-172,176,190-192,262
+  s_f9f0485c5813a5::t_8d2795f8bc7ac8 9-10,45-50
+  s_f9f0485c5813a5::t_776d710fcc413e 27,31-37,41-42,54,58,60-84,93-133,138-141,145-147,160-168,173-175,177-189,193-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dcf80fd3337a1bea8c56fbb025213aa5b0b4913f",
+  "prompts": {},
+  "sessions": {
+    "s_f9f0485c5813a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "395b6f63-90c2-4033-aefc-825333176341",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
