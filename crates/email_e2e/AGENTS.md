@@ -103,7 +103,9 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
 - A scenario for a bug that is not fixed yet asserts the right behaviour and
   is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
   email-e2e-known-bugs` (in CI a job that never fails for a scenario) runs only those and reports
-  which still fail and which now pass. Remove the attribute with the fix.
+  which still fail and which now pass. Remove the attribute with the fix:
+  the coverage job fails on one that passes. `#[ignore]` is for known bugs
+  only, always with that reason.
 - A scenario that fails is tried once more (`retries = 1` in the nextest
   profile); one that passes only then is reported as needing a retry, in
   `target/nextest/email-e2e/junit.xml` and the coverage report. Treat it as

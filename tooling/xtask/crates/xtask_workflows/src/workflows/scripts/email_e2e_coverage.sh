@@ -10,10 +10,16 @@ xtask=(cargo run --manifest-path tooling/xtask/Cargo.toml -- email-coverage)
 # waived, an entry point that is not reached and not waived, a ledger line
 # the records do not bear out, and a scenario kept for a known bug that
 # passes each fail this job. The report is written and shown either way.
-mkdir -p "$EMAIL_E2E_RESULTS" "$EMAIL_E2E_KNOWN_BUGS"
+mkdir -p "$EMAIL_E2E_RESULTS"
+# One directory per job that runs scenarios for known bugs, named after the
+# artifact it uploads: a job that kept no results fails the report.
+known_bugs=()
+for job in search rest; do
+  known_bugs+=(--known-bugs "$EMAIL_E2E_KNOWN_BUGS/email-e2e-known-bugs-$job")
+done
 status=0
 "${xtask[@]}" report --enforce --results "$EMAIL_E2E_RESULTS" \
-  --known-bugs "$EMAIL_E2E_KNOWN_BUGS" --out "$EMAIL_E2E_COVERAGE" || status=$?
+  "${known_bugs[@]}" --out "$EMAIL_E2E_COVERAGE" || status=$?
 if [ -f "$EMAIL_E2E_COVERAGE/coverage.md" ]; then
   cat "$EMAIL_E2E_COVERAGE/coverage.md" >> "$GITHUB_STEP_SUMMARY"
 fi

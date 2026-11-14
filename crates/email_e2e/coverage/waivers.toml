@@ -158,6 +158,7 @@ reason = "not reached yet: the harness has no runner for this lambda; scenarios 
 
 [[entry_point]]
 entry = "queue sfs-uploader:SFSUploaderMessage"
+provider = "gmail"
 reason = "not reached yet: the worker fetches a contact's photo from a public host only, and a stack has none to offer, so the message can be sent but never handled"
 
 [[entry_point]]
@@ -260,11 +261,11 @@ reason = "unreachable: candidate for removal (the handler has no sender: the nig
 
 [[dead_code]]
 entry = "queue gmail-ops:BlockSender"
-reason = "unreachable: candidate for removal (the handler has no sender: blocking writes the Gmail filter directly)"
+reason = "unreachable: candidate for removal (the port method that queues it has no caller: blocking writes the Gmail filter directly)"
 
 [[dead_code]]
 entry = "queue gmail-ops:UnblockSender"
-reason = "unreachable: candidate for removal (the handler has no sender: unblocking deletes the Gmail filter directly)"
+reason = "unreachable: candidate for removal (the port method that queues it has no caller: unblocking deletes the Gmail filter directly)"
 
 # ------------------------------------------- calendar provider methods
 #

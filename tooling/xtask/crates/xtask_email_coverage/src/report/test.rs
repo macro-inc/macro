@@ -5,7 +5,8 @@ use super::graphql::Schema;
 use super::junit::Results;
 use super::ledger::{Atom, Ledger, Waivers, checks, functions, map, proofs};
 use super::seen::{Hit, Reader, matches};
-use super::{Status, build, judge_known_bugs, render};
+use super::gaps::{ignored, judge_known_bugs, read_known_bugs};
+use super::{Status, build, render};
 use crate::{Sources, parse_tsv};
 
 const ROWS: &str = "kind\tkey\tproviders\tmatch\tsource\n\
@@ -697,8 +698,10 @@ reason = "no longer a scenario"
     let mut known_bugs = Results::default();
     for (scenario, outcome) in [
         ("state gmail_fixed", Outcome::Passed),
-        ("state outlook_races", Outcome::Flaky(1)),
+        ("state outlook_races", Outcome::Passed),
         ("state gmail_still_broken", Outcome::Failed),
+        // Failed, then passed when tried again: the bug still shows.
+        ("state gmail_flickers", Outcome::Flaky(1)),
     ] {
         known_bugs.outcomes.insert(scenario.to_owned(), outcome);
     }
@@ -726,8 +729,9 @@ reason = "no longer a scenario"
     ));
     assert!(!has("`state outlook_races`, kept for a known bug"));
     assert!(!has("gmail_still_broken"));
+    assert!(!has("gmail_flickers"));
     assert!(has("[[intermittent_bug]] names `state gone`"));
-    assert_eq!(model.suite.known_bugs_failing, 1);
+    assert_eq!(model.suite.known_bugs_failing, 2);
     assert_eq!(
         model.suite.known_bugs_passing,
         ["state gmail_fixed", "state outlook_races"]
@@ -737,6 +741,70 @@ reason = "no longer a scenario"
         summary.contains("Gaps (each fails the job under --enforce)"),
         "{summary}"
     );
+}
+
+/// Each job that runs scenarios for known bugs must have left its results:
+/// one that left none would have its scenarios go unjudged. A run that had
+/// no scenario left to run is not that.
+#[test]
+fn every_known_bug_job_must_leave_results() {
+    let rows = parse_tsv(ROWS, "rows").unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let ledger = Ledger {
+        functions: functions(FUNCTIONS).unwrap(),
+        map: map(MAP).unwrap(),
+        checks: checks("function\tscenario\n").unwrap(),
+        proofs: proofs("function\tprovider\tscenario\tbreak\n").unwrap(),
+        waivers: Waivers::default(),
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let search = dir.path().join("search");
+    let rest = dir.path().join("rest");
+    std::fs::create_dir(&search).unwrap();
+    std::fs::write(
+        search.join("junit.xml"),
+        "<testsuites name=\"nextest-run\" tests=\"0\" uuid=\"run\">\n</testsuites>\n",
+    )
+    .unwrap();
+
+    let mut model = build(&reader, &ledger, Vec::new(), &Results::default());
+    read_known_bugs(&mut model, &ledger, &[search.clone(), rest.clone()]).unwrap();
+    assert_eq!(model.broken.len(), 1, "{:?}", model.broken);
+    assert!(
+        model.broken[0].contains("--known-bugs") && model.broken[0].contains("rest"),
+        "{:?}",
+        model.broken
+    );
+
+    let mut model = build(&reader, &ledger, Vec::new(), &Results::default());
+    read_known_bugs(&mut model, &ledger, &[search]).unwrap();
+    assert_eq!(model.broken, Vec::<String>::new());
+}
+
+/// A scenario is ignored only for a known bug, named in the reason.
+#[test]
+fn the_ignored_scenarios_name_their_bugs() {
+    let (ids, others) = ignored(
+        r#"
+#[tokio::test]
+#[ignore = "known bug: labels-wrong"]
+async fn one() {}
+
+#[ignore]
+async fn two() {}
+
+#[ignore = "slow"]
+async fn three() {}
+"#,
+    );
+    assert_eq!(ids, ["labels-wrong"]);
+    assert_eq!(others, 2);
 }
 
 /// A bug on one provider leaves the function as its scenarios show it on the

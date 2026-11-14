@@ -13,6 +13,7 @@
 //! under the functions: a row is covered when a passing scenario reached it.
 
 mod evidence;
+mod gaps;
 mod graphql;
 mod junit;
 mod ledger;
@@ -260,69 +261,6 @@ pub(crate) struct Model {
     pub(crate) gaps: Vec<String>,
 }
 
-impl Model {
-    /// What `--enforce` fails on: a scenario that failed; a function that is
-    /// not proved on a provider and neither waived nor held open by a known
-    /// bug; an entry point that is neither reached, waived nor deferred;
-    /// what the ledger says and the records do not bear out; and a scenario
-    /// kept for a known bug that passes.
-    fn find_gaps(&self) -> Vec<String> {
-        let mut gaps: Vec<String> = self
-            .suite
-            .failed
-            .iter()
-            .map(|scenario| format!("scenario `{scenario}` failed"))
-            .collect();
-        // The functions a known bug keeps open, per provider: their scenarios
-        // cannot pass, so the entry points only they reach cannot be reached.
-        let mut held_open: BTreeSet<(&str, &str)> = BTreeSet::new();
-        for row in &self.functions {
-            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
-                let Some(cell) = cell else { continue };
-                let known_bug = cell
-                    .reason
-                    .as_deref()
-                    .is_some_and(|reason| reason.starts_with(KNOWN_BUG));
-                if cell.status == Status::Open && known_bug {
-                    held_open.insert((row.id.as_str(), provider));
-                }
-                let state = match cell.status {
-                    Status::Open if known_bug => continue,
-                    Status::Open => "no scenario performs it",
-                    Status::Performed => "scenarios perform it and none is said to check it",
-                    Status::Claimed => "no break has proved the scenarios that check it",
-                    _ => continue,
-                };
-                gaps.push(format!(
-                    "function {} ({}) is not proved on {provider}: {state}",
-                    row.id, row.function
-                ));
-            }
-        }
-        for row in &self.entry_rows {
-            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
-                let open = cell
-                    .as_ref()
-                    .is_some_and(|cell| cell.status == Status::Open);
-                let behind_a_bug = !row.functions.is_empty()
-                    && row
-                        .functions
-                        .iter()
-                        .all(|function| held_open.contains(&(function.as_str(), provider)));
-                if open && !behind_a_bug {
-                    gaps.push(format!(
-                        "entry point `{} {}` is not reached on {provider}, and is neither \
-                         waived nor deferred",
-                        row.kind, row.key
-                    ));
-                }
-            }
-        }
-        gaps.extend(self.stale.iter().cloned());
-        gaps
-    }
-}
-
 /// Writes the report and says whether the run should fail.
 pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
     let rows = read_tsv(&root.join(ENTRYPOINTS_PATH))?;
@@ -345,15 +283,9 @@ pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
             "no {JUNIT_NAME} under --results: nothing says which scenarios passed"
         ));
     }
+    model.broken.extend(gaps::unkept_bugs(root, &ledger)?);
     if !options.known_bugs.is_empty() {
-        let known_bugs = junit::load(&evidence::files_named(&options.known_bugs, JUNIT_NAME)?)?;
-        if known_bugs.runs.is_empty() {
-            model.broken.push(format!(
-                "no {JUNIT_NAME} under --known-bugs: nothing says whether the scenarios kept \
-                 for known bugs still fail"
-            ));
-        }
-        judge_known_bugs(&mut model, &ledger, &known_bugs);
+        gaps::read_known_bugs(&mut model, &ledger, &options.known_bugs)?;
     }
 
     std::fs::create_dir_all(&options.out)
@@ -387,44 +319,6 @@ pub fn run(root: &Path, options: &Options) -> Result<bool, Report> {
     Ok(failed)
 }
 
-/// Adds what the runs of the scenarios kept for known bugs show: one that
-/// passes is a gap (its bug is gone, so the scenario should gate and the
-/// function's `bug` line go) unless the ledger says the bug shows only now
-/// and then.
-pub(crate) fn judge_known_bugs(model: &mut Model, ledger: &Ledger, known_bugs: &junit::Results) {
-    let intermittent: BTreeSet<&str> = ledger
-        .waivers
-        .intermittent_bug
-        .iter()
-        .map(|bug| bug.scenario.as_str())
-        .collect();
-    for (scenario, outcome) in &known_bugs.outcomes {
-        if *outcome == Outcome::Failed {
-            model.suite.known_bugs_failing += 1;
-            continue;
-        }
-        model.suite.known_bugs_passing.push(scenario.clone());
-        if !intermittent.contains(scenario.as_str()) {
-            model.gaps.push(format!(
-                "scenario `{scenario}`, kept for a known bug, passes: remove its `#[ignore]` so \
-                 it gates, and the `bug` line of its function in {}",
-                ledger::MAP_PATH
-            ));
-        }
-    }
-    for bug in &ledger.waivers.intermittent_bug {
-        if !known_bugs.outcomes.contains_key(&bug.scenario) {
-            let problem = format!(
-                "{}: [[intermittent_bug]] names `{}`, which is not among the scenarios kept \
-                 for known bugs",
-                ledger::WAIVERS_PATH,
-                bug.scenario
-            );
-            model.gaps.push(problem.clone());
-            model.stale.push(problem);
-        }
-    }
-}
 /// Joins the records with the ledger.
 pub(crate) fn build(
     reader: &Reader<'_>,

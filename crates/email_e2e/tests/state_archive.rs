@@ -334,7 +334,8 @@ async fn outlook_archiving_without_an_archive_folder_makes_one() -> Result<(), R
     stack.finish().await
 }
 
-/// The fewest messages Gmail label writes go out for as one batch.
+/// The fewest messages one label change must touch to be written to Gmail
+/// as a batch; below that each message is its own write.
 const BATCH_OF_MESSAGES: usize = 10;
 
 /// With batched label writes on, "done" for ten threads at once reaches
@@ -402,6 +403,25 @@ async fn gmail_many_threads_are_archived_in_one_batch() -> Result<(), Report> {
     for thread_id in &thread_ids {
         wait_for_inbox_state(&inbox, thread_id, false).await?;
     }
+    let writes = |route: &str| {
+        stack
+            .gmail()
+            .requests()
+            .iter()
+            .filter(|request| {
+                request.route.is_some_and(|name| name.to_string() == route) && request.status < 300
+            })
+            .count()
+    };
+    assert!(
+        writes("messages.batchModify") > 0,
+        "no batch reached Gmail"
+    );
+    assert_eq!(
+        writes("messages.modify"),
+        0,
+        "messages were written one by one"
+    );
 
     stack.finish().await
 }

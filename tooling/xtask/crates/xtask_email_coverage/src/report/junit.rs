@@ -46,11 +46,23 @@ pub(crate) struct Results {
 
 /// Reads the results files.
 pub(crate) fn load(files: &[PathBuf]) -> Result<Results, Report> {
+    load_all(files, false)
+}
+
+/// Reads the results files of runs that may have had no scenario to run.
+pub(crate) fn load_runs_that_may_be_empty(files: &[PathBuf]) -> Result<Results, Report> {
+    load_all(files, true)
+}
+
+fn load_all(files: &[PathBuf], may_be_empty: bool) -> Result<Results, Report> {
     let mut results = Results::default();
     for file in files {
         let text =
             std::fs::read_to_string(file).context(format!("could not read {}", file.display()))?;
         let run = read(file, &text, &mut results)?;
+        if run.tests == 0 && !may_be_empty {
+            bail!("{} holds no test results", file.display());
+        }
         results.runs.push(run);
     }
     Ok(results)
@@ -134,9 +146,6 @@ fn read(file: &Path, text: &str, results: &mut Results) -> Result<Run, Report> {
             .entry(scenario)
             .and_modify(|known| *known = worse(*known, outcome))
             .or_insert(outcome);
-    }
-    if run.tests == 0 {
-        bail!("{} holds no test results", file.display());
     }
     if let Some(declared) = declared
         && declared != run.tests

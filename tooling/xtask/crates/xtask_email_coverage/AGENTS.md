@@ -92,15 +92,24 @@
   that made it fail on that provider. Without the proof it is **claimed**.
   With `--enforce` everything not proved and not waived or deferred is a
   gap. CI enforces.
-- The gaps are one list (`Model::find_gaps`, printed as `gap:` lines and in
-  the report): failed scenarios, functions not proved, entry points not
+- The gaps are one list (`src/report/gaps.rs`, printed as `gap:` lines and
+  in the report): failed scenarios, functions not proved, entry points not
   reached, stale ledger lines, and known-bug scenarios that pass. A
   function a known bug holds open is not a gap, and neither is an entry
   point all of whose functions are held open on that provider.
-- `--known-bugs <dir>` reads the `junit.xml` of the known-bug runs: a
-  scenario there that did not fail is a gap unless `waivers.toml` names it
-  under `[[intermittent_bug]]`; an `[[intermittent_bug]]` naming a scenario
-  those runs do not hold is a gap too. Without the flag nothing is judged.
+- `--known-bugs <dir>`, once per job that runs the scenarios kept for known
+  bugs, reads that job's `junit.xml`: a scenario there that passed at the
+  first attempt is a gap unless `waivers.toml` names it under
+  `[[intermittent_bug]]` (one that failed and passed on the retry still
+  shows its bug); an `[[intermittent_bug]]` naming a scenario those runs do
+  not hold is a gap too. A directory with no `junit.xml` fails the report,
+  so a job that has no such scenario left must stop being passed (the list
+  is in `email_e2e_coverage.sh`). Without the flag nothing is judged.
+- A `bug` in `functions.toml` must be the id of an
+  `#[ignore = "known bug: <id>"]` in `crates/email_e2e/tests`, and every
+  `#[ignore]` there must have such a reason: the report fails otherwise,
+  with or without `--enforce`. A `bug` line left behind would keep its
+  function out of the gaps for good.
 - A proof naming an unknown function, a provider other than `gmail` or
   `outlook`, or a scenario not in the results is broken (always fails); one
   whose scenario no longer performs and checks the function is stale.
