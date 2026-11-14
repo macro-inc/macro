@@ -9,6 +9,11 @@ glam = { workspace = true }
 ratatui = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
+[features]
+# Figures built from downloaded 3D assets (demo builds only).
+demo-assets = []
+
 [dev-dependencies]
+clap = { workspace = true }
 insta = "1.48.0"
 rand = { workspace = true }

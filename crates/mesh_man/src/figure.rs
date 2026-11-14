@@ -289,5 +289,9 @@ impl FigureBuilder {
 
 /// Every built-in figure, in viewer order. The first is the default.
 pub fn catalog() -> Vec<Figure> {
-    vec![crate::model::mesh_man()]
+    #[cfg_attr(not(feature = "demo-assets"), expect(unused_mut, reason = "only assets append"))]
+    let mut figures = vec![crate::model::mesh_man()];
+    #[cfg(feature = "demo-assets")]
+    figures.extend(crate::assets::figures());
+    figures
 }

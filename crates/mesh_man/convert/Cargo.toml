@@ -1,0 +1,16 @@
+# Turns downloaded 3D assets into the mesh man's compact line figures
+# (`crates/mesh_man/assets/*.mmf`). A standalone tool outside the workspace:
+# demo only, run by hand; see crates/mesh_man/AGENTS.md.
+[package]
+edition = "2024"
+name = "mesh_man_convert"
+publish = false
+version = "0.1.0"
+
+[workspace]
+
+[dependencies]
+clap = { version = "4.5.20", features = ["derive"] }
+glam = "0.34"
+gltf = { version = "1", default-features = false, features = ["import", "utils", "names"] }
+tobj = "4"

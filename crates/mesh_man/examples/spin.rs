@@ -1,11 +1,14 @@
 //! The mesh man alone, turning, with random nerve activity.
 //!
-//! `cargo run -p mesh_man --example spin`; `q`, Esc or Ctrl-C quits.
+//! `cargo run -p mesh_man --example spin [-- --figure NAME]`; `b` / `B`
+//! cycle figures, `q`, Esc or Ctrl-C quits. Add `--features demo-assets` for
+//! the figures made from downloaded meshes.
 
 use std::collections::VecDeque;
 use std::io;
 use std::time::{Duration, Instant};
 
+use clap::Parser;
 use mesh_man::{Body, PulseKind};
 use rand::Rng;
 use rand::seq::IndexedRandom;
@@ -35,6 +38,14 @@ struct Pending {
     fails: bool,
 }
 
+/// The mesh man alone, turning.
+#[derive(Parser)]
+struct Args {
+    /// Figure to start on: a name (any case) or a 1-based number.
+    #[arg(long)]
+    figure: Option<String>,
+}
+
 struct Demo {
     body: Body,
     nerves: Vec<String>,
@@ -45,8 +56,14 @@ struct Demo {
 }
 
 impl Demo {
-    fn new() -> Self {
-        let body = Body::new();
+    fn new(figure: Option<&str>) -> Self {
+        let mut body = Body::new();
+        if let Some(figure) = figure
+            && !body.select_figure(figure)
+            && let Ok(number) = figure.parse::<usize>()
+        {
+            body.set_figure(number.saturating_sub(1));
+        }
         let nerves = body.nerve_names().map(str::to_owned).collect();
         Self {
             body,
@@ -56,6 +73,14 @@ impl Demo {
             started: Instant::now(),
             load: 0.3,
         }
+    }
+
+    /// Changes figure; calls in flight are forgotten, since their nerves
+    /// belong to the old figure.
+    fn switch(&mut self, change: fn(&mut Body)) {
+        change(&mut self.body);
+        self.nerves = self.body.nerve_names().map(str::to_owned).collect();
+        self.pending.clear();
     }
 
     fn fire(&mut self, now: Duration, nerve: &str, kind: PulseKind) {
@@ -130,11 +155,18 @@ fn draw(terminal: &mut DefaultTerminal, demo: &Demo) -> io::Result<()> {
         let bpm = demo.body.heart_rate();
         let heading = Line::from(vec![
             Span::raw(" MESH MAN ").fg(BLACK).bg(ORANGE).bold(),
-            Span::raw("  BODY ").fg(AMBER).bold(),
+            Span::raw(format!(
+                "  [{}/{}] {} ",
+                demo.body.figure_index() + 1,
+                demo.body.figure_count(),
+                demo.body.figure_name()
+            ))
+            .fg(AMBER)
+            .bold(),
             Span::raw(format!(" LOAD {:>3.0}% ", demo.load * 100.0)).fg(YELLOW),
             Span::raw(format!(" HR {bpm:>3.0} ")).fg(RED),
             Span::raw(format!(" CALLS {:>2} ", demo.pending.len())).fg(CYAN),
-            Span::raw("  q QUIT").fg(AMBER_DIM),
+            Span::raw("  b/B FIGURE  q QUIT").fg(AMBER_DIM),
         ]);
         frame.render_widget(Paragraph::new(heading).bg(BLACK), title);
 
@@ -161,8 +193,8 @@ fn draw(terminal: &mut DefaultTerminal, demo: &Demo) -> io::Result<()> {
     Ok(())
 }
 
-fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
-    let mut demo = Demo::new();
+fn run(terminal: &mut DefaultTerminal, figure: Option<&str>) -> io::Result<()> {
+    let mut demo = Demo::new(figure);
     let mut last = Instant::now();
 
     loop {
@@ -177,6 +209,13 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                 if key.kind == KeyEventKind::Press && quit {
                     return Ok(());
                 }
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('b') => demo.switch(Body::next_figure),
+                        KeyCode::Char('B') => demo.switch(Body::prev_figure),
+                        _ => {}
+                    }
+                }
             }
         }
 
@@ -187,8 +226,9 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
+    let args = Args::parse();
     let mut terminal = ratatui::init();
-    let result = run(&mut terminal);
+    let result = run(&mut terminal, args.figure.as_deref());
     ratatui::restore();
     result
 }

@@ -13481,6 +13481,7 @@ dependencies = [
 name = "mesh_man"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "glam",
  "insta",
  "rand 0.9.4",
