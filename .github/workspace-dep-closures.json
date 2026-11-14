@@ -1365,6 +1365,17 @@
       "crates/web_search",
       "crates/workspace-hack"
     ],
+    "agent_monitor": [
+      "crates/agent_monitor",
+      "crates/workspace-hack"
+    ],
+    "agent_monitor_tui": [
+      "crates/agent_monitor",
+      "crates/agent_monitor_tui",
+      "crates/macro_env_var",
+      "crates/mesh_man",
+      "crates/workspace-hack"
+    ],
     "agent_preview": [
       "crates/agent",
       "crates/agent_correlation",
@@ -4263,6 +4274,8 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_correlation",
+      "crates/agent_monitor",
+      "crates/agent_monitor_tui",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -4345,6 +4358,7 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
+      "crates/mesh_man",
       "crates/messages",
       "crates/model",
       "crates/model-entity",
@@ -12017,6 +12031,10 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/mention_utils",
+      "crates/workspace-hack"
+    ],
+    "mesh_man": [
+      "crates/mesh_man",
       "crates/workspace-hack"
     ],
     "messages": [

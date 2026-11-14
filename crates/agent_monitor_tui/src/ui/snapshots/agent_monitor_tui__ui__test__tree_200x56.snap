@@ -1,0 +1,60 @@
+---
+source: crates/agent_monitor_tui/src/ui/test.rs
+expression: "render(&mut app, 200, 56)"
+---
+◢ MACROD://MON ◤ >_  DEMO  ACTIVE SYS.LINK ● LIVE ╱ WORK 25 ╱ WAIT 0 ╱ BLOCK 1 ╱ ERR 50 ╱ DAY ~$25.28 ╱ AGENTS 34 ╱ SEQ 0x0001                                                   FRI 02 JAN ⟦ 10:01:40 ⟧
+ 0 MON   1 AGENTS   2 TAPE   3 SPEND   4 FAILURES  ◢5 TREE◤  6 SOURCES   7 BODY   8 PRS   w WALL   ┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┼┄┄┄ / FIND  ? KEYS  ESC BACK 
+┏▸WORKING ────────── Q1 ┓┏▸WAITING ────────── Q2 ┓┏▸BLOCKED ────────── Q3 ┓┏▸TURNS 24H ──────── Q4 ┓┏▸TOOLS 24H ──────── Q5 ┓┏▸ERR 24H ────────── Q6 ┓┏▸TOK/MIN ────────── Q7 ┓┏▸DAY ────────────── Q8 ┓
+┃25 ▰▰▰▰▰▰▰▰▰▰▱▱        ┃┃0 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃1 ▱▱▱▱▱▱▱▱▱▱▱▱         ┃┃234                    ┃┃644                    ┃┃50                     ┃┃5.0M                   ┃┃~$25.28                ┃
+┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
+┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛
+┏━◢ 05 // TREE ◤ 34 AGENTS · 8 ROOTS · ←→ FOLD · ENTER OPEN ────────────────────────────────────────────────────────────────────────────────────────────━━━┓                                            
+┃▾ ◆ manager  release-train    WORK 09:39:00  22m   ~$1.43   9▸  Ship the release branch                                                                   ┃                                            
+│  ▾ ◆ builder  fix-19         WORK 10:01:11  28s   ~$0.13   1▸  Follow-up from review                                                                     │                                            
+│    · ◆ subagent explore the… WORK 10:01:31   9s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ ◆ builder  rpc-server     WORK 09:28:00  33m   ~$2.01   1▸  Task explore the reducer                                                                  │                                            
+│    · ◆ subagent explore the… WORK 10:01:40   0s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ ◆ builder  fix-18         WORK 10:00:45  54s   ~$0.32   1▸  Follow-up from review                                                                     │                                            
+│    · ◆ subagent explore the… WORK 10:01:23  16s        —   0▸  explore the reducer                                                                       │                                            
+│  · ◆ builder  fix-20         WORK 10:01:28  12s   ~$0.08   0▸  Follow-up from review                                                                     │                                            
+│  · ◆ subagent explore the r… WORK 10:01:23  16s        —   0▸  explore the reducer                                                                       │                                            
+│  · ◇ explorer find-21        IDLE 10:01:36   3s        —   0▸  Follow-up from review                                                                     │                                            
+│  ▾ ◇ reviewer review-rpc     IDLE 09:30:00  31m   ~$3.78   1▸  Review the RPC changes                                                                    │                                            
+│    · ◆ subagent explore the… WORK 10:00:54  46s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ · builder  store-reducer  DONE 09:35:00  26m   ~$1.69   1▸  Single-writer store and reducer                                                           │                                            
+│    · ◆ subagent explore the… WORK 10:00:37   1m        —   0▸  explore the reducer                                                                       │                                            
+│  · · explorer find-15        DONE 10:00:12   1m   ~$0.21   0▸  Follow-up from review                                                                     │                                            
+│▾ ◆ other    scratch-notes    WORK 09:25:20  36m   ~$1.19   1▸  scratch-notes session                                                                     │                                            
+│  · ◆ subagent explore the r… WORK 10:01:33   6s        —   0▸  explore the reducer                                                                       │                                            
+│· ◆ other    lint-sweep sess… WORK 09:35:20  26m        —   0▸  lint-sweep session                                                                        │                                            
+│▾ ◆ chatter  chat-desk        WORK 09:15:00  46m   ~$2.47   1▸  Answer questions                                                                          │                                            
+│  · ◆ subagent explore the r… WORK 10:01:36   4s        —   0▸  explore the reducer                                                                       │                                            
+│▾ ◆ planner  q4-roadmap       WORK 09:40:00  21m   ~$3.58   1▸  Draft the quarter's plan                                                                  │                                            
+│  · ◆ subagent explore the r… WORK 10:01:35   4s        —   0▸  explore the reducer                                                                       │                                            
+│▾ ▲ manager  billing-revamp   BLCK 09:02:00  59m   ~$2.34   5▸  Rework invoice exports                                                                    │                                            
+│  ▾ ◆ builder  fix-16         WORK 10:00:12   1m   ~$0.51   1▸  Follow-up from review                                                                     │                                            
+│    · ◆ subagent explore the… WORK 10:01:37   2s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ ◆ planner  mesh-plan      WORK 09:30:00  31m   ~$3.26   1▸  Plan the figure widget                                                                    │                                            
+│    · ◆ subagent explore the… WORK 10:01:32   8s        —   0▸  explore the reducer                                                                       │                                            
+│  · ◆ subagent explore the r… WORK 10:01:26  13s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ ◇ builder  ui-pages       IDLE 09:33:00  28m   ~$1.93   1▸  Pages and drill-in                                                                        │                                            
+│    · ◆ subagent explore the… WORK 10:01:24  16s        —   0▸  explore the reducer                                                                       │                                            
+│  ▾ ✕ explorer find-17        FAIL 10:00:42  57s   ~$0.04   1▸  Follow-up from review                                                                     │                                            
+│    · ◆ subagent explore the… WORK 10:01:06  34s        —   0▸  explore the reducer                                                                       │                                            
+│· ◇ shell    logs             IDLE 09:37:00  24m        —   0▸  tail service logs                                                                         │                                            
+│· ✕ builder  flaky-tests      FAIL 09:26:00  35m   ~$0.31   0▸  Fix the flaky suite                                                                       │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+│                                                                                                                                                          │                                            
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │                                            
+┃                                                                                                                                                          ┃                                            
+┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛                                            
+◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-8 PAGE  w WALL  q QUIT

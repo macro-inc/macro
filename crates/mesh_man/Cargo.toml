@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "mesh_man"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+glam = { workspace = true }
+ratatui = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+insta = "1.48.0"
+rand = { workspace = true }

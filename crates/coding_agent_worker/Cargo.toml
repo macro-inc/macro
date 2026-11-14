@@ -73,6 +73,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
+agent_monitor = { path = "../agent_monitor" }
+agent_monitor_tui = { path = "../agent_monitor_tui" }
+async-trait = { workspace = true }
 rustix = { workspace = true }
 
 # Release archives: tar.gz everywhere but Windows, which gets a zip.

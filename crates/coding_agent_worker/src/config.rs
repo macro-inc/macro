@@ -48,6 +48,79 @@ pub struct Config {
     /// Whether a released macrod keeps itself up to date.
     #[serde(default)]
     pub update: UpdateSettings,
+    /// The agent monitor (`macrod monitor`).
+    #[serde(default)]
+    pub monitor: MonitorSettings,
+}
+
+/// The agent monitor: whether this macrod hosts the machine's collector, and
+/// what the collector and viewer read. Unix only; other systems ignore it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct MonitorSettings {
+    /// Host the collector in this macrod (the panel or `macrod service`),
+    /// unless another process already serves the machine.
+    pub enabled: bool,
+    /// Hours of history: transcripts are indexed back this far at startup,
+    /// and an agent that ended (or last wrote) longer ago, with no live
+    /// terminal or running process, is dropped.
+    pub history_hours: u32,
+    /// The viewer's frames per second while something animates; 0 stops
+    /// animation.
+    pub fps: u8,
+    /// Extra directories of work-run records (`<id>.json` with `<id>.cost`);
+    /// a leading `~` is the home directory.
+    pub run_record_dirs: Vec<PathBuf>,
+    /// hc terminal labels whose value is a work run's id, joining the run to
+    /// its terminal.
+    pub run_id_labels: Vec<String>,
+    /// Seconds between pull request status polls of GitHub (through the `gh`
+    /// CLI, one batched query per 100 lookups) while a viewer watches; at
+    /// most every 5 minutes with none. Values under 15 are raised to 15.
+    /// 0 turns pull request status off.
+    pub pr_poll_secs: u32,
+}
+
+impl Default for MonitorSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            history_hours: 24,
+            fps: 12,
+            run_record_dirs: Vec::new(),
+            run_id_labels: Vec::new(),
+            pr_poll_secs: 60,
+        }
+    }
+}
+
+impl MonitorSettings {
+    /// The `[monitor]` table of the config at `path`, without loading the
+    /// rest: `macrod monitor` runs on a machine that was never paired. A
+    /// missing file or table means the defaults.
+    pub fn read(path: &Path) -> Result<Self, ConfigError> {
+        let raw = match std::fs::read_to_string(path) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(source) => {
+                return Err(ConfigError::Io {
+                    path: path.to_owned(),
+                    source,
+                });
+            }
+        };
+        let parse = |source| ConfigError::Parse {
+            path: path.to_owned(),
+            source,
+        };
+        let mut table: toml::Table = toml::from_str(&raw).map_err(parse)?;
+        match table.remove("monitor") {
+            Some(monitor) => monitor.try_into().map_err(parse),
+            None => Ok(Self::default()),
+        }
+    }
 }
 
 /// Self-update preferences. `MACROD_NO_UPDATE=1` turns updating off too.
@@ -276,21 +349,27 @@ fn web_setting_in(table: &toml::Table) -> Option<&'static str> {
 /// macrod's directory, `~/.macrod` (`%USERPROFILE%\.macrod` on Windows):
 /// the default config, named profiles, adapter installs, and Herdr storage.
 pub fn macrod_directory() -> Option<PathBuf> {
+    home_directory().map(|home| home.join(".macrod"))
+}
+
+/// The user's home directory, which holds `~/.macrod` and the directories
+/// of the agents the monitor reads (`~/.claude`, `~/.codex`, `~/.herdr`).
+pub fn home_directory() -> Option<PathBuf> {
     let home = environment::Home::new();
     let user_profile = environment::Userprofile::new();
-    macrod_directory_in_home(
+    home_directory_from(
         home.as_ref().and_then(|home| home.value()),
         user_profile.as_ref().and_then(|profile| profile.value()),
     )
 }
 
 /// `HOME` wins; `USERPROFILE` is the fallback Windows needs.
-fn macrod_directory_in_home(home: Option<&str>, user_profile: Option<&str>) -> Option<PathBuf> {
+fn home_directory_from(home: Option<&str>, user_profile: Option<&str>) -> Option<PathBuf> {
     [home, user_profile]
         .into_iter()
         .flatten()
         .find(|directory| !directory.is_empty())
-        .map(|home| PathBuf::from(home).join(".macrod"))
+        .map(PathBuf::from)
 }
 
 /// An exclusive hold on one config: one macrod serves one harness.

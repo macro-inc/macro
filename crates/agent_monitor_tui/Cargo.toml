@@ -1,0 +1,35 @@
+[package]
+description = "The agent monitor's terminal viewer."
+edition = "2024"
+name = "agent_monitor_tui"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent_monitor = { path = "../agent_monitor" }
+async-trait = { workspace = true }
+async-stream = { workspace = true }
+chrono = { workspace = true }
+crossterm = { workspace = true }
+futures = { workspace = true }
+macro_env_var = { path = "../macro_env_var", optional = true }
+mesh_man = { path = "../mesh_man", optional = true }
+ratatui = { workspace = true }
+rootcause = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tonic = { workspace = true }
+tracing = { workspace = true }
+tui-input = { workspace = true }
+tui-tree-widget = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[features]
+default = ["mesh-man"]
+# Draw the BODY pane with the mesh man instead of the vitals panel.
+mesh-man = ["dep:mesh_man", "dep:macro_env_var"]
+
+[dev-dependencies]
+clap = { workspace = true }
+insta = "1.48.0"

@@ -43,6 +43,8 @@ pub enum Setting {
     HerdrStorage,
     /// Whether newly launched sessions take focus.
     HerdrFocus,
+    /// Whether this macrod hosts the agent monitor's collector.
+    Monitor,
 }
 
 impl Setting {
@@ -55,6 +57,7 @@ impl Setting {
             Self::HerdrArguments => "Extra args",
             Self::HerdrStorage => "Storage",
             Self::HerdrFocus => "Open sessions",
+            Self::Monitor => "Agent monitor",
         }
     }
 
@@ -68,7 +71,11 @@ impl Setting {
 }
 
 /// Settings in keyboard navigation order. Machine-local only: the runtime's
-/// name, ownership, and permission bypass are set on the web.
+/// name, ownership, and permission bypass are set on the web. The agent
+/// monitor exists only on Unix.
+#[cfg(unix)]
+pub const SETTINGS: &[Setting] = &[Setting::Agent, Setting::Workspace, Setting::Monitor];
+#[cfg(not(unix))]
 pub const SETTINGS: &[Setting] = &[Setting::Agent, Setting::Workspace];
 
 /// Settings relevant to the currently selected agent.
@@ -82,6 +89,7 @@ pub fn settings(config: &Config) -> &'static [Setting] {
         &[
             Setting::Agent,
             Setting::Workspace,
+            Setting::Monitor,
             Setting::HerdrModel,
             Setting::HerdrArguments,
             Setting::HerdrStorage,
@@ -173,6 +181,12 @@ impl ConfigForm {
                 "Background"
             }
             .to_owned(),
+            Setting::Monitor => if config.monitor.enabled {
+                "Hosted here"
+            } else {
+                "Off"
+            }
+            .to_owned(),
         }
     }
 
@@ -191,7 +205,7 @@ impl ConfigForm {
                     .flatten()
                     .filter_map(toml_edit::Value::as_str),
             ),
-            Setting::Agent | Setting::HerdrFocus => String::new(),
+            Setting::Agent | Setting::HerdrFocus | Setting::Monitor => String::new(),
         }
     }
 
@@ -236,7 +250,7 @@ impl ConfigForm {
                 }
                 self.doc["herdr"].or_insert(toml_edit::table())["arguments"] = value(args);
             }
-            Setting::Agent | Setting::HerdrFocus => {
+            Setting::Agent | Setting::HerdrFocus | Setting::Monitor => {
                 return Err(format!("{} is selected rather than typed", setting.label()));
             }
         }
@@ -300,6 +314,12 @@ impl ConfigForm {
     /// Toggle whether a new native session takes focus.
     pub fn toggle_herdr_focus(&mut self, config: &Config) {
         self.doc["herdr"].or_insert(toml_edit::table())["focus"] = value(!config.herdr.focus);
+    }
+
+    /// Toggle whether this macrod hosts the agent monitor's collector.
+    pub fn toggle_monitor(&mut self, config: &Config) {
+        self.doc["monitor"].or_insert(toml_edit::table())["enabled"] =
+            value(!config.monitor.enabled);
     }
 
     /// Point the daemon at a deployment's agent-harness, storage, and web URLs.

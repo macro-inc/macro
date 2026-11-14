@@ -1,0 +1,979 @@
+//! The normalized agent model every source is reduced into, and the updates the
+//! store publishes. Only the store's reducer builds an [`Agent`]; sources send
+//! [`Observation`](crate::domain::observation::Observation)s.
+
+#[cfg(test)]
+mod test;
+
+use std::fmt;
+use std::path::PathBuf;
+
+use chrono::{DateTime, Utc};
+
+/// A point in time, always UTC.
+pub type Timestamp = DateTime<Utc>;
+
+/// Minutes in the per-agent activity sparkline and the tokens-per-minute series.
+pub const ACTIVITY_MINUTES: usize = 60;
+
+/// Hours in the cost-by-hour series.
+pub const HOURS_PER_DAY: usize = 24;
+
+/// A stable agent identity, prefixed by the source namespace that minted it:
+/// `hc:<address>`, `claude:<session>`, `claude:<session>/<agent>`, `codex:<id>`,
+/// `run:<id>`, `demo:<n>`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct AgentId(String);
+
+impl AgentId {
+    /// The id of an hc terminal.
+    pub fn terminal(address: &str) -> Self {
+        Self(format!("hc:{address}"))
+    }
+
+    /// The id of a Claude Code session.
+    pub fn claude_session(session: &str) -> Self {
+        Self(format!("claude:{session}"))
+    }
+
+    /// The id of a Claude Code subagent inside a session.
+    pub fn claude_subagent(session: &str, agent: &str) -> Self {
+        Self(format!("claude:{session}/{agent}"))
+    }
+
+    /// The id of a Codex session.
+    pub fn codex_session(session: &str) -> Self {
+        Self(format!("codex:{session}"))
+    }
+
+    /// The id of a work-run record.
+    pub fn run(id: &str) -> Self {
+        Self(format!("run:{id}"))
+    }
+
+    /// Wraps an id received over the wire. Ids are opaque to viewers.
+    pub fn from_wire(id: String) -> Self {
+        Self(id)
+    }
+
+    /// The id as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for AgentId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// Where a fact came from: one value per source adapter, so a source's
+/// [`Change::Reset`](crate::domain::observation::Change::Reset) replaces only
+/// its own facts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceKind {
+    /// hc terminals (`hc events`).
+    Hc,
+    /// The Claude Code session registry (running processes).
+    ClaudeRegistry,
+    /// Claude Code transcripts.
+    ClaudeTranscripts,
+    /// Codex rollouts.
+    Codex,
+    /// Sessions macrod dispatched.
+    Macrod,
+    /// herdr manager directories.
+    Manager,
+    /// Generic work-run records.
+    RunRecord,
+    /// The scripted demo fleet.
+    Demo,
+    /// The macrod process hosting the collector: its runtime connection,
+    /// open prompts and harness. Reported as source health only.
+    Daemon,
+    /// Pull request status from GitHub, polled through the `gh` CLI.
+    Github,
+}
+
+impl SourceKind {
+    /// Every source, in display order.
+    pub const ALL: [SourceKind; 10] = [
+        SourceKind::Hc,
+        SourceKind::ClaudeRegistry,
+        SourceKind::ClaudeTranscripts,
+        SourceKind::Codex,
+        SourceKind::Macrod,
+        SourceKind::Manager,
+        SourceKind::RunRecord,
+        SourceKind::Demo,
+        SourceKind::Daemon,
+        SourceKind::Github,
+    ];
+
+    /// A short lowercase name, used in span fields and the SOURCES pane.
+    pub fn name(self) -> &'static str {
+        match self {
+            SourceKind::Hc => "hc",
+            SourceKind::ClaudeRegistry => "claude_registry",
+            SourceKind::ClaudeTranscripts => "claude_transcripts",
+            SourceKind::Codex => "codex",
+            SourceKind::Macrod => "macrod",
+            SourceKind::Manager => "manager",
+            SourceKind::RunRecord => "run_record",
+            SourceKind::Demo => "demo",
+            SourceKind::Daemon => "daemon",
+            SourceKind::Github => "github",
+        }
+    }
+
+    fn bit(self) -> u16 {
+        1 << (self as u16)
+    }
+}
+
+/// The set of sources that contributed to one agent.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct SourceSet(u16);
+
+impl SourceSet {
+    /// Adds a source.
+    pub fn insert(&mut self, source: SourceKind) {
+        self.0 |= source.bit();
+    }
+
+    /// Whether the source contributed.
+    pub fn contains(self, source: SourceKind) -> bool {
+        self.0 & source.bit() != 0
+    }
+
+    /// The contributing sources, in display order.
+    pub fn iter(self) -> impl Iterator<Item = SourceKind> {
+        SourceKind::ALL
+            .into_iter()
+            .filter(move |source| self.contains(*source))
+    }
+}
+
+/// A per-minute series as a list: serde derives arrays only up to 32.
+fn serialize_series<S: serde::Serializer, T: serde::Serialize>(
+    series: &[T],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_seq(series)
+}
+
+/// Serialized as the list of source names.
+impl serde::Serialize for SourceSet {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+impl FromIterator<SourceKind> for SourceSet {
+    fn from_iter<I: IntoIterator<Item = SourceKind>>(sources: I) -> Self {
+        let mut set = SourceSet::default();
+        for source in sources {
+            set.insert(source);
+        }
+        set
+    }
+}
+
+/// What role an agent plays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentKind {
+    /// Runs a multi-step project through helpers.
+    Manager,
+    /// Changes code and ships it.
+    Builder,
+    /// Answers questions, read only.
+    Explorer,
+    /// Writes plans.
+    Planner,
+    /// Talks with a person.
+    Chatter,
+    /// Reviews a manager's work.
+    Reviewer,
+    /// A subagent inside another agent's session.
+    Subagent,
+    /// A session macrod dispatched.
+    MacrodSession,
+    /// A recorded work run.
+    WorkRun,
+    /// A factory job.
+    Factory,
+    /// A terminal running a shell or another program, not an agent.
+    Shell,
+    /// Anything else.
+    Other,
+}
+
+impl AgentKind {
+    /// A short lowercase label for the KIND column.
+    pub fn label(self) -> &'static str {
+        match self {
+            AgentKind::Manager => "manager",
+            AgentKind::Builder => "builder",
+            AgentKind::Explorer => "explorer",
+            AgentKind::Planner => "planner",
+            AgentKind::Chatter => "chatter",
+            AgentKind::Reviewer => "reviewer",
+            AgentKind::Subagent => "subagent",
+            AgentKind::MacrodSession => "session",
+            AgentKind::WorkRun => "run",
+            AgentKind::Factory => "factory",
+            AgentKind::Shell => "shell",
+            AgentKind::Other => "other",
+        }
+    }
+}
+
+/// An agent's state, in the order the AGENTS pane sorts by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Status {
+    /// Running a turn.
+    Working,
+    /// Blocked, for example on a permission prompt.
+    Blocked,
+    /// Waiting on a person.
+    Waiting,
+    /// Alive and idle.
+    Idle,
+    /// Finished successfully.
+    Done,
+    /// Finished with an error.
+    Failed,
+    /// Killed or stopped.
+    Stopped,
+}
+
+impl Status {
+    /// Whether the agent has ended.
+    pub fn is_final(self) -> bool {
+        matches!(self, Status::Done | Status::Failed | Status::Stopped)
+    }
+}
+
+/// What an agent has cost. Never shown as `$0` when unknown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cost {
+    /// Reported by the agent's own records.
+    Known(f64),
+    /// Summed usage times the price table.
+    Estimated(f64),
+    /// The model is missing from the price table, or there is no usage yet.
+    #[default]
+    Unpriced,
+}
+
+impl Cost {
+    /// The dollar amount, if any is known or estimated.
+    pub fn usd(self) -> Option<f64> {
+        match self {
+            Cost::Known(usd) | Cost::Estimated(usd) => Some(usd),
+            Cost::Unpriced => None,
+        }
+    }
+
+    /// Sums two costs: any estimate makes the sum an estimate, and an unpriced
+    /// side adds nothing.
+    pub fn plus(self, other: Cost) -> Cost {
+        match (self, other) {
+            (Cost::Unpriced, other) => other,
+            (this, Cost::Unpriced) => this,
+            (Cost::Known(a), Cost::Known(b)) => Cost::Known(a + b),
+            (Cost::Known(a) | Cost::Estimated(a), Cost::Known(b) | Cost::Estimated(b)) => {
+                Cost::Estimated(a + b)
+            }
+        }
+    }
+}
+
+/// Token usage by class.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct Tokens {
+    /// Uncached input tokens.
+    pub input: u64,
+    /// Output tokens.
+    pub output: u64,
+    /// Input tokens read from the prompt cache.
+    pub cache_read: u64,
+    /// Input tokens written to the prompt cache.
+    pub cache_write: u64,
+    /// Of `cache_write`, the tokens written with a one-hour lifetime (priced higher).
+    pub cache_write_1h: u64,
+}
+
+impl Tokens {
+    /// Every class summed (`cache_write_1h` is part of `cache_write`).
+    pub fn total(self) -> u64 {
+        self.input + self.output + self.cache_read + self.cache_write
+    }
+
+    /// Adds another usage record.
+    pub fn add(&mut self, other: Tokens) {
+        self.input += other.input;
+        self.output += other.output;
+        self.cache_read += other.cache_read;
+        self.cache_write += other.cache_write;
+        self.cache_write_1h += other.cache_write_1h;
+    }
+}
+
+/// One agent, built by the reducer from every source that knows it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Agent {
+    /// Stable identity.
+    pub id: AgentId,
+    /// Every source that contributed.
+    pub sources: SourceSet,
+    /// Role.
+    pub kind: AgentKind,
+    /// The hc name, else the session's name, else its title.
+    pub name: String,
+    /// The goal, title or task; at most 160 characters.
+    pub task: Option<String>,
+    /// Current state.
+    pub status: Status,
+    /// Why: "permission", an exit reason, a manager state.
+    pub status_detail: Option<String>,
+    /// The program, such as `claude-code`, `codex` or `bash`.
+    pub program: Option<String>,
+    /// The model in use.
+    pub model: Option<String>,
+    /// Working directory.
+    pub cwd: Option<PathBuf>,
+    /// Git branch.
+    pub branch: Option<String>,
+    /// herdr space name.
+    pub space: Option<String>,
+    /// herdr tags.
+    pub tags: Vec<String>,
+    /// The agent that started this one.
+    pub parent: Option<AgentId>,
+    /// Agents this one started.
+    pub children: Vec<AgentId>,
+    /// hc terminal address.
+    pub terminal: Option<String>,
+    /// The program's native session id.
+    pub session: Option<String>,
+    /// Transcript file.
+    pub transcript: Option<PathBuf>,
+    /// Process id of the program.
+    pub pid: Option<u32>,
+    /// When it started.
+    pub started: Option<Timestamp>,
+    /// When it ended.
+    pub ended: Option<Timestamp>,
+    /// Its last observed activity.
+    pub last_activity: Option<Timestamp>,
+    /// Turns so far.
+    pub turns: u32,
+    /// Tool calls so far.
+    pub tool_calls: u32,
+    /// Tool calls that failed.
+    pub tool_errors: u32,
+    /// The tool call still open: name and a gist, at most 80 characters.
+    pub doing: Option<String>,
+    /// Token usage.
+    pub tokens: Tokens,
+    /// Cost so far.
+    pub cost: Cost,
+    /// Failures in the last 24 hours.
+    pub failures: u32,
+    /// Tool calls plus turns per minute over the last hour, oldest first.
+    #[serde(serialize_with = "serialize_series")]
+    pub activity: [u16; ACTIVITY_MINUTES],
+    /// The last hour by minute, one series per drill-in cell. Boxed: it is
+    /// most of a row's size.
+    pub minutes: Box<AgentMinutes>,
+    /// Pull requests this agent opened or works on, newest first.
+    pub prs: Vec<PrId>,
+}
+
+/// An agent's last hour by minute, oldest first: what the drill-in's stat
+/// cells draw.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct AgentMinutes {
+    /// Turns ended.
+    #[serde(serialize_with = "serialize_series")]
+    pub turns: [u16; ACTIVITY_MINUTES],
+    /// Tool calls started.
+    #[serde(serialize_with = "serialize_series")]
+    pub tools: [u16; ACTIVITY_MINUTES],
+    /// Tool calls that failed.
+    #[serde(serialize_with = "serialize_series")]
+    pub errors: [u16; ACTIVITY_MINUTES],
+    /// Tokens of every class.
+    #[serde(serialize_with = "serialize_series")]
+    pub tokens: [u32; ACTIVITY_MINUTES],
+    /// Spend, as the board's day total attributes it.
+    #[serde(serialize_with = "serialize_series")]
+    pub cost_usd: [f32; ACTIVITY_MINUTES],
+}
+
+impl Default for AgentMinutes {
+    fn default() -> Self {
+        Self {
+            turns: [0; ACTIVITY_MINUTES],
+            tools: [0; ACTIVITY_MINUTES],
+            errors: [0; ACTIVITY_MINUTES],
+            tokens: [0; ACTIVITY_MINUTES],
+            cost_usd: [0.0; ACTIVITY_MINUTES],
+        }
+    }
+}
+
+impl AgentMinutes {
+    /// Adds one minute's counts at `slot` (0 is the oldest minute); a slot
+    /// outside the hour is ignored.
+    pub fn add(&mut self, slot: usize, turns: u32, tools: u32, errors: u32, tokens: u64) {
+        let narrow = |value: u32| u16::try_from(value).unwrap_or(u16::MAX);
+        if let Some(value) = self.turns.get_mut(slot) {
+            *value = value.saturating_add(narrow(turns));
+        }
+        if let Some(value) = self.tools.get_mut(slot) {
+            *value = value.saturating_add(narrow(tools));
+        }
+        if let Some(value) = self.errors.get_mut(slot) {
+            *value = value.saturating_add(narrow(errors));
+        }
+        if let Some(value) = self.tokens.get_mut(slot) {
+            *value = value.saturating_add(u32::try_from(tokens).unwrap_or(u32::MAX));
+        }
+    }
+
+    /// Adds spend at `slot`; a slot outside the hour is ignored.
+    pub fn add_cost(&mut self, slot: usize, usd: f64) {
+        if let Some(value) = self.cost_usd.get_mut(slot) {
+            *value += usd as f32;
+        }
+    }
+
+    /// Whether the hour is empty.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+impl Agent {
+    /// An agent with only an identity, kind and name; every other field empty.
+    pub fn new(id: AgentId, kind: AgentKind, name: String) -> Self {
+        Self {
+            id,
+            sources: SourceSet::default(),
+            kind,
+            name,
+            task: None,
+            status: Status::Idle,
+            status_detail: None,
+            program: None,
+            model: None,
+            cwd: None,
+            branch: None,
+            space: None,
+            tags: Vec::new(),
+            parent: None,
+            children: Vec::new(),
+            terminal: None,
+            session: None,
+            transcript: None,
+            pid: None,
+            started: None,
+            ended: None,
+            last_activity: None,
+            turns: 0,
+            tool_calls: 0,
+            tool_errors: 0,
+            doing: None,
+            tokens: Tokens::default(),
+            cost: Cost::Unpriced,
+            failures: 0,
+            activity: [0; ACTIVITY_MINUTES],
+            minutes: Box::default(),
+            prs: Vec::new(),
+        }
+    }
+}
+
+/// What a tape line records.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TapeKind {
+    /// An agent appeared.
+    Spawned,
+    /// Its status changed.
+    Status,
+    /// A turn started.
+    TurnStart,
+    /// A turn ended.
+    TurnEnd,
+    /// A tool call started.
+    ToolStart,
+    /// A tool call ended.
+    ToolEnd,
+    /// A tool call failed.
+    ToolError,
+    /// The agent failed.
+    Failure,
+    /// The agent finished.
+    Finished,
+    /// The agent was removed.
+    Removed,
+    /// A pull request was opened.
+    PrOpened,
+    /// A pull request's CI passed.
+    PrCiPassed,
+    /// A pull request's CI failed.
+    PrCiFailed,
+    /// A pull request was merged.
+    PrMerged,
+    /// A pull request was closed without merging.
+    PrClosed,
+}
+
+/// How loudly a tape line should show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    /// Routine.
+    Info,
+    /// Worth a glance.
+    Notice,
+    /// Something went wrong but the agent carries on.
+    Warning,
+    /// A failure.
+    Error,
+}
+
+/// One line of the tape.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct TapeEvent {
+    /// The store's sequence number when this line was written.
+    pub seq: u64,
+    /// When it happened.
+    pub at: Timestamp,
+    /// Which agent.
+    pub agent: AgentId,
+    /// What happened.
+    pub kind: TapeKind,
+    /// A short line: tool name and gist, turn number, exit reason. Never transcript text.
+    pub text: String,
+    /// How loudly to show it.
+    pub severity: Severity,
+}
+
+/// The board numbers.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Totals {
+    /// Agents working now.
+    pub working: u32,
+    /// Agents waiting on a person.
+    pub waiting: u32,
+    /// Agents blocked.
+    pub blocked: u32,
+    /// Agents that failed in the last 24 hours.
+    pub failed_24h: u32,
+    /// Turns in the last 24 hours.
+    pub turns_24h: u32,
+    /// Tool calls in the last 24 hours.
+    pub tools_24h: u32,
+    /// Tool errors in the last 24 hours.
+    pub errors_24h: u32,
+    /// Spend since local midnight.
+    pub cost_today: Cost,
+    /// Spend per hour of the local day.
+    pub cost_by_hour: [f32; HOURS_PER_DAY],
+    /// Spend since local midnight by agent kind, largest first; the parts add
+    /// up to `cost_today`.
+    pub spend_by_kind: Vec<(AgentKind, f64)>,
+    /// Tokens per minute over the last hour, oldest first.
+    #[serde(serialize_with = "serialize_series")]
+    pub tokens_per_min: [u32; ACTIVITY_MINUTES],
+}
+
+impl Default for Totals {
+    fn default() -> Self {
+        Self {
+            working: 0,
+            waiting: 0,
+            blocked: 0,
+            failed_24h: 0,
+            turns_24h: 0,
+            tools_24h: 0,
+            errors_24h: 0,
+            cost_today: Cost::Unpriced,
+            cost_by_hour: [0.0; HOURS_PER_DAY],
+            spend_by_kind: Vec::new(),
+            tokens_per_min: [0; ACTIVITY_MINUTES],
+        }
+    }
+}
+
+/// Whether a source is working.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceState {
+    /// Started, nothing reported yet.
+    Starting,
+    /// Reporting.
+    Healthy,
+    /// Its last run failed; the supervisor is restarting it.
+    Unhealthy,
+    /// Not available on this machine.
+    Absent,
+}
+
+/// Progress through a bounded job.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Progress {
+    /// Items finished.
+    pub done: u32,
+    /// Items in total.
+    pub total: u32,
+}
+
+/// One source's health, for the SOURCES pane.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct SourceHealth {
+    /// Which source.
+    pub source: SourceKind,
+    /// Its state.
+    pub state: SourceState,
+    /// The last error or a note.
+    pub detail: Option<String>,
+    /// Items it currently reports (terminals, transcripts, records).
+    pub items: u32,
+    /// When it last reported anything.
+    pub last_event: Option<Timestamp>,
+    /// Startup indexing, while it runs.
+    pub indexing: Option<Progress>,
+    /// How often the supervisor restarted it.
+    pub restarts: u32,
+    /// How often a polled source asks, while it polls; `None` for a
+    /// push-driven source.
+    pub poll_every: Option<std::time::Duration>,
+}
+
+impl SourceHealth {
+    /// A source that has just started.
+    pub fn starting(source: SourceKind) -> Self {
+        Self {
+            source,
+            state: SourceState::Starting,
+            detail: None,
+            items: 0,
+            last_event: None,
+            indexing: None,
+            restarts: 0,
+            poll_every: None,
+        }
+    }
+}
+
+/// Everything a new subscriber needs to draw.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+pub struct Snapshot {
+    /// Every agent.
+    pub agents: Vec<Agent>,
+    /// The last tape lines, oldest first.
+    pub tape: Vec<TapeEvent>,
+    /// The board numbers.
+    pub totals: Totals,
+    /// Every source's health.
+    pub sources: Vec<SourceHealth>,
+    /// Every known pull request.
+    pub prs: Vec<Pr>,
+}
+
+/// One change the store publishes.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateKind {
+    /// The whole state; replaces anything the viewer holds.
+    Snapshot(Snapshot),
+    /// A whole agent row, replacing the row with the same id.
+    Upsert(Agent),
+    /// An agent that is gone.
+    Removed(AgentId),
+    /// One tape line.
+    Event(TapeEvent),
+    /// New board numbers.
+    Totals(Totals),
+    /// One source's health changed.
+    Source(SourceHealth),
+    /// A whole pull request row, replacing the row with the same id.
+    PrUpsert(Pr),
+    /// A pull request that is gone (pruned, or no source knows it).
+    PrRemoved(PrId),
+    /// The collector is alive.
+    Heartbeat(Timestamp),
+}
+
+/// A sequenced change. Sequence numbers rise by one per published update; a
+/// snapshot carries the sequence number of the last update it includes.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Update {
+    /// Sequence number.
+    pub seq: u64,
+    /// The change.
+    pub kind: UpdateKind,
+}
+
+/// What a transcript item is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TranscriptItemKind {
+    /// A message from the user or the harness.
+    User,
+    /// The assistant's text.
+    Assistant,
+    /// A tool call.
+    ToolCall,
+    /// A tool result.
+    ToolResult,
+}
+
+/// One row of an agent's transcript, for the drill-in page.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct TranscriptItem {
+    /// When it was written.
+    pub at: Timestamp,
+    /// What it is.
+    pub kind: TranscriptItemKind,
+    /// Message text, the tool call's arguments or its result, clipped.
+    pub text: String,
+    /// The tool call id, on tool rows.
+    pub tool_id: Option<String>,
+    /// The tool name, on tool rows.
+    pub tool_name: Option<String>,
+    /// Whether the tool call failed.
+    pub is_error: bool,
+    /// How long the tool call took, on result rows.
+    pub duration_ms: Option<u64>,
+}
+
+/// The collector's own status, for `Status` and the viewer's header.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct MonitorStatus {
+    /// The wire protocol version the collector speaks.
+    pub protocol: u32,
+    /// The collector's build version.
+    pub version: String,
+    /// How long the collector has run.
+    pub uptime: std::time::Duration,
+    /// Every source's health.
+    pub sources: Vec<SourceHealth>,
+    /// Viewers subscribed now.
+    pub subscribers: u32,
+}
+
+/// A pull request's identity: `<owner>/<repo>#<number>`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct PrId(String);
+
+impl PrId {
+    /// Wraps an id received over the wire. Ids are opaque to viewers.
+    pub fn from_wire(id: String) -> Self {
+        Self(id)
+    }
+
+    /// The id as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// A GitHub repository, `<owner>/<name>`, each part limited to the
+/// characters GitHub allows, so it can go into a query unescaped. Kept in
+/// lowercase, as GitHub matches names without regard to case.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct RepoName(String);
+
+impl RepoName {
+    /// Checks `<owner>/<name>` and lowercases it; anything else is `None`.
+    pub fn parse(text: &str) -> Option<Self> {
+        let (owner, name) = text.split_once('/')?;
+        let valid = |part: &str| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        };
+        (valid(owner) && valid(name)).then(|| Self(text.to_ascii_lowercase()))
+    }
+
+    /// The owner.
+    pub fn owner(&self) -> &str {
+        self.0.split_once('/').map_or("", |(owner, _)| owner)
+    }
+
+    /// The repository's own name, without its owner.
+    pub fn name(&self) -> &str {
+        self.0.split_once('/').map_or(&self.0, |(_, name)| name)
+    }
+
+    /// The whole `<owner>/<name>`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for RepoName {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// A pull request by repository and number.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub struct PrRef {
+    /// The repository.
+    pub repo: RepoName,
+    /// The pull request's number.
+    pub number: u32,
+}
+
+impl PrRef {
+    /// The id rows are keyed by.
+    pub fn id(&self) -> PrId {
+        PrId(format!("{}#{}", self.repo, self.number))
+    }
+
+    /// The pull request's page.
+    pub fn url(&self) -> String {
+        format!("https://github.com/{}/pull/{}", self.repo, self.number)
+    }
+
+    /// The last pull request page URL in `text`
+    /// (`https://github.com/<owner>/<repo>/pull/<n>`); `gh pr create` prints
+    /// the new one last.
+    pub fn last_in(text: &str) -> Option<Self> {
+        lazy_regex::regex!(r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/pull/([0-9]+)")
+            .captures_iter(text)
+            .filter_map(|captures| {
+                Some(Self {
+                    repo: RepoName::parse(captures.get(1)?.as_str())?,
+                    number: captures.get(2)?.as_str().parse().ok()?,
+                })
+            })
+            .last()
+    }
+}
+
+/// Where a pull request stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrState {
+    /// Known from a transcript or manager, not yet looked up on GitHub.
+    Unknown,
+    /// Open and ready for review.
+    Open,
+    /// Open as a draft.
+    Draft,
+    /// Merged.
+    Merged,
+    /// Closed without merging.
+    Closed,
+}
+
+impl PrState {
+    /// Whether the pull request is finished with.
+    pub fn is_final(self) -> bool {
+        matches!(self, PrState::Merged | PrState::Closed)
+    }
+}
+
+/// A pull request's CI: the `CI gate` status when the head commit has one,
+/// else the rollup of every check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiState {
+    /// Not looked up yet.
+    Unknown,
+    /// No checks ran.
+    None,
+    /// Checks are running.
+    Running,
+    /// Checks passed.
+    Passed,
+    /// A check failed.
+    Failed,
+}
+
+/// A pull request's review decision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    /// No decision, or no review is required.
+    None,
+    /// A review is required and missing.
+    ReviewRequired,
+    /// Changes were requested.
+    ChangesRequested,
+    /// Approved.
+    Approved,
+}
+
+/// Whether a pull request merges cleanly into its base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mergeable {
+    /// Not computed yet.
+    Unknown,
+    /// Merges cleanly.
+    Mergeable,
+    /// Has conflicts.
+    Conflicting,
+}
+
+/// One pull request, built by the reducer from the agents that opened it or
+/// work on its branch and from its GitHub status.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Pr {
+    /// `<owner>/<repo>#<number>`.
+    pub id: PrId,
+    /// The repository.
+    pub repo: RepoName,
+    /// Its number.
+    pub number: u32,
+    /// Its page.
+    pub url: String,
+    /// Its title, once looked up.
+    pub title: Option<String>,
+    /// Open, draft, merged or closed.
+    pub state: PrState,
+    /// CI on its head commit.
+    pub ci: CiState,
+    /// The review decision.
+    pub review: ReviewState,
+    /// Whether it merges cleanly.
+    pub mergeable: Mergeable,
+    /// The agent that opened it, when a transcript recorded that.
+    pub author_agent: Option<AgentId>,
+    /// Every agent tied to it: its author, the manager that recorded it, and
+    /// agents working on its branch.
+    pub agents: Vec<AgentId>,
+    /// Its head branch.
+    pub branch: Option<String>,
+    /// When it was opened.
+    pub opened_at: Option<Timestamp>,
+    /// When it last changed on GitHub.
+    pub updated_at: Option<Timestamp>,
+    /// When it was merged or closed.
+    pub closed_at: Option<Timestamp>,
+}

@@ -19,7 +19,7 @@ members = [
   "crates/suggestions_db_utils",
   "crates/suggestion_generation",
   "crates/activity",
-  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_monitor", "crates/agent_monitor_tui", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",
@@ -133,6 +133,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/mesh_man",
   "crates/messages",
   "crates/model_owner",
   "crates/mcp_select",
@@ -317,6 +318,7 @@ fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
 gif = { version = "0.14", default-features = false, features = ["std"] }
+glam = "0.34"
 glob = "0.3.3"
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
@@ -378,6 +380,7 @@ md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+notify = "8"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
 openssl-sys = "0.9"
@@ -489,6 +492,9 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+tonic-prost-build = "0.14.6"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
@@ -503,6 +509,8 @@ tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 tui-input = { version = "0.14.0", default-features = false }
+# 0.23: the last line built on ratatui 0.29; 0.24 moved to ratatui-core.
+tui-tree-widget = "0.23.1"
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }

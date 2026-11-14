@@ -81,6 +81,14 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
   (`hc`) by environment; both stay supported.
+- `src/monitor.rs` (`src/monitor/`): the agent monitor's wiring, Unix only:
+  `macrod monitor` (viewer, auto-starting a detached collector),
+  `monitor serve|dump`, `--demo`, the collector the panel and `macrod service`
+  host while `[monitor] enabled` (`Host`; one per machine, claimed through
+  `~/.macrod/monitor/monitor.sock`), and the `daemon` source (`daemon_source.rs`, fed
+  by `Daemon::reporting_to`). The model, store, sources and server are
+  `crates/agent_monitor`, the viewer `crates/agent_monitor_tui`; README.md
+  "Monitor" has the behaviour.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
   never npm's extensionless shell script beside them. The Claude Code adapter
@@ -175,7 +183,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
   `shared_team_ids`, never a team owner variant; every harness has a human owner.
 
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
-  Windows-breaking code there without a cfg gate.
+  Windows-breaking code there without a cfg gate. So is `src/monitor.rs`: the
+  `agent_monitor` crates are Unix-only dependencies, and Windows parses
+  `[monitor]` but never hosts.
 - Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
   `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
@@ -218,7 +228,8 @@ stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
 Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
+(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) and agent
+monitor spans (`macrod.monitor*`, from `macrod service` and `monitor serve`) export,
 with the marker's computer UUID as a resource attribute. Enrollment joins the
 setup trace from `Enrollment.traceparent`; its claim sends the setup
 `traceparent`. stdout remains the daemon protocol.
