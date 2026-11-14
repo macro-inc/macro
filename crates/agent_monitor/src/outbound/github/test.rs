@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use chrono::DateTime;
 use tokio::sync::watch;
@@ -192,6 +192,9 @@ struct FakeGithub {
     absent: bool,
     /// Calls after this many fail.
     fail_after: Option<usize>,
+    /// `/elsewhere` has become a checkout.
+    elsewhere_cloned: Arc<AtomicBool>,
+    origin_calls: Arc<AtomicUsize>,
 }
 
 impl GithubBackend for FakeGithub {
@@ -211,6 +214,10 @@ impl GithubBackend for FakeGithub {
     }
 
     async fn origin(&self, cwd: PathBuf) -> Option<String> {
+        self.origin_calls.fetch_add(1, Ordering::SeqCst);
+        if cwd == Path::new("/elsewhere") && self.elsewhere_cloned.load(Ordering::SeqCst) {
+            return Some(ssh_remote("github.com:example-org/gadgets.git"));
+        }
         (cwd == Path::new("/work/widgets"))
             .then(|| ssh_remote("github.com:example-org/widgets.git"))
     }
@@ -218,6 +225,8 @@ impl GithubBackend for FakeGithub {
 
 struct Harness {
     calls: Arc<Mutex<Vec<Instant>>>,
+    elsewhere_cloned: Arc<AtomicBool>,
+    origin_calls: Arc<AtomicUsize>,
     observations: mpsc::Receiver<Observation>,
     subscribers: Arc<AtomicUsize>,
     cancel: CancellationToken,
@@ -244,10 +253,14 @@ fn run_backend(
     every: Duration,
 ) -> Harness {
     let calls = Arc::new(Mutex::new(Vec::new()));
+    let elsewhere_cloned = Arc::new(AtomicBool::new(false));
+    let origin_calls = Arc::new(AtomicUsize::new(0));
     let backend = FakeGithub {
         calls: Arc::clone(&calls),
         absent,
         fail_after,
+        elsewhere_cloned: Arc::clone(&elsewhere_cloned),
+        origin_calls: Arc::clone(&origin_calls),
     };
     let mut wanted = PrWanted {
         // What the fixture answers.
@@ -287,6 +300,8 @@ fn run_backend(
     tokio::spawn(Box::new(source).run(out, cancel.clone()));
     Harness {
         calls,
+        elsewhere_cloned,
+        origin_calls,
         observations,
         subscribers,
         cancel,
@@ -409,5 +424,36 @@ async fn a_poll_interval_below_the_minimum_gap_is_raised_to_it() {
     for gap in harness.gaps() {
         assert!(gap >= MIN_GAP && gap < MIN_GAP * 2, "{gap:?}");
     }
+    harness.cancel.cancel();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_directory_that_becomes_a_checkout_is_noticed() {
+    let mut harness = run_fake(1, false);
+    harness.until_health().await;
+    // Both directories looked up once; the next poll asks neither again.
+    assert_eq!(harness.origin_calls.load(Ordering::SeqCst), 2);
+    harness.until_health().await;
+    assert_eq!(harness.origin_calls.load(Ordering::SeqCst), 2);
+
+    harness.elsewhere_cloned.store(true, Ordering::SeqCst);
+    let checkout = Change::Upsert(Fact::Checkout(CheckoutFact {
+        cwd: PathBuf::from("/elsewhere"),
+        repo: repo("example-org/gadgets"),
+    }));
+    let mut seen = false;
+    for _ in 0..12 {
+        let (changes, _) = harness.until_health().await;
+        if changes.contains(&checkout) {
+            seen = true;
+            break;
+        }
+    }
+    assert!(
+        seen,
+        "a new checkout is noticed within the recheck interval"
+    );
+    // The known checkout was never looked up again.
+    assert_eq!(harness.origin_calls.load(Ordering::SeqCst), 3);
     harness.cancel.cancel();
 }

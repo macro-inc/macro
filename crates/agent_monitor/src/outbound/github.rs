@@ -46,6 +46,10 @@ pub const IDLE_POLL: Duration = Duration::from_secs(5 * 60);
 /// How long to wait before looking for `gh` again when none was found.
 const DISCOVERY_RETRY: Duration = Duration::from_secs(5 * 60);
 
+/// A directory that was not a GitHub checkout is looked at again after this,
+/// in case it has become one.
+const RECHECK_NON_CHECKOUT: Duration = Duration::from_secs(10 * 60);
+
 /// A newly named pull request is looked up this long after it appears, so a
 /// burst of changes makes one query.
 const NEW_REF_DEBOUNCE: Duration = Duration::from_secs(5);
@@ -243,8 +247,9 @@ struct Poller<B> {
     source: GithubSource<B>,
     out: mpsc::Sender<Observation>,
     /// Each working directory's repository, once looked up (`None`: not a
-    /// GitHub checkout).
-    origins: HashMap<PathBuf, Option<RepoName>>,
+    /// GitHub checkout, looked up again after [`RECHECK_NON_CHECKOUT`]), and
+    /// when.
+    origins: HashMap<PathBuf, (Option<RepoName>, Instant)>,
     sent_checkouts: BTreeMap<PathBuf, RepoName>,
     /// What the last query covered.
     polled: PrWanted,
@@ -433,8 +438,10 @@ impl<B: GithubBackend> Poller<B> {
     }
 
     async fn repo_of(&mut self, cwd: &Path) -> Option<RepoName> {
-        if let Some(repo) = self.origins.get(cwd) {
-            return repo.clone();
+        match self.origins.get(cwd) {
+            Some((Some(repo), _)) => return Some(repo.clone()),
+            Some((None, checked)) if checked.elapsed() < RECHECK_NON_CHECKOUT => return None,
+            _ => {}
         }
         let repo = self
             .source
@@ -443,7 +450,8 @@ impl<B: GithubBackend> Poller<B> {
             .await
             .as_deref()
             .and_then(repo_of_remote);
-        self.origins.insert(cwd.to_owned(), repo.clone());
+        self.origins
+            .insert(cwd.to_owned(), (repo.clone(), Instant::now()));
         repo
     }
 
@@ -452,7 +460,7 @@ impl<B: GithubBackend> Poller<B> {
         let fresh: Vec<(PathBuf, RepoName)> = self
             .origins
             .iter()
-            .filter_map(|(cwd, repo)| Some((cwd.clone(), repo.clone()?)))
+            .filter_map(|(cwd, (repo, _))| Some((cwd.clone(), repo.clone()?)))
             .filter(|(cwd, repo)| self.sent_checkouts.get(cwd) != Some(repo))
             .collect();
         for (cwd, repo) in fresh {
