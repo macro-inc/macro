@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Notify;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 use crate::domain::audit::AuditService;
 use crate::domain::ports::{AuditRepo, DomainAudit, EventConsumers, InboxRepo, StripeReader};
@@ -18,8 +20,10 @@ pub const POLL_INTERVAL: Duration = Duration::from_secs(5);
 /// How often a replica checks whether the audit is due.
 pub const AUDIT_CHECK_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
-/// Runs passes until `stop`. A pass in progress finishes first; its leases
-/// would otherwise only expire.
+/// Drains up to [`CLAIM_BATCH`] cursors at once until `stop`, claiming more
+/// as each finishes, so one slow apply holds one slot, not the others. On
+/// `stop` it claims nothing more and waits for the drains in flight; their
+/// leases would otherwise only expire.
 pub async fn run_inbox_worker<Repo, Reader, Consumers>(
     inbox: Arc<InboxService<Repo, Reader, Consumers>>,
     wake: Arc<Notify>,
@@ -29,25 +33,41 @@ pub async fn run_inbox_worker<Repo, Reader, Consumers>(
     Reader: StripeReader,
     Consumers: EventConsumers,
 {
+    let mut drains = JoinSet::new();
     loop {
-        let claimed = match inbox.run_pass().await {
-            Ok(report) => report.claimed,
-            Err(error) => {
-                tracing::error!(error = ?error, "stripe inbox pass failed");
-                0
+        let free = CLAIM_BATCH.saturating_sub(u32::try_from(drains.len()).unwrap_or(CLAIM_BATCH));
+        if free > 0 && !stop.is_cancelled() {
+            let claimed = match inbox.claim(free).await {
+                Ok(cursors) => cursors,
+                Err(error) => {
+                    tracing::error!(error = ?error, "stripe inbox claim failed");
+                    Vec::new()
+                }
+            };
+            let full = u32::try_from(claimed.len()).is_ok_and(|claimed| claimed >= free);
+            for cursor in claimed {
+                let inbox = inbox.clone();
+                drains.spawn(async move { inbox.drain(cursor).await }.in_current_span());
             }
-        };
-        // A full batch may have left more due cursors behind.
-        if u32::try_from(claimed).is_ok_and(|claimed| claimed >= CLAIM_BATCH) {
-            if stop.is_cancelled() {
-                return;
+            // Every free slot filled: more cursors may be due.
+            if full {
+                continue;
             }
-            continue;
         }
         tokio::select! {
-            () = stop.cancelled() => return,
+            () = stop.cancelled() => break,
+            Some(drained) = drains.join_next(), if !drains.is_empty() => {
+                if let Err(error) = drained {
+                    tracing::error!(error = ?error, "stripe inbox drain task failed");
+                }
+            }
             () = wake.notified() => {}
             () = tokio::time::sleep(POLL_INTERVAL) => {}
+        }
+    }
+    while let Some(drained) = drains.join_next().await {
+        if let Err(error) = drained {
+            tracing::error!(error = ?error, "stripe inbox drain task failed");
         }
     }
 }

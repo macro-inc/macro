@@ -85,11 +85,16 @@ enum Outcome {
     Reject,
 }
 
-/// Records every delivery; fails the consumers it is told to.
+/// Records every delivery; fails the consumers it is told to, and holds
+/// one consumer's apply of one event until released.
 #[derive(Default)]
 struct Recorder {
     applied: Mutex<Vec<(Consumer, String, usize)>>,
     failing: Mutex<HashMap<Consumer, Outcome>>,
+    stall: Mutex<Option<(Consumer, String)>>,
+    stalled: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+    applied_events: Mutex<Option<tokio::sync::mpsc::UnboundedSender<(Consumer, String)>>>,
 }
 
 impl Recorder {
@@ -106,6 +111,18 @@ impl Recorder {
 
 impl EventConsumers for Recorder {
     async fn apply(&self, consumer: Consumer, delivery: &Delivery) -> Result<(), ApplyError> {
+        let stalls = self
+            .stall
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|(stalled, event)| {
+                *stalled == consumer && *event == delivery.event_id.as_str()
+            });
+        if stalls {
+            self.stalled.notify_one();
+            self.release.notified().await;
+        }
         if let Some(outcome) = self.failing.lock().unwrap().get(&consumer) {
             return Err(match outcome {
                 Outcome::Retry => {
@@ -123,6 +140,9 @@ impl EventConsumers for Recorder {
                 ..
             }
         );
+        if let Some(applied) = self.applied_events.lock().unwrap().as_ref() {
+            let _ = applied.send((consumer, delivery.event_id.to_string()));
+        }
         self.applied.lock().unwrap().push((
             consumer,
             delivery.event_id.to_string(),
@@ -864,6 +884,63 @@ async fn dead_cursors_replay_in_bulk_by_consumer(pool: PgPool) {
         cursor_state(&pool, Consumer::TeamSubscription).await,
         ("idle".to_owned(), 0, Some("evt_Bad".to_owned()), None)
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stalled_apply_does_not_hold_back_other_customers(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    let inbox = Arc::new(inbox);
+    *recorder.stall.lock().unwrap() = Some((Consumer::Analytics, "evt_Stalled".to_owned()));
+    let (applied, mut applied_events) = tokio::sync::mpsc::unbounded_channel();
+    *recorder.applied_events.lock().unwrap() = Some(applied);
+    let wake = Arc::new(tokio::sync::Notify::new());
+    let stop = tokio_util::sync::CancellationToken::new();
+    let worker = tokio::spawn(crate::inbound::worker::run_inbox_worker(
+        inbox.clone(),
+        wake.clone(),
+        stop.clone(),
+    ));
+
+    inbox
+        .receive(&event(
+            "evt_Stalled",
+            "customer.subscription.created",
+            1_800_000_000,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    wake.notify_one();
+    recorder.stalled.notified().await;
+
+    // While that analytics call hangs, another customer's event arrives.
+    let mut other = subscription("sub_Other", "active", 1_800_000_000);
+    other["customer"] = json!("cus_Other");
+    inbox
+        .receive(&event(
+            "evt_Other",
+            "customer.subscription.created",
+            1_800_000_000,
+            other,
+        ))
+        .await
+        .unwrap();
+    wake.notify_one();
+
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while let Some((consumer, event_id)) = applied_events.recv().await {
+            if consumer == Consumer::TeamSubscription && event_id == "evt_Other" {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("another customer's event applied while one apply stalls");
+
+    stop.cancel();
+    recorder.release.notify_one();
+    worker.await.unwrap();
+    assert!(recorder.applied(Consumer::Analytics).contains(&"evt_Stalled".to_owned()));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

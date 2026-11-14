@@ -151,6 +151,15 @@ where
         Ok(PassReport { claimed })
     }
 
+    /// Leases up to `limit` due cursors, for the worker to drain one by one
+    /// as slots free (see `inbound::worker`).
+    pub async fn claim(&self, limit: u32) -> Result<Vec<ClaimedCursor>, rootcause::Report> {
+        self.repo
+            .claim(self.replica, limit, LEASE)
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())
+    }
+
     /// Makes a cursor due again (an operator's replay).
     pub async fn replay(
         &self,
@@ -181,7 +190,7 @@ where
     /// Applies one leased cursor's pending events until it is caught up or
     /// one fails. Storage errors leave the lease to expire, so another pass
     /// retries.
-    async fn drain(&self, cursor: ClaimedCursor) {
+    pub async fn drain(&self, cursor: ClaimedCursor) {
         if let Err(error) = self.drain_cursor(cursor.clone()).await {
             tracing::error!(
                 consumer = %cursor.consumer,
