@@ -12027,6 +12027,10 @@
       "crates/mention_utils",
       "crates/workspace-hack"
     ],
+    "mesh_man": [
+      "crates/mesh_man",
+      "crates/workspace-hack"
+    ],
     "messages": [
       "crates/activity",
       "crates/agent",

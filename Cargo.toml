@@ -132,6 +132,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/mesh_man",
   "crates/messages",
   "crates/model_owner",
   "crates/mcp_select",
@@ -316,6 +317,7 @@ fractional_index = { version = "2.0.2", default-features = false }
 futures = "0.3.31"
 getrandom = "0.3"
 gif = { version = "0.14", default-features = false, features = ["std"] }
+glam = "0.34"
 glob = "0.3.3"
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
