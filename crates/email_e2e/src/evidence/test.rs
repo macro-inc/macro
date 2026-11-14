@@ -108,31 +108,26 @@ fn a_graphql_request_is_kept_by_its_query() {
 }
 
 #[test]
-fn a_webhook_is_kept_with_its_query_keys_and_body_shape() {
+fn a_request_is_kept_with_the_shape_of_its_query_and_body() {
     let recorder = Recorder::default();
     let body =
         json!({ "value": [{ "lifecycleEvent": "missed", "subscriptionId": "4f1c" }] }).to_string();
     recorder.served(&Served {
         service: "email_service",
         method: "POST",
-        path: "/outlook/webhook",
-        query: Some("validationToken=abc"),
+        path: "/outlook/webhook/4f1c",
+        query: Some("validationToken=abc%20def&view=inbox"),
         body: body.as_bytes(),
         status: 202,
         answer: b"",
     });
 
     let seen = recorder.seen();
-    let shape =
-        json!({ "value": [{ "lifecycleEvent": "missed", "subscriptionId": "<str>" }] }).to_string();
+    let request = seen.http.keys().next().unwrap();
+    assert_eq!(request.query, "validationToken&view=inbox");
     assert_eq!(
-        seen.webhooks.get(&(
-            "email_service".to_owned(),
-            "/outlook/webhook".to_owned(),
-            "validationToken".to_owned(),
-            shape,
-            202,
-        )),
-        Some(&1)
+        request.body,
+        json!({ "value": [{ "lifecycleEvent": "missed", "subscriptionId": "<str>" }] }).to_string()
     );
+    assert_eq!(seen.http.values().copied().collect::<Vec<_>>(), vec![1]);
 }

@@ -13,13 +13,6 @@ use tokio::process::{Child, Command};
 /// and `pubsub_workers`.
 const BIN_DIR_ENV: &str = "EMAIL_E2E_BIN_DIR";
 
-/// The environment variable naming a directory for the services' coverage
-/// profiles. Set for a run against binaries built with
-/// `-C instrument-coverage` (`tooling/email-coverage`), unset otherwise.
-const PROFILE_DIR_ENV: &str = "EMAIL_E2E_PROFILE_DIR";
-/// The variable an instrumented binary reads its profile's path from.
-const PROFILE_FILE_ENV: &str = "LLVM_PROFILE_FILE";
-
 /// How long a service may take to shut down when asked.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -53,12 +46,9 @@ impl ServiceProcess {
             .append(true)
             .open(&log_path)
             .context("could not open the service's log file")?;
-        let mut command = Command::new(&binary);
-        command.env_clear().envs(env);
-        if let Some(profile) = profile_file(name) {
-            command.env(PROFILE_FILE_ENV, profile);
-        }
-        let child = command
+        let child = Command::new(&binary)
+            .env_clear()
+            .envs(env)
             // The services load any `.env` at or above their working directory;
             // the root has none.
             .current_dir("/")
@@ -136,21 +126,6 @@ impl ServiceProcess {
             tracing::warn!(error = ?error, service = self.name, "could not stop a service");
         }
     }
-}
-
-/// Where the instrumented binary `name` writes its coverage profile, when
-/// the run collects coverage.
-///
-/// Every process of one binary shares a file (`%m`) that the counters are
-/// mapped into (`%c`), so a service the scenario kills has still written
-/// what it ran, and the profiles of a whole run stay a few files.
-fn profile_file(name: &str) -> Option<PathBuf> {
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "test support: the suite's own settings come from the process environment"
-    )]
-    let dir = std::env::var(PROFILE_DIR_ENV).ok()?;
-    Some(PathBuf::from(dir).join(format!("{name}-%m%c.profraw")))
 }
 
 /// Fails when one of the service binaries has not been built.

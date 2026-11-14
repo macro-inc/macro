@@ -34,9 +34,6 @@ const VERSION: u8 = 1;
 const TAG_LENGTH: usize = 48;
 const TEXT: &str = "<str>";
 const NOT_JSON: &str = "<not json>";
-/// The paths whose requests are kept with their query keys and body shape:
-/// one route that does different work depending on what it is sent.
-const WEBHOOK_SUFFIX: &str = "/webhook";
 /// The path the GraphQL API is served at, in any service.
 const GRAPHQL_SUFFIX: &str = "/graphql";
 /// The variable nextest sets to the attempt a test run is.
@@ -65,10 +62,8 @@ impl QueueStep {
 
 #[derive(Default)]
 struct Seen {
-    /// (service, method, path, status) to how often.
-    http: BTreeMap<(String, String, String, u16), u64>,
-    /// (service, path, query keys, body shape, status) to how often.
-    webhooks: BTreeMap<(String, String, String, String, u16), u64>,
+    /// What was served to how often.
+    http: BTreeMap<Request, u64>,
     /// (service, query text, answered data without errors) to how often.
     graphql: BTreeMap<(String, String, bool), u64>,
     /// (queue URL, step, body shape) to how often.
@@ -80,6 +75,20 @@ struct Seen {
     lambda: BTreeMap<(String, bool), u64>,
     /// (tool, succeeded) to how often.
     tools: BTreeMap<(String, bool), u64>,
+}
+
+/// A request as the record keeps it. Requests that differ only in content
+/// (ids in the body, a search text) are one.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Request {
+    service: String,
+    method: String,
+    path: String,
+    /// The query's shape: see [`query_shape`].
+    query: String,
+    /// The body's [`shape`], as JSON text.
+    body: String,
+    status: u16,
 }
 
 /// The record of one stack. Clones share it.
@@ -107,38 +116,26 @@ impl Recorder {
     /// Records a request a service answered.
     pub(crate) fn served(&self, served: &Served<'_>) {
         let service = served.service.to_owned();
+        let graphql = served.path.ends_with(GRAPHQL_SUFFIX);
         let mut seen = self.seen();
         *seen
             .http
-            .entry((
-                service.clone(),
-                served.method.to_owned(),
-                served.path.to_owned(),
-                served.status,
-            ))
+            .entry(Request {
+                service: service.clone(),
+                method: served.method.to_owned(),
+                path: served.path.to_owned(),
+                query: query_shape(served.query.unwrap_or_default()),
+                // A GraphQL request is kept by its query below.
+                body: if graphql {
+                    Value::Null.to_string()
+                } else {
+                    shape_of_bytes(served.body)
+                },
+                status: served.status,
+            })
             .or_default() += 1;
 
-        if served.path.ends_with(WEBHOOK_SUFFIX) {
-            let mut keys: Vec<&str> = served
-                .query
-                .unwrap_or_default()
-                .split('&')
-                .filter_map(|pair| pair.split('=').next())
-                .filter(|key| !key.is_empty())
-                .collect();
-            keys.sort_unstable();
-            keys.dedup();
-            *seen
-                .webhooks
-                .entry((
-                    service,
-                    served.path.to_owned(),
-                    keys.join("&"),
-                    shape_of_bytes(served.body),
-                    served.status,
-                ))
-                .or_default() += 1;
-        } else if served.path.ends_with(GRAPHQL_SUFFIX)
+        if graphql
             && let Ok(request) = serde_json::from_slice::<Value>(served.body)
             && let Some(query) = request["query"].as_str()
         {
@@ -255,12 +252,10 @@ impl Recorder {
             "attempt": attempt(),
             "providers": providers,
             "links": collected.links.len(),
-            "http": seen.http.iter().map(|((service, method, path, status), count)| json!({
-                "service": service, "method": method, "path": path, "status": status, "count": count,
-            })).collect::<Vec<_>>(),
-            "webhooks": seen.webhooks.iter().map(|((service, path, query, body, status), count)| json!({
-                "service": service, "path": path, "query": query, "body": parsed(body),
-                "status": status, "count": count,
+            "http": seen.http.iter().map(|(request, count)| json!({
+                "service": request.service, "method": request.method, "path": request.path,
+                "query": request.query, "body": parsed(&request.body),
+                "status": request.status, "count": count,
             })).collect::<Vec<_>>(),
             "graphql": seen.graphql.iter().map(|((service, query, answered), count)| json!({
                 "service": service, "query": query, "answered": answered, "count": count,
@@ -373,6 +368,23 @@ fn is_tag(text: &str) -> bool {
         && text
             .chars()
             .all(|character| character.is_ascii_alphabetic() || "_.-".contains(character))
+}
+
+/// The shape of a query string: its keys in order, each with its value when
+/// that reads as a tag (`view=inbox`) and alone otherwise (`cursor`).
+fn query_shape(query: &str) -> String {
+    let mut pairs: Vec<String> = query
+        .split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| match pair.split_once('=') {
+            Some((key, value)) if is_tag(value) => format!("{key}={value}"),
+            Some((key, _)) => key.to_owned(),
+            None => pair.to_owned(),
+        })
+        .collect();
+    pairs.sort_unstable();
+    pairs.dedup();
+    pairs.join("&")
 }
 
 fn shape_of_bytes(body: &[u8]) -> String {
