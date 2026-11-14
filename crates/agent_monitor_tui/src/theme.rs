@@ -1,7 +1,9 @@
-//! The monitor palette: black, amber ink, yellow for live, cyan for tools, red
-//! for errors, green for ok, and macrod's orange for title strips. The HUD
-//! dressing lives here too: bracket-cornered frames, orange title chips,
-//! segmented meters and the glitch on fresh values.
+//! The monitor's design tokens and its HUD dressing.
+//!
+//! UI code never names a colour. It names a [`Token`], a role such as
+//! [`Token::Alert`] or [`Token::Rule`], and the active [`Theme`] gives each
+//! role its colour. The HUD dressing lives here too: bracket-cornered frames,
+//! orange title chips, segmented meters and the glitch on fresh values.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -12,63 +14,177 @@ use ratatui::widgets::{Block, Borders};
 
 use agent_monitor::domain::model::{Severity, Status};
 
-/// The background.
-pub const BG: Color = Color::Rgb(0, 0, 0);
-/// The ink.
-pub const AMBER: Color = Color::Rgb(255, 165, 43);
-/// Secondary ink.
-pub const DIM: Color = Color::Rgb(194, 123, 28);
-/// Rules, borders and quiet labels.
-pub const FAINT: Color = Color::Rgb(122, 80, 22);
-/// Frame edges between the bright corner brackets.
-pub const EDGE: Color = Color::Rgb(92, 60, 16);
-/// Barely there: empty bars and grid dots.
-pub const GHOST: Color = Color::Rgb(58, 38, 10);
-/// Title strips: macrod's accent.
-pub const STRIP: Color = Color::Rgb(249, 115, 22);
-/// Live values.
-pub const YELLOW: Color = Color::Rgb(255, 225, 77);
-/// Tools.
-pub const CYAN: Color = Color::Rgb(79, 211, 255);
-/// Errors.
-pub const RED: Color = Color::Rgb(255, 59, 59);
-/// Ok.
-pub const GREEN: Color = Color::Rgb(34, 229, 92);
-/// Cyan rules and tick marks: the tool colour, turned down.
-pub const CYAN_DIM: Color = Color::Rgb(28, 98, 122);
-/// Barely there cyan: grid lines.
-pub const CYAN_DARK: Color = Color::Rgb(16, 56, 70);
-/// Highlighted row background.
-pub const SELECT: Color = Color::Rgb(70, 40, 0);
-/// Text on a strip.
-pub const INK_ON_STRIP: Color = Color::Rgb(0, 0, 0);
+/// A colour role. Tokens run from quiet structure to loud signals; a theme
+/// keeps routine roles calm so the loud ones ([`Token::Alert`],
+/// [`Token::Attention`]) draw the eye.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Token {
+    /// The background, and the text on a filled chip or highlight.
+    Bg,
+    /// Barely there: grid dots and the empty cells of meters and gauges.
+    Ghost,
+    /// Pane edges between the bright corner brackets.
+    Frame,
+    /// Rules, separators, quiet labels and settled values (done agents,
+    /// zero counts).
+    Rule,
+    /// The background of the selected row.
+    Selection,
+    /// Secondary ink: column heads, labels, idle agents, units.
+    TextDim,
+    /// The ink: names, values and plain tape lines.
+    Text,
+    /// The brand orange: title chips, spend meters and warnings.
+    Accent,
+    /// What the eye should find next: the focused frame, key hints, the
+    /// command line, live numbers (cost, tokens, counts) and in-flight states
+    /// (CI running, a tool call pending, a source starting).
+    Highlight,
+    /// Waiting on a person: a waiting agent, a PR that needs review.
+    Attention,
+    /// Healthy and routine: working agents, the live link, activity
+    /// sparklines, CI passed, approvals, merges, a tool that succeeded.
+    Ok,
+    /// Tools and what an agent is doing now: tool names and counts, the
+    /// DOING column, BIOSCAN labels.
+    Info,
+    /// Info chrome: ids, branch names, tick marks and info rules.
+    InfoDim,
+    /// Barely there info: the scanner's edge ticks and the help rule.
+    InfoFaint,
+    /// Errors and failures: failed and blocked agents, failing CI, changes
+    /// requested, tool errors, an offline link.
+    Alert,
+}
+
+/// A colour for every [`Token`], and the BODY figure's palette.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Theme {
+    /// The theme's name, as config and the header spell it.
+    pub name: &'static str,
+    /// [`Token::Bg`].
+    pub bg: Color,
+    /// [`Token::Ghost`].
+    pub ghost: Color,
+    /// [`Token::Frame`].
+    pub frame: Color,
+    /// [`Token::Rule`].
+    pub rule: Color,
+    /// [`Token::Selection`].
+    pub selection: Color,
+    /// [`Token::TextDim`].
+    pub text_dim: Color,
+    /// [`Token::Text`].
+    pub text: Color,
+    /// [`Token::Accent`].
+    pub accent: Color,
+    /// [`Token::Highlight`].
+    pub highlight: Color,
+    /// [`Token::Attention`].
+    pub attention: Color,
+    /// [`Token::Ok`].
+    pub ok: Color,
+    /// [`Token::Info`].
+    pub info: Color,
+    /// [`Token::InfoDim`].
+    pub info_dim: Color,
+    /// [`Token::InfoFaint`].
+    pub info_faint: Color,
+    /// [`Token::Alert`].
+    pub alert: Color,
+    /// The mesh man's colours, matched to the tokens.
+    #[cfg(feature = "mesh-man")]
+    pub figure: mesh_man::Palette,
+}
+
+impl Theme {
+    /// The colour of `token`.
+    pub fn color(&self, token: Token) -> Color {
+        match token {
+            Token::Bg => self.bg,
+            Token::Ghost => self.ghost,
+            Token::Frame => self.frame,
+            Token::Rule => self.rule,
+            Token::Selection => self.selection,
+            Token::TextDim => self.text_dim,
+            Token::Text => self.text,
+            Token::Accent => self.accent,
+            Token::Highlight => self.highlight,
+            Token::Attention => self.attention,
+            Token::Ok => self.ok,
+            Token::Info => self.info,
+            Token::InfoDim => self.info_dim,
+            Token::InfoFaint => self.info_faint,
+            Token::Alert => self.alert,
+        }
+    }
+}
+
+/// Black, amber ink, macrod's orange chips, yellow highlights, cyan tools,
+/// green for ok and red for errors.
+pub const CLASSIC: Theme = Theme {
+    name: "classic",
+    bg: Color::Rgb(0, 0, 0),
+    ghost: Color::Rgb(58, 38, 10),
+    frame: Color::Rgb(92, 60, 16),
+    rule: Color::Rgb(122, 80, 22),
+    selection: Color::Rgb(70, 40, 0),
+    text_dim: Color::Rgb(194, 123, 28),
+    text: Color::Rgb(255, 165, 43),
+    accent: Color::Rgb(249, 115, 22),
+    highlight: Color::Rgb(255, 225, 77),
+    attention: Color::Rgb(255, 225, 77),
+    ok: Color::Rgb(34, 229, 92),
+    info: Color::Rgb(79, 211, 255),
+    info_dim: Color::Rgb(28, 98, 122),
+    info_faint: Color::Rgb(16, 56, 70),
+    alert: Color::Rgb(255, 59, 59),
+    #[cfg(feature = "mesh-man")]
+    figure: mesh_man::Palette::DEFAULT,
+};
+
+/// The theme frames are drawn in.
+pub fn active() -> &'static Theme {
+    &CLASSIC
+}
+
+impl Token {
+    /// This role's colour in the active theme.
+    pub fn color(self) -> Color {
+        active().color(self)
+    }
+}
 
 /// Plain ink on black.
 pub fn base() -> Style {
-    Style::new().fg(AMBER).bg(BG)
+    Style::new().fg(Token::Text.color()).bg(Token::Bg.color())
 }
 
-/// A colour on black.
-pub fn ink(color: Color) -> Style {
-    Style::new().fg(color)
+/// Text in a role's colour.
+pub fn ink(token: Token) -> Style {
+    Style::new().fg(token.color())
 }
 
-/// Bold colour.
-pub fn bold(color: Color) -> Style {
-    Style::new().fg(color).add_modifier(Modifier::BOLD)
+/// Bold text in a role's colour.
+pub fn bold(token: Token) -> Style {
+    Style::new().fg(token.color()).add_modifier(Modifier::BOLD)
+}
+
+/// Bold background-coloured text on a filled role: a chip or a badge.
+pub fn chip(token: Token) -> Style {
+    bold(Token::Bg).bg(token.color())
 }
 
 /// Black on orange, the title strip style.
 pub fn strip() -> Style {
-    Style::new()
-        .fg(INK_ON_STRIP)
-        .bg(STRIP)
-        .add_modifier(Modifier::BOLD)
+    chip(Token::Accent)
 }
 
 /// The selected row.
 pub fn selected() -> Style {
-    Style::new().bg(SELECT).add_modifier(Modifier::BOLD)
+    Style::new()
+        .bg(Token::Selection.color())
+        .add_modifier(Modifier::BOLD)
 }
 
 /// Frame corners: heavy brackets on light edges. [`brackets`] grows each
@@ -85,12 +201,12 @@ pub const FRAME: border::Set = border::Set {
     horizontal_bottom: "─",
 };
 
-/// A bordered block in the HUD frame, its edges in `color`.
-pub fn frame(color: Color) -> Block<'static> {
+/// A bordered block in the HUD frame, its edges in `token`'s colour.
+pub fn frame(token: Token) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
         .border_set(FRAME)
-        .border_style(Style::new().fg(color))
+        .border_style(ink(token))
         .style(base())
 }
 
@@ -112,10 +228,14 @@ fn hud_title(title: &str) -> String {
 }
 
 /// A pane: the bracket frame, a numbered title chip, and extra
-/// title spans after it. A focused pane gets a yellow frame.
+/// title spans after it. A focused pane gets a highlighted frame.
 pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'static> {
-    let border = if focused { YELLOW } else { EDGE };
-    let mut spans = vec![Span::styled("━", Style::new().fg(corner(border)))];
+    let border = if focused {
+        Token::Highlight
+    } else {
+        Token::Frame
+    };
+    let mut spans = vec![Span::styled("━", Style::new().fg(corner(border.color())))];
     spans.extend(strip_title(&hud_title(title)));
     spans.extend(extra);
     frame(border).title(Line::from(spans))
@@ -123,10 +243,13 @@ pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'sta
 
 /// The brighter ink of a frame's corners.
 fn corner(border: Color) -> Color {
-    match border {
-        EDGE => DIM,
-        FAINT => AMBER,
-        other => other,
+    let theme = active();
+    if border == theme.frame {
+        theme.text_dim
+    } else if border == theme.rule {
+        theme.text
+    } else {
+        border
     }
 }
 
@@ -200,14 +323,14 @@ fn dots(buffer: &mut Buffer, y: u16, from: u16, to: u16) {
     let blank = (from..to).all(|x| {
         buffer
             .cell((x, y))
-            .is_some_and(|cell| cell.symbol() == " " && cell.bg == BG)
+            .is_some_and(|cell| cell.symbol() == " " && cell.bg == Token::Bg.color())
     });
     if !blank {
         return;
     }
     for x in (from + 2..to.saturating_sub(1)).filter(|x| x.is_multiple_of(GRID_COLUMNS)) {
         if let Some(cell) = buffer.cell_mut((x, y)) {
-            cell.set_symbol("·").set_fg(GHOST);
+            cell.set_symbol("·").set_fg(Token::Ghost.color());
         }
     }
 }
@@ -237,11 +360,11 @@ fn heavy(
 }
 
 /// A segmented meter `width` cells wide, `filled` of them lit.
-pub fn meter(filled: usize, width: usize, color: Color) -> Vec<Span<'static>> {
+pub fn meter(filled: usize, width: usize, token: Token) -> Vec<Span<'static>> {
     let filled = filled.min(width);
     vec![
-        Span::styled("▰".repeat(filled), ink(color)),
-        Span::styled("▱".repeat(width - filled), ink(GHOST)),
+        Span::styled("▰".repeat(filled), ink(token)),
+        Span::styled("▱".repeat(width - filled), ink(Token::Ghost)),
     ]
 }
 
@@ -275,15 +398,15 @@ pub fn glitch(text: &str, age_ms: i64, now_ms: i64) -> String {
         .collect()
 }
 
-/// The colour of a status square.
-pub fn status_color(status: Status) -> Color {
+/// The role of a status square.
+pub fn status_color(status: Status) -> Token {
     match status {
-        Status::Working => GREEN,
-        Status::Waiting => YELLOW,
-        Status::Blocked | Status::Failed => RED,
-        Status::Idle => DIM,
-        Status::Done => FAINT,
-        Status::Stopped => GHOST,
+        Status::Working => Token::Ok,
+        Status::Waiting => Token::Attention,
+        Status::Blocked | Status::Failed => Token::Alert,
+        Status::Idle => Token::TextDim,
+        Status::Done => Token::Rule,
+        Status::Stopped => Token::Ghost,
     }
 }
 
@@ -314,12 +437,12 @@ pub fn status_square(status: Status, blink: bool) -> Span<'static> {
     Span::styled(glyph, bold(status_color(status)))
 }
 
-/// The colour of a tape line.
-pub fn severity_color(severity: Severity) -> Color {
+/// The role of a tape line.
+pub fn severity_color(severity: Severity) -> Token {
     match severity {
-        Severity::Info => AMBER,
-        Severity::Notice => YELLOW,
-        Severity::Warning => STRIP,
-        Severity::Error => RED,
+        Severity::Info => Token::Text,
+        Severity::Notice => Token::Highlight,
+        Severity::Warning => Token::Accent,
+        Severity::Error => Token::Alert,
     }
 }

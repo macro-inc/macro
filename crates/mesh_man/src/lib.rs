@@ -27,6 +27,7 @@ use std::f32::consts::TAU;
 use std::time::Duration;
 
 mod model;
+mod palette;
 mod project;
 mod pulse;
 mod widget;
@@ -34,6 +35,7 @@ mod widget;
 #[cfg(test)]
 mod test;
 
+pub use palette::{Palette, Rgb};
 pub use pulse::PulseKind;
 
 use model::Model;
@@ -74,6 +76,8 @@ pub struct Body {
     glow: Vec<f32>,
     /// The colours the terminal can show.
     color_depth: ColorDepth,
+    /// The colours the figure is drawn in.
+    palette: Palette,
 }
 
 /// How many colours the terminal shows.
@@ -119,12 +123,18 @@ impl Body {
             flashes: Vec::new(),
             glow,
             color_depth: ColorDepth::default(),
+            palette: Palette::DEFAULT,
         }
     }
 
     /// Draws with the colours a terminal of `depth` can show.
     pub fn set_color_depth(&mut self, depth: ColorDepth) {
         self.color_depth = depth;
+    }
+
+    /// Draws in `palette`'s colours.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
     }
 
     /// The names of the nerves, in a fixed order: `spinal_cord`; then for the

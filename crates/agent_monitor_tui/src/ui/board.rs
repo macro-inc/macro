@@ -2,7 +2,6 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Color;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
@@ -11,12 +10,13 @@ use agent_monitor::domain::model::Status;
 use crate::app::App;
 use crate::format;
 use crate::theme;
+use crate::theme::Token;
 
 /// One quote cell: a label, a value in a colour, and a sub-line.
 struct Quote {
     label: &'static str,
     value: String,
-    color: Color,
+    color: Token,
     sub: Line<'static>,
     /// A share of the live agents, drawn as a meter after the value.
     share: Option<f64>,
@@ -47,8 +47,8 @@ fn quotes(app: &App) -> [Quote; 8] {
         .iter()
         .map(|value| u64::from(*value))
         .sum();
-    let sub = |text: String| Line::from(Span::styled(text, theme::ink(theme::DIM)));
-    let red_if = |value: u32| if value > 0 { theme::RED } else { theme::GREEN };
+    let sub = |text: String| Line::from(Span::styled(text, theme::ink(Token::TextDim)));
+    let red_if = |value: u32| if value > 0 { Token::Alert } else { Token::Ok };
     let of_live = |count: u32| {
         if live == 0 {
             0.0
@@ -61,14 +61,14 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "WORKING",
             value: totals.working.to_string(),
-            color: theme::GREEN,
+            color: Token::Ok,
             sub: sub(format!("of {live} live · {idle} idle")),
             share: Some(of_live(totals.working)),
         },
         Quote {
             label: "WAITING",
             value: totals.waiting.to_string(),
-            color: theme::YELLOW,
+            color: Token::Highlight,
             sub: sub(String::from("on a person")),
             share: Some(of_live(totals.waiting)),
         },
@@ -76,9 +76,9 @@ fn quotes(app: &App) -> [Quote; 8] {
             label: "BLOCKED",
             value: totals.blocked.to_string(),
             color: if totals.blocked > 0 {
-                theme::RED
+                Token::Alert
             } else {
-                theme::AMBER
+                Token::Text
             },
             sub: sub(String::from("permission / stuck")),
             share: Some(of_live(totals.blocked)),
@@ -86,14 +86,14 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "TURNS 24H",
             value: format::thousands(u64::from(totals.turns_24h)),
-            color: theme::AMBER,
+            color: Token::Text,
             sub: sub(format!("{}/h avg", totals.turns_24h / 24)),
             share: None,
         },
         Quote {
             label: "TOOLS 24H",
             value: format::thousands(u64::from(totals.tools_24h)),
-            color: theme::CYAN,
+            color: Token::Info,
             sub: sub(format!("{error_rate:.1}% failed")),
             share: None,
         },
@@ -107,16 +107,16 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "TOK/MIN",
             value: format::compact(u64::from(tokens_now)),
-            color: theme::YELLOW,
+            color: Token::Highlight,
             sub: {
                 let mut spans = format::spark(
                     totals.tokens_per_min.iter().map(|value| u64::from(*value)),
                     14,
-                    theme::GREEN,
+                    Token::Ok,
                 );
                 spans.push(Span::styled(
                     format!(" {}/h", format::compact(tokens_hour)),
-                    theme::ink(theme::DIM),
+                    theme::ink(Token::TextDim),
                 ));
                 Line::from(spans)
             },
@@ -125,14 +125,14 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "DAY",
             value: format::cost(totals.cost_today),
-            color: theme::YELLOW,
+            color: Token::Highlight,
             sub: Line::from(format::spark(
                 totals.cost_by_hour.iter().map(|usd| {
                     // Cents, for bar heights only.
                     (f64::from(*usd) * 100.0).round().max(0.0) as u64
                 }),
                 24,
-                theme::STRIP,
+                Token::Accent,
             )),
             share: None,
         },
@@ -151,10 +151,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
         for quote in &quotes {
             spans.push(Span::styled(
                 format!(" {} ", quote.label),
-                theme::ink(theme::DIM),
+                theme::ink(Token::TextDim),
             ));
             spans.push(Span::styled(quote.value.clone(), theme::bold(quote.color)));
-            spans.push(Span::styled(" ╱", theme::ink(theme::FAINT)));
+            spans.push(Span::styled(" ╱", theme::ink(Token::Rule)));
         }
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
@@ -162,15 +162,15 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
 
     let cells = Layout::horizontal([Constraint::Ratio(1, 8); 8]).split(area);
     for (index, (quote, cell)) in quotes.into_iter().zip(cells.iter()).enumerate() {
-        let block = theme::frame(theme::EDGE)
+        let block = theme::frame(Token::Frame)
             .title(Line::from(vec![Span::styled(
                 format!(" {} ", quote.label),
-                theme::bold(theme::STRIP),
+                theme::bold(Token::Accent),
             )]))
             .title(
                 Line::from(Span::styled(
                     format!(" Q{} ", index + 1),
-                    theme::ink(theme::CYAN_DIM),
+                    theme::ink(Token::InfoDim),
                 ))
                 .right_aligned(),
             );

@@ -3,7 +3,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Cell, Paragraph, Row, Table, TableState};
 
@@ -16,6 +16,7 @@ use crate::app::App;
 use crate::format;
 use crate::keys::{Base, Pane};
 use crate::theme;
+use crate::theme::Token;
 use crate::ui::Clock;
 use crate::view::{ViewState, pr_state_word};
 
@@ -42,7 +43,7 @@ pub fn draw(
 }
 
 fn count_span(text: String) -> Span<'static> {
-    Span::styled(format!(" {text} "), theme::ink(theme::DIM))
+    Span::styled(format!(" {text} "), theme::ink(Token::TextDim))
 }
 
 /// Rows skipped so the cursor row stays visible in `height` rows.
@@ -106,19 +107,19 @@ fn agent_row(
     columns: &AgentColumns,
 ) -> Row<'static> {
     let doing = match (&agent.doing, agent.status) {
-        (Some(doing), _) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
+        (Some(doing), _) => Span::styled(doing.clone(), theme::ink(Token::Info)),
         (None, status) => match (&agent.status_detail, &agent.task) {
             (Some(detail), _) => {
                 Span::styled(detail.clone(), theme::ink(theme::status_color(status)))
             }
-            (None, Some(task)) => Span::styled(task.clone(), theme::ink(theme::DIM)),
-            (None, None) => Span::styled("—", theme::ink(theme::FAINT)),
+            (None, Some(task)) => Span::styled(task.clone(), theme::ink(Token::TextDim)),
+            (None, None) => Span::styled("—", theme::ink(Token::Rule)),
         },
     };
     let cost_color = match agent.cost {
-        agent_monitor::domain::model::Cost::Known(_) => theme::YELLOW,
-        agent_monitor::domain::model::Cost::Estimated(_) => theme::AMBER,
-        agent_monitor::domain::model::Cost::Unpriced => theme::FAINT,
+        agent_monitor::domain::model::Cost::Known(_) => Token::Highlight,
+        agent_monitor::domain::model::Cost::Estimated(_) => Token::Text,
+        agent_monitor::domain::model::Cost::Unpriced => Token::Rule,
     };
     let errors = agent.tool_errors + agent.failures;
 
@@ -129,7 +130,7 @@ fn agent_row(
     if !columns.compact {
         cells.push(Cell::from(Span::styled(
             agent.kind.label(),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )));
     }
     let name_cell = match badge {
@@ -137,12 +138,12 @@ fn agent_row(
             // The table may give the column a cell less than asked.
             let room = usize::from(NAME_WIDTH).saturating_sub(badge.width() + 2);
             Line::from(vec![
-                Span::styled(format::cell(&name, room), theme::bold(theme::AMBER)),
+                Span::styled(format::cell(&name, room), theme::bold(Token::Text)),
                 Span::raw(" "),
                 badge,
             ])
         }
-        None => Line::from(Span::styled(name, theme::bold(theme::AMBER))),
+        None => Line::from(Span::styled(name, theme::bold(Token::Text))),
     };
     cells.push(Cell::from(name_cell));
     if !columns.compact {
@@ -155,7 +156,7 @@ fn agent_row(
     if columns.task > 0 {
         cells.push(Cell::from(Span::styled(
             agent.task.clone().unwrap_or_default(),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )));
     }
     cells.extend([
@@ -164,7 +165,7 @@ fn agent_row(
         Cell::from(
             Line::from(Span::styled(
                 agent.tool_calls.to_string(),
-                theme::ink(theme::CYAN),
+                theme::ink(Token::Info),
             ))
             .right_aligned(),
         ),
@@ -173,7 +174,11 @@ fn agent_row(
         cells.push(Cell::from(
             Line::from(Span::styled(
                 errors.to_string(),
-                theme::ink(if errors > 0 { theme::RED } else { theme::FAINT }),
+                theme::ink(if errors > 0 {
+                    Token::Alert
+                } else {
+                    Token::Rule
+                }),
             ))
             .right_aligned(),
         ));
@@ -182,7 +187,7 @@ fn agent_row(
         cells.push(Cell::from(
             Line::from(Span::styled(
                 format::compact(agent.tokens.total()),
-                theme::ink(theme::DIM),
+                theme::ink(Token::TextDim),
             ))
             .right_aligned(),
         ));
@@ -196,9 +201,9 @@ fn agent_row(
     ));
     if columns.spark > 0 {
         let color = if agent.status.is_final() {
-            theme::FAINT
+            Token::Rule
         } else {
-            theme::GREEN
+            Token::Ok
         };
         cells.push(Cell::from(Line::from(format::activity(
             &agent.activity,
@@ -236,12 +241,12 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         app.view.agents.len()
     ))];
     extra.push(if app.filter.all {
-        Span::styled(" ALL · a HIDES ENDED ", theme::bold(theme::YELLOW))
+        Span::styled(" ALL · a HIDES ENDED ", theme::bold(Token::Highlight))
     } else {
-        Span::styled(" a SHOWS ENDED ", theme::ink(theme::FAINT))
+        Span::styled(" a SHOWS ENDED ", theme::ink(Token::Rule))
     });
     if !app.filter.is_empty() {
-        extra.push(Span::styled(" FILTERED ", theme::bold(theme::YELLOW)));
+        extra.push(Span::styled(" FILTERED ", theme::bold(Token::Highlight)));
     }
     let block = theme::pane("1 AGENTS", extra, focused);
 
@@ -294,7 +299,7 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
     let header_row = Row::new(
         header
             .into_iter()
-            .map(|title| Cell::from(Span::styled(title, theme::bold(theme::FAINT)))),
+            .map(|title| Cell::from(Span::styled(title, theme::bold(Token::Rule)))),
     );
     let table = Table::new(table_rows, widths)
         .header(header_row)
@@ -322,13 +327,13 @@ fn pr_badge(view: &ViewState, agent: &Agent) -> Option<Span<'static>> {
     };
     let open: Vec<&&Pr> = prs.iter().filter(|pr| !pr.state.is_final()).collect();
     let color = if open.iter().any(|pr| pr.ci == CiState::Failed) {
-        theme::RED
+        Token::Alert
     } else if open.iter().any(|pr| pr.ci == CiState::Running) {
-        theme::YELLOW
+        Token::Highlight
     } else if !open.is_empty() && open.iter().all(|pr| pr.ci == CiState::Passed) {
-        theme::GREEN
+        Token::Ok
     } else {
-        theme::CYAN_DIM
+        Token::InfoDim
     };
     Some(Span::styled(text, theme::bold(color)))
 }
@@ -336,31 +341,31 @@ fn pr_badge(view: &ViewState, agent: &Agent) -> Option<Span<'static>> {
 /// A pull request's CI glyph: ◆ passed, ◌ running, ✕ failed, · none.
 pub fn ci_glyph(ci: CiState) -> Span<'static> {
     match ci {
-        CiState::Passed => Span::styled("◆", theme::bold(theme::GREEN)),
-        CiState::Running => Span::styled("◌", theme::bold(theme::YELLOW)),
-        CiState::Failed => Span::styled("✕", theme::bold(theme::RED)),
-        CiState::None => Span::styled("·", theme::ink(theme::DIM)),
-        CiState::Unknown => Span::styled("·", theme::ink(theme::FAINT)),
+        CiState::Passed => Span::styled("◆", theme::bold(Token::Ok)),
+        CiState::Running => Span::styled("◌", theme::bold(Token::Highlight)),
+        CiState::Failed => Span::styled("✕", theme::bold(Token::Alert)),
+        CiState::None => Span::styled("·", theme::ink(Token::TextDim)),
+        CiState::Unknown => Span::styled("·", theme::ink(Token::Rule)),
     }
 }
 
 /// A review decision as a short word and colour.
 fn review_word(review: ReviewState) -> Span<'static> {
     match review {
-        ReviewState::Approved => Span::styled("APPR", theme::bold(theme::GREEN)),
-        ReviewState::ChangesRequested => Span::styled("CHG ", theme::bold(theme::RED)),
-        ReviewState::ReviewRequired => Span::styled("REQ ", theme::ink(theme::YELLOW)),
-        ReviewState::None => Span::styled("—   ", theme::ink(theme::FAINT)),
+        ReviewState::Approved => Span::styled("APPR", theme::bold(Token::Ok)),
+        ReviewState::ChangesRequested => Span::styled("CHG ", theme::bold(Token::Alert)),
+        ReviewState::ReviewRequired => Span::styled("REQ ", theme::ink(Token::Attention)),
+        ReviewState::None => Span::styled("—   ", theme::ink(Token::Rule)),
     }
 }
 
 /// A pull request state's colour.
-fn pr_state_color(state: PrState) -> ratatui::style::Color {
+fn pr_state_color(state: PrState) -> Token {
     match state {
-        PrState::Open => theme::AMBER,
-        PrState::Draft => theme::DIM,
-        PrState::Merged => theme::GREEN,
-        PrState::Closed | PrState::Unknown => theme::FAINT,
+        PrState::Open => Token::Text,
+        PrState::Draft => Token::TextDim,
+        PrState::Merged => Token::Ok,
+        PrState::Closed | PrState::Unknown => Token::Rule,
     }
 }
 
@@ -387,7 +392,7 @@ pub fn pr_line(
         .or_else(|| pr.branch.clone())
         .unwrap_or_else(|| String::from("…"));
     let conflict = if pr.mergeable == Mergeable::Conflicting {
-        Span::styled("⚠ ", theme::bold(theme::RED))
+        Span::styled("⚠ ", theme::bold(Token::Alert))
     } else {
         Span::raw("  ")
     };
@@ -396,18 +401,15 @@ pub fn pr_line(
         Span::raw(" "),
         Span::styled(
             format::cell(&format!("#{}", pr.number), 7),
-            theme::bold(theme::YELLOW),
+            theme::bold(Token::Highlight),
         ),
-        Span::styled(
-            format::cell(pr.repo.name(), 11),
-            theme::ink(theme::CYAN_DIM),
-        ),
+        Span::styled(format::cell(pr.repo.name(), 11), theme::ink(Token::InfoDim)),
         Span::styled(
             format::cell(&title, title_width),
             theme::ink(if pr.state.is_final() {
-                theme::DIM
+                Token::TextDim
             } else {
-                theme::AMBER
+                Token::Text
             }),
         ),
     ];
@@ -415,14 +417,14 @@ pub fn pr_line(
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             format::cell(pr.branch.as_deref().unwrap_or("—"), branch_width - 1),
-            theme::ink(theme::CYAN_DIM),
+            theme::ink(Token::InfoDim),
         ));
     }
     if with_agent {
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             format::cell(&agent, 14),
-            theme::bold(theme::AMBER),
+            theme::bold(Token::Text),
         ));
     }
     spans.extend([
@@ -432,7 +434,7 @@ pub fn pr_line(
         conflict,
         Span::styled(
             format::right(&age_since(clock, pr.opened_at), 4),
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         ),
         Span::raw(" "),
         Span::styled(
@@ -464,7 +466,7 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
     if failing > 0 {
         extra.push(Span::styled(
             format!(" ✕ {failing} FAILING "),
-            theme::bold(theme::RED),
+            theme::bold(Token::Alert),
         ));
     }
     if let Some(health) = app
@@ -475,7 +477,7 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
     {
         extra.push(Span::styled(
             format!(" ◷ {}s ", every.as_secs()),
-            theme::ink(theme::CYAN_DIM),
+            theme::ink(Token::InfoDim),
         ));
     }
     let block = theme::pane("8 PRS", extra, focused);
@@ -507,7 +509,7 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
             ),
             width,
         ),
-        theme::bold(theme::FAINT),
+        theme::bold(Token::Rule),
     ))];
     lines.extend(
         rows.iter()
@@ -528,30 +530,30 @@ fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: 
     if rows.is_empty() {
         lines.push(Line::from(Span::styled(
             "  no pull requests yet: agents' gh pr create and managers' prs files show here",
-            theme::ink(theme::FAINT),
+            theme::ink(Token::Rule),
         )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 /// A tape kind's short tag and colour.
-pub fn tape_tag(kind: TapeKind) -> (&'static str, Color) {
+pub fn tape_tag(kind: TapeKind) -> (&'static str, Token) {
     match kind {
-        TapeKind::Spawned => ("SPWN", theme::GREEN),
-        TapeKind::Status => ("STAT", theme::YELLOW),
-        TapeKind::TurnStart => ("TURN", theme::AMBER),
-        TapeKind::TurnEnd => ("TEND", theme::DIM),
-        TapeKind::ToolStart => ("TOOL", theme::CYAN),
-        TapeKind::ToolEnd => ("TOK ", theme::CYAN),
-        TapeKind::ToolError => ("TERR", theme::RED),
-        TapeKind::Failure => ("FAIL", theme::RED),
-        TapeKind::Finished => ("DONE", theme::GREEN),
-        TapeKind::Removed => ("GONE", theme::FAINT),
-        TapeKind::PrOpened => ("PR+ ", theme::GREEN),
-        TapeKind::PrCiPassed => ("CI◆ ", theme::GREEN),
-        TapeKind::PrCiFailed => ("CI✕ ", theme::RED),
-        TapeKind::PrMerged => ("MRGD", theme::GREEN),
-        TapeKind::PrClosed => ("CLSD", theme::FAINT),
+        TapeKind::Spawned => ("SPWN", Token::Ok),
+        TapeKind::Status => ("STAT", Token::Highlight),
+        TapeKind::TurnStart => ("TURN", Token::Text),
+        TapeKind::TurnEnd => ("TEND", Token::TextDim),
+        TapeKind::ToolStart => ("TOOL", Token::Info),
+        TapeKind::ToolEnd => ("TOK ", Token::Info),
+        TapeKind::ToolError => ("TERR", Token::Alert),
+        TapeKind::Failure => ("FAIL", Token::Alert),
+        TapeKind::Finished => ("DONE", Token::Ok),
+        TapeKind::Removed => ("GONE", Token::Rule),
+        TapeKind::PrOpened => ("PR+ ", Token::Ok),
+        TapeKind::PrCiPassed => ("CI◆ ", Token::Ok),
+        TapeKind::PrCiFailed => ("CI✕ ", Token::Alert),
+        TapeKind::PrMerged => ("MRGD", Token::Ok),
+        TapeKind::PrClosed => ("CLSD", Token::Rule),
     }
 }
 
@@ -565,8 +567,8 @@ pub fn tape_line(
 ) -> Line<'static> {
     let (tag, tag_color) = tape_tag(event.kind);
     let text_color = match event.kind {
-        TapeKind::ToolStart | TapeKind::ToolEnd => theme::CYAN,
-        TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => theme::RED,
+        TapeKind::ToolStart | TapeKind::ToolEnd => Token::Info,
+        TapeKind::ToolError | TapeKind::Failure | TapeKind::PrCiFailed => Token::Alert,
         _ => theme::severity_color(event.severity),
     };
     // An error flickers for a moment as it lands.
@@ -579,11 +581,11 @@ pub fn tape_line(
         _ => event.text.clone(),
     };
     let line = Line::from(vec![
-        Span::styled(clock.time_of(event.at), theme::ink(theme::DIM)),
+        Span::styled(clock.time_of(event.at), theme::ink(Token::TextDim)),
         Span::raw(" "),
         Span::styled(
             format::cell(&app.view.name_of(&event.agent), name_width),
-            theme::ink(theme::AMBER),
+            theme::ink(Token::Text),
         ),
         Span::raw(" "),
         Span::styled(tag, theme::bold(tag_color)),
@@ -609,10 +611,10 @@ fn tape(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused:
     if cursor > 0 {
         extra.push(Span::styled(
             format!(" +{cursor} NEW "),
-            theme::bold(theme::BG).bg(theme::YELLOW),
+            theme::chip(Token::Highlight),
         ));
     } else {
-        extra.push(Span::styled(" ▼ FOLLOWING ", theme::ink(theme::GREEN)));
+        extra.push(Span::styled(" ▼ FOLLOWING ", theme::ink(Token::Ok)));
     }
     let block = theme::pane("2 TAPE", extra, focused);
     let inner = block.inner(area);
@@ -635,7 +637,7 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         "3 SPEND TODAY",
         vec![Span::styled(
             format!(" {} ", format::cost(totals.cost_today)),
-            theme::bold(theme::YELLOW),
+            theme::bold(Token::Highlight),
         )],
         focused,
     );
@@ -664,9 +666,9 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
                 .value(cents)
                 .text_value(String::new())
                 .style(theme::ink(if cents > 0 {
-                    theme::STRIP
+                    Token::Accent
                 } else {
-                    theme::GHOST
+                    Token::Ghost
                 }))
         })
         .collect();
@@ -683,7 +685,7 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         axis.push_str(&format::cell(&label, usize::from(bar_width) * 6));
     }
     frame.render_widget(
-        Paragraph::new(Span::styled(axis, theme::ink(theme::FAINT))),
+        Paragraph::new(Span::styled(axis, theme::ink(Token::Rule))),
         axis_area,
     );
 
@@ -693,7 +695,7 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
     let bar_room = width.saturating_sub(8 + 9 + 5 + 2);
     let mut lines = vec![Line::from(Span::styled(
         format::cell("KIND        USD    %", width),
-        theme::bold(theme::FAINT),
+        theme::bold(Token::Rule),
     ))];
     for (index, (kind, cost)) in kinds.iter().enumerate() {
         let usd = cost.usd().unwrap_or(0.0);
@@ -702,19 +704,19 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         let filled = ((share * bar_room as f64).round() as usize).min(bar_room);
         let line = Line::from(
             vec![
-                Span::styled(format::cell(kind.label(), 8), theme::ink(theme::AMBER)),
+                Span::styled(format::cell(kind.label(), 8), theme::ink(Token::Text)),
                 Span::styled(
                     format::right(&format::cost(*cost), 9),
-                    theme::bold(theme::YELLOW),
+                    theme::bold(Token::Highlight),
                 ),
                 Span::styled(
                     format::right(&format!("{:.0}", share * 100.0), 4),
-                    theme::ink(theme::DIM),
+                    theme::ink(Token::TextDim),
                 ),
                 Span::raw(" "),
             ]
             .into_iter()
-            .chain(theme::meter(filled, bar_room, theme::STRIP))
+            .chain(theme::meter(filled, bar_room, Token::Accent))
             .collect::<Vec<_>>(),
         );
         lines.push(if focused && index == app.cursors.spend {
@@ -732,9 +734,9 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
     // The board's count, so the two always agree; rows give the detail.
     let count = totals.errors_24h + totals.failed_24h;
     let color = if count == 0 && rows.is_empty() {
-        theme::GREEN
+        Token::Ok
     } else {
-        theme::RED
+        Token::Alert
     };
     let block = theme::pane(
         "4 FAILURES",
@@ -742,7 +744,7 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
             Span::styled(format!(" {count} 24H "), theme::bold(color)),
             Span::styled(
                 format!("{} TOOL · {} AGENT ", totals.errors_24h, totals.failed_24h),
-                theme::ink(theme::DIM),
+                theme::ink(Token::TextDim),
             ),
         ],
         focused,
@@ -766,7 +768,7 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
             let line = Line::from(vec![
                 Span::styled(
                     format::right(&format::age(clock.now - row.at), 4),
-                    theme::ink(theme::DIM),
+                    theme::ink(Token::TextDim),
                 ),
                 Span::raw(" "),
                 Span::styled(
@@ -778,12 +780,12 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
                         },
                         8,
                     ),
-                    theme::bold(theme::RED),
+                    theme::bold(Token::Alert),
                 ),
-                Span::styled(format::cell(kind, 9), theme::ink(theme::DIM)),
+                Span::styled(format::cell(kind, 9), theme::ink(Token::TextDim)),
                 Span::styled(
                     format::cell(&app.view.name_of(&row.agent), 14),
-                    theme::ink(theme::AMBER),
+                    theme::ink(Token::Text),
                 ),
                 Span::raw(" "),
                 Span::styled(
@@ -792,7 +794,7 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
                         (clock.now - row.at).num_milliseconds(),
                         clock.now.timestamp_millis(),
                     ),
-                    theme::ink(theme::RED),
+                    theme::ink(Token::Alert),
                 ),
             ]);
             if focused && index == cursor {
@@ -805,7 +807,7 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
     if lines.is_empty() {
         lines.push(Line::from(Span::styled(
             "  ◆ ALL CLEAR // no failures in the last 24 hours",
-            theme::ink(theme::GREEN),
+            theme::ink(Token::Ok),
         )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
@@ -821,9 +823,9 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
         })
         .count();
     let color = if healthy == rows.len() {
-        theme::GREEN
+        Token::Ok
     } else {
-        theme::RED
+        Token::Alert
     };
     let block = theme::pane(
         "6 SOURCES",
@@ -841,15 +843,15 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
             "  {}  AGT  ITEMS LAST",
             format::cell("SOURCE", name_width.saturating_sub(1))
         ),
-        theme::bold(theme::FAINT),
+        theme::bold(Token::Rule),
     ))];
     for (index, row) in rows.iter().enumerate() {
         let (dot, color) = match row.health.map(|health| health.state) {
-            Some(SourceState::Healthy) => ("●", theme::GREEN),
-            Some(SourceState::Starting) => ("◐", theme::YELLOW),
-            Some(SourceState::Unhealthy) => ("●", theme::RED),
-            Some(SourceState::Absent) => ("○", theme::FAINT),
-            None => ("◆", theme::AMBER),
+            Some(SourceState::Healthy) => ("●", Token::Ok),
+            Some(SourceState::Starting) => ("◐", Token::Highlight),
+            Some(SourceState::Unhealthy) => ("●", Token::Alert),
+            Some(SourceState::Absent) => ("○", Token::Rule),
+            None => ("◆", Token::Text),
         };
         let items = row.health.map_or_else(
             || String::from("—"),
@@ -863,19 +865,19 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
         };
         let mut spans = vec![
             Span::styled(format!("{dot} "), theme::bold(color)),
-            Span::styled(format::cell(&name, name_width), theme::ink(theme::AMBER)),
+            Span::styled(format::cell(&name, name_width), theme::ink(Token::Text)),
             Span::styled(
                 format::right(&row.agents.to_string(), 5),
-                theme::bold(theme::YELLOW),
+                theme::bold(Token::Highlight),
             ),
-            Span::styled(format::right(&items, 7), theme::ink(theme::AMBER)),
-            Span::styled(format::right(&last, 5), theme::ink(theme::DIM)),
+            Span::styled(format::right(&items, 7), theme::ink(Token::Text)),
+            Span::styled(format::right(&last, 5), theme::ink(Token::TextDim)),
         ];
         let restarts = row.health.map_or(0, |health| health.restarts);
         if restarts > 0 {
             spans.push(Span::styled(
                 format!(" ↻{restarts}"),
-                theme::ink(theme::RED),
+                theme::ink(Token::Alert),
             ));
         }
         let line = Line::from(spans);
@@ -894,14 +896,14 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
                 usize::try_from(done * u64::try_from(room).unwrap_or(0) / u64::from(total))
                     .unwrap_or(0)
                     .min(room);
-            let mut spans = vec![Span::styled("  idx ", theme::ink(theme::FAINT))];
-            spans.extend(theme::meter(filled, room, theme::YELLOW));
+            let mut spans = vec![Span::styled("  idx ", theme::ink(Token::Rule))];
+            spans.extend(theme::meter(filled, room, Token::Highlight));
             lines.push(Line::from(
                 spans
                     .into_iter()
                     .chain([Span::styled(
                         format!(" {}/{}", progress.done, progress.total),
-                        theme::ink(theme::DIM),
+                        theme::ink(Token::TextDim),
                     )])
                     .collect::<Vec<_>>(),
             ));
@@ -918,7 +920,7 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
     if rows.is_empty() {
         lines.push(Line::from(Span::styled(
             "  waiting for the collector",
-            theme::ink(theme::DIM),
+            theme::ink(Token::TextDim),
         )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
@@ -928,7 +930,7 @@ fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
     let block = theme::pane(
         "7 BODY",
         vec![
-            Span::styled(" BIOSCAN ", theme::bold(theme::CYAN)),
+            Span::styled(" BIOSCAN ", theme::bold(Token::Info)),
             count_span(app.view.body.title().to_owned()),
         ],
         focused,
@@ -945,8 +947,8 @@ fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if area.width < 24 || area.height < 6 {
         return;
     }
-    let rule = theme::ink(theme::CYAN_DIM);
-    let label = theme::bold(theme::CYAN);
+    let rule = theme::ink(Token::InfoDim);
+    let label = theme::bold(Token::Info);
     let tokens = app.view.totals.tokens_per_min.last().copied().unwrap_or(0);
 
     let corner = |x: u16, y: u16, spans: Vec<Span<'static>>, right: bool| {
@@ -966,23 +968,18 @@ fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App) {
             ],
             false,
         ),
-        corner(
-            area.right(),
-            area.y,
-            vec![Span::styled("╶┐", rule)],
-            true,
-        ),
+        corner(area.right(), area.y, vec![Span::styled("╶┐", rule)], true),
         corner(
             area.x,
             area.bottom() - 1,
             vec![
                 Span::styled("└╴", rule),
-                Span::styled("SUBJ ", theme::ink(theme::DIM)),
+                Span::styled("SUBJ ", theme::ink(Token::TextDim)),
                 Span::styled(
                     format!("{:02}", app.view.totals.working),
-                    theme::bold(theme::GREEN),
+                    theme::bold(Token::Ok),
                 ),
-                Span::styled(" LIVE", theme::ink(theme::DIM)),
+                Span::styled(" LIVE", theme::ink(Token::TextDim)),
             ],
             false,
         ),
@@ -990,10 +987,10 @@ fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App) {
             area.right(),
             area.bottom() - 1,
             vec![
-                Span::styled("TOK/M ", theme::ink(theme::DIM)),
+                Span::styled("TOK/M ", theme::ink(Token::TextDim)),
                 Span::styled(
                     format::compact(u64::from(tokens)),
-                    theme::bold(theme::YELLOW),
+                    theme::bold(Token::Highlight),
                 ),
                 Span::styled("╶┘", rule),
             ],
@@ -1019,7 +1016,7 @@ fn scanner(frame: &mut Frame<'_>, area: Rect, app: &App) {
                 if let Some(cell) = buffer.cell_mut((x, y))
                     && cell.symbol() == " "
                 {
-                    cell.set_char(symbol).set_fg(theme::CYAN_DARK);
+                    cell.set_char(symbol).set_fg(Token::InfoFaint.color());
                 }
             }
         }

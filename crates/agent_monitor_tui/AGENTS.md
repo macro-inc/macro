@@ -26,8 +26,10 @@ times a second, and ticks at `fps` only while something animates.
   8 PRS (`ui/panes.rs` `prs`/`pr_line`) shares the lower right with
   FAILURES; agent rows carry a PR badge and the drill-in lists the agent's PRs.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
-- `src/theme.rs`: the palette and the HUD dressing: bracket frames, orange
-  title chips, segmented meters, the dot grid and the glitch on fresh errors.
+- `src/theme.rs`: the design tokens (`Token`, a colour role such as `Alert`
+  or `Rule`), the `Theme` that colours them, and the HUD dressing: bracket
+  frames, orange title chips, segmented meters, the dot grid and the glitch
+  on fresh errors.
 
 ## Scope
 
@@ -57,6 +59,9 @@ times a second, and ticks at `fps` only while something animates.
   is the "on" phase.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
+- Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never
+  write a `Color` outside a theme definition in `theme.rs`. Pick the token
+  by role, not by the hue you want: see the doc on each `Token` variant.
 - Box every pane with `theme::pane` or `theme::frame`: `ui::draw` finishes
   each frame with `theme::grid` (dots on blank pane rows) and
   `theme::brackets` (keys on the `┏┓┗┛` corners), so never draw those four
