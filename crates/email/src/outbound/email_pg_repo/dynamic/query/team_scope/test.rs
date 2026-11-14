@@ -13,6 +13,8 @@ const TEAMMATE: Uuid = Uuid::from_u128(2);
 const NOT_CONTRIBUTING: Uuid = Uuid::from_u128(3);
 /// The team of the `email_crm_team_read` fixture.
 const GAMMA: &str = "e0000003-0000-0000-0000-000000000003";
+/// The fixture's other team, whose member u9 consents.
+const DELTA: &str = "e0000004-0000-0000-0000-000000000004";
 
 fn all_mail() -> PreviewView {
     PreviewView::StandardLabel(PreviewViewStandardLabel::All)
@@ -256,12 +258,60 @@ fn gamma_link(i: u128) -> Uuid {
     Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | i)
 }
 
+/// For every thread of the fixture: how many `crm_email_thread_allowed`
+/// allows for `team`, how many get another verdict from the inline rule,
+/// and how many there are. Every inbox of the fixture is offered, so the
+/// `contributing` CTE's own mailbox conditions decide.
+async fn verdicts(pool: &sqlx::PgPool, team: Uuid) -> anyhow::Result<(i64, i64, i64)> {
+    let links: Vec<Uuid> = (0..=10).map(gamma_link).collect();
+    let view = all_mail();
+    let filter = any_direction("dense.test");
+    let mut params = params(SimpleSortMethod::UpdatedAt);
+    params.team_id = Some(team);
+    params.resolved = ResolvedFilters::empty()
+        .with_team_links(links.clone())
+        .with_contributing_links(links);
+    let read = team_read(&view, &filter, params).unwrap();
+
+    let mut builder = QueryBuilder::new("");
+    read.push_ctes(&mut builder, Stream::Inboxes);
+    builder.push(
+        r#"
+        SELECT count(*) FILTER (WHERE allowed),
+               count(*) FILTER (WHERE allowed IS DISTINCT FROM inline),
+               count(*)
+        FROM (
+            SELECT crm_email_thread_allowed("#,
+    );
+    builder.push_bind(team);
+    builder.push(", t.id) AS allowed, (TRUE");
+    builder.push(ALLOWED);
+    builder.push(") AS inline FROM email_threads t) AS verdict");
+    Ok(builder.build_query_as().fetch_one(pool).await?)
+}
+
+/// Sorted contributing inboxes and member inboxes `resolve_filters` finds
+/// for `caller`'s read in `team`.
+async fn resolved_inboxes(
+    pool: &sqlx::PgPool,
+    team: Uuid,
+    caller: Uuid,
+) -> anyhow::Result<(Vec<Uuid>, Vec<Uuid>)> {
+    let resolved =
+        resolve_filters(pool, &[caller], Some(team), &any_direction("dense.test")).await?;
+    let mut contributing = resolved.contributing_link_ids().unwrap().to_vec();
+    contributing.sort();
+    let mut members = resolved.team_link_ids().unwrap().to_vec();
+    members.sort();
+    Ok((contributing, members))
+}
+
 /// The inboxes a team read takes are the ones `crm_email_thread_allowed`
-/// lets contribute. In the fixture each of these misses one of its mailbox
+/// lets contribute. In Gamma each of these misses one of its mailbox
 /// conditions: u5's primary inbox (link 6) has no consent of its own, since
 /// u5's consent names u5's non-primary link 7; u6's inbox (link 8) is being
 /// deleted; u7's (link 9) has consent off; and u3's (link 3) is named only by
-/// u8's consent.
+/// u8's consent. Delta's u9 consents on link 10, which only Delta reads.
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
@@ -269,41 +319,98 @@ fn gamma_link(i: u128) -> Uuid {
 async fn contributing_inboxes_restate_the_privacy_function(
     pool: sqlx::PgPool,
 ) -> anyhow::Result<()> {
-    let team = Uuid::parse_str(GAMMA)?;
-    let resolved = resolve_filters(
-        &pool,
-        &[gamma_link(0)],
-        Some(team),
-        &any_direction("dense.test"),
-    )
-    .await?;
-    let mut contributing = resolved.contributing_link_ids().unwrap().to_vec();
-    contributing.sort();
-    let allowed = sqlx::query_scalar!(
-        r#"
-        SELECT DISTINCT t.link_id AS "link_id!" FROM email_threads t
-        WHERE crm_email_thread_allowed($1, t.id)
-        ORDER BY 1
-        "#,
-        team,
-    )
-    .fetch_all(&pool)
-    .await?;
-    assert_eq!(contributing, allowed);
-    assert_eq!(allowed, [0, 1, 2].map(gamma_link));
+    let cases: [(&str, u128, Vec<u128>, Vec<u128>); 2] = [
+        (GAMMA, 0, vec![0, 1, 2], vec![0, 1, 2, 3, 6, 8, 9]),
+        (DELTA, 10, vec![10], vec![10]),
+    ];
+    for (team, caller, contributing_links, member_links) in cases {
+        let team = Uuid::parse_str(team)?;
+        let (contributing, members) = resolved_inboxes(&pool, team, gamma_link(caller)).await?;
+        let allowed = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT t.link_id AS "link_id!" FROM email_threads t
+            WHERE crm_email_thread_allowed($1, t.id)
+            ORDER BY 1
+            "#,
+            team,
+        )
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(contributing, allowed, "{team}");
+        let expected: Vec<Uuid> = contributing_links.into_iter().map(gamma_link).collect();
+        assert_eq!(allowed, expected, "{team}");
+        // Every member's primary inbox, contributing or not.
+        let expected: Vec<Uuid> = member_links.into_iter().map(gamma_link).collect();
+        assert_eq!(members, expected, "{team}");
+    }
+    Ok(())
+}
 
-    // Every member's primary inbox, contributing or not.
-    let mut team_links = resolved.team_link_ids().unwrap().to_vec();
-    team_links.sort();
-    assert_eq!(team_links, [0, 1, 2, 3, 6, 8, 9].map(gamma_link));
+/// `team_user_user_id_unique` (one team per user) is all that keeps another
+/// team's consent and personal lists away from a team's read through its
+/// members today. This test drops it, so the read's own team conditions
+/// must: u3, a Gamma member without Gamma consent, joins Delta and consents
+/// there, and u1, who contributes to Gamma, joins Delta and blocks
+/// dense.test there.
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
+)]
+async fn another_teams_consent_and_lists_never_apply(pool: sqlx::PgPool) -> anyhow::Result<()> {
+    let gamma = Uuid::parse_str(GAMMA)?;
+    let delta = Uuid::parse_str(DELTA)?;
+    sqlx::query!("ALTER TABLE team_user DROP CONSTRAINT team_user_user_id_unique")
+        .execute(&pool)
+        .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO team_user (team_id, user_id, team_role)
+        VALUES ($1, 'macro|u1@gamma.test', 'member'), ($1, 'macro|u3@gamma.test', 'member')
+        "#,
+        delta,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled)
+        VALUES ($1, 'macro|u3@gamma.test', $2, TRUE)
+        "#,
+        delta,
+        gamma_link(3),
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain)
+        VALUES ($1, 'macro|u1@gamma.test', 'dense.test')
+        "#,
+        delta,
+    )
+    .execute(&pool)
+    .await?;
+
+    // u3's Delta consent is live: Delta now reads u3's inbox.
+    let (contributing, _) = resolved_inboxes(&pool, delta, gamma_link(10)).await?;
+    assert_eq!(contributing, [3, 10].map(gamma_link));
+
+    let (contributing, _) = resolved_inboxes(&pool, gamma, gamma_link(0)).await?;
+    assert_eq!(contributing, [0, 1, 2].map(gamma_link));
+    for team in [gamma, delta] {
+        let (_, differ, total) = verdicts(&pool, team).await?;
+        assert_eq!(
+            differ, 0,
+            "{team}: {differ} of {total} threads get another verdict"
+        );
+    }
     Ok(())
 }
 
 /// The inline privacy rule agrees with `crm_email_thread_allowed` on every
-/// thread. Every inbox is offered, so the `contributing` CTE's own mailbox
-/// conditions decide, and some addresses sit at the edges of the suffix test.
-/// The fixture's hand-made threads are where only a draft or a spam message
-/// carries a participant.
+/// thread, for both teams. Some addresses sit at the edges of the suffix
+/// test. The fixture's hand-made threads are where only a draft or a spam
+/// message carries a participant.
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../../fixtures", scripts("email_crm_team_read"))
@@ -353,37 +460,18 @@ async fn allowed_restates_the_privacy_function(pool: sqlx::PgPool) -> anyhow::Re
         ]
     );
 
-    let links: Vec<Uuid> = (0..10).map(gamma_link).collect();
-    let view = all_mail();
-    let filter = any_direction("dense.test");
-    let mut params = params(SimpleSortMethod::UpdatedAt);
-    params.team_id = Some(team);
-    params.resolved = ResolvedFilters::empty()
-        .with_team_links(links.clone())
-        .with_contributing_links(links);
-    let read = team_read(&view, &filter, params).unwrap();
-
-    let mut builder = QueryBuilder::new("");
-    read.push_ctes(&mut builder, Stream::Inboxes);
-    builder.push(
-        r#"
-        SELECT count(*) FILTER (WHERE allowed),
-               count(*) FILTER (WHERE allowed IS DISTINCT FROM inline),
-               count(*)
-        FROM (
-            SELECT crm_email_thread_allowed("#,
-    );
-    builder.push_bind(team);
-    builder.push(", t.id) AS allowed, (TRUE");
-    builder.push(ALLOWED);
-    builder.push(") AS inline FROM email_threads t) AS verdict");
-    let (allowed, differ, total): (i64, i64, i64) =
-        builder.build_query_as().fetch_one(&pool).await?;
-
-    assert_eq!(differ, 0, "{differ} of {total} threads get another verdict");
-    assert!(
-        allowed > 500 && allowed < total,
-        "both verdicts occur: {allowed} of {total}"
-    );
+    // Gamma's own mail, and Delta's, which Delta's blocklist and hidden
+    // company cut down.
+    for (team, least_allowed) in [(GAMMA, 500), (DELTA, 100)] {
+        let (allowed, differ, total) = verdicts(&pool, Uuid::parse_str(team)?).await?;
+        assert_eq!(
+            differ, 0,
+            "{team}: {differ} of {total} threads get another verdict"
+        );
+        assert!(
+            allowed > least_allowed && allowed < total,
+            "{team}: both verdicts occur: {allowed} of {total}"
+        );
+    }
     Ok(())
 }

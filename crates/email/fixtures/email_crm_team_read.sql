@@ -9,6 +9,10 @@
 --     second, non-primary inbox, u6's inbox is being deleted, and u7's
 --     consent is off. u8 is a member with no inbox of its own whose consent
 --     names u3's inbox.
+--   • Team Delta: u9 owns it, consents, and holds mail on the same domains
+--     and addresses in a primary inbox (link 10), so no Gamma read may show
+--     it. Delta blocks sparse.test and hides a company on old.test, which
+--     Gamma's reads must ignore.
 --   • Each link holds threads over a few weeks, one to three messages each.
 --     Conversation k is shared: u1 holds k % 10 = 0 (joining k % 20 = 0
 --     after its first message, so those copies don't dedupe) and about half
@@ -24,34 +28,38 @@
 
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 SELECT md5('user' || i)::uuid, 'u' || i || '@gamma.test', 'u' || i || '@gamma.test', 'stripe_u' || i
-FROM generate_series(0, 8) i;
+FROM generate_series(0, 9) i;
 
 INSERT INTO "User" (id, email, name, macro_user_id)
 SELECT 'macro|u' || i || '@gamma.test', 'u' || i || '@gamma.test', 'U' || i, md5('user' || i)::uuid
-FROM generate_series(0, 8) i;
+FROM generate_series(0, 9) i;
 
 INSERT INTO team (id, name, owner_id, seat_count)
-VALUES ('e0000003-0000-0000-0000-000000000003', 'Team Gamma', 'macro|u0@gamma.test', 4);
+VALUES ('e0000003-0000-0000-0000-000000000003', 'Team Gamma', 'macro|u0@gamma.test', 8),
+       ('e0000004-0000-0000-0000-000000000004', 'Team Delta', 'macro|u9@gamma.test', 1);
 
 INSERT INTO team_user (team_id, user_id, team_role)
-SELECT 'e0000003-0000-0000-0000-000000000003', 'macro|u' || i || '@gamma.test',
+SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, 'macro|u' || i || '@gamma.test',
        CASE WHEN i = 0 THEN 'owner' ELSE 'member' END::team_role
 FROM generate_series(0, 8) i
-WHERE i <> 4;
+WHERE i <> 4
+UNION ALL
+SELECT 'e0000004-0000-0000-0000-000000000004'::uuid, 'macro|u9@gamma.test', 'owner'::team_role;
 
 INSERT INTO team_crm_settings (team_id, crm_enabled)
-VALUES ('e0000003-0000-0000-0000-000000000003', TRUE);
+VALUES ('e0000003-0000-0000-0000-000000000003', TRUE), ('e0000004-0000-0000-0000-000000000004', TRUE);
 
 -- Links 0-4 are users 0-4's primary inboxes and link 5 is u0's second inbox.
 -- Links 6, 8 and 9 are the primary inboxes of u5, u6 and u7; link 7 is u5's
--- second inbox. A link is primary when its address is its owner's.
+-- second inbox. Link 10 is u9's primary inbox, in Team Delta. A link is primary
+-- when its address is its owner's.
 CREATE TEMP TABLE gamma_link AS
-SELECT i, ('f0000000-0000-0000-0000-00000000000' || i)::uuid AS id,
+SELECT i, ('f0000000-0000-0000-0000-' || lpad(to_hex(i), 12, '0'))::uuid AS id,
        'macro|u' || u || '@gamma.test' AS macro_id, email
 FROM (VALUES (0, 0, 'u0@gamma.test'), (1, 1, 'u1@gamma.test'), (2, 2, 'u2@gamma.test'),
              (3, 3, 'u3@gamma.test'), (4, 4, 'u4@gamma.test'), (5, 0, 'u0.personal@else.test'),
              (6, 5, 'u5@gamma.test'), (7, 5, 'u5.second@else.test'), (8, 6, 'u6@gamma.test'),
-             (9, 7, 'u7@gamma.test')) AS link(i, u, email);
+             (9, 7, 'u7@gamma.test'), (10, 9, 'u9@gamma.test')) AS link(i, u, email);
 
 -- Link 8 is inserted already being deleted: setting `deleting_at` later
 -- would revoke its consent (`email_links_revoke_crm_consent`).
@@ -67,7 +75,9 @@ SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, macro_id, id, i <> 9
 FROM gamma_link WHERE i IN (7, 8, 9)
 UNION ALL
 SELECT 'e0000003-0000-0000-0000-000000000003'::uuid, 'macro|u8@gamma.test', id, TRUE
-FROM gamma_link WHERE i = 3;
+FROM gamma_link WHERE i = 3
+UNION ALL
+SELECT 'e0000004-0000-0000-0000-000000000004'::uuid, macro_id, id, TRUE FROM gamma_link WHERE i = 10;
 
 INSERT INTO crm_blocked_domains (team_id, domain)
 VALUES ('e0000003-0000-0000-0000-000000000003', 'blocked.test');
@@ -79,6 +89,13 @@ VALUES ('c3000000-0000-0000-0000-000000000001', 'e0000003-0000-0000-0000-0000000
 INSERT INTO crm_domains (company_id, domain, team_id)
 VALUES ('c3000000-0000-0000-0000-000000000001', 'Hidden.test', 'e0000003-0000-0000-0000-000000000003'),
        ('c3000000-0000-0000-0000-000000000002', 'dense.test', 'e0000003-0000-0000-0000-000000000003');
+-- Delta's own exclusions, which no Gamma read may apply.
+INSERT INTO crm_blocked_domains (team_id, domain)
+VALUES ('e0000004-0000-0000-0000-000000000004', 'sparse.test');
+INSERT INTO crm_companies (id, team_id, email_sync, first_interaction, last_interaction)
+VALUES ('c4000000-0000-0000-0000-000000000001', 'e0000004-0000-0000-0000-000000000004', false, NOW(), NOW());
+INSERT INTO crm_domains (company_id, domain, team_id)
+VALUES ('c4000000-0000-0000-0000-000000000001', 'old.test', 'e0000004-0000-0000-0000-000000000004');
 
 -- Every address each inbox knows.
 CREATE TEMP TABLE gamma_address AS

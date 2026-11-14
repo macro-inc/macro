@@ -7,10 +7,12 @@
 //! header), and the dedupe fixtures of `crm_scope_dynamic_query`.
 
 use super::*;
+use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::TeamReadTuning;
 use macro_user_id::cowlike::CowLike;
 
 const TEAM_GAMMA_ID: &str = "e0000003-0000-0000-0000-000000000003";
+const TEAM_DELTA_ID: &str = "e0000004-0000-0000-0000-000000000004";
 
 fn link(i: u8) -> Uuid {
     Uuid::from_u128(0xf000_0000_0000_0000_0000_0000_0000_0000 | u128::from(i))
@@ -89,7 +91,7 @@ fn me(tree: Expr<EmailLiteral>, owner: Uuid) -> Expr<EmailLiteral> {
     Expr::and(tree, Expr::Literal(EmailLiteral::Owner(owner)))
 }
 
-/// The pages a caller reads until one comes back empty, each row in full.
+/// The pages a caller reads until one comes back empty.
 async fn pages(
     pool: &Pool<Postgres>,
     team: &str,
@@ -98,7 +100,7 @@ async fn pages(
     filter: &Expr<EmailLiteral>,
     limit: u32,
     read: Option<TeamReadTuning>,
-) -> anyhow::Result<Vec<Vec<String>>> {
+) -> anyhow::Result<Vec<Vec<ThreadPreviewCursorDbRow>>> {
     let team = Uuid::parse_str(team)?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
     let filter = Arc::new(filter.clone());
@@ -126,12 +128,20 @@ async fn pages(
             },
             filter: filter.clone(),
         });
-        pages.push(page.iter().map(|row| format!("{row:?}")).collect());
+        pages.push(page);
         if cursor.is_none() {
             return Ok(pages);
         }
         anyhow::ensure!(pages.len() <= 3_000, "runaway pagination");
     }
+}
+
+/// Each row of the pages in full, to compare.
+fn printed(pages: &[Vec<ThreadPreviewCursorDbRow>]) -> Vec<Vec<String>> {
+    pages
+        .iter()
+        .map(|page| page.iter().map(|row| format!("{row:?}")).collect())
+        .collect()
 }
 
 /// Asserts each team read returns the general builder's pages, and returns
@@ -144,18 +154,20 @@ async fn assert_parity(
     filter: &Expr<EmailLiteral>,
     limit: u32,
 ) -> anyhow::Result<usize> {
-    let expected = pages(pool, team, caller_links, caller, filter, limit, None).await?;
+    let expected = printed(&pages(pool, team, caller_links, caller, filter, limit, None).await?);
     for (name, tuning) in READS {
-        let actual = pages(
-            pool,
-            team,
-            caller_links,
-            caller,
-            filter,
-            limit,
-            Some(tuning),
-        )
-        .await?;
+        let actual = printed(
+            &pages(
+                pool,
+                team,
+                caller_links,
+                caller,
+                filter,
+                limit,
+                Some(tuning),
+            )
+            .await?,
+        );
         assert_eq!(
             actual, expected,
             "{name} read differs for {caller} with {filter:?} in pages of {limit}"
@@ -187,6 +199,47 @@ async fn company_pages_match_for_every_caller(pool: Pool<Postgres>) -> anyhow::R
         100,
     )
     .await?;
+    Ok(())
+}
+
+/// Another team's member consents and holds mail on the same domains and
+/// addresses in a primary inbox (u9's link 10, in Team Delta). Gamma never
+/// reads it, whichever stream a page comes from, while Delta's read does.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_crm_team_read"))
+)]
+async fn another_teams_mail_never_shows(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let delta_inbox = link(10);
+    let reads: Vec<(&str, Option<TeamReadTuning>)> = std::iter::once(("general", None))
+        .chain(READS.map(|(name, tuning)| (name, Some(tuning))))
+        .collect();
+    for record in [company(&["dense.test"]), contact(&["p1@dense.test"])] {
+        for &(name, read) in &reads {
+            let gamma = pages(
+                &pool,
+                TEAM_GAMMA_ID,
+                &[link(0)],
+                &user(0),
+                &record,
+                100,
+                read,
+            )
+            .await?;
+            let rows: Vec<&ThreadPreviewCursorDbRow> = gamma.iter().flatten().collect();
+            assert!(!rows.is_empty(), "{name} read of {record:?} is empty");
+            assert!(
+                rows.iter().all(|row| row.link_id != delta_inbox),
+                "{name} read of {record:?} shows Delta's inbox"
+            );
+        }
+        let rows =
+            assert_parity(&pool, TEAM_DELTA_ID, &[delta_inbox], &user(9), &record, 100).await?;
+        assert!(
+            rows > 10,
+            "Delta reads its own inbox's mail on {record:?}: {rows}"
+        );
+    }
     Ok(())
 }
 
@@ -367,7 +420,7 @@ async fn a_copy_keyed_by_a_thread_id_dedupes(pool: Pool<Postgres>) -> anyhow::Re
         .await?;
     let dense = company(&["dense.test"]);
     for read in [None, Some(TeamReadTuning::DEFAULT)] {
-        let rows: Vec<String> = pages(
+        let rows = pages(
             &pool,
             TEAM_GAMMA_ID,
             &[link(0)],
@@ -378,7 +431,7 @@ async fn a_copy_keyed_by_a_thread_id_dedupes(pool: Pool<Postgres>) -> anyhow::Re
         )
         .await?
         .concat();
-        let shows = |id: Uuid| rows.iter().any(|row| row.contains(&format!("id: {id}")));
+        let shows = |id: Uuid| rows.iter().any(|row| row.id == id);
         assert!(shows(own), "the caller's copy represents conversation 7");
         assert!(!shows(teammate), "the teammate's copy dedupes into it");
     }
