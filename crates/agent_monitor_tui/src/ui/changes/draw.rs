@@ -221,7 +221,7 @@ fn scroll_into(cursor: Option<usize>, current: usize, rows: usize, total: usize)
 }
 
 /// Sets one cell.
-fn put(buffer: &mut Buffer, x: u16, y: u16, symbol: &str, style: Style) {
+pub(super) fn put(buffer: &mut Buffer, x: u16, y: u16, symbol: &str, style: Style) {
     if let Some(cell) = buffer.cell_mut((x, y)) {
         cell.set_symbol(symbol).set_style(style);
     }
@@ -235,7 +235,7 @@ fn symbol_at(buffer: &Buffer, x: u16, y: u16) -> String {
 }
 
 /// Writes `spans` from `x`, no further than `right`; returns where it stopped.
-fn write(buffer: &mut Buffer, x: u16, y: u16, right: u16, spans: &[Span<'_>]) -> u16 {
+pub(super) fn write(buffer: &mut Buffer, x: u16, y: u16, right: u16, spans: &[Span<'_>]) -> u16 {
     let mut x = x;
     for span in spans {
         for character in span.content.chars() {

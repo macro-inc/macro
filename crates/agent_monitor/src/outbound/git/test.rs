@@ -466,7 +466,7 @@ async fn a_real_repository_maps_its_trunk_worktree_stack_and_landing() {
     let local = graph.trunk.local.clone().expect("local main");
     assert_eq!((local.ahead, local.behind), (1, 0));
     assert!(graph.trunk.fetched_at.is_some());
-    assert_eq!(graph.trunk.worktrees, [work.clone()]);
+    assert_eq!(graph.trunk.worktrees, std::slice::from_ref(&work));
 
     let lanes: Vec<(&str, u32, u32, usize)> = graph
         .lanes

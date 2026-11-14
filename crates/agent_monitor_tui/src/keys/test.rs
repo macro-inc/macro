@@ -385,3 +385,47 @@ fn a_toggles_ended_agents() {
         (focused, Action::ToggleAll)
     );
 }
+
+#[test]
+fn the_changes_page_claims_its_keys_and_other_pages_do_not() {
+    let changes = Page::Zoom(Pane::Changes);
+    for (key, change) in [
+        (Key::Char('+'), ChangeKey::ZoomIn),
+        (Key::Char('-'), ChangeKey::ZoomOut),
+        (Key::Char('<'), ChangeKey::Earlier),
+        (Key::Char('>'), ChangeKey::Later),
+        (Key::Home, ChangeKey::Now),
+        (Key::Char('['), ChangeKey::PrevRepo),
+        (Key::Char(']'), ChangeKey::NextRepo),
+        (Key::Char('n'), ChangeKey::NextAttention),
+        (Key::Char('N'), ChangeKey::PrevAttention),
+        (Key::Char('m'), ChangeKey::ToggleLanded),
+        (Key::Char('s'), ChangeKey::Sort),
+        (Key::Char('p'), ChangeKey::OpenLane),
+    ] {
+        assert_eq!(
+            step(idle(), key, &changes),
+            (idle(), Action::Changes(change)),
+            "{key:?}"
+        );
+    }
+    // Moving and opening stay the common keys.
+    assert_eq!(
+        step(idle(), Key::Left, &changes).1,
+        Action::Move(Some(Pane::Changes), Motion::Left)
+    );
+    assert_eq!(
+        step(idle(), Key::Enter, &changes).1,
+        Action::Activate(Some(Pane::Changes))
+    );
+    // Elsewhere `n` starts the command line and Home goes to the top.
+    let agents = Page::Zoom(Pane::Agents);
+    assert!(matches!(
+        step(idle(), Key::Char('n'), &agents).0,
+        Mode::Command { .. }
+    ));
+    assert_eq!(
+        step(idle(), Key::Home, &agents).1,
+        Action::Move(Some(Pane::Agents), Motion::Top)
+    );
+}

@@ -422,3 +422,33 @@ fn failing_prs_sort_first_then_open_ones_newest_first_then_finished() {
         .collect();
     assert_eq!(drafts, vec![4]);
 }
+
+#[test]
+fn commits_are_fresh_only_when_a_delta_brings_them() {
+    let start = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 1, 2, 10, 0, 0)
+        .single()
+        .expect("a time");
+    let snapshot = agent_monitor::outbound::demo::snapshot(
+        7,
+        start,
+        std::time::Duration::from_millis(250),
+        40,
+    );
+    let mut graph = snapshot.repos[0].clone();
+    let mut view = ViewState::new(Box::new(Vitals::default()));
+    view.apply(Update {
+        seq: 1,
+        kind: UpdateKind::Snapshot(snapshot),
+    });
+    assert!(view.fresh.is_empty(), "a snapshot animates nothing");
+
+    let mut landed = graph.lanes[0].commits[0].clone();
+    landed.oid = agent_monitor::domain::model::Oid::parse(&"f".repeat(40)).expect("an oid");
+    graph.lanes[0].commits.insert(0, landed.clone());
+    view.apply(Update {
+        seq: 2,
+        kind: UpdateKind::RepoUpsert(graph),
+    });
+    assert_eq!(view.fresh.len(), 1);
+    assert!(view.fresh.contains_key(&landed.oid));
+}

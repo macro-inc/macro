@@ -151,14 +151,16 @@ pub fn moves_refs(relative: &Path) -> bool {
         .components()
         .filter_map(|part| part.as_os_str().to_str())
         .collect();
-    match parts.as_slice() {
-        ["refs", "heads", ..] | ["refs", "remotes", "origin", ..] => true,
-        ["packed-refs" | "packed-refs.lock" | "HEAD" | "FETCH_HEAD"] => true,
-        ["worktrees", _] | ["worktrees", _, "HEAD"] => true,
-        ["logs", "refs", "remotes", "origin", ..] => true,
-        ["reftable", ..] => true,
-        _ => false,
-    }
+    matches!(
+        parts.as_slice(),
+        ["refs", "heads", ..]
+            | ["refs", "remotes", "origin", ..]
+            | ["packed-refs" | "packed-refs.lock" | "HEAD" | "FETCH_HEAD"]
+            | ["worktrees", _]
+            | ["worktrees", _, "HEAD"]
+            | ["logs", "refs", "remotes", "origin", ..]
+            | ["reftable", ..]
+    )
 }
 
 /// Whether a changed path adds or removes a worktree, so watches must follow.

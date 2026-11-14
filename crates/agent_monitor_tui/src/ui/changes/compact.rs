@@ -7,12 +7,12 @@ use std::collections::HashSet;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use agent_monitor::domain::model::{Lane, PrState};
 
+use super::draw::{put, write};
 use super::layout::{self, Viewport};
 use super::{ci_mark, distance, lane_tag, lane_token, review_mark, title_spans};
 use crate::app::{App, ChangeRow};
@@ -311,24 +311,4 @@ fn track(
             theme::bold(Token::Ok),
         );
     }
-}
-
-fn put(buffer: &mut Buffer, x: u16, y: u16, symbol: &str, style: Style) {
-    if let Some(cell) = buffer.cell_mut((x, y)) {
-        cell.set_symbol(symbol).set_style(style);
-    }
-}
-
-fn write(buffer: &mut Buffer, x: u16, y: u16, right: u16, spans: &[Span<'_>]) -> u16 {
-    let mut x = x;
-    for span in spans {
-        for character in span.content.chars() {
-            if x >= right {
-                return x;
-            }
-            put(buffer, x, y, &character.to_string(), span.style);
-            x += 1;
-        }
-    }
-    x
 }

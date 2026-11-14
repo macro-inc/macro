@@ -118,13 +118,15 @@ fn in_fork_order_no_fork_line_crosses_a_lane_and_stacks_stay_together() {
     let scene = layout(&graph, &ordered, &[], &HashSet::new(), viewport(120, 300));
     for drop in &scene.drops {
         let from = drop.from.map_or(0, |row| row + 1);
-        for row in from..drop.to {
-            let lane = &scene.lanes[row];
+        for (lane, branch) in scene.lanes[from..drop.to]
+            .iter()
+            .zip(&ordered[from..drop.to])
+        {
             assert!(
                 lane.start.is_none_or(|start| start > drop.col),
                 "the fork line at column {} crosses {}",
                 drop.col,
-                ordered[row].branch
+                branch.branch
             );
         }
     }
@@ -193,7 +195,7 @@ fn now_is_quantised_so_a_scene_holds_within_a_bucket() {
 
 #[test]
 fn the_automatic_zoom_fits_most_forks() {
-    let lanes = vec![
+    let lanes = [
         lane("a", 30, &[1], 1),
         lane("b", 90, &[1], 2),
         lane("c", 150, &[1], 3),
