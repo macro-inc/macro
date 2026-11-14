@@ -8,7 +8,9 @@ authenticating with the internal API key header instead of a user JWT.
 ## Start here
 
 - `src/lib.rs`: `SearchServiceClient::new` — sets `INTERNAL_API_KEY_HEADER` on
-  every request via `reqwest::Client::builder().default_headers(...)`.
+  every request via `reqwest::Client::builder().default_headers(...)`;
+  `with_trace_headers` adds the current trace context, so the search joins
+  the caller's trace.
 - `src/search_unified.rs` / `src/search_channel_name.rs`: one file per endpoint.
 
 ## Scope
@@ -18,8 +20,10 @@ authenticating with the internal API key header instead of a user JWT.
 
 ## Boundaries
 
-- Depends on: `models_search` (request/response types).
-- Used by: `ai_tools`, `memory`, `skills`, `document_cognition_service`, `mcp_service`.
+- Depends on: `models_search` (request/response types), `macro_tower_layers`
+  (trace propagation).
+- Used by: `ai_tools`, `memory`, `skills`, `document_cognition_service`,
+  `mcp_service`, `agent_harness_service` (routine drafts' name lookup).
 
 ## Recipes
 
