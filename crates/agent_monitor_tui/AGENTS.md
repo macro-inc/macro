@@ -76,21 +76,27 @@ times a second, and ticks at `fps` only while something animates.
 - Snapshot tests use `agent_monitor::outbound::demo::snapshot` at a fixed clock
   and UTC offset; never render with the system clock in a test. CHANGES has
   `changes_240x45`, `changes_200x56`, `changes_narrow_100x30`,
-  `changes_compact_80x24`, a failing lane selected and `lane_detail_200x56`.
+  `changes_compact_80x24`, a failing lane selected, `lane_detail_200x56`,
+  no repositories with PRs, and a PR in an unmapped repository.
 - CHANGES colours lanes by state (working `Ok`, failing CI `Alert`, CI
   running `Highlight`, idle `TextDim`), never by agent; identity is the
   board's tag. The map's now is quantised to its bucket, so it moves one
   column when a bucket ends, and commits glitch only when a delta brings
   them (`ViewState::fresh`), never after a snapshot.
 - On the CHANGES page `+ - < > [ ] n N m s p` and Home are page keys
-  (`keys::ChangeKey`); elsewhere letters still start the command line.
+  (`keys::ChangeKey`), so there a command starting with m, s, p or n is
+  typed in capitals (`MON`, `SPND`, `SRC`, `PRS`; no mnemonic starts with
+  N); elsewhere letters start the command line in any case. Its tabs are
+  the mapped repositories, then `other PRs` (`app::ChangeTab::OtherPrs`)
+  for pull requests in no mapped repository, drawn as PRS rows.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
   meaning (what Enter opens) is decided in `app.rs`.
 - A bare letter starts the command line, so never bind a lowercase letter
-  that begins a mnemonic (`t` would swallow TAPE and TREE); use Ctrl or a
-  command instead, as the theme does (Ctrl-T, `` ` ``, `THEME`). Browsers
+  that begins a mnemonic (`t` would swallow TAPE and TREE). CHANGES is the
+  one exception: its `m s p n` leave capitals for commands (above).
+  Elsewhere use Ctrl or a command instead, as the theme does (Ctrl-T, `` ` ``, `THEME`). Browsers
   (ttyd previews) swallow Ctrl-T, Ctrl-W and Ctrl-N, so give every Ctrl key
   a plain-key twin.
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never

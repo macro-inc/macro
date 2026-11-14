@@ -350,4 +350,5 @@ fn help_overlay() {
     app.key(Key::Char('?'));
     let screen = render(&mut app, 200, 56);
     assert!(screen.contains("AGT builder working"));
+    assert!(screen.contains("in any case (CAPITALS on 8), then ENTER:"), "{screen}");
 }
