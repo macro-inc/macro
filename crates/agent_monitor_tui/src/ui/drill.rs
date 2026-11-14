@@ -205,10 +205,10 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     ];
     let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
     for ((label, value, color, series), cell) in cells.into_iter().zip(areas.iter()) {
-        let block = theme::frame(theme::EDGE).title(Line::from(vec![
-            Span::styled("▸", theme::ink(theme::STRIP)),
-            Span::styled(format!("{label} "), theme::bold(theme::STRIP)),
-        ]));
+        let block = theme::frame(theme::EDGE).title(Line::from(vec![Span::styled(
+            format!(" {label} "),
+            theme::bold(theme::STRIP),
+        )]));
         let mut lines = vec![Line::from(Span::styled(value, theme::bold(color)))];
         if let Some(series) = series {
             lines.push(Line::from(format::spark(

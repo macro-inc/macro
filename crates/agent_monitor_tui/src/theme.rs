@@ -1,6 +1,6 @@
 //! The monitor palette: black, amber ink, yellow for live, cyan for tools, red
 //! for errors, green for ok, and macrod's orange for title strips. The HUD
-//! dressing lives here too: bracket-cornered frames, slanted title strips,
+//! dressing lives here too: bracket-cornered frames, orange title chips,
 //! segmented meters and the glitch on fresh values.
 
 use ratatui::buffer::Buffer;
@@ -94,13 +94,9 @@ pub fn frame(color: Color) -> Block<'static> {
         .style(base())
 }
 
-/// A slanted orange title strip: `◢ TEXT ◤`.
+/// An orange title chip: ` TEXT `.
 pub fn strip_title(text: &str) -> Vec<Span<'static>> {
-    vec![
-        Span::styled("◢", Style::new().fg(STRIP).bg(BG)),
-        Span::styled(format!(" {text} "), strip()),
-        Span::styled("◤", Style::new().fg(STRIP).bg(BG)),
-    ]
+    vec![Span::styled(format!(" {text} "), strip())]
 }
 
 /// A pane title as the HUD writes it: `1 AGENTS` becomes `01 // AGENTS`.
@@ -115,7 +111,7 @@ fn hud_title(title: &str) -> String {
     }
 }
 
-/// A pane: the bracket frame, a slanted numbered title strip, and extra
+/// A pane: the bracket frame, a numbered title chip, and extra
 /// title spans after it. A focused pane gets a yellow frame.
 pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'static> {
     let border = if focused { YELLOW } else { EDGE };
@@ -250,7 +246,7 @@ pub fn meter(filled: usize, width: usize, color: Color) -> Vec<Span<'static>> {
 }
 
 /// Glyphs a glitch swaps in.
-const GLITCH: [char; 8] = ['▚', '▞', '░', '▒', '╳', '▓', '◢', '◤'];
+const GLITCH: [char; 8] = ['▚', '▞', '░', '▒', '╳', '▓', '▘', '▝'];
 
 /// How long a fresh value glitches, in milliseconds.
 pub const GLITCH_MS: i64 = 1_200;
