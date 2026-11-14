@@ -27,7 +27,9 @@ use std::f32::consts::TAU;
 use std::time::Duration;
 
 mod figure;
+mod figures;
 mod model;
+mod palette;
 mod project;
 mod pulse;
 mod widget;
@@ -36,6 +38,7 @@ mod widget;
 mod test;
 
 pub use figure::{Core, Figure, FigureBuilder, catalog};
+pub use palette::Look;
 pub use pulse::PulseKind;
 
 use pulse::{Flash, Pulse};
@@ -224,17 +227,35 @@ impl Body {
     /// (see [`Body::nerve_for`]).
     pub fn fire(&mut self, key: &str, kind: PulseKind) {
         let nerve = self.nerve_index(key);
-        let Some(length) = self.figure().nerves.get(nerve).map(|path| path.length()) else {
+        let figure = self.figure();
+        if nerve >= figure.nerves.len() {
             return;
-        };
-
-        if kind.travels() {
-            if self.pulses.len() >= MAX_PULSES {
-                self.pulses.remove(0);
-            }
-            self.pulses.push(Pulse::new(nerve, kind, length));
         }
 
+        if kind.travels() {
+            // A forking figure sends pulses down the nerve's whole group:
+            // they run together along the shared trunk and part where the
+            // paths do.
+            let group = match figure.forks.get(nerve) {
+                Some(group) if group.contains(&nerve) => group.clone(),
+                _ => vec![nerve],
+            };
+            let pulses: Vec<Pulse> = group
+                .iter()
+                .filter_map(|index| {
+                    let length = figure.nerves.get(*index)?.length();
+                    Some(Pulse::new(*index, kind, length))
+                })
+                .collect();
+            for pulse in pulses {
+                if self.pulses.len() >= MAX_PULSES {
+                    self.pulses.remove(0);
+                }
+                self.pulses.push(pulse);
+            }
+        }
+
+        // Only the nerve fired flashes and glows.
         if kind.flashes() {
             if self.flashes.len() >= MAX_FLASHES {
                 self.flashes.remove(0);

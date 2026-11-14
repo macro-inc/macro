@@ -126,6 +126,9 @@ pub(crate) fn mesh_man() -> Figure {
             nerves,
             nerve_lines: Vec::new(),
             core: Some(Core::Heart(HEART)),
+            look: crate::palette::Look::Classic,
+            forks: Vec::new(),
+            quiet_paths: false,
         }
     }
 }
