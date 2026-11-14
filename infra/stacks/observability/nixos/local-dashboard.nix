@@ -2,9 +2,14 @@
 let
   # Shared with scripts/ci-report.ts --spec local, so the report and these panels agree.
   report = builtins.fromJSON (builtins.readFile ./local-report.json);
+  # Every filter names its machine; the dashboard narrows each to the Machine variable.
+  dashboardReport = report // {
+    filters = lib.mapAttrs (_: filter: ''${filter} | machine=~"$machine"'') report.filters;
+  };
   inherit
     (import ./loki-report-panels.nix {
-      inherit lib report;
+      inherit lib;
+      report = dashboardReport;
     })
     expand
     grid
@@ -15,11 +20,6 @@ let
     row
     ;
 
-  readyTarget = quantile: legendFormat: {
-    inherit legendFormat;
-    expr = expand "1d" "quantile_over_time(${quantile}, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (start)";
-  };
-
   loki = {
     type = "loki";
     uid = "loki";
@@ -28,27 +28,457 @@ let
     type = "tempo";
     uid = "tempo";
   };
-  prometheus = {
-    type = "prometheus";
-    uid = "prometheus";
+
+  starts = [
+    {
+      start = "fresh";
+      title = "Fresh start";
+    }
+    {
+      start = "resume";
+      title = "Resume";
+    }
+  ];
+
+  readyTarget = quantile: legendFormat: by: {
+    inherit legendFormat;
+    expr = expand "1d" "quantile_over_time(${quantile}, $READY | unwrap seconds | __error__=\"\" [$RANGE]) by (${by})";
+  };
+
+  instant = refId: expr: legendFormat: {
+    inherit refId legendFormat;
+    datasource = loki;
+    expr = expand "$__range" expr;
+    queryType = "instant";
+  };
+
+  byName = name: properties: {
+    matcher = {
+      id = "byName";
+      options = name;
+    };
+    inherit properties;
+  };
+
+  # A step's part of all foreground (critical-path) time for one kind of start.
+  shareExpr =
+    start:
+    "sum by (step) (sum_over_time($CRIT | start=\"${start}\" | unwrap seconds | __error__=\"\" [$RANGE])) / on () group_left sum(sum_over_time($CRIT | start=\"${start}\" | unwrap seconds | __error__=\"\" [$RANGE]))";
+
+  # The step that takes the biggest share of a start's foreground time.
+  bottleneckStat = id: gridPos: start: title: {
+    inherit id gridPos;
+    title = "Bottleneck: ${title}";
+    description = "The foreground step that takes the biggest share of a ${start} bring-up's critical path in the range, and that share. See Critical path for the rest.";
+    type = "stat";
+    datasource = loki;
+    targets = [ (instant "A" "topk(1, ${shareExpr start})" "{{step}}") ];
+    fieldConfig.defaults = {
+      unit = "percentunit";
+      decimals = 0;
+      noValue = "No runs with lanes yet";
+      displayName = "\${__field.labels.step}";
+      color = {
+        mode = "fixed";
+        fixedColor = "orange";
+      };
+    };
+    options = {
+      reduceOptions = {
+        calcs = [ "lastNotNull" ];
+        fields = "";
+        values = false;
+      };
+      colorMode = "value";
+      graphMode = "none";
+      textMode = "value_and_name";
+      justifyMode = "center";
+      text.titleSize = 14;
+    };
+  };
+
+  # Top-level steps on every lane, named with their lane when it is not the foreground.
+  laneBar = ''label_format bar=`{{ if and .lane (ne .lane "main") }}{{ .lane }} · {{ end }}{{ .step }}`'';
+
+  # A Gantt chart of the typical bring-up: each top-level step's median start
+  # (transparent) and median length, in start order.
+  gantt = id: gridPos: start: title: {
+    inherit id gridPos;
+    title = "Typical ${lib.toLower title}";
+    description = "Each top-level step of a ${start} bring-up at its median start and median length, in start order. Steps on another lane (frontend, FusionAuth, LocalStack) run beside the foreground and are named with their lane. Recorded since runs gained offsets.";
+    type = "barchart";
+    datasource = loki;
+    targets = [
+      (instant "A"
+        "quantile_over_time(0.5, $TOP | start=\"${start}\" | offset_in_run!=\"\" | ${laneBar} | unwrap offset_in_run | __error__=\"\" [$RANGE]) by (bar)"
+        "Starts at"
+      )
+      (instant "B"
+        "quantile_over_time(0.5, $TOP | start=\"${start}\" | offset_in_run!=\"\" | ${laneBar} | unwrap seconds | __error__=\"\" [$RANGE]) by (bar)"
+        "Takes"
+      )
+    ];
+    transformations = [
+      {
+        id = "merge";
+        options = { };
+      }
+      {
+        id = "organize";
+        options = {
+          excludeByName.Time = true;
+          renameByName = {
+            bar = "Step";
+            "Value #A" = "Starts at";
+            "Value #B" = "Takes";
+          };
+        };
+      }
+      {
+        id = "sortBy";
+        options.sort = [ { field = "Starts at"; } ];
+      }
+    ];
+    fieldConfig = {
+      defaults = {
+        unit = "s";
+        color = {
+          mode = "fixed";
+          fixedColor = "blue";
+        };
+        custom = {
+          fillOpacity = 80;
+          lineWidth = 0;
+          axisPlacement = "bottom";
+        };
+      };
+      overrides = [
+        (byName "Starts at" [
+          {
+            id = "color";
+            value = {
+              mode = "fixed";
+              fixedColor = "transparent";
+            };
+          }
+          {
+            id = "custom.hideFrom";
+            value = {
+              legend = true;
+              tooltip = false;
+              viz = false;
+            };
+          }
+        ])
+      ];
+    };
+    options = {
+      orientation = "horizontal";
+      stacking = "normal";
+      xField = "Step";
+      showValue = "never";
+      barWidth = 0.8;
+      groupWidth = 0.8;
+      xTickLabelMaxLength = 48;
+      legend.showLegend = false;
+      tooltip.mode = "multi";
+    };
+  };
+
+  criticalTable =
+    id: gridPos: start: title:
+    let
+      panel = lokiTableOf id {
+        title = "Critical path: ${lib.toLower title}";
+        description = "The foreground steps a ${start} bring-up waits on, in order of their share of its foreground time. A step on another lane counts only through the foreground step that waits for it.";
+        by = [ "step" ];
+        sort = "Share";
+        columns = [
+          {
+            name = "Share";
+            unit = "percentunit";
+            expr = shareExpr start;
+          }
+          {
+            name = "p50";
+            unit = "s";
+            expr = "quantile_over_time(0.5, $CRIT | start=\"${start}\" | unwrap seconds | __error__=\"\" [$RANGE]) by (step)";
+          }
+          {
+            name = "p90";
+            unit = "s";
+            expr = "quantile_over_time(0.9, $CRIT | start=\"${start}\" | unwrap seconds | __error__=\"\" [$RANGE]) by (step)";
+          }
+          {
+            name = "Runs";
+            unit = "short";
+            expr = "sum by (step) (count_over_time($CRIT | start=\"${start}\" [$RANGE]))";
+          }
+        ];
+      } gridPos;
+    in
+    panel
+    // {
+      fieldConfig = panel.fieldConfig // {
+        overrides = panel.fieldConfig.overrides ++ [
+          (byName "Share" [
+            {
+              id = "custom.cellOptions";
+              value = {
+                type = "gauge";
+                mode = "basic";
+                valueDisplayMode = "text";
+              };
+            }
+            {
+              id = "max";
+              value = 1;
+            }
+            {
+              id = "min";
+              value = 0;
+            }
+            {
+              id = "color";
+              value = {
+                mode = "fixed";
+                fixedColor = "orange";
+              };
+            }
+          ])
+        ];
+      };
+    };
+
+  tracePanel = id: gridPos: start: title: {
+    inherit id gridPos;
+    title = "${title}: \$${start}_run";
+    description = "A ${start} bring-up's steps as a trace: lanes, nested steps, the crates its service build compiled and the services it waited on. Pick another run with the ${title} variable, or from Recent bring-ups. Traces are kept 7 days; runs recorded before traces were keyed by run do not show here.";
+    type = "traces";
+    datasource = tempo;
+    targets = [
+      {
+        refId = "A";
+        datasource = tempo;
+        queryType = "traceql";
+        query = "\$${start}_run";
+      }
+    ];
+  };
+
+  runPicker = start: title: {
+    name = "${start}_run";
+    label = title;
+    description = "${title}s that reached ready on the chosen machines, newest first, as run id/machine. The traces panels open it.";
+    type = "query";
+    datasource = tempo;
+    query = {
+      refId = "${start}_run";
+      type = 1;
+      label = "bring_up";
+    };
+    # bring_up is <start>/<run_id>/<machine>; the run id is the trace id, and
+    # sorts by time because it is a UUIDv7.
+    regex = "/^${start}\\/(?<text>(?<value>[0-9a-f]{32})\\/(?:$machine))$/";
+    refresh = 2;
+    sort = 2;
   };
 
   # The local stacks' own traces, logs and metrics, from machines whose local
   # telemetry settings say `services = true` (docs/development/running-locally.md).
   # Their forwarder tags everything `host.name` = the machine's name and
-  # `deployment.environment` = local; their run events gain `host_name`.
-  localTop = 40;
+  # `deployment.environment` = local.
+  localTop = 132;
   machineFilter = ''host_name=~"$machine"'';
   serviceLogs = ''{deployment_environment="local", service_name!="local-telemetry"} | ${machineFilter}'';
   errorLogs = ''${serviceLogs} | severity_text=~"(?i)error|fatal|critical"'';
   bothLabels = "host_name, macro_local_instance";
 
+  recentRuns = {
+    id = 13;
+    type = "table";
+    title = "Recent bring-ups";
+    description = "The latest bring-ups on the chosen machines. A trace id opens that run's trace here, as the fresh or resume run, or in Explore.";
+    datasource = loki;
+    gridPos = grid 0 41 24 9;
+    targets = [
+      {
+        refId = "A";
+        datasource = loki;
+        expr = expand "" "$RUN";
+        queryType = "range";
+        maxLines = 100;
+      }
+    ];
+    transformations = [
+      {
+        id = "extractFields";
+        options = {
+          source = "labels";
+          replace = false;
+        };
+      }
+      {
+        id = "filterFieldsByName";
+        options.include.names = [
+          "Time"
+          "machine"
+          "start"
+          "detached"
+          "outcome"
+          "seconds"
+          "failed_step"
+          "trace_id"
+        ];
+      }
+      {
+        id = "convertFieldType";
+        options.conversions = [
+          {
+            targetField = "seconds";
+            destinationType = "number";
+          }
+        ];
+      }
+      {
+        id = "organize";
+        options = {
+          indexByName = {
+            Time = 0;
+            machine = 1;
+            start = 2;
+            detached = 3;
+            outcome = 4;
+            seconds = 5;
+            failed_step = 6;
+            trace_id = 7;
+          };
+          renameByName = {
+            seconds = "Time to ready";
+            failed_step = "Stopped at";
+          };
+        };
+      }
+      {
+        id = "sortBy";
+        options.sort = [
+          {
+            field = "Time";
+            desc = true;
+          }
+        ];
+      }
+    ];
+    fieldConfig = {
+      defaults.custom.minWidth = 60;
+      overrides = [
+        (byName "Time to ready" [
+          {
+            id = "unit";
+            value = "s";
+          }
+        ])
+        (byName "trace_id" [
+          {
+            id = "links";
+            value = [
+              {
+                title = "Show this run's trace here";
+                url = "/d/macro-run-local?\${__url_time_range}&\${machine:queryparam}&var-\${__data.fields.start}_run=\${__value.raw}";
+              }
+              {
+                title = "Open in Explore";
+                url = "";
+                internal = {
+                  datasourceUid = "tempo";
+                  datasourceName = "Tempo";
+                  query = {
+                    queryType = "traceql";
+                    query = "\${__value.raw}";
+                  };
+                };
+              }
+            ];
+          }
+        ])
+      ];
+    };
+    options = {
+      showHeader = true;
+      cellHeight = "sm";
+    };
+  };
+
+  stepMatrix = {
+    id = 33;
+    type = "table";
+    title = "Steps by machine, p50";
+    description = "Each top-level step's median on each machine: a column that is darker than the others is a machine that is slow at that step.";
+    datasource = loki;
+    gridPos = grid 0 89 24 12;
+    targets = [
+      (instant "A"
+        "quantile_over_time(0.5, $TOP | unwrap seconds | __error__=\"\" [$RANGE]) by (machine, step)"
+        ""
+      )
+    ];
+    transformations = [
+      {
+        id = "merge";
+        options = { };
+      }
+      {
+        id = "groupingToMatrix";
+        options = {
+          columnField = "machine";
+          rowField = "step";
+          valueField = "Value #A";
+          emptyValue = "null";
+        };
+      }
+      {
+        id = "organize";
+        options.renameByName."step\\machine" = "Step";
+      }
+    ];
+    fieldConfig = {
+      defaults = {
+        unit = "s";
+        decimals = 0;
+        custom = {
+          minWidth = 90;
+          cellOptions = {
+            type = "color-background";
+            mode = "gradient";
+          };
+        };
+        color.mode = "continuous-GrYlRd";
+      };
+      overrides = [
+        (byName "Step" [
+          {
+            id = "custom.cellOptions";
+            value.type = "auto";
+          }
+          {
+            id = "custom.minWidth";
+            value = 320;
+          }
+        ])
+      ];
+    };
+    options = {
+      showHeader = true;
+      cellHeight = "sm";
+    };
+  };
+
   dashboard = {
     uid = "macro-run-local";
     title = "Macro run_local";
-    description = "Where `just run_local` time goes, from the local telemetry events (on by default) in Loki (service_name=local-telemetry, kept 30 days). Set the range to a day or more for percentiles. A run's trace_id opens its step waterfall in Tempo, kept 7 days. The last row shows the local stacks' own traces and logs from machines that turned on `services = true`, filtered by the Machine variable.";
+    description = "Where `just run_local` time goes, from the local telemetry events (on by default) in Loki (service_name=local-telemetry, kept 30 days) and each run's trace in Tempo (kept 7 days). Set the range to a day or more for percentiles; the Machine variable narrows every panel. The last row shows the local stacks' own traces and logs from machines that turned on `services = true`.";
     schemaVersion = 39;
-    version = 1;
+    version = 2;
     editable = false;
     tags = [
       "macro"
@@ -61,55 +491,73 @@ let
       to = "now";
     };
     panels = [
-      (row 100 0 "Time to ready, from Loki events")
-      (lokiStat 1 "summary" (grid 0 1 24 4))
-      (lokiTable 2 "ready" (grid 0 5 12 8))
-      (lokiSeries 3 (grid 12 5 12 8) "Time to ready, rolling 24 h"
+      (row 100 0 "Time to ready")
+      (lokiStat 1 "summary" (grid 0 1 12 4))
+      (bottleneckStat 10 (grid 12 1 6 4) "fresh" "fresh start")
+      (bottleneckStat 11 (grid 18 1 6 4) "resume" "resume")
+      (lokiTable 2 "ready" (grid 0 5 12 7))
+      (lokiSeries 3 (grid 12 5 12 7) "Time to ready, rolling 24 h"
         "Each point covers the 24 hours before it, by fresh or resumed start."
         "s"
         "15m"
         [
-          (readyTarget "0.5" "p50 {{start}}")
-          (readyTarget "0.9" "p90 {{start}}")
+          (readyTarget "0.5" "p50 {{start}}" "start")
+          (readyTarget "0.9" "p90 {{start}}" "start")
         ]
         { }
       )
-      # Full width: step names are long.
-      (lokiTable 4 "steps" (grid 0 13 24 11))
-      (lokiTable 5 "services" (grid 0 24 12 10))
-      (lokiTable 7 "builds" (grid 12 24 12 5))
-      (lokiTable 8 "actions" (grid 12 29 12 5))
-      (lokiTable 6 "failures" (grid 0 34 24 6))
 
-      (row 200 localTop "Local stacks by machine (`services = true`)")
-      (lokiTableOf 20 {
-        title = "Bring-ups by machine";
-        description = "Bring-ups from machines that send their stacks' telemetry, by the machine's name.";
-        by = [ "host_name" ];
-        sort = "Runs";
-        columns = [
+      (row 101 12 "One bring-up as a trace")
+      (tracePanel 14 (grid 0 13 24 14) "fresh" "Fresh start")
+      (tracePanel 15 (grid 0 27 24 14) "resume" "Resume")
+      recentRuns
+
+      (row 102 50 "Bottleneck: what a bring-up waits on")
+      (gantt 16 (grid 0 51 12 13) "fresh" "Fresh start")
+      (gantt 17 (grid 12 51 12 13) "resume" "Resume")
+      (criticalTable 18 (grid 0 64 12 9) "fresh" "Fresh start")
+      (criticalTable 19 (grid 12 64 12 9) "resume" "Resume")
+
+      (row 103 73 "Machines")
+      (lokiTable 30 "machines" (grid 0 74 24 7))
+      (lokiSeries 31 (grid 0 81 12 8) "Time to ready by machine, rolling 24 h p50"
+        "Each point covers the 24 hours before it, fresh and resumed starts together."
+        "s"
+        "15m"
+        [ (readyTarget "0.5" "{{machine}}" "machine") ]
+        { }
+      )
+      (lokiSeries 32 (grid 12 81 12 8) "Bring-ups by machine"
+        "Bring-ups started per machine, ready or not. The Machines table has each machine's ready share."
+        "short"
+        "1h"
+        [
           {
-            name = "Runs";
-            unit = "short";
-            expr = "sum by (host_name) (count_over_time($RUN | ${machineFilter} [$RANGE]))";
+            expr = expand "$__auto" "sum by (machine) (count_over_time($RUN [$RANGE]))";
+            legendFormat = "{{machine}}";
           }
-          {
-            name = "Not ready";
-            unit = "short";
-            expr = "sum by (host_name) (count_over_time($STOPPED | ${machineFilter} [$RANGE]))";
-          }
-          {
-            name = "Ready p50";
-            unit = "s";
-            expr = "quantile_over_time(0.5, $READY | ${machineFilter} | unwrap seconds | __error__=\"\" [$RANGE]) by (host_name)";
-          }
-          {
-            name = "Ready p90";
-            unit = "s";
-            expr = "quantile_over_time(0.9, $READY | ${machineFilter} | unwrap seconds | __error__=\"\" [$RANGE]) by (host_name)";
-          }
-        ];
-      } (grid 0 (localTop + 1) 12 8))
+        ]
+        {
+          fieldConfig.defaults.custom = {
+            drawStyle = "bars";
+            stacking.mode = "normal";
+            fillOpacity = 80;
+          };
+        }
+      )
+      stepMatrix
+
+      (row 104 101 "Inside the steps")
+      # Full width: step names are long.
+      (lokiTable 4 "steps" (grid 0 102 24 10))
+      (lokiTable 40 "nested" (grid 0 112 12 9))
+      (lokiTable 41 "crates" (grid 12 112 12 9))
+      (lokiTable 5 "services" (grid 0 121 12 11))
+      (lokiTable 7 "builds" (grid 12 121 12 5))
+      (lokiTable 8 "actions" (grid 12 126 12 6))
+
+      (row 105 localTop "Failures and local stacks (`services = true`)")
+      (lokiTable 6 "failures" (grid 0 (localTop + 1) 12 8))
       (
         (lokiTableOf 21 {
           title = "Stacks sending telemetry, last 24 hours";
@@ -192,10 +640,14 @@ let
       {
         name = "machine";
         label = "Machine";
-        description = "Machines whose local stacks sent metrics in the range: their `machine` setting or hostname.";
+        description = "Machines with run_local traces in the range: their `machine` setting, or a hash of the hostname. Runs recorded before traces carried the machine are in the panels under All.";
         type = "query";
-        datasource = prometheus;
-        query = ''label_values({deployment_environment="local"}, host_name)'';
+        datasource = tempo;
+        query = {
+          refId = "machine";
+          type = 1;
+          label = "machine";
+        };
         refresh = 2;
         sort = 1;
         multi = true;
@@ -206,7 +658,8 @@ let
           value = "$__all";
         };
       }
-    ];
+    ]
+    ++ map ({ start, title }: runPicker start title) starts;
   };
 in
 {
