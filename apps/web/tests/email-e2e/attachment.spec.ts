@@ -241,7 +241,6 @@ for (const provider of PROVIDERS) {
           (await storedAttachment(mailbox, thread.id, 'walk.ics'))?.toString()
         )
         .toBe(PUBLISHED_EVENT);
-      confirmed('F-126');
     });
   });
 

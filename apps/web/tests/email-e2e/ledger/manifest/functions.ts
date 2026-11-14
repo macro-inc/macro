@@ -64,14 +64,15 @@ export function parseProofs(table: string): Map<string, string> {
   const [head, ...lines] = table.split('\n').filter((line) => line !== '');
   if (head !== PROOF_HEAD)
     throw new Error(`proofs.tsv: the head is not ${PROOF_HEAD}`);
-  return new Map(
-    lines.map((line) => {
-      const [id, broke, ...more] = line.split('\t');
-      if (!/^F-\d{3}$/.test(id) || !broke || more.length > 0)
-        throw new Error(`proofs.tsv: cannot read "${line}"`);
-      return [id, broke];
-    })
-  );
+  const proofs = new Map<string, string>();
+  for (const line of lines) {
+    const [id, broke, ...more] = line.split('\t');
+    if (!/^F-\d{3}$/.test(id) || !broke || more.length > 0)
+      throw new Error(`proofs.tsv: cannot read "${line}"`);
+    if (proofs.has(id)) throw new Error(`proofs.tsv: ${id} is listed twice`);
+    proofs.set(id, broke);
+  }
+  return proofs;
 }
 
 export const PROOFS: ReadonlyMap<string, string> = parseProofs(

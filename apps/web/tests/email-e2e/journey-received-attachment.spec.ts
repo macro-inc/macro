@@ -7,7 +7,7 @@ import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import type { Provider } from './harness/stack';
 import { storedAttachment } from './harness/thread';
-import { confirmed, did, saw } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
@@ -103,7 +103,6 @@ for (const provider of PROVIDERS) {
           )
         )
         .toBe(true);
-      confirmed('F-127');
     });
   });
 }

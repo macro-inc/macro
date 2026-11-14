@@ -224,6 +224,13 @@ describe('functionRows', () => {
     expect(functionTotals(proved).proved).toBe(1);
     expect(proved[1].proof).toBe('the sort ignores its key');
     expect(() => parseProofs('id\tbreak\nF-2\tx\n')).toThrow('F-2');
+    expect(() => parseProofs('id\tbreak\nF-002\tx\nF-002\ty\n')).toThrow(
+      'twice'
+    );
+    // A proof of a function one provider still lacks proves nothing yet.
+    const half = functionRows(functions, both.slice(0, 1), rows, proofs);
+    expect(half[1].status).toBe('partial');
+    expect(functionTotals(half).proved).toBe(0);
   });
 
   it('defers a function whose every way needs more, and leaves the backend its own', () => {

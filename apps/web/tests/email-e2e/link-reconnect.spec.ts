@@ -84,9 +84,9 @@ test.describe('an inbox whose access was revoked at Google', () => {
       text: 'Can you read this?',
     });
     await mailbox.synced('Back again');
+    confirmed('F-007');
     const account = await googleAccount(mailbox);
     expect(account.revoked).toBe(false);
     expect(account.watch_expires_at).not.toBeNull();
-    confirmed('F-007');
   });
 });

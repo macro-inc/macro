@@ -130,7 +130,6 @@ for (const provider of PROVIDERS) {
         { address: mailbox.inbox.email, provider, primary: true },
         { address: 'work@example.com', provider, primary: false },
       ]);
-      confirmed('F-189');
     });
 
     // Class calendar-turn-off: turning the calendar off for an inbox must
