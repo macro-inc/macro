@@ -60,4 +60,4 @@ repo_url = "https://github.com/macro-inc/macro"
 # pr_poll_secs = 60           # PR status from GitHub via the gh CLI while a viewer watches
 #                             # (at most every 5 min with none; at least 15 s); 0 turns it off.
 # changes = true              # Map agents' git repositories for the CHANGES page (read-only).
-# theme = "classic"           # Viewer colours: classic, ember, phosphor or dusk; Ctrl-T cycles them.
+# theme = "classic"           # Viewer colours: classic, ember, phosphor or dusk; Ctrl-T or ` cycles them.

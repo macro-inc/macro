@@ -83,7 +83,7 @@ pub struct MonitorSettings {
     /// requests) for the CHANGES page. Read-only: never fetches or locks.
     pub changes: bool,
     /// The viewer's colour theme: `classic`, `ember`, `phosphor` or `dusk`,
-    /// in any case. Ctrl-T in the viewer cycles through them; `--theme`
+    /// in any case. Ctrl-T (or a backtick) in the viewer cycles through them; `--theme`
     /// overrides this. Kept as text so a misspelt name cannot stop the
     /// collector: the viewer warns and draws in `classic`.
     pub theme: String,

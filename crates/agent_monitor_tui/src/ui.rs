@@ -440,7 +440,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                     app.theme.to_string().to_uppercase(),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::styled("  CTRL-T NEXT", theme::ink(Token::Rule)));
+                spans.push(Span::styled("  CTRL-T or ` NEXT", theme::ink(Token::Rule)));
                 spans.push(Span::raw("  "));
             }
             if let Some(message) = &app.message {
@@ -511,7 +511,10 @@ const HELP: [(&str, &str); 21] = [
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
-    ("CTRL-T", "next colour theme"),
+    (
+        "CTRL-T  `",
+        "next colour theme (` where a browser keeps CTRL-T)",
+    ),
     (
         "8: + − < > HOME",
         "changes: zoom, pan, back to now; [ ] repository",

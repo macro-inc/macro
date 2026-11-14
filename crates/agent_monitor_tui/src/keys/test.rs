@@ -276,6 +276,23 @@ fn ctrl_t_cycles_the_theme_in_any_mode() {
 }
 
 #[test]
+fn a_backtick_cycles_the_theme_where_a_browser_keeps_ctrl_t() {
+    assert_eq!(
+        step(idle(), Key::Char('`'), &Page::Monitor),
+        (idle(), Action::Theme(None))
+    );
+    assert_eq!(
+        step(idle(), Key::Char('`'), &Page::Zoom(Pane::Changes)).1,
+        Action::Theme(None)
+    );
+    // On the command line it is just a character.
+    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    let (mode, action) = step(typing, Key::Char('`'), &Page::Monitor);
+    assert_eq!(action, Action::None);
+    assert!(matches!(mode, Mode::Command { input, .. } if input.value() == "T`"));
+}
+
+#[test]
 fn ctrl_t_decodes_to_the_theme_key() {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 

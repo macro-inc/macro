@@ -39,7 +39,8 @@ times a second, and ticks at `fps` only while something animates.
   or `Rule`), the `Theme` that colours them, and the HUD dressing: bracket
   frames, orange title chips, segmented meters, the dot grid and the glitch
   on fresh errors. The themes (`ThemeName`: classic, ember, phosphor, dusk)
-  are in `src/theme/themes.rs`; Ctrl-T or the `THEME [name]` command line
+  are in `src/theme/themes.rs`; Ctrl-T, a backtick (for terminals in a
+  browser, which keeps Ctrl-T) or the `THEME [name]` command line
   switches them, `[monitor] theme` and `--theme` pick the first (names in any
   case).
 
@@ -89,7 +90,9 @@ times a second, and ticks at `fps` only while something animates.
   meaning (what Enter opens) is decided in `app.rs`.
 - A bare letter starts the command line, so never bind a lowercase letter
   that begins a mnemonic (`t` would swallow TAPE and TREE); use Ctrl or a
-  command instead, as the theme does (Ctrl-T, `THEME`).
+  command instead, as the theme does (Ctrl-T, `` ` ``, `THEME`). Browsers
+  (ttyd previews) swallow Ctrl-T, Ctrl-W and Ctrl-N, so give every Ctrl key
+  a plain-key twin.
 - Name colours only as `theme::Token`s (`theme::ink(Token::Info)`); never
   write a `Color` outside the theme definitions in `src/theme/themes.rs`.
   `theme::active()` is thread-local and `ui::draw` sets it from `App::theme`

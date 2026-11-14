@@ -45,7 +45,8 @@ pub enum Key {
     Backspace,
     /// Ctrl-C.
     Interrupt,
-    /// Ctrl-T: the next colour theme.
+    /// Ctrl-T: the next colour theme, in any mode (a backtick does it outside
+    /// the command line and find).
     NextTheme,
 }
 
@@ -432,6 +433,9 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Key::End => (stay, Action::Move(pane, Motion::Bottom)),
         Key::Enter => (stay, Action::Activate(pane)),
         Key::Char('q') => (stay, Action::Quit),
+        // Browsers keep Ctrl-T for a new tab, so a terminal in a browser
+        // (ttyd) cycles themes with a backtick.
+        Key::Char('`') => (stay, Action::Theme(None)),
         Key::Char('w') => (Mode::Base(Base::Idle), Action::Open(Page::Wall)),
         Key::Char('a') => (stay, Action::ToggleAll),
         Key::Char('/') => (
