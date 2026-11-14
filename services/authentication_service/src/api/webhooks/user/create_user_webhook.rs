@@ -19,6 +19,7 @@ use crate::service::user::create_user::create_user;
 use crate::service::user::support_channel_welcome::{
     AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
+use crate::service::user::team_auto_join::join_team_by_email_domain;
 use crate::{
     api::{
         context::{ApiContext, AuthorizationService, TeamsServiceType},
@@ -482,30 +483,29 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     });
 
     // Automatically add the new user to a team whose auto-join domain
-    // matches their email domain. Fire-and-forget: a failed auto-join must
+    // matches their email domain. A passwordless signup hasn't proven the
+    // address yet, so its auto-join waits for the first completed sign-in
+    // (`passwordless_callback`). Fire-and-forget: a failed auto-join must
     // never block user creation.
     tokio::spawn({
         let teams_service = ctx.teams_service.clone();
+        let macro_cache_client = ctx.macro_cache_client.clone();
         let user_id = user_id.clone();
+        let email = email.clone();
         async move {
-            let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
-                Ok(user_id) => user_id,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to parse user id for team auto-join");
+            match macro_cache_client.is_passwordless_signup_pending(&email).await {
+                Ok(false) => {}
+                Ok(true) => {
+                    tracing::info!("deferring team auto-join until passwordless sign-in completes");
                     return;
                 }
-            };
-            match teams_service.try_join_team_by_domain(&user_id).await {
-                Ok(Some(member)) => {
-                    tracing::info!(team_id=%member.team_id, "auto-joined user to team by email domain");
-                }
-                Ok(None) => {
-                    tracing::info!("no team auto-join domain matched the user's email domain");
-                }
                 Err(e) => {
-                    tracing::error!(error=?e, "failed to auto-join user to team by email domain");
+                    // Fail closed: never add an unproven address to a team.
+                    tracing::error!(error=?e, "unable to check pending passwordless signup; skipping team auto-join");
+                    return;
                 }
             }
+            join_team_by_email_domain(teams_service.as_ref(), &user_id).await;
         }
         .in_current_span()
     });

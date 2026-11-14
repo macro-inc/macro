@@ -224,6 +224,13 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
 
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
+- `POST /login/passwordless` creates the FusionAuth user before any code is
+  verified, so nothing has proven the address yet. Onboarding that trusts the
+  address (domain team auto-join, referral credit) waits for the first
+  completed sign-in: the start route records a pending signup in Redis, the
+  `user.create` webhook skips auto-join while it is pending (or unreadable),
+  and `/oauth/passwordless/{code}` consumes it and runs both. A signup whose
+  marker expires (7 days) is never auto-joined.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
   account returns 409; disconnect first to switch accounts. Missing grants report

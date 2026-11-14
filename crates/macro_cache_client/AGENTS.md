@@ -20,7 +20,9 @@ behind its own Cargo feature.
 ## Scope
 
 - Owns: rate-limit counters for auth-adjacent flows (login codes, account
-  creation, passwordless, verification emails).
+  creation, passwordless, verification emails), and short-lived auth markers
+  in `src/auth.rs` (passwordless codes, just-signed-up, pending passwordless
+  signups).
 - Not here: general-purpose Redis operations — those are `macro_redis`.
   Code that must keep a key out of its errors (keys holding a session code
   or an email) calls `redis` directly: `macro_redis` names the key in its
