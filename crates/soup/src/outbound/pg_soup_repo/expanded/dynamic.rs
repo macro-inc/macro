@@ -1651,16 +1651,22 @@ pub(in crate::outbound::pg_soup_repo) fn document_filter_is_impossible(
 pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     ast: Option<&Expr<ProjectLiteral>>,
 ) -> bool {
+    project_filter_never_matches(ast, false)
+}
+
+/// Whether a project filter can match no project. With `nil_parent`, a parent
+/// pinned to the nil id counts too: `parentId` references `Project(id)`, and
+/// no project has the nil id.
+fn project_filter_never_matches(ast: Option<&Expr<ProjectLiteral>>, nil_parent: bool) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
-            // A parent id references `Project(id)`, so the nil parent is as
-            // impossible as the nil project.
-            filter_ast::ExprFrame::Literal(
-                ProjectLiteral::ProjectIdSelf(id) | ProjectLiteral::ProjectId(id),
-            ) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(id)) => id.is_nil(),
+            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(id)) => {
+                nil_parent && id.is_nil()
+            }
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })
@@ -1711,10 +1717,21 @@ impl DynamicArms {
         }
     }
 
-    /// Whether any arm can return a row. With none, the query is a `WHERE
-    /// false` placeholder, so callers skip it and its transaction.
-    fn any(self) -> bool {
-        self.documents || self.chats || self.projects || self.initiatives || self.database_rows
+    /// Whether the query can return a row. With no arm, it is a `WHERE false`
+    /// placeholder; with only a project arm under the nil parent, it reads no
+    /// row either. Callers skip both, and their transaction.
+    ///
+    /// A nil parent keeps its arm in a union with other live arms. Without
+    /// it, the hydration reads `TopItems` once, Postgres inlines the CTE, and
+    /// CRM record Files then scanned `document_sub_type` once per page row.
+    fn can_match(filter_ast: &EntityFilterAst) -> bool {
+        let arms = Self::new(filter_ast);
+        arms.documents
+            || arms.chats
+            || arms.initiatives
+            || arms.database_rows
+            || (arms.projects
+                && !project_filter_never_matches(filter_ast.project_filter.as_deref(), true))
     }
 }
 
@@ -2492,8 +2509,8 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     // A filter that pins every arm to nothing (CRM tabs, the pipeline card)
-    // would read the caller's sources only to run a `WHERE false` query.
-    if !DynamicArms::new(cursor.filter()).any() {
+    // would read the caller's sources only to run a query that returns no row.
+    if !DynamicArms::can_match(cursor.filter()) {
         return Ok(Vec::new());
     }
 

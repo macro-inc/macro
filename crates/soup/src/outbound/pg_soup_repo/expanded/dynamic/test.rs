@@ -3,7 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 #[test]
-fn nil_project_and_parent_ids_are_impossible_but_negated_filters_are_not() {
+fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
     let nil = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
     let real = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::from_u128(1)));
     assert!(project_filter_is_impossible(Some(&nil)));
@@ -17,14 +17,61 @@ fn nil_project_and_parent_ids_are_impossible_but_negated_filters_are_not() {
     ))));
     assert!(!project_filter_is_impossible(Some(&Expr::is_not(nil))));
     assert!(!project_filter_is_impossible(Some(&real)));
-    // `parentId` references `Project(id)`, so no project has the nil parent.
-    assert!(project_filter_is_impossible(Some(&Expr::val(
+    assert!(!project_filter_is_impossible(Some(&Expr::val(
         ProjectLiteral::ProjectId(Uuid::nil())
     ))));
-    assert!(!project_filter_is_impossible(Some(&Expr::val(
-        ProjectLiteral::ProjectId(Uuid::from_u128(1))
-    ))));
     assert!(!project_filter_is_impossible(None));
+}
+
+#[test]
+fn a_nil_parent_matches_no_project_only_where_asked() {
+    let nil_parent = Expr::val(ProjectLiteral::ProjectId(Uuid::nil()));
+    let nil_self = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
+    let real_parent = Expr::val(ProjectLiteral::ProjectId(Uuid::from_u128(1)));
+    assert!(project_filter_never_matches(Some(&nil_parent), true));
+    assert!(!project_filter_never_matches(Some(&nil_parent), false));
+    assert!(project_filter_never_matches(
+        Some(&Expr::or(nil_parent.clone(), nil_self)),
+        true
+    ));
+    assert!(!project_filter_never_matches(
+        Some(&Expr::or(nil_parent.clone(), real_parent.clone())),
+        true
+    ));
+    assert!(!project_filter_never_matches(
+        Some(&Expr::is_not(nil_parent)),
+        true
+    ));
+    assert!(!project_filter_never_matches(Some(&real_parent), true));
+}
+
+/// CRM record Files: documents on the company's domains, the project parent
+/// pinned to nil, every other arm pinned to nothing.
+fn documents_with_a_nil_parent() -> EntityFilterAst {
+    EntityFilterAst {
+        document_filter: None,
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil())))),
+        project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil())))),
+        ..EntityFilterAst::default()
+    }
+}
+
+#[test]
+fn a_nil_parent_keeps_its_arm_beside_a_live_one() {
+    let mut filter = documents_with_a_nil_parent();
+    assert!(DynamicArms::can_match(&filter));
+    let sort = SimpleSortMethod::UpdatedAt.into();
+    let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
+    let sql = build_query(&filter, false, sort, &mut arrays)
+        .sql()
+        .to_owned();
+    // The project hydration is the second read of `TopItems`, which keeps
+    // Postgres from inlining it into the document hydration.
+    assert!(sql.contains(r#"FROM "Project" p"#));
+    assert!(sql.contains(r#"INNER JOIN "Project" p ON p.id = t.id"#));
+
+    filter.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))));
+    assert!(!DynamicArms::can_match(&filter));
 }
 
 #[test]

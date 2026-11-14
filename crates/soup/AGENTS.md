@@ -110,9 +110,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   hydration leave a source out) runs no statement: `exclusions.rs` drops the
   email, channel, channel-thread (by thread or channel id), call, and
   foreign-entity requests, the calendar and agent-session legs return early,
-  and a dynamic query whose every arm is impossible (`DynamicArms`) skips its
-  transaction and source-id read; a project or parent id pinned to nil makes
-  the project arm impossible, so a union with other live arms leaves it out.
+  and a dynamic query that can return no row (`DynamicArms::can_match`) skips
+  its transaction and source-id read. A project parent pinned to nil counts
+  only there: a union with another live arm keeps that project arm, because
+  dropping it leaves one read of `TopItems`, Postgres inlines the CTE, and
+  CRM record Files then scanned `document_sub_type` once per page row.
   The CRM company request is dropped when the ids its extractor collects are
   all nil, read from the extract because it unions `And`ed ids; a
   hidden-company request keeps the leg so the admin check still answers it.
