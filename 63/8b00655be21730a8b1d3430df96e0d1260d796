@@ -1,0 +1,21 @@
+crates/agent_monitor/src/domain/join/test.rs
+  s_d14d9597da0a04::t_1955a5b2f2fe8e 220-752
+crates/agent_monitor/src/domain/join.rs
+  s_d14d9597da0a04::t_b745474185e1ed 22,36-39,81-91,105-108,111,127-128,181-185,188-191,199-207,219-221,236-238,337-342,345-357,359-370,376-386,392-393,395-405,471-486,494-502,509,515-523,529,535-537,542-544,551,553-735,866,895
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "638b00655be21730a8b1d3430df96e0d1260d796",
+  "prompts": {},
+  "sessions": {
+    "s_d14d9597da0a04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bde7157c-1ac0-434d-b2b6-e2d6405a5d46",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
