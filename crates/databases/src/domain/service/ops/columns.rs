@@ -49,16 +49,10 @@ impl Planner {
             } => {
                 let name = fresh_name(place, entry, name)?;
                 let target = PropertyType::from_column_kind(*kind);
-                let config = match kind {
-                    ColumnKind::Relation { database, table } => {
-                        self.link_target(place, *database, *table)?;
-                        Some(ColumnConfig::Link {
-                            database_id: *database,
-                            table_id: *table,
-                        })
-                    }
-                    _ => None,
-                };
+                if let ColumnKind::Relation { database, table } = kind {
+                    self.link_target(place, *database, *table)?;
+                }
+                let config = config_for(*kind, None);
                 if !options.is_empty() && !takes_options(target.data_type) {
                     return Err(place.refuse(SchemaError::OptionsOnPlainColumn.to_string()));
                 }
@@ -90,6 +84,7 @@ impl Planner {
                     Some(created),
                     Some(ColumnConfig::Derived {
                         formula: formula.clone(),
+                        percentage: false,
                     }),
                     false,
                 )
@@ -111,15 +106,16 @@ impl Planner {
                 }
                 let restored = self.restoration.columns.get(&id);
                 let formula = restored.and_then(|column| column.formula.clone());
-                let config = match (formula, restored.and_then(|column| column.kind)) {
-                    (Some(formula), _) => Some(ColumnConfig::Derived { formula }),
-                    (None, Some(ColumnKind::Relation { database, table })) => {
-                        self.link_target(place, database, table)?;
-                        Some(ColumnConfig::Link {
-                            database_id: database,
-                            table_id: table,
-                        })
-                    }
+                let kind = restored.and_then(|column| column.kind);
+                if let Some(ColumnKind::Relation { database, table }) = kind {
+                    self.link_target(place, database, table)?;
+                }
+                let config = match (formula, kind) {
+                    (Some(formula), kind) => Some(ColumnConfig::Derived {
+                        formula,
+                        percentage: matches!(kind, Some(ColumnKind::Percentage)),
+                    }),
+                    (None, Some(kind)) => config_for(kind, None),
                     _ => None,
                 };
                 let infer_type = restored.is_some_and(|column| column.infer_type);
@@ -344,53 +340,39 @@ impl Planner {
         to: ColumnKind,
     ) -> Result<Write, DatabaseError> {
         let column_id = place.column;
-        if column.column.formula().is_some() {
-            return Err(place.refuse(
-                "a derived column's type follows its formula; change the formula instead",
-            ));
-        }
+        let formula = column.column.formula().cloned();
         let source = column.definition.definition.id;
         if self.written_tables.contains(&entry.table.id) || self.changed_options.contains(&source) {
             return Err(place.refuse(SchemaError::RetypeAfterWrites.to_string()));
         }
-        let relation = match to {
-            ColumnKind::Relation { database, table } => {
-                self.related_table(place, database, table)?;
-                Some((database, table))
-            }
-            _ => None,
-        };
-        let now = self.now;
-        let views = views_without_tests_of(self.views_of(entry), column_id, now)
-            .map_err(|reason| place.refuse(reason.to_string()))?;
-        if let Some(previous) = self.restoration.rebinds.get(&place.op).copied() {
-            if column
-                .column
-                .protections
-                .contains(&ColumnProtection::ChangeType)
-            {
-                return Err(place.refuse(
-                    SchemaError::ColumnProtected {
-                        capability: ColumnProtection::ChangeType,
-                    }
-                    .to_string(),
-                ));
-            }
-            return self.rebind(place, entry, column, previous, relation, views);
+        if let ColumnKind::Relation { database, table } = to {
+            self.related_table(place, database, table)?;
         }
         let current = PropertyType::of(&column.column, &column.definition);
         let target = PropertyType::from_column_kind(to);
-        let same_relation = match (&column.column.config, relation) {
-            (Some(ColumnConfig::Link { table_id, .. }), Some((_, target_table))) => {
-                *table_id == target_table
-            }
-            (_, None) => true,
-            _ => false,
+        let same_relation = match (&column.column.config, to) {
+            (
+                Some(ColumnConfig::Link { table_id, .. }),
+                ColumnKind::Relation {
+                    table: target_table,
+                    ..
+                },
+            ) => *table_id == target_table,
+            (_, ColumnKind::Relation { .. }) => false,
+            _ => true,
         };
         if current == target && same_relation {
             return Ok(Write::Unchanged {
                 table_id: entry.table.id,
             });
+        }
+        let format_only = current.same_storage(&target)
+            && same_relation
+            && matches!(to, ColumnKind::Number | ColumnKind::Percentage);
+        if formula.is_some() && !format_only {
+            return Err(place.refuse(
+                "a derived column's type follows its formula; change the formula instead",
+            ));
         }
 
         if column
@@ -405,6 +387,22 @@ impl Planner {
                 .to_string(),
             ));
         }
+        if let Some(previous) = self.restoration.rebinds.get(&place.op).copied() {
+            let now = self.now;
+            let views = if format_only {
+                Vec::new()
+            } else {
+                views_without_tests_of(self.views_of(entry), column_id, now)
+                    .map_err(|reason| place.refuse(reason.to_string()))?
+            };
+            return self.rebind(place, entry, column, previous, to, views);
+        }
+        if format_only {
+            return self.replace_config(place, entry, column, config_for(to, formula.as_ref()));
+        }
+        let now = self.now;
+        let views = views_without_tests_of(self.views_of(entry), column_id, now)
+            .map_err(|reason| place.refuse(reason.to_string()))?;
 
         let stored = self
             .found
@@ -477,10 +475,7 @@ impl Planner {
                 (row, value)
             })
             .collect();
-        let config = relation.map(|(database_id, table_id)| ColumnConfig::Link {
-            database_id,
-            table_id,
-        });
+        let config = config_for(to, None);
         let replacement = ColumnReplacement {
             column: column.column.clone(),
             definition_id: definition.id,
@@ -515,6 +510,35 @@ impl Planner {
         })
     }
 
+    /// Keep the definition and cells; only the placement's display config changes.
+    fn replace_config(
+        &mut self,
+        place: Place,
+        entry: &StorageTable,
+        column: &ColumnEntry,
+        config: Option<ColumnConfig>,
+    ) -> Result<Write, DatabaseError> {
+        let replacement = ColumnReplacement {
+            column: column.column.clone(),
+            definition_id: column.definition.definition.id,
+            config: config.clone(),
+            values: Vec::new(),
+        };
+        let read_version =
+            (!self.created_tables.contains(&entry.table.id)).then_some(entry.table.version);
+        if let Some(stored) = self.column_mut(entry.table.id, place.column) {
+            stored.column.config = config;
+            stored.column.infer_type = false;
+        }
+        Ok(Write::ReplaceColumn {
+            table_id: entry.table.id,
+            read_version,
+            definition: None,
+            replacement,
+            views: Vec::new(),
+        })
+    }
+
     /// Bind a column back to a definition it had before a type change: the
     /// definition still exists, with its options, so the cells written back
     /// after this op name them as they were.
@@ -524,7 +548,7 @@ impl Planner {
         entry: &StorageTable,
         column: &ColumnEntry,
         previous: PropertyDefinitionId,
-        relation: Option<(DatabaseId, TableId)>,
+        to: ColumnKind,
         views: Vec<DatabaseView>,
     ) -> Result<Write, DatabaseError> {
         let definition = self
@@ -533,10 +557,7 @@ impl Planner {
             .get(&previous)
             .cloned()
             .ok_or_else(|| place.refuse("the column's earlier definition is gone"))?;
-        let config = relation.map(|(database_id, table_id)| ColumnConfig::Link {
-            database_id,
-            table_id,
-        });
+        let config = config_for(to, column.column.formula());
         let replacement = ColumnReplacement {
             column: column.column.clone(),
             definition_id: previous,
@@ -578,8 +599,11 @@ impl Planner {
             });
         }
         let result = check_formula(place, entry, Some(place.column), formula)?;
+        let percentage =
+            derived_data_type(result) == DataType::Number && column.column.is_percentage();
         let config = Some(ColumnConfig::Derived {
             formula: formula.clone(),
+            percentage,
         });
         let read_version =
             (!self.created_tables.contains(&entry.table.id)).then_some(entry.table.version);
@@ -880,6 +904,23 @@ fn derived_data_type(result: FormulaType) -> DataType {
     match result {
         FormulaType::Number => DataType::Number,
         FormulaType::Date => DataType::Date,
+    }
+}
+
+fn config_for(kind: ColumnKind, formula: Option<&Formula>) -> Option<ColumnConfig> {
+    if let Some(formula) = formula {
+        return Some(ColumnConfig::Derived {
+            formula: formula.clone(),
+            percentage: matches!(kind, ColumnKind::Percentage),
+        });
+    }
+    match kind {
+        ColumnKind::Relation { database, table } => Some(ColumnConfig::Link {
+            database_id: database,
+            table_id: table,
+        }),
+        ColumnKind::Percentage => Some(ColumnConfig::Percentage),
+        _ => None,
     }
 }
 

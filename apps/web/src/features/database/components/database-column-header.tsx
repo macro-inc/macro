@@ -389,6 +389,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                 <PropertyIcon
                   relation={!!props.column.relation}
                   formula={!!props.column.formula}
+                  percentage={!!props.column.percentage}
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
@@ -469,7 +470,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 group === 'edit' &&
                                 props.onChangeType &&
                                 canRename() &&
-                                !props.column.formula
+                                (!props.column.formula ||
+                                  props.column.dataType === 'NUMBER')
                               }
                             >
                               <ColumnTypeMenu
@@ -483,6 +485,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                 }
                                 onFormula={
                                   formulas &&
+                                  !props.column.formula &&
                                   (() => {
                                     const replace = formulaReplaces();
                                     requested = () =>
@@ -519,6 +522,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               <PropertyIcon
                 relation={!!props.column.relation}
                 formula={!!props.column.formula}
+                percentage={!!props.column.percentage}
                 type={props.column.dataType}
                 entityType={props.column.specificEntityType}
               />

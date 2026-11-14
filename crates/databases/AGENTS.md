@@ -55,7 +55,9 @@ service with Axum, agent-tool and Postgres adapters.
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").
 - Column type changes must convert every value or refuse with the misfit count;
-  never silently drop data outside an explicit delete.
+  never silently drop data outside an explicit delete. Percentage is Number
+  storage plus placement config; Number↔Percentage does not convert or rescale
+  cells.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
   link. The team share's state lives in a `SharePermission` row that
   `database_entities.share_permission_id` points at, made the first time the

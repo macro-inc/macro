@@ -1,6 +1,6 @@
 # Type Alias: ColumnConfig
 
-> **ColumnConfig** = \{ `database_id`: `string`; `kind`: `"link"`; `table_id`: `string`; \} \| \{ `formula`: [`Formula`](Formula.md); `kind`: `"derived"`; \}
+> **ColumnConfig** = \{ `database_id`: `string`; `kind`: `"link"`; `table_id`: `string`; \} \| \{ `formula`: [`Formula`](Formula.md); `kind`: `"derived"`; `percentage?`: `boolean`; \} \| \{ `kind`: `"percentage"`; \}
 
 Column-kind specific configuration stored on the placement.
 
@@ -20,9 +20,16 @@ Column-kind specific configuration stored on the placement.
 
 ### Type Literal
 
-\{ `formula`: [`Formula`](Formula.md); `kind`: `"derived"`; \}
+\{ `formula`: [`Formula`](Formula.md); `kind`: `"derived"`; `percentage?`: `boolean`; \}
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
 | `formula` | [`Formula`](Formula.md) | How its cells are computed. |
 | `kind` | `"derived"` | - |
+| `percentage?` | `boolean` | Whether a number formula is shown as a percent. |
+
+***
+
+### Type Literal
+
+\{ `kind`: `"percentage"`; \}

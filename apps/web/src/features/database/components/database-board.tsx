@@ -775,6 +775,8 @@ function BoardCard(props: {
                     type={column().dataType}
                     entityType={column().specificEntityType}
                     relation={!!column().relation}
+                    formula={!!column().formula}
+                    percentage={!!column().percentage}
                     class="size-3.5 shrink-0 text-ink-placeholder"
                   />
                   <div

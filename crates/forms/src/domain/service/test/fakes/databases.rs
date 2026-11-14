@@ -131,6 +131,7 @@ fn column_detail(
             database_id: database,
             table_id: table,
         }),
+        ColumnKind::Percentage => Some(ColumnConfig::Percentage),
         _ => None,
     };
     ColumnDetail {
@@ -235,7 +236,7 @@ fn fits(column: &FakeColumn, value: &CellValue) -> Result<CellValue, String> {
     match (column.kind, value) {
         (_, CellValue::Clear)
         | (ColumnKind::Text, CellValue::Text(_))
-        | (ColumnKind::Number, CellValue::Number(_))
+        | (ColumnKind::Number | ColumnKind::Percentage, CellValue::Number(_))
         | (ColumnKind::Boolean, CellValue::Boolean(_))
         | (ColumnKind::Date, CellValue::Date(_))
         | (ColumnKind::Relation { .. }, CellValue::Rows(_)) => Ok(value.clone()),

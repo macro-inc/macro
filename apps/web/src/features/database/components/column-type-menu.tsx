@@ -18,6 +18,7 @@ import { PropertyIcon } from './property-icon';
 const types: { label: string; to: DatabaseColumnKind }[] = [
   { label: 'Text', to: { type: 'text' } },
   { label: 'Number', to: { type: 'number' } },
+  { label: 'Percentage', to: { type: 'percentage' } },
   { label: 'Select', to: { type: 'select', multi: false } },
   { label: 'Multi-select', to: { type: 'select', multi: true } },
   { label: 'Date', to: { type: 'date' } },
@@ -77,12 +78,18 @@ export function ColumnTypeMenu(props: {
       dataType === target.dataType &&
       props.column.isMultiSelect === target.isMultiSelect &&
       (props.column.specificEntityType ?? undefined) ===
-        target.specificEntityType
+        target.specificEntityType &&
+      !!props.column.percentage === !!target.percentage
     );
   };
   // Keep a multi-valued reference column represented by its current menu item.
-  const menuTypes = () =>
-    types.map((item) =>
+  const menuTypes = () => {
+    if (props.column.formula)
+      return [
+        { label: 'Number', to: { type: 'number' as const } },
+        { label: 'Percentage', to: { type: 'percentage' as const } },
+      ];
+    return types.map((item) =>
       item.to.type === 'entity' &&
       props.column.dataType === 'ENTITY' &&
       !props.column.relation &&
@@ -90,6 +97,7 @@ export function ColumnTypeMenu(props: {
         ? { ...item, to: { ...item.to, multi: props.column.isMultiSelect } }
         : item
     );
+  };
   /** Keep the current type visible; leave out types no value converts to. */
   const offered = (to: DatabaseColumnKind) => {
     if (selected(to)) return true;
@@ -125,6 +133,7 @@ export function ColumnTypeMenu(props: {
           type={props.column.dataType}
           entityType={props.column.specificEntityType}
           relation={!!props.column.relation}
+          percentage={!!props.column.percentage}
         />
         <span class="flex-1">Change type</span>
         <CaretRightIcon class="size-3" />
@@ -146,6 +155,7 @@ export function ColumnTypeMenu(props: {
                     <PropertyIcon
                       type={castTargetOf(type.to).dataType}
                       entityType={castTargetOf(type.to).specificEntityType}
+                      percentage={!!castTargetOf(type.to).percentage}
                     />
                   }
                   selected={selected(type.to)}
@@ -169,7 +179,7 @@ export function ColumnTypeMenu(props: {
               </Dropdown.Group>
             )}
           </Show>
-          <Show when={offeredTables().length}>
+          <Show when={offeredTables().length && !props.column.formula}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Related table</Dropdown.GroupLabel>
               <For each={offeredTables()}>

@@ -127,7 +127,9 @@ export function formatCellValue(
     if (range) return formatTimeRange(range);
   }
   if (column.dataType === 'NUMBER' && typeof value === 'number')
-    return formatNumber(value);
+    return column.percentage
+      ? `${formatNumber(value * 100)}%`
+      : formatNumber(value);
   return String(value);
 }
 

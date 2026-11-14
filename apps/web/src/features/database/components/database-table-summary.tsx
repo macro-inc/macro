@@ -7,7 +7,7 @@ import {
   summarizeColumn,
 } from '../core/column-summary';
 import type { DatabaseViewColumn } from '../core/database-view';
-import type { DatabaseRow } from '../core/table';
+import { type DatabaseRow, formatCellValue } from '../core/table';
 
 const calculations: {
   value: ColumnCalculation;
@@ -102,7 +102,11 @@ function SummaryCell(props: {
             }
           >
             <span class="tabular-nums text-ink">
-              {value() === null ? '—' : format.format(value()!)}
+              {value() === null
+                ? '—'
+                : props.column.percentage && calculation().numeric
+                  ? formatCellValue(props.column, value()!)
+                  : format.format(value()!)}
             </span>
             <span class="truncate lowercase">{calculation().label}</span>
           </Show>

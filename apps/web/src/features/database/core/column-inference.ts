@@ -23,3 +23,14 @@ export function inferDatabaseNumber(value: string): number | undefined {
     return undefined;
   return number;
 }
+
+/** Percentage points to the stored fraction: `25` and `25%` are 0.25. */
+export function inferDatabasePercentage(value: string): number | undefined {
+  const points = inferDatabaseNumber(value.trim().replace(/%$/, '').trim());
+  return points === undefined ? undefined : points / 100;
+}
+
+/** The stored fraction as percentage points for the cell editor. */
+export function percentagePointsText(value: number): string {
+  return String(Number((value * 100).toPrecision(12)));
+}

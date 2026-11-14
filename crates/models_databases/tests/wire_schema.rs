@@ -331,6 +331,7 @@ fn ops() -> Vec<DatabaseOp> {
     let kinds = [
         ColumnKind::Text,
         ColumnKind::Number,
+        ColumnKind::Percentage,
         ColumnKind::Boolean,
         ColumnKind::Date,
         ColumnKind::Link,

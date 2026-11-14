@@ -10,5 +10,5 @@ export type ColumnKindOneOfTwooneType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnKindOneOfTwooneType = {
-  relation: 'relation',
+  entity: 'entity',
 } as const;

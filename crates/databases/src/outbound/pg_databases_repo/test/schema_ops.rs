@@ -888,7 +888,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         created.config,
         Some(ColumnConfig::Derived {
-            formula: times(2.0)
+            formula: times(2.0),
+            percentage: false,
         })
     );
 
@@ -924,7 +925,8 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     assert_eq!(
         edited.config,
         Some(ColumnConfig::Derived {
-            formula: times(3.0)
+            formula: times(3.0),
+            percentage: false,
         })
     );
     assert_eq!(

@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ColumnConfigOneOf } from './columnConfigOneOf';
+import type { ColumnConfigOneOfFive } from './columnConfigOneOfFive';
 import type { ColumnConfigOneOfThree } from './columnConfigOneOfThree';
 
 /**
  * Column-kind specific configuration stored on the placement.
  */
-export type ColumnConfig = ColumnConfigOneOf | ColumnConfigOneOfThree;
+export type ColumnConfig =
+  | ColumnConfigOneOf
+  | ColumnConfigOneOfThree
+  | ColumnConfigOneOfFive;

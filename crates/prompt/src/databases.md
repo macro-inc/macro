@@ -11,6 +11,7 @@ Whenever you create a table or column, type each column by what its values are:
 | a row of another table in the database | relation |
 | a status, stage or category | select; `select[]` or tag for several |
 | money, counts, scores | number |
+| a share, rate, or percent | percentage (stored as a fraction: 0.25 is 25%) |
 | dates | date |
 | yes/no | boolean |
 | URLs | link |

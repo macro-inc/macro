@@ -145,7 +145,7 @@ fn normalized(
         (ColumnKind::Text, CellValue::Text(text)) => {
             Ok((!text.trim().is_empty()).then(|| value.clone()))
         }
-        (ColumnKind::Number, CellValue::Number(number)) => {
+        (ColumnKind::Number | ColumnKind::Percentage, CellValue::Number(number)) => {
             if number.is_finite() {
                 Ok(Some(value.clone()))
             } else {

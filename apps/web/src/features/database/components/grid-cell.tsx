@@ -31,6 +31,8 @@ import {
   type DatabaseEntityType,
   type DatabaseMention,
   inferDatabaseNumber,
+  inferDatabasePercentage,
+  percentagePointsText,
 } from '../core/column-inference';
 import {
   type DatabaseCellValue,
@@ -165,7 +167,9 @@ export function GridCell(props: GridCellProps) {
   );
   const [editing, setEditing] = createSignal(startsEditing);
   const [draft, setDraft] = createSignal(
-    startsEditing && props.value !== null ? String(props.value) : ''
+    startsEditing && props.value !== null
+      ? numberEditorDraft(props.column, props.value)
+      : ''
   );
   const [selectAll, setSelectAll] = createSignal(true);
   const cellKind = createMemo<GridCellKind>(() =>
@@ -215,7 +219,7 @@ export function GridCell(props: GridCellProps) {
         ? seed
         : props.value === null
           ? ''
-          : String(props.value)
+          : numberEditorDraft(props.column, props.value)
     );
     setEditing(true);
     if (
@@ -717,7 +721,9 @@ function InlineEditor(props: {
   const renderTextEditor =
     props.column.dataType === 'STRING' ? props.renderTextEditor : undefined;
   const initialDraft =
-    props.originalValue === null ? '' : String(props.originalValue);
+    props.originalValue === null
+      ? ''
+      : numberEditorDraft(props.column, props.originalValue);
   const focus = () => {
     if (textFocus) {
       textFocus();
@@ -743,7 +749,7 @@ function InlineEditor(props: {
       props.draft.trim() === ''
         ? null
         : props.column.dataType === 'NUMBER'
-          ? inferDatabaseNumber(props.draft)
+          ? numberFromEditorDraft(props.column, props.draft)
           : props.draft;
     if (value === undefined) {
       setError('Enter a valid number');
@@ -822,7 +828,10 @@ function InlineEditor(props: {
                 props.onDraft(event.currentTarget.value);
                 if (
                   event.currentTarget.value.trim() === '' ||
-                  inferDatabaseNumber(event.currentTarget.value) !== undefined
+                  numberFromEditorDraft(
+                    props.column,
+                    event.currentTarget.value
+                  ) !== undefined
                 )
                   setError('');
               }}
@@ -1266,6 +1275,24 @@ function DateCell(props: GridCellProps) {
       </Dropdown>
     </Show>
   );
+}
+
+function numberEditorDraft(
+  column: DatabaseViewColumn,
+  value: DatabaseCellValue
+): string {
+  return column.percentage && typeof value === 'number'
+    ? percentagePointsText(value)
+    : String(value);
+}
+
+function numberFromEditorDraft(
+  column: DatabaseViewColumn,
+  draft: string
+): number | undefined {
+  return column.percentage
+    ? inferDatabasePercentage(draft)
+    : inferDatabaseNumber(draft);
 }
 
 /** Multi-line text keeps its arrows until the caret is on the first or last line. */

@@ -46,6 +46,20 @@ const casts: DatabaseColumnCasts = {
     },
     {
       target: {
+        dataType: 'NUMBER',
+        isMultiSelect: false,
+        relation: false,
+        percentage: true,
+      },
+      cast: {
+        verdict: 'checked',
+        failures: 3,
+        summary: "3 values aren't numbers",
+        examples: ['TBD', 'n/a', '12.5.0'],
+      },
+    },
+    {
+      target: {
         dataType: 'SELECT_STRING',
         isMultiSelect: false,
         relation: false,

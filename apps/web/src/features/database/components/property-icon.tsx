@@ -1,5 +1,6 @@
 import FunctionIcon from '@icon/system/regular/function.svg';
 import LinkIcon from '@icon/system/regular/link-simple.svg';
+import PercentIcon from '@icon/system/regular/percent.svg';
 import { PropertyDataTypeIcon } from '@property/utils/PropertyDataTypeIcon';
 import { DataType } from '@service-properties/generated/schemas/dataType';
 import { Show } from 'solid-js';
@@ -14,6 +15,7 @@ export function PropertyIcon(props: {
   entityType?: DatabaseEntityType | null;
   relation?: boolean;
   formula?: boolean;
+  percentage?: boolean;
   class?: string;
 }) {
   const valueType = () => (isDataType(props.type) ? props.type : 'STRING');
@@ -23,14 +25,22 @@ export function PropertyIcon(props: {
       class={props.class ?? 'size-3.5 shrink-0 text-ink-muted'}
     >
       <Show when={!props.formula} fallback={<FunctionIcon class="size-full" />}>
-        <Show when={!props.relation} fallback={<LinkIcon class="size-full" />}>
-          <PropertyDataTypeIcon
-            property={{
-              valueType: valueType(),
-              specificEntityType: props.entityType,
-            }}
-            class="size-full"
-          />
+        <Show
+          when={!props.percentage}
+          fallback={<PercentIcon class="size-full" />}
+        >
+          <Show
+            when={!props.relation}
+            fallback={<LinkIcon class="size-full" />}
+          >
+            <PropertyDataTypeIcon
+              property={{
+                valueType: valueType(),
+                specificEntityType: props.entityType,
+              }}
+              class="size-full"
+            />
+          </Show>
         </Show>
       </Show>
     </span>

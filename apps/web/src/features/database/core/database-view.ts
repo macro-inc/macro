@@ -33,6 +33,8 @@ export type DatabaseViewColumn = {
   sharedOutsideDatabase?: boolean;
   /** A derived column's formula: its cells are computed, and nothing writes them. */
   formula?: Formula;
+  /** A number shown as a percent: 0.25 displays as 25%. */
+  percentage?: boolean;
   /** A relationship points to rows in a table, independently of the property's scalar type. */
   relation?: {
     databaseId: string;

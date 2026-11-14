@@ -1,6 +1,6 @@
 # Type Alias: ColumnKind
 
-> **ColumnKind** = \{ `type`: `"text"`; \} \| \{ `type`: `"number"`; \} \| \{ `type`: `"boolean"`; \} \| \{ `type`: `"date"`; \} \| \{ `type`: `"date_range"`; \} \| \{ `type`: `"link"`; \} \| \{ `multi`: `boolean`; `type`: `"select"`; \} \| \{ `multi`: `boolean`; `type`: `"select_number"`; \} \| \{ `type`: `"tag"`; \} \| \{ `multi`: `boolean`; `target`: [`EntityKind`](EntityKind.md); `type`: `"entity"`; \} \| \{ `database`: `string`; `table`: `string`; `type`: `"relation"`; \}
+> **ColumnKind** = \{ `type`: `"text"`; \} \| \{ `type`: `"number"`; \} \| \{ `type`: `"percentage"`; \} \| \{ `type`: `"boolean"`; \} \| \{ `type`: `"date"`; \} \| \{ `type`: `"date_range"`; \} \| \{ `type`: `"link"`; \} \| \{ `multi`: `boolean`; `type`: `"select"`; \} \| \{ `multi`: `boolean`; `type`: `"select_number"`; \} \| \{ `type`: `"tag"`; \} \| \{ `multi`: `boolean`; `target`: [`EntityKind`](EntityKind.md); `type`: `"entity"`; \} \| \{ `database`: `string`; `table`: `string`; `type`: `"relation"`; \}
 
 A type a column can have.
 
@@ -15,6 +15,12 @@ A type a column can have.
 ### Type Literal
 
 \{ `type`: `"number"`; \}
+
+***
+
+### Type Literal
+
+\{ `type`: `"percentage"`; \}
 
 ***
 

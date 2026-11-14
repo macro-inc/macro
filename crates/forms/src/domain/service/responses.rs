@@ -68,6 +68,7 @@ fn tallied(kind: ColumnKind) -> bool {
         | ColumnKind::Boolean => true,
         ColumnKind::Text
         | ColumnKind::Number
+        | ColumnKind::Percentage
         | ColumnKind::Date
         | ColumnKind::DateRange
         | ColumnKind::Link
