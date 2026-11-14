@@ -1285,12 +1285,20 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         if areas.is_empty() {
             areas = FALLBACK_AREAS.iter().map(|area| (*area).to_owned()).collect();
         }
-        let mut wanted = vec!["routines".to_owned()];
+        // One call per group, so each keeps its own budget for the types it
+        // imports: in one call the routines area's imports crowd out
+        // `ai`'s (`StructuredCompletionRequest`).
+        let mut groups = vec![vec!["routines".to_owned()]];
         if code {
-            wanted.push(AI_AREA.to_owned());
-            wanted.extend(areas);
+            groups.push(vec![AI_AREA.to_owned()]);
+            groups.push(areas);
         }
-        let reference = self.code.area_reference(&wanted);
+        let reference = groups
+            .iter()
+            .map(|group| self.code.area_reference(group))
+            .filter(|reference| !reference.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
         let items = format!(
             "{}\n{}",
             lookup.for_writer(),
