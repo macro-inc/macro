@@ -56,6 +56,16 @@ insets. Short conversations are bottom aligned. Before a scroll correction is
 written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
+A width change (a split opening or closing beside the channel) rewraps every row.
+The core only compensates a remeasured row that lies entirely above the viewport,
+so the row spanning the top edge would push the message being read down. Rows
+remember the width they were measured at; a row measured at another width is
+compensated whenever it starts above the viewport, like a first measurement, so
+the first message starting in view keeps its position. This covers rows measured
+at the old width that remount later as the reader scrolls up, and sizes restored
+from a scroll snapshot, whose width is unknown.
+The backend-free browser regression narrows and widens the production list and reopens it at another width:
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 including scroll events dispatched while our own `scrollTo` runs, so our own
 corrections neither start nor prolong gesture compensation.
@@ -70,7 +80,16 @@ once 150ms pass without input or scrolling and `scrollTop` has not moved in that
 the adjustment is removed and committed to the DOM offset in the same task. A busy
 main thread can delay scroll events beyond 150ms while momentum continues, so the
 timer alone is not proof that scrolling stopped.
-The sizer retains its logical height and clips shifted overflow during this period.
+The sizer's height excludes the adjustment during this period, so its end moves with
+the shifted rows: native scrolling stops at the latest message instead of continuing
+into blank space below it (or stopping short of it), and the distance to the bottom
+compares native positions.
+Because a gesture never moves the native top boundary, rows above that are taller than
+their 96px estimate would only grow the adjustment, and a long fling stops at
+`scrollTop` 0 with history still above it. On WebKit the range extractor
+therefore keeps rows up to twelve viewports above the reading position mounted
+and measured before a gesture reaches them, adding at most six unmeasured rows
+per range pass.
 Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
 the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
 navigation flush the adjustment before computing targets.
@@ -88,6 +107,14 @@ that spans the viewport's top is not compensated when its lower content grows.
 Message images reserve a responsive box from attachment dimensions, with the loading
 placeholder overlaid inside it. Keep the border on the frame: a border on the image
 can change portrait/landscape sizing when intrinsic dimensions become available.
+
+No row may change height after it mounts because of data loaded later. Text may
+wrap, but only from what is known at mount; reserve the space for anything fetched,
+or keep it to one line. A request-to-join row wraps its sentence from the
+requester's name stored on the event (older events show the email), as mentions do,
+and keeps its answer line at the buttons' height (36px on touch) in every state,
+including while the request loads. Its backend-free desktop/phone regression is
+`bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
 Message IDs also key Solid's rendered components, preserving editors and expanded
 threads across pagination. `Key` owns each row's virtual-item accessor; a shared

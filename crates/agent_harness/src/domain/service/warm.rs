@@ -52,14 +52,15 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
+    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = tracing::field::Empty, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
     pub(super) async fn open_managed_session_inner(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
         warm: bool,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let managed_defaults = self.inner.defaults.managed();
-        let (bot_id, model, harness, instructions, mut mcp_servers) = match request.profile {
+        let (bot_id, model, harness, persona_instructions, mut mcp_servers) = match request.profile
+        {
             Some(SelectedManagedPersona {
                 bot_id,
                 profile: Some(profile),
@@ -81,7 +82,20 @@ where
                     bot_id,
                     defaults.model.clone(),
                     defaults.harness.clone(),
-                    request.instructions,
+                    None,
+                    AgentMcpServers::OwnerConnections,
+                )
+            }
+            // An explicit repository is a Cursor session: no other managed
+            // persona honors `repo_url`, and omitting the persona used to
+            // 422 as the default sandboxed coder.
+            None if request.repo_url.is_some() => {
+                let defaults = self.inner.defaults.for_bot(bot_id::CURSOR_BOT_ID);
+                (
+                    bot_id::CURSOR_BOT_ID,
+                    defaults.model.clone(),
+                    defaults.harness.clone(),
+                    None,
                     AgentMcpServers::OwnerConnections,
                 )
             }
@@ -89,14 +103,16 @@ where
                 managed_defaults.bot_id,
                 managed_defaults.model.clone(),
                 managed_defaults.harness.clone(),
-                request.instructions,
+                None,
                 AgentMcpServers::OwnerConnections,
             ),
         };
-        // A caller's pick outranks the persona's: choosing a model on the way
-        // in is choosing what this session runs on, for its whole life.
+        // A caller's pick outranks the persona's: choosing a model or
+        // instructions on the way in is choosing what this session runs
+        // under, for its whole life.
         let requested_model = request.model;
         let model = requested_model.clone().unwrap_or(model);
+        let instructions = request.instructions.or(persona_instructions);
         tracing::Span::current().record("agent.session.model", &model);
         let kind = AgentKind::for_session(bot_id, &harness);
         let harness = kind.harness_slug().map_or(harness, str::to_owned);
@@ -114,7 +130,8 @@ where
             if kind != AgentKind::Cursor {
                 return Err(
                     agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
-                        "repository selection is supported for Cursor coding agents",
+                        "repoUrl needs a Cursor coding agent; choose a Cursor agent persona or \
+                         omit repoUrl",
                     ),
                 );
             }
@@ -165,7 +182,10 @@ where
                 && bot_id == bot_id::MACRO_NEW_BOT_ID
                 && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
                 && request.repo_url.is_none()
-                && request.source == SessionSource::User;
+                && request.source == SessionSource::User
+                // A warm row is billable; a non-billable session opens its own
+                // row.
+                && request.billing.is_billable();
             let claim = match &self.warm_lifecycle {
                 Some(lifecycle) if eligible => Some(
                     lifecycle
@@ -175,6 +195,7 @@ where
                             bot_id,
                             &model,
                             instructions.as_deref(),
+                            &request.origin,
                         )
                         .await?,
                 ),
@@ -183,9 +204,10 @@ where
             record_warm_claim(request.id.is_some(), eligible, claim);
             claim
         };
+        tracing::Span::current()
+            .record("agent.session.warm_hit", claim == Some(WarmClaim::Claimed));
         if claim == Some(WarmClaim::Claimed) {
             self.warm_reservations.lock().await.remove(&session_id);
-            tracing::Span::current().record("agent.session.warm_hit", true);
             let session = self.inner.sessions.get_session(session_id).await?;
             self.inner
                 .publish_opened(&session)
@@ -194,6 +216,7 @@ where
                 )
                 .await;
             if let Some(prompt) = request.prompt {
+                let client = prompt.client;
                 let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
@@ -203,6 +226,7 @@ where
                         actor: Some(owner_user),
                         announce: None,
                         context: None,
+                        client,
                     }),
                 )
                 .await
@@ -247,6 +271,12 @@ where
                     (false, SessionSource::Agent) => {
                         agent_session::domain::model::SessionPurpose::Dispatched
                     }
+                    // Asked for out of sight, such as a routine draft.
+                    (false, SessionSource::User)
+                        if request.visibility == SessionVisibility::Hidden =>
+                    {
+                        agent_session::domain::model::SessionPurpose::Background
+                    }
                     (false, SessionSource::User) => {
                         agent_session::domain::model::SessionPurpose::Standalone
                     }
@@ -273,6 +303,8 @@ where
                 instructions,
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
+                origin: request.origin,
+                billing: request.billing,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -363,6 +395,7 @@ where
         // prompt is composed, and the worker is what serializes this first
         // prompt against any control prompt racing the session's birth.
         if let Some(prompt) = request.prompt {
+            let client = prompt.client;
             let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
@@ -372,6 +405,7 @@ where
                     actor: Some(owner_user),
                     announce: None,
                     context: None,
+                    client,
                 }),
             )
             .await
@@ -431,6 +465,8 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,
             prompt: None,

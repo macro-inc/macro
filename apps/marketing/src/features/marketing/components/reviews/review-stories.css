@@ -28,7 +28,7 @@
 
 /* PrDetail: centered max-w-3xl column. */
 .review-pr { max-width: 768px; min-width: 0; margin-inline: auto; padding: 48px 24px; text-align: left; }
-.review-pr h1 { font: 600 24px/32px 'Inter Variable', Inter, sans-serif; }
+.review-pr h1 { font: 500 24px/32px 'Inter Variable', Inter, sans-serif; }
 .review-pr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 24px; font-size: 14px; }
 .review-pr-pill { display: inline-flex; min-width: 0; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--color-edge-muted); border-radius: 999px; background: var(--color-surface); line-height: 1.25; }
 .review-pr-description { font-size: 14px; overflow-wrap: break-word; }
@@ -62,7 +62,7 @@
 .review-message-body { margin-top: 2px; font-size: 15px; line-height: 24px; overflow-wrap: break-word; }
 
 /* PullRequestPreviewCard: w-80 Surface depth 3, rounded-xl, shadow-lg. */
-.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 400 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
+.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 370 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
 
 /* Walkthrough overlays sit over the window, measured from their targets. */
 .review-flow-frame { position: relative; }
@@ -124,7 +124,7 @@
 .github-file-heading span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .github-diff-render { color-scheme: dark; min-width: 0; }
 .github-merge-dialog { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--color-edge); border-radius: 16px; background: var(--color-panel); color: var(--color-ink); font-family: 'Inter Variable', Inter, sans-serif; }
-.github-merge-dialog h2 { font-size: 18px; font-weight: 600; }
+.github-merge-dialog h2 { font-size: 18px; font-weight: 500; }
 .github-merge-dialog p { margin-top: 12px; font-size: 14px; color: var(--color-ink-muted); }
 @container pr-layout (max-width: 600px) {
   .review-pr-layout[data-changes='true'] > .review-pr-document { display: none; }

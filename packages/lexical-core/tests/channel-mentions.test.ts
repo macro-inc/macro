@@ -116,3 +116,51 @@ it('preserves authored groups for server-side recipient expansion', () => {
     )
   ).toEqual([{ entityType: 'group', entityId: 'here' }]);
 });
+
+it('references the forms an agent reply presents in its activity cards', () => {
+  // An agent that presents a form it made posts it only as a card in the
+  // reply's steps; without a reference, channel delivery never shares the
+  // form and channel members are denied it.
+  const activity = {
+    agentSessionId: 'session-1',
+    turn: 0,
+    segment: 0,
+    sealed: true,
+    rows: [
+      { id: 'create', label: 'Create Form', status: 'completed' },
+      {
+        id: 'view-1',
+        label: 'Present view',
+        status: 'completed',
+        card: {
+          kind: 'view',
+          view: {
+            widgets: [
+              { type: 'cards', items: [{ type: 'form', id: 'form-1' }] },
+              {
+                type: 'container',
+                children: [
+                  {
+                    type: 'cards',
+                    items: [
+                      { type: 'form', id: 'form-2' },
+                      { type: 'document', id: 'doc-1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    ],
+  };
+  expect(
+    extractChannelMentionsFromMarkdown(
+      `<m-agent-activity>${JSON.stringify(activity)}</m-agent-activity>\n\nI built the form.`
+    )
+  ).toEqual([
+    { entityType: 'form', entityId: 'form-1' },
+    { entityType: 'form', entityId: 'form-2' },
+  ]);
+});

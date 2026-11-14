@@ -1,3 +1,5 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
@@ -14,8 +16,15 @@ import {
   mapInitiativeDetail,
   mapInitiativeIdentity,
 } from '@service-storage/initiative';
-import { type Client, type DocumentInput, stringifyDocument } from '@urql/core';
-import { type Accessor, createMemo } from 'solid-js';
+import {
+  type Client,
+  createRequest,
+  type DocumentInput,
+  getOperationName,
+  type RequestPolicy,
+  stringifyDocument,
+} from '@urql/core';
+import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
 import type { ProjectIdentity } from '../core/project';
 import { toProjectDetail } from './project-model';
 import { projectProperties } from './project-properties';
@@ -70,67 +79,127 @@ export async function seedProjectDetail(
 }
 
 function createAuthorizedProjectQuery<
-  QueryData extends { user: { id: string } },
+  QueryData extends { user: { id: string; initiative?: unknown } },
   Result,
 >(
   document: DocumentInput<QueryData, InitiativeQueryVariables>,
-  select: (data: QueryData) => Result,
+  select: (data: QueryData, failedRead: boolean) => Result,
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  requestPolicy: RequestPolicy = 'cache-and-network'
 ) {
-  const active = () => enabled() && Boolean(userId() && projectId());
-  const authorization = createQueryAuthorization(() =>
-    JSON.stringify([userId(), projectId()])
+  const operationName = getOperationName(
+    createRequest(document, { initiativeId: '' }).query
   );
+  const currentClient = createMemo(client);
+  const currentViewer = createMemo(userId);
+  const currentProject = createMemo(projectId);
+  const readEnabled = createMemo(enabled);
+  const scope = createMemo(() => ({
+    client: currentClient(),
+    viewerId: currentViewer(),
+    projectId: currentProject(),
+    active: readEnabled() && Boolean(currentViewer() && currentProject()),
+  }));
+  const active = () => scope().active;
+  const authorization = createMemo(() => {
+    const current = scope();
+    const key = JSON.stringify([
+      operationName,
+      current.viewerId,
+      current.projectId,
+    ]);
+    return createQueryAuthorization(() => key, current.client);
+  });
   const query = createLiveQuery(
     document,
-    () => (active() ? { initiativeId: projectId() } : undefined),
-    () => ({
-      client: client(),
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
-      onResult: authorization.onResult,
-      select: (data) => ({ viewerId: data.user.id, value: select(data) }),
-    })
+    () => (active() ? { initiativeId: scope().projectId } : undefined),
+    () => {
+      const current = scope();
+      const auth = authorization();
+      return {
+        client: current.client,
+        requestPolicy: untrack(() =>
+          auth.error() ? 'network-only' : requestPolicy
+        ),
+        context: auth.requestContext(),
+        keepPreviousData: false,
+        onResult: (result) => {
+          if (result.data && result.data.user.id !== current.viewerId) return;
+          auth.onResult(result);
+        },
+        select: (data) => ({ viewerId: data.user.id, value: data }),
+      };
+    }
   );
+  const refetch: typeof query.refetch = (options = {}) =>
+    query.refetch({
+      ...options,
+      context: { ...options.context, ...authorization().requestContext() },
+    });
   registerProjectRevalidation(client, active, () =>
-    query.refetch({ requestPolicy: 'cache-and-network' })
+    refetch({ requestPolicy: 'cache-and-network' })
   );
+  let recoveredScope: ReturnType<typeof scope> | undefined;
+  createEffect(() => {
+    const current = scope();
+    const result = query.data;
+    if (
+      !current.active ||
+      !result ||
+      result.viewerId === current.viewerId ||
+      recoveredScope === current
+    )
+      return;
+    recoveredScope = current;
+    fireAndForget(
+      refetch({ requestPolicy: 'network-only' }),
+      'project-identity.viewer-recovery'
+    );
+  });
+  // A project the viewer cannot load (deleted, or never shared with them)
+  // comes back as a NOT_FOUND error beside a user without `initiative`, even
+  // though the schema declares that field non-null.
   const data = createMemo(() => {
     const result = query.data;
     if (
       !active() ||
-      authorization.error() ||
+      authorization().error() ||
       !result ||
-      result.viewerId !== userId()
+      result.viewerId !== userId() ||
+      !result.value.user.initiative
     )
       return undefined;
-    return result.value;
+    return select(result.value, Boolean(query.error));
   });
   return {
     get data() {
       return data();
     },
     get error() {
-      return active() ? (authorization.error() ?? query.error) : null;
+      return active() ? (authorization().error() ?? query.error) : null;
     },
     get isSuccess() {
       return (
         active() &&
-        !authorization.error() &&
+        !authorization().error() &&
         query.isSuccess &&
         query.data?.viewerId === userId()
       );
     },
     get isPending() {
-      return !active() || query.isPending;
+      return (
+        !active() ||
+        query.isPending ||
+        (query.isFetching && query.data?.viewerId !== scope().viewerId)
+      );
     },
     get isError() {
-      return active() && Boolean(authorization.error() || query.isError);
+      return active() && Boolean(authorization().error() || query.isError);
     },
-    refetch: query.refetch,
+    refetch,
   };
 }
 
@@ -141,9 +210,22 @@ export function createProjectDetailQuery(
   projectId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
+  const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeDocument,
-    (data) => projectDetailData(mapInitiativeDetail(data.user.initiative)),
+    (data, failedRead) => {
+      const result = projectDetailData(
+        mapInitiativeDetail(data.user.initiative)
+      );
+      const appearance = pendingAppearance(
+        'initiative',
+        result.project.id,
+        failedRead
+      );
+      return appearance
+        ? { ...result, project: { ...result.project, appearance } }
+        : result;
+    },
     client,
     userId,
     projectId,
@@ -151,27 +233,32 @@ export function createProjectDetailQuery(
   );
 }
 
-/** Chips, previews, and labels read only id, name, and the viewer's access. */
+/** Chips, previews, and labels read only id, name, appearance, and viewer access. */
 export function createProjectIdentityQuery(
   client: () => Client,
   userId: Accessor<string | undefined>,
   projectId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
+  const pendingAppearance = usePendingEntityAppearance();
   return createAuthorizedProjectQuery(
     InitiativeIdentityDocument,
-    (data): ProjectIdentity => {
+    (data, failedRead): ProjectIdentity => {
       const project = mapInitiativeIdentity(data.user.initiative);
       return {
         id: project.id,
         name: project.name,
+        appearance:
+          pendingAppearance('initiative', project.id, failedRead) ??
+          project.appearance,
         access: project.userAccessLevel,
       };
     },
     client,
     userId,
     projectId,
-    enabled
+    enabled,
+    'cache-first'
   );
 }
 

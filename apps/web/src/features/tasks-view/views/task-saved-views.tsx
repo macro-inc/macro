@@ -4,6 +4,7 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -38,6 +39,8 @@ import {
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
+import { TASK_VIEWER } from '../filters/task-facets';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -53,6 +56,15 @@ import { useTasksView } from '../tasks-view-context';
 
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
 
+function sortDirectionLabel(sort: TaskSavedViewConfig['sort'][number]) {
+  if (sort.id.startsWith('due_date_')) return 'missing last';
+  if (sort.id === 'status' || sort.id === 'priority')
+    return sort.reversed ? 'reverse order' : 'option order';
+  if (sort.id === 'title')
+    return sort.reversed ? t('viewMenus.sortZToA') : t('viewMenus.sortAToZ');
+  return sort.reversed ? 'oldest first' : 'newest first';
+}
+
 function TaskSavedViewSummary(props: {
   config: TaskSavedViewConfig;
   omittedFilters?: TaskSavedViewIssue[];
@@ -60,6 +72,23 @@ function TaskSavedViewSummary(props: {
   const { state } = useTasksView();
   const filters = useTaskFilters();
   const selection = () => materializeTaskSavedView(props.config);
+  const dueDateLabel = () => {
+    const filter = props.config.dueDate;
+    if (!filter) return;
+    if (filter.type === 'range')
+      return `Custom range (${filter.start ?? 'Any'} – ${filter.end ?? 'Any'})`;
+    if (filter.type === 'has_due_date') return 'Has due date';
+    return TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
+      ?.label;
+  };
+  const people = useContactFilterLabels(() =>
+    [
+      ...new Set([
+        ...(selection().facets.assignees ?? []),
+        ...(selection().facets['created-by'] ?? []),
+      ]),
+    ].filter((id) => id !== TASK_VIEWER)
+  );
   return (
     <>
       <Show when={props.omittedFilters?.length}>
@@ -75,16 +104,22 @@ function TaskSavedViewSummary(props: {
             <p>
               {group.label}:{' '}
               {(selection().facets[group.id] ?? [])
-                .map(
-                  (id) =>
+                .map((id) => {
+                  if (group.id === 'assignees' || group.id === 'created-by')
+                    return id === TASK_VIEWER
+                      ? 'Me'
+                      : (people().get(id)?.label ?? 'Unavailable option');
+                  return (
                     group.options.find((option) => option.id === id)?.label ??
                     'Unavailable option'
-                )
+                  );
+                })
                 .join(', ')}
             </p>
           </Show>
         )}
       </For>
+      <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
         Group by:{' '}
@@ -99,7 +134,7 @@ function TaskSavedViewSummary(props: {
         {props.config.sort
           .map(
             (sort) =>
-              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.reversed ? 'oldest first' : 'newest first'})`
+              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sortDirectionLabel(sort)})`
           )
           .join(', ') || 'Default'}
       </p>
@@ -208,6 +243,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
                 layout: restored.layout,
                 groupBy: restored.groupBy,
                 sort: restored.sort,
+                dueDate: restored.dueDate,
               });
             }
             selectCreatedSavedView(created.id);
@@ -375,7 +411,7 @@ function TaskSavedViewRows(props: {
     <Show when={savedViews && savedViewsList}>
       {(views) => (
         <>
-          <SavedViewList.Items>
+          <SavedViewList.Items label={t('viewMenus.savedTaskViews')}>
             <Show when={creating()}>
               <SavedViewList.Draft onSelect={() => run(closeTask)} />
             </Show>
@@ -676,7 +712,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
         <Show
           when={savedViews?.view().kind === 'new'}
           fallback={
-            <HeaderActionGroup label="Saved view actions">
+            <HeaderActionGroup label="Saved view actions" size="md">
               <Show when={selected()?.record.ownerId === viewerId()}>
                 <ButtonGroup.Button
                   variant="primary"
@@ -713,7 +749,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label="Saved view save error">
+          <HeaderActionGroup label="Saved view save error" size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

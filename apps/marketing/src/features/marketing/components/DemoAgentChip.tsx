@@ -1,5 +1,5 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import Check from '@phosphor/check.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import './demo-agent-chip.css';
@@ -8,6 +8,7 @@ import './demo-agent-chip.css';
 export function DemoAgentChip(props: {
   agentSessionId: string;
   requester: string;
+  showRequest?: boolean;
   request: string;
   markdown: string;
   pullRequest: JSX.Element;
@@ -16,13 +17,15 @@ export function DemoAgentChip(props: {
 }) {
   return (
     <div class="demo-cursor-response">
-      <div class="demo-cursor-origin">
-        from <span>{props.requester}</span>
-      </div>
-      <div class="demo-cursor-quote">
-        <strong>{props.requester}</strong>
-        <span>{props.request}</span>
-      </div>
+      <Show when={props.showRequest !== false}>
+        <div class="demo-cursor-origin">
+          from <span>{props.requester}</span>
+        </div>
+        <div class="demo-cursor-quote">
+          <strong>{props.requester}</strong>
+          <span>{props.request}</span>
+        </div>
+      </Show>
       <div
         role="button"
         tabIndex={0}
@@ -60,7 +63,7 @@ export function DemoAgentChip(props: {
                 <Check class="size-3" />
               </span>
               <span
-                class="min-w-0 truncate text-xs font-semibold"
+                class="min-w-0 truncate text-xs font-medium"
                 data-magic-chip-agent
               >
                 Cursor Agent

@@ -28,6 +28,23 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
+const flags = vi.hoisted(() => ({ agentNavigation: false }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: unknown) =>
+      flag === actual.enableAgentNavigation && flags.agentNavigation,
+  };
+});
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const logSource = vi.hoisted(() => {
   class Unavailable extends Error {
     constructor(
@@ -166,6 +183,7 @@ import {
 } from './AgentSession';
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
+import { holdMobile, MOBILE_DEVICES } from './tests/device';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -311,6 +329,47 @@ describe('AgentSession', () => {
     expect(events).toEqual([[speculated]]);
     live.release();
   });
+
+  it('sends the tab a prompt was typed in, and only with prompts', async () => {
+    flags.agentNavigation = true;
+    onTestFinished(() => {
+      flags.agentNavigation = false;
+    });
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'prompt', prompt: 'open the plan' });
+    await live.issue({ type: 'stop' });
+
+    const [prompt, stop] = harness.control.mock.calls.map(
+      ([, request]) => request
+    );
+    expect(prompt.clientId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(stop).not.toHaveProperty('clientId');
+    live.release();
+  });
+
+  it.each(MOBILE_DEVICES)(
+    'sends no tab with a prompt typed on $on',
+    async (mobile) => {
+      flags.agentNavigation = true;
+      holdMobile(device, mobile);
+      onTestFinished(() => {
+        flags.agentNavigation = false;
+      });
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      await live.issue({ type: 'prompt', prompt: 'open the plan' });
+
+      const [[, prompt]] = harness.control.mock.calls;
+      expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
+      expect(prompt).not.toHaveProperty('clientId');
+      live.release();
+    }
+  );
 
   it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
     harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
@@ -713,6 +772,40 @@ describe('AgentSession', () => {
       kind: 'snapshot',
       rows: [row(1), row(2)],
     });
+    live.release();
+  });
+
+  it('refreshes on request and resolves once the refetched log is folded', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const refetch = deferred<LogSnapshot>();
+    logSource.fetched.mockReturnValueOnce(refetch.promise);
+    const done = vi.fn();
+    const refreshed = live.refresh().then(done);
+    // A second request while the first is out rides the same run.
+    const joined = live.refresh().then(done);
+    await settle();
+    expect(done).not.toHaveBeenCalled();
+    logSource.fetched.mockResolvedValueOnce(logOf([row(1), row(2), row(3)]));
+    refetch.resolve(logOf([row(1), row(2)]));
+    await Promise.all([refreshed, joined]);
+    expect(done).toHaveBeenCalledTimes(2);
+    expect(inputs().at(-1)).toEqual({
+      kind: 'snapshot',
+      rows: [row(1), row(2), row(3)],
+    });
+    live.release();
+  });
+
+  it('resolves a refresh whose fetch fails, leaving the fold as it was', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    const before = inputs();
+    logSource.fetched.mockRejectedValueOnce(
+      new logSource.Unavailable(SESSION, 'failed')
+    );
+    await live.refresh();
+    expect(inputs()).toEqual(before);
     live.release();
   });
 
@@ -1157,6 +1250,33 @@ describe('AgentSession', () => {
       live.release();
     });
 
+    it('reports a second open of a loaded session as reused, fetching nothing', async () => {
+      const first = AgentSession.acquire(SESSION);
+      await first.load();
+      const second = AgentSession.acquire(SESSION);
+      await second.load();
+
+      expect(logSource.watch).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledOnce();
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded', 'reused']);
+      second.release();
+      first.release();
+    });
+
+    it('does not trace a hold as an open', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const held = AgentSession.acquire(SESSION, 'hold');
+
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded']);
+      held.release();
+      live.release();
+    });
+
     it('says why a load failed', async () => {
       harness.get.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
       const live = AgentSession.acquire(SESSION);
@@ -1203,6 +1323,7 @@ describe('AgentSession', () => {
       live.rendered('fetched', [
         {
           agentSessionId: SESSION,
+          key: '0:user',
           turn: 0,
           author: { kind: 'user', userId: null },
           requestId: null,
@@ -1215,6 +1336,7 @@ describe('AgentSession', () => {
         },
         {
           agentSessionId: SESSION,
+          key: '0:agent',
           turn: 0,
           author: { kind: 'agent' },
           requestId: null,
@@ -1346,6 +1468,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:user',
             turn: 1,
             author: { kind: 'user', userId: 'macro|wolf@macro.com' },
             requestId: actionId,
@@ -1361,6 +1484,7 @@ describe('AgentSession', () => {
           kind: 'new',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,
@@ -1412,6 +1536,7 @@ describe('AgentSession', () => {
           kind: 'update',
           message: {
             agentSessionId: SESSION,
+            key: '1:agent',
             turn: 1,
             author: { kind: 'agent' },
             requestId: null,

@@ -4,11 +4,19 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSectionSearchSource } from '../components/rail/next/channel-discovery-source';
 import type { ChannelsDataSource, ChannelsSourceScope } from '../queries';
 import { useChannelListSearchPool } from './channel-list-search-pool';
 import { createChannelSearchSource } from './channel-search-source';
 
 const queryMock = vi.hoisted(() => vi.fn());
+const astQueryMock = vi.hoisted(() => vi.fn());
+const hydratedSearch = vi.hoisted(() => ({
+  channels: (): ChannelEntity[] => [],
+}));
+vi.mock('@queries/channel/by-ids', () => ({
+  useCachedChannelsByIds: () => ({ channels: () => hydratedSearch.channels() }),
+}));
 const channelList = vi.hoisted(() => ({
   channels: (): ApiChannelWithLatest[] => [],
 }));
@@ -17,9 +25,10 @@ vi.mock('@core/context/channels', () => ({
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: queryMock,
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
-vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
+vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: astQueryMock }));
 vi.mock('@queries/channel/detail', () => ({
   createChannelDetailQuery: vi.fn(),
 }));
@@ -111,7 +120,8 @@ let dispose: (() => void) | undefined;
 function setup(
   initialText = '',
   initialScope: ChannelsSourceScope = 'search',
-  pool?: () => Accessor<ChannelEntity[]>
+  pool?: () => Accessor<ChannelEntity[]>,
+  discovery = false
 ) {
   return createRoot((cleanup) => {
     dispose = cleanup;
@@ -190,13 +200,20 @@ function setup(
       loadMore: vi.fn(async () => {}),
       refresh: vi.fn(async () => {}),
     };
-    const source = createChannelSearchSource({
-      text,
-      scope,
-      enabled,
-      source: () => local,
-      additionalLocalChannels: pool?.() ?? extra,
-    });
+    const source = discovery
+      ? createSectionSearchSource({
+          text,
+          enabled,
+          recent: () => local,
+          localChannels: pool?.() ?? extra,
+        })
+      : createChannelSearchSource({
+          text,
+          scope,
+          enabled,
+          source: () => local,
+          additionalLocalChannels: pool?.() ?? extra,
+        });
     return {
       source,
       setExtra,
@@ -222,6 +239,7 @@ describe('shared channel search source', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     channelList.channels = () => [];
+    hydratedSearch.channels = () => [];
   });
   afterEach(() => {
     dispose?.();
@@ -392,7 +410,7 @@ describe('shared channel search source', () => {
     vi.mocked(s.local.isFetching).mockReturnValue(true);
     s.setText('');
     expect(s.source.isLoading()).toBe(true);
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.queryEnabled()).toBe(false);
     expect(s.source.isLoading()).toBe(false);
@@ -475,7 +493,7 @@ describe('shared channel search source', () => {
     expect(s.source.hasMore()).toBe(false);
   });
 
-  it('ignores an old service fetch for short queries and refreshes search even when browse fails', async () => {
+  it('ignores an old service fetch for a query with no search term and refreshes search even when browse fails', async () => {
     const s = setup('alpha');
     s.local.refresh = vi.fn(async () => {
       throw new Error('Browse failed');
@@ -483,7 +501,7 @@ describe('shared channel search source', () => {
     await expect(s.source.refresh()).rejects.toThrow('Browse failed');
     expect(s.serverRefresh).toHaveBeenCalledOnce();
     s.setRemote({ isFetching: true, isFetchingNextPage: true });
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.source.isFetching()).toBe(false);
     expect(s.source.isLoadingMore()).toBe(false);
@@ -502,12 +520,46 @@ describe('shared channel search source', () => {
     expect(s.source.error()).toBeUndefined();
     s.setRemote('error', searchError);
     expect(s.source.error()).toBe(searchError);
-    s.setText('zz');
+    s.setText('"');
     await vi.advanceTimersByTimeAsync(300);
     expect(s.source.error()).toBeUndefined();
     s.setText('');
     expect(s.source.error()).toBe(listError);
     s.setEnabled(false);
     expect(s.source.error()).toBeUndefined();
+  });
+  it('hydrates unknown search membership before grouping a server-only channel', async () => {
+    astQueryMock.mockReturnValue({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      isFetchingNextPage: false,
+      error: undefined,
+      fetchError: undefined,
+      hasNextPage: false,
+      data: { entities: [] },
+      fetchNextPage: vi.fn(async () => {}),
+      refresh: vi.fn(async () => {}),
+    });
+    hydratedSearch.channels = () => [
+      {
+        ...channel('unjoined', 'Release new'),
+        channelType: 'team',
+        teamId: 'team',
+        isParticipant: false,
+      },
+    ];
+    const s = setup('release', 'search', undefined, true);
+    s.setRemote('data', [
+      channel('joined', 'Release joined'),
+      { ...channel('unjoined', 'Release new'), isParticipant: undefined },
+    ]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ids(s.source)).toEqual(['unjoined', 'joined']);
+    expect(s.source.items()[0]).toMatchObject({
+      isParticipant: false,
+      teamId: 'team',
+    });
   });
 });

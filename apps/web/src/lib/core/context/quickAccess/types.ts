@@ -13,10 +13,12 @@ import type {
   FormEntity,
   InitiativeEntity,
   ProjectEntity,
+  RoutineEntity,
   SkillEntity,
   SnippetEntity,
   TaskEntity,
 } from '@entity';
+import type { PeopleSearch } from '@graphql-cache/people/generated';
 import type { Accessor } from 'solid-js';
 
 // Note (seamus) : Ideally history would return ownerId or we would get actual
@@ -41,7 +43,8 @@ export type Bucket =
   | 'agent_session'
   | 'initiative'
   | 'database'
-  | 'form';
+  | 'form'
+  | 'routine';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -62,6 +65,7 @@ const ALL_BUCKETS: Bucket[] = [
   'agent_session',
   'database',
   'form',
+  'routine',
   'initiative',
 ];
 
@@ -93,8 +97,12 @@ type ItemTimestamps = {
 
 type QuickAccessBase = {
   id: string;
+  /** Stable UI identity while an explicit contact alias resolves asynchronously. */
+  searchKey?: string;
   searchText: string;
   sortTimestamp: number;
+  /** Position in the current matched personal window; never a history index. */
+  personOrder?: number;
   timestamps: ItemTimestamps;
 };
 
@@ -109,6 +117,8 @@ export type UserItem = QuickAccessBase & {
   kind: 'user';
   bucket: 'person';
   data: IUser;
+  /** A bounded ranked hit's existing DM, resolved from the channel source. */
+  commandTarget?: EntityItem<ChannelEntity>;
 };
 
 export type QuickAccessItem = EntityItem | UserItem;
@@ -154,6 +164,7 @@ export type BucketItemMap = {
   agent_session: EntityItem<AgentSessionEntity>;
   database: EntityItem<DatabaseEntity>;
   form: EntityItem<FormEntity>;
+  routine: EntityItem<RoutineEntity>;
   initiative: EntityItem<InitiativeEntity>;
   person: UserItem;
 };
@@ -169,10 +180,14 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
 
 export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   items: Accessor<T[]>;
+  /** Changes when a bounded result window is replaced, not on label refreshes. */
+  windowKey?: Accessor<string | undefined>;
   /** Number of loaded matching items. Check hasMore for additional cached pages. */
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
+  /** The cache has not yet answered the current query; listed rows may be other sources'. */
+  isSearching?: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   error: Accessor<unknown>;
   loadMore: () => Promise<void>;
@@ -186,9 +201,16 @@ export type QuickAccessListOptions<
   searchTerm?: Accessor<string>;
   /** Disable this list without affecting other Quick Access consumers. */
   enabled?: Accessor<boolean>;
+  /** Person scoring policy, applied before the native window limit. */
+  peopleMode?: PeopleSearch['mode'];
+  excludeSelf?: boolean;
+  /** Explicit scoped participants/guests excluded from personal suggestions. */
+  excludedPeople?: Accessor<ReadonlySet<string>>;
 };
 
 export type QuickAccessContextValue = {
+  /** Existing channel activity for an explicit peer, without loading contacts. */
+  interactionForUser: (id: string) => DateValue | undefined;
   /**
    * Get items from specific buckets, cached and reactive.
    * Returns all items if no buckets specified. Passing options scopes search

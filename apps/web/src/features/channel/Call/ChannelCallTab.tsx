@@ -1,15 +1,27 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { useChannel } from '@core/context/channels';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
+import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
-import { ActiveCallLink } from './ActiveCallLink';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
+import { CallDiscussionContent } from './discussion/CallDiscussionContent';
+import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
+import { ActiveCallHeader } from './views/ActiveCallHeader';
 
 function ParticipantFirstName(props: { id: string }) {
   const name = createMemo(() => {
@@ -47,10 +59,10 @@ function ParticipantNamesLine(props: { ids: string[] }) {
 function JoinCallEmptyState(props: {
   channelId: string;
   isJoining: boolean;
-  onJoin: () => void;
+  onJoin: (callId?: string) => void;
 }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const callRecordQuery = useCallRecordQuery(
+  const callRecordQuery = useLiveCallRecordQuery(
     () => activeCallQuery.data?.callId ?? ''
   );
   const participantIds = createMemo(
@@ -80,7 +92,7 @@ function JoinCallEmptyState(props: {
         variant="primary"
         size="lg"
         class="px-5"
-        onClick={props.onJoin}
+        onClick={() => props.onJoin(activeCallQuery.data?.callId)}
         disabled={props.isJoining}
       >
         <PhoneIcon class="size-5" />
@@ -111,9 +123,20 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
-  async function handleJoin() {
+  const record = useLiveCallRecordQuery(
+    () => call.callCtx.activeCallId() ?? ''
+  );
+  const discussion = () =>
+    callDiscussionOf(record, call.callCtx.activeCallId());
+  const channel = useChannel(props.channelId);
+  const [outsideCount, setOutsideCount] = createSignal(0);
+
+  async function handleJoin(callId?: string) {
     try {
-      await call.joinCall();
+      await call.joinCall(
+        'user',
+        callId ? { kind: 'join', callId } : undefined
+      );
     } catch (error) {
       console.error('Failed to join call', error);
     }
@@ -147,13 +170,38 @@ export function ChannelCallTab(props: {
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <div class="flex size-full min-h-0 flex-col">
-          <div class="px-2 pt-2">
-            <ActiveCallLink />
-          </div>
-          <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={handleLeave} />
-          </div>
+        <div class="size-full min-h-0">
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
+              <ActiveCallHeader channelId={props.channelId} />
+            </SplitHeaderRight>
+          </Show>
+          <CallOverlay
+            onLeave={handleLeave}
+            sharingChannelName={
+              discussion()?.kind === 'channel_thread'
+                ? (channel()?.name ?? undefined)
+                : undefined
+            }
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread'
+                  ? (channel()?.name ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => (
+                <CallDiscussionContent
+                  discussion={discussion}
+                  access={{ kind: 'member' }}
+                  panel={panel}
+                  onViewChannel={() => setActiveTab('messages')}
+                  onOutsideCountChange={setOutsideCount}
+                />
+              ),
+            }}
+          />
         </div>
       </Match>
       <Match when={call.joinError()}>
@@ -166,7 +214,7 @@ export function ChannelCallTab(props: {
           </Show>
           <button
             type="button"
-            onClick={handleJoin}
+            onClick={() => handleJoin()}
             disabled={call.isJoining()}
             class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >

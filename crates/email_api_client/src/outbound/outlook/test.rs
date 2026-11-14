@@ -3,7 +3,7 @@ use serde_json::json;
 use uuid::Uuid;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{header, method, path, query_param},
+    matchers::{header, headers, method, path, query_param, query_param_is_missing},
 };
 
 use super::*;
@@ -28,8 +28,12 @@ async fn delta_preserves_removals_as_stream_events_and_keeps_opaque_continuation
     Mock::given(method("GET"))
         .and(path("/v1.0/me/mailFolders/folder/messages/delta"))
         .and(header("authorization", "Bearer test-bearer"))
-        .and(header("prefer", "IdType=\"ImmutableId\""))
+        .and(headers(
+            "prefer",
+            vec!["IdType=\"ImmutableId\"", "odata.maxpagesize=100"],
+        ))
         .and(query_param("$select", "id"))
+        .and(query_param_is_missing("$top"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "value":[{"id":"m1"},{"id":"m2","@removed":{"reason":"deleted"}}],
             "@odata.nextLink":next
@@ -213,6 +217,7 @@ async fn inline_attachments_are_loaded_even_when_has_attachments_is_false() {
         name: "Boîte de réception".into(),
         role: FolderRole::Inbox,
         has_children: false,
+        total_items: None,
     };
     let message = api
         .message(
@@ -403,6 +408,12 @@ async fn request_gate_covers_nested_pages_and_receives_provider_retry_after() {
             self.finished.lock().unwrap().push(retry_after);
             Box::pin(async {})
         }
+        fn admitted(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+            Box::pin(async { None })
+        }
     }
     let (server, mut api, token) = setup().await;
     let mailbox = MailboxAccess {
@@ -579,6 +590,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Trash".into(),
             role: FolderRole::Trash,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("parent").unwrap(),
@@ -586,6 +598,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Deleted project".into(),
             role: FolderRole::Other,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("child").unwrap(),
@@ -593,6 +606,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Invoices".into(),
             role: FolderRole::Other,
             has_children: false,
+            total_items: None,
         },
     ];
     let source =
@@ -686,4 +700,245 @@ async fn message_mime_returns_the_original_bytes() {
         .await
         .unwrap();
     assert_eq!(bytes, mime);
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_page() {
+    use crate::domain::{
+        ports::{AlwaysAllowRateLimiter, MailboxTokenSource},
+        service::mailbox::MailboxApiService,
+    };
+    struct Tokens;
+    impl MailboxTokenSource for Tokens {
+        async fn access_token(
+            &self,
+            _mailbox: MailboxAccess,
+            freshness: TokenFreshness,
+        ) -> Result<AccessToken, TokenError> {
+            Ok(AccessToken::new(match freshness {
+                TokenFreshness::Cached => "expired",
+                TokenFreshness::Fresh => "fresh",
+            }))
+        }
+    }
+    let (server, api, _) = setup().await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer expired"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer fresh"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$orderby", "receivedDateTime desc"))
+        .and(query_param("$top", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[
+            {
+                "id":"m2", "conversationId":"c2", "parentFolderId":"inbox",
+                "subject":"Invoice 42", "bodyPreview":"Your invoice is attached",
+                "from":{"emailAddress":{"address":"billing@example.com","name":"Vendor"}},
+                "toRecipients":[{"emailAddress":{"address":"me@example.com"}}],
+                "isRead":false, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-27T09:00:00Z"
+            },
+            {
+                "id":"m1", "conversationId":"c1", "parentFolderId":"inbox",
+                "subject":"Lunch?", "isRead":true, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-26T09:00:00Z"
+            }
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let inbox = MailFolder {
+        id: ProviderId::new("inbox").unwrap(),
+        parent_id: None,
+        name: "Inbox".into(),
+        role: FolderRole::Inbox,
+        has_children: false,
+        total_items: None,
+    };
+    let service = MailboxApiService::new(api, Tokens, AlwaysAllowRateLimiter);
+
+    let messages = service
+        .recent_inbox_messages(
+            MailboxAccess {
+                link_id: Uuid::now_v7(),
+                sync_generation: 1,
+                grant_generation: 1,
+            },
+            2,
+            &[inbox],
+        )
+        .await
+        .unwrap();
+
+    let subjects: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message.subject.as_deref())
+        .collect();
+    assert_eq!(subjects, vec![Some("Invoice 42"), Some("Lunch?")]);
+    let newest = &messages[0].content.message;
+    assert_eq!(newest.snippet.as_deref(), Some("Your invoice is attached"));
+    assert_eq!(
+        newest.from.as_ref().map(|from| from.email.as_str()),
+        Some("billing@example.com")
+    );
+    assert!(messages[0].state.in_inbox);
+    assert!(newest.attachments.is_empty());
+}
+
+#[tokio::test]
+async fn an_invitation_whose_source_fails_reads_without_calendar_parts() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "@odata.type":"#microsoft.graph.eventMessageRequest",
+            "id":"m1", "conversationId":"conversation", "parentFolderId":"folder"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/$value"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error":{"code":"ErrorInternalServerError","message":"internal"}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let message = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(message.calendar_parts_unavailable);
+    assert!(message.content.calendar_parts.is_empty());
+    assert_eq!(message.content.message.provider_id.as_deref(), Some("m1"));
+}
+
+#[tokio::test]
+async fn a_throttled_invitation_source_still_fails_the_read() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "@odata.type":"#microsoft.graph.eventMessageRequest",
+            "id":"m1", "conversationId":"conversation"
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/$value"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "9"))
+        .mount(&server)
+        .await;
+
+    let error = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, EmailApiError::RateLimited { .. }),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_sender_or_recipient_without_an_address_is_left_out() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m1", "conversationId":"conversation", "subject":"Newsletter",
+            "from":{"emailAddress":{"name":"Sender without an address"}},
+            "toRecipients":[
+                {"emailAddress":{"name":"Undisclosed recipients"}},
+                {"emailAddress":{"address":"me@example.com","name":"Me"}},
+                {"emailAddress":{"address":null,"name":"Null"}}
+            ],
+            "ccRecipients":[{"emailAddress":{}}, {"emailAddress":null}, {}],
+            "bccRecipients":[{"emailAddress":{"address":"  ","name":"Blank"}}]
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1/attachments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[]})))
+        .mount(&server)
+        .await;
+
+    let read = api
+        .message(&token, Uuid::now_v7(), &ProviderId::new("m1").unwrap(), &[])
+        .await
+        .unwrap()
+        .unwrap();
+
+    let message = &read.content.message;
+    assert_eq!(message.subject.as_deref(), Some("Newsletter"));
+    assert!(message.from.is_none());
+    let to: Vec<_> = message
+        .to
+        .iter()
+        .map(|contact| (contact.email.as_str(), contact.name.as_deref()))
+        .collect();
+    assert_eq!(to, [("me@example.com", Some("Me"))]);
+    assert!(message.cc.is_empty());
+    assert!(message.bcc.is_empty());
+}
+
+#[tokio::test]
+async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m1", "conversationId":"conversation",
+            "toRecipients":[{"emailAddress":{"address":"ok@example.com"}},{"emailAddress":{"address":["private@example.com"]}}]
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/m2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id":"m2", "subject":"Quarterly numbers"
+        })))
+        .mount(&server)
+        .await;
+
+    let read = |id: &'static str| {
+        let api = &api;
+        let token = &token;
+        async move {
+            api.message(token, Uuid::now_v7(), &ProviderId::new(id).unwrap(), &[])
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    let wrong_type = read("m1").await;
+    let missing = read("m2").await;
+
+    assert_eq!(
+        wrong_type,
+        "permanent email provider failure: invalid Microsoft Graph response: unexpected value at toRecipients[1].emailAddress.address"
+    );
+    assert_eq!(
+        missing,
+        "permanent email provider failure: invalid Microsoft Graph response: missing field `conversationId` at ."
+    );
 }

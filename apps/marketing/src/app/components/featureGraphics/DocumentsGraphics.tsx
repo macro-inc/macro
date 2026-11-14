@@ -1,3 +1,19 @@
+import IconShareMacro from '@icon/share.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFileMd from '@icon/system/regular/file.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconChannelMacro from '@icon/system/regular/hash-straight.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconTaskMacro from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconAgentStar from '@icon/system/regular/star.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createEffect,
@@ -8,24 +24,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import StatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconChannelMacro from '../../../assets/icons/wide-channel.svg';
 import IconClaude from '../../../assets/icons/wide-claude.svg';
-import IconFileMd from '../../../assets/icons/wide-file-md.svg';
-import IconShareMacro from '../../../assets/icons/wide-share.svg';
-import IconAgentStar from '../../../assets/icons/wide-star.svg';
-import IconTaskMacro from '../../../assets/icons/wide-task.svg';
 import avatarJulia from '../../../assets/people/julia.webp';
 import { isMobileViewport } from '../../utils/utilBreakpoint';
 import {
@@ -78,7 +78,7 @@ function _ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '42px' : '36px',
         'justify-content': 'center',
@@ -161,7 +161,7 @@ export function GithubStarButton() {
         display: 'inline-flex',
         'font-family': 'body',
         'font-size': mobile() ? '14px' : '15px',
-        'font-weight': '700',
+        'font-weight': '500',
         gap: '9px',
         height: mobile() ? '40px' : '38px',
         'justify-content': 'center',
@@ -203,7 +203,7 @@ export function GithubStarButton() {
                 display: 'inline-flex',
                 'font-family': 'Inter, body',
                 'font-size': mobile() ? '15px' : '16px',
-                'font-weight': '700',
+                'font-weight': '500',
                 gap: '5px',
                 'letter-spacing': '0.02em',
               }}
@@ -289,7 +289,7 @@ function Avatar(props: {
         flex: 'none',
         'font-family': appFont,
         'font-size': `${Math.round(s * 0.38)}px`,
-        'font-weight': '600',
+        'font-weight': '500',
         height: `${s}px`,
         overflow: 'hidden',
         'place-items': 'center',
@@ -930,7 +930,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '16px' : '18px',
-                'font-weight': '600',
+                'font-weight': '500',
                 'letter-spacing': '-0.01em',
                 margin: '0',
               }}
@@ -961,7 +961,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '14px' : '15px',
-                'font-weight': '600',
+                'font-weight': '500',
                 margin: '0',
               }}
             >
@@ -1051,7 +1051,7 @@ export function HeroDocWindow() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': compact() ? '14px' : '15px',
-                'font-weight': '600',
+                'font-weight': '500',
                 margin: '0',
               }}
             >
@@ -1105,7 +1105,7 @@ function CollabCaret(props: { name: string; color: string }) {
           color: 'var(--b0)',
           'font-family': appFont,
           'font-size': '10px',
-          'font-weight': '700',
+          'font-weight': '500',
           left: '0',
           'line-height': 1,
           padding: '2px 5px',
@@ -1147,7 +1147,7 @@ function CollabSelection(props: {
           color: 'var(--b0)',
           'font-family': appFont,
           'font-size': '10px',
-          'font-weight': props.labelWeight ?? '700',
+          'font-weight': props.labelWeight ?? '500',
           left: props.labelLeft ?? '-2px',
           'line-height': 1,
           padding: '2px 5px',
@@ -1383,7 +1383,7 @@ export function HomeMobileDocsShot() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': 'calc(21px * 0.94)',
-                'font-weight': '550',
+                'font-weight': '500',
                 'letter-spacing': '-0.025em',
                 'line-height': 1.08,
                 margin: '0',
@@ -1447,7 +1447,7 @@ export function HomeMobileDocsShot() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '14px',
-                  'font-weight': '520',
+                  'font-weight': '500',
                   'letter-spacing': '-0.012em',
                   margin: '0',
                 }}
@@ -1738,7 +1738,7 @@ export function HeroDocCollabWindow() {
                       style={{
                         color: 'var(--c1)',
                         'font-family': appFont,
-                        'font-weight': '600',
+                        'font-weight': '500',
                         'letter-spacing': '-0.01em',
                         margin: '0',
                       }}
@@ -1751,7 +1751,7 @@ export function HeroDocCollabWindow() {
                     >
                       Every document is a CRDT with its own{' '}
                       <strong
-                        style={{ color: 'var(--c1)', 'font-weight': '700' }}
+                        style={{ color: 'var(--c1)', 'font-weight': '500' }}
                       >
                         Durable Object
                       </strong>{' '}
@@ -1785,7 +1785,7 @@ export function HeroDocCollabWindow() {
                       style={{
                         color: 'var(--c1)',
                         'font-family': appFont,
-                        'font-weight': '600',
+                        'font-weight': '500',
                         margin: '0',
                       }}
                     >
@@ -1886,7 +1886,7 @@ function PinnedProp(props: {
           <span
             style={{
               color: props.accent ? 'var(--a0)' : 'var(--c1)',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             {props.value}
@@ -1982,7 +1982,7 @@ function AtLinkPill() {
       }}
     >
       <Avatar initials="JW" size={compact() ? 17 : 21} color="var(--b3)" />
-      <span style={{ color: 'var(--a0)', 'font-weight': '600' }}>
+      <span style={{ color: 'var(--a0)', 'font-weight': '500' }}>
         Julia Westphal
       </span>
     </span>
@@ -2149,7 +2149,7 @@ export function SlashMenuPanel(props: { highlightIndex?: number } = {}) {
           color: 'var(--c4)',
           'font-family': appFont,
           'font-size': '11px',
-          'font-weight': '600',
+          'font-weight': '500',
           padding: '9px 12px 5px',
         }}
       >
@@ -2515,7 +2515,7 @@ export function SlashMenuGraphic(
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Untitled
@@ -2658,7 +2658,7 @@ export function CollabGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Collaborative editor (jacob rewrite)
@@ -2700,7 +2700,7 @@ export function CollabGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '-2px',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2740,7 +2740,7 @@ export function CollabGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '0',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2840,7 +2840,7 @@ export function AgentEditGraphic() {
               color: 'var(--c1)',
               'font-family': appFont,
               'font-size': '13.5px',
-              'font-weight': '600',
+              'font-weight': '500',
             }}
           >
             Launch plan (agent rewrite)
@@ -2883,7 +2883,7 @@ export function AgentEditGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '-2px',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2923,7 +2923,7 @@ export function AgentEditGraphic() {
                   color: 'var(--b0)',
                   'font-family': appFont,
                   'font-size': '10px',
-                  'font-weight': '700',
+                  'font-weight': '500',
                   left: '0',
                   'line-height': 1,
                   padding: '2px 5px',
@@ -2979,7 +2979,7 @@ function AgentTag(props: {
         display: 'inline-flex',
         'font-family': appFont,
         'font-size': '10px',
-        'font-weight': '600',
+        'font-weight': '500',
         gap: '3px',
         left: props.left ?? '0',
         'line-height': 1,
@@ -3617,13 +3617,13 @@ export function DocsAgentTeammateGraphic(
         }
       `}</style>
       <DocCropBand
-        label="Website launch plan: agents correct the launch date to Thursday and check it against Valentina’s email"
+        label="Website launch plan: agents correct the launch date to Thursday and check it against Austin Barron’s email"
         peak={46}
       >
         <p style={cropLine(true)}>
           Website launch plan. Gabriel owns the checklist, Teo is checking the
-          invite flow, and Valentina is waiting for the final plan before the
-          team call.
+          invite flow, and Austin Barron is waiting for the final plan before
+          the team call.
         </p>
         <p style={cropLine()}>
           The team will run through onboarding before we share the plan. Every
@@ -3637,8 +3637,8 @@ export function DocsAgentTeammateGraphic(
             </AgentSelection>
           </CropFocus>
           {cropShort(
-            ', matching the email sent to Valentina',
-            ', per Valentina’s email'
+            ', matching the email sent to Austin Barron',
+            ', per Austin Barron’s email'
           )}
           <Show when={!props.launchReview}>
             <CropFocus>
@@ -3665,8 +3665,8 @@ export function DocsAgentTeammateGraphic(
           . Invited teammates should land in onboarding with their team intact.
         </p>
         <p style={cropLine(true)}>
-          Share the updated plan in the launch channel. Send Valentina the link
-          once the invite check is complete, keeping the original email
+          Share the updated plan in the launch channel. Send Austin Barron the
+          link once the invite check is complete, keeping the original email
           attached.
         </p>
       </DocCropBand>
@@ -3754,7 +3754,7 @@ export function CommentsGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '13px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Julia Westphal
@@ -3946,7 +3946,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -3993,7 +3993,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -4062,7 +4062,7 @@ export function PropertiesPanel() {
             display: 'flex',
             'font-family': appFont,
             'font-size': '11.5px',
-            'font-weight': '600',
+            'font-weight': '500',
             gap: '6px',
             padding: '2px 14px 8px',
           }}
@@ -4133,7 +4133,7 @@ export function MarkdownGraphic(props: { columns?: number } = {}) {
                 'font-family':
                   "ui-monospace, 'SFMono-Regular', Menlo, monospace",
                 'font-size': '13px',
-                'font-weight': '700',
+                'font-weight': '500',
                 'min-width': '34px',
                 padding: '5px 7px',
                 'place-items': 'center',
@@ -4252,7 +4252,7 @@ function _ImportGraphic() {
                 color: 'var(--c1)',
                 'font-family': appFont,
                 'font-size': '12.5px',
-                'font-weight': '600',
+                'font-weight': '500',
               }}
             >
               Macro Agent
@@ -4366,7 +4366,7 @@ function _ImportGraphic() {
                   color: 'var(--c1)',
                   'font-family': appFont,
                   'font-size': '12.5px',
-                  'font-weight': '600',
+                  'font-weight': '500',
                 }}
               >
                 Engineering
@@ -4563,7 +4563,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
             'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
-            'font-weight': '700',
+            'font-weight': '500',
             'letter-spacing': '0.02em',
             'white-space': 'nowrap',
           }}
@@ -4590,7 +4590,7 @@ function _ComparisonTable() {
     display: 'flex',
     'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
-    'font-weight': '700',
+    'font-weight': '500',
     'justify-content': 'center',
     'letter-spacing': '0.04em',
     'line-height': 1.1,

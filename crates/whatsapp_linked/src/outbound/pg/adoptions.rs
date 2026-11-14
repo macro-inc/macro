@@ -26,8 +26,15 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR SHARE", account.id,user,account.authorization_generation)
+        // Exclusive against the replica's fence: a chat-list update commits
+        // either before the backfill state below is decided, so it sees the
+        // anchor, or after this chat exists, so the update marks it ready.
+        // In share mode both could miss each other and leave the chat waiting
+        // for a message that had already arrived.
+        sqlx::query_scalar!("SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND generation = $3 AND state = 'connected' FOR NO KEY UPDATE", account.id,user,account.authorization_generation)
             .fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(ExternalChatError::Disconnected)?;
+        // Taken after the account, in update_chats_in's order.
+        super::chats::lock_anchors_in(&mut tx, user).await?;
         let existing = sqlx::query_as!(ChatRow,"SELECT id, provider, remote_id, kind, user_id, state, adopted_at FROM external_chat WHERE user_id = $1 AND provider = 'whatsapp' AND remote_id = $2 AND state <> 'detached' FOR UPDATE",user,adoption.jid)
             .fetch_optional(&mut *tx).await.map_err(failure)?;
         let adopted = match existing {
@@ -87,6 +94,9 @@ impl AdoptionRepository for PgWhatsAppRepository {
             remote_member = true,can_post = excluded.can_post,observed_at = excluded.observed_at,reconciled = true"#,
             adopted.chat.id,account.id,account.authorization_generation,adoption.can_post,adoption.observed_at)
             .execute(&mut *tx).await.map_err(failure)?;
+        // Idempotent: re-adding a chat tracks its picture again if it was dropped.
+        super::pictures::track_pictures_in(&mut tx, user, std::slice::from_ref(&adoption.jid))
+            .await?;
         notify(&mut tx, signals::ACCOUNT_CHANGED, account.id).await?;
         tx.commit().await.map_err(failure)?;
         Ok(adopted)
@@ -100,6 +110,8 @@ impl AdoptionRepository for PgWhatsAppRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
+        // Checks are spent only on what an added chat shows.
+        super::pictures::release_detached_pictures_in(&mut tx, chat.id).await?;
         let observers = sqlx::query_scalar!(
             "UPDATE whatsapp_chat_membership SET consent_ended_at = COALESCE(consent_ended_at, now()) WHERE chat_id = $1 RETURNING account_id",
             chat.id

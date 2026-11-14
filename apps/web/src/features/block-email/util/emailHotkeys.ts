@@ -1,4 +1,5 @@
 import type { EmailThreadKeyboardHandlers } from '@app/features/email-thread/core/thread-keyboard';
+import { t } from '@app/lib/i18n';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 
@@ -6,17 +7,6 @@ export function registerEmailHotkeys(
   scopeId: string,
   handlers: EmailThreadKeyboardHandlers
 ) {
-  if (handlers.replyAllToFocusedMessage) {
-    registerHotkey({
-      hotkey: 'opt+r',
-      scopeId: scopeId,
-      description: 'Reply all to message',
-      keyDownHandler: handlers.replyAllToFocusedMessage,
-      hotkeyToken: TOKENS.email.replyAll,
-      displayPriority: 8,
-    });
-  }
-
   registerHotkey({
     hotkey: 'r',
     scopeId: scopeId,
@@ -25,6 +15,18 @@ export function registerEmailHotkeys(
     hotkeyToken: TOKENS.email.reply,
     displayPriority: 9,
   });
+
+  if (handlers.createEvent) {
+    registerHotkey({
+      hotkey: 'b',
+      scopeId,
+      description: () => t('commands.createEventFromEmail'),
+      keyDownHandler: handlers.createEvent,
+      hotkeyToken: TOKENS.email.createEvent,
+      displayPriority: 7,
+      condition: handlers.canCreateEvent,
+    });
+  }
 
   registerHotkey({
     hotkey: 'f',

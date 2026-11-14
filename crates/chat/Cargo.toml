@@ -12,6 +12,7 @@ attachment = [
   "inbound",
 ]
 inbound = [
+  "dep:agent_correlation",
   "dep:axum",
   "dep:entity_registry",
   "dep:macro_authorization",
@@ -33,6 +34,7 @@ ports = []
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+agent_correlation = { path = "../agent_correlation", optional = true }
 # Domain (always included)
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
@@ -55,7 +57,6 @@ model = { path = "../model" }
 non_empty = { path = "../non_empty" }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner" }
-models_entity_access_management = { path = "../models_entity_access_management", default-features = false }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
 serde = { workspace = true }

@@ -10,7 +10,7 @@ the user's action through every service it touches, with the timing and IDs need
 to answer "what happened to this request and where did the time go". Reviewers
 treat missing instrumentation on a new flow as a defect, like a missing test.
 New flows and hot paths are instrumented in the same change, frontend and
-backend. The document open lifecycle (`doc.open`) and agent editing
+backend. The routed document load flow (`view.*` → `doc.load`) and agent editing
 (`edit.session`) are the reference examples; the `instrumentation` skill walks
 through them and the per-runtime APIs.
 
@@ -23,8 +23,17 @@ through them and the per-runtime APIs.
   frame, worker call) needs inject on send and extract on receive. If a hop
   can't carry context, record the upstream trace id as a span field.
 - Web and Cloudflare Workers use the `@macro-inc/observability` `Telemetry`
-  facade (`Telemetry.span`, `Telemetry.clientSpan`); don't import OpenTelemetry
-  directly and don't add a second telemetry path.
+  facade (`Telemetry.span`); don't import OpenTelemetry
+  directly and don't add a second telemetry path (ast-grep
+  `ts/tsx-observability-facade`).
+- Browser context does not survive an `await`: retain the parent span (or a
+  `Telemetry.captureContext()` taken at synchronous admission, before auth or
+  scheduling yields) across awaits and retries, and pass it explicitly, e.g. in
+  mutation variables, never in the request payload. Don't restore global async
+  patches.
+- Web view loading and in-view interactions use `@app/observability/flow`
+  (`TraceFlow`, `usePending`, `useFlow().task`, `beginInteraction`), never a
+  hand-rolled root span per load.
 
 ## Spans at boundaries
 
@@ -36,9 +45,16 @@ through them and the per-runtime APIs.
 - Record the IDs you will search by (entity, user, team, session, document) and
   sizes/counts as fields. Skip bulky or sensitive arguments; never record
   prompts, message content, tokens, secrets, or personal data (email, username,
-  IP); use opaque ids.
+  IP); use opaque ids. `#[tracing::instrument]` records every argument it
+  doesn't skip, by `Debug`, and a `MacroUserId` is an email: skip user ids (and
+  structs holding one) or use `skip_all` with explicit `fields`.
+- A background loop opens one span per round, never one around the whole loop:
+  `#[tracing::instrument]` on a function that loops forever opens a span that
+  never closes, so its rounds never form a finished trace.
 - Async work that outlives the request (spawned tasks, queued jobs) links to or
-  parents on the span that started it, so the flow stays one trace.
+  parents on the span that started it, so the flow stays one trace. DataLoader
+  batches spawn with `|batch| tokio::spawn(batch.in_current_span())` (ast-grep
+  `rust-dataloader-batch-in-request-span`, error).
 
 ## Timing
 
@@ -47,6 +63,8 @@ through them and the per-runtime APIs.
   not one opaque span.
 - Record outcome on the span (error status, retry count, cache hit/miss), so
   slow and failed paths can be filtered without logs.
+- Start a Rust span field you record later as `tracing::field::Empty` and
+  record it once (ast-grep `rust-span-field-recorded-once`, error).
 
 ## Logs
 

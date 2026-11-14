@@ -5,8 +5,8 @@
 `tooling/xtask/crates/xtask_workflows/src/workflows/export_ci_telemetry.rs` defines
 this workflow. Run `cargo x workflows` to regenerate
 `.github/workflows/export-ci-telemetry.yml`; CI checks it for drift. The JavaScript
-preflight and shell credential reader are embedded from adjacent `scripts/` files
-at generation time, so runtime checkout is unnecessary.
+preflight, TypeScript event steps and shell credential reader are embedded from
+adjacent `scripts/` files at generation time, so runtime checkout is unnecessary.
 
 The generated workflow observes completed workflows on its
 explicit name list using Grafana's
@@ -14,18 +14,163 @@ explicit name list using Grafana's
 action, pinned to that reviewed commit. It reads the triggering attempt's GitHub
 metadata and sends OTLP/HTTP protobuf traces to our existing endpoint. The trace
 hierarchy is workflow → jobs → steps, stored in Tempo with
-`service.name=github-actions` and `deployment.environment=ci`. There is no custom
-telemetry exporter, triggering PR checkout, artifact download, raw build-log
-collection, or Datadog export. Individual test cases are outside this integration.
+`service.name=github-actions` and `deployment.environment=ci`. There is no
+triggering PR checkout, artifact download, raw build-log collection, or Datadog
+export. Individual test cases are outside this integration.
 
-`/d/macro-ci` provides workflow traces, failed/cancelled jobs and steps, and jobs
+### GitHub API budget
+
+Every workflow's `GITHUB_TOKEN` draws on one budget of 5,000 REST calls an hour
+for the repository, and PR CI fails to start without its own calls. Exporting
+every completion of about 50 workflows, most of them PR bookkeeping, once used
+nearly all of it. So:
+
+- PR bookkeeping that runs on most PR events (labels, statuses, comments, text
+  checks, preview cleanup; the `UNOBSERVED_PR_WORKFLOWS` list) is not observed.
+  It has no `job` or `step` lines or traces, so CI hours and the queue tables
+  leave out its runs, most of the tiny runner's work among them. It seldom
+  finishes last on a push that ran PR CI (2 of about 640 in a week). A test makes
+  every new PR workflow pick a list.
+- A run whose jobs were all skipped doesn't start the exporter.
+- The preflight reads the budget first, which GitHub doesn't count. Below 40% of
+  the limit it skips the export and makes no calls; the collector stops at the
+  same line. Otherwise it lists the run's jobs once, for both the collector and
+  its own checks of the upstream action's limits.
+- The trace step runs only on an attempt the pinned trace action can represent.
+  That action retries a failed assertion, and an API error, up to 240 times at
+  two calls a try, and sends a job that ends before it starts as a broken span,
+  so the preflight checks first. When it refuses, the exporter still ends green,
+  without an annotation, and the `export` line's `untraced` says why. The
+  common reason is `job_never_ran`: GitHub dates a skipped job, or one
+  cancelled before it started, as completed a second before it started, and most
+  PR CI runs skip some jobs. An API error during the trace can still start the
+  retry loop.
+
+An exporter run costs one call to list jobs, two for the trace, and, on a PR
+event, one to list the head's runs. The run that completes a push adds one call
+per other workflow that ran, one for the PR, one to three for its files and one
+for the push time.
+
+### CI events in Loki
+
+Tempo refuses metrics queries over three hours and keeps traces for seven days, so
+it cannot answer daily percentiles. The exporter therefore also writes one log line
+per finished push, job and step to Loki, with `service_name="ci-telemetry"`. They
+keep for 30 days and give exact percentiles. Fields are structured metadata, read
+without a parser; each line's `trace_id` links to the run's trace, which exists
+only when the run's `export` line has no `untraced`.
+
+| `event` | Fields |
+| --- | --- |
+| `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
+| `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
+| `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, `skipped` (`budget`, `no_listing`) when it made no calls, and `untraced` when it sent no trace (`no_job_ran`, `job_never_ran`, `job_unfinished`, `no_conclusion`, `step_timing`, `duplicate_name`, `over_100_jobs`, `over_511_spans`) |
+
+`pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
+`other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
+or any root manifest change. `wall_seconds` runs from the push, or from opening the
+PR when that came later, to the last job. If neither fits, such as a reopen or
+leaving draft, it runs from the first workflow run and `wall_start` says
+`first_run`. A push counts as finished when every workflow it started has finished,
+and only an observed workflow's completion can notice that, so a push whose last
+workflow is unobserved PR bookkeeping has no `push` line. Neither does a push
+where only bookkeeping ran, or only one workflow. A run
+that starts after everything on its head has finished came from something else, such
+as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
+which also leaves a commit's first full run after draft out of the real PR numbers.
+
+Real PR numbers exclude experiments, reruns and drafts, and pushes where only one
+workflow ran: a lone CLA run means CI didn't run, as on a PR into another branch.
+Metadata makes an ungrouped query return one series per combination, so always group:
+
+```logql
+quantile_over_time(0.9, {service_name="ci-telemetry"} | event="push"
+  | experiment="false" | rerun="false" | pr_draft="false" | conclusion="success"
+  | workflows > 1 | unwrap wall_seconds [1d]) by (pr_type)
+```
+
+Lines never carry branch names, actors, titles or file paths. A line's time and
+body are the same from every exporter that sees it, so Loki drops the duplicate
+when two workflows finish together. A workflow that starts after the rest finished
+produces a second `push` line for that head. `volume_state` is `cold` when the dev
+shell step takes 30 s or more, an inference from step timing.
+
+Collection and sending are best effort and cannot fail the exporter, and neither
+touches the observed PR's jobs. Collection runs before any credential is read.
+
+`nixos/ci-report.json` holds the queries over these events: real PR wall time
+overall and by PR type, what finished last, the slowest PR jobs and steps, queue
+by runner and job, warm and cold cache volumes, CI hours by trigger, and the
+exporter's own cost. The top of `/d/macro-ci` renders them over the selected
+range, and the daily report prints the same tables as Markdown, plus one summary
+row per UTC day:
+
+```sh
+GRAFANA_TOKEN=$(cat <token file>) bun infra/stacks/observability/scripts/ci-report.ts --range 24h --days 7
+```
+
+The token needs only Viewer access. `--loki <url>` points it at another Loki API
+root, such as a local one. Change a query in the JSON and both follow. PR steps
+grouped by workflow, job and step pass Loki's default cap of 500 series in a day,
+so `backend-config.nix` raises `max_query_series` to 2000.
+
+Below them, `/d/macro-ci` provides workflow traces, failed/cancelled jobs and steps, and jobs
 running longer than five minutes. Open a trace for its execution waterfall and
 GitHub URL. Search tables are limited to 100 traces and 100 matching spans per
 trace; narrow the time range to investigate further. These are bounded searches,
-not complete counts or p95 summaries. The action does not emit our old structured
-Loki events. Job durations exclude runner queue time. Workflow root duration
+not complete counts or p95 summaries. Job durations exclude runner queue time. Workflow root duration
 includes waiting and, on reruns, starts at the original run creation time because
 of an upstream limitation; do not treat it as attempt execution time.
+
+### run_local events in Loki
+
+`just run_local`, `just stack up`/`update` and `cargo x build-services` send the
+same kind of events by default, unless a developer opts out
+(`docs/development/running-locally.md`, `tooling/xtask/crates/xtask_local_telemetry`):
+one line per run, step, build and container health wait, with
+`service_name="local-telemetry"` and `deployment_environment="local"`, through
+the same OTLP route as CI. Each machine reads the ingest token from Doppler
+`observability/lcl` (`LOCAL_TELEMETRY_TOKEN`) into a 0600 per-user file; keep
+that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; each line's
+`trace_id` opens the run's step waterfall in Tempo. Runs that ended before their
+events were sent are sent by the developer's next run, clamped to 30 minutes old
+like CI's, and a killed run arrives with `outcome="interrupted"`.
+
+| `event` | Fields |
+| --- | --- |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `host_name` (the readable machine name, only from machines with `services = true`), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
+| `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
+| `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
+| `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |
+| `service` | `service`, `phase` (`infra`, `app`), `health`, `seconds_to_healthy` (start to first passing probe), `restarts` |
+
+```logql
+quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="up"
+  | unwrap seconds | __error__="" [7d]) by (step)
+```
+
+`nixos/local-report.json` holds the queries for the `Macro run_local` dashboard
+(`/d/macro-run-local`) and for `scripts/ci-report.ts --spec local`. Both
+dashboards build their Loki panels with `nixos/loki-report-panels.nix`.
+
+### Local stacks' own telemetry
+
+A developer who sets `services = true` in their local telemetry settings also
+sends their local stacks' service traces, logs and metrics through the same
+route and token (`docs/development/running-locally.md`). A Grafana Alloy
+forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
+trace with an error in its first 30 seconds and a tenth of the rest, drops the
+local collector's own telemetry and debug and trace logs,
+and tags resources and metric datapoints with `host.name` (the machine's name)
+and `deployment.environment="local"`; services add `macro.local.instance`,
+which the forwarder copies onto metric datapoints. Dev
+dashboards and alerts select `dev`/`development`, so this data stays out of
+them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
+under `deployment_environment="local"`. The `Macro run_local` dashboard's
+`Machine` variable lists `host_name` from those metrics, and its last row
+(`nixos/local-dashboard.nix`, not the shared report spec) shows bring-ups,
+stacks, sampled traces, error logs and logs by machine.
 
 ### Pinned exporter limits
 
@@ -47,9 +192,9 @@ export step. The role can submit telemetry but cannot read stored traces or obta
 Grafana's OAuth credentials. The provider is account-wide and protected; import it
 into Pulumi if another stack creates it before this rollout.
 
-Build, publish and smoke-boot a NixOS image with `ci-dashboard.nix`, then pin its AMI
-and deploy normally to provision the dashboard. The workflow starts observing after
-merge to `main`; add new workflow names to its list when they are introduced.
+Deploy the host (see [Deploying](#deploying)) to provision the dashboard. The workflow starts observing after
+merge to `main`; a test fails until a new PR workflow is in `OBSERVED_WORKFLOWS`
+or `UNOBSERVED_PR_WORKFLOWS`. Add other new workflows to `OBSERVED_WORKFLOWS`.
 GitHub's three-level `workflow_run` chaining limit still applies. Keep
 `trace-artifacts-glob` unset so the exporter never downloads PR-produced artifacts.
 
@@ -223,8 +368,8 @@ boundary; split roles/hosts when stronger isolation is required.
 
 ## First deployment
 
-The stack is deliberately absent from `.github/services-config.json`, so this PR
-does not enroll it in automatic deployments. Use the repository's Pulumi backend
+The stack is deliberately absent from `.github/services-config.json`; it deploys
+only through the manual workflow in [Deploying](#deploying). Use the repository's Pulumi backend
 and AWS account `569036502058`, region `us-east-2`. Deployment requires the
 existing public `macro-internal.com` Route53 zone; this stack creates its own VPC/NAT and
 DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
@@ -250,8 +395,9 @@ DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
    delivery destination must remain accessible during a production outage.
    Configuration rejects secrets and topics in another region; the host reads
    the local secret directly, without fetching credentials from production.
-4. Build, publish and smoke-boot the NixOS image as described below. Set its
-   reviewed Ohio AMI ID; there is deliberately no mutable "latest image" lookup.
+4. Build, publish and smoke-boot the NixOS image: run **Deploy Observability**
+   as a dry run (see [Deploying](#deploying)). Pulumi finds the AMI tagged for
+   this checkout's image source; there is no `amiId` setting.
 5. Set the nonsecret configuration below, substituting actual identifiers.
    Placeholder credentials are not usable for deployment.
 
@@ -261,7 +407,6 @@ bun install --frozen-lockfile
 \cd stacks/observability
 pulumi stack select macro-inc/dev --create
 pulumi config set aws:region us-east-2
-pulumi config set amiId '<reviewed NixOS AMI ID in Ohio>'
 pulumi config set secretArn '<existing Secrets Manager ARN>'
 pulumi config set alarmTopicArn '<existing monitored SNS topic ARN>'
 pulumi preview --diff
@@ -294,44 +439,134 @@ Before enabling application traffic, validate all of these against AWS:
 
 ## Operations and recovery
 
-### NixOS image build and publication
+### Deploying
 
-From `infra/stacks/observability`, on an x86_64 Linux Nix builder:
+Run **Deploy Observability** (`.github/workflows/deploy-observability.yml`,
+generated from `tooling/xtask/crates/xtask_workflows/src/workflows/deploy_observability.rs`)
+from `main` in the Actions tab. Nothing starts it automatically.
+
+> **A rollout causes downtime.** It replaces the single host: Grafana, Loki,
+> Tempo, Prometheus and GoAlert are unavailable, and OTLP ingestion is refused,
+> for several minutes, until the new host passes its load-balancer health checks.
+> Producers retry rejected OTLP requests; pages from Datadog to GoAlert fail
+> during the window. Run it when that is acceptable.
+
+The `dry_run` input defaults to on. A dry run does everything except replace
+the host: build, publish, smoke boot, preview and the permission check. Untick it
+to roll out. The steps, all in `deploy/release.ts`:
+
+1. **Refuse a stale commit.** Branches other than `main`, and a re-run of an old
+   run whose commit is behind main's last change to this stack, fail, so a rerun
+   never rolls production back.
+2. **Find the image.** `deploy/image-key.ts` hashes the image's source (the
+   git-tracked `flake.nix`, `flake.lock`, `nixos/` and `assets/`, minus
+   `nixos/database-collector/`). An available AMI with the tag key
+   `ImageSource:<hash>` has already passed a smoke boot for this source: skip to
+   step 5. Otherwise, if an AMI already boots the same NixOS system
+   (`NixSystem` tag, from `nix eval` of the toplevel) and passed, it gets this
+   source's tag and the host is not replaced. If one exists but has not passed,
+   go to step 4.
+3. **Build and publish.** `nix build .` makes the UEFI VHD (its builder needs the
+   `kvm` system feature; without `/dev/kvm` QEMU emulates, more slowly).
+   `deploy/publish.ts` uploads it to `macro-observability-images-569036502058-us-east-2`,
+   imports an encrypted snapshot through the `macro-observability-vmimport` role
+   and registers a private AMI tagged `project`, `ImageSHA256`, `NixSystem` and
+   `GitCommit`. A rerun reuses an AMI or import task for the same VHD.
+4. **Smoke boot.** `deploy/smoke.ts` creates this run's own resources, named
+   after the run: two buckets (`observability-smoke-<run>-logs` and `-traces`),
+   a secret `observability/smoke-<run>` of fresh throwaway values, and an IAM
+   role and instance profile under the path `/observability-smoke/` that may
+   only reach those buckets and that secret, plus SSM. It launches the AMI as an
+   `m7i.xlarge` in the host's subnet and security group with a blank 20 GiB
+   volume. Never production storage: Loki and Tempo compactors delete blocks they
+   consider expired. The smoke host has no CloudWatch, SNS or production access,
+   and its alarm topic does not exist, so it cannot page anyone. Over SSM it waits up to 15 minutes for every unit to be
+   active and for `/healthz`, `/goalert-healthz`, Loki, Tempo and Prometheus to
+   answer, then sends an OTLP log and span and finds them in Loki and Tempo, and
+   checks ingestion refuses a missing token. Cleanup stops the host, detaches and
+   terminates it (the calls a rollout makes), then deletes the volume, buckets,
+   secret, instance profile and role. It sweeps every smoke resource, not only
+   this run's, so a cancelled or crashed run's leftovers go too, and a cleanup
+   that cannot delete something fails the run. A pass
+   tags the AMI `Smoke=passed` and `ImageSource:<hash>`; a failure tags
+   `Smoke=failed`, prints the failing units' journals and the console, and stops
+   the run with production untouched.
+5. **Check the plan.** `pulumi preview --json --show-sames` on `prod`;
+   `deploy/plan.ts` allows only replacing or updating the instance, its volume and
+   target-group attachments, and updating the alarms that name it. Any other
+   change (network, IAM, DNS, buckets, the data volume) stops the run: apply it
+   with a reviewed manual `pulumi up`. The data volume and both buckets must be
+   listed unchanged. Then `deploy/iam-preflight.ts` runs IAM's policy simulator
+   for every call the replacement makes, on the stack's real ARNs, so a missing
+   permission fails here instead of after the old host is gone.
+6. **Roll out** (not in a dry run). `pulumi up --target <instance> --target-dependents`,
+   so nothing else changes even if the stack moved since the preview. Then it waits
+   up to 25 minutes for the new instance to pass both target groups' health
+   checks and for `https://grafana.macro-internal.com/api/health`, and prints how
+   long the update took.
+
+One rollout runs at a time (concurrency group `deploy-observability-prod`,
+never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`
+label) builds it through `.github/workflows/observability_image.yml`, with no
+credentials, so a broken image fails before merge. The deploy job uses the
+repository's deploy credentials (`AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` and
+`PULUMI_ACCESS_TOKEN`), the same ones `deploy_on_push` and `deploy_web_app` use.
+Nothing needs setting up first.
+
+**If the new host fails after the rollout.** The old instance is already gone:
+the stack deletes it before creating the replacement, since one host owns the
+data volume. The run fails loudly; follow [Runtime](#runtime) to debug over SSM.
+To roll back, revert the commit on `main` and run the workflow again: the
+previous source's AMI still carries its tag, so nothing is rebuilt. Rolling an
+AMI back does not roll back Grafana or GoAlert schema migrations; use a tested
+snapshot recovery when the old version cannot read current data.
+
+**What survives a replacement.** Nothing the services keep is on the replaced
+host:
+
+- Loki chunks and Tempo blocks are in the two S3 buckets, which Pulumi protects
+  and retains (`durable`), and nothing about them depends on the image.
+- Everything local is on the `observability-data` EBS volume: Grafana's SQLite
+  (users, dashboards, settings), Loki and Tempo WALs and indexes, Prometheus
+  TSDB, Alloy's WAL and GoAlert's Postgres. The volume is protected and retained,
+  and none of its inputs change with the image, so the plan check requires it to
+  be unchanged.
+- Only the volume attachment is replaced. It has `stopInstanceBeforeDetaching`,
+  so the old host stops cleanly (systemd gives each service 90 seconds) before
+  the detach, and `forceDetach: false`.
+- The new host's bootstrap waits for that exact volume ID, mounts it without
+  formatting (`prepare-volume.sh` formats only a disk with no filesystem or
+  signatures), and stable uids keep file ownership. Every service checks the
+  mount before starting, so none falls back to the root disk.
+- The root disk is disposable and holds nothing to keep. OTLP data accepted
+  into Alloy's in-memory queues during shutdown can be lost; producer retries
+  cover requests rejected while the host is down.
+
+**Images and cleanup.** Retain the previous AMI and snapshot until the new host
+has passed acceptance; the workflow never deletes AMIs. Remove obsolete image
+artifacts, AMIs and their root snapshots through the normal infrastructure
+cleanup process; they are separate from the protected telemetry volume and its
+daily snapshots. Do not run an ad-hoc `nixos-rebuild switch` on the host: the
+image built from `main` is the source of truth. For host changes or security
+updates, update `nixos/host.nix` or the pinned input with
+`nix flake update nixpkgs`, merge, then deploy.
+
+**Prerequisites.** The image bucket and `macro-observability-vmimport` role
+above, which earlier hand publishing created. Nothing persistent exists for the
+smoke boot; each run creates and deletes its own resources.
+
+To publish by hand, with credentials that may write the bucket and import:
 
 ```bash
+\cd infra/stacks/observability
 nix build . --cores 2
-python3 nixos/publish-image.py result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
+bun deploy/publish.ts result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
 ```
 
-The build produces a UEFI VHD with the complete host configuration. KVM speeds up
-image creation; software emulation is supported but slower. The publishing command
-is an explicit AWS write: it uploads the image, imports an encrypted snapshot and
-registers a private AMI in `us-east-2`. It never launches or modifies an instance.
-It requires an existing private S3 artifact bucket in Ohio and an operator with
-the [VM Import permissions and service role](https://docs.aws.amazon.com/vm-import/latest/userguide/required-permissions.html)
-plus image registration/tagging permissions. Use `--role` for a dedicated import
-role; scope its S3 access to the artifact bucket. This role is separate from the
-runtime EC2 role. Publishing credentials never enter the image.
-
-Record the printed image SHA256, import task, snapshot and AMI ID with the release.
-If publication is interrupted, inspect those identifiers before retrying; do not
-blindly create duplicate import tasks. Retain the previous AMI and snapshot until
-the replacement has passed acceptance checks. Remove obsolete image artifacts,
-AMIs and their root snapshots through the normal infrastructure cleanup process;
-they are separate from the protected telemetry volume and its daily snapshots.
-
-Review the AMI and boot it in the pilot's private subnet before enabling ingestion.
-Check SSM access, the OS version, exact data volume mount, service health, reboot,
-secret-outage recovery and replacement/reattachment. Pin `amiId` only after review.
-The AWS image import and actual EC2 boot checks require deployment access and are
-separate from local configuration and startup validation.
-
-For host changes or security updates, update `nixos/host.nix` or the pinned input
-with `nix flake update nixpkgs`, build/test/publish a new image, then change `amiId`
-and review `pulumi preview`. Do not run an ad-hoc `nixos-rebuild switch` on the
-host: Pulumi's pinned image is the source of truth. Rolling back an AMI does not
-roll back Grafana schema migrations or telemetry state; use a tested snapshot
-recovery plan when the old application version cannot read current data.
+A hand-published AMI has no `ImageSource` or `NixSystem` tag, so neither Pulumi
+nor the workflow's `find` step uses it. The workflow builds its own image; only
+when that build produces a byte-identical VHD does `publish` reuse the
+hand-published AMI (matched by `ImageSHA256`) and tag it.
 
 ### Runtime
 
@@ -364,9 +599,9 @@ credential copies from systemd. Secret-service outages retry every 30 seconds;
 Loki, Tempo, Prometheus and host collection can run independently of that service.
 Systemd restarts crashed processes individually with memory and filesystem limits.
 
-Configuration/image changes require a new image and reviewed `amiId`; runtime
-value changes do not need an image rebuild. Both kinds of changes replace the
-instance and cause downtime. The old instance is deleted before replacement, its
+Configuration/image changes require a new image; runtime value changes do not
+need an image rebuild. Both kinds of changes replace the instance and cause
+downtime (see [Deploying](#deploying)). The old instance is deleted before replacement, its
 volume is detached, then the new host waits for that retained volume. This pilot
 has not been deployed with the earlier container layout; an existing container
 installation would need an explicit ownership/path migration before using this image.
@@ -486,8 +721,8 @@ without SMTP credentials. The configured topic already has wolf@macro.com and
 teo@macro.com subscriptions; each recipient must confirm their SNS subscription.
 Test the contact point and verify receipt before relying on notifications.
 
-User-data schema 6 adds `oncallHost`. Deploy it together with the new reviewed
-AMI; a schema-5 image cannot boot schema-6 user data.
+User-data schema 6 adds `oncallHost`. Deploy it together with the image that
+reads it; a schema-5 image cannot boot schema-6 user data.
 
 ## On-call paging (GoAlert)
 
@@ -552,7 +787,7 @@ point's alerts with 401 and Grafana shows it as failing.
 
 ### First deployment
 
-1. Add the secrets above, then build, publish and deploy the AMI as usual. The
+1. Add the secrets above, then deploy the host as usual. The
    certificate gains the on-call name, so Pulumi replaces the ACM certificate and
    updates the listener.
 2. Sign in as `admin`. Create the escalation policies and services below, and a

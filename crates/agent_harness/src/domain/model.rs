@@ -19,6 +19,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
 use trigger_context::TriggerContext;
+mod current_time;
+pub use current_time::CurrentTime;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 mod coding_preferences;
@@ -441,13 +443,14 @@ impl ReplyPlacement {
 /// takes. A thread carries one reply per mention, so the reply is one message
 /// that grows. A private conversation reads like talking to a teammate, so
 /// each passage the agent writes is its own message as soon as it is
-/// finished, with the steps it took after it attached.
+/// finished, with the steps it took to get there; while it works, its typing
+/// row says what it is doing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoiceStyle {
     /// One message per turn, posted when the turn starts and updated in place.
     Turn,
     /// One message per passage, posted when the passage is finished; nothing
-    /// is posted until the agent has something to say or do.
+    /// is posted until the agent has something to say.
     Segments,
 }
 
@@ -556,6 +559,36 @@ pub struct DeliverAction {
     /// prompts driven from the session itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TriggerContext>,
+    /// The app tab a person typed the prompt in, when they typed it in one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<agent_session::domain::model::UiClientId>,
+}
+
+/// What decides whether a turn may run on an agent's registered runtime.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeAccessFacts {
+    /// The runtime's name, for saying why a turn was refused.
+    pub runtime_name: String,
+    /// The agent lives on the runtime, rather than being a coding agent someone
+    /// directs there turn by turn.
+    pub resident: bool,
+    /// Whether the agent's own owner may use the runtime.
+    pub agent_owner_may_use: bool,
+    /// Whether the person prompting may use it, when a person is.
+    pub actor_may_use: Option<bool>,
+}
+
+impl RuntimeAccessFacts {
+    /// Whether the turn may run. A resident answers to anyone who can reach it
+    /// for as long as its owner keeps access; a coding agent runs someone's
+    /// instructions, so that person needs access themselves.
+    #[must_use]
+    pub const fn may_run(&self) -> bool {
+        match (self.resident, self.actor_may_use) {
+            (false, Some(actor_may_use)) => actor_may_use,
+            (true, _) | (false, None) => self.agent_owner_may_use,
+        }
+    }
 }
 
 /// One operation executed by the harness for an agent session.
@@ -629,6 +662,10 @@ pub enum HarnessCommand {
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
+    /// Load an external session whose agent is still running on a runtime
+    /// that dialed in again, so its local activity reaches Macro without a
+    /// prompt. Internal: the runtime registry asks for these on each dial.
+    Reattach,
 }
 
 /// What executing a command did with it, beyond succeeding.
@@ -658,6 +695,7 @@ impl DeliverAction {
             actor,
             announce,
             context: None,
+            client: None,
         }
     }
 
@@ -674,6 +712,7 @@ impl DeliverAction {
             actor: event.actor,
             announce: None,
             context: event.context,
+            client: event.client,
         }
     }
 }
@@ -809,6 +848,9 @@ pub enum ReplyOutcome {
     /// The question was answered or withdrawn, or every held tool call was
     /// settled, and the turn is running again.
     Resumed,
+    /// The prompt never ran, and the harness says why: the agent may not run
+    /// on its runtime.
+    Refused(String),
 }
 
 /// A tool call held for the session owner's approval, as far as the thread

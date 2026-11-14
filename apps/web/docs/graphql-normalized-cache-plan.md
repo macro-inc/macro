@@ -75,7 +75,28 @@ entire cache in browser memory. With 10s of thousands of cached objects
     database (`__meta:identity`), so compare-and-wipe is atomic with the
     triggering write (no stale-in-flight-write races). A mismatch wipes and
     rebinds (“silent restart”) and all active operations re-execute. Eager
-    path: clear on logout.
+    path: clear on logout. REST contact-edit responses use a separate captured
+    write-session token: logout closes admission and drains admitted durable
+    write/delete operations before clearing registered hosts. Independent local
+    auth cleanup and server sign-out begin without waiting for this drain; reload
+    and replacement admission still wait for all cleanup. Tracked contact writes
+    retain their exact physical host even if auth propagation retires the public
+    wrapper, whose callbacks and subsequent operations are silenced immediately.
+    Successful login
+    also retires this token, drains writes and deletes only the contact records
+    written by that session before refetching. This preserves unrelated durable
+    queues during same-account reauthentication, while handling native account
+    replacement that keeps the same client and host objects. A readiness probe
+    precedes tracking so failed initialization cannot strand a never-written key.
+    Logical retirement keeps narrow cleanup usable through the retained owner.
+    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    from the original backend/scope factory without booting a user client or queue;
+    unknown or quarantined failures cannot use this path. Failed repair retains
+    keys/ownership, reports the failure, and leaves admission closed for retry.
+    A no-op delete is not proof of storage cleanup, and a never-settling durable
+    write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
+    normalized-cache clearing. A post-write identity check cannot
+    undo a native mutation already dispatched.
     Additive GraphQL schema changes retain existing normalized records;
     fragment reads can continue projecting fields already present. Manually
     bump the schema compatibility epoch when identity, field storage shape, or
@@ -188,6 +209,14 @@ One Rust core engine, two hosts:
   free, with native Turso filesystem storage instead of webview storage. The
   wasm/worker path is **browser-only**.
 
+Each tab return starts a new engine worker. The owner page keeps the engine's
+compiled `WebAssembly.Module` and passes it to the next worker, which then skips
+the download and, more importantly, the browser's lazy recompilation of every
+function on first call. The module is keyed by the asset URL it was compiled
+from and travels on a port of its own (`worker/compiled-engine.ts`); it cannot
+pass through the coordinator, which is a different agent cluster. If the module
+cannot be passed or instantiated, the worker loads the engine as before.
+
 ### 4.2 Multi-consumer strategy (browser only)
 
 **Decision: Turso-backed persistence over OPFS, with one coordinated engine
@@ -250,11 +279,43 @@ records how many hints each coalesced broadcast replaced, without payloads.
 
 While parked or transitioning, `waiting` pauses read/init deadlines without
 creating a second page-side request queue. Reads, writes, and teardown retain
-coordinator admission order. A visible consumer starts a one-second read budget
+coordinator admission order, except that a typed search (a `search` with a
+query) reaches a new engine first and, inside the engine worker, runs ahead of
+list rereads and past generation checks and operation teardowns. It registers
+nothing and writes nothing, so those fences do not order it; it never passes
+`init` or `clear`. It can run before a write queued ahead of it, returning rows
+that are only older; that write's cache change then refreshes the list.
+The record reads that load the rows a typed search named (`read-records-by-keys`
+with `priority: 'typed-search'`, set by Quick Access through `searchRowHost`)
+rank with it: they run ahead of list rereads and past the same fences, since the
+search is not answered for the user until its rows list. Like the search they
+can run before a network result queued ahead of them, whose cache change then
+refreshes the list. The list keeps those rows until that refresh, so a row read
+that arrives while a change made on this device is queued (an optimistic
+mutation or its settlement) orders like any other record read instead.
+The desktop host ignores the field.
+Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
+query that feeds app state rather than a view sets `backgroundReader` in its
+operation context and is reread at ordinary rank, behind the views on screen;
+the notification feed (500 entities with their notifications) does.
+The engine worker does not start a request the moment it arrives. The browser
+delivers one message per task and engine calls run to completion, so a request
+started on arrival usually finishes before the next is seen: the queue would
+rarely hold two and its priorities would rarely apply. The worker instead yields
+to its event loop before starting (and again after each request), repeating
+while requests keep arriving (up to a bound), and then picks by priority. A
+typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
-Only read callers are canceled, not admitted engine work or writes. Readiness
+Only read callers are canceled, not admitted engine work or writes. A typed
+search already sent is the exception: it has no network fallback, so it stays
+queued and the replacement engine answers it. It gets the ordinary read
+timeout from the moment reads are blocked, so an owner change that never
+completes still ends the wait with the same refusal. One issued while reads are
+blocked is refused like any read, and Quick Access replays it. `search` takes an
+`AbortSignal`: a caller that has moved on to another query aborts it and the
+host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
 
@@ -281,6 +342,13 @@ subscription effects) and `graphql.subscription.cache_apply` (cache application,
 including parked-storage waits) to that receipt, even after its immediate span
 ends. Cache failures mark the application phase without recording payloads or
 replaying delivery. This context never enters GraphQL extensions or the wire.
+
+A subscription whose payloads no reader takes from the cache opts out of these
+effects with the exchange's `isUncachedSubscription` option; its results are
+delivered unchanged. `ActivityUpdates` is one: a push only tells mounted
+activity queries to refetch, and a bulk upload or delete sends one push per
+item to everyone with access. Writing each would advance the revision and make
+open lists and broadly registered live queries read again.
 
 Already-sent HTTP mutations may finish while parked. Their local commit, rollback,
 or defer requests wait for storage and retain their position ahead of later
@@ -473,14 +541,21 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 ### 4.5 urql exchange semantics
 
-- On operation: RPC `readQuery` → full hit: emit (stale-flagged if
-  `cache-and-network`, then forward to network); partial/miss: forward.
-- On network result: RPC `writeQuery`; normalization captures every record the
+- On operation: read the cache and emit a full hit; partial/miss: forward.
+  `cache-and-network` starts the cache read and network request concurrently,
+  emitting a still-current cache hit as stale while the request is pending.
+- On network result: publish foreground data before the ordered RPC `writeQuery`;
+  normalization captures every record the
   response traverses and installs the active operation's dependencies in the
   same write. Complete responses register exact keys; uncertain responses are
   conservatively affected by every visible change until a later exact read or
-  write. No post-write denormalizing read is performed. The engine returns the
-  changed record keys and the exchange re-executes affected active operations.
+  write. Persistence acknowledges a revision without replaying the response.
+- Initial and affected cache reads share a version guard: a newer published
+  result, cache read, teardown, or generation change supersedes an older read.
+  A late affected read must not restore old message membership after a fresh
+  thread response. Hosts with watched queries reconcile pending local edits
+  against the new server snapshot after persistence, including hosts whose watch
+  endpoint falls back to a full read.
 - Hydration-only operations skip cache reads and active-operation registration.
   Client-only `@cacheOnly` fields are fetched and normalized but omitted from
   the result returned across the worker/Tauri boundary. The directive is
@@ -488,7 +563,7 @@ the engine directly from its multi-threaded runtime, and unbounded on wasm.
   from the validated response during the write, avoiding a denormalizing read.
 - On teardown: unregister operation (unpins dependencies).
 - Cross-context: engine broadcasts changed-keys; every context's exchange
-  re-executes its own affected active operations.
+  rereads its own affected active operations, preserving mounted live queries.
 
 ### 4.6 Coexistence with normy / tanstack
 
@@ -584,7 +659,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
-  RPC with the same 10s timeout + Error-normalized rejections, event
+  RPC with the same read-only 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in
   `graphql-soup.ts`.
 
@@ -783,8 +858,13 @@ unrelated fields.
 ### Adoption and mutation coverage
 
 Mounted project details, project identity chips, and agent-session mentions use
-this live path as well. Mention lookups share stable batches: adding another
-visible item does not clear an existing item's data or restart its request.
+this live path as well. Project identity reads are cache-first; the shared
+`GraphqlUser.initiative` entity resolver lets them reuse complete authorized
+project records loaded by Soup or detail queries, without fetching on row remount.
+Missing fields still require an authorized network read. Detail reads retain
+cache-and-network behavior, and identity reads retain explicit permission
+revalidation. Mention lookups share stable batches: adding another visible item
+does not clear an existing item's data or restart its request.
 Project creation links the complete server-normalized record to its detail query,
 including when the user root is not cached yet. Async creation stops publishing
 after viewer changes, cache replacement, or storage reset.
@@ -794,17 +874,22 @@ separate assignment mutations no longer exist. Task creation includes that
 property in its ordinary create request. Project descriptions use the project's
 collaborative surface, provisioned by an authoritative ensure mutation.
 
-Permissions and server-owned membership still revalidate on activity, focus, and
-the existing project polling interval. A denied mounted read stays hidden across
-cache hits until an authorized network response succeeds. Disabled detail reads
-and results for another viewer are not exposed. Mentions also refresh on session
-rename, deletion, metadata updates, and reconnect when the normalized cache is
-unavailable.
+Permissions and server-owned membership revalidate only through the activity
+registry: activity pushes, Soup websocket connects and reconnects, and the app's
+own project writes. Projects have no polling or focus refetch, so an access
+change reaches an open project with the next of those or a reopen. Project
+denials are scoped to the client, viewer, project, and operation, surviving row
+remounts until a fresh authorized network response succeeds. Recovery requests capture the current denial version;
+older responses and cache updates cannot clear a newer denial. A rejected
+previous-viewer cache hit triggers one immediate network recovery per activation.
+Disabled reads and results for another viewer are not exposed. Other query
+consumers retain mount-local denial state. Mentions also refresh on session rename,
+deletion, metadata updates, and reconnect when the normalized cache is unavailable.
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-37 mutation documents and fails when a document has no declared strategy.
+47 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -815,15 +900,18 @@ every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
-| Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (12) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone |
-| Authoritative outcome (11) | SendEmailMessage, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
-| Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
+| Local resolver (9) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
+| Existing domain optimistic recipe (18) | SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen |
+| Authoritative outcome (14) | CreateSavedView, UpdateSavedView, DeleteSavedView, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone |
+| Authoritative entity mutation (5) | UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities |
+| Inactive (1) | SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.
 Notification optimism predicts MARK_DONE; conditional seen/reopen transitions
 remain authoritative. Renames patch both displayName and the selected source-name
-alias. Property removal unlinks only the assignment from its parent, retaining a
+alias. Moves predict the destination folder (`projectId`, or `parentId` for a
+project), which folder lists filter on locally; a batch that moves a database or
+form waits for the server. Property removal unlinks only the assignment from its parent, retaining a
 rollbackable link until the server confirms deletion.
 
 Server-generated identities, per-task permission outcomes, and exact notification
@@ -881,6 +969,38 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Supported Soup predicates can read indexed matches before a server response,
+using an empty baseline. `useSoupAstItemsQuery.cacheStatus` reports local
+predicate readiness separately from network loading; `ready` does not prove
+complete server membership. `fetchError` retains background failures even when
+the display-oriented `error` keeps cached results quiet. Explicit entity lookups
+pass typed identities through `graphqlCacheFirstEntities`. The single Soup owner
+keeps the full-identity cache predicate separate from a stable missing-entity
+network request, including pagination and retries. Identity includes entity type,
+so equal IDs in different entity types remain independent. Channel lookups use
+`queries/channel/by-ids` for channel identities, batching, and bounded unread
+refreshes. Soup exposes generic revalidation descriptors rather than registering
+channel notification readers. Consumers receive rows and unresolved IDs without
+coordinating query lifetimes.
+
+A predicate that still trails the observed cache revision after three consecutive
+reads reports a cache error instead of holding initial hydration indefinitely.
+The existing missing-record hydration path can then fetch unresolved identities.
+Already-resolved rows remain visible without a forced full-identity refresh;
+a later cache change retries the predicate and replaces its membership on success.
+Explicit refreshes still use the existing query refresh path. Recovery does not
+depend on the selected projection or add a second row/removal store.
+A change received during the final stale read is deferred to a new task rather
+than lost or retried indefinitely in the same microtask chain. Revision and
+generation checks continue to govern which local or network snapshot is shown;
+there is no separate recovery authority.
+
+Deletion markers use the same `typename:id` identity through pending mutations,
+retention, display filtering, and restore confirmation. Deleting or restoring a
+document must not hide or restore an unrelated channel with the same ID. The
+GraphQL-enabled deletion flow also scopes REST Soup and search side-cache
+removals to the entity type, including grouped caches and partial-failure rollback.
+
 Mail list pages carry same-query server membership in the existing `baseline`
 field. The Mail adapter reconciles only baseline rows outside the indexed window,
 retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
@@ -937,6 +1057,98 @@ Date rollover uses the original server bin as old membership. The
 `graphql_cache.soup_grouped_local_evaluation` span records grouping field,
 loaded baseline size and resulting bin count.
 
+#### Mail window evaluation cost
+
+Mail through-cursor reads start with the requested visible minimum plus one
+lookahead row (bounded by the index page limit), then grow their scan size
+geometrically only when the cursor is deeper. Previously each read started with
+499 indexed rows and loaded their sort projections even for a 20-row window.
+The shared `soup_filter_cache_adapter::mail` owner applies this policy to native
+and browser engines. Cursor fingerprints are independent of page size; retained
+server membership and the 5,000-row window ceiling keep their existing semantics.
+
+Repeat the native benchmark with
+`SOUP_BENCHMARK_FIXTURE=/tmp/mail-fixture.json cargo run --release -p soup-filter-cache-adapter --example mail_window_benchmark`.
+It seeds 2,000 canonical threads in in-memory Turso and measures 20 warm through
+reads at each window size. The optional fixture uses the Rust capsule encoder.
+For worker/OPFS and JavaScript phase timings, serve
+`src/lib/queries/soup/graphql/browser-test/vite.config.ts` from `apps/web`, then run
+`bun scripts/benchmark-mail-evaluation.ts /tmp/mail-fixture.json /tmp/mail-timings.json`.
+Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for a system browser. The runner throttles
+the renderer 4x, isolates worker samples by operation/window, and separates
+cache-read round trips from JavaScript projection. It does not measure network,
+DOM rendering, or native IPC. Setup and warmup are excluded from reported runs.
+
+On the measured 2,000-thread fixture, native median 20-row evaluation fell from
+21.48 to 3.07 ms; browser filter round trip fell from 25.10 to 3.00 ms and total
+cache-read/projection evaluation from 28.45 to 5.10 ms. A 499-row window was
+approximately unchanged. The initial 20-row worker filter was 24.5 ms while
+JavaScript projection was about 0.1 ms: the dominant cost was inside the worker,
+not cross-worker transport or JavaScript materialization. These are fixture
+measurements, not production p90s.
+
+#### Cache notification coalescing
+
+Native maintained views return a `registrationId` bound to the engine's retained
+validated specification. The native host keeps at most 256 descriptors; subsequent
+reads of the same descriptor send only its view id, registration token and
+subscriber revision. Token lookup and the read share the engine lease. Replacement,
+release, eviction or reset makes resume miss, so the host registers the complete
+specification again. Older binaries without a token continue using full requests.
+Revision/reset/delta semantics remain the same. Empty explicit-key selections
+need only a fresh engine revision and send no unused selection document.
+
+Soup's revision observer and maintained predicate reader both use
+`subscribeToVisibleCacheChanges`: leading/trailing 250 ms coalescing while
+visible, one dirty refresh after visibility returns, and serialized asynchronous
+reads. Generation resets and explicit/initial reads remain immediate. The
+revision fence still observes every accepted notification before scheduling
+work, so a late persistence acknowledgement cannot regain network authority.
+Predicate snapshots publish revision progress independently of stable row/order
+identities; the Soup adapter memoizes those inputs before materializing rows.
+
+Hydration still emits notifications, but a shared cache-core owner may attach
+`unchangedViews`: immutable observation tokens whose displayed windows are proven
+unchanged through that notification's revision. Each accepted maintained-view
+read or Mail page advertises its own token. Fragment reads bind recursive record
+dependencies; the Mail compiler also binds the readable-account catalog's
+`emailLinks` field, so unrelated fields on that parent do not wake Mail.
+
+The owner uses the complete record/projection journal, validated predicate,
+selected and baseline keys, and a proven full-window sort cutoff. A matching
+entrant, selected dependency change, uncertain facts, optimistic composition,
+journal barrier/gap, or evicted token prevents a proof. Observations are bounded
+to 64 snapshots. Proof failure preserves the committed hydration and broadcasts
+broadly. Older native engines omit tokens and continue conservative refreshes;
+no new request arguments are sent across that deployed boundary.
+
+Mail cutoffs additionally require a known matching lookahead row, tracked as a
+record/projection dependency. Its continued membership proves the cursor still
+exists. Exhausted windows omit that cutoff so older hydration can expose a new
+continuation; deleting the last lookahead also invalidates the proof.
+
+The subscriber skips only its exact accepted observation. Pagination clears its
+proof until a through-read observes the combined window. Batched hydration
+notifications intersect proofs across all writes. Calendar coverage commits
+record their complete normalized deletion set in the same journal and carry the
+same proof metadata, without changing calendar range invalidation. Quick Access search bucket
+hints remain insufficient for Soup property/membership invalidation. Filtering,
+sorting, proof decisions and maintained view deltas stay in the shared Rust
+owners; screen components do not inspect changed entity kinds.
+
+`soup.network`, `soup.cache`, and the initial `soup.local` pending phases join
+existing route flows through paint. Incremental cache evaluations create no
+standalone spans and do not compare no-op span identity. The shared Soup
+telemetry owner aggregates predicate/local read counts, rows, changed-row
+counts, retries, errors, discarded reads, durations, authority transitions and
+stale-fallback durations into `graphql_cache.soup_updates.summary` logs at most
+once per five active minutes per tab. It retains only fixed numeric categories,
+uses no timers, and isolates exporter failures. Durations in that summary are
+aggregate measurements, not duplicate duration attributes on operation spans.
+`urql.reconcile` times the Solid bridge, and subscription cache application has
+separate write/delete children and an effect count so transport waits are visible
+per effect.
+
 #### Grouped projection performance
 
 Run `bun scripts/benchmark-grouped-soup.ts /tmp/grouped-soup.json` from
@@ -984,6 +1196,21 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## CRM contact hydration
+
+The auxiliary lane in `src/lib/queries/soup/backfill.ts` hydrates CRM contacts
+alongside companies and foreign entities. Contacts require the explicit
+`crmContactFilter: { literal: { include: true } }` opt-in; an omitted filter
+returns no contacts. `SoupBackfill` already selects `GraphqlCrmContactFields`
+under `items @cacheOnly`, so records are persisted without materializing their
+payloads in the page. The backend scopes contacts to visible contacts in the
+viewer's accessible CRM-enabled teams.
+
+Checkpoint version 18 restarts scans saved before contacts were included. The
+lane retains normal cursor pagination, retries, cancellation, storage-generation
+checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
+visible contacts because the contact filter has no updated-at watermark.
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
@@ -1003,9 +1230,209 @@ supply this negative evidence. The existing authoritative-write telemetry covers
 this preparation/write path; no new worker command or database migration is needed.
 See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
 
+## Bounded Quick Access search
+
+Typed cache search binds normalized subsequence patterns into Turso and streams
+matching compact projections into a Rust heap of at most `limit + 1` documents.
+It no longer retains per-bucket text catalogs. Matching and ranking semantics,
+optimistic overlays, and indexed empty-query browsing are preserved; leading
+wildcards still scan selected buckets. Storage schema 12 makes the browse index
+covering by appending search text and source hashes. This is an incompatible
+cutover, not a migration: native caches reset, including queued mutations;
+browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
+Existing cleanup safeguards for those older files remain. That streaming-search
+cutover did not change the record format or schema epoch. See
+[streaming text search](../../../crates/client/README.md#streaming-text-search)
+for the memory boundary and native/OPFS verification.
+
+## Contact cache foundation
+
+Projection 5 indexes only viewer-scoped `GraphqlContact` records into `person`;
+public profiles and the authenticated viewer record do not establish directory
+membership. Names and emails share the existing streamed matcher. Search replies
+advertise `projectionVersion`, absent on older native engines, so future callers
+can gate contact search rather than interpreting unsupported projection as empty.
+
+`ContactDirectoryBackfill` persists nodes through hydration and returns the
+generated cursor-only projection. Hydration omits viewer contact-page and exact
+lookup wrappers. Foreground contact query variants share Soup/database views' 64-page / 2 MiB
+budget; retention version 2 compacts older viewers without clearing entities,
+queue state, or storage generation.
+
+Contact synchronization shares Soup's authenticated leader and rollout gate.
+Fetch-only transport returns one 500-row page for explicit scoped admission:
+the core checks the captured generation and expected/response identities under
+the same engine lock as the write, without switching accounts. Coordinator
+protocol 17 forwards that scope and contact admission fence; native hosts refuse
+guarded writes on older engines. Capture admission before fetching. Checkpoints
+advance only after persistence and a generation recheck.
+Invalidations coalesce on a 15-minute cadence without interrupting active scans;
+hourly passes refresh names. Scan omissions never delete records. The same lane
+then scans at most 500 raw cached contact records per keyset window and verifies
+scoped IDs through the existing exact lookup. Only validated requested-ID omissions
+permit removal. Checkpoint v2 tracks hydration/verification and completes only
+after the verification pass; failures/interruption resume at the last committed
+cursor. No directory-sized seen set or extra synchronization endpoint is used.
+
+Contact admission is fenced by the existing single-owner engine, including
+identical positive responses and no-removal verification. This prevents late
+hydration resurrecting removals and late absence deleting newer observations.
+Unfenced network/optimistic contact writes reject; context-only stubs remain
+non-membership. Deletions publish committed dependency/person invalidations,
+not hydration-only hints. Deploy the canonical-ID lookup fix before client
+removal checks; older lookup omissions cannot safely prove absence.
+
+The first UI consumer is `/app/debug/data`: its contact card uses one replaceable
+50-row window, with immediately collected query history. The reader validates
+viewer identity and storage generation around cache reads, preserves target user
+IDs, and uses bounded server pages for cold/unsupported caches. Offline windows
+remain explicitly incomplete; authorization failures never become cached successes.
+Server continuations stay server-side even if hydration finishes between pages.
+Exact ID/email resolution derives only requested viewer-scoped UUIDv5 keys
+(verified against shared backend fixtures) and projects bounded records offline.
+Online batches check current membership; omissions never resurrect cached rows.
+Guarded foreground hydration warms returned contacts on supported engines.
+Calendar search organizer/attendee filters now combine bounded suggestions with
+independent selected-email labels and do not use the global full-list hook.
+Their avatars consume resolved names rather than adding name-store history.
+Drive creators and CRM Notes creators now use the same reads via lazy option
+sources in the shared list filter menu and mobile drawer. Selected IDs and Me
+remain separate from the bounded visible page; selection changes do not shuffle
+clicked rows or accumulate prior pages. Only replaces the whole current group,
+including selected IDs outside the page. Tasks' AI-filter catalog and CRM company
+owner/team semantics have not been changed.
+Remaining ranking end-to-end validation and whole-app acceptance are tracked in
+[the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+
+### Deterministic person-policy foundation
+
+Ordinary entity/name scoring remains corpus-independent. Personal suggestions use
+policy 5: exact names, all-word prefixes, then literal contains, recent-first with
+identity ties. Complete addresses and Macro IDs cannot match display-name aliases.
+Command keywords keep their separate matcher; reference evidence stays policy 4.
+
+The core's new person-policy API stores local DM recency/command-target and
+secondary-inbox facts as private fields on existing normalized record keys. Only
+server-supplied complete contact records can rank. Context snapshots use scoped,
+compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
+snapshots report pending, not an empty directory. The indexed reader probes bounded
+posting/rank windows in the existing predicate index and retains at most `limit + 1`
+winners, applying exclusions and DM deduplication before stopping. Complete matching
+streams handle insufficient rank probes; arbitrary candidate truncation is not valid.
+Point reads use the covering contact-payload index in unpublished schema 12. There
+is no new database/table, schema cutover or remote search fallback.
+The core hoists viewer namespace hashing and keeps exact key validation with a
+stack buffer. Shared automated-mailbox eligibility retains all existing semantics
+while fast-rejecting nonmatching local parts. `CacheHost.people` now exposes state,
+update, search, bounded reference resolution and local SQL through coordinator
+protocol 17 and dedicated native commands. Local SQL uses the existing predicate
+index, not another database or a directory-sized Rust/JS relation; its adapter
+returns only bounded final results. Browser SQL now consumes this capability,
+including offline; it never sends statements to a new server read endpoint.
+Reference results retain at most two witnesses per
+requested label, not a directory catalog. The reference read requires a bound viewer
+without binding one itself, and publication is required only for inbox exclusions.
+Missing reference support is independently unsupported on older hosts; scope/storage
+failures remain fatal. The app-wrapper/worker/OPFS fixture exercises this complete
+boundary, including retirement and stale/foreign scope rejection.
+The frontend reference query owns one current label set and a serialized reader
+(one active physical scan, one replaceable pending input). It captures backfill
+completeness before the scan, keeps incomplete evidence unknown, and uses fetch-only
+exact server stages when necessary; literal identities have separate point lookup.
+Cache hints wake readiness transitions, not an HTTP rescan on every hydrated page.
+The app's retiring-host wrapper forwards this capability through the current host,
+including methods captured before disposal. Retired reads report unsupported;
+retired context writes reject instead of acknowledging a discarded publication.
+Ranked continuations bind scope, policy/layout, publication epoch and live contact/
+context tokens. Same-epoch patches invalidate pages without staling them on unrelated
+cache writes. Bounded target lookups suppress prior DM aliases; short/empty pages
+still continue. Frontend person invalidations fence pending replies and restart paging.
+Rust-derived Zod contracts validate ingress and bounded replies; missing native
+commands/older WASM report unsupported reads and reject writes. Scope and storage
+errors are never swallowed. Context updates publish person hydration hints only.
+Host/worker/native spans record operation, counts and opaque correlation metadata,
+never names, addresses or search text; live trace connectivity remains unverified.
+The channel/inbox context publisher now runs under Soup's existing leader and
+rollout/generation gate. Ownership-tagged selectors reuse scoped query data without
+contact-directory reads or app suspension. A committed snapshot is followed by
+changed/removed-peer patches, at most 500 rows per write and 500 pending IDs. Changes
+to an in-flight ID survive its earlier ack; overflow and uncertain writes start a
+new epoch. Missing inputs pause rather than publish emptiness. Source changes
+coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
+scope or unsupported hosts stop until the lifecycle changes. Context maps scale
+with existing DM peers/inboxes; full channel sources are still in memory.
+The web full-list query/hooks, shared recipient pool and manual contacts GET
+wrapper are removed. Message/native-share/websocket invalidations now issue only
+coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
+compatible. Quick Access reads a replaceable person window rather than a global
+contact item index. Commands/mentions forward typed queries; CRM alias matching
+uses exact lookup for only the current 50-row CRM window. Soup facets and property
+pickers preserve selections separately. General Soup creator menus and chips use
+lazy contact windows; assignees stay team/agent-scoped. Closed-chip labels resolve explicit IDs independently,
+without directory-sized maps. Unassigned is a local value, not membership.
+Query-driven comboboxes retain typed input across page/metadata replacement.
+CRM Owner chips use the same lazy source/selected-label separation, while header
+options stay team-scoped. Local empty values never enter membership lookup.
+Native policy 5 order survives command/DM merging, mention ranking, recipient
+composition and property selection. Empty property browsing alone pins self. Document/project/call discussion mentions
+also delegate to that window; channel/CRM/explicit rosters stay scoped even while
+empty. Agent transforms decorate only current rows, keeping original native
+metadata for unchanged people. Recipient policy excludes automated mailboxes
+before the result limit unless a full address was typed. The policy floor is generated
+from Rust alongside the transport schemas; older replies remain unavailable. Partial
+sync returns local partial windows, and explicit refresh schedules background sync.
+Creation/sharing and main email recipient controls now own paged sources; email
+threads retain scoped addresses, not an address book. Channel invitations and
+participant pickers also use those sources, with existing roster IDs excluded and
+empty continuations retained when a roster exceeds the native exclusion budget.
+Universal Input recipient/search/guest references now use complete per-label evidence
+and independent picker/mention windows. Tasks filters use lazy windows too; their
+planner extracts references without a personal catalog and resolves complete evidence
+before applying any constraints. Inline checklist labels resolve only task-referenced
+IDs in bounded batches, not a directory map. Onboarding filters bounded local browse
+windows to its approved domain and retains at most six non-self emails, with zero-history scoped queries.
+Linear import resolves only uploaded assignee labels in serial bounded exact batches;
+manual mapping uses personal property windows and keeps explicit choices separate.
+Its retained names scale with the uploaded file, not the personal directory.
+Browser SQL compiles dependency metadata and executes direct people reads through
+`CacheHost.people.readSql` in existing local Turso. The ordinary row source accepts
+only bounded explicit people keys for joins, never a directory array. A complete
+same-generation backfill checkpoint is required before and after a read; its final
+commit notification wakes pending queries after the page acknowledgement. Scope,
+compiler metadata and input ownership fence answers, and each observer retains one
+physical operation plus one replaceable input. The unnecessary `/databases/read`
+endpoint/client is removed. Fresh queries work offline once synchronization is
+complete; unsupported/incomplete reads stay explicit. The frontend correctness
+pass covers real compiler/controller/local-cache composition, including explicit
+refusal of non-ID join hints rather than misleading empty results. Current whole-app
+memory/latency and physical-device acceptance remain open. PostgreSQL SQL feature
+parity and arbitrary join expansion are not requirements of the contacts-memory plan.
+Calendar create/edit, event-detail guest actions and AI-draft
+composers now use bounded property windows with event-owned guest extras. Chosen
+names stay in selection metadata rather than a directory map, and person pages
+are not truncated again by the property UI. Shared scoped exclusions bind the
+full roster while capping native IPC; continuations retain oversized-roster gaps.
+Universal task-property inference now uses complete
+per-label reference evidence instead of the shared pool, with ambiguous/incomplete
+names unresolved and manual properties taking precedence. Other Universal Input
+modes prefer a unique full name before first-name matching; explicit addresses
+never match another person's display-name alias. Chosen display metadata stays
+separate from automatic name evidence.
+Shared display-name getters and participant labels now share the existing QueryClient:
+active readers pin their names, while idle entries cap at 512/512 KiB and expire after
+ten minutes. Requests are serialized in at most 500-ID batches with 500 queued IDs;
+no separate promise backlog or directory map is retained. Scope changes/disposal
+cancel transport and a 30-second abort deadline bounds requests. Name TTL is ten minutes,
+with stale labels retained during refresh and a 30-second later-access failure retry;
+reconnection wakes active failures without refetching idle history.
+Private labels and bearer-token reuse are fenced by account/session transitions;
+manual overrides and released/replaced entries reject old responses. Debug seeds
+are session-owned. This cache does not establish personal-contact membership.
+Whole-app memory/latency acceptance remains pending.
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 4; version 4 added task
+The disposable Quick Access projection is version 6; version 6 includes the local-part contact label fallback in matching. Version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an
@@ -1034,3 +1461,82 @@ version mechanism, preserving normalized records, pending mutations, and storage
 generation. This does not expand hydration: automatic backfill remains 90 days of
 signal email and 30 days of noise email, plus any other cached threads. Explicit
 full-text search reaches older uncached mail.
+
+
+### Foreground writes and background hydration
+
+Native `EngineAccess` reserves FIFO mutex turns for foreground commands.
+Background hydration waits on release notifications without reserving a turn;
+a foreground authoritative write advances the admission epoch. A waiting page
+whose epoch is superseded returns an error before touching storage. The worker
+owner applies the same rule by rejecting earlier queued hydration within the
+current lifecycle segment. Foreground write order is preserved. An already
+running storage transaction finishes atomically.
+
+Soup backfill treats this supersession as flow control: it refetches the same
+cursor after a short interruptible delay, preserving its checkpoint. Ordinary
+network/storage failures retain the lane's existing bounded retry policy.
+Calendar range and delta callers await their persisted occurrence fetches
+before sending coverage/replacement commits; those commits may supersede
+unrelated queued hydration just like other authoritative writes.
+
+`graphql.subscription.cache_queue` times preceding effects from the same
+subscription operation. `graphql.subscription.cache_apply` starts afterward
+and includes host readiness, IPC, engine admission and persistence. Native
+writes and deletes have no IPC deadline (see Native IPC transport), so a long
+apply is a slow engine queue, not a timeout. Apply/write/delete spans carry
+`cache.failure` from the bounded cache error classifier; use it with
+`cache.effects_applied` to separate engine failures from slow applies. Native
+engine admission has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
+for each foreground or hydrate acquisition. Its `graphql_cache.lock.wait_ms`
+includes waiting until admission or supersession, not time holding the lock. Native scheduling changes require a
+rebuilt native binary; older installed binaries retain their scheduling.
+
+### Native IPC transport
+
+The Tauri host coalesces identical concurrent `readQuery` calls, including their
+operation registration identity. It never retains a completed result. Commands
+and native change notifications invalidate pending-read reuse, so writes and
+resets cannot cause a later caller to share an older read. Conservative operation
+invalidations coalesce until the next task. Before delivering field patches,
+cache changes (including resets), hydration or mutation settlements, the host
+flushes earlier invalidations so other observers cannot overtake them. Disposal
+drops pending callbacks.
+
+Tauri cannot cancel a command, and the engine runs commands one at a time, so a
+caller that stops waiting only loses the outcome of work that still happens.
+As in worker-host, only reads and initialization have the ten-second deadline:
+a read falls back to the network, and every request waits behind init. Writes,
+hydration, queue claims and settlements, deletes, invalidations, teardown and
+clear wait for the engine's answer. A timeout would report a failure for a
+commit that still lands, and callers act on it: the mutation queue runner holds
+later edits for its five-minute lease after an unconfirmed commit, and a failed
+logout clear rotates the cache scope, which the running native engine refuses
+with `graphql cache scope mismatch`.
+
+The deadline counts only time the page runs on time. When the page itself
+stalls (an occluded or napping macOS window, a long task), the overdue timer
+would otherwise run before an answer the engine already sent and fail every
+request in flight at once, so a timer that fires more than a second late starts
+a new window.
+
+Native live views advertise a specification-bound registration token. The host
+retains at most 256 descriptors and resumes an unchanged specification from its
+id, token and revision; a missing registration triggers a full request. Changed
+specifications, release, reset and disposal invalidate retention. Older
+installed binaries omit the token and keep receiving full requests. Empty record
+selections fetch only the current revision, with no unused fragment.
+
+`graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
+records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page
+stall extended its deadline. The webview does not re-encode read
+arguments to count bytes or create spans for notification callbacks.
+`graphql_cache.ipc.notification` in the native emitter measures serialization and
+emission, recording the single serialized payload's byte count. Native read, watch,
+write, and hydration spans include the shared owner’s lock-wait child phase,
+with `graphql_cache.lock.kind` set to `foreground` or `hydrate`. Native receive spans
+carry the originating webview trace id, since the native logger does not adopt
+the browser OpenTelemetry context. No payload content is
+recorded. Broadcast operation notifications carry operation ids and optional field
+patches, without a redundant entity-key list. The native emitter serializes once
+and uses `emit_str`; consumers still receive ordinary JSON events.

@@ -50,7 +50,7 @@ pub struct CreateDocumentResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateDocument",
-    description = "Create a plaintext document or a native Macro spreadsheet or canvas. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. For a Canvas use fileExtension canvas, empty fileContent, and isTask false; then ReadCanvas and EditCanvas. Native documents are initialized before returning and work without an open editor."
+    description = "Create a plaintext document or a native Macro spreadsheet or canvas. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. For a Canvas use fileExtension canvas, empty fileContent, and isTask false; then ReadCanvas and EditCanvas. Native documents are initialized before returning and work without an open editor. Markdown (md) content uses the same Markdown, citation and mention syntax as chat replies; other file types take raw content with no Markdown or mention tags. Images come from GenerateImage, Word documents from DuplicateItem and EditWordDocument, and decks from EditPresentation, not from this tool."
 )]
 pub struct CreateDocument {
     #[schemars(description = "The name of the document without the file extension")]
@@ -95,7 +95,14 @@ where
         service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Create content");
+        // The name and content are the user's; log only their shape.
+        tracing::info!(
+            file_extension = %self.file_extension,
+            is_task = self.is_task,
+            in_project = self.project_id.is_some(),
+            content_bytes = self.file_content.len(),
+            "Create content"
+        );
 
         let parsed_file_type =
             FileType::from_str(&self.file_extension).map_err(|e| ToolCallError {

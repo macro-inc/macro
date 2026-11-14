@@ -21,13 +21,11 @@ import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-b
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -57,6 +55,7 @@ import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { CrmListError, CrmListSkeleton } from '../components/list-state';
+import { PeopleDisplayMenu } from '../components/people-display-menu';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
 import { useCrmContext } from '../context/crm-context';
@@ -73,8 +72,10 @@ import { createCrmExportLoader } from '../primitives/export-source';
 import { CrmActivityView } from './activity';
 import { useApplyCrmView } from './apply-view';
 import { Crm as CrmSettings } from './crm-settings';
+import { CrmEmailOptInBanner } from './email-privacy';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
+import { CrmItemDetail } from './item-detail';
 import { PipelineView } from './pipeline';
 import { CrmRecordDetail } from './record-detail';
 import { CompanyDisplayMenu, CompanyViewsMenu } from './saved-views-menu';
@@ -99,10 +100,10 @@ function NavigationToggle(props: {
         <Show
           when={shell.breakpoints.narrow?.()}
           fallback={
-            <Tooltip label="Expand CRM sidebar">
+            <Tooltip label={t('crm.expandSidebar')}>
               <Button
-                aria-label="Expand CRM sidebar"
-                tooltip="Expand CRM sidebar"
+                aria-label={t('crm.expandSidebar')}
+                tooltip={t('crm.expandSidebar')}
                 variant="ghost"
                 size="icon-sm"
                 ref={toggleTarget}
@@ -118,11 +119,11 @@ function NavigationToggle(props: {
             onOpenChange={setOpen}
             placement="bottom-start"
           >
-            <Tooltip label="Show CRM navigation">
+            <Tooltip label={t('crm.showNavigation')}>
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Show CRM navigation"
+                aria-label={t('crm.showNavigation')}
                 ref={toggleTarget}
               >
                 <ListIcon class="size-4" />
@@ -142,35 +143,6 @@ function NavigationToggle(props: {
         </Show>
       </SplitPanel.ControlGroup>
     </Show>
-  );
-}
-
-function CrmSearchBar() {
-  const view = useCrmWorkspace();
-  let input: HTMLInputElement | undefined;
-  useViewControlHotkeys({
-    scopeId: view.host.scopeId,
-    enabled: view.host.isActive,
-    search: {
-      description: 'Search companies',
-      run: () => {
-        input?.focus();
-        input?.select();
-        return true;
-      },
-    },
-  });
-  return (
-    <SearchBar
-      ref={(element) => (input = element)}
-      label="Search companies"
-      placeholder="Search companies"
-      value={view.searchText()}
-      onValueChange={view.setSearchText}
-      onEscape={view.host.focus}
-      hotkey="cmd+f"
-      class="max-w-md flex-1"
-    />
   );
 }
 
@@ -254,7 +226,6 @@ export function CrmWorkspaceView(props: {
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
@@ -287,7 +258,12 @@ export function CrmWorkspaceView(props: {
   const settings = view.host.settings;
   const { openWithSplit } = useCrmContext().createNavigation();
   const records = view.host.record.records;
-  const recordOpen = () => records().length > 0;
+  const itemKey = () => {
+    const item = view.host.record.item();
+    return item ? `${item.itemType}:${item.itemId}` : undefined;
+  };
+  const itemOpen = () => !!itemKey();
+  const recordOpen = () => records().length > 0 && !itemOpen();
   const showRecord = (record: CrmRecordRef) => {
     // The list unmounts; its entry keeps the scroll position for the return.
     view.host.captureEntryState();
@@ -322,9 +298,7 @@ export function CrmWorkspaceView(props: {
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const canCreatePipeline = () =>
-    pipelinesEnabled() &&
-    teamQuery.isSuccess &&
-    teamQuery.data?.team.crm_enabled === true;
+    pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined
   );
@@ -351,16 +325,10 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled &&
-      (tab !== 'databases' || databasesFlag().enabled) &&
-      isCrmActivityTab(tab)
-      ? tab
-      : undefined;
+    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
   };
   const activityPending = () =>
-    isCrmActivityTab(active()) &&
-    (activityFlag().loading ||
-      (active() === 'databases' && databasesFlag().loading));
+    isCrmActivityTab(active()) && activityFlag().loading;
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -412,7 +380,6 @@ export function CrmWorkspaceView(props: {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
     if (id === active()) view.host.record.close();
@@ -452,6 +419,8 @@ export function CrmWorkspaceView(props: {
   };
   onMount(() => {
     if (!listsEnabled() && active().startsWith('list:')) navigate('active');
+    // Saved and shared links to the retired Databases view open Companies.
+    if (active() === 'databases') navigate('active');
   });
   const toolbarCreateMenu = () => (
     <CrmCreateMenu
@@ -471,34 +440,15 @@ export function CrmWorkspaceView(props: {
   // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
   createEffect(
     on(
-      () =>
-        [
-          activityPending(),
-          activityFlag().enabled,
-          databasesFlag().enabled,
-          active(),
-        ] as const,
-      ([loading, activityEnabled, databasesEnabled, tab]) => {
-        if (
-          !loading &&
-          isCrmActivityTab(tab) &&
-          (!activityEnabled || (tab === 'databases' && !databasesEnabled))
-        )
+      () => [activityPending(), activityFlag().enabled, active()] as const,
+      ([loading, activityEnabled, tab]) => {
+        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
           navigate('active');
       }
     )
   );
   const sidebar = (onCollapse?: () => void) => (
     <CrmSidebar
-      searchLabel={peopleActive() ? 'Search people' : 'Search companies'}
-      search={() => (
-        <Show when={peopleActive()} fallback={<CrmSearchBar />}>
-          <PeopleSearchBar
-            value={peopleSearch()}
-            onValueChange={searchPeople}
-          />
-        </Show>
-      )}
       promotion={
         <ConnectorImportSidebar
           category="crm"
@@ -564,6 +514,9 @@ export function CrmWorkspaceView(props: {
         </Suspense>
       </ViewShell.Aside>
       <ViewShell.Main>
+        <Suspense>
+          <CrmEmailOptInBanner />
+        </Suspense>
         <Show
           when={!settings.isOpen()}
           fallback={
@@ -594,7 +547,7 @@ export function CrmWorkspaceView(props: {
             </>
           }
         >
-          <Show when={isTouchDevice() && !recordOpen()}>
+          <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
             <ViewShell.Header>
               <CrmMobileTabs
                 active={activeRecord()}
@@ -622,6 +575,16 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             </Show>
           </Show>
+          <Show when={itemKey()} keyed>
+            <CrmItemDetail
+              sourceName={activePipeline()?.name ?? title()}
+              navigation={
+                <NavigationToggle onExpand={() => setCollapsed(false)}>
+                  <Suspense>{sidebar()}</Suspense>
+                </NavigationToggle>
+              }
+            />
+          </Show>
           <Show when={recordOpen()}>
             <CrmRecordDetail
               records={records()}
@@ -639,7 +602,7 @@ export function CrmWorkspaceView(props: {
               }
             />
           </Show>
-          <Show when={!recordOpen() && pipelineId()} keyed>
+          <Show when={!recordOpen() && !itemOpen() && pipelineId()} keyed>
             {(id) => (
               <Show when={activePipeline()}>
                 {(pipeline) => (
@@ -669,7 +632,11 @@ export function CrmWorkspaceView(props: {
               </Show>
             )}
           </Show>
-          <Show when={!recordOpen() && pipelineId() && !activePipeline()}>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && pipelineId() && !activePipeline()
+            }
+          >
             <Show
               when={!pipelines.loading()}
               fallback={<CrmListSkeleton label="Loading pipeline" />}
@@ -687,10 +654,19 @@ export function CrmWorkspaceView(props: {
               </Button>
             </Show>
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityPending()}>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && !pipelineId() && activityPending()
+            }
+          >
             <CrmListSkeleton label="Loading CRM activity" />
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
+          <Show
+            when={
+              !recordOpen() && !itemOpen() && !pipelineId() && activityTab()
+            }
+            keyed
+          >
             {(tab) => (
               <Suspense
                 fallback={<CrmListSkeleton label="Loading CRM activity" />}
@@ -714,6 +690,7 @@ export function CrmWorkspaceView(props: {
           <Show
             when={
               !recordOpen() &&
+              !itemOpen() &&
               !pipelineId() &&
               !activityTab() &&
               !activityPending()
@@ -722,13 +699,16 @@ export function CrmWorkspaceView(props: {
             <Show
               when={!isTouchDevice()}
               fallback={
-                <Show when={peopleActive()}>
-                  <ViewShell.Header class="touch:pt-0">
-                    <div class="flex min-w-0 items-center justify-between gap-3">
+                <ViewShell.Header class="touch:pt-0">
+                  <div class="flex min-w-0 items-center justify-between gap-3">
+                    <Show when={peopleActive()}>
                       <PeopleSearchBar
                         value={peopleSearch()}
                         onValueChange={searchPeople}
                       />
+                    </Show>
+                    <PeopleDisplayMenu visibility={view.peopleVisibility} />
+                    <Show when={peopleActive()}>
                       <Button
                         variant="secondary"
                         class="ml-auto shrink-0"
@@ -737,9 +717,9 @@ export function CrmWorkspaceView(props: {
                         <PlusIcon class="size-4" />
                         New contact
                       </Button>
-                    </div>
-                  </ViewShell.Header>
-                </Show>
+                    </Show>
+                  </div>
+                </ViewShell.Header>
               }
             >
               <ListHeader
@@ -755,10 +735,10 @@ export function CrmWorkspaceView(props: {
                 }
               >
                 <Show when={!peopleActive()}>
-                  <HeaderActionGroup label="Company filters">
+                  <HeaderActionGroup label="Company filters" size="md">
                     <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
                   </HeaderActionGroup>
-                  <HeaderActionGroup label="Company view options">
+                  <HeaderActionGroup label="Company view options" size="md">
                     <SoupViewContextSort grouped />
                     <SoupViewContextGroup grouped hideLabel variant="ghost" />
                     <CompanyDisplayMenu grouped />
@@ -775,6 +755,7 @@ export function CrmWorkspaceView(props: {
                     </Show>
                   </HeaderActionGroup>
                 </Show>
+                <PeopleDisplayMenu visibility={view.peopleVisibility} />
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
                   label={peopleActive() ? 'Search people' : 'Search companies'}

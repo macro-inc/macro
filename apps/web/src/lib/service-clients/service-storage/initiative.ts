@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { catchToResult, ThrownResultError } from '@core/util/result';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type {
@@ -19,7 +20,11 @@ import {
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
 } from './graphql/generated/graphql';
-import { getGraphqlSoupClient, mapGraphqlProperties } from './graphql-soup';
+import {
+  getGraphqlSoupClient,
+  getGraphqlSoupNetworkClient,
+  mapGraphqlProperties,
+} from './graphql-soup';
 
 type InitiativeAccess = Lowercase<GraphqlEntityAccessLevel>;
 export type InitiativeSharingPatch = {
@@ -66,6 +71,7 @@ export function mapInitiativeIdentity(
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
+    appearance: readEntityAppearance(project.appearance),
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
@@ -156,8 +162,14 @@ function operationData<Data, Variables extends AnyVariables>(
   return result.data;
 }
 
-/** All project operations use the authenticated, normalized GraphQL client. */
-export function createInitiativeClient(client: () => Client) {
+/**
+ * Project operations use the authenticated, normalized GraphQL client. `network`
+ * is the fetch-only transport, for a write that changes nothing the cache holds.
+ */
+export function createInitiativeClient(
+  client: () => Client,
+  network: () => Client
+) {
   async function query<Data, Variables extends AnyVariables>(
     document: DocumentInput<Data, Variables>,
     variables: Variables,
@@ -175,10 +187,11 @@ export function createInitiativeClient(client: () => Client) {
   }
   async function mutation<Data, Variables extends AnyVariables>(
     document: DocumentInput<Data, Variables>,
-    variables: Variables
+    variables: Variables,
+    transport = client
   ) {
     return operationData(
-      await client().mutation(document, variables).toPromise()
+      await transport().mutation(document, variables).toPromise()
     );
   }
   return {
@@ -211,14 +224,21 @@ export function createInitiativeClient(client: () => Client) {
         // response is an acknowledgement, never a complete project snapshot.
         operationData(result);
       }),
-    /** Ensure the description surface, which has the project's id, before connecting. */
+    /**
+     * Ensure the description surface, which has the project's id, before
+     * connecting. It changes no cached record, so it skips the normalized
+     * cache: a mutation there makes every read in flight stale, and opening
+     * a project would send its project read again.
+     */
     ensureDescriptionSurface: (id: string) =>
       catchToResult(
         async () =>
           (
-            await mutation(EnsureInitiativeDescriptionSurfaceDocument, {
-              initiativeId: id,
-            })
+            await mutation(
+              EnsureInitiativeDescriptionSurfaceDocument,
+              { initiativeId: id },
+              network
+            )
           ).ensureInitiativeDescriptionSurface
       ),
     delete: (id: string) =>
@@ -230,4 +250,7 @@ export function createInitiativeClient(client: () => Client) {
   };
 }
 
-export const initiativeClient = createInitiativeClient(getGraphqlSoupClient);
+export const initiativeClient = createInitiativeClient(
+  getGraphqlSoupClient,
+  () => getGraphqlSoupNetworkClient()
+);

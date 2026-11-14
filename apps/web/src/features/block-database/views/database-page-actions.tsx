@@ -1,7 +1,14 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import DuplicateIcon from '@icon/system/regular/copy-simple.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -46,6 +53,12 @@ export type DatabaseEntityActions = {
   onToggleFavorite: () => void;
   onCopyLink: () => void;
   onCopyId: () => void;
+  /** Whether a copy is being made; Duplicate waits for it. */
+  duplicating: boolean;
+  /** Copy the database into a new one the viewer owns, and open it. */
+  onDuplicate: () => void;
+  /** Present for the owner, who alone may file it in a folder. */
+  onMoveToFolder?: () => void;
 };
 
 export function DatabasePageActions(props: {
@@ -59,6 +72,8 @@ export function DatabasePageActions(props: {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
@@ -183,6 +198,29 @@ export function DatabasePageActions(props: {
             {(actions) => (
               <>
                 <Dropdown.Group>
+                  <Show when={editable() && appearanceFlag().enabled}>
+                    <Dropdown.Item
+                      onSelect={() =>
+                        changeIcon(
+                          {
+                            type: 'database',
+                            id: props.detail.database.id,
+                            name: props.detail.database.name,
+                            ownerId: props.detail.database.owner_id,
+                            grant: props.detail.grant,
+                            appearance: readEntityAppearance(
+                              props.detail.database.appearance
+                            ),
+                            projectId:
+                              props.detail.database.project_id ?? undefined,
+                          },
+                          menuButton
+                        )
+                      }
+                    >
+                      {t('appearance.title')}
+                    </Dropdown.Item>
+                  </Show>
                   <Dropdown.Item onSelect={actions().onCopyLink}>
                     <LinkIcon class="size-4 shrink-0" />
                     Copy Link
@@ -197,16 +235,37 @@ export function DatabasePageActions(props: {
                     <StarIcon class="size-4 shrink-0" />
                     {actions().favorited ? 'Unfavorite' : 'Favorite'}
                   </Dropdown.Item>
+                  <Show when={actions().onMoveToFolder}>
+                    {(moveToFolder) => (
+                      <Dropdown.Item onSelect={moveToFolder()}>
+                        <ArrowRightIcon class="size-4 shrink-0" />
+                        {t('entityActions.moveToFolder')}
+                      </Dropdown.Item>
+                    )}
+                  </Show>
                 </Dropdown.Group>
               </>
             )}
           </Show>
-          <Show when={editable()}>
+          <Show when={editable() || props.entityActions}>
             <Dropdown.Group>
-              <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
-                <PencilIcon class="size-4 shrink-0" />
-                Rename
-              </Dropdown.Item>
+              <Show when={editable()}>
+                <Dropdown.Item onSelect={() => (focusTitleAfterClose = true)}>
+                  <PencilIcon class="size-4 shrink-0" />
+                  Rename
+                </Dropdown.Item>
+              </Show>
+              <Show when={props.entityActions}>
+                {(actions) => (
+                  <Dropdown.Item
+                    disabled={actions().duplicating}
+                    onSelect={actions().onDuplicate}
+                  >
+                    <DuplicateIcon class="size-4 shrink-0" />
+                    {t('entityActions.duplicate')}
+                  </Dropdown.Item>
+                )}
+              </Show>
             </Dropdown.Group>
           </Show>
           <Dropdown.Group>

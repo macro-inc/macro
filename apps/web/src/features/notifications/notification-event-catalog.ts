@@ -24,6 +24,8 @@ export type NotificationEventDefinition = {
   type: string;
   label: string;
   description: string;
+  /** Shown only with `enable-macro-computers` on. */
+  macroComputers?: true;
 };
 
 export type NotificationEventGroup = {
@@ -72,6 +74,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'channel_message_reaction',
         label: 'Message reactions',
         description: 'When someone reacts to one of your messages',
+      },
+      {
+        type: 'channel_access_requested',
+        label: 'Requests to join',
+        description: 'When someone asks to join a channel you belong to',
       },
     ],
   },
@@ -187,6 +194,25 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'agent_session_mentioned',
         label: 'Agent session mentions',
         description: 'When someone mentions you in an agent session',
+      },
+      {
+        type: 'routine_run_finished',
+        label: 'Routine runs',
+        description: 'When one of your routines finishes or fails a run',
+      },
+      {
+        type: 'agent_sign_in_expiry',
+        label: 'Computer agent sign-ins',
+        description:
+          "When an agent sign-in on your team's computer is about to expire",
+        macroComputers: true,
+      },
+      {
+        type: 'computer_setup',
+        label: 'Computer setup',
+        description:
+          'When a computer you bought is ready, or could not be set up',
+        macroComputers: true,
       },
     ],
   },

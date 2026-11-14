@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_write_intents SET completed_at=COALESCE(completed_at,now()) WHERE operation_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f046a87037d7b07d13cf6392f2307de4d3f2aa12fb211db5ad0d67b0b6e1ab9"
+}

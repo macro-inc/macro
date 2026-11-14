@@ -64,6 +64,9 @@ impl FromStr for InitiativeId {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeBasic {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -77,6 +80,9 @@ pub struct InitiativeBasic {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeSummary {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -90,6 +96,9 @@ pub struct InitiativeSummary {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeDetail {
+    /// Entity-owned icon and color overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<model_entity::EntityAppearance>,
     /// Opaque identifier.
     pub id: InitiativeId,
     /// Display name.
@@ -210,6 +219,10 @@ pub enum InitiativeError {
     /// The caller cannot perform this action.
     #[error("unauthorized")]
     Unauthorized,
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),

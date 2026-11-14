@@ -60,6 +60,8 @@ export type RunEditorCodeArgs = {
   sleep?: (ms: number) => Promise<void>;
   /** Skip animation entirely -- apply each op directly with no typing, pauses, or cursor movement. */
   typingAnimations?: boolean;
+  /** Once aborted, no further op or animation step is applied. */
+  signal?: AbortSignal;
   /** Called with the raw ops before they are queued/applied -- use to collect them. */
   onOps?: (ops: DocumentOp[]) => void;
   /** Annotated (never created/ended here) with sandbox timing, op counts, and
@@ -114,6 +116,8 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
   const results: OpResult[] =
     args.typingAnimations === false
       ? ops.map((op) => {
+          if (args.signal?.aborted)
+            return { ok: false, op, error: 'edit aborted' };
           try {
             args.doc.apply(op);
             return { ok: true, op };
@@ -131,6 +135,7 @@ export async function runEditorCode(args: RunEditorCodeArgs): Promise<string> {
           awarenessSource: args.awarenessSource,
           resolveNode: (n) => args.doc.resolveRef(n), // point cursors at inserted nodes
           sleep: args.sleep,
+          signal: args.signal,
         });
   const failed = results.filter((r) => !r.ok).length;
   span?.setAttr('ops.failed', failed);

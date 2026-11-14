@@ -14,12 +14,15 @@ mod test;
 pub mod meetings;
 
 use std::borrow::Cow;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::{
     Json, Router,
     extract::{FromRef, FromRequestParts, State},
-    http::{StatusCode, request::Parts},
+    http::{HeaderMap, StatusCode, header, request::Parts},
     response::IntoResponse,
     routing::{get, patch, post},
 };
@@ -34,18 +37,21 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    CODE_EXECUTION_HEADER, CredentialOrigin, MacroAuthorizationExtractor,
+    MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
+use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use uuid::Uuid;
 
 use crate::domain::models::{
     ActiveCallsResponse, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
     EditCallRecordRequest, EditCallTranscriptRequest, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, LeaveCallResponse, MAX_BATCH_CALL_IDS, RingStatusResponse,
+    GetBatchCallRecordPreviewResponse, JoinCallRequest, LeaveCallResponse,
+    LiveCallParticipantsResponse, LiveCallsResponse, MAX_BATCH_CALL_IDS, RingStatusResponse,
     TranscriptSegmentRequest,
 };
-use crate::domain::ports::CallService;
+use crate::domain::ports::{CallService, CallStartLimiter};
 
 // ---------------------------------------------------------------------------
 // Call router (authenticated)
@@ -56,6 +62,33 @@ pub struct CallRouterState<S, Svc, Auth> {
     service: Arc<S>,
     access_service: Arc<Svc>,
     authorization_state: MacroAuthorizationState<Auth>,
+}
+
+/// Adapter around the shared rate limit service.
+pub struct RateLimitedCallStarts<R>(pub R);
+
+impl<R: RateLimitService> CallStartLimiter for RateLimitedCallStarts<R> {
+    fn check<'a>(
+        &'a self,
+        user_id: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CallError>> + Send + 'a>> {
+        Box::pin(async move {
+            let key = RateLimitKey::builder(&"call-start")
+                .append(&user_id)
+                .finish();
+            match self
+                .0
+                .check_rate_limit(key, RateLimitConfig::new(20, Duration::from_secs(3600)))
+                .await
+            {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(_)) => Err(CallError::RateLimited),
+                Err(error) => Err(CallError::Internal(anyhow::anyhow!(
+                    "call start rate limit failed: {error:?}"
+                ))),
+            }
+        })
+    }
 }
 
 impl<S, Svc, Auth> Clone for CallRouterState<S, Svc, Auth> {
@@ -159,6 +192,7 @@ where
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc, Auth>)
+                .post(start_call_handler::<S, Svc, Auth>)
                 .delete(leave_or_end_call_handler::<S, Svc, Auth>),
         )
         .route(
@@ -166,6 +200,23 @@ where
             get(check_active_call_handler::<S, Svc, Auth>),
         )
         .route("/active", get(get_active_calls_handler::<S, Svc, Auth>))
+        .route("/active/all", get(get_live_calls_handler::<S, Svc, Auth>))
+        .route(
+            "/record/{call_id}/join",
+            post(join_call_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/leave",
+            post(leave_call_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/ring",
+            get(get_call_ring_state_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/participants",
+            get(get_call_participants_handler::<S, Svc, Auth>),
+        )
         .route(
             "/record/preview",
             post(get_batch_call_record_preview_handler::<S, Svc, Auth>),
@@ -173,6 +224,10 @@ where
         .route(
             "/record/{call_id}/decline",
             post(decline_call_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/recording",
+            get(get_call_recording_handler::<S, Svc, Auth>),
         )
         .route(
             "/record/{call_id}",
@@ -373,16 +428,223 @@ pub async fn get_or_create_call_handler<
     State(state): State<CallRouterState<S, Svc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
 ) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
+    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+        return Err(CallError::Forbidden(
+            "an agent-attributed start requires approval".to_string(),
+        ));
+    }
     let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
 
     let response = state
         .service
-        .get_or_create_call(&channel_id, user.authorization.user.macro_user_id.clone())
+        .start_call(
+            &channel_id,
+            user.authorization.user.macro_user_id.clone(),
+            JoinCallRequest {
+                on_other_call: crate::domain::models::OnOtherCall::Switch,
+                replace: true,
+                ..Default::default()
+            },
+            credential_is_program(&user.authorization.user.origin),
+        )
         .await?;
 
     Ok(Json(response))
+}
+
+pub(super) fn refuse_code_execution_token(headers: &HeaderMap) -> Result<(), CallError> {
+    if headers.contains_key(CODE_EXECUTION_HEADER) {
+        return Err(CallError::Forbidden(
+            "call tokens are unavailable in code execution".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn credential_is_program(origin: &CredentialOrigin) -> bool {
+    matches!(
+        origin,
+        CredentialOrigin::UserApiKey
+            | CredentialOrigin::MacroApiJwt
+            | CredentialOrigin::ScopedMacroApiJwt
+    )
+}
+
+/// Start or join a channel call explicitly.
+#[utoipa::path(post, operation_id = "start_call", path = "/call/{channel_id}",
+    params(("channel_id" = Uuid, Path)), request_body = JoinCallRequest,
+    responses((status = 200, body = CallTokenResponse), (status = 403, body = ErrorResponse), (status = 409)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn start_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
+    request: Option<Json<JoinCallRequest>>,
+) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
+    if !state
+        .service
+        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+        .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
+    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+        return Err(CallError::Forbidden(
+            "an agent-attributed start requires approval".to_string(),
+        ));
+    }
+    let channel_id = Uuid::parse_str(&access.entity_access_receipt.entity().entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid channel_id")))?;
+    Ok(Json(
+        state
+            .service
+            .start_call(
+                &channel_id,
+                user.authorization.user.macro_user_id.clone(),
+                request.map_or_else(JoinCallRequest::default, |body| body.0),
+                credential_is_program(&user.authorization.user.origin),
+            )
+            .await?,
+    ))
+}
+
+/// Join a live call by its session id.
+#[utoipa::path(post, operation_id = "join_call", path = "/call/record/{call_id}/join",
+    params(("call_id" = Uuid, Path)), request_body = JoinCallRequest,
+    responses((status = 200, body = CallTokenResponse), (status = 403, body = ErrorResponse), (status = 409), (status = 410)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn join_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
+    request: Option<Json<JoinCallRequest>>,
+) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
+    if !user.authorization.user.is_human_session()
+        && !state
+            .service
+            .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+            .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
+    Ok(Json(
+        state
+            .service
+            .join_call(
+                &call_id,
+                user.authorization.user.macro_user_id.clone(),
+                request.map_or_else(JoinCallRequest::default, |body| body.0),
+                credential_is_program(&user.authorization.user.origin),
+            )
+            .await?,
+    ))
+}
+
+/// Leave a specific live call.
+#[utoipa::path(post, operation_id = "leave_call", path = "/call/record/{call_id}/leave",
+    params(("call_id" = Uuid, Path)),
+    responses((status = 200, body = LeaveCallResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn leave_call_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<LeaveCallResponse>, CallError> {
+    if !state
+        .service
+        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+        .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
+    Ok(Json(
+        state
+            .service
+            .leave_call(&call_id, user.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
+}
+
+/// Read this account's ring state for a call.
+#[utoipa::path(get, operation_id = "get_call_ring_state", path = "/call/record/{call_id}/ring",
+    params(("call_id" = Uuid, Path)), responses((status = 200, body = RingStatusResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_ring_state_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<RingStatusResponse>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_call_ring_state(&call_id, user.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
+}
+
+/// List all channel and standalone calls this account can join.
+#[utoipa::path(get, operation_id = "get_live_calls", path = "/call/active/all",
+    responses((status = 200, body = LiveCallsResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_live_calls_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<LiveCallsResponse>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_live_calls(user.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
+}
+
+/// Read live participants and track state for a joinable call.
+#[utoipa::path(get, operation_id = "get_call_participants", path = "/call/record/{call_id}/participants",
+    params(("call_id" = Uuid, Path)), responses((status = 200, body = LiveCallParticipantsResponse), (status = 403), (status = 404)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_participants_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<LiveCallParticipantsResponse>, CallError> {
+    Ok(Json(
+        state
+            .service
+            .get_call_participants(&call_id, user.authorization.user.macro_user_id.clone())
+            .await?,
+    ))
 }
 
 /// Handler for `GET /call/{channel_id}/active`.
@@ -486,6 +748,52 @@ pub async fn get_call_record_handler<
     Ok(Json(record))
 }
 
+/// OpenAPI representation of streamed recording bytes.
+#[derive(utoipa::ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct RecordingBytes(
+    /// Raw video bytes.
+    pub Vec<u8>,
+);
+
+/// Stream the recording bytes for a call record the caller may view.
+#[utoipa::path(
+    get,
+    operation_id = "get_call_recording",
+    path = "/call/record/{call_id}/recording",
+    params(("call_id" = Uuid, Path, description = "Call ID")),
+    responses(
+        (status = 200, content_type = "video/mp4", body = RecordingBytes),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_call_recording_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<axum::response::Response, CallError> {
+    let recording = state
+        .service
+        .get_call_recording(access.entity_access_receipt)
+        .await?;
+    let content_length = recording.content_length.to_string();
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, recording.content_type),
+            (header::CONTENT_LENGTH, content_length),
+        ],
+        axum::body::Body::from_stream(recording.chunks),
+    )
+        .into_response())
+}
+
 /// Handler for `DELETE /call/record/{call_id}`.
 ///
 /// Deletes a call record (and its participants/transcripts via cascade).
@@ -555,6 +863,12 @@ pub async fn edit_call_record_handler<
     access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(
+        request.share_permission.is_some() || request.share_with_team.is_some(),
+    )
+    .map_err(|refused| CallError::Forbidden(refused.to_string()))?;
     state
         .service
         .edit_call_record(access.entity_access_receipt, request)
@@ -914,6 +1228,9 @@ impl IntoResponse for CallError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
+            CallError::Ended => StatusCode::GONE,
+            CallError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+            CallError::InOtherCall | CallError::AlreadyConnected => StatusCode::CONFLICT,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
             CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
@@ -930,11 +1247,14 @@ impl IntoResponse for CallError {
             CallError::Internal(_) => "internal server error".to_string(),
             other => other.to_string(),
         };
+        let code = match &self {
+            CallError::InOtherCall => Some("in_other_call"),
+            CallError::AlreadyConnected => Some("already_connected"),
+            _ => None,
+        };
         (
             status_code,
-            Json(ErrorResponse {
-                message: message.into(),
-            }),
+            Json(serde_json::json!({ "message": message, "code": code })),
         )
             .into_response()
     }

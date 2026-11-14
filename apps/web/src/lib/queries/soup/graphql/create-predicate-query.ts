@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -17,6 +18,8 @@ import {
   type EntityFilterCacheArgs,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
+import { createHiddenDeferral } from '../../visible-refresh';
+import { soupCacheTelemetry } from './cache-activity-telemetry';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
 export type PredicateQueryRequest<T> = {
@@ -45,6 +48,16 @@ type LiveQueryHost = Pick<
   'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
 >;
 
+export type PredicateQueryStatus =
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'unsupported'
+  | 'error';
+
+// A busy or stale cache must release cache-first readers to network hydration.
+const MAX_STALE_READS = 3;
+
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -57,9 +70,7 @@ export function createPredicateQuery<T extends object>(options: {
   query: Accessor<PredicateQueryRequest<T> | undefined>;
 }) {
   const [data, setData] = createSignal<LiveQuerySnapshot<T>>();
-  const [status, setStatus] = createSignal<
-    'idle' | 'loading' | 'ready' | 'unsupported' | 'error'
-  >('idle');
+  const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
   let requestRefresh = () => {};
   // A caller may derive a new request object from a query snapshot even when
@@ -101,27 +112,60 @@ export function createPredicateQuery<T extends object>(options: {
       });
       setStatus('loading');
 
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
       const run = async () => {
         if (running || !active) return;
         running = true;
+        let staleReads = 0;
         try {
           while (pending && active) {
             pending = false;
             const observedEpoch = epoch;
+            let outcome: 'success' | 'unsupported' | 'error' | 'discarded' =
+              'discarded';
+            let upserts = 0;
+            let patches = 0;
+            let removed = 0;
+            let retries = 0;
+            const startedAt = performance.now();
             try {
               const result = await host.entityFilter(args());
-              if (!active || epoch !== observedEpoch) continue;
+              if (!active || epoch !== observedEpoch) {
+                staleReads = 0;
+                continue;
+              }
               if (result.kind !== 'live-query') {
+                outcome = 'unsupported';
                 unsupported = true;
                 pending = false;
                 setStatus('unsupported');
                 continue;
               }
+              upserts = result.upserts.length;
+              patches = result.patches.length;
+              removed = result.removed.length;
               const revision = parseCacheRevision(result.revision);
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
+                staleReads += 1;
+                if (staleReads >= MAX_STALE_READS) {
+                  // Preserve an invalidation that arrived during this read, but
+                  // yield before starting another bounded attempt.
+                  if (pending) {
+                    retryTimer = setTimeout(() => {
+                      retryTimer = undefined;
+                      deferral.request();
+                    }, 0);
+                  }
+                  pending = false;
+                  throw new Error(
+                    'Cache predicate repeatedly returned a stale revision'
+                  );
+                }
+                retries = 1;
                 pending = true;
                 continue;
               }
+              staleReads = 0;
               if (result.reset && result.keys === undefined)
                 throw new Error('live query reset omitted its keys');
               // Check row envelopes and patch bases before updating reactive state.
@@ -197,10 +241,27 @@ export function createPredicateQuery<T extends object>(options: {
                   setStatus('ready');
                 })
               );
+              outcome = 'success';
             } catch (cause) {
-              if (!active || epoch !== observedEpoch) continue;
+              if (!active || epoch !== observedEpoch) {
+                staleReads = 0;
+                continue;
+              }
+              outcome = 'error';
               setError(() => cause);
               setStatus('error');
+            } finally {
+              soupCacheTelemetry.record('predicate', {
+                durationMs: performance.now() - startedAt,
+                rows: orderedRows.length,
+                upserts,
+                patches,
+                removed,
+                retries,
+                error: outcome === 'error',
+                discarded: outcome === 'discarded',
+                incomplete: outcome === 'unsupported',
+              });
             }
           }
         } finally {
@@ -208,15 +269,20 @@ export function createPredicateQuery<T extends object>(options: {
         }
       };
       const refresh = () => {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
         if (unsupported) return;
         pending = true;
         if (!running) runPromise = run();
       };
       requestRefresh = refresh;
+      // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+      // instead of reading on each revision; initial and explicit reads still run.
+      const deferral = createHiddenDeferral(refresh);
       const unsubscribeChanges = host.onCacheChanged(
         (revision) => {
           latest = revision;
-          refresh();
+          deferral.request();
         },
         { includeHydration: true }
       );
@@ -229,11 +295,13 @@ export function createPredicateQuery<T extends object>(options: {
           setData(undefined);
           setStatus('loading');
         });
-        refresh();
+        deferral.request();
       });
       refresh();
       onCleanup(() => {
         active = false;
+        clearTimeout(retryTimer);
+        deferral.dispose();
         unsubscribeChanges();
         unsubscribeGeneration();
         // Serialize release after any pending read, so disposal cannot recreate
@@ -250,5 +318,6 @@ export function createPredicateQuery<T extends object>(options: {
       });
     })
   );
+  usePending('soup.cache', () => status() === 'loading');
   return { data, status, error, refresh: () => requestRefresh() };
 }

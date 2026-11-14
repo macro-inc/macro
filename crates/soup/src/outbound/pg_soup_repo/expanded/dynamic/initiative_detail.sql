@@ -9,6 +9,7 @@
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            i.appearance as "appearance",
             i.created_at::timestamptz as "created_at",
             i.updated_at::timestamptz as "updated_at",
             NULL::text as "project_id",
@@ -21,11 +22,14 @@
             ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
+            t.sort_key as "sort_key",
             NULL as "is_completed",
             NULL::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             NULL::jsonb as "database_row"
         FROM TopItems t
-        INNER JOIN initiative i ON i.id::text = t.id
+        -- Keep the indexed UUID column bare. Other Soup kinds can have legacy text ids.
+        INNER JOIN initiative i ON i.id = (CASE WHEN t.item_type = 'initiative' THEN t.id END)::uuid
         LEFT JOIN "UserHistory" uh
             ON uh."itemId" = i.id::text
             AND uh."itemType" = 'initiative'

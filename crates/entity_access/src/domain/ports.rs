@@ -26,6 +26,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// The highest access level a signed-in user has on each requested
+    /// document, keyed by the id as given; documents without access are left
+    /// out. Each answer is the one [`Self::get_document_access`] gives.
+    fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<String, AccessLevel>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a chat.
     fn get_chat_access(
         &self,
@@ -164,6 +173,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_form_access(
         &self,
         form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Resolve who may use a runtime.
+    fn get_harness_access(
+        &self,
+        harness_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
@@ -448,6 +464,48 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
                 );
             }
             receipts
+        }
+    }
+
+    /// View receipts for the documents a signed-in user can view, keyed by the
+    /// id as given. Each document is decided as
+    /// [`Self::generate_entity_access_receipt`] decides it: refused, missing
+    /// and malformed documents are left out, and a failed check fails the
+    /// call. Implementations may share access lookups; the default checks one
+    /// document at a time.
+    fn generate_document_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        document_ids: &'a [String],
+    ) -> impl Future<
+        Output = Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError>,
+    > + Send
+    + 'a {
+        async move {
+            let mut receipts = HashMap::with_capacity(document_ids.len());
+            for document_id in document_ids {
+                match self
+                    .generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        None,
+                        document_id,
+                        EntityType::Document,
+                    )
+                    .await
+                {
+                    Ok(receipt) => {
+                        receipts.insert(document_id.clone(), receipt);
+                    }
+                    Err(
+                        AccessError::Unauthorized
+                        | AccessError::UnauthorizedWithMessage(_)
+                        | AccessError::NotFound(_)
+                        | AccessError::BadRequest(_),
+                    ) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(receipts)
         }
     }
 

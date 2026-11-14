@@ -13,20 +13,21 @@ import {
   ListFilterDropdown,
   type ListFilterGroup,
 } from '@app/components/view-shell';
-import { combine, literal, NIL_UUID } from '@app/features/soup';
+import { combine, literal, NIL_UUID } from '@app/features/soup/filters/facets';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  getTaskAssigneeIds,
-  getTaskPriorityOptionId,
-  getTaskStatusOptionId,
   isTaskEntity,
   type TaskEntityWithProperties,
-} from '@entity';
+} from '@entity/types/entity';
+import {
+  getTaskAssigneeIds,
+  getTaskDueDate,
+  getTaskPriorityOptionId,
+  getTaskStatusOptionId,
+} from '@entity/utils/task-properties';
 import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import Flag from '@icon/system/regular/flag.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useContacts } from '@queries/contacts/contacts';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { cn } from '@ui';
 import type { LexicalEditor, NodeKey } from 'lexical';
@@ -66,6 +67,7 @@ import {
   STATUS_ORDER,
   type TaskInfo,
 } from '../../plugins/checklist-controls/model';
+import { useTaskListAssigneeNames } from './task-list-assignee-names';
 
 /** Pin every non-document soup target so the query returns tasks only. */
 const NON_TASK_TARGETS = {
@@ -84,12 +86,6 @@ export function TaskListControlsRenderer(props: {
   editor: LexicalEditor;
   data: ChecklistControlsData;
 }) {
-  const contacts = useContacts();
-  const nameById = createMemo(
-    () => new Map(contacts().map((user) => [user.id, user.name ?? user.email]))
-  );
-  const resolveName = (id: string) => nameById().get(id) ?? 'Unknown';
-
   const taskIds = createMemo(() => {
     const ids = new Set<string>();
     for (const meta of Object.values(props.data.meta)) {
@@ -131,11 +127,15 @@ export function TaskListControlsRenderer(props: {
         statusOptionId: getTaskStatusOptionId(task) ?? null,
         priorityOptionId: getTaskPriorityOptionId(task) ?? null,
         assigneeIds: getTaskAssigneeIds(task),
-        due: getTaskDueDate(task),
+        due: getTaskDueDate(task) ?? null,
       };
     }
     return map;
   });
+
+  const resolveName = useTaskListAssigneeNames(() =>
+    Object.values(taskInfo()).flatMap((task) => task.assigneeIds)
+  );
 
   const lists = createMemo(() =>
     Object.values(props.data.mounts).filter(
@@ -156,15 +156,6 @@ export function TaskListControlsRenderer(props: {
       )}
     </For>
   );
-}
-
-function getTaskDueDate(task: TaskEntityWithProperties): string | null {
-  const property = task.properties?.find(
-    (p) => p.definition.id === SYSTEM_PROPERTY_IDS.DUE_DATE
-  );
-  const value = property?.value;
-  if (!value || value.type !== 'Date') return null;
-  return typeof value.value === 'string' ? value.value : null;
 }
 
 function TaskListEntryControls(props: {
@@ -238,7 +229,7 @@ function TaskListEntryControls(props: {
 
 type TaskListFilterGroupId = 'status' | 'priority' | 'assignees' | 'due';
 
-function TaskListBar(props: {
+export function TaskListBar(props: {
   plan: () => ChecklistPlan;
   settings: () => NormalizedSettings;
   items: () => EffectiveItem[];
@@ -326,6 +317,7 @@ function TaskListBar(props: {
                   icon: () => (
                     <UserIcon
                       id={option.id}
+                      name={option.name}
                       size="sm"
                       class="size-3.5"
                       suppressClick

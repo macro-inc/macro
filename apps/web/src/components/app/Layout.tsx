@@ -28,6 +28,8 @@ import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
+import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
+import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -72,7 +74,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -84,6 +85,7 @@ import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
+import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
@@ -148,6 +150,7 @@ export function RootFrame(props: ParentProps) {
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();
+  useCloseTabShortcut();
 
   // save last_path to cookie
   createEffect(() => {
@@ -167,7 +170,6 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
-    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -220,7 +222,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Sends first-time desktop users into the onboarding flow at /onboarding, and
+ * new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -229,12 +232,17 @@ function useNewOnboardingRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
   createEffect(() => {
-    if (isMobile() || isNativeMobilePlatform()) return;
     // A pending read would suspend the chrome; wait for the user instead.
     const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
+    // Agents skip onboarding: their setup page shows their SDK token.
+    if (data.isAgent) {
+      navigate('/agent-setup', { replace: true });
+      return;
+    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -249,6 +257,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -261,6 +274,8 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
+  const { status: systemStatus, dismiss: dismissSystemStatus } =
+    useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -324,7 +339,16 @@ export function AppChrome(props: ParentProps) {
           </Show>
         </Show>
       </Suspense>
-      <div class="min-h-0 flex-1 flex">
+      <Show when={systemStatus()}>
+        {(status) => (
+          <StatusBanner {...status()} onDismiss={dismissSystemStatus} />
+        )}
+      </Show>
+      {/* The banner already sits below the status bar on touch devices. */}
+      <div
+        class="min-h-0 flex-1 flex"
+        classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
+      >
         <ItemDndProvider>
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>
@@ -343,6 +367,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>

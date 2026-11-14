@@ -15,14 +15,11 @@ const { failure, permissionToken, span } = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure } }));
-vi.mock('@block-md/observability', () => ({
-  resumeDocumentSpan: () => undefined,
-}));
 vi.mock('@service-storage/client', () => ({
   getDocumentPermissionToken: permissionToken,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { clientSpan: () => span },
+  Telemetry: { span: () => span },
 }));
 
 const state = useAiUsageLimitState();
@@ -119,4 +116,20 @@ test('keeps successful edits and clarification requests distinct from quota fail
 
   expect(failure).toHaveBeenCalledWith('Which paragraph?');
   expect(state.usageLimitOpen()).toBe(false);
+});
+
+test('runs the edit request under its explicitly supplied parent context', async () => {
+  const { NOOP_SPAN } = await vi.importActual<
+    typeof import('@macro-inc/observability')
+  >('@macro-inc/observability');
+  const run = vi.spyOn(NOOP_SPAN, 'run');
+  const parent = NOOP_SPAN;
+  fetch.mockResolvedValue(new Response('{}', { status: 200 }));
+  await requestAiEdit({
+    documentId: 'document',
+    prompt: 'test',
+    parentSpan: parent,
+  });
+  expect(run).toHaveBeenCalledOnce();
+  expect(span.injectTraceHeaders).toHaveBeenCalledOnce();
 });

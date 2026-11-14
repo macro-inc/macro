@@ -5,7 +5,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
-import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type ProjectSource,
   type ProjectsContext,
@@ -132,12 +133,15 @@ export function ProjectWorkspace(props: {
                     class="mb-6 mt-3 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden"
                     aria-label="Project properties"
                   >
-                    <For each={props.source.properties()}>
+                    <Key
+                      each={props.source.properties()}
+                      by="propertyDefinitionId"
+                    >
                       {(property) => (
                         <PropertyValuePill
                           variant="secondary"
                           size="xs"
-                          property={property}
+                          property={property()}
                           canEdit={canEdit()}
                           onSave={(property, value) =>
                             props.commands.saveProperty(
@@ -152,7 +156,7 @@ export function ProjectWorkspace(props: {
                           }}
                         />
                       )}
-                    </For>
+                    </Key>
                   </div>
                   <div aria-label="Project description">
                     {props.description}
@@ -164,6 +168,7 @@ export function ProjectWorkspace(props: {
             <Match when={props.section === 'tasks'}>
               <ProjectTasksList
                 projectId={props.project.id}
+                source={props.source}
                 projectName={props.project.name}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}

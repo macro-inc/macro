@@ -1,6 +1,11 @@
+import { isMobile } from '@core/mobile/isMobile';
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { children, type ParentProps, Show } from 'solid-js';
+import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
+import { TaskPropertyControl } from '../../extractors-property/task-property-control';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -20,7 +25,9 @@ import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
-export function NarrowLayout(props: LayoutProps) {
+export function NarrowLayout(props: ParentProps<LayoutProps>) {
+  const compactTask = () => isMobile() && isTaskEntity(props.entity);
+  const trailingMetadata = children(() => props.children);
   const pullRequest = () => {
     const entity = props.entity;
     return isGithubPrEntity(entity) ? entity : undefined;
@@ -29,11 +36,15 @@ export function NarrowLayout(props: LayoutProps) {
     <Entity.Layout
       class={cn(
         SOUP_ROW_CLASS.narrow,
-        'w-full gap-x-(--soup-row-column-gap) items-center text-sm pr-2 pl-(--soup-row-padding-l) grid'
+        'w-full items-center text-sm pr-2 grid',
+        compactTask()
+          ? 'gap-x-0 pl-0'
+          : 'gap-x-(--soup-row-column-gap) pl-(--soup-row-padding-l)'
       )}
       style={{
-        'grid-template-columns':
-          'var(--soup-row-indicator-width) 1fr max-content',
+        'grid-template-columns': compactTask()
+          ? '0.5rem minmax(0, 1fr) max-content'
+          : 'var(--soup-row-indicator-width) 1fr max-content',
         'grid-template-rows': pullRequest() ? '44px auto' : '44px',
         'grid-template-areas': pullRequest()
           ? '"indicator title timestamp" ". body body"'
@@ -41,31 +52,62 @@ export function NarrowLayout(props: LayoutProps) {
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
-        <RowIndicator
-          checked={props.checked}
-          hideCheckbox={props.hideCheckbox}
-          onChecked={props.onChecked}
-          unread={props.unread}
-        />
+        <Show
+          when={compactTask()}
+          fallback={
+            <RowIndicator
+              checked={props.checked}
+              hideCheckbox={props.hideCheckbox}
+              onChecked={props.onChecked}
+              unread={props.unread}
+            />
+          }
+        >
+          <UnreadIndicator active={props.unread} />
+        </Show>
       </Entity.Slot>
 
       <Entity.Slot
         placement="title"
-        class="ph-no-capture flex items-center gap-2 truncate font-semibold"
+        class={cn(
+          'ph-no-capture flex items-center gap-2 truncate font-semibold',
+          compactTask() && 'gap-1'
+        )}
       >
-        <div class="size-4 shrink-0">
-          <Show
-            when={props.icon}
-            fallback={
-              <Entity.Icon
-                entity={props.entity}
-                streamState={props.streamState}
-              />
-            }
-          >
-            {props.icon}
-          </Show>
-        </div>
+        <Show
+          when={isTaskEntity(props.entity) ? props.entity : undefined}
+          fallback={
+            <div class="size-4 shrink-0">
+              <Show
+                when={props.icon}
+                fallback={
+                  <Entity.Icon
+                    entity={props.entity}
+                    streamState={props.streamState}
+                  />
+                }
+              >
+                {props.icon}
+              </Show>
+            </div>
+          }
+        >
+          {(task) => (
+            <TaskPropertyControl entity={task()} property="priority" />
+          )}
+        </Show>
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => (
+            <div
+              class={cn(
+                '-mr-1 flex shrink-0 items-center',
+                compactTask() ? '-ml-1' : 'touch:-mr-2'
+              )}
+            >
+              <TaskPropertyControl entity={task()} property="status" />
+            </div>
+          )}
+        </Show>
         {props.titleLeading}
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
@@ -74,6 +116,18 @@ export function NarrowLayout(props: LayoutProps) {
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
         </Show>
         {props.titleTrailing}
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => (
+            <EntityRowTags
+              entityId={task().id}
+              entityType={EntityType.TASK}
+              properties={task().properties}
+              maxVisible={0}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto shrink-0"
+            />
+          )}
+        </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
         </Show>
@@ -113,6 +167,7 @@ export function NarrowLayout(props: LayoutProps) {
 
       <Show
         when={
+          trailingMetadata() ||
           props.referenceProperties ||
           props.scheduleStatus ||
           (!props.hasNotifications &&
@@ -125,6 +180,7 @@ export function NarrowLayout(props: LayoutProps) {
         >
           {props.referenceProperties}
           {props.scheduleStatus}
+          {trailingMetadata()}
           <Show when={!props.hasNotifications}>
             <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
               <Show
@@ -132,9 +188,11 @@ export function NarrowLayout(props: LayoutProps) {
                 fallback={
                   <Entity.Properties
                     entity={props.entity}
-                    maxUserStackUsers={0}
+                    maxUserStackUsers={1}
                     showCaret={false}
                     includeProject={props.showProject}
+                    hideStatus
+                    hidePriority
                   />
                 }
               >

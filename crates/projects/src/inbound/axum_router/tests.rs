@@ -37,16 +37,20 @@ use model::{
 };
 use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
-use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
+use models_bulk_upload::{
+    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
+    UploadFolderProgress, UploadFolderStatus,
+};
 use models_permissions::share_permission::{
     SharePermissionV2, access_level::AccessLevel as ShareAccessLevel,
 };
 use rootcause::Report;
 use serde_json::{Value, json};
+use tokio::sync::{Notify, oneshot};
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{ProjectRouterState, projects_router};
+use super::{ProjectRouterState, internal_upload_router, projects_router};
 use crate::domain::{
     models::{ProjectError, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult},
     ports::ProjectService,
@@ -66,6 +70,14 @@ struct FakeProjectService {
     permanently_deleted_projects: Arc<Mutex<Vec<BasicProject>>>,
     upload_internal_flags: Arc<Mutex<Vec<bool>>>,
     create_principals: Arc<Mutex<Vec<CreationPrincipal>>>,
+    purge_gate: Arc<Mutex<Option<PurgeGate>>>,
+}
+
+/// Holds a purge open so a test can drop the request while it runs.
+struct PurgeGate {
+    started: oneshot::Sender<()>,
+    release: Arc<Notify>,
+    finished: oneshot::Sender<()>,
 }
 
 impl FakeProjectService {
@@ -82,6 +94,7 @@ impl FakeProjectService {
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
             create_principals: Arc::new(Mutex::new(Vec::new())),
+            purge_gate: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -92,6 +105,7 @@ impl FakeProjectService {
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
             create_principals: Arc::new(Mutex::new(Vec::new())),
+            purge_gate: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -219,10 +233,26 @@ impl ProjectService for FakeProjectService {
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         project: BasicProject,
     ) -> Result<PurgedProjectTree, ProjectError> {
+        let gate = self
+            .purge_gate
+            .lock()
+            .expect("purge gate lock poisoned")
+            .take();
+        let finished = match gate {
+            Some(gate) => {
+                let _ = gate.started.send(());
+                gate.release.notified().await;
+                Some(gate.finished)
+            }
+            None => None,
+        };
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
             .push("permanent_delete");
+        if let Some(finished) = finished {
+            let _ = finished.send(());
+        }
         self.permanently_deleted_projects
             .lock()
             .expect("permanently deleted project lock poisoned")
@@ -276,6 +306,25 @@ impl ProjectService for FakeProjectService {
         _args: UploadExtractFolderRequest,
     ) -> Result<UploadExtractFolderResponseData, ProjectError> {
         panic!("upload extraction is not used by these tests")
+    }
+
+    async fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> Result<UploadExtractStatusResponseData, ProjectError> {
+        if actor.as_ref() != USER_ID || upload_request_id != "request-1" {
+            return Err(ProjectError::NotFound(upload_request_id.to_string()));
+        }
+        Ok(UploadExtractStatusResponseData {
+            status: UploadFolderStatus::Processing,
+            project_id: Some(PROJECT_ID.to_string()),
+            progress: Some(UploadFolderProgress {
+                files_total: 10_000,
+                files_stored: 4_000,
+                files_failed: 2,
+            }),
+        })
     }
 
     async fn mark_projects_uploaded(
@@ -458,6 +507,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                 .map(|user_id| MacroUserAuthentication {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -854,6 +904,43 @@ async fn edit_rejects_deleted_project() {
     );
 }
 
+/// A scoped session renames a project but never changes who it's shared with.
+#[tokio::test]
+async fn a_scoped_session_edits_a_project_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let mutations = service.mutations.clone();
+    let router = router(service, None);
+    let edit = |body: Value| authenticated_json_request("PATCH", &format!("/{PROJECT_ID}"), body);
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = json!({ "sharePermission": { "teamShareAccessLevel": "view" } });
+    let response = scope_attribution(no_send, router.clone().oneshot(edit(share.clone())))
+        .await
+        .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let response = scope_attribution(
+        no_send,
+        router.clone().oneshot(edit(json!({ "name": "Edited" }))),
+    )
+    .await
+    .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = router
+        .oneshot(edit(share))
+        .await
+        .expect("router should respond");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        *mutations.lock().expect("mutation lock poisoned"),
+        ["edit", "edit"]
+    );
+}
+
 #[tokio::test]
 async fn edit_body_parent_denial_prevents_handler() {
     let response = router(FakeProjectService::with_project(USER_ID, false), None)
@@ -1046,6 +1133,104 @@ async fn internal_upload_selects_internal_destinations_with_exact_lambda_json() 
     );
 }
 
+fn ten_thousand_file_folder() -> Value {
+    let content: Vec<Value> = (0..10_000)
+        .map(|index| {
+            json!({
+                "name": format!("Inspection report 2024-03-18 north wing {index:05}"),
+                "fullName": format!("Inspection report 2024-03-18 north wing {index:05}.pdf"),
+                "fileType": "pdf",
+                "relativePath": format!("Client Archive/Site Inspections/2024/Building {}", index % 40),
+                "sha": "a".repeat(64),
+            })
+        })
+        .collect();
+    let body = json!({
+        "content": content,
+        "rootFolderName": "Client Archive",
+        "uploadRequestId": "lambda-request"
+    });
+    assert!(body.to_string().len() > 2 * 1024 * 1024);
+    body
+}
+
+#[tokio::test]
+async fn internal_upload_accepts_a_ten_thousand_file_folder() {
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let flags = service.upload_internal_flags.clone();
+    let router = internal_upload_router::<
+        FakeProjectService,
+        FakeEntityAccessService,
+        FakeAuthorizationService,
+        (),
+    >(ProjectRouterState {
+        service: Arc::new(service),
+        access_service: Arc::new(FakeEntityAccessService { access_level: None }),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+        non_user_owners: NonUserOwners::Disabled,
+    });
+
+    let response = router
+        .oneshot(internal_identity_json_request(
+            "POST",
+            "/upload",
+            ten_thousand_file_folder(),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(&*flags.lock().expect("upload flag lock poisoned"), &[true]);
+}
+
+#[tokio::test]
+async fn user_upload_keeps_the_default_body_limit() {
+    let service = FakeProjectService::with_project(USER_ID, false);
+    let flags = service.upload_internal_flags.clone();
+    let response = router(service, None)
+        .oneshot(authenticated_json_request(
+            "POST",
+            "/upload",
+            ten_thousand_file_folder(),
+        ))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(flags.lock().expect("upload flag lock poisoned").is_empty());
+}
+
+#[tokio::test]
+async fn upload_extract_status_reports_progress_to_its_owner() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_request("/upload_extract/request-1"))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await,
+        json!({
+            "error": false,
+            "data": {
+                "status": "processing",
+                "projectId": PROJECT_ID,
+                "progress": { "filesTotal": 10_000, "filesStored": 4_000, "filesFailed": 2 }
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn upload_extract_status_of_an_unknown_request_is_not_found() {
+    let response = router(FakeProjectService::with_project(USER_ID, false), None)
+        .oneshot(authenticated_request("/upload_extract/request-2"))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
 #[tokio::test]
 async fn permanent_delete_forwards_loaded_project() {
     let service = FakeProjectService::with_project(USER_ID, true);
@@ -1074,6 +1259,59 @@ async fn permanent_delete_forwards_loaded_project() {
             .expect("permanently deleted project lock poisoned"),
         vec![expected_project]
     );
+}
+
+/// A client that goes away mid-purge (a closed tab, a network change, a
+/// deploy) must not cancel it: the purge still finishes.
+#[tokio::test]
+async fn permanent_delete_finishes_after_the_request_is_dropped() {
+    let service = FakeProjectService::with_project(USER_ID, true);
+    let (started_tx, started_rx) = oneshot::channel();
+    let (finished_tx, finished_rx) = oneshot::channel();
+    let release = Arc::new(Notify::new());
+    *service.purge_gate.lock().expect("purge gate lock poisoned") = Some(PurgeGate {
+        started: started_tx,
+        release: Arc::clone(&release),
+        finished: finished_tx,
+    });
+    let request = tokio::spawn(
+        router(service, Some(AccessLevel::Owner)).oneshot(
+            Request::delete(format!("/{PROJECT_ID}/permanent"))
+                .header("authorization", format!("Bearer {TOKEN}"))
+                .body(Body::empty())
+                .expect("request should be valid"),
+        ),
+    );
+
+    started_rx.await.expect("purge should start");
+    request.abort();
+    assert!(
+        request
+            .await
+            .expect_err("request should be cancelled")
+            .is_cancelled()
+    );
+    release.notify_one();
+
+    assert_eq!(finished_rx.await, Ok(()));
+}
+
+/// Events a folder operation publishes carry the agent attribution of the
+/// request that started it, so the spawned task must keep it.
+#[tokio::test]
+async fn run_on_own_task_keeps_the_agent_attribution() {
+    let agent_correlation_id = Uuid::from_u128(0xa6e7);
+
+    let seen = agent_correlation::context::scope(
+        Some(agent_correlation_id),
+        super::delete_project::run_on_own_task(async {
+            Ok::<_, ProjectError>(agent_correlation::context::current())
+        }),
+    )
+    .await
+    .expect("work should succeed");
+
+    assert_eq!(seen, Some(agent_correlation_id));
 }
 
 #[tokio::test]

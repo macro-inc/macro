@@ -2,17 +2,25 @@ import type {
   AiFilterOutcome,
   ListFilterGroup,
 } from '@app/components/view-shell';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
-import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
-import { idToDisplayName } from '@core/user/util';
+import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
-import { useContacts } from '@queries/contacts/contacts';
-import { Tooltip } from '@ui';
-import { batch, createMemo } from 'solid-js';
+import { useQueryAccount } from '@queries/auth/use-query-account';
+import { batch, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
-import { requestAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
+import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
+import {
+  isTaskDueDateBucket,
+  TASK_DUE_DATE_BUCKETS,
+} from '../core/task-due-date';
+import { useAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
 import type { AiTaskFilterCatalog } from './ai-task-filter';
 import {
@@ -20,7 +28,10 @@ import {
   TASK_STATUS_OPTIONS,
   TASK_VIEWER,
 } from './task-facets';
+import { taskPeopleSource, taskViewerOption } from './task-people-options';
 
+const AI_FILTER_STALE_MESSAGE =
+  'The account or filters changed. Try the request again.';
 const AI_FILTER_UNAVAILABLE_MESSAGE =
   'AI filtering is unavailable right now. Try again in a moment.';
 const AI_FILTER_UNREADABLE_MESSAGE =
@@ -33,65 +44,63 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
-  | 'tags';
+  | 'tags'
+  | 'due_date';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState, savedViews } = useTasksView();
-  const contacts = useContacts();
+  const { state, setFacets, setState, savedViews, savedViewScope } =
+    useTasksView();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
+  const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
+  const assigneePicker = useAssigneePicker(
+    () => (state.facets.assignees ?? []).filter((id) => id !== TASK_VIEWER),
+    () => true
+  );
+  const selectedAssigneesAtViewEntry = createMemo(
+    on(assigneePicker.selectedIdsAtViewEntry, () => [
+      ...(state.facets.assignees ?? []),
+    ])
+  );
 
-  const peopleOptions = createMemo(() => {
-    const me = currentUserId();
-    const people = [...contacts()].sort(
-      (a, b) => Number(b.id === me) - Number(a.id === me)
-    );
-    if (me && !people.some((person) => person.id === me)) {
-      people.unshift({ id: me, email: '', name: idToDisplayName(me) });
-    }
-
-    const options = people.map((person) => ({
-      id: person.id,
-      label:
-        person.id === me
-          ? person.name
-            ? `${person.name} (me)`
-            : 'Me'
-          : person.name || person.id,
-      icon: () => (
-        <UserIcon
-          id={person.id}
-          size="sm"
-          class="size-3.5"
-          suppressClick
-          showTooltip={false}
-        />
-      ),
-    }));
-    return savedViews
-      ? [
-          {
-            id: TASK_VIEWER,
-            label: 'Me',
-            content: () => (
-              <Tooltip label="Matches whoever opens this saved view." as="span">
-                Me
-              </Tooltip>
-            ),
-            icon: () => (
-              <UserIcon
-                id={me ?? ''}
-                size="sm"
-                class="size-3.5"
-                suppressClick
-                showTooltip={false}
-              />
-            ),
-          },
-          ...options,
-        ]
-      : options;
+  const selectedPeople = createMemo(() =>
+    [
+      ...new Set([
+        ...(state.facets.assignees ?? []),
+        ...(state.facets['created-by'] ?? []),
+      ]),
+    ].filter((id) => id !== TASK_VIEWER)
+  );
+  const labels = useContactFilterLabels(selectedPeople);
+  const createPeopleSource = taskPeopleSource(!!savedViews);
+  const peopleOptions = (group: 'assignees' | 'created-by') =>
+    (state.facets[group] ?? []).flatMap((id) => {
+      const option =
+        id === TASK_VIEWER
+          ? taskViewerOption(currentUserId())
+          : labels().get(id);
+      return option ? [option] : [];
+    });
+  const requestPlan = useAiTaskFilterPlan();
+  const account = useQueryAccount();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
   });
+  // Returning to identical filters after an intervening edit is still a new input.
+  const inputScope = createMemo(() => ({
+    facets: JSON.stringify(state.facets),
+    search: state.search,
+    navigation: savedViewScope(),
+    account: account(),
+  }));
+
+  const assigneeOptions = createMemo(() => [
+    ...(savedViews || state.facets.assignees?.includes(TASK_VIEWER)
+      ? [taskViewerOption(currentUserId())]
+      : []),
+    ...assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+  ]);
 
   const withUnavailable = (
     id: TaskFilterGroupId,
@@ -141,16 +150,37 @@ export function useTaskFilters() {
         ),
       },
       {
+        id: 'due_date',
+        label: 'Due date',
+        selectionMode: 'single',
+        defaultOptionId: 'any',
+        options: [
+          { id: 'any', label: 'Any due date' },
+          ...TASK_DUE_DATE_BUCKETS,
+          { id: 'has_due_date', label: 'Has due date' },
+          {
+            id: 'range',
+            label:
+              state.dueDate?.type === 'range'
+                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
+                : 'Custom range…',
+          },
+        ],
+      },
+      {
         id: 'assignees',
         label: 'Assignee',
-        searchPlaceholder: 'Search assignees...',
-        options: withUnavailable('assignees', peopleOptions()),
+        searchPlaceholder: assigneePicker.placeholder(),
+        options: assigneeOptions(),
+        footer: <AssigneePickerStatus picker={assigneePicker} />,
+        onOpenChange: assigneePicker.onOpenChange,
       },
       {
         id: 'created-by',
         label: 'Created by',
         searchPlaceholder: 'Search creators...',
-        options: withUnavailable('created-by', peopleOptions()),
+        options: peopleOptions('created-by'),
+        createSource: createPeopleSource,
       },
       ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
         ? [
@@ -164,13 +194,29 @@ export function useTaskFilters() {
   );
 
   const isSelected = (groupId: TaskFilterGroupId, optionId: string) =>
-    (state.facets[groupId] ?? []).includes(optionId);
+    groupId === 'due_date'
+      ? (state.dueDate?.type ?? 'any') === optionId
+      : (state.facets[groupId] ?? []).includes(optionId);
 
   const setSelected = (
     groupId: TaskFilterGroupId,
     optionId: string,
     selected: boolean
   ) => {
+    if (groupId === 'due_date') {
+      if (optionId === 'range') {
+        const current = state.dueDate;
+        setCustomRange({
+          start: current?.type === 'range' ? (current.start ?? '') : '',
+          end: current?.type === 'range' ? (current.end ?? '') : '',
+        });
+      } else if (!selected || optionId === 'any') {
+        setState('dueDate', undefined);
+      } else if (isTaskDueDateBucket(optionId) || optionId === 'has_due_date') {
+        setState('dueDate', { type: optionId });
+      }
+      return;
+    }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
     setFacets({
       ...state.facets,
@@ -181,23 +227,36 @@ export function useTaskFilters() {
   const activeCount = () =>
     Object.values(state.facets).reduce(
       (count, optionIds) => count + optionIds.length,
-      0
+      state.dueDate ? 1 : 0
     );
 
   const aiCatalog = (): AiTaskFilterCatalog => ({
-    people: peopleOptions().map(({ id, label }) => ({ id, label })),
+    viewer: savedViews ? TASK_VIEWER : (currentUserId() ?? ''),
     tags: tagGroup().options.map(({ id, label }) => ({ id, label })),
   });
 
   /** Replaces the selection with filters resolved from a plain-English request. */
   const applyDescription = async (query: string): Promise<AiFilterOutcome> => {
-    const result = await requestAiTaskFilterPlan(query, aiCatalog());
+    const scope = inputScope();
+    const result = await requestPlan(
+      query,
+      aiCatalog(),
+      () => !disposed && inputScope() === scope
+    );
+    if (disposed || inputScope() !== scope)
+      return { status: 'error', message: AI_FILTER_STALE_MESSAGE };
     if (result.isErr()) {
       return {
         status: 'error',
         message: match(result.error)
           .with({ code: 'UNAVAILABLE' }, () => AI_FILTER_UNAVAILABLE_MESSAGE)
           .with({ code: 'UNREADABLE' }, () => AI_FILTER_UNREADABLE_MESSAGE)
+          .with(
+            { code: 'UNRESOLVED_PEOPLE' },
+            () =>
+              'A person is unknown, ambiguous, or unavailable. Use a full name or email address.'
+          )
+          .with({ code: 'STALE' }, () => AI_FILTER_STALE_MESSAGE)
           .with(
             { code: 'NO_FILTERS' },
             ({ unresolved }) => unresolved ?? AI_FILTER_NOTHING_MATCHED_MESSAGE
@@ -217,8 +276,30 @@ export function useTaskFilters() {
   return {
     activeCount,
     applyDescription,
-    clear: () => setFacets({}),
+    clear: () =>
+      batch(() => {
+        setFacets({});
+        setState('dueDate', undefined);
+      }),
+    customRange,
+    setCustomRange,
+    applyCustomRange: () => {
+      const range = customRange();
+      if (
+        !range ||
+        !(range.start || range.end) ||
+        (range.start && range.end && range.start > range.end)
+      )
+        return;
+      setState('dueDate', {
+        type: 'range',
+        start: range.start || undefined,
+        end: range.end || undefined,
+      });
+      setCustomRange(undefined);
+    },
     groups,
+    selectedAssigneesAtViewEntry,
     isSelected,
     selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,

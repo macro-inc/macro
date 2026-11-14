@@ -315,6 +315,14 @@ function mapChannelType(
   }
 }
 
+function mapEmailAttachment(value: unknown) {
+  return match(value)
+    .with('pdf', () => 'PDF' as const)
+    .with('image', () => 'IMAGE' as const)
+    .with('document', () => 'DOCUMENT' as const)
+    .otherwise(() => unsupported(`email attachment kind ${String(value)}`));
+}
+
 function mapEmailShared(value: unknown): 'EXCLUDE' | 'INCLUDE' | 'ONLY' {
   const shared = mapString(value, 'shared');
   switch (shared) {
@@ -479,6 +487,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { cc: mapEmailValue(value) };
     case 'Bcc':
       return { bcc: mapEmailValue(value) };
+    case 'Subject':
+      return { subject: mapString(value, 'subject') };
     case 'ThreadId':
       return { threadId: mapString(value, 'threadId') };
     case 'Owner':
@@ -497,6 +507,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { shared: mapEmailShared(value) };
     case 'CalendarOnly':
       return { calendarOnly: mapBoolean(value, 'calendarOnly') };
+    case 'Attachment':
+      return { attachment: mapEmailAttachment(value) };
     case 'ca':
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
@@ -714,17 +726,50 @@ function mapGithubPullRequestLiteral(
 function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
   if (!isRecord(literal)) unsupported('expected property literal object');
   const propertyDefinitionId = mapString(literal.pd, 'propertyDefinitionId');
+  const propertyEntityTypes = [
+    'CALENDAR_EVENT',
+    'CHANNEL',
+    'CHAT',
+    'COMPANY',
+    'DATABASE_ROW',
+    'DOCUMENT',
+    'INITIATIVE',
+    'PROJECT',
+    'TASK',
+    'THREAD',
+    'USER',
+  ] as const satisfies readonly NonNullable<
+    GraphqlPropertiesLiteralInput['entityType']
+  >[];
+  const entityType =
+    literal.et === undefined
+      ? undefined
+      : propertyEntityTypes.find((type) => type === literal.et);
+  if (literal.et !== undefined && !entityType)
+    unsupported(`property entity type ${literal.et}`);
+  const property = { propertyDefinitionId, ...(entityType && { entityType }) };
   const value = literal.v;
   if (!isRecord(value)) unsupported('expected property value matcher object');
 
   if (typeof value.so === 'string') {
-    return { propertyDefinitionId, value: { selectOption: value.so } };
+    return { ...property, value: { selectOption: value.so } };
   }
   if (typeof value.er === 'string') {
-    return { propertyDefinitionId, value: { entityRef: value.er } };
+    return { ...property, value: { entityRef: value.er } };
+  }
+  if (isRecord(value.dr)) {
+    const start =
+      value.dr.start == null
+        ? undefined
+        : mapString(value.dr.start, 'dateRange.start');
+    const end =
+      value.dr.end == null
+        ? undefined
+        : mapString(value.dr.end, 'dateRange.end');
+    return { ...property, value: { dateRange: { start, end } } };
   }
 
-  unsupported('expected property value so or er');
+  unsupported('expected property value so, er, or dr');
 }
 
 function mapSortDirection(
@@ -758,6 +803,10 @@ function mapSortMethod(
       return unsupported('sort_method touched_by_me');
     case 'notified_at':
       return unsupported('sort_method notified_at');
+    case 'property':
+      return 'PROPERTY';
+    case 'name':
+      return 'NAME';
     case undefined:
       return undefined;
   }
@@ -901,6 +950,7 @@ export function makeGraphqlSoupInput(args: {
       limit: args.params.limit ?? undefined,
       expand: true,
       sortMethod: mapSortMethod(args.params.sort_method),
+      sortPropertyDefinitionId: args.params.sort_property_definition_id,
       sortDirection,
       emailView,
       filters: makeGraphqlFilters(body),
@@ -919,6 +969,13 @@ function makeGraphqlGroupByInput(groupBy: GroupByField): GraphqlGroupByInput {
       field: 'PROPERTY' as const,
       propertyDefinitionId: field.propertyDefinitionId,
       entityType: field.entityType,
+      ...(field.bucketing && {
+        bucketing: {
+          type: 'DATE_RANGES' as const,
+          ranges: field.bucketing.ranges,
+          missingValueBucketKey: field.bucketing.missingValueBucketKey,
+        },
+      }),
     }))
     .exhaustive(() => ({ field: 'ENTITY_TYPE' as const }));
 }
@@ -940,6 +997,8 @@ export function makeGraphqlGroupedSoupInput(args: {
       groupBy: makeGraphqlGroupByInput(args.groupBy),
       limit: args.params.limit ?? undefined,
       sortMethod: mapSortMethod(args.params.sort_method),
+      sortPropertyDefinitionId: args.params.sort_property_definition_id,
+      sortDirection: mapSortDirection(args.params.sort_direction),
       filters: makeGraphqlFilters(body),
     },
   };

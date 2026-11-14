@@ -15,9 +15,11 @@ use super::super::{stage::Stage, workspace_root};
 #[cfg(test)]
 mod test;
 
-/// The shared runtime image tag. Not per-instance: the image has no
-/// instance-specific content.
-pub const RUNTIME_IMAGE_TAG: &str = "macro-local-runtime:dev";
+/// The recipe-specific runtime reference shared by build and compose generation.
+/// Other worktrees with different recipes cannot replace this tag.
+pub fn runtime_image_tag(target: Target) -> Result<String> {
+    Ok(format!("macro-local-runtime:{}", content_key(target)?))
+}
 
 const DOCKERFILE_REL: &str = "docker/Dockerfile.runtime";
 
@@ -39,9 +41,10 @@ const KEY_LABEL: &str = "com.macro.local-runtime-key";
 pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Result<()> {
     let ws = workspace_root();
     let key = content_key(target)?;
-    if !force && current_key() == Some(key.clone()) {
+    let tag = runtime_image_tag(target)?;
+    if !force && current_key(&tag) == Some(key.clone()) {
         stage.note(&format!(
-            "runtime image {RUNTIME_IMAGE_TAG} is up to date ({})",
+            "runtime image {tag} is up to date ({})",
             &key[..12]
         ));
         return Ok(());
@@ -50,7 +53,7 @@ pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Resul
     cmd.current_dir(&ws)
         .args(["buildx", "build", "--platform", target.docker_platform])
         .args(["-f", DOCKERFILE_REL])
-        .args(["-t", RUNTIME_IMAGE_TAG])
+        .args(["-t", &tag])
         .args(["--label", &format!("{KEY_LABEL}={key}")])
         // Nothing consumes an attestation for a local dev image, and both
         // turn the `--load` into a manifest-list export.
@@ -60,10 +63,7 @@ pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Resul
         cmd.arg("--no-cache");
     }
     cmd.arg(".");
-    stage.run(
-        &format!("Building runtime image {RUNTIME_IMAGE_TAG}"),
-        &mut cmd,
-    )
+    stage.run(&format!("Building runtime image {tag}"), &mut cmd)
 }
 
 /// Hash everything that decides the image's content: the Dockerfile and the
@@ -71,23 +71,27 @@ pub fn ensure_runtime_image(stage: &Stage, target: Target, force: bool) -> Resul
 /// Dockerfile copies nothing from it, so the context is not an input.
 fn content_key(target: Target) -> Result<String> {
     let dockerfile = workspace_root().join(DOCKERFILE_REL);
+    let recipe =
+        std::fs::read(&dockerfile).with_context(|| format!("reading {}", dockerfile.display()))?;
+    Ok(recipe_key(target, &recipe))
+}
+
+fn recipe_key(target: Target, recipe: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(target.docker_platform.as_bytes());
-    hasher.update(
-        std::fs::read(&dockerfile).with_context(|| format!("reading {}", dockerfile.display()))?,
-    );
-    Ok(hex(&hasher.finalize()))
+    hasher.update(recipe);
+    hex(&hasher.finalize())
 }
 
 /// The key stamped on the currently loaded image, if any. Any failure (no
 /// image, no daemon, no label) reads as "not current" and falls through to a
 /// build, which then reports the real error.
-fn current_key() -> Option<String> {
+fn current_key(tag: &str) -> Option<String> {
     let out = Command::new("docker")
         .args([
             "image",
             "inspect",
-            RUNTIME_IMAGE_TAG,
+            tag,
             "--format",
             &format!("{{{{index .Config.Labels \"{KEY_LABEL}\"}}}}"),
         ])

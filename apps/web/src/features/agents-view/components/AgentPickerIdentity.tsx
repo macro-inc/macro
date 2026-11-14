@@ -1,5 +1,7 @@
+import { AgentOfflineBadge } from '@core/component/AgentOfflineBadge';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import Check from '@icon/system/regular/check.svg';
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
 import { AgentIcon } from './AgentGlyph';
@@ -29,11 +31,21 @@ export function AgentPickerIdentity(props: {
         <AgentIcon agent={props.agent} class="size-[18px]" />
       </span>
       <span class="min-w-0 flex-1 text-left">
-        <span
-          class="block truncate text-sm font-medium leading-5"
-          title={props.agent.name}
-        >
-          {props.agent.name}
+        <span class="flex min-w-0 items-center gap-2">
+          <span
+            class={cn('block min-w-0 truncate text-sm font-medium leading-5', {
+              'text-ink-muted': props.agent.offline || props.agent.poweredOff,
+            })}
+            title={props.agent.name}
+          >
+            {props.agent.name}
+          </span>
+          <Show when={props.agent.offline}>
+            <AgentOfflineBadge />
+          </Show>
+          <Show when={props.agent.poweredOff}>
+            <AgentOfflineBadge label="Powered off" />
+          </Show>
         </span>
         <span
           class="block truncate text-xs leading-4 text-ink-muted"

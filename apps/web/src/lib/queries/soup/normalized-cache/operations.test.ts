@@ -3,11 +3,12 @@
  */
 
 import { withDocumentTabItemScope } from '@app/features/next-soup/soup-view/document-tab-scope';
+import type { UnifiedNotification } from '@notifications/types';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import type { InfiniteData } from '@tanstack/solid-query';
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
@@ -381,6 +382,180 @@ describe('refetchSoupEntity', () => {
         'd-1',
       ]);
     });
+
+    describe('for a new notification', () => {
+      const notifiedKey = [
+        ...soupKeys.astItems._def,
+        { params: { sort_method: 'notified_at' } },
+      ];
+      const notifiedPages = () =>
+        testQueryClient.getQueryData<
+          InfiniteData<SoupAstItemsFlatPage, unknown>
+        >(notifiedKey);
+      const notification = {
+        id: 'notification-1',
+        entity_id: 'doc-new',
+        entity_type: 'document',
+        created_at: '2026-01-02T00:00:00.000Z',
+        state: 'unseen',
+        notification_metadata: { tag: 'commented_on_document', content: {} },
+      } as unknown as UnifiedNotification;
+
+      beforeEach(() => {
+        testQueryClient.setQueryData(notifiedKey, {
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+      });
+
+      const mountNotifiedList = () =>
+        new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn: () => notifiedPages() ?? null,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+      it('adds a row a mounted notified_at list does not have yet', async () => {
+        const unmount = mountNotifiedList();
+
+        updateSoupForNotification(notification);
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
+      it('reads a list again when its first read predates the notification', async () => {
+        const pagesOf = (...ids: string[]) => ({
+          pages: [
+            {
+              kind: 'flat',
+              items: ids.map((id) => mockDocumentItem(id)),
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue(pagesOf('doc-new', 'd-1'));
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmount = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead(pagesOf('d-1'));
+
+        await vi.waitFor(() => {
+          expect(notifiedPages()?.pages[0].items.map(getSoupItemId)).toEqual([
+            'doc-new',
+            'd-1',
+          ]);
+        });
+        unmount();
+      });
+
+      it('reads each list again as soon as its own first read settles', async () => {
+        const never = () => new Promise(() => {});
+        const slowKey = [
+          ...soupKeys.astItems._def,
+          { params: { sort_method: 'notified_at' }, body: { slow: true } },
+        ];
+        let settleFirstRead = (_data: unknown) => {};
+        const queryFn = vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                settleFirstRead = resolve;
+              })
+          )
+          .mockResolvedValue({
+            pages: [
+              {
+                kind: 'flat',
+                items: [mockDocumentItem('doc-new')],
+                nextCursor: null,
+              },
+            ],
+            pageParams: [null],
+          });
+        testQueryClient.removeQueries({ queryKey: notifiedKey });
+        const unmountFast = new QueryObserver(testQueryClient, {
+          queryKey: notifiedKey,
+          queryFn,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+        const unmountSlow = new QueryObserver(testQueryClient, {
+          queryKey: slowKey,
+          queryFn: never,
+          staleTime: Number.POSITIVE_INFINITY,
+        }).subscribe(() => {});
+
+        updateSoupForNotification(notification);
+        await vi.waitFor(() => {
+          expect(getSoupItemsMock).toHaveBeenCalledOnce();
+        });
+        await getSoupItemsMock.mock.results[0]?.value;
+        await new Promise((resolve) => setTimeout(resolve));
+        settleFirstRead({
+          pages: [
+            {
+              kind: 'flat',
+              items: [mockDocumentItem('d-1')],
+              nextCursor: null,
+            },
+          ],
+          pageParams: [null],
+        });
+
+        await vi.waitFor(() => {
+          expect(queryFn).toHaveBeenCalledTimes(2);
+        });
+        unmountFast();
+        unmountSlow();
+      });
+
+      it('fetches nothing when no notified_at list is mounted', async () => {
+        await refetchSoupEntity('doc-new', 'document', { notified: true });
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+      });
+
+      it('fetches nothing for a change that is not a notification', async () => {
+        const unmount = mountNotifiedList();
+
+        await refetchSoupEntity('doc-new', 'document');
+
+        expect(getSoupItemsMock).not.toHaveBeenCalled();
+        unmount();
+      });
+    });
   });
 });
 
@@ -431,6 +606,24 @@ describe('removeSoupEntities', () => {
     expect(getSoupItemId(cached.pages[0].items[0])).toBe('c-1');
     expect(cached.pages[1].items).toHaveLength(1);
     expect(getSoupItemId(cached.pages[1].items[0])).toBe('d-2');
+  });
+
+  it('keeps another entity type with the same ID when removal is scoped', () => {
+    seedSoupQuery(
+      mockSoupCache([[mockDocumentItem('shared'), mockChannelItem('shared')]])
+    );
+    const transaction = removeSoupEntities(
+      new Set(['shared']),
+      (item) => item.tag === 'document'
+    );
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'channel',
+    ]);
+    transaction.rollback();
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'document',
+      'channel',
+    ]);
   });
 
   it('rollback restores removed items', () => {
@@ -582,6 +775,28 @@ describe('removeSearchEntities', () => {
     expect(cached.pages[0].results).toHaveLength(1);
     expect(cached.pages[0].results[0].type).toBe('chat');
     expect(cached.pages[1].results).toHaveLength(0);
+  });
+
+  it('keeps search results of other types with the same ID', () => {
+    seedSearchQuery(
+      mockSearchCache([
+        [
+          mockSearchResult('document', 'shared'),
+          mockSearchResult('chat', 'shared'),
+        ],
+      ])
+    );
+    const transaction = removeSearchEntities(
+      new Set(['shared']),
+      (item) => item.type === 'document'
+    );
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['chat']
+    );
+    transaction.rollback();
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['document', 'chat']
+    );
   });
 
   it('rollback restores removed search results', () => {
@@ -755,6 +970,7 @@ import {
   soupItemMatchesProjectMembership,
   soupItemMatchesQuery,
 } from '@app/features/next-soup/filters/query-filters';
+import { updateSoupForNotification } from '../../notification/notification-soup';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import { NOT_SET_GROUP_KEY } from '../grouped/types';
 import type { SoupAstItemsFlatPage, SoupAstItemsGroupedPage } from '../items';
@@ -937,6 +1153,23 @@ describe('removeSoupEntities — grouped cache', () => {
     expect(done.totalCount).toBe(3);
   });
 
+  it('keeps grouped membership when the matching ID has another type', () => {
+    const key = seedGroupedAstQuery(
+      mockGroupedParentCache(
+        [mockTaskItem('shared', 'in_progress')],
+        [buildGroup('in_progress', ['shared'], 1, 0)]
+      )
+    );
+    removeSoupEntities(new Set(['shared']), (item) => item.tag === 'chat');
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(cached.pages[0].groups[0].itemIds).toEqual(['shared']);
+    expect(cached.pages[0].groups[0].totalCount).toBe(1);
+    expect(cached.pages[0].items.shared).toBeDefined();
+  });
+
   it('rollback restores grouped cache', () => {
     const items = [mockTaskItem('a-1', 'in_progress')];
     const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
@@ -956,6 +1189,86 @@ describe('removeSoupEntities — grouped cache', () => {
 });
 
 describe('optimisticUpdateSoupEntity — cross-group move', () => {
+  it.each([
+    ['2026-11-01T00:00:00Z', 'later'],
+    [null, 'missing'],
+  ])(
+    'moves a loaded date property to %s before refetch',
+    (value, destination) => {
+      const initial = mockTaskItem('date-item', 'unused');
+      if (initial.tag !== 'document')
+        throw new Error('Expected document fixture');
+      const property = initial.data.properties?.[0];
+      if (!property) throw new Error('Expected property fixture');
+      const item: SoupApiItem = {
+        ...initial,
+        data: {
+          ...initial.data,
+          properties: [
+            {
+              ...property,
+              value: { type: 'Date', value: '2026-10-31T23:59:59Z' },
+            },
+          ],
+        },
+      };
+      const groupBy: GroupByField = {
+        type: 'property',
+        propertyDefinitionId: STATUS_DEF,
+        bucketing: {
+          type: 'date_ranges',
+          ranges: [
+            { key: 'soon', start: null, end: '2026-11-01T00:00:00Z' },
+            { key: 'later', start: '2026-11-01T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'missing',
+        },
+      };
+      const key = [...soupKeys.astItems._def, {}, {}, groupBy];
+      const data = mockGroupedParentCache(
+        [item],
+        [
+          buildGroup('soon', ['date-item'], 8),
+          buildGroup('later', [], 5),
+          buildGroup('missing', [], 2),
+        ]
+      );
+      testQueryClient.setQueryDefaults(key, { meta: { groupBy } });
+      testQueryClient.setQueryData(key, data);
+      const updated: SoupApiItem = {
+        ...item,
+        data: {
+          ...item.data,
+          properties: [
+            {
+              ...property,
+              value: value === null ? null : { type: 'Date', value },
+            },
+          ],
+        },
+      };
+      mockNormalizer.getObjectById.mockReturnValue(updated);
+      testQueryClient.setQueryData(key, {
+        ...data,
+        pages: [{ ...data.pages[0], items: { 'date-item': updated } }],
+      });
+      optimisticUpdateSoupEntity(updated);
+      const page =
+        testQueryClient.getQueryData<
+          InfiniteData<SoupAstItemsGroupedPage, unknown>
+        >(key)!.pages[0];
+      expect(page.groups.find((group) => group.key === 'soon')).toMatchObject({
+        itemIds: [],
+        totalCount: 7,
+      });
+      expect(
+        page.groups.find((group) => group.key === destination)
+      ).toMatchObject({
+        itemIds: ['date-item'],
+        totalCount: destination === 'later' ? 6 : 3,
+      });
+    }
+  );
   it('moves item id between groups via itemIds mutations only', () => {
     const items = [
       mockTaskItem('a-1', 'in_progress'),
@@ -1784,5 +2097,84 @@ describe('insert gate (meta.insertFilter) — grouped cache', () => {
     expect(page.groups.find((g) => g.key === 'in_progress')!.itemIds).toEqual([
       'a-1',
     ]);
+  });
+});
+
+describe('raw grouped entity IDs', () => {
+  it('updates and removes memberships using entity IDs without changing pool keys', () => {
+    const item = mockTaskItem('a-1', 'in_progress');
+    const key = seedGroupedAstQuery({
+      pages: [
+        {
+          kind: 'grouped',
+          items: { 'a-1': item },
+          groups: [
+            buildGroup('in_progress', ['a-1'], 4),
+            buildGroup('done', [], 2),
+          ],
+          nextCursor: null,
+        },
+      ],
+      pageParams: [null],
+    });
+    const updated = mockTaskItem('a-1', 'done');
+    mockNormalizer.getObjectById.mockReturnValue(updated);
+    optimisticUpdateSoupEntity(updated);
+    const moved =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0];
+    expect(Object.keys(moved.items)).toEqual(['a-1']);
+    expect(moved.items['a-1']).toEqual(updated);
+    expect(
+      moved.groups.map((group) => [group.key, group.itemIds, group.totalCount])
+    ).toEqual([
+      ['in_progress', [], 3],
+      ['done', ['a-1'], 3],
+    ]);
+    const transaction = removeSoupEntities(new Set(['a-1']));
+    const removed =
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0];
+    expect(removed.items).toEqual({});
+    expect(removed.groups[1].itemIds).toEqual([]);
+    expect(removed.groups[1].totalCount).toBe(2);
+    transaction.rollback();
+    expect(
+      testQueryClient.getQueryData<InfiniteData<SoupAstItemsGroupedPage>>(key)!
+        .pages[0]
+    ).toEqual(moved);
+  });
+
+  it('does not duplicate an entity from a later expanded-group page', () => {
+    const key = [...soupKeys.groupedGroup._def, 'raw-continuation'];
+    const item = mockTaskItem('a-1', 'in_progress');
+    type Page = { items: Record<string, SoupApiItem>; group: GroupMeta };
+    testQueryClient.setQueryDefaults(key, {
+      meta: { groupBy: STATUS_GROUP_BY, groupKey: 'in_progress' },
+    });
+    testQueryClient.setQueryData<InfiniteData<Page>>(key, {
+      pages: [
+        {
+          items: { 'a-2': mockTaskItem('a-2', 'in_progress') },
+          group: buildGroup('in_progress', ['a-2'], 5),
+        },
+        {
+          items: { 'a-1': item },
+          group: buildGroup('in_progress', ['a-1'], 5),
+        },
+      ],
+      pageParams: [null, 'cursor'],
+    });
+    mockNormalizer.getObjectById.mockReturnValue(item);
+    optimisticUpdateSoupEntity(item);
+    insertSoupEntity(item);
+    const pages = testQueryClient.getQueryData<InfiniteData<Page>>(key)!.pages;
+    expect(pages.map((page) => page.group.itemIds)).toEqual([['a-2'], ['a-1']]);
+    removeSoupEntities(new Set(['a-1']));
+    const removed =
+      testQueryClient.getQueryData<InfiniteData<Page>>(key)!.pages;
+    expect(removed[1].items).toEqual({});
+    expect(removed[1].group.itemIds).toEqual([]);
+    expect(removed[1].group.totalCount).toBe(4);
   });
 });

@@ -52,6 +52,35 @@ fn workspace_candidate(event_name: &str, workspace_id: &str) -> StreamCandidateE
     candidate
 }
 
+#[tokio::test]
+async fn private_call_event_streams_only_to_the_recipient() {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+    let stream = service
+        .open_stream(subscriber(), WebhookScope::User, filter(&["call.invited"]))
+        .await
+        .unwrap();
+    sender
+        .send(StreamCandidateEvent {
+            event: normalized("call.invited", DOCUMENT_ID),
+            audience: StreamAudience::User {
+                user_id: "macro|other@example.com".to_string(),
+            },
+        })
+        .unwrap();
+    sender
+        .send(StreamCandidateEvent {
+            event: normalized("call.invited", DOCUMENT_ID),
+            audience: StreamAudience::User {
+                user_id: SUBSCRIBER_ID.to_string(),
+            },
+        })
+        .unwrap();
+
+    let delivered: Vec<_> = stream.take(1).collect().await;
+    assert_eq!(delivered.len(), 1);
+    assert_eq!(delivered[0].event_name, "call.invited");
+}
+
 fn filter(events: &[&str]) -> WebhookFilters {
     vec![WebhookFilter {
         events: events.iter().map(|event| event.to_string()).collect(),
@@ -246,7 +275,45 @@ impl WebhookWorkspaceResolver for FakeWorkspaceResolver {
     }
 }
 
-type TestService = WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver>;
+/// Contact pairs the fake graph knows, as `(user, other)`; counts lookups.
+#[derive(Clone, Default)]
+struct FakeContactChecker {
+    pairs: Arc<Mutex<Vec<(String, String)>>>,
+    calls: Arc<Mutex<usize>>,
+}
+
+impl FakeContactChecker {
+    fn with_pair(user: &str, other: &str) -> Self {
+        let checker = Self::default();
+        checker
+            .pairs
+            .lock()
+            .unwrap()
+            .push((user.to_string(), other.to_string()));
+        checker
+    }
+}
+
+impl WebhookContactChecker for FakeContactChecker {
+    type Err = anyhow::Error;
+
+    async fn is_contact(
+        &self,
+        user: MacroUserIdStr<'static>,
+        other: MacroUserIdStr<'static>,
+    ) -> Result<bool, Self::Err> {
+        *self.calls.lock().unwrap() += 1;
+        Ok(self
+            .pairs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(a, b)| a == user.as_ref() && b == other.as_ref()))
+    }
+}
+
+type TestService =
+    WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver, FakeContactChecker>;
 
 fn service(access: FakeAccessService) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
     service_with_team(access, Some(TEAM_WORKSPACE_ID.to_string()))
@@ -261,6 +328,7 @@ fn service_with_team(
         sender.clone(),
         Arc::new(access),
         FakeWorkspaceResolver::with_team(team_workspace_id),
+        FakeContactChecker::default(),
     );
     (service, sender)
 }
@@ -398,6 +466,7 @@ async fn lagged_stream_skips_missed_events_and_continues() {
         sender.clone(),
         Arc::new(FakeAccessService::allowing(&[DOCUMENT_ID])),
         FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
+        FakeContactChecker::default(),
     );
     let mut stream = service
         .open_stream(
@@ -487,6 +556,7 @@ async fn team_membership_revocation_ends_the_stream() {
         sender.clone(),
         Arc::new(FakeAccessService::allowing(&[])),
         resolver.clone(),
+        FakeContactChecker::default(),
     );
     let mut stream = service
         .open_stream(
@@ -533,4 +603,302 @@ async fn agent_session_events_fall_back_to_access_level() {
     let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
     assert_eq!(delivered[0].entity_id, SESSION_ID);
     assert_eq!(*access_level_calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn wildcard_stream_delivers_future_event_types_only_with_current_access() {
+    let (service, sender) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let stream = service
+        .open_stream(subscriber(), WebhookScope::Team, filter(&["*"]))
+        .await
+        .expect("wildcard stream opens");
+    sender
+        .send(document_candidate("future.event", OTHER_DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(workspace_candidate("future.event", FOREIGN_WORKSPACE_ID))
+        .expect("subscriber exists");
+    sender
+        .send(document_candidate("future.event", DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(workspace_candidate("another.event", TEAM_WORKSPACE_ID))
+        .expect("subscriber exists");
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(2).collect().await;
+    assert_eq!(delivered[0].entity_id, DOCUMENT_ID);
+    assert_eq!(delivered[0].event_name, "future.event");
+    assert_eq!(delivered[1].event_name, "another.event");
+}
+
+#[tokio::test]
+async fn wildcard_stream_preserves_entity_id_filters() {
+    let (service, sender) = service(FakeAccessService::allowing(&[
+        DOCUMENT_ID,
+        OTHER_DOCUMENT_ID,
+    ]));
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            vec![WebhookFilter {
+                events: vec!["*".to_string()],
+                ids: Some(vec![DOCUMENT_ID.to_string()]),
+            }],
+        )
+        .await
+        .expect("wildcard stream opens");
+    sender
+        .send(document_candidate("document.updated", OTHER_DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(document_candidate("future.event", DOCUMENT_ID))
+        .expect("subscriber exists");
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered[0].entity_id, DOCUMENT_ID);
+}
+
+const CHANGED_USER_ID: &str = "macro|changed@example.com";
+
+fn picture_candidate(team_workspace_ids: &[&str]) -> StreamCandidateEvent {
+    let mut audiences = vec![StreamAudience::ContactsOf {
+        user_id: CHANGED_USER_ID.to_string(),
+    }];
+    audiences.extend(
+        team_workspace_ids
+            .iter()
+            .map(|id| StreamAudience::Workspace {
+                workspace_id: (*id).to_string(),
+            }),
+    );
+    let mut candidate = document_candidate("user.picture_changed", CHANGED_USER_ID);
+    candidate.audience = StreamAudience::Any(audiences);
+    candidate
+}
+
+/// Whether one picture event reaches a stream with this scope.
+async fn picture_reaches(
+    scope: WebhookScope,
+    subscriber: MacroUserIdStr<'static>,
+    contacts: FakeContactChecker,
+    candidate: StreamCandidateEvent,
+) -> bool {
+    let (sender, _) = broadcast::channel(16);
+    let service = WebhookEventStreamServiceImpl::new(
+        sender.clone(),
+        Arc::new(FakeAccessService::allowing(&[])),
+        FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
+        contacts,
+    );
+    let mut stream = service
+        .open_stream(subscriber, scope, filter(&["user.picture_changed"]))
+        .await
+        .expect("stream opens");
+    sender.send(candidate).unwrap();
+    // Sentinel the stream always delivers, so a skipped event ends the wait.
+    let sentinel_workspace = match scope {
+        WebhookScope::User => SUBSCRIBER_ID,
+        WebhookScope::Team => TEAM_WORKSPACE_ID,
+    };
+    sender
+        .send(workspace_candidate(
+            "user.picture_changed",
+            sentinel_workspace,
+        ))
+        .unwrap();
+    let first = stream.next().await.expect("sentinel arrives");
+    first.entity_id == CHANGED_USER_ID
+}
+
+#[tokio::test]
+async fn picture_event_reaches_the_changed_user() {
+    let changed = MacroUserIdStr::try_from(CHANGED_USER_ID.to_string()).unwrap();
+    let contacts = FakeContactChecker::default();
+    assert!(
+        picture_reaches(
+            WebhookScope::User,
+            changed,
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn picture_event_reaches_a_contact_with_one_lookup() {
+    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    assert!(
+        picture_reaches(
+            WebhookScope::User,
+            subscriber(),
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn picture_event_skips_a_non_contact() {
+    let contacts = FakeContactChecker::default();
+    assert!(
+        !picture_reaches(
+            WebhookScope::User,
+            subscriber(),
+            contacts,
+            picture_candidate(&[FOREIGN_WORKSPACE_ID])
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn picture_event_reaches_team_streams_of_the_users_teams_only() {
+    assert!(
+        picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            FakeContactChecker::default(),
+            picture_candidate(&[FOREIGN_WORKSPACE_ID, TEAM_WORKSPACE_ID])
+        )
+        .await
+    );
+    assert!(
+        !picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            FakeContactChecker::default(),
+            picture_candidate(&[FOREIGN_WORKSPACE_ID])
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn team_stream_does_not_get_contact_audience() {
+    // A contact's team-scoped stream is not the contact's own user stream.
+    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    assert!(
+        !picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 0);
+}
+
+const TEAMMATE_ID: &str = "macro|teammate@example.com";
+
+/// A composer request to a bot's own runtime, asked by `requester`.
+fn requested_session_candidate(requester: &str) -> StreamCandidateEvent {
+    requested_session_candidate_for(requester, None)
+}
+
+/// A composer request asked by `requester` to a runtime that authenticates
+/// as `runtime_user`.
+fn requested_session_candidate_for(
+    requester: &str,
+    runtime_user: Option<&str>,
+) -> StreamCandidateEvent {
+    use agent_trigger::domain::broker_events::{
+        AgentSessionRequestedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+    let event = macro_event_broker::Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
+            repo_url: None,
+            bot_id: bot_id::BotId::new_from_uuid(Uuid::from_u128(0xB07)),
+            session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
+                Uuid::from_u128(0x5E55),
+            ),
+            owner: requester.to_owned(),
+            context: None,
+            runtime_user: runtime_user.map(str::to_owned),
+        }),
+    ));
+    crate::domain::ingestion::stream::agent_trigger_stream_candidate(&event)
+        .expect("requested sessions stream")
+}
+
+/// The first event a stream delivers when a requested session for
+/// `requester` is followed by a team event every team stream receives.
+async fn first_after_requested(
+    subscriber_id: &str,
+    scope: WebhookScope,
+    requester: &str,
+) -> NormalizedWebhookEvent {
+    first_after(subscriber_id, scope, requested_session_candidate(requester)).await
+}
+
+async fn first_after(
+    subscriber_id: &str,
+    scope: WebhookScope,
+    requested: StreamCandidateEvent,
+) -> NormalizedWebhookEvent {
+    let (service, sender) = service(FakeAccessService::allowing(&[]));
+    let mut stream = service
+        .open_stream(
+            MacroUserIdStr::try_from(subscriber_id.to_owned()).expect("valid user id"),
+            scope,
+            filter(&[requested.event.event_name.as_str(), "webhook.created"]),
+        )
+        .await
+        .expect("stream opens");
+    sender.send(requested).unwrap();
+    sender
+        .send(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID))
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
+        .await
+        .expect("an event is delivered in time")
+        .expect("the stream stays open")
+}
+
+/// A harness shared with a team streams team-scoped, so a requester's own
+/// composer request must still reach it there.
+#[tokio::test]
+async fn a_requested_session_reaches_the_requesters_team_stream() {
+    let first = first_after_requested(SUBSCRIBER_ID, WebhookScope::Team, SUBSCRIBER_ID).await;
+    assert_ne!(
+        first.event_name, "webhook.created",
+        "the request was dropped"
+    );
+}
+
+#[tokio::test]
+async fn a_requested_session_does_not_reach_a_teammates_team_stream() {
+    let first = first_after_requested(TEAMMATE_ID, WebhookScope::Team, SUBSCRIBER_ID).await;
+    assert_eq!(first.event_name, "webhook.created");
+}
+
+#[tokio::test]
+async fn a_requested_session_reaches_the_requesters_user_stream() {
+    let first = first_after_requested(SUBSCRIBER_ID, WebhookScope::User, SUBSCRIBER_ID).await;
+    assert_ne!(first.event_name, "webhook.created");
+}
+
+const BUYER_ID: &str = "macro|buyer@example.com";
+
+/// A team computer's runtime streams as its buyer; a teammate's request to it
+/// still reaches that stream.
+#[tokio::test]
+async fn a_teammates_request_reaches_the_runtime_owners_team_stream() {
+    let requested = requested_session_candidate_for(TEAMMATE_ID, Some(BUYER_ID));
+    let first = first_after(BUYER_ID, WebhookScope::Team, requested).await;
+    assert_ne!(
+        first.event_name, "webhook.created",
+        "the request was dropped"
+    );
+}
+
+#[tokio::test]
+async fn a_teammates_request_does_not_reach_a_third_members_team_stream() {
+    let requested = requested_session_candidate_for(TEAMMATE_ID, Some(BUYER_ID));
+    let first = first_after(SUBSCRIBER_ID, WebhookScope::Team, requested).await;
+    assert_eq!(first.event_name, "webhook.created");
 }

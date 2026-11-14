@@ -8,7 +8,10 @@ import {
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import {
+  enableEmailSignatures,
+  enableMacroComputers,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -24,6 +27,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import { useSearchParams } from '@solidjs/router';
 import {
   createMemo,
   createRenderEffect,
@@ -34,6 +39,11 @@ import {
 } from 'solid-js';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { SettingsSidebar } from './components/settings-sidebar';
+import {
+  COMPUTER_SETUP_PARAM,
+  parseComputerSetupParam,
+  requestComputerSetup,
+} from './computers/primitives/setup-request';
 import {
   type SettingsSearchResult,
   searchSettings,
@@ -69,9 +79,16 @@ export function SettingsPanelComponentWrapper() {
 /** Old settings URLs still open their section, over the restored app surface. */
 function MobileSettingsDeepLink() {
   const params = useParams<{ tab?: string }>();
+  const [searchParams] = useSearchParams();
   const { openSettings, restoreMobileDeepLink } = useSettingsState();
 
   onMount(() => {
+    // Restoring the app surface drops the URL, so a computer setup link is
+    // handed to Settings → Machines first.
+    const computerId = parseComputerSetupParam(
+      searchParams[COMPUTER_SETUP_PARAM]
+    );
+    if (computerId) requestComputerSetup(computerId);
     openSettings(settingsSlugToTab(params.tab ?? '') ?? 'Account');
     restoreMobileDeepLink();
   });
@@ -92,6 +109,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const outlook = useOutlookAvailable();
+  const macroComputers = useFeatureFlag(enableMacroComputers);
 
   const activeNavigationTab = activeTabId;
 
@@ -101,6 +120,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const searchResults = createMemo(() =>
     searchSettings(searchGroups(), searchQuery(), {
       emailSignatures: signatures().enabled,
+      outlook: outlook(),
+      macroComputers: macroComputers().enabled,
     })
   );
 
@@ -262,7 +283,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
                   onSelect={selectRoutedTab}
-                  footer={<TeamSidebarAction />}
+                  action={<TeamSidebarAction />}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>

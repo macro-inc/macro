@@ -4,8 +4,32 @@
 // the entry point runs those and returns before the app starts.
 #[cfg_attr(target_os = "macos", tauri_runtime_cef::cef_entry_point)]
 fn main() {
+    // Chromium keeps its cookie key in a "Chromium Safe Storage" keychain item
+    // whose ACL macOS checks against the code signature, so the system store
+    // asks for keychain access on launch. Sign-in lives in the native HTTP
+    // cookie jar, not Chromium's, so the mock keychain protects nothing less.
     #[cfg(target_os = "macos")]
-    app_lib::run_with(tauri::Builder::default().runtime(tauri_runtime_cef::Cef::default()));
+    app_lib::run_with(
+        tauri::Builder::default().runtime(
+            tauri_runtime_cef::Cef::default()
+                .secret_storage(tauri_runtime_cef::SecretStorage::Mock),
+        ),
+        configure_window,
+    );
     #[cfg(not(target_os = "macos"))]
     compile_error!("desktop-cef is the macOS build; other platforms build ../src-tauri");
+}
+
+/// Alloy style has no screen picker, so screen sharing is granted only after
+/// the user picks a source in the app's own picker.
+#[cfg(target_os = "macos")]
+fn configure_window<'a>(
+    window: tauri::WebviewWindowBuilder<
+        'a,
+        app_lib::AppRuntime,
+        tauri::AppHandle<app_lib::AppRuntime>,
+    >,
+) -> tauri::WebviewWindowBuilder<'a, app_lib::AppRuntime, tauri::AppHandle<app_lib::AppRuntime>> {
+    use tauri_runtime_cef::WebviewWindowBuilderCefExt;
+    window.on_desktop_capture_request(app_lib::screen_capture::take_screen_capture_grant)
 }

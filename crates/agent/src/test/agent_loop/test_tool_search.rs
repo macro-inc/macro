@@ -8,6 +8,9 @@
 use super::util;
 use crate::AgentError;
 use crate::stream::ToolResponse;
+use ai_toolset::tool_search::{
+    LOAD_TOOLS, LoadToolsResponse, SEARCH_TOOLS, SearchToolsResponse, ToolMatch,
+};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
     ToolResult, ToolSet as AiToolSet, ToolSetError,
@@ -23,11 +26,13 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 /// Stand-in for `ai_tools::SearchTools`: returns all tools and stages them so
-/// they are callable on the next model turn. (The real tool auto-loads only
-/// the top-ranked matches; with this test catalog everything fits the cap.)
+/// they are callable on the next model turn, and names every advertised tool
+/// as `name: description`, so tests can see the description it was handed.
+/// (The real tool ranks both against the query; with this test catalog
+/// everything fits the cap.)
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
-    title = "search_tools",
+    title = "SearchTools",
     description = "Find and stage searchable tools."
 )]
 struct SearchToolsTest {}
@@ -38,7 +43,7 @@ impl ToolAnnotated for SearchToolsTest {
 
 #[async_trait]
 impl AsyncTool<()> for SearchToolsTest {
-    type Output = serde_json::Value;
+    type Output = SearchToolsResponse;
 
     async fn call(
         &self,
@@ -47,18 +52,26 @@ impl AsyncTool<()> for SearchToolsTest {
     ) -> ToolResult<Self::Output> {
         let matched: Vec<SearchableTool> =
             request_context.searchable_tools.iter().cloned().collect();
-        let results: Vec<String> = matched.iter().map(|t| t.name.clone()).collect();
+        let results = matched.iter().map(ToolMatch::of).collect();
         if let Some(loader) = request_context.tool_loader.as_ref() {
             loader.load(matched);
         }
-        Ok(serde_json::json!({ "results": results }))
+        Ok(SearchToolsResponse {
+            results,
+            additional_matches: Vec::new(),
+            already_available: request_context
+                .advertised_tools
+                .iter()
+                .map(|tool| format!("{}: {}", tool.name, tool.description))
+                .collect(),
+        })
     }
 }
 
 /// Stand-in for `ai_tools::LoadTools`: looks names up in the request context's
 /// searchable catalog and hands them to the loader.
 #[derive(Deserialize, JsonSchema)]
-#[schemars(title = "load_tools", description = "Load searchable tools by name.")]
+#[schemars(title = "LoadTools", description = "Load searchable tools by name.")]
 struct LoadToolsTest {
     names: Vec<String>,
 }
@@ -69,7 +82,7 @@ impl ToolAnnotated for LoadToolsTest {
 
 #[async_trait]
 impl AsyncTool<()> for LoadToolsTest {
-    type Output = serde_json::Value;
+    type Output = LoadToolsResponse;
 
     async fn call(
         &self,
@@ -82,19 +95,22 @@ impl AsyncTool<()> for LoadToolsTest {
             .filter(|t| self.names.contains(&t.name))
             .cloned()
             .collect();
-        let loaded: Vec<String> = matched.iter().map(|t| t.name.clone()).collect();
+        let loaded = matched.iter().map(ToolMatch::of).collect();
         if let Some(loader) = request_context.tool_loader.as_ref() {
             loader.load(matched);
         }
-        Ok(serde_json::json!({ "loaded": loaded }))
+        Ok(LoadToolsResponse {
+            loaded,
+            not_found: Vec::new(),
+        })
     }
 }
 
-/// Fake `CombinedToolSet`: static tools + a searchable MCP catalog spanning
-/// two servers (`a` and `b`).
+/// Fake `CombinedToolSet`: static tools + a searchable catalog of a deferred
+/// Macro tool and MCP tools spanning two servers (`a` and `b`).
 struct FakeCombined {
     static_tools: Arc<AsyncToolCollection<()>>,
-    mcp_tools: Vec<String>,
+    catalog_tools: Vec<String>,
 }
 
 impl FakeCombined {
@@ -105,7 +121,8 @@ impl FakeCombined {
                     .add_tool::<SearchToolsTest, ()>()
                     .add_tool::<LoadToolsTest, ()>(),
             ),
-            mcp_tools: vec![
+            catalog_tools: vec![
+                "ReadInitiative".to_owned(),
                 "mcp__a__t1".to_owned(),
                 "mcp__b__t2".to_owned(),
                 "mcp__a__t3".to_owned(),
@@ -124,16 +141,9 @@ impl AiToolSet<()> for FakeCombined {
     ) -> Pin<
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     > {
-        if tool_name.starts_with("mcp__") {
-            let known = self.mcp_tools.iter().any(|t| t == tool_name);
+        if self.catalog_tools.iter().any(|t| t == tool_name) {
             let name = tool_name.to_owned();
-            return Box::pin(async move {
-                if known {
-                    Ok(Ok(serde_json::json!({ "ok": name })))
-                } else {
-                    Err(ToolSetError::NotFound(name))
-                }
-            });
+            return Box::pin(async move { Ok(Ok(serde_json::json!({ "ok": name }))) });
         }
         self.static_tools
             .dispatch_tool_call(context, request_context, tool_name, json)
@@ -144,7 +154,7 @@ impl AiToolSet<()> for FakeCombined {
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
-        self.mcp_tools
+        self.catalog_tools
             .iter()
             .map(|name| SearchableTool {
                 name: name.clone(),
@@ -180,7 +190,7 @@ async fn mcp_calls_from_two_providers_in_one_turn() {
         vec![
             MockStreamEvent::tool_call(
                 "call-load",
-                "load_tools",
+                LOAD_TOOLS,
                 serde_json::json!({ "names": ["mcp__a__t1", "mcp__b__t2"] }),
             ),
             MockStreamEvent::final_response_with_default_usage(),
@@ -212,7 +222,7 @@ async fn mcp_calls_from_two_providers_in_one_turn() {
 async fn search_stages_tools_from_multiple_providers_for_the_next_turn() {
     let model = MockCompletionModel::from_stream_turns([
         vec![
-            MockStreamEvent::tool_call("call-search", "search_tools", serde_json::json!({})),
+            MockStreamEvent::tool_call("call-search", SEARCH_TOOLS, serde_json::json!({})),
             MockStreamEvent::final_response_with_default_usage(),
         ],
         vec![
@@ -222,7 +232,7 @@ async fn search_stages_tools_from_multiple_providers_for_the_next_turn() {
             // turn's normal allowed set and no invalid-call recovery is needed.
             MockStreamEvent::tool_call(
                 "call-load-b",
-                "load_tools",
+                LOAD_TOOLS,
                 serde_json::json!({ "names": ["mcp__b__t2"] }),
             ),
             MockStreamEvent::tool_call("call-b", "mcp__b__t2", serde_json::json!({})),
@@ -240,8 +250,106 @@ async fn search_stages_tools_from_multiple_providers_for_the_next_turn() {
         "stream ended with error: {:?}",
         result.error
     );
+    // The loop hands SearchTools the tools it advertises.
+    let search = result
+        .tool_responses()
+        .into_iter()
+        .find(|r| matches!(r, ToolResponse::Json { name, .. } if name == SEARCH_TOOLS));
+    match search {
+        Some(ToolResponse::Json { json, .. }) => {
+            let mut names: Vec<String> =
+                serde_json::from_value(json["already_available"].clone()).unwrap();
+            names.sort();
+            assert_eq!(
+                names,
+                vec![
+                    "LoadTools: Load searchable tools by name.",
+                    "SearchTools: Find and stage searchable tools.",
+                ]
+            );
+        }
+        other => panic!("expected a SearchTools response, got {other:?}"),
+    }
     expect_json_ok(&result, "mcp__a__t1");
     expect_json_ok(&result, "mcp__b__t2");
+}
+
+/// `FakeCombined` whose request schemas carry blank descriptions, leaving the
+/// text only in each schema's root, where the provider definition reads it.
+struct BlankDescriptions(FakeCombined);
+
+impl AiToolSet<()> for BlankDescriptions {
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: (),
+        request_context: RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
+    > {
+        self.0
+            .dispatch_tool_call(context, request_context, tool_name, json)
+    }
+
+    fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
+        let mut schemas = self.0.request_schemas()?;
+        for schema in &mut schemas {
+            schema.description = String::new();
+        }
+        Some(schemas)
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.0.searchable_catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.0.searchable_toolset_names()
+    }
+}
+
+/// SearchTools matches advertised tools against the description the provider
+/// shows, which falls back to the schema root when the explicit one is blank.
+#[tokio::test]
+async fn search_sees_the_provider_description_of_advertised_tools() {
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-search", SEARCH_TOOLS, serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![MockStreamEvent::final_response_with_default_usage()],
+    ]);
+
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> =
+        Arc::new(BlankDescriptions(FakeCombined::new()));
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+    let result = util::drive(&mut session, "search").await;
+
+    assert!(
+        result.error.is_none(),
+        "stream ended with error: {:?}",
+        result.error
+    );
+    let search = result
+        .tool_responses()
+        .into_iter()
+        .find(|r| matches!(r, ToolResponse::Json { name, .. } if name == SEARCH_TOOLS));
+    match search {
+        Some(ToolResponse::Json { json, .. }) => {
+            let mut names: Vec<String> =
+                serde_json::from_value(json["already_available"].clone()).unwrap();
+            names.sort();
+            assert_eq!(
+                names,
+                vec![
+                    "LoadTools: Load searchable tools by name.",
+                    "SearchTools: Find and stage searchable tools.",
+                ]
+            );
+        }
+        other => panic!("expected a SearchTools response, got {other:?}"),
+    }
 }
 
 /// Repro for the reported "silent empty-turn stall": the model calls an
@@ -401,7 +509,7 @@ async fn mcp_calls_from_two_providers_loaded_sequentially() {
         vec![
             MockStreamEvent::tool_call(
                 "call-load-a",
-                "load_tools",
+                LOAD_TOOLS,
                 serde_json::json!({ "names": ["mcp__a__t1"] }),
             ),
             MockStreamEvent::final_response_with_default_usage(),
@@ -413,7 +521,7 @@ async fn mcp_calls_from_two_providers_loaded_sequentially() {
         vec![
             MockStreamEvent::tool_call(
                 "call-load-b",
-                "load_tools",
+                LOAD_TOOLS,
                 serde_json::json!({ "names": ["mcp__b__t2"] }),
             ),
             MockStreamEvent::final_response_with_default_usage(),
@@ -481,4 +589,85 @@ async fn a_tool_called_earlier_in_the_conversation_is_loaded_upfront() {
         .collect();
     assert!(advertised.contains(&"mcp__a__t1"), "{advertised:?}");
     assert!(!advertised.contains(&"mcp__b__t2"), "{advertised:?}");
+}
+
+/// A deferred tool loaded with `LoadTools` on one turn and never called there
+/// is still loaded on the next: the call goes through on the first request,
+/// with no invalid-call recovery.
+#[tokio::test]
+async fn a_tool_loaded_on_an_earlier_turn_is_callable_on_the_next() {
+    use rig_core::OneOrMany;
+    use rig_core::message::{AssistantContent, Message};
+
+    let first_model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call(
+                "call-load",
+                LOAD_TOOLS,
+                serde_json::json!({ "names": ["ReadInitiative"] }),
+            ),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("I'm checking your access on that project."),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> = Arc::new(FakeCombined::new());
+    let mut first = util::session(toolset.clone(), Arc::new(()), first_model).await;
+    let first_turn = util::drive(&mut first, "link these tasks to the Agents project").await;
+    assert!(first_turn.error.is_none(), "{:?}", first_turn.error);
+    let Some(loaded) =
+        first_turn
+            .tool_responses()
+            .into_iter()
+            .find_map(|response| match response {
+                ToolResponse::Json { name, json, .. } if name == LOAD_TOOLS => Some(json),
+                _ => None,
+            })
+    else {
+        panic!("expected the LoadTools result");
+    };
+
+    let second_model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-read", "ReadInitiative", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("You can view the project."),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let mut second = util::session(toolset, Arc::new(()), second_model.clone()).await;
+    let stream = second
+        .send_message(vec![
+            Message::user("link these tasks to the Agents project"),
+            Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::tool_call(
+                    "call-load",
+                    LOAD_TOOLS,
+                    serde_json::json!({ "names": ["ReadInitiative"] }),
+                )),
+            },
+            Message::tool_result("call-load", loaded.to_string()),
+            Message::assistant("I'm checking your access on that project."),
+            Message::user("did it work?"),
+        ])
+        .await
+        .expect("send_message should start the stream");
+    let second_turn = util::collect(stream).await;
+
+    assert!(second_turn.error.is_none(), "{:?}", second_turn.error);
+    expect_json_ok(&second_turn, "ReadInitiative");
+    let requests = second_model.requests();
+    assert_eq!(requests.len(), 2, "the call needed no recovery");
+    assert!(
+        requests[0]
+            .tools
+            .iter()
+            .any(|tool| tool.name == "ReadInitiative"),
+        "ReadInitiative is advertised on the first request"
+    );
 }

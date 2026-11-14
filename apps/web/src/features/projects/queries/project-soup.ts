@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -10,14 +11,15 @@ import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input'
 import {
   type GraphqlFilterPropertiesExpr,
   type GraphqlInitiativeExpr,
-  SoupDocument,
+  ProjectSoupDocument,
+  type ProjectSoupQuery,
+  type ProjectSoupQueryVariables,
   type SoupInput,
-  type SoupQuery,
-  type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
 import { projectProperties } from './project-properties';
@@ -91,7 +93,7 @@ const accessLevels = {
 
 /** Project presentation over the shared Soup entity contract; folders stay distinct. */
 export function projectSoupRows(
-  items: SoupQuery['user']['soup']['items']
+  items: ProjectSoupQuery['user']['soup']['items']
 ): ProjectRow[] {
   return items.flatMap((item) => {
     if (item.__typename !== 'GraphqlSoupInitiative') return [];
@@ -101,8 +103,11 @@ export function projectSoupRows(
         project: {
           id: item.id,
           name: item.displayName ?? 'Untitled project',
+          appearance: readEntityAppearance(item.appearance),
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
+          taskCount: item.taskCount,
+          completedTaskCount: item.completedTaskCount,
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'
               ? accessLevels[permission.accessLevel]
@@ -119,16 +124,17 @@ export function createProjectSoupSource(
   filters: Accessor<ProjectFilters>,
   enabled: Accessor<boolean>
 ): ProjectsSource {
+  const pendingAppearance = usePendingEntityAppearance();
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
-    SoupQuery,
-    SoupQueryVariables,
+    ProjectSoupQuery,
+    ProjectSoupQueryVariables,
     string | null
   >(() => {
     const initial = input();
     return {
-      query: SoupDocument,
+      query: ProjectSoupDocument,
       client: client(),
       enabled: enabled(),
       initialPageParam: null,
@@ -159,7 +165,7 @@ export function createProjectSoupSource(
     registerGraphqlSoupRevalidations(() => {
       if (!enabled() || !query.isSuccess) return [];
       return (query.data?.pageParams ?? [null]).map((cursor) => ({
-        document: SoupDocument,
+        document: ProjectSoupDocument,
         variables: {
           input: cursor
             ? {
@@ -187,7 +193,18 @@ export function createProjectSoupSource(
       // last authorized pages without triggering a Solid resource suspension.
       const data = query.data;
       return data
-        ? projectSoupRows(data.pages.flatMap((page) => page.user.soup.items))
+        ? projectSoupRows(
+            data.pages.flatMap((page) => page.user.soup.items)
+          ).map((row) => {
+            const appearance = pendingAppearance(
+              'initiative',
+              row.project.id,
+              Boolean(query.error)
+            );
+            return appearance
+              ? { ...row, project: { ...row.project, appearance } }
+              : row;
+          })
         : undefined;
     },
     loading: () => enabled() && query.isPending,

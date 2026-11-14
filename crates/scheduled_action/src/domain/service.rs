@@ -13,18 +13,29 @@ use entity_registry::OwnedPurgeOutcome;
 use github::domain::{models::GithubError, ports::GithubInstallationClaims};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
+use super::appearance::ChangeAppearance;
+use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
+use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
+use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
-    ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
+    CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, RunCaller, RunningRun, ScheduledAction,
+    SubRoutine, SubRoutineKey,
 };
 use super::ports::{
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
+    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
+    SubRoutines, SuggestionOrigins, TaskTargetValidator,
 };
+
+mod sub_routines;
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -36,15 +47,35 @@ pub struct ScheduledActionServiceImpl<
     Grants,
     Targets = ModelOnlyTargets,
     Github = NoGithubLinks,
+    Code = NoRoutineCode,
+    Upgrades = NoCodeUpgrades,
+    Rollout = EventRoutinesOff,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
     grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
-    event_management_enabled: bool,
+    rollout: Rollout,
     conditions_enabled: bool,
     targets: Targets,
     github: Github,
+    /// Type-checks code steps before they are saved.
+    code: Arc<Code>,
+    /// How code steps were brought to new SDKs.
+    upgrades: Arc<Upgrades>,
+    /// Where a routine draft's session hands its check back.
+    drafts: Option<DraftChecks>,
+    /// What a suggestion a routine is saved from was, for its log.
+    origins: Option<Arc<dyn SuggestionOrigins>>,
+    /// Finds the agent session behind a create, to tell a routine run's.
+    run_sessions: Option<Arc<dyn RequestSessions>>,
+}
+
+/// What keeps a draft session's check as its answer.
+#[derive(Clone)]
+struct DraftChecks {
+    hand_backs: Arc<dyn DraftHandBacks>,
+    sessions: Arc<dyn RequestSessions>,
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -66,7 +97,7 @@ impl GithubInstallationClaims for NoGithubLinks {
 }
 
 impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe, Grants> {
-    /// Event management defaults off until explicitly enabled by composition.
+    /// Event triggers stay off until composition supplies a rollout.
     pub fn new(
         repo: Arc<Rpo>,
         executor: Arc<Exe>,
@@ -78,30 +109,40 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             executor,
             grants,
             dispatcher_tx,
-            event_management_enabled: false,
+            rollout: EventRoutinesOff,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
+            code: Arc::new(NoRoutineCode),
+            upgrades: Arc::new(NoCodeUpgrades),
+            drafts: None,
+            origins: None,
+            run_sessions: None,
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades, Rollout> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
-            event_management_enabled: self.event_management_enabled,
+            rollout: self.rollout,
             conditions_enabled: self.conditions_enabled,
             targets,
             github: self.github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
         }
     }
 
@@ -109,21 +150,94 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades, Rollout> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
-            event_management_enabled: self.event_management_enabled,
+            rollout: self.rollout,
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
         }
     }
 
-    pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
-        self.event_management_enabled = enabled;
+    /// Decides, per owner, who may save event triggers.
+    pub fn with_event_routines<R: EventRoutineRollout>(
+        self,
+        rollout: R,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, R> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            rollout,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code: self.code,
+            upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
+        }
+    }
+
+    /// Lets routines have code steps, type-checked by `code` when saved,
+    /// and shows how they were brought to new SDKs from `upgrades`.
+    pub fn with_code<C: RoutineCode, U: CodeUpgrades>(
+        self,
+        code: Arc<C>,
+        upgrades: Arc<U>,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U, Rollout> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            rollout: self.rollout,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code,
+            upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
+            run_sessions: self.run_sessions,
+        }
+    }
+
+    /// Keep a routine draft's session's checks as its answer, finding the
+    /// session behind a request through `sessions`.
+    pub fn with_draft_hand_backs(
+        mut self,
+        hand_backs: Arc<dyn DraftHandBacks>,
+        sessions: Arc<dyn RequestSessions>,
+    ) -> Self {
+        self.drafts = Some(DraftChecks {
+            hand_backs,
+            sessions,
+        });
+        self
+    }
+
+    /// Log what suggestion a routine is saved from, found through `origins`.
+    pub fn with_suggestion_origins(mut self, origins: Arc<dyn SuggestionOrigins>) -> Self {
+        self.origins = Some(origins);
+        self
+    }
+
+    /// Make routines created from a routine run's agent session that
+    /// routine's sub-routines, finding the session through `sessions`.
+    pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
+        self.run_sessions = Some(sessions);
         self
     }
 
@@ -143,15 +257,49 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     /// Delete `action` and hand its removal to the dispatcher. The permit is
     /// reserved first so a stopped dispatcher fails while the row still exists
     /// for a retry to find.
-    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()>
+    where
+        Rpo: SubRoutines,
+    {
+        // A routine's sub-routines are deleted with it.
+        let children = match action.sub_routine {
+            Some(_) => Vec::new(),
+            None => self.repo.children(id).await?,
+        };
         let permit = self.dispatcher_tx.reserve().await?;
         self.repo.delete_action(id).await?;
         permit.send(DispatchEvent::Delete(action));
+        for child in children {
+            self.dispatcher_tx
+                .send(DispatchEvent::Delete(child))
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to dispatch delete event: {e}"))?;
+        }
         Ok(())
     }
 
-    fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
-        if trigger.event_filters().is_some() && !self.event_management_enabled {
+    /// Event triggers need the owner's rollout; a flag that cannot be read
+    /// counts as off.
+    async fn check_event_management(
+        &self,
+        trigger: &ActionTrigger,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()>
+    where
+        Rollout: EventRoutineRollout,
+    {
+        if trigger.event_filters().is_none() {
+            return Ok(());
+        }
+        let enabled = self
+            .rollout
+            .enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "feature flags unavailable; event triggers stay off");
+            })
+            .unwrap_or(false);
+        if !enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
         }
         Ok(())
@@ -171,26 +319,38 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     async fn create(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Option<Uuid>,
+        appearance: EntityAppearance,
+        suggestion_id: Option<Uuid>,
+        sub_routine: Option<SubRoutine>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        let input = ActionConfiguration::from(input);
-        self.check_event_management(&input.trigger)?;
+        appearance
+            .validate()
+            .map_err(ActionPolicyError::InvalidAppearance)?;
+        let mut input = input;
+        input.task = named_steps(&input.task);
+        let description = description(&input.description)?;
+        self.check_event_management(&input.trigger, owner_user)
+            .await?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
+        let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
         }
         let now = Utc::now();
-        let next_run_at = next_run(&input.trigger)?;
+        let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
         let created = self
             .repo
@@ -200,7 +360,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 name: input.name,
                 trigger: input.trigger,
                 kind: input.kind,
-                task: input.task,
+                task,
                 enabled: input.enabled,
                 run_visibility: input.run_visibility,
                 created_at: now,
@@ -210,6 +370,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 next_run_at,
                 claimed: None,
                 template_id,
+                appearance,
+                suggestion_id,
+                description,
+                sub_routine,
             })
             .await?;
         self.dispatcher_tx
@@ -217,6 +381,89 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             .await
             .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
         Ok(created)
+    }
+
+    /// What saving `input` would find wrong, by the same checks [`Self::create`]
+    /// makes, and the routine as it would be stored. Nothing is saved.
+    async fn check(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        input: ActionConfiguration,
+    ) -> Result<RoutineCheck>
+    where
+        Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
+        Code: RoutineCode,
+        Rollout: EventRoutineRollout,
+    {
+        let mut input = input;
+        input.task = named_steps(&input.task);
+        let mut problems = Vec::new();
+        let mut steps = Vec::new();
+        let found = [
+            description(&input.description).map(|_| ()),
+            self.check_event_management(&input.trigger, owner).await,
+            self.check_conditions(&input.trigger),
+            self.targets.validate_task(&input.task, owner).await,
+        ];
+        for result in found {
+            if let Err(error) = result {
+                problems.push(check_problem(error)?);
+            }
+        }
+        match checked_task(self.code.as_ref(), &input.task, None).await {
+            Ok(task) => input.task = task,
+            Err(CodeCheckError::DoesNotCheck { steps: failing }) => {
+                steps = step_positions(&input.task, failing);
+            }
+            Err(CodeCheckError::Unavailable(reason)) => problems.push(reason),
+        }
+        if input.enabled
+            && let Err(error) = self.check_github(&input.trigger, owner).await
+        {
+            problems.push(check_problem(error)?);
+        }
+        if let Err(error) = next_run(&input.trigger, Utc::now(), |_| false) {
+            problems.push(check_problem(error)?);
+        }
+        Ok(RoutineCheck {
+            ok: problems.is_empty() && steps.is_empty(),
+            problems,
+            steps,
+            routine: input,
+        })
+    }
+
+    /// Keep `check` as the answer of the routine draft whose session made
+    /// the request `correlation` names, when it is `owner`'s draft. A check
+    /// that isn't a draft's, or a store that fails, leaves the check's own
+    /// answer alone.
+    async fn hand_back(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        correlation: Option<Uuid>,
+        check: &RoutineCheck,
+        created: &[CreatedItem],
+    ) {
+        let (Some(drafts), Some(correlation)) = (&self.drafts, correlation) else {
+            return;
+        };
+        let recorded = async {
+            let Some(session) = drafts.sessions.session_of(correlation).await? else {
+                return Ok(false);
+            };
+            drafts
+                .hand_backs
+                .record(session, owner, check, created)
+                .await
+        }
+        .await;
+        match recorded {
+            Ok(recorded) => {
+                tracing::Span::current().record("routine.check.draft", recorded);
+            }
+            Err(error) => tracing::warn!(error = ?error, "could not keep a draft's check"),
+        }
     }
 
     /// An enabled GitHub trigger needs its owner to have linked GitHub.
@@ -234,28 +481,62 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         Ok(())
     }
 
+    /// Replace a routine's configuration, then make its sub-routines follow
+    /// a change of whether it is on.
     async fn replace_configuration(
         &self,
-        mut action: ScheduledAction,
+        action: ScheduledAction,
         input: ActionConfiguration,
+    ) -> Result<ScheduledAction>
+    where
+        Rpo: SubRoutines,
+        Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
+        Code: RoutineCode,
+        Rollout: EventRoutineRollout,
+    {
+        let was_enabled = action.enabled;
+        let updated = self.replace_one(action, input, false).await?;
+        if updated.sub_routine.is_none() && updated.enabled != was_enabled {
+            self.follow_parent(&updated).await;
+        }
+        Ok(updated)
+    }
+
+    /// Replace one routine's configuration. `with_parent` marks a
+    /// sub-routine switched off because its parent was.
+    async fn replace_one(
+        &self,
+        mut action: ScheduledAction,
+        mut input: ActionConfiguration,
+        with_parent: bool,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
+        Rollout: EventRoutineRollout,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        input.task = named_steps(&input.task);
+        // Clients don't echo the SDK the stored code was checked against.
+        if same_task(&action.task, &input.task) {
+            input.task = action.task.clone();
+        }
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
             || action.kind != input.kind
-            || action.task != input.task
-            || action.run_visibility != input.run_visibility;
+            || !same_task(&action.task, &input.task)
+            || action.run_visibility != input.run_visibility
+            || action.description != input.description.trim();
         let disable_only = !input.enabled && !configuration_changed;
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
         if !disable_only {
-            self.check_event_management(&action.trigger)?;
-            self.check_event_management(&input.trigger)?;
+            let owner = action.owner_user()?;
+            self.check_event_management(&action.trigger, owner).await?;
+            self.check_event_management(&input.trigger, owner).await?;
             self.check_conditions(&input.trigger)?;
         }
         let now = Utc::now();
@@ -266,12 +547,14 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
+            input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)
                     .await?;
             }
             if trigger_changed || (!action.enabled && input.enabled) {
-                action.next_run_at = next_run(&input.trigger)?;
+                action.next_run_at =
+                    next_run(&input.trigger, now, |at| once_already_fired(&action, at))?;
             }
         }
         action.event_activated_at = if input.trigger.event_filters().is_some() {
@@ -283,6 +566,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         } else {
             None
         };
+        // Checked like any update, but with nothing to replace: a new revision
+        // would only supersede event runs queued under the current one.
+        // A sub-routine its parent's pause now holds off must record that,
+        // even when nothing else about it changes.
+        let newly_held = with_parent
+            && !input.enabled
+            && action
+                .sub_routine
+                .as_ref()
+                .is_some_and(|link| !link.paused_by_parent);
+        if !configuration_changed && action.enabled == input.enabled && !newly_held {
+            return Ok(action);
+        }
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
         action.trigger = input.trigger;
@@ -290,7 +586,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         action.task = input.task;
         action.enabled = input.enabled;
         action.run_visibility = input.run_visibility;
+        action.description = description(&input.description)?;
         action.updated_at = now;
+        // Off with its parent until it is switched on again, by the parent
+        // or by hand; an edit while it is off keeps the mark.
+        if let Some(link) = &mut action.sub_routine {
+            link.paused_by_parent = !input.enabled && (with_parent || link.paused_by_parent);
+        }
 
         let updated = self.repo.update_action(action).await?;
         self.dispatcher_tx
@@ -324,8 +626,78 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
     }
 }
 
-fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
-    let next = trigger.next_run_after(Utc::now());
+/// An error the routine's author can fix, as a problem to show them; any
+/// other error is the check's own failure.
+fn check_problem(error: anyhow::Error) -> Result<String> {
+    use super::target_validation::TargetValidationError;
+    use agent_session::domain::routines::RoutineSessionError;
+    let theirs = match error.downcast_ref::<ActionPolicyError>() {
+        Some(ActionPolicyError::NotFound | ActionPolicyError::UpdateConflict) => false,
+        Some(_) => true,
+        None => {
+            error.downcast_ref::<TargetValidationError>().is_some()
+                || matches!(
+                    error.downcast_ref::<RoutineSessionError>(),
+                    Some(
+                        RoutineSessionError::InvalidCommand
+                            | RoutineSessionError::ModelMismatch
+                            | RoutineSessionError::PersonaUnavailable
+                            | RoutineSessionError::Forbidden
+                            | RoutineSessionError::AppNotConnected
+                            | RoutineSessionError::AppsUnsupported
+                    )
+                )
+        }
+    };
+    if theirs {
+        Ok(error.to_string())
+    } else {
+        Err(error)
+    }
+}
+
+/// Failing code steps by their place among `task`'s steps; the checker
+/// counts code steps alone.
+pub(crate) fn step_positions(
+    task: &serde_json::Value,
+    failing: Vec<StepProblems>,
+) -> Vec<CheckedStepProblems> {
+    let positions: Vec<usize> = routine_program::RoutineProgram::from_task(task)
+        .map(|program| {
+            program
+                .steps
+                .iter()
+                .enumerate()
+                .filter(|(_, step)| matches!(step, routine_program::Step::Code(_)))
+                .map(|(index, _)| index)
+                .collect()
+        })
+        .unwrap_or_default();
+    failing
+        .into_iter()
+        .map(|step| CheckedStepProblems {
+            index: positions.get(step.index).copied().unwrap_or(step.index),
+            title: step.title,
+            problems: step.problems,
+        })
+        .collect()
+}
+
+/// A description as stored: trimmed, and within the limit.
+fn description(text: &str) -> Result<String> {
+    let text = text.trim();
+    if text.chars().count() > MAX_DESCRIPTION_CHARS {
+        return Err(ActionPolicyError::DescriptionTooLong.into());
+    }
+    Ok(text.to_owned())
+}
+
+fn next_run(
+    trigger: &ActionTrigger,
+    now: DateTime<Utc>,
+    fired: impl Fn(DateTime<Utc>) -> bool,
+) -> Result<Option<DateTime<Utc>>> {
+    let next = trigger.first_run_at(now, fired);
     if trigger.has_schedule() && next.is_none() && trigger.event_filters().is_none() {
         return Err(ActionPolicyError::NoFutureFirings.into());
     }
@@ -338,7 +710,7 @@ pub(crate) async fn list_accessible_actions<R, G>(
     user_id: &MacroUserIdStr<'static>,
 ) -> Result<Vec<ScheduledAction>>
 where
-    R: ScheduledActionRepo,
+    R: SubRoutines,
     G: ScheduledActionGrants,
 {
     let ids = grants
@@ -348,7 +720,8 @@ where
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let mut actions = repo.get_actions_by_ids(&ids).await?;
+    // Sub-routines are listed under the routine that created them.
+    let mut actions = repo.top_level_by_ids(&ids).await?;
     actions.retain(|action| action.owner.is_user(user_id));
     actions.sort_by(|left, right| {
         left.created_at
@@ -356,6 +729,13 @@ where
             .then(left.id.cmp(&right.id))
     });
     Ok(actions)
+}
+
+/// Whether the stored routine already ran its once trigger at `at`. Pending
+/// firings never come after `next_run_at`, so a stored once time before it (or
+/// with nothing left to run) has been consumed.
+fn once_already_fired(stored: &ScheduledAction, at: DateTime<Utc>) -> bool {
+    stored.trigger.once_times().contains(&at) && stored.next_run_at.is_none_or(|next| next > at)
 }
 
 fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> bool {
@@ -368,20 +748,23 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
 where
     Github: GithubInstallationClaims,
-    Rpo: ScheduledActionRepo,
+    Code: RoutineCode,
+    Upgrades: CodeUpgrades,
+    Rollout: EventRoutineRollout,
+    Rpo: ScheduledActionRepo + SubRoutines,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
-    async fn get_action(&self, id: Uuid) -> Result<ScheduledAction> {
-        self.repo
-            .get_action(&id)
-            .await?
-            .ok_or_else(|| ActionPolicyError::NotFound.into())
+    async fn get_action<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> Result<ScheduledAction> {
+        self.load_granted(receipt).await
     }
 
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
@@ -422,44 +805,228 @@ where
     async fn create_action(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None).await
+        self.create(
+            principal,
+            input,
+            None,
+            EntityAppearance::default(),
+            None,
+            None,
+        )
+        .await
+    }
+
+    #[tracing::instrument(name = "routine.create", skip_all, fields(
+        routine.id = tracing::field::Empty,
+        routine.parent_id = tracing::field::Empty,
+        routine.created_by_run_id = tracing::field::Empty,
+        routine.creating_routine_id = tracing::field::Empty,
+        routine.keyed = key.is_some(),
+        routine.create.outcome = tracing::field::Empty,
+    ), err)]
+    async fn create_action_from(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        caller: RunCaller,
+        key: Option<SubRoutineKey>,
+    ) -> Result<SavedAction> {
+        let span = tracing::Span::current();
+        let saved = match self.creating_run(principal, caller).await? {
+            Some(run) => self.create_sub_routine(principal, input, run, key).await,
+            None if key.is_some() => Err(ActionPolicyError::KeyOutsideRun.into()),
+            None => self
+                .create(
+                    principal,
+                    input,
+                    None,
+                    EntityAppearance::default(),
+                    None,
+                    None,
+                )
+                .await
+                .map(SavedAction::Created),
+        };
+        let outcome = match &saved {
+            Ok(SavedAction::Created(_)) => "created",
+            Ok(SavedAction::Updated(_)) => "updated",
+            Err(error) => match error.downcast_ref::<ActionPolicyError>() {
+                Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                _ => "failed",
+            },
+        };
+        span.record("routine.create.outcome", outcome);
+        if let Ok(SavedAction::Created(action) | SavedAction::Updated(action)) = &saved
+            && let Some(id) = action.id
+        {
+            span.record("routine.id", tracing::field::display(id));
+        }
+        saved
+    }
+
+    async fn detach_action(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<ScheduledAction> {
+        let action = self.load_granted(&receipt).await?;
+        self.detach(action).await
+    }
+
+    #[tracing::instrument(name = "routine.check", skip_all, fields(
+        routine.check.ok = tracing::field::Empty,
+        routine.check.problems = tracing::field::Empty,
+        routine.check.failing_steps = tracing::field::Empty,
+        routine.check.draft = tracing::field::Empty,
+    ), err)]
+    async fn check_action(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        created: Vec<CreatedItem>,
+        correlation: Option<Uuid>,
+    ) -> Result<RoutineCheck> {
+        let owner = principal.owner();
+        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: owner.owner_type(),
+        })?;
+        let check = self.check(owner_user, input).await?;
+        let span = tracing::Span::current();
+        span.record("routine.check.ok", check.ok);
+        span.record("routine.check.problems", check.problems.len());
+        span.record("routine.check.failing_steps", check.steps.len());
+        self.hand_back(owner_user, correlation, &check, &created)
+            .await;
+        Ok(check)
     }
 
     async fn create_action_from_template(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Uuid,
+        appearance: EntityAppearance,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id)).await
+        self.create(principal, input, Some(template_id), appearance, None, None)
+            .await
+    }
+
+    async fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        let created = self
+            .create(
+                principal,
+                input,
+                None,
+                EntityAppearance::default(),
+                Some(suggestion_id),
+                None,
+            )
+            .await?;
+        // Accepts by who suggested, kind and surface, for the suggestions
+        // dashboard. A failed lookup only leaves those fields out.
+        let origin = match (&self.origins, principal.owner().as_user()) {
+            (Some(origins), Some(owner)) => origins
+                .origin(owner, suggestion_id)
+                .await
+                .inspect_err(|error| tracing::warn!(error = ?error, "could not read the suggestion a routine was saved from"))
+                .ok()
+                .flatten(),
+            _ => None,
+        };
+        tracing::info!(
+            event = "routine_suggestions.saved",
+            routine.suggestion.id = %suggestion_id,
+            from = origin.map(|origin| origin.from),
+            kind = origin.map(|origin| origin.kind),
+            surface = origin.and_then(|origin| origin.surface),
+            enabled = created.enabled,
+        );
+        Ok(created)
     }
 
     async fn get_actions(
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
-    ) -> Result<Vec<ScheduledAction>> {
-        Ok(
-            list_accessible_actions(self.repo.as_ref(), self.grants.as_ref(), &user_id)
-                .await?
-                .into_iter()
-                .filter(|action| {
-                    include_events || matches!(action.trigger, ActionTrigger::Cron { .. })
-                })
-                .collect(),
-        )
+        scope: ListScope,
+    ) -> Result<Vec<ListedAction>> {
+        let actions: Vec<ScheduledAction> = self
+            .list_in(self.grants.as_ref(), &user_id, scope)
+            .await?
+            .into_iter()
+            // Only the plain list has clients that predate event and one-time
+            // triggers; the sub-routine scopes return every trigger type.
+            .filter(|action| {
+                include_events
+                    || scope != ListScope::TopLevel
+                    || matches!(action.trigger, ActionTrigger::Cron { .. })
+            })
+            .collect();
+
+        let ids: Vec<Uuid> = actions.iter().filter_map(|action| action.id).collect();
+        let mut last_runs = self.repo.last_runs(&ids).await?;
+
+        Ok(actions
+            .into_iter()
+            .map(|action| ListedAction {
+                last_run: action.id.and_then(|id| last_runs.remove(&id)),
+                action,
+            })
+            .collect())
     }
 
     async fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        input: UpdateScheduledAction,
+        input: ActionConfigurationUpdate,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
         let input = input.into_configuration(&action);
         self.replace_configuration(action, input).await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        appearance: EntityAppearance,
+    ) -> Result<EntityAppearance> {
+        appearance
+            .validate()
+            .map_err(ActionPolicyError::InvalidAppearance)?;
+        let action = self.load_granted(&receipt).await?;
+        let id = action.id.ok_or(ActionPolicyError::NotFound)?;
+        let attribution = match receipt.auth() {
+            entity_access::domain::models::EntityAccessAuth::Authenticated(user) => {
+                activity::Attribution::direct(activity::Actor::new_from_user(user.clone()))
+            }
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                activity::Attribution::new(
+                    activity::Actor::new_from_bot(bot.bot_id()),
+                    bot.scope().acting_user_id().cloned(),
+                )
+            }
+            entity_access::domain::models::EntityAccessAuth::Internal
+            | entity_access::domain::models::EntityAccessAuth::Unauthenticated => {
+                return Err(ActionPolicyError::NotFound.into());
+            }
+        };
+        self.repo
+            .set_appearance(ChangeAppearance {
+                id,
+                appearance: appearance.clone(),
+                attribution,
+                event_id: macro_uuid::generate_uuid_v7(),
+                occurred_at: Utc::now(),
+            })
+            .await?;
+        Ok(appearance)
     }
 
     async fn set_enabled(
@@ -478,6 +1045,7 @@ where
             task: action.task.clone(),
             enabled,
             run_visibility: action.run_visibility,
+            description: action.description.clone(),
         };
         self.replace_configuration(action, input).await
     }
@@ -487,12 +1055,7 @@ where
         let Some(id) = action.id else {
             bail!("cannot delete action without id");
         };
-        self.repo.delete_action(&id).await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Delete(action))
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch delete event: {e}"))?;
-        Ok(())
+        self.delete_and_dispatch(&id, action).await
     }
 
     async fn execute_action_now(
@@ -508,11 +1071,27 @@ where
     async fn get_execution_records(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<ActionExecutionRecord>> {
+    ) -> Result<Vec<ListedRun>> {
         let action = self.load_granted(&receipt).await?;
         let Some(id) = action.id else {
             bail!("cannot read execution history without id");
         };
-        self.repo.get_execution_records(&id).await
+        let records = self.repo.get_execution_records(&id).await?;
+        self.with_created(&action, records).await
+    }
+
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry> {
+        super::catalog::catalog(self.code.as_ref(), timezone)
+    }
+
+    async fn get_code_upgrades(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<CodeUpgrade>> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot read code upgrades without id");
+        };
+        self.upgrades.list_upgrades(id).await
     }
 }

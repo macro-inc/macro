@@ -1,86 +1,58 @@
-import ArrowRight from '@phosphor/arrow-right.svg';
-import { createSignal } from 'solid-js';
-import { HomepageScrollCue } from '../marketing/components/HomepageScrollCue';
-import { HomepageSections } from '../marketing/components/HomepageSections';
-import { HomepageUnification } from '../marketing/components/HomepageUnification';
-import { routePhoneToMobileSignup } from '../marketing/core/navigation';
-import { OnboardingShell } from './components/OnboardingShell';
-import { WelcomeStep } from './components/WelcomeSteps';
+import { lazy, Show, Suspense } from 'solid-js';
+import { setPageSeo } from '../../app/utils/utilSeo';
+import { FeatureUiStyles } from '../marketing/components/FeaturePage';
+import { HomepageFeatureLinks } from '../marketing/components/HomepageFeatureLinks';
+import { HomepageResources } from '../marketing/components/HomepageResources';
+import { HomepageTrustBadges } from '../marketing/components/HomepageTrustBadges';
+import { MacroHero } from '../marketing/components/homepage/MacroHero';
+import { SiteHeader } from '../marketing/components/SiteHeader';
+import { wallpapers } from '../marketing/components/TutorialWallpaper';
+import '../marketing/components/homepage/macro-homepage.css';
+import '../marketing/components/page-aura.css';
 
-/** Shared build-time and browser tree: hydration preserves the first-painted hero. */
-export function Homepage() {
-  const [motionSpeed, setMotionSpeed] = createSignal(1);
-  let replayHero: ((duration: number) => void) | undefined;
+const HomepageSections = lazy(() =>
+  import('../marketing/components/HomepageSections').then((module) => ({
+    default: module.HomepageSections,
+  }))
+);
+
+/** One workspace introduction shared by desktop, phones, and prerendering. */
+export function Homepage(props: { embedded?: boolean } = {}) {
+  setPageSeo({
+    title: 'Macro — The unified workspace for your company.',
+    description:
+      'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
+    path: '/',
+  });
   return (
-    <>
-      <OnboardingShell
-        wide
-        landing
-        heroFooter={<HomepageScrollCue />}
-        below={
-          <>
-            <HomepageUnification
-              onPreviewReady={
-                import.meta.env.DEV
-                  ? (replay) => {
-                      replayHero = replay;
-                    }
-                  : undefined
-              }
-            />
-            <HomepageSections />
-          </>
-        }
+    <div class="macro-homepage">
+      <FeatureUiStyles scope=".macro-homepage" />
+      <Show when={!props.embedded}>
+        <SiteHeader currentPath="/" />
+      </Show>
+      <main
+        class="macro-home-scroll page-outline-layout"
+        data-onboarding-scroll
       >
-        <WelcomeStep
-          onContinue={() => {}}
-          action={
-            <div class="homepage-hero-action mt-6 flex justify-center pb-5">
-              <a
-                class="site-nav-start homepage-hero-cta homepage-primary-cta"
-                href="/app/signup"
-                onClick={routePhoneToMobileSignup}
-              >
-                <span>Get started</span>
-                <ArrowRight aria-hidden="true" />
-              </a>
-            </div>
-          }
-        />
-      </OnboardingShell>
-      {import.meta.env.DEV && (
-        <details class="fixed bottom-3 right-5 z-modal rounded-2xl border border-edge bg-surface p-2 text-[10px] text-ink-muted">
-          <summary>Preview controls</summary>
-          <a
-            href="/onboarding-preview.html"
-            class="block rounded-full px-2 py-1"
-          >
-            Preview onboarding
-          </a>
-          <button
-            type="button"
-            class="rounded-full px-2 py-1"
-            onClick={() => replayHero?.(1400 / motionSpeed())}
-          >
-            Replay hero → features
-          </button>
-          <label>
-            Motion speed{' '}
-            <select
-              aria-label="Motion speed"
-              class="bg-surface"
-              value={motionSpeed()}
-              onChange={(event) =>
-                setMotionSpeed(Number(event.currentTarget.value))
-              }
-            >
-              <option value="1">1×</option>
-              <option value="0.25">¼×</option>
-              <option value="0.1">⅒×</option>
-            </select>
-          </label>
-        </details>
-      )}
-    </>
+        <div
+          class="page-aura"
+          style={{
+            '--page-aura-primary': wallpapers.home.colors[1],
+            '--page-aura-secondary': wallpapers.home.colors[2],
+            '--page-aura-deep': wallpapers.home.colors[3],
+          }}
+        >
+          <section class="macro-home-hero" aria-labelledby="macro-home-title">
+            <HomepageFeatureLinks />
+            <MacroHero />
+            <HomepageTrustBadges revealOnScroll />
+          </section>
+          <Suspense>
+            <HomepageSections />
+          </Suspense>
+        </div>
+        <HomepageResources />
+      </main>
+    </div>
   );
 }

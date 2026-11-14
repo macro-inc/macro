@@ -1,18 +1,18 @@
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import ChatIcon from '@phosphor/chats-circle.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import DocumentIcon from '@phosphor/file-text.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import HomeIcon from '@phosphor/house.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SplitIcon from '@phosphor/sidebar-simple.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import SheetIcon from '@phosphor/table.svg';
-import HomeFillIcon from '@phosphor-fill/house-fill.svg';
+import HomeFillIcon from '@icon/system/fill/house-fill.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import ChatIcon from '@icon/system/regular/chats-circle.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import DocumentIcon from '@icon/system/regular/file-text.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SplitIcon from '@icon/system/regular/sidebar-simple.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import SheetIcon from '@icon/system/regular/table.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { Tabs } from '@ui/components/Tabs';
 import {
@@ -56,6 +56,7 @@ const CALLOUTS: readonly {
   id: Destination;
   label: string;
   description?: string;
+  mobileDescription?: string;
   icon: NavIcon;
   side: 'left' | 'right';
 }[] = [
@@ -93,6 +94,7 @@ const CALLOUTS: readonly {
     id: 'agents',
     label: 'External agents',
     description: 'Cursor, Claude, ChatGPT, Hermes, ACP, etc.',
+    mobileDescription: 'Cursor, Claude, ChatGPT',
     icon: AgentIcon,
     side: 'right',
   },
@@ -232,7 +234,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
           const x1 =
             ((left ? a.right + 14 : a.left - 14) - bounds.left) * scale;
           const y1 = (a.top + a.height / 2 - bounds.top) * scale;
-          const x2 = ((left ? b.left - 8 : b.right + 8) - bounds.left) * scale;
+          const x2 = ((left ? b.left - 8 : b.right + 10) - bounds.left) * scale;
           const y2 = (b.top + b.height / 2 - bounds.top) * scale;
           const firstBend = x1 + (x2 - x1) * 0.25;
           const secondBend = x1 + (x2 - x1) * 0.75;
@@ -490,9 +492,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
             {(pointer) => (
               <g data-highlighted={highlighted() === pointer().id}>
                 <path d={pointer().path} pathLength="1" />
-                <polygon
-                  points={`${pointer().x},${pointer().y - 3} ${pointer().x + 3},${pointer().y} ${pointer().x},${pointer().y + 3} ${pointer().x - 3},${pointer().y}`}
-                />
+                <circle cx={pointer().x} cy={pointer().y} r={2.55} />
               </g>
             )}
           </Index>
@@ -513,7 +513,19 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
               >
                 <span>{item.label}</span>
                 <Show when={item.description}>
-                  <p>{item.description}</p>
+                  <p
+                    classList={{
+                      'homepage-sidebar-description-full':
+                        !!item.mobileDescription,
+                    }}
+                  >
+                    {item.description}
+                  </p>
+                  <Show when={item.mobileDescription}>
+                    <p class="homepage-sidebar-description-mobile">
+                      {item.mobileDescription}
+                    </p>
+                  </Show>
                 </Show>
               </div>
             )}

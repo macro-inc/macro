@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -34,20 +35,14 @@ export const BrowserNotificationModal = () => {
   );
 };
 
-/** Native apps ask for app notifications; only the web app uses the browser's. */
-function promptTitle() {
-  if (isPlatform('desktop')) return 'Enable Desktop Notifications';
-  if (isPlatform('android')) return 'Enable Notifications';
-  return 'Enable Browser Notifications';
-}
-
 function NotificationToastTrigger(props: {
   settings: SupportedNotificationSettings;
 }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: promptTitle(),
+        title: 'Enable notifications',
+        dismissLabel: t('common.notNow'),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -56,13 +51,6 @@ function NotificationToastTrigger(props: {
           </div>
         ),
         actions: [
-          {
-            label: 'Hide',
-            onClick: () => {
-              props.settings.dismissPrompt();
-              toast.dismiss(toastId);
-            },
-          },
           {
             label: 'Enable',
             onClick: async () => {
@@ -82,6 +70,8 @@ function NotificationToastTrigger(props: {
       {
         persistent: true,
         region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+        // Closing the prompt is a decline, so don't ask again on the next load.
+        onUserDismiss: () => props.settings.dismissPrompt(),
       }
     );
   });

@@ -10,6 +10,7 @@ import {
   setActiveCallEndedCache,
   setActiveCallStartedCache,
 } from '@queries/call/call';
+import { invalidateMessageTimeline } from '@queries/messages/timeline';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
 import {
@@ -274,6 +275,11 @@ export function CallStartedNotifier() {
     // and clicking it deep-links into a join, which for a call that is over
     // means get-or-create starts a brand-new one in the channel.
     closeCallNotification(resolution.callId);
+    // A channel call's row says how long it lasted once it ends.
+    fireAndForget(
+      invalidateMessageTimeline({ type: 'channel', id: resolution.channelId }),
+      'channel-call'
+    );
     setActiveCallEndedCache({
       channelId: resolution.channelId,
       callId: resolution.callId,
@@ -338,9 +344,9 @@ export function CallStartedNotifier() {
   return null;
 }
 
-async function joinFromNotification(channelId: string) {
+async function joinFromNotification(channelId: string, callId: string) {
   try {
-    await joinChannelCall(channelId);
+    await joinChannelCall(channelId, { kind: 'join', callId });
   } catch (error) {
     Telemetry.error(error, { surface: 'channel-call' });
     toast.failure('Failed to join call');
@@ -411,7 +417,7 @@ async function emitCallStartedNotification(args: {
     };
     handle.onClick(() => {
       window.focus();
-      fireAndForget(joinFromNotification(channelId), 'channel-call');
+      fireAndForget(joinFromNotification(channelId, callId), 'channel-call');
       handle.close();
       untrack();
       ringer.stop();

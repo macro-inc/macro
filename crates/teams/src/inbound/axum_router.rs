@@ -6,6 +6,8 @@ pub mod create_team;
 pub mod delete_team;
 /// Delete a team invite.
 pub mod delete_team_invite;
+/// Email a new team's domain contacts that it exists.
+pub mod domain_notice;
 /// Get a team by ID.
 pub mod get_team;
 /// Get all invites for a team.
@@ -50,7 +52,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post},
 };
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{
+    models::{EntityAccessReceipt, RequiredPermission},
+    ports::EntityAccessService,
+};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
@@ -62,6 +67,33 @@ use crate::domain::{
     },
     team_repo::{TeamInviteLinkService, TeamService},
 };
+
+/// Why a team route refused a request that named a team other than the
+/// caller's current one.
+const NOT_CURRENT_TEAM: &str = "the requested team is not the caller's current team";
+
+/// Whether `expected`, when the caller names one, is the team `receipt` was
+/// issued for. Team routes act on the caller's current team, resolved with
+/// the caller's role in the same request; naming the team binds the request
+/// to it, so a caller who has since moved to another team is refused instead
+/// of acting there.
+fn is_expected_team<P: RequiredPermission>(
+    receipt: &EntityAccessReceipt<P>,
+    expected: Option<uuid::Uuid>,
+) -> bool {
+    expected.is_none_or(|team_id| receipt.entity().entity_id == team_id.to_string())
+}
+
+/// The 409 a team route answers when the caller named another team.
+fn not_current_team_response() -> Response {
+    (
+        StatusCode::CONFLICT,
+        Json(ErrorResponse {
+            message: NOT_CURRENT_TEAM.into(),
+        }),
+    )
+        .into_response()
+}
 
 /// Router state containing the team service.
 pub struct TeamRouterState<T, Eas, Auth> {
@@ -230,6 +262,12 @@ impl IntoResponse for CreateTeamError {
                     message: "invalid team name".into(),
                 }),
             ),
+            CreateTeamError::AlreadyOnTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "you are already on a team; leave it before creating a new one".into(),
+                }),
+            ),
             CreateTeamError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -374,6 +412,13 @@ impl IntoResponse for SetTeamMemberPlanError {
                 }),
             )
                 .into_response(),
+            SetTeamMemberPlanError::SeatIncluded => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "the member's seat is included and has no paid plan".into(),
+                }),
+            )
+                .into_response(),
             SetTeamMemberPlanError::TeamError(e) => e.into_response(),
             SetTeamMemberPlanError::CustomerError(_)
             | SetTeamMemberPlanError::RolesError(_)
@@ -407,6 +452,12 @@ impl IntoResponse for RemoveUserFromTeamError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "user not in team".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::AgentTeammate => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "this member is an agent teammate: remove it from the team's agents (DELETE /team_agents/{id})".into(),
                 }),
             ),
             RemoveUserFromTeamError::CustomerError(_) => (

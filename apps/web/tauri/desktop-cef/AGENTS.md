@@ -37,8 +37,10 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   lockfiles: run `cargo metadata --format-version 1 > /dev/null` here as well as
   in `..`. A new git dependency also needs its `outputHashes` entry on both
   vendor dirs in `nix/tauri-desktop.nix`. The `check tauri lockfiles` PR
-  workflow (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`) fails
-  when either lockfile is stale; otherwise only the macOS release build would.
+  workflow fails when either lockfile is stale (`cargo update --workspace
+  --locked`); otherwise only the macOS release build would. When a lockfile or
+  Nix input changes it also builds the vendor dirs
+  (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`).
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
 - The `cef` feature of `../src-tauri` adds no dependencies; it switches the
@@ -53,7 +55,8 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   `CEF_PATH` to an extracted codec distribution (below) to test media.
 - Releases embed CEF built with proprietary codecs, pinned in `cef-codecs.json`
   and laid out by `nix/tauri-desktop.nix`; Nix evaluation fails if that pin
-  doesn't match the `cef` crate in `Cargo.lock`. To bump the `cef` crate, put
+  doesn't match the `cef` crate in `Cargo.lock`. While `sha256` is empty, Nix
+  warns and builds with the codec-less CDN CEF. To bump the `cef` crate, put
   the new CDN version (`cefVersion`, its `g<hash>` as `cefCommit`, the Chromium
   branch) and a new `releaseTag`/`asset` in the manifest with an empty `sha256`
   on a PR. The `Build CEF with codecs` workflow then builds and publishes it
@@ -72,6 +75,16 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
 - Keep the HTTP/WebSocket fork revision and Nix source hash aligned with the
   shared native workspace; native cookies use Application Support as documented
   in `../src-tauri/README.md#native-authentication-cookies`.
+- The app hosts Chromium in Alloy style, which has no screen picker and refuses
+  `getDisplayMedia()`. Screen sharing goes through Macro's picker and
+  `../src-tauri/src/screen_capture.rs`: `main.rs` registers
+  `on_desktop_capture_request` (a hook of the `macro-cef` fork), which grants a
+  desktop capture only right after the user picks a source.
 - Keep `tauri.conf.json` aligned with `../src-tauri/tauri.conf.json` and
   `tauri.macos.conf.json`: the CLI bundles from this file, while the app's
   runtime config still comes from `../src-tauri`.
+- Keep `SecretStorage::Mock` in `src/main.rs`. With the system store, Chromium
+  keeps its cookie key in a "Chromium Safe Storage" keychain item and macOS asks
+  for keychain access on launch. The app's sign-in uses the native HTTP cookie
+  jar, so Chromium's own cookies (embeds) are all the mock key covers;
+  switching key sources drops those cookies once.

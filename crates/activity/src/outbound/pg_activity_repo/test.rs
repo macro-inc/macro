@@ -8,6 +8,47 @@ use crate::domain::models::{Action, ActionTag, Actor, CommonAction, PropertyChan
 use crate::domain::ports::EntityActivityReads;
 
 mod teammate_feed;
+mod transaction;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {
+    let correlation = Uuid::now_v7();
+    let activity = agent_correlation::context::scope_with_verb(
+        Some(correlation),
+        Some(agent_correlation::AgentVerb::Edited),
+        async {
+            Activity::common(
+                Uuid::now_v7(),
+                0,
+                Actor::new_from_user(user("macro|actor@example.com")),
+                None,
+                EntityType::Document,
+                "verb-document",
+                CommonAction::Edited,
+                Utc::now(),
+            )
+        },
+    )
+    .await;
+    let repo = PgActivityRepo::new(pool);
+    repo.insert_activities(&[activity]).await.unwrap();
+    let page = repo
+        .entity_feed(EntityType::Document, "verb-document", None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(page.records[0].agent_correlation_id, Some(correlation));
+    assert_eq!(
+        page.records[0].agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+    let wire = crate::domain::events::ActivityWireRow::from(page.records[0].clone());
+    assert_eq!(wire.agent_verb.as_deref(), Some("edited"));
+    assert_eq!(
+        wire.into_record().unwrap().agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+}
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -404,6 +445,42 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_changes_remain_in_entity_history_but_not_personal_feeds(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool);
+    let change = crate::AppearanceChange {
+        from: None,
+        to: Some(model_entity::EntityAppearance {
+            icon: None,
+            color: Some(model_entity::AppearanceColor::Blue),
+        }),
+    };
+    repo.insert_activities(&[seed(
+        41,
+        CommonAction::AppearanceChanged(change.clone()),
+        "doc-appearance",
+    )])
+    .await
+    .unwrap();
+
+    let keys = [(EntityType::Document, "doc-appearance".to_string())];
+    let activity = repo.entity_activity(&keys, 10).await.unwrap();
+    assert_eq!(
+        activity[&keys[0]][0].action,
+        RecordedAction::Known(Action::AppearanceChanged(change))
+    );
+    let history = repo
+        .entity_feed(EntityType::Document, "doc-appearance", None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(history.records.len(), 1);
+    let feed = repo
+        .subject_feed("macro|actor@example.com", None, nz(10))
+        .await
+        .unwrap();
+    assert!(feed.records.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rows_written_by_a_newer_vocabulary_read_as_unknown(pool: PgPool) {
     let repo = PgActivityRepo::new(pool.clone());
     sqlx::query!(
@@ -614,9 +691,11 @@ async fn subject_overview_filters_subject_and_window_and_orders_sparse_aggregate
 async fn subject_overview_buckets_fifteen_minute_rows_across_havana_midnights(pool: PgPool) {
     let repo = PgActivityRepo::new(pool);
     let subject = "macro|havana@example.com";
+    // Cuba's last spring forward was 2026-03-08 and its next fall back is
+    // 2027-11-07 (IANA tzdata 2026f); both dates hold in older releases too.
     let transition_starts = [
         ("2026-03-08T04:00:00Z", "spring"),
-        ("2026-11-01T04:00:00Z", "fall"),
+        ("2027-11-07T04:00:00Z", "fall"),
     ];
     let mut activities = Vec::new();
     let mut source = 200_u128;
@@ -636,27 +715,34 @@ async fn subject_overview_buckets_fifteen_minute_rows_across_havana_midnights(po
     }
     repo.insert_activities(&activities).await.unwrap();
 
-    let overview = repo
-        .subject_overview(
-            subject,
-            overview_window(chrono_tz::America::Havana, "2026-03-07", "2026-11-02"),
-        )
-        .await
-        .unwrap();
+    let mut days = Vec::new();
+    let mut total = 0;
+    for (start, end) in [("2026-03-07", "2026-03-09"), ("2027-11-06", "2027-11-08")] {
+        let overview = repo
+            .subject_overview(
+                subject,
+                overview_window(chrono_tz::America::Havana, start, end),
+            )
+            .await
+            .unwrap();
+        days.extend(
+            overview
+                .days
+                .iter()
+                .map(|day| (day.day.to_string(), day.count.get())),
+        );
+        total += overview.total();
+    }
 
     assert_eq!(
-        overview
-            .days
-            .iter()
-            .map(|day| (day.day.to_string(), day.count.get()))
-            .collect::<Vec<_>>(),
+        days,
         vec![
             ("2026-03-07".to_owned(), 4),
             ("2026-03-08".to_owned(), 5),
-            ("2026-11-01".to_owned(), 9),
+            ("2027-11-07".to_owned(), 9),
         ]
     );
-    assert_eq!(overview.total(), 18);
+    assert_eq!(total, 18);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -723,7 +809,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
 ) {
     let repo = PgActivityRepo::new(pool);
     let subject = "macro|havana-start@example.com";
-    let first_midnight = chrono::DateTime::parse_from_rfc3339("2026-11-01T04:00:00Z")
+    let first_midnight = chrono::DateTime::parse_from_rfc3339("2027-11-07T04:00:00Z")
         .unwrap()
         .with_timezone(&Utc);
     let mut activities = Vec::new();
@@ -753,7 +839,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
     let starting_on_fallback = repo
         .subject_overview(
             subject,
-            overview_window(chrono_tz::America::Havana, "2026-11-01", "2026-11-02"),
+            overview_window(chrono_tz::America::Havana, "2027-11-07", "2027-11-08"),
         )
         .await
         .unwrap();
@@ -763,14 +849,14 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
             .iter()
             .map(|day| (day.day.to_string(), day.count.get()))
             .collect::<Vec<_>>(),
-        vec![("2026-11-01".to_owned(), 4)]
+        vec![("2027-11-07".to_owned(), 4)]
     );
     assert_eq!(starting_on_fallback.total(), 4);
 
     let ending_on_fallback = repo
         .subject_overview(
             subject,
-            overview_window(chrono_tz::America::Havana, "2026-10-31", "2026-11-01"),
+            overview_window(chrono_tz::America::Havana, "2027-11-06", "2027-11-07"),
         )
         .await
         .unwrap();
@@ -780,7 +866,7 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
             .iter()
             .map(|day| (day.day.to_string(), day.count.get()))
             .collect::<Vec<_>>(),
-        vec![("2026-10-31".to_owned(), 1)]
+        vec![("2027-11-06".to_owned(), 1)]
     );
     assert_eq!(ending_on_fallback.total(), 1);
 }
@@ -942,5 +1028,162 @@ async fn timeline_index_skips_exactly_the_unindexed_actions(pool: PgPool) {
     assert_eq!(
         predicate,
         format!("(action <> ALL (ARRAY[{}]))", tags.join(", "))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_activity_preserves_invocations_and_paginates_without_entity_grants(pool: PgPool) {
+    use crate::domain::ports::AgentActivityReads;
+    let session = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let first_run = Uuid::now_v7();
+    let second_run = Uuid::now_v7();
+    let foreign_run = Uuid::now_v7();
+    for id in [session, other] {
+        sqlx::query!("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ($1, 'macro|owner@example.com', $2, 'test', 'test', '/workspace')", id, Uuid::now_v7()).execute(&pool).await.unwrap();
+    }
+    for (id, parent) in [
+        (first_run, session),
+        (second_run, session),
+        (foreign_run, other),
+    ] {
+        sqlx::query!(
+            "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+            id,
+            parent
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = PgActivityRepo::new(pool.clone());
+    let timestamp = Utc::now();
+    let rows: Vec<_> = [
+        Some(first_run),
+        Some(second_run),
+        Some(first_run),
+        Some(foreign_run),
+        None,
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, correlation)| {
+        Activity::common(
+            Uuid::from_u128(100 + index as u128),
+            0,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "private-document",
+            CommonAction::Edited,
+            timestamp,
+        )
+        .with_agent_correlation(correlation)
+    })
+    .collect();
+    repo.insert_activities(&rows).await.unwrap();
+    repo.insert_activities(&rows).await.unwrap();
+    let page = repo
+        .agent_activity(session, None, None, nz(2))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 2);
+    let next = repo
+        .agent_activity(session, None, page.next, nz(2))
+        .await
+        .unwrap();
+    assert_eq!(next.records.len(), 1);
+    assert!(next.next.is_none());
+    assert!(page.records.iter().all(|row| row.id != next.records[0].id));
+    let filtered = repo
+        .agent_activity(session, Some(first_run), None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(filtered.records.len(), 2);
+    assert!(
+        filtered
+            .records
+            .iter()
+            .all(|row| row.agent_correlation_id == Some(first_run))
+    );
+    assert!(
+        repo.agent_activity(session, Some(foreign_run), None, nz(10))
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    // Session deletion removes its mapping, never the entity's existing history.
+    // The route refuses a deleted session at its access check before reading.
+    sqlx::query!("DELETE FROM agent_session WHERE id = $1", session)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.entity_feed(EntityType::Document, "private-document", None, nz(10))
+            .await
+            .unwrap()
+            .records
+            .len(),
+        5
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_activity_is_stamped_on_insert_and_leaves_out_reads(pool: PgPool) {
+    use crate::domain::ports::AgentActivityReads;
+    let session = Uuid::now_v7();
+    let run = Uuid::now_v7();
+    sqlx::query!("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ($1, 'macro|owner@example.com', $2, 'test', 'test', '/workspace')", session, Uuid::now_v7()).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+        run,
+        session
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgActivityRepo::new(pool.clone());
+    let timestamp = Utc::now();
+    let row = |ordinal: u32, action: CommonAction, correlation: Option<Uuid>| {
+        Activity::common(
+            Uuid::from_u128(500),
+            ordinal,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "document",
+            action,
+            timestamp,
+        )
+        .with_agent_correlation(correlation)
+    };
+    repo.insert_activities(&[
+        row(0, CommonAction::Edited, Some(run)),
+        row(1, CommonAction::Opened, Some(run)),
+        row(2, CommonAction::Edited, None),
+    ])
+    .await
+    .unwrap();
+
+    // The trigger stamps correlated rows only, whatever the writer sent.
+    let stamped = sqlx::query_scalar!(
+        "SELECT agent_session_id FROM activity_events WHERE entity_id = 'document' ORDER BY id"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stamped.iter().filter(|id| **id == Some(session)).count(), 2);
+    assert_eq!(stamped.iter().filter(|id| id.is_none()).count(), 1);
+
+    let page = repo
+        .agent_activity(session, None, None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert!(
+        page.records
+            .iter()
+            .all(|record| record.agent_correlation_id == Some(run))
     );
 }

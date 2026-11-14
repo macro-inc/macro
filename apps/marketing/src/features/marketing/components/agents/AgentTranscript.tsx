@@ -1,14 +1,14 @@
-import Calendar from '@phosphor/calendar-blank.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Envelope from '@phosphor/envelope.svg';
-import EnvelopeOpen from '@phosphor/envelope-open.svg';
-import Eye from '@phosphor/eye.svg';
-import File from '@phosphor/file.svg';
-import HashStraight from '@phosphor/hash-straight.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Newspaper from '@phosphor/newspaper.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import EnvelopeOpen from '@icon/system/regular/envelope-open.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import File from '@icon/system/regular/file.svg';
+import HashStraight from '@icon/system/regular/hash-straight.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Newspaper from '@icon/system/regular/newspaper.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
 import { Button, UserMessageBubble } from '@ui';
 import {
   type Component,
@@ -54,7 +54,13 @@ export type SearchHit = {
 
 export type AgentToolCall =
   | { kind: 'thought'; text: string }
-  | { kind: 'search'; query: string; hits: SearchHit[] }
+  | {
+      kind: 'search';
+      query: string;
+      hits: SearchHit[];
+      pending?: boolean;
+      scope?: SearchHit['kind'];
+    }
   | { kind: 'read-channel'; channel: string; count: number }
   | { kind: 'read-call' }
   | { kind: 'read-document'; title: string }
@@ -193,7 +199,7 @@ function SearchRow(props: {
   const count = () => props.call.hits.length;
   return (
     <ToolRow
-      icon={MagnifyingGlass}
+      icon={props.call.scope ? HIT_ICONS[props.call.scope] : MagnifyingGlass}
       response={
         <Show when={open()}>
           <div class="max-h-120 overflow-y-auto">
@@ -251,25 +257,33 @@ function SearchRow(props: {
         </Show>
       }
     >
-      <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+      <div
+        class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden"
+        data-search-scope={props.call.scope}
+      >
         <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <span class="min-w-0 truncate">
             Search <span class="text-ink"> {props.call.query} </span>
           </span>
         </div>
-        <Button
-          type="button"
-          variant="plain"
-          size="sm"
-          noTouchResize
-          aria-expanded={open()}
-          class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
-          data-search-toggle
-          onClick={toggle}
+        <Show
+          when={!props.call.pending}
+          fallback={<span class="magic-chip-shimmer text-xs">Searching…</span>}
         >
-          <span>{count() === 1 ? '1 hit' : `${count()} hits`}</span>
-          <CaretRight aria-hidden="true" class={open() ? 'rotate-90' : ''} />
-        </Button>
+          <Button
+            type="button"
+            variant="plain"
+            size="sm"
+            noTouchResize
+            aria-expanded={open()}
+            class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
+            data-search-toggle
+            onClick={toggle}
+          >
+            <span>{count() === 1 ? '1 hit' : `${count()} hits`}</span>
+            <CaretRight aria-hidden="true" class={open() ? 'rotate-90' : ''} />
+          </Button>
+        </Show>
       </div>
     </ToolRow>
   );
@@ -516,7 +530,7 @@ function Inline(props: {
             />
           );
         if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
-          return <strong class="font-bold">{part.slice(2, -2)}</strong>;
+          return <strong class="font-medium">{part.slice(2, -2)}</strong>;
         return part;
       }}
     </For>

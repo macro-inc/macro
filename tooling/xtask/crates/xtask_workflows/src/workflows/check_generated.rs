@@ -4,27 +4,30 @@
 //! (and the kafka topics file) are defined in Rust" enforceable rather than
 //! aspirational.
 
-use gh_workflow::{Event, Job, PullRequest, Step, Workflow};
+use gh_workflow::{Event, Job, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("tooling/xtask/**"),
+    xtask_paths::repo_glob!("crates/macro_event_topics/**"),
+    xtask_paths::repo_glob!(".github/workflows/**"),
+    xtask_paths::repo_glob!(".github/kafka-cluster-topics.json"),
+];
 
 /// Build the workflow.
 pub fn check_generated_workflows() -> Workflow {
     Workflow::new("check generated workflows")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/**"))
-                .add_path(xtask_paths::repo_glob!("crates/macro_event_topics/**"))
-                .add_path(xtask_paths::repo_glob!(".github/workflows/**"))
-                .add_path(xtask_paths::repo_glob!(".github/kafka-cluster-topics.json")),
-        ))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("check-workflows", check_workflows())
 }
 
 /// Regenerate in `--check` mode and fail on any difference.
 fn check_workflows() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())

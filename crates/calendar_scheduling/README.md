@@ -14,8 +14,19 @@ Apply MacroDB migrations `20260918164303_calendar_scheduling.sql` and
 updated calendar service with its existing `CALENDAR_SYNC_ENABLED` setting enabled.
 The migration uses PostgreSQL multiranges (PostgreSQL 14+) and `btree_gist` for
 atomic host conflict exclusion. Each host needs a connected, writable primary
-calendar with calendar sync ready. All connected calendars are checked for busy
-time. Invitations and Google Meet links use the existing calendar mutation service.
+calendar whose grant works, and every calendar that counts toward their busy time
+must be current (`macro_services/sync_health.rs`, over
+`CalendarSyncHealthReader`): a calendar failing transiently still offers time
+around its stored events for 45 minutes after its next sync was due (its last
+successful sync; for a Google system calendar such as holidays, which Macro
+syncs daily, a day after it), while a
+permanent or reauthorization failure, a calendar or inbox still on its first
+sync, or a failure past that window refuses availability. A calendar with Busy
+off never blocks booking, whatever its sync state. Busy time comes from every connected calendar
+the host has not turned off (the Busy switch in Settings → Calendar, stored in
+`calendar_availability_preferences` and read in process, never through the
+calendar service's HTTP listing), plus meetings the host is in on any calendar
+(`calendar_events::domain::labels::attends_meeting`). Invitations and Google Meet links use the existing calendar mutation service.
 Deployed invitations include the private cancellation/rescheduling URL.
 
 The web entry points are Settings → Calendar, the calendar header shortcuts,
@@ -91,6 +102,9 @@ Missing or blank confirmation is rejected before calling the scheduling service.
 As with confirmed email/calendar tools, the quote is not verified against conversation
 history. There is no booking review card, elicitation, or deferred user-tool result.
 The agent discovers internal identities through tools instead of asking users for IDs.
+Code mode reaches the same workflows through `macro.calendar.booking` in the SDK, over
+`GET/POST /scheduling/links` and `PUT /scheduling/links/{id}`; the HTTP writes take the
+same required `userConfirmation`.
 
 The scheduling service owns authorization and validates the complete draft. Edits
 replace only the chosen event type; changed hours use a separate schedule to

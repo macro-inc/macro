@@ -79,9 +79,6 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [vi.fn(), 'share-scope'],
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({ all: () => [] }),
-}));
 vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
   blockNameToItemType: () => 'agent_session',
@@ -301,7 +298,7 @@ describe('forwarding with selected access', () => {
       await submitted;
       expect(onSubmit).toHaveBeenCalledOnce();
       expect(mocks.success).toHaveBeenCalledWith(
-        'Message sent successfully',
+        'Message sent',
         expect.any(Object)
       );
     }

@@ -36,14 +36,14 @@ pub enum SearchError {
     /// Invalid page size
     #[error("page_size must be between 0 and 100")]
     InvalidPageSize,
-    /// Invalid query size
-    #[error("query must be at least 3 characters")]
-    InvalidQuerySize,
+    /// The query holds no search term
+    #[error("query must not be empty")]
+    EmptyQuery,
     /// Query expands into too many search terms
     #[error("query has too many terms (max 50)")]
     TooManyTerms,
     /// No query or terms provided
-    #[error("query or terms must be provided and at least 3 characters")]
+    #[error("query or terms must be provided")]
     NoQueryOrTermsProvided,
     /// No channel IDs provided
     #[error("at least one channel_id must be provided")]
@@ -81,7 +81,7 @@ impl IntoResponse for SearchError {
             | SearchError::InternalAccessRequired
             | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
-            | SearchError::InvalidQuerySize
+            | SearchError::EmptyQuery
             | SearchError::TooManyTerms
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)

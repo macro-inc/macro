@@ -56,6 +56,7 @@ use soup::domain::{
     models::{SoupProjectionHydration, SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 /// Maximum number of entity keys folded into one user-scoped Soup request.
@@ -250,6 +251,7 @@ where
             .map(|thread| SoupProjectionHydration {
                 item: SoupItem::EmailThread(thread),
                 document_server_facts: None,
+                sort_key: None,
             })
             .chain(items);
         let mut loaded = HashMap::with_capacity(requested.len());
@@ -433,7 +435,10 @@ impl SoupItemDataLoader {
         S: SoupService,
         R: SoupEmailThreadReader,
     {
-        let loader = Arc::new(DataLoader::new(loader, tokio::spawn).max_batch_size(MAX_BATCH_SIZE));
+        let loader = Arc::new(
+            DataLoader::new(loader, |batch| tokio::spawn(batch.in_current_span()))
+                .max_batch_size(MAX_BATCH_SIZE),
+        );
         // A WebSocket may receive repeated updates for the same entity. Only
         // coalesce concurrent loads; never retain an item across updates.
         loader.enable_all_cache(false);
@@ -460,7 +465,25 @@ impl SoupItemDataLoader {
 /// and querying second; both need every committed row, which a replica
 /// lagging by seconds does not have. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
+pub struct AgentSessionEntityLoader(pub(crate) SoupItemDataLoader);
+
+impl AgentSessionEntityLoader {
+    /// Build the reader over a primary-backed Soup service. It always rechecks
+    /// the viewer's team: linked pull requests are stored for the team, so a
+    /// read without it reports every session's PR state as unknown.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Primary-backed Soup reader for reads that must see a write committed
 /// moments earlier, before a replica has replayed it: `soupUpdates`
@@ -468,7 +491,24 @@ pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 /// caches it as current, and `soupEntity`, which opens an entity right after
 /// it is created or edited. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct PrimarySoupItemLoader(pub SoupItemDataLoader);
+pub struct PrimarySoupItemLoader(pub(crate) SoupItemDataLoader);
+
+impl PrimarySoupItemLoader {
+    /// Build the reader over a primary-backed Soup service, rechecking the
+    /// viewer's team so team-stored PRs and CRM records hydrate.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Build the Soup DataLoader from the Soup service and the access-checked
 /// email thread reader.
@@ -588,6 +628,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ExternalChat => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",

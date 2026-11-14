@@ -137,6 +137,9 @@ impl Planner {
             display_name: None,
             infer_type,
         };
+        if column.formula().is_some() {
+            self.rederived.push((entry.table.id, id));
+        }
         let writable = grant_writes(self.grant);
         if let Some(entry) = self.entry_mut(entry.table.id) {
             entry.columns.push(ColumnEntry {
@@ -501,6 +504,7 @@ impl Planner {
                 cells: converted.into_iter().collect(),
             },
         );
+        self.rederived.push((entry.table.id, column_id));
         Ok(Write::ReplaceColumn {
             table_id: entry.table.id,
             read_version,
@@ -572,6 +576,7 @@ impl Planner {
             stored.definition = definition;
         }
         self.found.cells.remove(&place.column);
+        self.rederived.push((entry.table.id, place.column));
         Ok(Write::ReplaceColumn {
             table_id: entry.table.id,
             read_version: Some(entry.table.version),
@@ -637,6 +642,7 @@ impl Planner {
                 planned.definition = stored;
             }
         }
+        self.rederived.push((entry.table.id, place.column));
         Ok(Write::ReplaceColumn {
             table_id: entry.table.id,
             read_version,

@@ -2,11 +2,13 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
+import { useRecordSuggestionsActivity } from '@app/features/suggestions/queries/use-record-suggestions-activity';
 import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
+import { rememberMobileEmailAttribution } from '@app/lib/analytics/signupAttribution';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
@@ -61,6 +63,10 @@ import { AppRouterView } from './app-router-view';
 import { useSyncLoginCookie } from './use-sync-login-cookie';
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  // Before any await: the desktop link's ad parameters have to be stored
+  // before signup navigates away to the identity provider.
+  rememberMobileEmailAttribution();
+
   await prefetchUserInfo();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
@@ -148,6 +154,10 @@ function useUserInfoSideEffects() {
           email: user.email,
           os,
         });
+      } else {
+        // Already identified, including as the mobile-capture email on this
+        // browser. identify() will not switch that browser to the account id.
+        analytics.linkMobileCapturePerson(user.id, user.email);
       }
 
       const planKey = `${user.id}:${user.licenseStatus}`;
@@ -179,6 +189,7 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  */
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
+  useRecordSuggestionsActivity();
   useSessionWebsockets();
   useNotificationCoverTimeout();
   onMount(() => {

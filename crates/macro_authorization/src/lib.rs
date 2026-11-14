@@ -23,6 +23,7 @@
 //! | Policy | Admitted principals | Narrowed output |
 //! |---|---|---|
 //! | [`UserOrInternal`] | User or internal service acting for a user | [`UserOrInternalAuthorization`] |
+//! | [`AccountHolderOrInternal`] | Same as [`UserOrInternal`], refusing an account manager's credential and a scoped agent run's | [`UserOrInternalAuthorization`] |
 //! | [`UserOrInternalService`] | User or internal service, with optional acting user | [`UserOrInternalServiceAuthorization`] |
 //! | [`ActingUser`] | Any principal with an acting user | [`ActingUserAuthorization`] |
 //! | [`UserOnly`] | Directly authenticated user | [`MacroUserAuthentication`] |
@@ -62,11 +63,12 @@ pub use domain::{
     bot_authorizer::BotAuthorizerService,
     harness_authorizer::HarnessAuthorizerService,
     models::{
-        BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
-        BotTokenAuthorization, CredentialOrigin, HarnessAuthentication, HarnessAuthorizationOwner,
-        HarnessTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
-        MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
-        ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
+        AccountManagerCredential, AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication,
+        BotAuthorizationOwner, BotScope, BotTokenAuthorization, CredentialOrigin,
+        HarnessAuthentication, HarnessAuthorizationOwner, HarnessTokenAuthorization,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
+        MacroUserAuthentication, ResolvedApiKeyUser, ResolvedBotActingUser, ValidatedCredential,
+        ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, HarnessAuthorizationRepo, HarnessAuthorizer,
@@ -80,19 +82,19 @@ pub use domain::{
 #[allow(deprecated)]
 #[cfg(feature = "axum")]
 pub use inbound::{
-    ActingEntity, ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy,
-    BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
+    AccountHolderOrInternal, ActingEntity, ActingUser, ActingUserAuthorization, AnyPrincipal,
+    AuthorizationPolicy, BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
     BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotOnly,
-    HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessOnly, INTERNAL_API_KEY_HEADER,
-    INTERNAL_FUSIONAUTH_USER_ID_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER,
-    INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization, InternalEntity, InternalOnly,
-    LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
-    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationState,
-    OptionalMacroAuthorizationExtractor, USER_API_KEY_HEADER, UserBotOrHarness,
-    UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
-    UserOrBotAuthorization, UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization,
-    UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    CODE_EXECUTION_HEADER, HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessOnly,
+    INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER,
+    INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization,
+    InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
+    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
+    MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    USER_API_KEY_HEADER, UserBotOrHarness, UserBotOrHarnessAuthorization, UserBotOrHarnessEntity,
+    UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
+    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
+    UserOrInternalServiceAuthorization, is_agent_run,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]

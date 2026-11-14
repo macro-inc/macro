@@ -1,4 +1,11 @@
 export default {
+  notSpam: 'Not spam',
+  restoreEmail: 'Restore',
+  toastEmailRestoreRequested: 'Restore requested',
+  toastEmailRestoreFailed: {
+    one: 'Could not restore {{count}} email. Try again.',
+    other: 'Could not restore {{count}} emails. Try again.',
+  },
   // Action labels shared by the entity menus, file menu, command menu and
   // project/folder menus.
   markDone: 'Mark Done',
@@ -7,9 +14,11 @@ export default {
   markUnread: 'Mark Unread',
   open: 'Open',
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',
   rename: 'Rename',
+  askMacro: 'Ask Macro',
   setChannelPicture: 'Set channel picture',
   removeChannelPicture: 'Remove channel picture',
   favorite: 'Favorite',
@@ -18,11 +27,18 @@ export default {
   addToFavorites: 'Add to favorites',
   archive: 'Archive',
   unarchive: 'Unarchive',
+  // An agent session's auto-archive overrides.
+  archiveWhenPullRequestsMerge: 'Archive when PRs merge',
+  archiveWhenSessionCloses: 'Archive when session closes',
+  autoArchiveUseDefaultOn: 'Use default (On)',
+  autoArchiveUseDefaultOff: 'Use default (Off)',
+  autoArchiveOn: 'On',
+  autoArchiveOff: 'Off',
   openOnGitHub: 'Open on GitHub',
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
   removeTag: 'Remove tag',
-  snoozeNotifications: 'Snooze notifications…',
+  snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
   remindMe: 'Remind me',
@@ -30,6 +46,13 @@ export default {
   addToProject: 'Add to project…',
   openProjectNamed: 'Open project {{name}}',
   changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
+  openEntityNamed: 'Open {{name}}',
+  changeEntity: 'Change {{property}}',
+  unlinkValue: 'Unlink',
+  unlinking: 'Unlinking…',
+  unpinProperty: 'Unpin property',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -39,13 +62,22 @@ export default {
   markDoneCommand: 'Mark done',
   markReadCommand: 'Mark read',
   markUnreadCommand: 'Mark unread',
+  discardDraftCommand: {
+    one: 'Discard draft',
+    other: 'Discard drafts',
+  },
   copyLinkCommand: 'Copy link',
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
+  shareCommand: {
+    one: 'Share',
+    other: 'Share items',
+  },
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
+  createEvent: 'Create event',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
@@ -80,6 +112,17 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastOpenSplit: 'Open split',
+  toastFolderCreated: '{{name}} created',
+  toastFolderUploaded: '{{name}} uploaded',
+  toastFolderCreateFailed: 'Folder creation failed',
+  toastFolderCreateError: 'Could not create the folder. Please try again.',
+  toastFolderItemsSaveFailed:
+    'Folder created, but some items could not be saved. Retry to finish adding your tags and files.',
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
+  toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {
     one: 'Copied {{count}} item',
@@ -101,6 +144,11 @@ export default {
     other: 'Deleted {{count}} items',
   },
   toastDeleteFailed: 'Failed to delete',
+  toastDiscardedDrafts: {
+    one: 'Draft discarded',
+    other: '{{count}} drafts discarded',
+  },
+  toastDiscardDraftFailed: 'Failed to discard draft',
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -238,6 +286,7 @@ export default {
   folderDuplicateLimitHint:
     'Folders with more than 100 files, chats, and subfolders can’t be duplicated.',
   toastGithubLinkCopied: 'GitHub link copied to clipboard',
+  toastGithubLinkCopyFailed: 'Could not copy GitHub link',
   toastBranchNameCopied: 'Branch name copied to clipboard',
   download: 'Download',
   copyGithubLink: 'Copy GitHub Link',
@@ -258,4 +307,34 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  toastProjectActionLoadFailed: 'Could not open this project action',
+  toastProjectRenamed: 'Project renamed',
+  toastProjectsDeleted: {
+    one: 'Project deleted',
+    other: 'Deleted {{count}} projects',
+  },
+
+  // Confirming a project delete.
+  deleteProjectsTitle: {
+    one: 'Delete project?',
+    other: 'Delete {{count}} projects?',
+  },
+  deleteProjectsDescription: {
+    one: 'The project and its activity will be deleted. Its tasks will remain in your workspace.',
+    other:
+      'These projects and their activity will be deleted. Their tasks will remain in your workspace.',
+  },
+  deleteProjectsLabel: {
+    one: 'Delete project',
+    other: 'Delete {{count}} projects',
+  },
+  deleteProjectsFailed: 'Could not delete. Please try again.',
+  deleteProjectsPartlyFailed: {
+    one: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+    other: 'Deleted {{deleted}} of {{count}}. The rest could not be deleted.',
+  },
+
+  // Markdown document layout.
+  turnOnWideMode: 'Turn on wide mode',
+  turnOffWideMode: 'Turn off wide mode',
 };

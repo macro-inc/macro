@@ -1,3 +1,11 @@
+import IconMenuAutomation from '@icon/system/regular/clock.svg';
+import IconHash from '@icon/system/regular/hash-straight.svg';
+import IconMenuSkill from '@icon/system/regular/lightning.svg';
+import IconTaskGlyph from '@icon/system/regular/list-checks.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconTaskPriority from '@icon/system/regular/priority-urgent.svg';
+import IconMenuChat from '@icon/system/regular/sparkle.svg';
+import IconTaskStatus from '@icon/system/regular/task-in-progress.svg';
 import {
   type Component,
   createSignal,
@@ -8,14 +16,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconCall from '../../../assets/icons/chat-scene/call.svg';
-import IconHash from '../../../assets/icons/chat-scene/channel-hash.svg';
-import IconMenuAutomation from '../../../assets/icons/chat-scene/menu-automation.svg';
-import IconMenuChat from '../../../assets/icons/chat-scene/menu-open-in-chat.svg';
-import IconMenuSkill from '../../../assets/icons/chat-scene/menu-skill.svg';
-import IconTaskGlyph from '../../../assets/icons/chat-scene/task-glyph.svg';
-import IconTaskPriority from '../../../assets/icons/chat-scene/task-priority.svg';
-import IconTaskStatus from '../../../assets/icons/chat-scene/task-status-progress.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarTeo from '../../../assets/people/teo.webp';
@@ -85,10 +85,10 @@ const TL = {
 };
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+const ease = (x: number) => 1 - (1 - x) ** 3;
 /** Slower in and out, for things that travel rather than just appear. */
 const easeInOut = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 
 /*
  * The thread connector: a vertical drop into a quarter-circle turn.
@@ -326,7 +326,7 @@ export function AgentThreadGraphic() {
           padding: 8px 8px 8px 16px;
           width: 100%;
         }
-        .atg-title { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .atg-title { font-size: 10px; font-weight: 500; white-space: nowrap; }
         .atg-tabs {
           align-items: flex-start;
           background: #000;
@@ -420,7 +420,7 @@ export function AgentThreadGraphic() {
           white-space: nowrap;
           width: 100%;
         }
-        .atg-who { font-weight: 600; }
+        .atg-who { font-weight: 500; }
         .atg-time, .atg-meta { color: #8b8b8b; font-weight: 400; }
         .atg-text { color: #fff; font-size: 10px; margin: 0; position: relative; }
         /* The @mention chip: a highlight behind the word rather than a pill
@@ -593,7 +593,7 @@ export function AgentThreadGraphic() {
               />
               <div class="atg-msgbody">
                 <div class="atg-msghead">
-                  <span class="atg-who">Jacob</span>
+                  <span class="atg-who">Jacob Beckerman</span>
                   <span class="atg-time">8:02 AM</span>
                 </div>
                 <p class="atg-text">
@@ -708,7 +708,7 @@ export function AgentThreadGraphic() {
                 />
                 <div class="atg-agentbody">
                   <div class="atg-msghead">
-                    <span class="atg-who">Jacob</span>
+                    <span class="atg-who">Jacob Beckerman</span>
                     <span class="atg-time">8:05 AM</span>
                   </div>
                   <p class="atg-text">

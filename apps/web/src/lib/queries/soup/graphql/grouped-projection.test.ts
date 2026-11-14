@@ -41,6 +41,7 @@ function row(
 > {
   return {
     __typename: 'GraphqlSoupDocument',
+    appearance: null,
     id: String(id),
     entityType: 'DOCUMENT',
     displayName: String(id),
@@ -84,12 +85,20 @@ function page(count: number): GroupSoupQuery {
         bins: [
           {
             key: 'a',
+            displayOrder: null,
             label: null,
             totalCount: count,
             nextCursor: null,
             items: Array.from({ length: count }, (_, id) => row(id)),
           },
-          { key: 'b', label: null, totalCount: 0, nextCursor: null, items: [] },
+          {
+            key: 'b',
+            displayOrder: null,
+            label: null,
+            totalCount: 0,
+            nextCursor: null,
+            items: [],
+          },
         ],
       },
     },

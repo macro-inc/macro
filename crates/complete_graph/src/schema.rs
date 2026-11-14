@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod test;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
-use crate::realtime::AgentSessionLogSubscriptions;
+use crate::realtime::{AgentSessionActivitySubscriptions, AgentSessionLogSubscriptions};
 use crate::saved_view::{GraphqlSavedView, GraphqlSavedViewPage, SavedViewMutationRoot};
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
@@ -47,12 +47,19 @@ use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
+use graphql_notification_inbox::{
+    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
+    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+};
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
     GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
     NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
     load_property_options,
+};
+use graphql_registered_work::{
+    GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
 };
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
@@ -107,6 +114,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
+    NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
 );
 
@@ -134,19 +142,22 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
+            NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
         )
     }
 }
 
 /// Root subscription object combining realtime Soup, notification,
-/// activity, and work feed adapters.
+/// activity, work feed and notification inbox adapters.
 #[derive(MergedSubscription)]
 pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
     ActivitySubscriptionRoot<AS>,
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -461,6 +472,8 @@ where
             NotificationSubscriptionRoot::new(notification_subscription_service),
             ActivitySubscriptionRoot::new(activity_subscription_service),
             WorkFeedSubscriptionRoot::default(),
+            NotificationInboxSubscriptionRoot::default(),
+            RegisteredWorkSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -675,9 +688,79 @@ where
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| async_graphql::Error::new(error.to_string()));
             }
+            // The viewer reopens and refetches; this is how often it has to.
+            tracing::warn!(
+                agent.session.id = %session_id,
+                "closing an agent session log subscription that fell behind"
+            );
             yield Err(async_graphql::Error::new(
                 "agent session log subscription closed after falling behind",
             ));
+        })
+    }
+
+    /// Recorded activity from any invocation associated with this accessible session.
+    /// The stream errors when rows were missed; clients must refetch its REST page.
+    async fn agent_session_activity_appended(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<GraphqlActivityEvent>>,
+        > + 'static,
+    > {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+        let session_id = parse_id(session_id, "sessionId")?;
+        let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx, user_id, session_id,
+        )
+        .await?
+        .is_some();
+        if !accessible {
+            return Err(async_graphql::Error::new("agent session not found"));
+        }
+        let subscriptions = ctx.data::<AgentSessionActivitySubscriptions>()?.clone();
+        let mut receiver = subscriptions.subscribe();
+        Ok(async_stream::stream! {
+            let mut ownership = HashMap::new();
+            // The empty first frame acknowledges that delivery is listening.
+            // The client rereads after this point to close the REST-to-stream gap.
+            yield Ok(Vec::new());
+            loop {
+                match receiver.recv().await {
+                    Ok(record) => {
+                        let Some(correlation_id) = record.agent_correlation_id else { continue };
+                        let belongs = if let Some(belongs) = ownership.get(&correlation_id) {
+                            *belongs
+                        } else {
+                            match subscriptions.session_for_correlation(correlation_id).await {
+                                Ok(owner) => {
+                                    let belongs = owner == Some(session_id);
+                                    if ownership.len() >= 4096 {
+                                        ownership.clear();
+                                    }
+                                    ownership.insert(correlation_id, belongs);
+                                    belongs
+                                }
+                                Err(error) => {
+                                    yield Err(async_graphql::Error::new(error.to_string()));
+                                    break;
+                                }
+                            }
+                        };
+                        if belongs {
+                            yield Ok(vec![GraphqlActivityEvent::from(record.as_ref().clone())]);
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(agent.session.id = %session_id, skipped, "closing an agent session activity subscription that fell behind");
+                        yield Err(async_graphql::Error::new("agent session activity subscription closed after falling behind"));
+                        break;
+                    }
+                }
+            }
         })
     }
 }
@@ -725,6 +808,18 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// A page filtered and ordered across the entire authorized table.
+    async fn database_view_rows(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        input: graphql_databases::DatabaseViewRowsInput,
+    ) -> async_graphql::Result<
+        graphql_databases::DatabaseViewRowsPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_databases::resolve_database_view_rows(ctx, database_id, input).await
     }
 
     /// One initiative accessible to the authenticated viewer.
@@ -848,6 +943,12 @@ where
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
     }
 
+    /// Authenticated personal directory fields supplied by `graphql_contacts`.
+    #[graphql(flatten)]
+    async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
+        graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {
@@ -864,6 +965,40 @@ where
         input: Option<WorkFeedInput>,
     ) -> async_graphql::Result<GraphqlWorkFeedPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
         resolve_work_feed::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            input.unwrap_or_default(),
+        )
+        .await
+    }
+
+    /// The agent sessions `accountIds` registered as their work that the
+    /// authenticated user can view, newest first, at most 50 accounts.
+    /// Registrations of sessions the user cannot view are completely hidden.
+    async fn registered_work(
+        &self,
+        ctx: &Context<'_>,
+        account_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlRegisteredWork<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
+        resolve_registered_work::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            account_ids,
+        )
+        .await
+    }
+
+    /// A page of the authenticated user's notifications inbox, newest group
+    /// first: their pending notifications grouped by the entity they are
+    /// filed under and cut into rows, one per conversation thread, channel
+    /// top level, email thread, task, request or agent session.
+    async fn notification_inbox(
+        &self,
+        ctx: &Context<'_>,
+        input: Option<NotificationInboxInput>,
+    ) -> async_graphql::Result<GraphqlNotificationInboxPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>>
+    {
+        resolve_notification_inbox::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
             ctx,
             self.user_id.clone(),
             input.unwrap_or_default(),
@@ -926,10 +1061,10 @@ where
         .await
     }
 
-    /// The viewer's Focus: signal threads in their own inboxes worth their
-    /// attention, highest priority first (importance, halved for every 2 days
-    /// since the latest inbound mail), with mail in the last `days` days
-    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    /// The viewer's Focus: threads in their own inboxes worth their attention,
+    /// newest first by latest message time in either direction, with mail in
+    /// the last `days` days (default 30, at most 90). Each thread carries a
+    /// `focus` field that explains why.
     async fn email_focus(
         &self,
         ctx: &Context<'_>,

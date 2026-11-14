@@ -97,16 +97,11 @@ pub async fn insert_attachments(
         .await?;
     }
 
-    // The thread-level flag only moves when a calendar attachment enters or
-    // leaves this message's attachment set.
-    let calendar_set_changed = orphaned_attachments
-        .iter()
-        .chain(new_attachments.iter())
-        .any(|a| is_calendar_attachment(a.filename.as_deref(), a.mime_type.as_deref()));
-
+    // The thread-level attachment flags only move when an attachment enters
+    // or leaves this message's attachment set.
     if new_attachments.is_empty() {
-        if calendar_set_changed {
-            sync_thread_calendar_flag(&mut *tx, message_id).await?;
+        if !orphaned_attachments.is_empty() {
+            sync_thread_attachment_flags(&mut *tx, message_id).await?;
         }
         return Ok(());
     }
@@ -163,24 +158,14 @@ pub async fn insert_attachments(
         .execute(&mut *tx)
         .await?;
 
-    if calendar_set_changed {
-        sync_thread_calendar_flag(&mut *tx, message_id).await?;
-    }
+    sync_thread_attachment_flags(&mut *tx, message_id).await?;
 
     Ok(())
 }
 
-/// Mirrors the SQL calendar-attachment predicate behind the CalendarOnly
-/// email filter: `filename ILIKE '%.ics' OR mime_type IN ('text/calendar',
-/// 'application/ics')`.
-fn is_calendar_attachment(filename: Option<&str>, mime_type: Option<&str>) -> bool {
-    filename.is_some_and(|f| f.to_ascii_lowercase().ends_with(".ics"))
-        || mime_type.is_some_and(|m| m == "text/calendar" || m == "application/ics")
-}
-
 /// Resolves the message's thread and recomputes its denormalized
-/// `has_calendar_attachment` flag.
-async fn sync_thread_calendar_flag(
+/// attachment flags.
+async fn sync_thread_attachment_flags(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
 ) -> anyhow::Result<()> {
@@ -192,7 +177,7 @@ async fn sync_thread_calendar_flag(
     .await?;
 
     if let Some(thread_id) = thread_id {
-        crate::threads::update::sync_thread_calendar_flag(tx, thread_id).await?;
+        crate::threads::update::sync_thread_attachment_flags(tx, thread_id).await?;
     }
 
     Ok(())
@@ -393,15 +378,27 @@ pub async fn get_document_id_by_att_id_and_link(
     Ok(result.map(|record| record.document_id))
 }
 
-/// Get document_id for email attachment if record exists
+/// The live document linked to an email attachment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedAttachmentDocument {
+    /// The document id.
+    pub document_id: String,
+    /// The document's bytes have not finished reaching storage. DOCX is left
+    /// out: it stays not uploaded until its conversion finishes.
+    pub awaiting_upload: bool,
+}
+
+/// Get the document for email attachment if record exists
 #[tracing::instrument(skip(db), err)]
-pub async fn get_document_id_by_att_id(
+pub async fn get_document_by_att_id(
     db: &Pool<Postgres>,
     email_attachment_id: Uuid,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<Option<LinkedAttachmentDocument>> {
     let result = sqlx::query!(
         r#"
-        SELECT document_id
+        SELECT
+            document_id,
+            (NOT d.uploaded AND d."fileType" IS DISTINCT FROM 'docx') AS "awaiting_upload!"
         FROM document_email de
         INNER JOIN "Document" d on de.document_id = d.id
         INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
@@ -413,7 +410,10 @@ pub async fn get_document_id_by_att_id(
     .fetch_optional(db)
     .await?;
 
-    Ok(result.map(|record| record.document_id))
+    Ok(result.map(|record| LinkedAttachmentDocument {
+        document_id: record.document_id,
+        awaiting_upload: record.awaiting_upload,
+    }))
 }
 
 /// Get thread_id and link_id for an email attachment

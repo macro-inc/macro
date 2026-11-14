@@ -1,4 +1,8 @@
-import { runDatabaseSql } from '@core/database-sql/driver';
+import {
+  type DatabaseSqlSourceFailure,
+  runDatabaseSql,
+} from '@core/database-sql/driver';
+import type { Row } from '@core/database-sql/generated/types';
 import { readTranscript, replay } from '@core/database-sql/tests/transcript';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost, CacheReadArgs } from '@graphql-cache/host/types';
@@ -18,6 +22,7 @@ import {
   fetchExchange,
   type Operation,
 } from '@urql/core';
+import { okAsync } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 import { empty, fromValue, mergeMap, pipe } from 'wonka';
 import { createGraphqlRowSource } from './graphql-source';
@@ -183,11 +188,86 @@ function fakeClient(
   };
 }
 
-const noPeople = async () => {
-  throw new Error('no people in this catalog');
-};
-
 describe('the GraphQL row source', () => {
+  it('refuses people requests instead of enumerating a browser directory', async () => {
+    const server = fakeClient(() => {
+      throw new Error('No network rows expected');
+    });
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+    });
+    const result = await source.page(
+      { type: 'people', ids: null },
+      [],
+      null,
+      500,
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
+    );
+    expect(result.isErr() && result.error.kind).toBe('rejected');
+    expect(server.operationNames()).toEqual([]);
+  });
+  it('pages only bounded identity hints and preserves empty lookup continuations', async () => {
+    const server = fakeClient(() => {
+      throw new Error('No GraphQL contact reads');
+    });
+    const people = vi.fn((ids: string[]) =>
+      okAsync<Row[], DatabaseSqlSourceFailure>(
+        ids.includes('macro|c@example.com') ? [{ id: SAM, cells: {} }] : []
+      )
+    );
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+      people,
+    });
+    const step = {
+      decode: <T>(_rows: number, operation: () => T) => operation(),
+      request: () => {},
+      headers: () => ({}),
+    };
+    const ids = [
+      'macro|a@example.com',
+      'macro|b@example.com',
+      'macro|c@example.com',
+    ];
+    const first = await source.page({ type: 'people', ids }, [], null, 2, step);
+    expect(first._unsafeUnwrap()).toEqual({ rows: [], next: '2' });
+    const second = await source.page({ type: 'people', ids }, [], '2', 2, step);
+    expect(second._unsafeUnwrap()).toEqual({
+      rows: [{ id: SAM, cells: {} }],
+      next: null,
+    });
+    expect(people.mock.calls.map(([ids]) => ids)).toEqual([
+      ids.slice(0, 2),
+      ids.slice(2),
+    ]);
+    expect(
+      (
+        await source.page(
+          { type: 'people', ids: Array(101).fill(ids[0]) },
+          [],
+          null,
+          500,
+          step
+        )
+      ).isErr()
+    ).toBe(true);
+    expect(
+      (
+        await source.page({ type: 'people', ids: [] }, [], null, 500, step)
+      )._unsafeUnwrap()
+    ).toEqual({ rows: [], next: null });
+    expect(people).toHaveBeenCalledTimes(2);
+    expect(server.operationNames()).toEqual([]);
+  });
+
   it('reads a select-column filter as one Soup query over the table', async () => {
     const transcript = readTranscript('select-column-filter');
     const server = fakeClient(() => soupPage([acme, globex], null));
@@ -197,7 +277,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -238,7 +317,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -256,6 +334,7 @@ describe('the GraphQL row source', () => {
           bins: [
             {
               key: WON,
+              displayOrder: null,
               label: null,
               totalCount: 2,
               nextCursor: null,
@@ -263,6 +342,7 @@ describe('the GraphQL row source', () => {
             },
             {
               key: LEAD,
+              displayOrder: null,
               label: null,
               totalCount: 1,
               nextCursor: null,
@@ -270,6 +350,7 @@ describe('the GraphQL row source', () => {
             },
             {
               key: '',
+              displayOrder: null,
               label: null,
               totalCount: 4,
               nextCursor: null,
@@ -285,7 +366,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -326,7 +406,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -375,7 +454,6 @@ describe('the GraphQL row source', () => {
       client: server.client,
       catalog: { tables: [] },
       requestPolicy: 'network-only',
-      people: noPeople,
     });
 
     const page = await source.page(
@@ -412,7 +490,6 @@ describe('the GraphQL row source', () => {
         client: server.client,
         catalog: transcript.catalog,
         requestPolicy: 'network-only',
-        people: noPeople,
       }),
       open: replay(transcript),
     });
@@ -499,7 +576,6 @@ describe('concurrent SQL cache and network reads', () => {
             catalog: transcript.catalog,
             requestPolicy: policy,
             cache: host,
-            people: noPeople,
           }),
           open: replay(transcript),
         });

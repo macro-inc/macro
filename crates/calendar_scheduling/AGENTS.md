@@ -31,7 +31,14 @@ MacroDB migrations.
 
 - Depends on: `calendar_events`, `teams`, `email_validator`; optionally `call`
   via `calendar_events` (meeting links).
-- Used by: `forms`, `ai_tools`.
+- Used by: `forms`, `ai_tools`, `calendar_service` (router, mounted at `/scheduling`).
+
+## Interfaces
+
+- Host routes in `src/inbound/router.rs` carry `utoipa::path` annotations and are
+  listed in `services/calendar_service/src/api/swagger.rs`; the SDK's
+  `macro.calendar.booking` wraps them. Domain models derive `ToSchema` under the
+  `schema` feature (part of `inbound`); keep `ToSchema` beside every `JsonSchema`.
 
 ## Recipes
 
@@ -54,6 +61,13 @@ MacroDB migrations.
   link config.
 - Reschedule counts only increase after a successful move; old records default
   to zero rather than reconstructing unknown history.
+- Availability, reschedule slots, the agent's booking tools, forms bookings and
+  form attachment all gate on `macro_services/sync_health.rs`: only calendars
+  with Busy on count, a transient failure serves stored events for
+  `STALE_AVAILABILITY_WINDOW` after the next sync was due (the last good sync,
+  or a day after it for a daily-synced Google system calendar), and the creation
+  calendar refuses only a permanent or reauthorization failure. Change them
+  together.
 
 ## Related
 

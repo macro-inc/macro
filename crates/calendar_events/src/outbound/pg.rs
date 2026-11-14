@@ -10,6 +10,7 @@ mod join_requests;
 mod outlook;
 mod replacement;
 mod source_access;
+mod sync_health;
 
 use change_log::ChangeLogBatch;
 
@@ -35,14 +36,14 @@ use crate::domain::{
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantBinding, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarMentionViewerCopy, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncStatus,
-        CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar, DueCalendarReminder,
-        EventDetails, EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_SCOPES,
-        GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel, GuestPolicy, MeetingCopy,
-        OccurrenceException, OccurrenceListing, OccurrenceRange, OwnedInbox, ProviderCalendar,
-        StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities, VisibleCalendar,
-        is_system_calendar,
+        CalendarOccurrenceCursor, CalendarProvider, CalendarReminderFiring, CalendarSyncFailure,
+        CalendarSyncStatus, CalendarWatchRelease, ConferenceProvider, DisconnectedCalendar,
+        DueCalendarReminder, EventDetails, EventReminderOverride, EventReminders, EventStart,
+        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
+        GuestPolicy, MeetingCopy, OccurrenceException, OccurrenceListing, OccurrenceRange,
+        OwnedInbox, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, ViewerCapabilities,
+        VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1827,7 +1828,8 @@ impl CalendarRepository for PgCalendarRepository {
         if !sync.cancelled_provider_event_ids.is_empty() {
             // A cancelled recurring master retires its expanded instances via
             // provider_recurring_event_id, matching Google's tombstone shape.
-            let affected_event_ids = sqlx::query_scalar!(
+            let removed = sqlx::query_as!(
+                RemovedSources,
                 r#"
                 WITH deleted_sources AS (
                     DELETE FROM calendar_event_sources source
@@ -1838,10 +1840,13 @@ impl CalendarRepository for PgCalendarRepository {
                             source.provider_event_id = ANY($3::text[])
                             OR source.provider_recurring_event_id = ANY($3::text[])
                       )
-                    RETURNING source.event_id
+                    RETURNING source.event_id, source.event_type
                 )
-                SELECT DISTINCT event_id AS "event_id!"
+                SELECT
+                    event_id AS "event_id!",
+                    bool_or(event_type = 'out_of_office') AS "out_of_office!"
                 FROM deleted_sources
+                GROUP BY event_id
                 "#,
                 account_id,
                 sync.calendar_id,
@@ -1850,20 +1855,15 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
-            if !affected_event_ids.is_empty() {
+            if !removed.is_empty() {
                 source_access::invalidate_account_freshness(&mut tx, account_id).await?;
             }
-            for event_id in affected_event_ids {
-                if let Some(outcome) =
-                    restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-                {
-                    retired.push(outcome);
-                }
-            }
+            retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
         }
 
         if let Some(observed_provider_event_ids) = &sync.observed_provider_event_ids {
-            let affected_event_ids = sqlx::query_scalar!(
+            let removed = sqlx::query_as!(
+                RemovedSources,
                 r#"
                 WITH deleted_sources AS (
                     DELETE FROM calendar_event_sources source
@@ -1871,10 +1871,13 @@ impl CalendarRepository for PgCalendarRepository {
                       AND source.account_id = $1
                       AND source.calendar_id = $2
                       AND NOT (source.provider_event_id = ANY($3::text[]))
-                    RETURNING source.event_id
+                    RETURNING source.event_id, source.event_type
                 )
-                SELECT DISTINCT event_id AS "event_id!"
+                SELECT
+                    event_id AS "event_id!",
+                    bool_or(event_type = 'out_of_office') AS "out_of_office!"
                 FROM deleted_sources
+                GROUP BY event_id
                 "#,
                 account_id,
                 sync.calendar_id,
@@ -1883,16 +1886,10 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
-            if !affected_event_ids.is_empty() {
+            if !removed.is_empty() {
                 source_access::invalidate_account_freshness(&mut tx, account_id).await?;
             }
-            for event_id in affected_event_ids {
-                if let Some(outcome) =
-                    restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-                {
-                    retired.push(outcome);
-                }
-            }
+            retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
         }
 
         let has_materialized_range = sync.materialized_range.is_some();
@@ -1914,6 +1911,7 @@ impl CalendarRepository for PgCalendarRepository {
                 synced_at = now(),
                 last_sync_error = NULL,
                 last_sync_error_at = NULL,
+                last_sync_error_kind = NULL,
                 consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
@@ -1980,6 +1978,7 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_id: Uuid,
+        kind: CalendarSyncFailure,
         message: &str,
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
@@ -1989,6 +1988,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             UPDATE calendars
             SET last_sync_error = $3,
+                last_sync_error_kind = $4,
                 last_sync_error_at = now(),
                 consecutive_sync_failures = consecutive_sync_failures + 1,
                 updated_at = now()
@@ -2000,6 +2000,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id,
             account_id,
             message,
+            sync_health::stored_sync_failure(kind),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -2007,9 +2008,9 @@ impl CalendarRepository for PgCalendarRepository {
         // Clients see a calendar's error only once it crosses the badge
         // threshold, so only a newly shown or reworded badge is a change.
         let mut log = ChangeLogBatch::default();
-        let badged_after =
-            failures.is_some_and(|failures| failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD);
-        if badged_after && badged_before.as_deref() != Some(message) {
+        if failures.is_some_and(|failures| {
+            failure_changes_sync_error_badge(badged_before.as_deref(), failures, message)
+        }) {
             log.record(
                 key.email_link_id,
                 CalendarChangeOp::UpsertCalendar(calendar_id),
@@ -2162,7 +2163,8 @@ impl CalendarRepository for PgCalendarRepository {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
-        let affected_event_ids = sqlx::query_scalar!(
+        let removed = sqlx::query_as!(
+            RemovedSources,
             r#"
             WITH deleted_sources AS (
                 DELETE FROM calendar_event_sources source
@@ -2172,10 +2174,13 @@ impl CalendarRepository for PgCalendarRepository {
                         source.calendar_id IS NULL
                         OR NOT (source.calendar_id = ANY($2::uuid[]))
                   )
-                RETURNING source.event_id
+                RETURNING source.event_id, source.event_type
             )
-            SELECT DISTINCT event_id AS "event_id!"
+            SELECT
+                event_id AS "event_id!",
+                bool_or(event_type = 'out_of_office') AS "out_of_office!"
             FROM deleted_sources
+            GROUP BY event_id
             "#,
             account_id,
             &calendar_ids,
@@ -2183,16 +2188,10 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        if !affected_event_ids.is_empty() {
+        if !removed.is_empty() {
             source_access::invalidate_account_freshness(&mut tx, account_id).await?;
         }
-        for event_id in affected_event_ids {
-            if let Some(outcome) =
-                restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-            {
-                retired.push(outcome);
-            }
-        }
+        retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
 
         let flipped_calendars = sqlx::query!(
             r#"
@@ -2335,10 +2334,20 @@ impl CalendarRepository for PgCalendarRepository {
                 event_id: row.id,
                 owner_id: row.owner_id,
                 deleted: false,
+                team_ooo_changed: true,
             }
         }));
+        // One event can land here twice; either report can carry the hint.
+        let ooo_changed = retired
+            .iter()
+            .filter(|outcome| outcome.team_ooo_changed)
+            .map(|outcome| outcome.event_id)
+            .collect::<HashSet<_>>();
         let mut announced = HashSet::new();
-        retired.retain(|outcome| announced.insert(outcome.event_id));
+        retired.retain_mut(|outcome| {
+            outcome.team_ooo_changed = ooo_changed.contains(&outcome.event_id);
+            announced.insert(outcome.event_id)
+        });
 
         log.commit(tx).await?;
         Ok(retired)
@@ -2683,8 +2692,7 @@ impl CalendarRepository for PgCalendarRepository {
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
                 calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
-                COALESCE(preference.contributes_to_availability,
-                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -2816,7 +2824,8 @@ impl CalendarRepository for PgCalendarRepository {
         let cancelled = [provider_event_id.to_string()];
         // A deleted recurring master retires its expanded instances via
         // provider_recurring_event_id, matching Google's tombstone shape.
-        let affected_event_ids = sqlx::query_scalar!(
+        let removed = sqlx::query_as!(
+            RemovedSources,
             r#"
             WITH deleted_sources AS (
                 DELETE FROM calendar_event_sources source
@@ -2827,10 +2836,13 @@ impl CalendarRepository for PgCalendarRepository {
                         source.provider_event_id = ANY($3::text[])
                         OR source.provider_recurring_event_id = ANY($3::text[])
                   )
-                RETURNING source.event_id
+                RETURNING source.event_id, source.event_type
             )
-            SELECT DISTINCT event_id AS "event_id!"
+            SELECT
+                event_id AS "event_id!",
+                bool_or(event_type = 'out_of_office') AS "out_of_office!"
             FROM deleted_sources
+            GROUP BY event_id
             "#,
             account_id,
             calendar_id,
@@ -2839,14 +2851,7 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        let mut retired = Vec::new();
-        for event_id in affected_event_ids {
-            if let Some(outcome) =
-                restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-            {
-                retired.push(outcome);
-            }
-        }
+        let retired = retire_removed_sources(&mut tx, &mut log, removed).await?;
         log.commit(tx).await?;
         Ok(retired)
     }
@@ -3106,6 +3111,10 @@ async fn upsert_calendar_tx(
                 WHEN calendars.is_deleted THEN NULL
                 ELSE calendars.last_sync_error_at
             END,
+            last_sync_error_kind = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_kind
+            END,
             consecutive_sync_failures = CASE
                 WHEN calendars.is_deleted THEN 0
                 ELSE calendars.consecutive_sync_failures
@@ -3173,6 +3182,16 @@ async fn visible_calendar_sync_error_tx(
         row.last_sync_error
             .filter(|_| row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD)
     }))
+}
+
+/// Whether a failure stored as `message`, leaving `failures` in a row, newly
+/// shows or rewords the badge that `shown_before` held.
+fn failure_changes_sync_error_badge(
+    shown_before: Option<&str>,
+    failures: i32,
+    message: &str,
+) -> bool {
+    failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD && shown_before != Some(message)
 }
 
 fn stored_google_calendar(
@@ -3329,10 +3348,18 @@ impl CalendarBackfillRepository for PgCalendarRepository {
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, None).await?;
+        // A ready, synced account has nothing a viewer should wait for, so the
+        // run leaves it ready, as on Outlook. That includes a re-grant that
+        // kept calendar access: its sync tokens survive. Every other state is
+        // still catching up: a first import, a retry, or a return from
+        // `disabled` or `reauth_required`.
         sqlx::query!(
             r#"
             UPDATE calendar_accounts
-            SET sync_status = 'syncing',
+            SET sync_status = CASE
+                    WHEN sync_status = 'ready' AND last_synced_at IS NOT NULL THEN 'ready'
+                    ELSE 'syncing'
+                END,
                 updated_at = now()
             WHERE email_link_id = $1
             "#,
@@ -4198,7 +4225,8 @@ async fn apply_canonical_projection(
 /// Rewrite an event from its next-best remaining source, or delete it when no
 /// source on a live calendar is left, reporting which happened.
 ///
-/// `None` means the row was already gone before this call.
+/// `None` means the row was already gone before this call. The report cannot
+/// tell what was removed, so it leaves the team hint uncertain.
 async fn restore_best_source_or_delete(
     tx: &mut Transaction<'_, Postgres>,
     log: &mut ChangeLogBatch,
@@ -4256,6 +4284,7 @@ async fn restore_best_source_or_delete(
             event_id,
             owner_id: identity.owner_id,
             deleted: true,
+            team_ooo_changed: true,
         }));
     };
 
@@ -4278,7 +4307,34 @@ async fn restore_best_source_or_delete(
         event_id,
         owner_id: identity.owner_id,
         deleted: false,
+        team_ooo_changed: true,
     }))
+}
+
+/// One event that lost sources, and whether any of them was out of office.
+struct RemovedSources {
+    event_id: Uuid,
+    out_of_office: bool,
+}
+
+/// Settles the fate of each event that lost sources. The team overlay reads
+/// sources by this same typed `event_type`, so only removing an out-of-office
+/// source can withdraw a row teammates hold.
+async fn retire_removed_sources(
+    tx: &mut Transaction<'_, Postgres>,
+    log: &mut ChangeLogBatch,
+    removed: Vec<RemovedSources>,
+) -> Result<Vec<RetiredCalendarEvent>, Report> {
+    let mut retired = Vec::new();
+    for source in removed {
+        if let Some(outcome) = restore_best_source_or_delete(tx, log, source.event_id).await? {
+            retired.push(RetiredCalendarEvent {
+                team_ooo_changed: source.out_of_office,
+                ..outcome
+            });
+        }
+    }
+    Ok(retired)
 }
 
 async fn replace_attendees(

@@ -14,6 +14,7 @@ import {
   usePipedreamConnectedSlugs,
   usePipedreamOverlaysQuery,
 } from '@queries/pipedream-connectors';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -73,6 +74,9 @@ export function IntegrationsView(props: IntegrationsViewProps) {
 
 function ConnectionsContent(props: IntegrationsViewProps) {
   const { model, ready, error, partialError, retry } = useConnectionsModel();
+  // A consent finished in the system browser leaves the page visible, so the
+  // queries' visibility-based focus refetch never fires on return.
+  makeEventListener(window, 'focus', retry);
   const view = useConnectionsView();
   const [importSlackChannels, setImportSlackChannels] = createSignal(false);
   // External entry points request a connector or the complete channel import flow.
@@ -214,8 +218,8 @@ function IntegrationsOverview(
     useAgentProviderItem(props.model, 'linear'),
     useAgentProviderItem(props.model, 'notion'),
   ];
-  const items = [
-    ...useEmailItems(props),
+  const emailItems = useEmailItems(props);
+  const otherItems = [
     useGithubItem(props.model),
     ...agentTools,
     useGranolaItem(),
@@ -223,7 +227,7 @@ function IntegrationsOverview(
   ];
   // Agent tool rows need connector records; without them their state is unknown.
   const matching = () =>
-    items.filter(
+    [...emailItems(), ...otherItems].filter(
       (item) =>
         (props.agentToolsAvailable || !agentTools.includes(item)) &&
         matchesIntegration(item, query())
@@ -318,7 +322,7 @@ function IntegrationsOverview(
         <IntegrationsListHeader />
         <div
           role="rowgroup"
-          class="flex flex-col [&>[role=row]+[role=row]]:border-t [&>[role=row]+[role=row]]:border-ink/5"
+          class="flex flex-col [&>[role=row]:not(:first-child)]:border-t [&>[role=row]:not(:first-child)]:border-ink/5"
         >
           <For each={customLeftovers()}>
             {(leftover) => <LeftoverRow leftover={leftover} />}

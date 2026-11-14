@@ -20,6 +20,15 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 - `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
   `github_tokens.rs`: the credential resolvers.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
+- `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
+  `tools/list`/`tools/call` on a connected app or custom server for a caller
+  that authorized against the session itself (code executions'
+  `macro.connectedApps`). It reads the grant by session id
+  (`SessionAuthority::authorize_session`), never reaches Macro's own server or
+  previews, and shares the actor path's credential resolution and
+  not-connected answers. A call as the owner in a turn someone else prompted
+  is held per call through `OwnerApprovals::hold_in_process`, the same
+  approval record as the native tool gate.
 
 ## Scope
 
@@ -58,14 +67,26 @@ retain their existing session/repository identities.
 
 Session-egress Macro API tokens (`MacroApiTokens::mint`) carry the session's
 bound agent (`agent_session.bot_id`, read off the row as `SessionGrant.agent`) as
-their signed `agent_id` claim, so Macro's tools write as that agent. The bot
+their signed `agent_id` claim and retain `agent_session_id` provenance, so
+code mode can mint a fresh invocation correlation. Cache credentials by owner,
+agent, and session. The bot
 never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
-(code mode) choose the claim themselves; `mint_for` signs none.
+(code mode) choose the claim themselves, plus an optional signed `agent_via`
+client label (public MCP code mode signs the MCP client's name) and a
+`SignedCorrelation`: the code-mode correlation and its session's scope, signed
+as `agent_scope` so services with no database enforce it too; `mint_for`
+signs none of these claims. `mint_for_routine` signs the routine whose run the
+token acts for (and optionally an agent; `None` writes as the owner).
 
 ## Gotchas
 
 - Never let the sandbox see an upstream credential directly; every egress
   path must go through a port here, not a bypass in the harness.
+- `ReqwestForwarder` and `HttpActorMcpTransport` build their clients from
+  `mcp_client::outbound::guarded_http::client_builder` and check IP-literal
+  URLs before sending: a custom server's URL is whatever its owner typed.
+  Their `AddressPolicy` comes from the environment, so only a local stack
+  reaches private addresses.
 
 ## Related
 

@@ -50,7 +50,13 @@ queries against `static_assets/schema.graphql`, and returns two pages each of
 signal and noise Mail metadata. Metadata requests must carry a recency cutoff,
 but fixture timestamps are fixed, so the server does not apply it. Projection
 capsules reuse the existing Rust-encoded fixtures.
-Unrelated app-chrome reads return explicit empty resources. Unexpected requests,
+The runner starts from a fresh profile, so it first leaves the login hint
+(`localStorage['macro:login']`) and reloads: the app checks identity only when a
+hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
+app-chrome reads (billing, language, system status, routines, MCP connections,
+calendars, forms, harnesses, saved views, work feed, contacts) return explicit
+empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
+`fixtures/server.ts`. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.
@@ -68,8 +74,9 @@ Mail response. The badge gets only unread Signal rows; Noise and All remain
 unavailable online. The other rows arrive via metadata backfill. Tests wait for
 the real signal and noise completion checkpoints (four pages), then read the six
 normalized records through native IPC before changing filters. Tab changes
-activate the labeled sidebar buttons with DOM `click()` and verify
-`aria-current` before checking results. This exercises the real UI handlers, but
+activate the labeled controls (the Inbox view radio for Noise, the All mail
+sidebar row for All) with DOM `click()` and verify the selected state before
+checking results. This exercises the real UI handlers, but
 not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
 row in the Tauri window, and All is now beyond the numeric tab shortcuts.
 Assertions compare exact row identities, not just counts.
@@ -125,10 +132,11 @@ is covered yet.
 
 All registered Email and Tasks tabs must have an explicit source classification.
 The nine Soup-backed Email tabs include Favorites and Archived; the three task
-predicate tabs are My tasks, Created by me and All tasks. Scheduled email uses
+predicate tabs are My tasks, All tasks and Created by me. Scheduled email uses
 the scheduled-message service, Reminders gets membership from its reminder
-collection, and Tasks → Projects uses a project collection. Those separate
-surfaces are reported in `outsidePredicateMatrix`, not exercised through their
+collection, Spam and Trash use network-backed provider folder pages, and
+Tasks → My projects, All projects and Created by me use project collections.
+Those separate surfaces are reported in `outsidePredicateMatrix`, not exercised through their
 dormant Soup queries or claimed as offline predicate coverage. They need separate
 source-specific tests. Adding an unclassified tab fails the registry guard.
 
@@ -147,7 +155,7 @@ intersections without using the production compiler or cache results.
 This suite does not claim coverage of non-Mail offline pagination or every
 possible real-world user/tag/file value.
 
-After all seven real backfill lanes finish, the fixture API and WebSockets are
+After all nine real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
 read-only batches and asserts exact matching IDs against fixture truth. No
 query-specific network baselines are supplied. Mail attachment selections also
@@ -227,7 +235,7 @@ Every run writes `apps/web/test-results/native/<timestamp>/`:
 
 ```sh
 bun run native:e2e:fixtures   # fast schema/pagination/disconnect fixture tests
-bun run native:e2e:check      # standalone harness TypeScript check
+bun run native:e2e:check      # standalone harness TypeScript check (needs NODE_OPTIONS=--max-old-space-size=16384)
 ```
 
 - Missing WebKitWebDriver/Xvfb: enter `.#tauri-e2e`, not the default shell.

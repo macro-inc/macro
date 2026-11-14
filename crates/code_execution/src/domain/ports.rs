@@ -49,3 +49,37 @@ pub trait CodeRunner: Send + Sync + 'static {
         cancellation: CancellationToken,
     ) -> Outcome;
 }
+
+/// Type-checks a TypeScript program against the SDK's declarations, without
+/// running it.
+#[async_trait]
+pub trait ProgramChecker: Send + Sync + 'static {
+    /// The fingerprint of the declarations programs are checked against.
+    fn sdk_fingerprint(&self) -> &str;
+
+    /// The problems the type checker found; empty when the program checks.
+    /// `declarations` is a module whose `declare global` types the program
+    /// can use without importing them, such as the type of `main`'s argument.
+    async fn check(
+        &self,
+        source: &str,
+        declarations: &str,
+    ) -> Result<Vec<super::Diagnostic>, super::CheckError> {
+        self.check_files(
+            &[super::SourceFile {
+                name: "main.ts".to_owned(),
+                source: source.to_owned(),
+            }],
+            declarations,
+        )
+        .await
+    }
+
+    /// Type-check several modules together, so one can use the types
+    /// another exports (`import('./step_0.ts')`). Each problem names its file.
+    async fn check_files(
+        &self,
+        files: &[super::SourceFile],
+        declarations: &str,
+    ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
+}

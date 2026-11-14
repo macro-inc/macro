@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::models::{
-    AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
+    AdvancedSortParams, AttentionCandidate, AttentionCandidateRequest, AttentionSoupPage,
+    AttentionSoupRequest, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
     NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
-    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
-    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
+    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest,
+    grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -30,6 +31,7 @@ pub trait SoupRepo: Send + Sync + 'static {
     type Err;
     /// Iterator returned by grouped Soup queries.
     type GroupedItems: Iterator<Item = ItemGroupingInfo> + Send;
+
     /// Fetch expanded soup items for a simple sorted cursor query.
     fn expanded_generic_cursor_soup<'a>(
         &self,
@@ -116,14 +118,14 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: NotifiedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<NotifiedEntity>, Self::Err>> + Send;
 
-    /// Fetch one page of work feed candidates: entities with live attention
-    /// or own work, newest `sort_at` first, already gated on existence,
+    /// Fetch one page of attention feed candidates: entities with live
+    /// attention or own work, newest `sort_at` first, already gated on existence,
     /// deletion and access, and on the request's entity filters where soup
     /// owns the fold.
-    fn work_feed_soup_page<'a>(
+    fn attention_soup_page<'a>(
         &self,
-        req: WorkFeedCandidateRequest<'a>,
-    ) -> impl Future<Output = Result<Vec<WorkFeedCandidate>, Self::Err>> + Send;
+        req: AttentionCandidateRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<AttentionCandidate>, Self::Err>> + Send;
 }
 
 /// The possible outputs of soup — one paginated page per query mode.
@@ -142,6 +144,8 @@ pub enum SoupOutput<T, Item = SoupItem<()>> {
     Touched(PaginatedCursor<Item, String, TouchedByMe, T>),
     /// Page of a notified-at query.
     Notified(PaginatedCursor<Item, String, NotifiedAt, T>),
+    /// Page sorted by a selected property's numeric key.
+    Property(PaginatedCursor<Item, String, super::models::DynamicSort, T>),
 }
 
 impl<T, Item> SoupOutput<T, Item> {
@@ -152,6 +156,7 @@ impl<T, Item> SoupOutput<T, Item> {
     {
         match self {
             SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
+            SoupOutput::Property(page) => SoupOutput::Property(page.map(f)),
             SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
             SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
             SoupOutput::Notified(page) => SoupOutput::Notified(page.map(f)),
@@ -162,6 +167,7 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_items(self) -> Vec<Item> {
         match self {
             SoupOutput::Simple(page) => page.items,
+            SoupOutput::Property(page) => page.items,
             SoupOutput::Frecency(page) => page.items,
             SoupOutput::Touched(page) => page.items,
             SoupOutput::Notified(page) => page.items,
@@ -172,7 +178,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
         match self {
             SoupOutput::Simple(page) => Some(page),
-            SoupOutput::Frecency(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_)
+            | SoupOutput::Property(_) => None,
         }
     }
 
@@ -180,7 +189,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
         match self {
             SoupOutput::Frecency(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -188,7 +200,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
         match self {
             SoupOutput::Touched(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -196,7 +211,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_notified(self) -> Option<PaginatedCursor<Item, String, NotifiedAt, T>> {
         match self {
             SoupOutput::Notified(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_) => None,
         }
     }
 }
@@ -205,6 +223,7 @@ impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
     fn type_erase(self) -> PaginatedOpaqueCursor<Item> {
         match self {
             SoupOutput::Simple(page) => page.type_erase(),
+            SoupOutput::Property(page) => page.type_erase(),
             SoupOutput::Frecency(page) => page.type_erase(),
             SoupOutput::Touched(page) => page.type_erase(),
             SoupOutput::Notified(page) => page.type_erase(),
@@ -251,6 +270,7 @@ pub trait SoupService: Send + Sync + 'static {
                 output.map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 })
             })
         }
@@ -296,6 +316,7 @@ pub trait SoupService: Send + Sync + 'static {
                     output.map(|item| SoupProjectionHydration {
                         item,
                         document_server_facts: None,
+                        sort_key: None,
                     })
                 })
         }
@@ -340,21 +361,22 @@ pub trait SoupService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
 
-    /// Fetch one hydrated page of the viewer's work feed: entities with live
-    /// attention or own work, newest `sort_at` first, each with its reason
-    /// timestamps and authoritative server facts.
+    /// Fetch one hydrated page of one of the viewer's attention feeds (Home's
+    /// work feed, the notifications inbox): entities with live attention or
+    /// own work, newest `sort_at` first, each with its reason timestamps and
+    /// authoritative server facts.
     ///
-    /// Services without a work feed reject the request. The production
+    /// Services without attention feeds reject the request. The production
     /// service overrides this method.
-    fn get_work_feed_page(
+    fn get_attention_page(
         &self,
-        req: WorkFeedSoupRequest,
+        req: AttentionSoupRequest,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> impl Future<Output = Result<WorkFeedSoupPage, SoupErr>> + Send {
+    ) -> impl Future<Output = Result<AttentionSoupPage, SoupErr>> + Send {
         let _ = (req, team_receipt);
         async move {
             Err(SoupErr::SoupDbErr(anyhow::anyhow!(
-                "this soup service does not serve the work feed"
+                "this soup service does not serve attention feeds"
             )))
         }
     }
@@ -469,12 +491,12 @@ where
         (**self).caller_tag_sets(user_id).await
     }
 
-    async fn get_work_feed_page(
+    async fn get_attention_page(
         &self,
-        req: WorkFeedSoupRequest,
+        req: AttentionSoupRequest,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
-    ) -> Result<WorkFeedSoupPage, SoupErr> {
-        (**self).get_work_feed_page(req, team_receipt).await
+    ) -> Result<AttentionSoupPage, SoupErr> {
+        (**self).get_attention_page(req, team_receipt).await
     }
 }
 

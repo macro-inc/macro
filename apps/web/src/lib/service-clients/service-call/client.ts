@@ -11,21 +11,30 @@ import type { CreateMeetingRequest } from '@service-storage/generated/schemas/cr
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
 import type { GuestChatMessage } from '@service-storage/generated/schemas/guestChatMessage';
 import type { GuestChatPage } from '@service-storage/generated/schemas/guestChatPage';
+import type { GuestChatPatch } from '@service-storage/generated/schemas/guestChatPatch';
 import type { GuestChatPost } from '@service-storage/generated/schemas/guestChatPost';
+import type { GuestChatThread as ApiGuestChatThread } from '@service-storage/generated/schemas/guestChatThread';
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
+import type { JoinCallRequest } from '@service-storage/generated/schemas/joinCallRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
+import type { ReactionInput } from '@service-storage/generated/schemas/reactionInput';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
+import type { Message } from '@service-storage/messages';
 
 export type {
   CallRecord,
   CreateMeetingRequest,
   GuestChatMessage,
   GuestChatPage,
+  GuestChatPatch,
   UpdateMeetingRequest,
 };
+
+// Rust serializes the nullable thread field explicitly; Orval marks Option<T> optional.
+export type GuestChatThread = Required<ApiGuestChatThread>;
 
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
@@ -40,6 +49,65 @@ export type MeetingParticipants = {
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  getGuestChatThread(callId: string, token: string) {
+    return safeFetch<GuestChatThread>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/thread`,
+      { credentials: 'omit', headers: { Authorization: `Bearer ${token}` } }
+    );
+  },
+  postGuestChatMessage(callId: string, token: string, input: GuestChatPost) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+  patchGuestChatMessage(
+    callId: string,
+    token: string,
+    messageId: string,
+    input: GuestChatPatch
+  ) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'PATCH',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+  deleteGuestChatMessage(callId: string, token: string, messageId: string) {
+    return safeFetch<Record<string, never>>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'DELETE',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  },
+  reactGuestChatMessage(
+    callId: string,
+    token: string,
+    messageId: string,
+    input: ReactionInput
+  ) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
   getGuestChat(callId: string, token: string) {
     return safeFetch<GuestChatPage>(
       `${host}/call/guest-chat/${encodeURIComponent(callId)}`,
@@ -202,6 +270,18 @@ export const callServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  /** Join exactly this live session; an ended call never starts a replacement. */
+  joinCall(callId: string) {
+    const body: JoinCallRequest = { onOtherCall: 'switch', replace: true };
+    return fetchWithToken<CallTokenResponse>(
+      `${host}/call/record/${encodeURIComponent(callId)}/join`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    );
   },
 
   async leaveCall(channelId: string) {

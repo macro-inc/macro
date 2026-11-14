@@ -34,7 +34,11 @@ use super::cli::{AgentLaunch, HerdrCli, HerdrError};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
+use agent_client_protocol::schema::v1::{
+    ListSessionsRequest, ListSessionsResponse, SessionId, SessionInfo,
+};
 use agent_fold::domain::transcript::{Fold, LogEvent};
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -51,6 +55,8 @@ use permission::{OpenTool, track_open_tool};
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
 const MODEL_CONFIG_ID: &str = "model";
+/// Attempts to read one native agent's state while listing live sessions.
+const LIVE_SESSION_LOOKUPS: usize = 3;
 const DEFAULT_MODEL: &str = "default";
 const CLAUDE_MODELS: &[(&str, &str)] = &[
     (DEFAULT_MODEL, "Default (Claude Code's choice)"),
@@ -78,6 +84,11 @@ const MISSING_AGENT_CHECKS: u32 = 5;
 const INTERRUPT_PRESSES: u32 = 3;
 /// Status checks, one per [`POLL`], after each Esc press.
 const INTERRUPT_CHECKS: u32 = 4;
+/// Transcript polls per check, while idle, that the session's native agent
+/// still exists in herdr.
+const CLOSED_CHECK_EVERY: u32 = 20;
+/// How long that check may take before it is skipped as inconclusive.
+const CLOSED_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 /// Which coding-agent TUI each session runs.
 #[derive(
     Debug,
@@ -169,6 +180,7 @@ pub(crate) struct AdapterOptions {
 struct RpcError {
     code: i64,
     message: String,
+    data: Option<Value>,
 }
 
 impl RpcError {
@@ -176,6 +188,7 @@ impl RpcError {
         Self {
             code: -32603,
             message: message.into(),
+            data: None,
         }
     }
 
@@ -183,6 +196,23 @@ impl RpcError {
         Self {
             code: -32602,
             message: message.into(),
+            data: None,
+        }
+    }
+
+    /// A prompt that was stopped before it was typed into the TUI. Answering
+    /// `cancelled` would read in Macro as a message the agent saw.
+    fn not_delivered() -> Self {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::PromptNotDelivered,
+            title: "Message not delivered".to_owned(),
+            body: "The turn running in Herdr was stopped before this message was typed in, so the agent never received it. Send it again.".to_owned(),
+            link: None,
+        };
+        Self {
+            code: -32603,
+            message: "the prompt was stopped before it reached the native agent".to_owned(),
+            data: serde_json::to_value(notice).ok(),
         }
     }
 }
@@ -342,6 +372,13 @@ struct Live {
     path: Option<PathBuf>,
     cursor: Cursor,
     pending: VecDeque<LogEvent>,
+    /// This process launched the agent or saw it running. Only such an
+    /// agent's disappearance is a close: a session restored after herdr
+    /// itself restarted finds every agent gone without anyone closing them.
+    seen_alive: bool,
+    /// `_session/closed` was sent for this agent. A relaunch starts a new
+    /// `Live`, so a later close of the new agent is reported again.
+    closed_reported: bool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -358,11 +395,13 @@ impl Adapter {
     fn respond(&self, id: Value, result: Result<Value, RpcError>) {
         self.send(match result {
             Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err(error) => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": error.code, "message": error.message},
-            }),
+            Err(error) => {
+                let mut body = json!({"code": error.code, "message": error.message});
+                if let Some(data) = error.data {
+                    body["data"] = data;
+                }
+                json!({"jsonrpc": "2.0", "id": id, "error": body})
+            }
         });
     }
 
@@ -445,11 +484,18 @@ impl Adapter {
                 "protocolVersion": 1,
                 "agentCapabilities": {
                     "loadSession": true,
+                    "sessionCapabilities": {"list": {}},
                     "promptCapabilities": {"image": false, "audio": false, "embeddedContext": false},
                 },
                 "authMethods": [],
                 "agentInfo": {"name": "macrod-herdr", "version": env!("CARGO_PKG_VERSION")},
             })),
+            "session/list" => {
+                let request = serde_json::from_value::<ListSessionsRequest>(params)
+                    .map_err(|error| RpcError::invalid(error.to_string()))?;
+                serde_json::to_value(self.list_sessions(request.cwd.as_deref()).await)
+                    .map_err(|error| RpcError::internal(error.to_string()))
+            }
             "session/new" => self.new_session(&params),
             "session/load" => self.load_session(&params).await,
             "session/set_config_option" => {
@@ -476,8 +522,55 @@ impl Adapter {
             _ => Err(RpcError {
                 code: -32601,
                 message: format!("{method} is not supported"),
+                data: None,
             }),
         }
+    }
+
+    /// `session/list`: stored sessions whose Herdr agent still runs, oldest
+    /// first, in `cwd` when given. Read-only: the client's following
+    /// `session/load` attaches them. A closed agent is not live, so it is
+    /// never reopened; other lookup failures are retried before a session is
+    /// left out. Each carries `updatedAt`, its transcript's last write, when
+    /// it has one: the client restores recently active sessions at once, so
+    /// work typed into the agent's pane keeps reaching Macro.
+    async fn list_sessions(&self, cwd: Option<&Path>) -> ListSessionsResponse {
+        use futures::StreamExt as _;
+        let Some(herdr) = &self.herdr else {
+            return ListSessionsResponse::new(Vec::new());
+        };
+        let mut records: Vec<Record> = futures::stream::iter(
+            self.store.list().into_iter().filter(|record| {
+                record.kind == self.options.kind && cwd.is_none_or(|cwd| record.cwd == cwd)
+            }),
+        )
+        .map(|record| async move {
+            let name = agent_name(&record.id);
+            for _ in 0..LIVE_SESSION_LOOKUPS {
+                match herdr.agent_info(&name).await {
+                    Ok(_) => return Some(record),
+                    Err(error) if error.missing_agent() => return None,
+                    Err(error) => {
+                        tracing::warn!(%name, %error, "could not tell whether a native agent still runs");
+                    }
+                }
+            }
+            None
+        })
+        .buffer_unordered(8)
+        .filter_map(std::future::ready)
+        .collect()
+        .await;
+        records.sort_by(|a, b| a.started.cmp(&b.started).then_with(|| a.id.cmp(&b.id)));
+        ListSessionsResponse::new(
+            records
+                .into_iter()
+                .map(|record| {
+                    let updated_at = record.transcript.as_deref().and_then(last_written);
+                    SessionInfo::new(SessionId::new(record.id), record.cwd).updated_at(updated_at)
+                })
+                .collect(),
+        )
     }
 
     fn new_session(self: &Arc<Self>, params: &Value) -> Result<Value, RpcError> {
@@ -571,6 +664,8 @@ impl Adapter {
             path: record.transcript,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: false,
+            closed_reported: false,
         };
         if live.path.is_none() {
             live.path = self.locate(&live, record.native_id.as_deref());
@@ -668,8 +763,42 @@ impl Adapter {
                         }
                     }
                 }
+                if ticks.is_multiple_of(CLOSED_CHECK_EVERY)
+                    && let Some(herdr) = &adapter.herdr
+                {
+                    adapter.report_if_closed(herdr, &session, live).await;
+                }
             }
         });
+    }
+
+    /// Tell the client, once per native agent, that the agent was closed in
+    /// herdr - its tab or pane ended by the person or the agent. Only herdr's
+    /// explicit `agent_not_found` for an agent this process saw running
+    /// counts: a socket error, timeout, or unreadable answer may be transient,
+    /// and an agent missing since startup was lost, not closed. The next
+    /// prompt still relaunches the session.
+    async fn report_if_closed(&self, herdr: &HerdrCli, session: &Session, live: &mut Live) {
+        if live.closed_reported {
+            return;
+        }
+        let error =
+            match tokio::time::timeout(CLOSED_CHECK_TIMEOUT, herdr.agent_info(&live.name)).await {
+                Ok(Ok(_)) => {
+                    live.seen_alive = true;
+                    return;
+                }
+                Ok(Err(error)) => error,
+                Err(_) => return,
+            };
+        if !live.seen_alive || !error.missing_agent() {
+            return;
+        }
+        live.closed_reported = true;
+        tracing::info!(session = %session.id, "native agent was closed in herdr");
+        self.send(
+            json!({"jsonrpc":"2.0", "method":"_session/closed", "params":{"sessionId":session.id}}),
+        );
     }
 
     /// Whether herdr reports the session's native agent done with its turn.
@@ -714,12 +843,13 @@ impl Adapter {
             let wait = tracing::info_span!(
                 "macrod.herdr.prompt_wait",
                 session_id = %session.id,
-                native_turns = 0u32,
-                exit_dismissed = false,
+                native_turns = tracing::field::Empty,
+                exit_dismissed = tracing::field::Empty,
                 outcome = tracing::field::Empty,
             );
-            let waited = async {
-                let mut native_turns = 0u32;
+            let mut native_turns = 0u32;
+            let mut exit_dismissed = false;
+            let waited: Result<_, RpcError> = async {
                 loop {
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -734,13 +864,13 @@ impl Adapter {
                     if info.as_ref().is_ok_and(|info| info.status == "blocked")
                         && self.stay(herdr, &live.name).await?
                     {
-                        tracing::Span::current().record("exit_dismissed", true);
+                        exit_dismissed = true;
                         continue;
                     }
                     native_turns += 1;
-                    tracing::Span::current().record("native_turns", native_turns);
                     // An interrupted native turn ends "cancelled" too; only a
-                    // Stop from Macro drops the waiting prompt.
+                    // Stop from Macro drops the waiting prompt, which then
+                    // answers as not delivered.
                     self.follow(herdr, session, live, &cancel, true).await?;
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -748,14 +878,16 @@ impl Adapter {
                 }
             }
             .instrument(wait.clone())
-            .await
-            .inspect_err(|error: &RpcError| {
+            .await;
+            wait.record("native_turns", native_turns);
+            wait.record("exit_dismissed", exit_dismissed);
+            let waited = waited.inspect_err(|error| {
                 wait.record("outcome", "failed");
                 tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
             })?;
             let Some(info) = waited else {
-                wait.record("outcome", "cancelled");
-                return Ok("cancelled");
+                wait.record("outcome", "not_delivered");
+                return Err(RpcError::not_delivered());
             };
             wait.record("outcome", "ready");
             match info {
@@ -803,7 +935,7 @@ impl Adapter {
             }
         }
         if cancel.is_cancelled() {
-            return Ok("cancelled");
+            return Err(RpcError::not_delivered());
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.
@@ -967,6 +1099,8 @@ impl Adapter {
             path: None,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            seen_alive: true,
+            closed_reported: false,
         })
     }
 
@@ -1214,6 +1348,16 @@ async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
     }
     span.record("stopped", false);
     Ok(false)
+}
+
+/// When `transcript` was last written, as RFC 3339, or `None` when it cannot
+/// be read.
+fn last_written(transcript: &Path) -> Option<String> {
+    let modified = std::fs::metadata(transcript).ok()?.modified().ok()?;
+    Some(
+        chrono::DateTime::<chrono::Utc>::from(modified)
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    )
 }
 
 pub(crate) fn agent_name(session: &str) -> String {

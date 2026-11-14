@@ -13,9 +13,9 @@ fragment GraphqlCrmContactFields on GraphqlSoupCrmContact {
   __typename
   id
   contactTeamId: teamId
-  companyId
-  companyName
-  email
+  contactCompanyId: parentCompanyId
+  contactCompanyName: parentCompanyName
+  contactEmail: emailAddress
   crmContactName: name
   hidden
   firstInteraction
@@ -59,6 +59,8 @@ fragment CrmPipelineEntryFields on GraphqlCrmPipelineEntry {
       isMultiSelect
       specificEntityType
       writable
+      currencyColumnId
+      systemDefault
       options {
         __typename
         id

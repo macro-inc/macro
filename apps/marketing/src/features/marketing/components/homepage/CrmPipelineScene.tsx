@@ -1,11 +1,11 @@
-import Building from '@phosphor/building-office.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Currency from '@phosphor/currency-dollar.svg';
-import Grip from '@phosphor/dots-six-vertical.svg';
-import Dots from '@phosphor/dots-three.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
-import Table from '@phosphor/table.svg';
-import Users from '@phosphor/users.svg';
+import Building from '@icon/system/regular/building-office.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Currency from '@icon/system/regular/currency-dollar.svg';
+import Grip from '@icon/system/regular/dots-six-vertical.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
+import Table from '@icon/system/regular/table.svg';
+import Users from '@icon/system/regular/users.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -589,7 +589,7 @@ export default function CrmPipelineScene(
                   <Sidebar class="size-4" />
                 </Button>
               </Show>
-              <h1 class="text-sm font-semibold flex-1">{collectionName()}</h1>
+              <h1 class="text-sm font-medium flex-1">{collectionName()}</h1>
               <Show when={tab() === 'pipeline'}>
                 <Button
                   variant="plain"

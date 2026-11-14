@@ -40,6 +40,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
 // The real import module loads websocket infrastructure during initialization.
 vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: vi.fn(),
+  // Modules the view pulls in register their handlers at import time.
+  ws: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
 }));
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: mocks.connect,
@@ -89,7 +91,7 @@ vi.mock('./integration-items', async (importOriginal) => {
   });
   return {
     ...actual,
-    useEmailItems: () => [],
+    useEmailItems: () => () => [],
     useGithubItem: () => item('GitHub', () => null),
     useGranolaItem: () => item('Granola', () => null),
     useAgentProviderItem: (_model: unknown, provider: 'slack' | 'linear') =>

@@ -63,6 +63,19 @@ where
         };
         Ok(operation.view(url))
     }
+
+    #[tracing::instrument(
+        name = "calendar.replacement_recovery",
+        skip_all,
+        fields(claimed = pending.len())
+    )]
+    async fn confirm_claimed_replacements(&self, pending: Vec<(String, Uuid)>) {
+        for (user, id) in pending {
+            if let Err(error) = self.confirm_replacement(&user, id).await {
+                tracing::warn!(operation_id=%id,error=?error,"calendar replacement recovery needs another attempt or organizer review");
+            }
+        }
+    }
 }
 
 impl<R, G, T, B, N> CalendarReplacementService for CalendarMutationServiceImpl<R, G, T, B, N>
@@ -76,10 +89,8 @@ where
     async fn recover_replacements(&self) -> Result<usize, rootcause::Report> {
         let pending = self.repository.claim_pending_replacements(16).await?;
         let count = pending.len();
-        for (user, id) in pending {
-            if let Err(error) = self.confirm_replacement(&user, id).await {
-                tracing::warn!(operation_id=%id,error=?error,"calendar replacement recovery needs another attempt or organizer review");
-            }
+        if count > 0 {
+            self.confirm_claimed_replacements(pending).await;
         }
         Ok(count)
     }

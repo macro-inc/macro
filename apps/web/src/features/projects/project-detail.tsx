@@ -1,12 +1,13 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import {
   projectDetailRoute,
   projectTaskRoute,
@@ -21,14 +22,15 @@ import {
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -47,6 +49,10 @@ import {
 } from './core/project';
 import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
+import {
+  ProjectBreadcrumbItem,
+  type ProjectBreadcrumbProps,
+} from './project-breadcrumb';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
@@ -54,53 +60,12 @@ import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
-type ProjectBreadcrumbProps = {
-  entry: {
-    value: string;
-    data: { type: 'initiative'; id: string; fallbackName?: string };
-  };
-  order: number;
-};
-
-function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
-  const source = useProjectsContext().createProjectSource(
-    () => props.entry.data.id
-  );
-  const name = () =>
-    source.project()?.name ?? props.entry.data.fallbackName ?? 'Project';
-  return (
-    <ViewBreadcrumbs.Item
-      value={props.entry.value}
-      metadata={props.entry.data}
-      order={props.order}
-    >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={name()}
-        >
-          <StackIcon class="size-3 shrink-0" />
-          <span class="truncate">{name()}</span>
-        </ViewBreadcrumbs.Button>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
-
-export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
-  return (
-    <Projects>
-      <ProjectBreadcrumbContent {...props} />
-    </Projects>
-  );
-}
-
 type ProjectDetailProps = {
   route: ProjectRoute;
+  navigationRequest?: number;
   breadcrumb?: ProjectBreadcrumbProps;
   onDelete?(): void;
+  onSectionChange?(section: ProjectSection): void;
 };
 
 function ProjectTitleMenu(props: {
@@ -115,6 +80,8 @@ function ProjectTitleMenu(props: {
   const layout = useSplitLayout();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -167,6 +134,18 @@ function ProjectTitleMenu(props: {
           })
         }
         onRename={() => setRenaming(true)}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (row) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: row.project.id,
+                  name: row.project.name,
+                  ownerId: props.project.ownerId,
+                  appearance: row.project.appearance,
+                })
+            : undefined
+        }
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')
         }
@@ -208,17 +187,22 @@ function ProjectTitleMenu(props: {
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
-  useSplitDisplayName(() => source.project()?.name ?? 'Project');
+  usePending('project.detail', source.loading);
+  useSplitDisplayName(
+    () => source.project()?.name ?? t('tabs.projectFallbackName')
+  );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
-  const section = (section: ProjectSection) =>
-    navigate({
+  const section = (section: ProjectSection) => {
+    if (props.onSectionChange) return props.onSectionChange(section);
+    return navigate({
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
+  };
   const createTask = (options?: TaskCreateOptions) => {
     const projectId = props.route.id;
     layout.popoverSplit({
@@ -238,7 +222,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   return (
     <>
       <Show when={props.breadcrumb}>
-        {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
+        {(breadcrumb) => (
+          <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
       </Show>
       <EntityDetailTopBar
         titleMenu={
@@ -261,6 +247,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         navigation={(compact) => (
           <Tabs
             aria-label={t('tabs.projectSections')}
+            size={isTouchDevice() ? 'md' : 'sm'}
             touch="inset"
             class="shrink-0"
             options={[
@@ -349,6 +336,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                       projectId={project().id}
                       canWrite={canDiscussProject(project())}
                       targetId={props.route.discussionId}
+                      targetRequestKey={props.navigationRequest}
                     />
                   }
                 />

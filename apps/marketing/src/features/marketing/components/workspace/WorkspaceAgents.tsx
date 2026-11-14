@@ -1,9 +1,9 @@
 import ChatGptIcon from '@icon/openai.svg';
+import GitPull from '@icon/system/regular/git-pull-request.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Terminal from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import GitPull from '@phosphor/git-pull-request.svg';
-import Plus from '@phosphor/plus.svg';
-import Terminal from '@phosphor/terminal-window.svg';
 import { Button } from '@ui';
 import { createEffect, For, on, Show } from 'solid-js';
 import { DEPLOY_PROMPT, DEPLOY_TRACE } from '../../core/deploy-agent-demo';
@@ -68,7 +68,7 @@ export function WorkspaceAgents(props: {
       fallback={
         <>
           <ViewShell.TopBar>
-            <span class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+            <span class="min-w-0 truncate text-sm font-medium tracking-[-0.03em] text-ink">
               {props.home
                 ? ''
                 : w.selected() === 'routines'
@@ -235,7 +235,7 @@ export function WorkspaceAgents(props: {
                   }
                 >
                   <div class="mx-auto max-w-3xl p-8">
-                    <h1 class="text-2xl font-semibold mb-6">Connections</h1>
+                    <h1 class="text-2xl font-medium mb-6">Connections</h1>
                     <div class="text-sm text-ink-muted mb-6">
                       Connect the tools your team already uses so Macro's agent
                       can work in them.
@@ -253,7 +253,7 @@ export function WorkspaceAgents(props: {
             >
               <div class="dummy-scroll">
                 <div class="sample-agent-catalog">
-                  <h1 class="text-2xl font-semibold mb-2">Agents</h1>
+                  <h1 class="text-2xl font-medium mb-2">Agents</h1>
                   <div class="text-sm text-ink-muted leading-6 mb-6">
                     Agents let you customize your Macro AI experience by
                     combining a unique name, specific instructions, default

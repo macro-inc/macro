@@ -846,6 +846,16 @@ fn rejections_point_at_the_offending_token() {
             "expected FROM, found (",
         ),
         (
+            "SELECT COUNT(*) AS total, 'cows' FROM crm.deals",
+            26..32,
+            "expected a column name, an aggregate like COUNT(*) or SUM(column), or *, found 'cows'",
+        ),
+        (
+            "SELECT name, FROM crm.deals",
+            13..17,
+            "expected a column name, an aggregate like COUNT(*) or SUM(column), or *, found FROM",
+        ),
+        (
             "SELECT name FROM crm.deals WHERE stage IN ()",
             43..44,
             "expected a value: 'text', a number, TRUE, FALSE or NULL, found )",

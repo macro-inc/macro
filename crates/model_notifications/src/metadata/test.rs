@@ -86,6 +86,40 @@ fn view_access_notifications_preserve_permission_and_format_copy() {
     );
 }
 
+#[test]
+fn runtime_access_removal_names_the_owner_the_runtime_and_the_stopped_agents() {
+    let stopped = |names: &[&str]| RuntimeAccessRemovedMetadata {
+        runtime_name: "Studio Mac".into(),
+        agents: names
+            .iter()
+            .map(|name| StoppedAgent {
+                bot_id: Uuid::nil(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
+    };
+    let owner = || Some(uid("macro|owner@macro.com"));
+
+    assert_eq!(
+        stopped(&["Scout"]).format_title(owner()).unwrap(),
+        "owner@macro.com removed your access to Studio Mac"
+    );
+    assert_eq!(
+        stopped(&["Scout"]).format_body(owner()).unwrap(),
+        "Scout has stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger"]).format_body(owner()).unwrap(),
+        "Scout and Ranger have stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger", "Pilot"])
+            .format_body(owner())
+            .unwrap(),
+        "Scout and 2 others have stopped."
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),
@@ -145,6 +179,30 @@ fn channel_reaction_round_trips_as_notif_event() {
     });
     let event: NotifEvent = serde_json::from_value(value).unwrap();
     assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
+}
+
+#[test]
+fn channel_access_request_round_trips_and_names_the_channel() {
+    let value = serde_json::json!({
+        "tag": "channel_access_requested",
+        "content": {
+            "requestId": "00000000-0000-0000-0000-000000000001",
+            "channelType": "private",
+            "channelName": "design",
+        },
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    let NotifEvent::ChannelAccessRequested(request) = &event else {
+        panic!("expected a channel access request, got {event:?}");
+    };
+    assert_eq!(request.request_id, Uuid::from_u128(1));
+    assert_eq!(
+        event
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join #design"
+    );
+    assert_eq!(event.format_body(None).unwrap(), "#design");
 }
 
 fn github_pr_common() -> GithubPrNotificationCommon {
@@ -1299,6 +1357,74 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
 }
 
 #[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn alerts_show_nameless_mentions_as_their_kind() {
+    // Agents leave documentName empty or omit it; the app fills in live names.
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one is <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"0195c94f-3b0c-79f0-8558-e5e509ac9dd9"}}</m-document-mention>, about <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dda","blockName":"task","blockParams":{}}</m-document-mention>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one is <message>, about <task>."
+    );
+
+    let channel = ChannelMessageSendMetadata {
+        message_content: r#"I made <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention> from <m-document-mention>{"documentId":"d2","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>."#.to_string(),
+        ..bot_channel_message_send()
+    };
+    assert_eq!(
+        channel.format_body(None).unwrap(),
+        "I made <document> from <database>."
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
 fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     use notification::domain::models::NotificationExtEmail;
     let metadata = CalendarEventReminderMetadata {
@@ -1320,4 +1446,248 @@ fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     let mut second = metadata.clone();
     second.minutes_before = 5;
     assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}
+
+#[test]
+fn routine_run_finished_names_the_routine_and_its_outcome() {
+    let failed = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+    };
+    let succeeded = RoutineRunFinishedMetadata {
+        outcome: RoutineRunOutcome::Succeeded,
+        ..failed.clone()
+    };
+
+    let value = serde_json::to_value(&failed).unwrap();
+    assert_eq!(value["routineId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["routineName"], "Morning brief");
+    assert_eq!(value["outcome"], "failed");
+    assert_eq!(failed.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        succeeded.format_title(None).unwrap(),
+        "Morning brief finished"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "routine_run_finished",
+        "content": value,
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
+}
+
+#[test]
+fn agent_sign_in_expiry_serializes_with_the_agent_and_the_computer() {
+    let expiring = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+
+    assert_eq!(
+        serde_json::to_value(&expiring).unwrap(),
+        serde_json::json!({
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expires_soon",
+            "expiresAt": "2026-11-20T12:00:00Z",
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "agent_sign_in_expiry",
+        "content": {
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expired",
+            "expiresAt": null,
+        },
+    }))
+    .unwrap();
+    let NotifEvent::AgentSignInExpiry(metadata) = event else {
+        panic!("expected an agent sign-in expiry, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        AgentSignInExpiryMetadata {
+            agent: AgentProvider::Claude,
+            harness_id: Uuid::nil(),
+            computer_name: "Build box".to_string(),
+            stage: AgentSignInExpiryStage::Expired,
+            expires_at: None,
+        }
+    );
+}
+
+#[test]
+fn agent_sign_in_expiry_titles_name_the_agent_the_computer_and_the_stage() {
+    let expires_soon = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expires_today = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresToday,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expired = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::Expired,
+        expires_at: None,
+    };
+
+    assert_eq!(
+        expires_soon.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires soon"
+    );
+    assert_eq!(
+        expires_today.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires today"
+    );
+    assert_eq!(
+        expired.format_title(None).unwrap(),
+        "Claude sign-in on Build box expired"
+    );
+}
+
+#[test]
+fn computer_setup_serializes_with_the_computer_and_the_outcome() {
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::from_u128(1),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer kept crashing.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(&failed).unwrap(),
+        serde_json::json!({
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": null,
+            "computerName": "Build box",
+            "outcome": {
+                "kind": "failed",
+                "failureReason": "The computer kept crashing.",
+            },
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "computer_setup",
+        "content": {
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": "00000000-0000-0000-0000-000000000002",
+            "computerName": "Build box",
+            "outcome": { "kind": "ready" },
+        },
+    }))
+    .unwrap();
+    let NotifEvent::ComputerSetup(metadata) = event else {
+        panic!("expected a computer setup notice, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        ComputerSetupMetadata {
+            computer_id: Uuid::from_u128(1),
+            harness_id: Some(Uuid::from_u128(2)),
+            computer_name: "Build box".to_string(),
+            agent: None,
+            outcome: ComputerSetupOutcome::Ready,
+        }
+    );
+}
+
+#[test]
+fn computer_setup_titles_say_ready_or_name_the_computer_and_why_it_failed() {
+    let ready = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: Some(Uuid::nil()),
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Ready,
+    };
+    let failed = ComputerSetupMetadata {
+        computer_id: Uuid::nil(),
+        harness_id: None,
+        computer_name: "Build box".to_string(),
+        agent: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer couldn't be created on the host.".to_string(),
+        },
+    };
+
+    assert_eq!(
+        ready.format_title(None).unwrap(),
+        "Your computer is ready: connect your AI and finish setup"
+    );
+    assert_eq!(
+        ready.format_body(None).unwrap(),
+        "Build box is up. Bring your AI, then create an agent on it."
+    );
+    assert_eq!(
+        failed.format_title(None).unwrap(),
+        "Build box could not be set up"
+    );
+    assert_eq!(
+        failed.format_body(None).unwrap(),
+        "The computer couldn't be created on the host. Retry from the setup flow."
+    );
+}
+
+#[test]
+fn an_agent_teammates_computer_setup_names_the_agent() {
+    let ready = ComputerSetupMetadata {
+        computer_id: Uuid::from_u128(1),
+        harness_id: Some(Uuid::from_u128(2)),
+        computer_name: "Ada".to_string(),
+        agent: Some(ComputerSetupAgent {
+            user_id: "macro|ada@agents.macro.invalid".to_string(),
+            name: "Ada".to_string(),
+        }),
+        outcome: ComputerSetupOutcome::Ready,
+    };
+    let failed = ComputerSetupMetadata {
+        harness_id: None,
+        outcome: ComputerSetupOutcome::Failed {
+            failure_reason: "The computer couldn't be created on the host.".to_string(),
+        },
+        ..ready.clone()
+    };
+
+    assert_eq!(
+        serde_json::to_value(&ready).unwrap(),
+        serde_json::json!({
+            "computerId": "00000000-0000-0000-0000-000000000001",
+            "harnessId": "00000000-0000-0000-0000-000000000002",
+            "computerName": "Ada",
+            "agent": { "userId": "macro|ada@agents.macro.invalid", "name": "Ada" },
+            "outcome": { "kind": "ready" },
+        })
+    );
+    assert_eq!(ready.format_title(None).unwrap(), "Ada is ready");
+    assert_eq!(
+        ready.format_body(None).unwrap(),
+        "Message Ada to get started."
+    );
+    assert_eq!(failed.format_title(None).unwrap(), "Ada couldn't be set up");
+    assert_eq!(
+        failed.format_body(None).unwrap(),
+        "The computer couldn't be created on the host. Retry from Ada's row in Members."
+    );
 }

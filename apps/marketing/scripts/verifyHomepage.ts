@@ -1,11 +1,13 @@
 import path from 'node:path';
-import { chromium, expect } from '@playwright/test';
-import { verifyCrmMotion } from './verifyCrmMotion';
+import { chromium, expect, type Page } from '@playwright/test';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
 /** Verify the prerendered homepage keeps its first paint while becoming interactive. */
-export async function verifyHomepage(directory: string): Promise<void> {
+export async function verifyHomepage(
+  directory: string,
+  browserType: typeof chromium = chromium
+): Promise<void> {
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -26,15 +28,15 @@ export async function verifyHomepage(directory: string): Promise<void> {
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch();
+    browser = await browserType.launch();
     const origin = `http://127.0.0.1:${server.port}`;
-    await verifyDemo(browser, origin);
-    // Light mode renders the cream palette (src/features/setup/sitePalette.ts).
+    if (browserType === chromium) await verifyDemo(browser, origin);
+    // Verify both neutral homepage palettes before and after hydration.
     for (const [viewport, colorScheme] of [
       [{ width: 1440, height: 1000 }, 'dark'],
       [{ width: 390, height: 844 }, 'light'],
     ] as const) {
-      const label = `${viewport.width}×${viewport.height} ${colorScheme}`;
+      const label = `${browserType.name()} ${viewport.width}×${viewport.height} ${colorScheme}`;
       const page = await browser.newPage({
         viewport,
         colorScheme,
@@ -42,6 +44,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         hasTouch: viewport.width < 768,
         reducedMotion: 'reduce',
       });
+      page.setDefaultTimeout(15000);
       let releaseScripts!: () => void;
       const scriptsReady = new Promise<void>((resolve) => {
         releaseScripts = resolve;
@@ -59,14 +62,25 @@ export async function verifyHomepage(directory: string): Promise<void> {
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => {
-        if (/hydration mismatch/i.test(message.text()))
+        if (
+          /hydration mismatch|Unable to initialize the public website/i.test(
+            message.text()
+          )
+        )
           errors.push(message.text());
       });
       try {
         await page.goto(origin, { waitUntil: 'commit' });
         const headingLocator = page.locator('[data-welcome-heading]');
         await headingLocator.waitFor({ state: 'visible' });
-        await page.evaluate(() => document.fonts.ready);
+        // WebKit's fonts.ready can wait for the load event, which our held
+        // module scripts deliberately prevent. Load the first-paint fonts directly.
+        await page.evaluate(() =>
+          Promise.all([
+            document.fonts.load('32px "Roboto Slab Variable"'),
+            document.fonts.load('16px "Inter Variable"'),
+          ])
+        );
         const heading = await headingLocator.elementHandle();
         if (!heading) throw new Error(`Homepage has no SSR heading (${label})`);
         const before = await heading.boundingBox();
@@ -79,11 +93,30 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        // The SSR fallback is desktop, but CSS must hide it on phones before
-        // hydration replaces it with the mobile story. Otherwise it flashes in.
-        const desktopDemo = page.locator('.homepage-embedded-demo');
-        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
-        else await expect(desktopDemo).toBeVisible();
+        await expect(page.locator('.homepage-feature')).toHaveCount(5);
+        await expect(page.locator('#app-scroll-root')).toHaveCSS(
+          'background-color',
+          'rgb(0, 0, 0)'
+        );
+
+        // Lazy chapter styles must also be linked before hydration.
+        await expect(page.locator('#email .homepage-feature-title')).toHaveCSS(
+          'display',
+          'flex'
+        );
+        await expect(page.locator('#email-title')).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
+        );
+
+        // The welcome graphic must retain its dimensions before scripts run.
+        const mark = page.locator('.homepage-feature-links .ob-welcome-logo');
+        await expect(mark).toHaveCSS('width', '96px');
+        await expect(mark.locator('svg')).toHaveCSS('width', '48px');
+        await expect(headingLocator).toHaveCSS(
+          'font-family',
+          /Roboto Slab Variable/
+        );
 
         releaseScripts();
         await page.waitForLoadState('load');
@@ -98,24 +131,6 @@ export async function verifyHomepage(directory: string): Promise<void> {
             timeout: 10000,
           }
         );
-        if (viewport.width < 800) {
-          await expect(desktopDemo).toHaveCount(0);
-          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
-          const featureGap = await page
-            .locator('#coding-agents .homepage-feature-title')
-            .evaluate((heading) => {
-              const links = document.querySelector(
-                '#documents .homepage-feature-more-group'
-              );
-              if (!links) throw new Error('Missing document feature links');
-              return (
-                heading.getBoundingClientRect().top -
-                links.getBoundingClientRect().bottom
-              );
-            });
-          expect(featureGap).toBeGreaterThanOrEqual(32);
-          expect(featureGap).toBeLessThanOrEqual(56);
-        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>
@@ -141,16 +156,13 @@ export async function verifyHomepage(directory: string): Promise<void> {
           throw new Error(
             `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
           );
+        await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
-        if (viewport.width >= 768)
-          await page
-            .getByRole('link', { name: 'Macro home', exact: true })
-            .hover();
-        else
+        if (viewport.width < 768)
           await page
             .getByRole('button', { name: 'Open navigation', exact: true })
-            .tap();
+            .click();
         await page
           .getByRole('navigation', { name: 'Main navigation' })
           .waitFor({ state: 'visible' });
@@ -159,109 +171,88 @@ export async function verifyHomepage(directory: string): Promise<void> {
           await page
             .getByRole('button', { name: 'Close navigation', exact: true })
             .tap();
-        if (viewport.width >= 800) {
-          await page.locator('#interactive-demo').scrollIntoViewIfNeeded();
-          await page
-            .getByRole('button', {
-              name: /^Interact with Macro sample workspace/,
-            })
-            .click();
-          const workspace = page.frameLocator(
-            'iframe[title="Embedded Macro sample workspace"]'
-          );
-          // Prerendered buttons can paint before they have handlers. Also wait
-          // for iframe load, whose carousel listener selects the initial view.
-          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
-            0
-          );
-          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
-          const chat = workspace
-            .getByRole('navigation', { name: 'Workspace navigation' })
-            .getByRole('button', { name: 'Chat', exact: true });
-          await chat.click();
-          await expect(chat).toHaveAttribute('aria-current', 'page');
-          await expect(
-            workspace.getByRole('complementary', { name: 'Chat navigation' })
-          ).toBeVisible();
-          await page
-            .getByRole('button', { name: 'Show Docs highlight', exact: true })
-            .click();
-          await expect(
-            workspace
-              .getByRole('navigation', { name: 'Workspace navigation' })
-              .getByRole('button', { name: 'Drive', exact: true })
-          ).toHaveAttribute('aria-current', 'page');
-        }
         await page.locator('#email').scrollIntoViewIfNeeded();
+        // Native previews stay dark across live system theme changes.
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        const previewBody = page
+          .locator('#email .homepage-email-body p')
+          .first();
+        await expect(previewBody).toHaveCSS('opacity', '1');
+        await expect(previewBody).toHaveText(/\S+/);
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({
+          colorScheme: colorScheme === 'light' ? 'dark' : 'light',
+        });
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({ colorScheme });
+        const overflow = await page
+          .locator('[data-onboarding-scroll]')
+          .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
+        expect(overflow).toBe(false);
+        const graphic = await page
+          .locator('.homepage-feature-links [data-context-scene]')
+          .boundingBox();
+        if (!graphic)
+          throw new Error(`Homepage has no feature diagram (${label})`);
+        expect(graphic.x).toBeGreaterThanOrEqual(0);
+        expect(graphic.x + graphic.width).toBeLessThanOrEqual(viewport.width);
         await page
-          .locator('[data-email-demo-body]')
-          .waitFor({ state: 'visible' });
-        const entry = page.getByRole('button', {
-          name: /^Interact with Email and chat/,
-        });
-        if (viewport.width < 768) await entry.tap();
-        else await entry.click();
-        await expect(
-          page.getByRole('textbox', { name: 'Email body', exact: true })
-        ).toBeEditable();
-        if (colorScheme === 'light') {
-          await page.locator('#documents').scrollIntoViewIfNeeded();
-          await page.locator('#documents .mds-chip-person').first().waitFor();
-          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
-          await page
-            .locator('#coding-agents .homepage-person-mention')
-            .waitFor();
-          for (const selector of [
-            '#email .demo-inline-mention.mention-person',
-            '#documents .mds-chip-person',
-            '#coding-agents .homepage-person-mention',
-          ]) {
-            const tint = await page
-              .locator(selector)
-              .first()
-              .evaluate((node) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = canvas.height = 1;
-                const context = canvas.getContext('2d');
-                if (!context) throw new Error('Missing color test context');
-                context.fillStyle = '#fff';
-                context.fillRect(0, 0, 1, 1);
-                context.fillStyle = getComputedStyle(node).backgroundColor;
-                context.fillRect(0, 0, 1, 1);
-                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
-                return blue - red;
-              });
-            // The old neutral accent produced grey chips in the cream palette.
-            expect(
-              tint,
-              `${selector} needs a visible blue tint`
-            ).toBeGreaterThan(10);
-          }
-        }
-        await page.locator('#documents').scrollIntoViewIfNeeded();
-        const comment = page.getByRole('img', {
-          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
-        });
-        await expect(comment).toBeVisible();
-        await expect(
-          page.locator('#documents .mds-line.h2 .mds-mark')
-        ).toHaveCount(0);
+          .locator('#email')
+          .getByRole('link', { name: 'Learn about email', exact: true })
+          .click();
+        await expect(page).toHaveURL(`${origin}/email`);
+        await verifySignupNavigation(page, origin, viewport.width < 640);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, sample workspace, and email demo verified`
+          `[prerender] Homepage ${label}: SSR content, responsive hydration, navigation, feature links, animation, and signup routing verified`
         );
       } finally {
         releaseScripts();
         await page.close();
       }
     }
-    await verifyCrmMotion(browser, origin);
-    await verifyProductPages(browser, origin);
+    if (browserType === chromium) await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
     server.stop(true);
+  }
+}
+
+async function verifySignupNavigation(
+  page: Page,
+  origin: string,
+  phone: boolean
+): Promise<void> {
+  // App signup belongs to a separate application. A URL change alone
+  // can pass while the website router renders an empty shell.
+  await page.route(`${origin}/app/signup`, (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body: '<h1>Signup application</h1>',
+    })
+  );
+  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  for (const selector of [
+    '.homepage-hero-cta',
+    '.site-header-actions .site-nav-start',
+  ]) {
+    await page.goBack();
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url() === signupUrl &&
+          response.request().isNavigationRequest()
+      ),
+      page.locator(selector).click(),
+    ]);
+    expect(response.ok()).toBe(true);
+    await expect(page).toHaveURL(signupUrl);
+    if (!phone)
+      await expect(
+        page.getByRole('heading', { name: 'Signup application' })
+      ).toBeVisible();
   }
 }

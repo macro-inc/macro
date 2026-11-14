@@ -16,6 +16,7 @@ import {
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import { buildMentionMarkdownString } from '@macro-inc/lexical-core/utils/mentions';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ButtonSize } from '@ui';
 import { createSignal } from 'solid-js';
@@ -32,9 +33,13 @@ type ChatWithAgentEntity =
       blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
-  | { type: 'channel'; id: string; name: string; channelType: ChannelType };
+  | { type: 'chat'; id: string; name: string }
+  | { type: 'channel'; id: string; name: string; channelType: ChannelType }
+  | { type: 'pr'; id: string; url: string };
 
-function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
+type ChatWithAgentAttachment = Exclude<ChatWithAgentEntity, { type: 'pr' }>;
+
+function buildMention(entity: ChatWithAgentAttachment): ChatAttachmentMention {
   const blockName =
     entity.type === 'document'
       ? fileTypeToBlockName(entity.fileType, true)
@@ -114,8 +119,27 @@ async function createAndOpenAgent(seed: {
   return true;
 }
 
+function entityMentionMarkdown(entity: ChatWithAgentEntity): string {
+  if (entity.type === 'pr') {
+    // The Macro id lets the agent read the diff through the SDK.
+    return buildMentionMarkdownString({
+      type: 'pr',
+      id: entity.id,
+      url: entity.url,
+      label: '',
+    });
+  }
+
+  return chatAttachmentMentionToMarkdown(buildMention(entity));
+}
+
+/** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
+const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
+
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const input = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
+  const mention = `${entityMentionMarkdown(entity)} `;
+  const input =
+    entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
   return createAndOpenAgent({ input });
 }
 
@@ -164,6 +188,7 @@ export function ChatWithAgentButton(props: {
   label?: string;
   disabled?: boolean;
   grouped?: boolean;
+  size?: ButtonSize;
 }) {
   const [opening, setOpening] = createSignal(false);
   async function open() {
@@ -178,6 +203,7 @@ export function ChatWithAgentButton(props: {
   return (
     <HeaderActionButton
       grouped={props.grouped}
+      size={props.size}
       tooltip={props.label ?? 'Chat with Agent'}
       label={props.label ?? 'Chat'}
       icon={

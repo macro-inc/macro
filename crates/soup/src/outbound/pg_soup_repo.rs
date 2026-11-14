@@ -1,10 +1,10 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
-            NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
-            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
-            WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
+            AdvancedSortParams, AttentionCandidate, AttentionCandidateRequest, CrmPropertyEdge,
+            DynamicSort, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest, SimpleSortQuery,
+            SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField, TouchedEntity,
+            TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -21,17 +21,18 @@ use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod agent_session;
+mod attention;
 mod calendar_event;
 mod candidate_gates;
 mod crm_association;
 mod database_row;
 mod expanded;
 pub mod grouping;
+mod harness;
 mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
-mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -69,6 +70,18 @@ impl SoupRepo for PgSoupRepo {
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
+            SimpleSortQuery::Property(cursor) => {
+                return expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
+                    &self.pool.0,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor,
+                        exclude_frecency: false,
+                    },
+                )
+                .await;
+            }
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
                 expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
@@ -76,7 +89,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: query.map_filter(|(_, ast)| ast),
+                        cursor: DynamicSort::from_timestamp_query(query.map_filter(|(_, ast)| ast)),
                         exclude_frecency: true,
                     },
                 )
@@ -88,7 +101,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: ast,
+                        cursor: DynamicSort::from_timestamp_query(ast),
                         exclude_frecency: false,
                     },
                 )
@@ -109,7 +122,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: true,
                     },
                 )
@@ -121,7 +136,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: false,
                     },
                 )
@@ -135,6 +152,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -144,6 +162,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         sort_and_truncate_hydrations(&mut items, sort, limit);
@@ -158,6 +177,7 @@ impl SoupRepo for PgSoupRepo {
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
+            SimpleSortQuery::Property(_) => return self.expanded_generic_cursor_soup(req).await,
             SimpleSortQuery::ItemsFilter(_) => not_implemented(req).await?,
             SimpleSortQuery::ItemsAndFrecencyFilter(_) => not_implemented(req).await?,
             // Same substitution as the expanded path above; this arm has
@@ -168,7 +188,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: true,
                     },
                 )
@@ -223,6 +245,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -232,6 +255,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -241,6 +265,17 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
+                }),
+        );
+        items.extend(
+            harness::by_ids(&self.pool.0, by_ids_request.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -250,6 +285,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         Ok(items)
@@ -266,6 +302,7 @@ impl SoupRepo for PgSoupRepo {
         items.extend(calendar_event::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(agent_session::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(initiative::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(harness::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(database_row::by_ids(&self.pool.0, by_ids_request).await?);
         Ok(items)
     }
@@ -329,11 +366,11 @@ impl SoupRepo for PgSoupRepo {
         notified::notified_soup_page(&self.pool.0, req).await
     }
 
-    async fn work_feed_soup_page<'a>(
+    async fn attention_soup_page<'a>(
         &self,
-        req: WorkFeedCandidateRequest<'a>,
-    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
-        work_feed::work_feed_soup_page(&self.pool.0, req).await
+        req: AttentionCandidateRequest<'a>,
+    ) -> Result<Vec<AttentionCandidate>, Self::Err> {
+        attention::attention_soup_page(&self.pool.0, req).await
     }
 }
 
@@ -447,7 +484,8 @@ pub(crate) async fn populate_properties(
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::AgentSession(_) => None,
+                | SoupItem::AgentSession(_)
+                | SoupItem::Harness(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())
@@ -470,6 +508,7 @@ macro_rules! map_soup_type {
         match r.item_type.as_ref() {
             "document" => Ok(::models_soup::item::SoupItem::Document(
                 ::models_soup::document::SoupDocument {
+                    appearance: r.appearance.map(serde_json::from_value).transpose().map_err(type_err)?,
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     document_version_id: r
                         .document_version_id
@@ -570,6 +609,7 @@ macro_rules! map_soup_projection_hydration {
                 $crate::domain::models::SoupProjectionHydration {
                     item,
                     document_server_facts,
+                    sort_key: None,
                 }
             })
         }

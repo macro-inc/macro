@@ -86,8 +86,11 @@ vi.mock('@queries/soup/search', () => ({
 }));
 vi.mock('@app/features/soup/search', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useSearchContext: () => ({ entityPool: () => [] }),
-  useOptionalSearchContext: () => ({ entityPool: () => [] }),
+  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useOptionalSearchContext: () => ({
+    entityPool: () => [],
+    routinePool: () => [],
+  }),
 }));
 vi.mock('@queries/properties/tags', () => ({
   useTagsQuery: () => ({ data: [], isSuccess: true }),
@@ -141,7 +144,10 @@ describe('SoupViewContextProvider setup', () => {
     ));
 
     expect(screen.getByTestId('child').textContent).toBe('ready');
-    expect(mocks.itemsOptionsEvaluated).toHaveBeenCalledTimes(1);
+    expect(mocks.itemsOptionsEvaluated).toHaveBeenCalledTimes(2);
+    expect(mocks.itemsOptionsEvaluated).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false, graphqlCacheFirstEntities: [] })
+    );
     expect(mocks.groupedOptionsEvaluated).toHaveBeenCalledTimes(1);
     expect(mocks.searchOptionsEvaluated).toHaveBeenCalledTimes(1);
     expect(mocks.searchOptionsEvaluated).toHaveBeenCalledWith({

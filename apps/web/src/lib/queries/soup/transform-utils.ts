@@ -26,6 +26,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  HarnessEntity,
   InitiativeEntity,
   Notification,
   ProjectEntity,
@@ -95,12 +96,14 @@ type SoupEntity =
   | CrmCompanyEntity
   | CrmContactEntity
   | CalendarEventEntity
-  | ForeignEntity;
+  | ForeignEntity
+  | HarnessEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
     notifications?: Notification[] | null;
     unreadNotifications?: ChannelEntity['unreadNotifications'];
+    unreadMentions?: ChannelEntity['unreadMentions'];
   };
 };
 
@@ -330,7 +333,11 @@ export const useSearchResponseItemMapper = () => {
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{ id: string; name?: string | null }>
+  channels: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    team_id?: string | null;
+  }>
 ) => {
   return (
     result: UnifiedSearchResponseItem,
@@ -503,8 +510,11 @@ export const createSearchResponseItemMapper = (
           contentHitData: null,
           source: 'service',
         };
+        const channel = channels.find(
+          (channel) => channel.id === result.channel_id
+        );
         const channelName =
-          channels.find((channel) => channel.id === result.channel_id)?.name ??
+          channel?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -515,6 +525,7 @@ export const createSearchResponseItemMapper = (
             name: channelName,
             ownerId: result.owner_id ?? '',
             channelType: result.channel_type as ChannelType,
+            teamId: channel?.team_id ?? undefined,
             createdAt: result.metadata.created_at,
             updatedAt: result.metadata.updated_at,
             viewedAt: result.metadata.viewed_at,
@@ -888,9 +899,12 @@ export const mapApiSoupItemToEntity = (
         type: 'channel',
         unreadNotifications: (item as SoupItemWithOptionalNotifications).data
           .unreadNotifications,
+        unreadMentions: (item as SoupItemWithOptionalNotifications).data
+          .unreadMentions,
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
+        teamId: item.data.channel.team_id ?? undefined,
         ownerId: item.data.channel.owner_id,
         frecencyScore: item.frecency_score ?? 0,
         updatedAt: item.data.channel.updated_at,
@@ -973,6 +987,14 @@ export const mapApiSoupItemToEntity = (
 
       return out;
     })
+    .with({ tag: 'harness' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: 'harness' as const,
+    }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -988,7 +1010,7 @@ export const mapApiSoupItemToEntity = (
     .with({ tag: 'crmContact' }, (item) => ({
       ...item.data,
       type: 'crm_contact' as const,
-      name: item.data.name?.trim() || item.data.email,
+      name: item.data.name?.trim() || item.data.email || '',
       ownerId: item.data.teamId,
       sortTs: item.data.lastInteraction,
       frecencyScore: item.frecency_score,

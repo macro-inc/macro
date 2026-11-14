@@ -8,6 +8,7 @@ import type { CalendarEventSearchScope } from './calendarEventSearchScope';
 import type { EntityFilters } from './entityFilters';
 import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
+import type { TermMatching } from './termMatching';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
 
 export interface UnifiedSearchRequest {
@@ -26,8 +27,12 @@ index, so it is searched only under Name / NameContent. */
   include_crm?: boolean;
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
-  /** The search query string. Must be at least 3 characters. */
+  /** The search query string. Must not be empty; one character is enough. */
   query: string;
   /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
+  /** How a query of several terms matches document content. Defaults to
+`all`, the strict AND that AI tools and the SDK rely on; the web
+app's Search view asks for `dynamic`. */
+  term_matching?: TermMatching;
 }

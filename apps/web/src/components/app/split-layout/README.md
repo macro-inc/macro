@@ -1,4 +1,48 @@
-Split layout should support an arbitrary number of vertical splits.
+Splits tile like a window manager: any split can be split again beside
+(left/right) or stacked (above/below), nested to any depth.
+
+## Tiling
+
+The split router owns the tiling as a tree (`lib/split-router/panes/layout-tree.ts`):
+row and column splits whose leaves, depth-first, are the open panes in order.
+`TiledSplits` renders desktop panes from it. Every pane stays in one keyed
+list and is positioned absolutely at the rectangle `split-geometry.ts` solves,
+so splitting or closing a neighbour never moves a pane's content to another
+parent and remounts it. Keep it that way: don't nest a `Resize.Zone` per
+split. Gutters reuse `Resize`'s `Gutter` and `moveHandleShares`; sizes live in
+the tree but not in the URL. A split is at least `DEFAULT_SPLIT_MIN_WIDTH` wide
+and, stacked, `DEFAULT_SPLIT_MIN_HEIGHT` tall (`splitContentSizing.ts`).
+With desktop tabs, `SplitLayout` renders one `TiledSplits` per tab layer: the
+live layer tiles as `router.layout()`, and a parked one keeps the tiles its
+panes were parked in (`router.layoutOf`), so a background tab comes back
+stacked as it was. Only the live layer reports its area or resizes.
+
+Open beside a split with `beside: { split, side }` on `openWithSplit` or
+`createNewSplit`; without it a new split is a full-height column at the end.
+The new-split keys (`\`, `|`) and title-bar buttons open beside the active split.
+`canAppendSplit()` checks room for that column and `canSplit(id, side)` for a
+split along `side`'s axis, both against the area `TiledSplits` measured.
+A Shift-click that also holds Option (Alt) opens below the split it came from:
+`split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
+does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
+keeps the tiles and their sizes and changes which split shows where.
+Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
+tiles, not the pane order: `split-direction.ts` returns to the previously
+active split when it borders that side, else the one level with the focused
+split's centre, wrapping past the edge. A focused slider, or a control marked
+`data-owns-arrow-keys` (the database grid, the slide stage and rail), keeps
+`Shift+Arrow`: app hotkeys see keys before the focused element does.
+
+Opening or closing a split changes its neighbours' widths, and their text
+rewraps under an unchanged scrollTop. WebKit (Safari, iOS) has no CSS scroll
+anchoring, so a scrolling view that holds a reading position calls
+`keepScrollAnchorOnResize` (`@core/util/scrollAnchor`) on its scroll container,
+as the markdown `Notebook` does.
+
+`browser-test/` is a backend-free Playwright regression over the real router
+and `TiledSplits`, including a document that keeps its reading position as the
+splits beside it close, with browser scroll anchoring off as in WebKit:
+`bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
 ## Opt-in view restoration
 
@@ -91,3 +135,21 @@ TODO AFTER:
 - [ ] useBeforeLeave won't work as expected going forward, since we use the split layout as the source of truth.
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
+
+## Panel-owned slots
+
+`withSplitPanelOwner(name, factory)` creates a resource in a root owned by the
+split panel, not by the calling component, so it outlives the component: an
+email opened from a list still pages through that list's data source after the
+list has unmounted. A slot ends when its name is claimed again, when the panel
+closes, or when the split moves to another view (`splitViewId`: the component
+it shows, or the nearest one behind its content in history). The slot's root
+closes over the view that created it, so a slot that outlived its view would
+keep that view's DOM and subscriptions in memory.
+
+## Priority collapse
+
+Split headers and toolbars create their own controllers from
+`src/components/priority-collapse/`. `layoutUtils.ts` keeps only the
+split-specific header and toolbar registration wrappers; other rows register
+with the shared controller directly.

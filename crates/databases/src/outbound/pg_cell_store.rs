@@ -3,6 +3,8 @@
 //! options.
 
 mod core;
+mod derive;
+mod duplicate;
 mod provisioning;
 mod required;
 mod transfer;
@@ -257,6 +259,12 @@ where
             .flat_map(|write| write.versioned_tables().iter().copied())
             .chain(deleted.iter().copied())
             .chain(writes.expected_versions.iter().map(|(table, _)| *table))
+            .chain(
+                writes
+                    .derivations
+                    .iter()
+                    .map(|derivation| derivation.table_id()),
+            )
             .filter(|table| !created.contains(table))
             .collect();
         required.sort();
@@ -349,6 +357,16 @@ where
             }
         }
 
+        // A table whose derived cells all held their values already keeps
+        // its version, unless another write changed it.
+        let mut rederived = Vec::new();
+        for derivation in &writes.derivations {
+            let rows = journal::table_rows(&mut *transaction, derivation.table_id()).await?;
+            if self.derive(&mut transaction, derivation, &rows).await? {
+                rederived.push(derivation.table_id());
+            }
+        }
+
         if let Some(missing) = self
             .check_required_cells(&mut transaction, writes, &inserted)
             .await?
@@ -376,6 +394,7 @@ where
             .filter(|write| write.changes())
             .flat_map(|write| write.versioned_tables().iter().copied())
             .chain(created.iter().copied())
+            .chain(rederived)
             .chain(
                 related
                     .iter()
@@ -588,16 +607,32 @@ where
             Write::InsertRows {
                 table_id,
                 rows,
+                ids,
                 restored,
+                derivation,
             } => {
-                let minted = if restored.is_empty() {
-                    rows::append_rows(
+                let placed = if restored.is_empty() {
+                    let ids = if ids.is_empty() {
+                        rows.iter().map(|_| RowId::new()).collect()
+                    } else {
+                        ids.clone()
+                    };
+                    match rows::append_rows(
                         transaction,
                         *table_id,
                         writes.created_by.as_ref(),
-                        rows.len(),
+                        &ids,
                     )
                     .await?
+                    {
+                        rows::Placed::Taken(row) => {
+                            return refused(WritesOutcome::IdTaken {
+                                write: index,
+                                id: TakenId::Row(row),
+                            });
+                        }
+                        placed => placed,
+                    }
                 } else {
                     match rows::restore_rows(
                         transaction,
@@ -607,14 +642,13 @@ where
                     )
                     .await?
                     {
-                        rows::Restored::Applied(rows) => Some(rows),
-                        rows::Restored::TableGone => None,
-                        rows::Restored::Taken(row) => {
+                        rows::Placed::Taken(row) => {
                             return refused(WritesOutcome::RowTaken { write: index, row });
                         }
+                        placed => placed,
                     }
                 };
-                let Some(minted) = minted else {
+                let rows::Placed::Applied(minted) = placed else {
                     return refused(WritesOutcome::TableNotFound(*table_id));
                 };
                 let mut valued = Vec::new();
@@ -635,11 +669,17 @@ where
                     }
                 }
                 rows::settle_inference(&mut **transaction, *table_id, &valued).await?;
-                return Ok(Applied::Rows(
-                    minted.into_iter().map(|row| row.id).collect(),
-                ));
+                let minted: Vec<RowId> = minted.into_iter().map(|row| row.id).collect();
+                if let Some(derivation) = derivation {
+                    self.derive(transaction, derivation, &minted).await?;
+                }
+                return Ok(Applied::Rows(minted));
             }
-            Write::UpdateRows { table_id, rows } => {
+            Write::UpdateRows {
+                table_id,
+                rows,
+                derivation,
+            } => {
                 let named: Vec<RowId> = rows.iter().map(|(row, _)| *row).collect();
                 let owned = rows::lock_rows(&mut **transaction, *table_id, &named).await?;
                 if let Some(row) = named.iter().find(|row| !owned.contains(row)) {
@@ -666,6 +706,9 @@ where
                     }
                 }
                 rows::settle_inference(&mut **transaction, *table_id, &valued).await?;
+                if let Some(derivation) = derivation {
+                    self.derive(transaction, derivation, &named).await?;
+                }
             }
             Write::DeleteRows {
                 table_id,

@@ -9,8 +9,8 @@ the socket themselves.
 ## Start here
 
 - `src/api/connection.rs`: WebSocket upgrade endpoint and connection lifecycle.
-- `src/api/message.rs`: HTTP endpoint other services call to send a message to
-  a connected entity.
+- `src/api/message.rs`: HTTP endpoints other services call to send a message to
+  a connected entity, or (`/message/broadcast`) to every open connection.
 - `src/service/connection.rs` + `src/service/dynamodb.rs`: connection registry,
   backed by DynamoDB (tracks which entity is on which instance).
 - `src/service/sender.rs` + `src/service/redis.rs`: cross-instance message
@@ -63,7 +63,20 @@ the socket themselves.
   after its last `open` or `ping`, compared across instances' clocks. A `ping`
   for a row that is gone re-creates it, so a lost `open` heals on the next
   heartbeat.
+- Reads skip rows that do not parse as a connection entry, so one bad row
+  never fails delivery to the rest of an entity or a batch. A row missing
+  entry attributes (left by pings before they checked their row exists) is
+  deleted on read, conditioned on those attributes still being absent; a
+  whole row this instance cannot read (e.g. an entity type from a newer
+  deploy) is kept. Keep every write of a new attribute conditional on the
+  row existing.
+- Broadcasts use their own Redis channel (`BROADCAST_CHANNEL`): each instance
+  forwards them to every connection it holds, with no DynamoDB lookup and no
+  receipts. Keep them rare (e.g. the platform status banner); a broadcast is
+  one message per open tab.
 
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

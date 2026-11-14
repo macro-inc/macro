@@ -22,6 +22,8 @@ type Column = Cell['column'];
 function column(overrides: Partial<Column>): Column {
   return {
     __typename: 'GraphqlCrmPipelineColumn',
+    currencyColumnId: null,
+    systemDefault: null,
     id: 'column',
     name: 'Column',
     dataType: 'STRING',

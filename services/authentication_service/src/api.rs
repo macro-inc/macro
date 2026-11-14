@@ -50,20 +50,28 @@ mod utils;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+pub(crate) mod trace_capture;
 
 /// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
 /// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/auth";
 
-pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
+pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer_with_headers(vec![HeaderName::from_static(
         MACRO_REFRESH_TOKEN_HEADER,
     )]);
 
     let env = state.environment;
+    let correlation =
+        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
 
     let app = api_router(state.clone())
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
@@ -105,6 +113,23 @@ fn swagger_ui() -> Router {
         )
 }
 
+fn computer_router_state(
+    state: &ApiContext,
+) -> hosted_runtimes::inbound::axum_router::ComputerRouterState<
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>,
+    hosted_runtimes::domain::service::SystemClock,
+    crate::api::context::EntityAccessServiceType,
+    crate::api::context::AuthorizationService,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+> {
+    hosted_runtimes::inbound::axum_router::ComputerRouterState {
+        service: state.computer_service.clone(),
+        entity_access_service: state.entity_access_service.clone(),
+        authorization_state: state.authorization_state.clone(),
+    }
+}
+
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .merge(native_app_service::inbound::native_app_router(
@@ -112,7 +137,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 inner: state.native_app_service.clone(),
             },
         ))
-        .nest("/internal", internal::router())
+        .nest(
+            "/internal",
+            internal::router().merge(team_agents::inbound::axum_router::agent_enrollment_router(
+                team_agents::inbound::axum_router::AgentEnrollmentRouterState {
+                    service: state.team_agents_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            )),
+        )
         .nest("/permissions", permissions::router())
         .nest("/login", login::router(state.clone()))
         .nest("/logout", logout::router())
@@ -142,6 +175,28 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .merge(hosted_runtimes::inbound::axum_router::team_router(
+            computer_router_state(&state),
+        ))
+        .nest(
+            "/team_agents",
+            team_agents::inbound::axum_router::team_agents_router(
+                team_agents::inbound::axum_router::TeamAgentsRouterState {
+                    service: state.team_agents_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .merge(
+            teams::inbound::axum_router::domain_notice::domain_notice_router(
+                teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {
+                    service: state.domain_notice_service.clone(),
+                    entity_access_service: state.entity_access_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
         .nest(
             "/referral",
             referral::inbound::axum_router::referral_router(
@@ -158,6 +213,15 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 gtm_invite::inbound::axum_router::GtmInviteRouterState {
                     service: state.gtm_invite_service.clone(),
                     rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
+        .nest(
+            "/system-status",
+            system_status::inbound::axum_router::system_status_router(
+                system_status::inbound::axum_router::SystemStatusRouterState {
+                    service: state.system_status_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
             ),

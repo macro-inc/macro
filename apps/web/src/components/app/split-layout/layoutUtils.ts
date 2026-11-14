@@ -1,15 +1,18 @@
-import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   onCleanup,
   untrack,
   useContext,
 } from 'solid-js';
+import {
+  type CollapsibleItemInput,
+  useRegisterPriorityCollapseItem,
+} from '../../priority-collapse/createPriorityCollapser';
 import { SplitLayoutContext, SplitPanelContext } from './context';
 import type {
   SplitContent,
@@ -17,10 +20,8 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type {
-  CollapsibleItemInput,
-  PriorityCollapser,
-} from './utils/createPriorityCollapser';
+import { shouldAutofocusNavigation } from './should-autofocus-navigation';
+import type { SplitDirection } from './split-direction';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -55,7 +56,19 @@ export function useSplitPanelOrThrow() {
 }
 
 /**
+ * The view a split is in: the component it shows, or the nearest one behind
+ * its content in history (the list a detail was opened from).
+ */
+export function splitViewId(
+  handle: Pick<SplitHandle, 'history'>
+): string | undefined {
+  return handle.history().findLast((content) => content.type === 'component')
+    ?.id;
+}
+
+/**
  * Creates or replaces a named resource under the current split panel's owner.
+ * It lasts until the name is reused or the split moves to another view.
  */
 export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);
@@ -114,32 +127,16 @@ export function shouldShowSplitCloseButton(manager: SplitManager) {
   return manager.getVisibleSplitCount() > 1;
 }
 
-/** Close a visible panel, or return the last one to its most recent list. */
-export function closeSplitOrReturnToList(
-  manager: SplitManager,
-  handle: SplitHandle
-) {
-  if (shouldShowSplitCloseButton(manager)) {
-    handle.close();
-    return;
-  }
-  const content = handle.content();
-  if (content.type === 'component' && isListViewID(content.id)) return;
-  if (
-    handle.goBackTo(
-      (entry) => entry.type === 'component' && isListViewID(entry.id)
-    )
-  )
-    return;
-  handle.replace({
-    next: { type: 'component', id: LIST_VIEW_ID.home },
-    mergeHistory: true,
-  });
-}
-
 /** Inline previews stay passive until the user focuses them. */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.isInlinePreview;
+  const panel = useSplitPanel();
+  if (panel?.isInlinePreview) return false;
+  return panel
+    ? shouldAutofocusNavigation(
+        panel.handle.lastNavigationSource(),
+        panel.handle.lastNavigationCause()
+      )
+    : true;
 }
 
 /**
@@ -179,25 +176,13 @@ export function returnSplitToRecentListView(handle: SplitHandle) {
   }
 }
 
-export function focusAdjacentSplit(direction: 'left' | 'right') {
+/** Focuses the split beside the active one toward `direction`, as the splits tile. */
+export function focusAdjacentSplit(direction: SplitDirection) {
   const splitManager = globalSplitManager();
   if (!splitManager) return;
   const activeSplitId = splitManager.activeSplitId();
   if (!activeSplitId) return;
-  const currentSplitIds = splitManager.splits().map((s) => s.id);
-  const currentSplitIndex = currentSplitIds.indexOf(activeSplitId);
-  const getAdjacentSplitId = () => {
-    if (direction === 'left') {
-      if (currentSplitIndex === 0)
-        return currentSplitIds[currentSplitIds.length - 1];
-      return currentSplitIds[currentSplitIndex - 1];
-    } else {
-      if (currentSplitIndex === currentSplitIds.length - 1)
-        return currentSplitIds[0];
-      return currentSplitIds[currentSplitIndex + 1];
-    }
-  };
-  const adjacentSplitId = getAdjacentSplitId();
+  const adjacentSplitId = splitManager.adjacentSplit(activeSplitId, direction);
   if (!adjacentSplitId) return;
   splitManager.activateSplit(adjacentSplitId);
   splitManager.returnFocus();
@@ -216,30 +201,6 @@ function _createIsActiveSplitContentMemo(
     const content = activeSplit()?.content();
     return content?.type === contentType && content.id === id;
   });
-}
-
-/**
- * Register a collapsible item with an explicit collapser for the lifetime of
- * the calling owner. Rows outside the split header (a ViewShell top bar with
- * its own overflow sensor) hand their controller's collapser in directly.
- */
-export function useRegisterPriorityCollapseItem(
-  collapser: PriorityCollapser,
-  input: CollapsibleItemInput
-): Accessor<boolean> {
-  const [collapsed, setCollapsedInner] = createSignal(false);
-  const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
-    setCollapsedInner(value);
-    if (!opts?.silent) input.onCollapsedChange?.(value);
-  };
-  input.onCollapsedChange?.(false);
-  const cleanup = collapser.register({
-    ...input,
-    collapsed,
-    setCollapsed,
-  });
-  onCleanup(cleanup);
-  return collapsed;
 }
 
 function useRegisterCollapsibleItem(

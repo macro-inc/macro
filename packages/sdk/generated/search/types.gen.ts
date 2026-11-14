@@ -24,7 +24,7 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by session owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
      * owner.
      */
@@ -684,9 +684,9 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by chat owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -931,9 +931,9 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by document owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -1564,9 +1564,9 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by project owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -1662,6 +1662,20 @@ export type ProjectSearchResult = {
 };
 
 /**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type PropertyDateFilterRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -1693,6 +1707,7 @@ export type PropertyDefinition = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | PropertyDateFilterRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -1702,6 +1717,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -2479,6 +2498,11 @@ export type TaskFilters = {
     include_cbm_atm_nc?: boolean | null;
 };
 
+/**
+ * How a query of several terms matches document content.
+ */
+export type TermMatching = 'all' | 'dynamic';
+
 export type UnifiedSearchRequest = {
     /**
      * Which calendar events to search. Defaults to `own`: events on the
@@ -2504,13 +2528,19 @@ export type UnifiedSearchRequest = {
      */
     match_type: MatchType;
     /**
-     * The search query string. Must be at least 3 characters.
+     * The search query string. Must not be empty; one character is enough.
      */
     query: string;
     /**
      * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
     search_on?: SearchOn;
+    /**
+     * How a query of several terms matches document content. Defaults to
+     * `all`, the strict AND that AI tools and the SDK rely on; the web
+     * app's Search view asks for `dynamic`.
+     */
+    term_matching?: TermMatching;
 };
 
 export type UnifiedSearchResponse = {

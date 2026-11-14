@@ -30,6 +30,7 @@ import {
 } from 'solid-js';
 import { MessageOperationRecovery } from '../../email-message/views/message-operation-recovery';
 import { createAttachmentViewer } from '../components/attachment-viewer';
+import { CreateEventButton } from '../components/create-event-button';
 import { DraftBackMenu } from '../components/draft-back-menu';
 import { DraftSyncStatus } from '../components/draft-sync-status';
 import { EmailDateSelector } from '../components/email-date-selector';
@@ -42,13 +43,15 @@ import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
-import { decodeBase64Utf8 } from '../core/decode-base64';
+import { draftEditorHtml } from '../core/draft-editor-html';
+import { proposesMeeting } from '../core/meeting-intent';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
 import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { createDraftSyncStatus } from '../primitives/draft-sync-status';
 import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
+import { createWrittenText } from '../primitives/written-text';
 import { ReplyEnvelope } from './reply-envelope';
 
 false && fileFolderDrop;
@@ -95,8 +98,9 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
-    if (draft.body_html_sanitized != null)
-      return decodeBase64Utf8(draft.body_html_sanitized);
+    // Saved HTML is authoritative even when empty: stale plain text must not
+    // refill a reply the user cleared.
+    if (draft.body_html_sanitized != null) return draftEditorHtml(draft) ?? '';
     return draft.body_text ? plainTextToHtml(draft.body_text) : '';
   };
   return (
@@ -222,6 +226,19 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
       : undefined;
+  const writtenText = createWrittenText(editor);
+  const createEvent = () => {
+    const recipients = form.recipients();
+    composeContext.calendarEvents?.open({
+      subject: form.subject() || (props.replyingTo()?.subject ?? ''),
+      guests: [...recipients.to, ...recipients.cc].map(
+        (recipient) => recipient.data.email
+      ),
+      text: [writtenText(), props.replyingTo()?.body_text ?? '']
+        .filter(Boolean)
+        .join('\n\n'),
+    });
+  };
   const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
   const requestClose = () => {
     // The full-screen dialog owns Escape; dismiss the nested draft choices first.
@@ -522,6 +539,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           props.unframed ? { 'background-color': 'transparent' } : undefined
         }
         hideBorder={props.unframed}
+        // Full-screen mobile compose scrolls the whole surface, not the body.
+        data-composer-scroll={isMobileCompose() ? '' : undefined}
         ref={(el) => {
           composeContainerRef = el;
           if (isMobileCompose()) setScrollContainer(el);
@@ -608,6 +627,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           fields={state.recipients}
           values={form.recipients}
           options={props.session.recipientOptions}
+          createRecipientSource={composeContext.createRecipientSource}
           inboxes={composeContext.accounts.inboxes}
           activeInboxId={activeInboxId}
           senderEmail={activeInboxEmail}
@@ -632,6 +652,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           )}
         >
           <div
+            data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
               if (!isMobileCompose()) setScrollContainer(el);
             }}
@@ -693,7 +714,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             <MarkdownShell
               config={editorConfig}
               class={cn(
-                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
+                // shrink-0: the editor's min-h-8 otherwise lets this capped
+                // flex column squeeze its box below its text, and the
+                // watermark after the box is then drawn over the reply.
+                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible shrink-0',
                 // Quoted thread collapses behind the "⋯" pill below
                 // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
                 // variants turn the underscore in .macro_quote into a space)
@@ -798,6 +822,14 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
+                <Show when={composeContext.calendarEvents?.enabled()}>
+                  <CreateEventButton
+                    suggested={proposesMeeting(writtenText())}
+                    shortcut="b"
+                    disabled={editingDisabled()}
+                    onClick={createEvent}
+                  />
+                </Show>
                 <Show
                   when={
                     composeContext.presentation.scheduleEnabled &&

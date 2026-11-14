@@ -30,6 +30,13 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Replace presentation and its history atomically, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: DatabaseId,
+        update: activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+
     /// Create a database with its first table and that table's title
     /// column, granting the creator owner access, all or nothing.
     fn create_database(
@@ -62,6 +69,15 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     fn restore_database(
         &self,
         id: DatabaseId,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
+    /// File a live database in a folder, or at the root when `project_id`
+    /// is `None`, swapping the grants it inherits from folders to match;
+    /// `false` when it is trashed or gone.
+    fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
     /// Remove a database permanently.
@@ -266,6 +282,20 @@ pub trait AccessDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, Self::Error>> + Send;
 }
 
+/// Whether the user who set up something that writes a database on their
+/// behalf (a webhook, a sync) can still edit it, asked on every write.
+pub trait CreatorAccess: Send + Sync + 'static {
+    /// The creator's edit receipt for the database; `None` when they can no
+    /// longer edit it.
+    fn edit_receipt(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        database_id: DatabaseId,
+    ) -> impl Future<
+        Output = Result<Option<EntityAccessReceipt<EditAccessLevel>>, rootcause::Report>,
+    > + Send;
+}
+
 /// The definitions behind columns: creating database-owned ones, binding
 /// existing ones, and reading them back with their options.
 pub trait ColumnDefinitionStore: Send + Sync + 'static {
@@ -335,11 +365,13 @@ pub trait TableEventPublisher: Send + Sync + 'static {
         version: TableVersion,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
-    /// Relay where a viewer is to the database's other viewers.
+    /// Relay where a viewer is to the database's other viewers, and whether
+    /// their grant lets them edit.
     fn awareness(
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
@@ -377,6 +409,13 @@ pub trait DatabasesService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         name: String,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+
+    /// Replace icon and color overrides under an edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DatabaseError>> + Send;
 
     /// Move a database to the trash.
     fn trash_database(
@@ -485,8 +524,9 @@ pub trait DatabasesService: Send + Sync + 'static {
         since: TableVersion,
     ) -> impl Future<Output = Result<TableChanges, DatabaseError>> + Send;
 
-    /// Tell the database's other viewers where this viewer is; a relay
-    /// failure is the caller's error.
+    /// Tell the database's other viewers where this viewer is and whether
+    /// they can edit; a viewer who cannot is never relayed as editing. A
+    /// relay failure is the caller's error.
     fn share_awareness(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

@@ -3,6 +3,7 @@
  * the markdown features that are supported by our LexicalEngine.
  */
 
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
 import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
@@ -11,6 +12,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AccountManagerRequestNode,
   type AgentActivityNode,
   type AgentContextNode,
   type AgentSessionMentionNode,
@@ -23,6 +25,8 @@ import {
   type DatabaseQueryNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
+  type DetailsNode,
+  type DetailsSummaryNode,
   type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
@@ -36,7 +40,7 @@ import {
   type PullRequestMentionNode,
   type ReplyTargetNode,
   type SnapshotNode,
-  SupportedNodeTypes,
+  StaticRenderNodeTypes,
   type TagMentionNode,
   type ThemeMentionNode,
   type UnknownMentionNode,
@@ -85,6 +89,7 @@ import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchN
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AccountManagerRequest as AccountManagerRequestDecorator } from '../decorator/AccountManagerRequest';
 import { AgentActivity as AgentActivityDecorator } from '../decorator/AgentActivity';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
@@ -224,7 +229,7 @@ function newStaticRenderingEditor(props: {
     parentEditor: props.parentEditor,
     theme: props.theme,
     namespace: 'static-renderer',
-    nodes: SupportedNodeTypes,
+    nodes: StaticRenderNodeTypes,
     onError: console.error,
   });
   return editor;
@@ -396,7 +401,7 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
     const shouldRenderLazy = options.lazy;
 
     return (
-      <span class={getTextClassName(props.node, props.theme)}>
+      <span class={getTextClassName(props.node, props.theme)} data-mention>
         {shouldRenderLazy ? (
           <LazyDecorator
             placeholder={
@@ -420,7 +425,7 @@ const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
   guard: (node: LexicalNode): node is AgentSessionMentionNode =>
     node.__type === 'agent-session-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <AgentSessionMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -434,7 +439,7 @@ const PullRequestMention: TypedRenderableEntity<PullRequestMentionNode> = {
   guard: (node: LexicalNode): node is PullRequestMentionNode =>
     node.__type === 'pr-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <PullRequestMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -486,6 +491,21 @@ const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
   ),
 };
 
+const AccountManagerRequest: TypedRenderableEntity<AccountManagerRequestNode> =
+  {
+    guard: (node: LexicalNode): node is AccountManagerRequestNode =>
+      node.__type === 'account-manager-request',
+    render: (props) => (
+      <span>
+        {AccountManagerRequestDecorator({
+          ...props.node.exportComponentProps(),
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </span>
+    ),
+  };
+
 const DatabaseQuery: TypedRenderableEntity<DatabaseQueryNode> = {
   guard: (node: LexicalNode): node is DatabaseQueryNode =>
     node.__type === 'database-query',
@@ -530,7 +550,7 @@ const ContactMention: TypedRenderableEntity<ContactMentionNode> = {
   guard: (node: LexicalNode): node is ContactMentionNode =>
     node.__type === 'contact-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       {ContactMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
@@ -735,6 +755,7 @@ const List: TypedRenderableElement<ListNode> = {
           classList={{
             ['depth-' + depth]: true,
           }}
+          start={start !== 1 ? start : undefined}
           style={{ 'counter-reset': `static-md-counter-${depth} ${start - 1}` }}
         >
           {props.children}
@@ -790,6 +811,37 @@ const Quote: TypedRenderableElement<QuoteNode> = {
     >
       {props.children}
     </blockquote>
+  ),
+};
+
+/**
+ * GitHub's collapsible section, drawn with the native element so it opens
+ * and closes without state. The first child is its summary line.
+ */
+const Details: TypedRenderableElement<DetailsNode> = {
+  guard: (node: LexicalNode): node is DetailsNode => node.__type === 'details',
+  render: (props) => {
+    const [summary, ...body] = [props.children].flat();
+    return (
+      <details class="group my-2" open={props.node.__open}>
+        {summary}
+        <div class="pl-5">{body}</div>
+      </details>
+    );
+  },
+};
+
+const DetailsSummary: TypedRenderableElement<DetailsSummaryNode> = {
+  guard: (node: LexicalNode): node is DetailsSummaryNode =>
+    node.__type === 'details-summary',
+  render: (props) => (
+    <summary class="flex items-baseline gap-1 list-none select-none touch:min-h-[44px] touch:items-center [&::-webkit-details-marker]:hidden">
+      <CaretRight
+        aria-hidden="true"
+        class="size-4 shrink-0 self-center text-ink-muted transition-transform group-open:rotate-90"
+      />
+      <span class="min-w-0">{props.children}</span>
+    </summary>
   ),
 };
 
@@ -1049,6 +1101,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
   eraseRenderableEntity(ConnectApp),
+  eraseRenderableEntity(AccountManagerRequest),
   eraseRenderableEntity(DatabaseQuery),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
@@ -1061,6 +1114,8 @@ const Elements: RenderableElement[] = [
   eraseRenderableElement(List),
   eraseRenderableElement(ListItem),
   eraseRenderableElement(Quote),
+  eraseRenderableElement(Details),
+  eraseRenderableElement(DetailsSummary),
   eraseRenderableElement(Code),
   eraseRenderableElement(Link),
   eraseRenderableElement(Mark),

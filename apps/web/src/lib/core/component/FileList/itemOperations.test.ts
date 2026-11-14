@@ -1,9 +1,8 @@
-import { err, ok } from 'neverthrow';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   graphql: true,
-  showPaywall: vi.fn(),
   metadata: vi.fn(),
   edit: vi.fn(),
   trash: vi.fn(),
@@ -15,17 +14,18 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   resources: vi.fn(),
   removeDeleted: vi.fn(),
+  duplicateDatabase: vi.fn(),
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: {},
   isFeatureEnabled: () => mocks.graphql,
 }));
-vi.mock('@core/constant/PaywallState', () => ({
-  usePaywallState: () => ({ showPaywall: mocks.showPaywall }),
-}));
 vi.mock('@queries/history/history', () => ({
   removeHistoryItem: mocks.removeHistory,
+}));
+vi.mock('@queries/storage/databases', () => ({
+  duplicateDatabase: mocks.duplicateDatabase,
 }));
 vi.mock('@queries/storage/deleted', () => ({
   getDeletedTree: () => ({ itemMap: {} }),
@@ -64,7 +64,6 @@ vi.mock('@service-cognition/client', () => ({
     deleteChat: mocks.trash,
     revertDeleteChat: mocks.restore,
     permanentlyDeleteChat: mocks.permanent,
-    copyChat: mocks.copy,
   },
 }));
 vi.mock('@service-email/client', () => ({
@@ -74,6 +73,7 @@ vi.mock('@service-call/client', () => ({ callServiceClient: {} }));
 
 import { getOperationAST } from 'graphql';
 import {
+  canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
@@ -132,6 +132,29 @@ describe('flagged entity callers', () => {
     }
   );
 
+  it.each([
+    ['database', 'DATABASE'],
+    ['form', 'FORM'],
+  ] as const)(
+    'moves a %s through the entity mutation, its only route, with or without the GraphQL soup',
+    async (itemType, type) => {
+      for (const graphql of [true, false]) {
+        mocks.graphql = graphql;
+        for (const folderId of ['folder', null]) {
+          mocks.mutation.mockClear();
+          expect(await moveToFolder({ itemType, id: 'source', folderId })).toBe(
+            true
+          );
+          expect(variables()).toEqual({
+            inputs: [{ entity: { type, id: 'source' }, projectId: folderId }],
+          });
+        }
+      }
+      expect(mocks.edit).not.toHaveBeenCalled();
+      expect(mocks.metadata).not.toHaveBeenCalled();
+    }
+  );
+
   it.each(['document', 'chat', 'project'] as const)(
     'trashes/restores/permanently deletes %s through GraphQL',
     async (itemType) => {
@@ -161,93 +184,81 @@ describe('flagged entity callers', () => {
     expect(mocks.trash).not.toHaveBeenCalled();
   });
 
-  it.each(['document', 'chat'] as const)(
-    'opens the new %s identity returned by duplicate effects',
-    async (itemType) => {
-      mocks.mutation.mockReturnValue({
-        toPromise: async () => ({
-          data: {
-            duplicateEntities: {
-              results: [
-                {
-                  __typename: 'GraphqlMutationSuccess',
-                  effects: [
-                    {
-                      __typename: 'SoupUpdated',
-                      item: {
-                        __typename:
-                          itemType === 'document'
-                            ? 'GraphqlSoupDocument'
-                            : 'GraphqlSoupChat',
-                        id: 'new-copy',
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
+  it('opens the new document identity returned by duplicate effects', async () => {
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          duplicateEntities: {
+            results: [
+              {
+                __typename: 'GraphqlMutationSuccess',
+                effects: [
+                  {
+                    __typename: 'SoupUpdated',
+                    item: { __typename: 'GraphqlSoupDocument', id: 'new-copy' },
+                  },
+                ],
+              },
+            ],
           },
-        }),
-      });
-      expect(await copyItem({ itemType, id: 'source', name: 'Original' })).toBe(
-        'new-copy'
-      );
-      expect(variables()).toEqual({
-        inputs: [
-          {
-            entity: {
-              type: itemType === 'document' ? 'DOCUMENT' : 'CHAT',
-              id: 'source',
-            },
-            displayName: itemType === 'document' ? 'Original copy' : undefined,
-          },
-        ],
-      });
-      expect(mocks.copy).not.toHaveBeenCalled();
-      expect(mocks.showPaywall).not.toHaveBeenCalled();
-    }
-  );
+        },
+      }),
+    });
+    expect(
+      await copyItem({ itemType: 'document', id: 'source', name: 'Original' })
+    ).toBe('new-copy');
+    expect(variables()).toEqual({
+      inputs: [
+        {
+          entity: { type: 'DOCUMENT', id: 'source' },
+          displayName: 'Original copy',
+        },
+      ],
+    });
+    expect(mocks.copy).not.toHaveBeenCalled();
+  });
 
-  it.each([
-    [true, 'chat', 'FORBIDDEN', 1],
-    [false, 'chat', 'FORBIDDEN', 1],
-    [true, 'document', 'FORBIDDEN', 0],
-    [false, 'document', 'FORBIDDEN', 0],
-    [true, 'chat', 'NOT_FOUND', 0],
-    [true, 'chat', 'INTERNAL', 0],
-  ] as const)(
-    'preserves copy paywall behavior (graphql=%s, item=%s, error=%s)',
-    async (graphql, itemType, errorCode, paywallCalls) => {
+  it.each([true, false])(
+    'does not duplicate legacy chats (GraphQL Soup %s)',
+    async (graphql) => {
       mocks.graphql = graphql;
-      mocks.mutation.mockReturnValue({
-        toPromise: async () => ({
-          data: {
-            duplicateEntities: {
-              results: [
-                {
-                  __typename: 'GraphqlMutationError',
-                  errorCode,
-                  message: 'Copy refused',
-                },
-              ],
-            },
-          },
-        }),
-      });
-      mocks.copy.mockResolvedValue(
-        err([{ code: errorCode, message: 'Copy refused' }])
-      );
-
+      expect(canDuplicateItemType('chat')).toBe(false);
       expect(
-        await copyItem({ itemType, id: 'source', name: 'Original' })
+        await copyItem({ itemType: 'chat', id: 'source', name: 'Original' })
       ).toBeNull();
-      expect(mocks.showPaywall).toHaveBeenCalledTimes(paywallCalls);
-      expect(mocks.mutation).toHaveBeenCalledTimes(graphql ? 1 : 0);
-      expect(mocks.copy).toHaveBeenCalledTimes(graphql ? 0 : 1);
-      expect(mocks.resources).not.toHaveBeenCalled();
-      expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(mocks.mutation).not.toHaveBeenCalled();
+      expect(mocks.copy).not.toHaveBeenCalled();
     }
   );
+
+  it.each([true, false])(
+    'duplicates a database through its own route, named like documents (GraphQL Soup %s)',
+    async (graphql) => {
+      mocks.graphql = graphql;
+      mocks.duplicateDatabase.mockReturnValue(okAsync('database-copy'));
+
+      expect(canDuplicateItemType('database')).toBe(true);
+      expect(
+        await copyItem({ itemType: 'database', id: 'source', name: 'Plans' })
+      ).toBe('database-copy');
+
+      expect(mocks.duplicateDatabase).toHaveBeenCalledWith({
+        id: 'source',
+        name: 'Plans copy',
+      });
+      expect(mocks.mutation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('answers a failed database duplicate with no copy', async () => {
+    mocks.duplicateDatabase.mockReturnValue(
+      errAsync([{ code: 'NOT_FOUND', message: 'gone' }])
+    );
+
+    expect(
+      await copyItem({ itemType: 'database', id: 'source', name: 'Plans' })
+    ).toBeNull();
+  });
 
   it('preserves every REST path when the flag is disabled', async () => {
     mocks.graphql = false;

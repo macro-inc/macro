@@ -330,6 +330,7 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
 fn assigned_to_task() -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
         AgentAssignedToTaskEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
             bot_id: BotId::TEST_A,
             parent: document(),
             discussion_id: Uuid::from_u128(2),

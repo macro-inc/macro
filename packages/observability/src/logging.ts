@@ -21,16 +21,30 @@ import { userIdSuppressed } from './privacy';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * The log exporter's options with the export transport. `fetch` exists only
+ * on the patched exporter (`apps/web/patches`); an install without the patch
+ * (an agent teammate's computer) ignores it, so it is typed here rather than
+ * relied on from the exporter's own config type.
+ */
+type LogExporterOptions = NonNullable<
+  ConstructorParameters<typeof OTLPLogExporter>[0]
+> & { readonly fetch?: TelemetryInitConfig<string>['exportFetch'] };
+
 export class Logging {
   #provider: LoggerProvider | undefined;
   readonly #logger: Logger = logs.getLogger(INSTRUMENTATION_SCOPE_NAME);
 
   init(
-    config: TelemetryInitConfig,
+    config: TelemetryInitConfig<string>,
     resource: Resource,
     getUserId: () => string | undefined
   ): void {
     if (!config.logsUrl) return;
+    const exporterOptions: LogExporterOptions = {
+      url: config.logsUrl,
+      fetch: config.exportFetch,
+    };
     this.#provider = new LoggerProvider({
       resource,
       processors: [
@@ -44,7 +58,7 @@ export class Logging {
           shutdown: () => Promise.resolve(),
         },
         new BatchLogRecordProcessor({
-          exporter: new OTLPLogExporter({ url: config.logsUrl }),
+          exporter: new OTLPLogExporter(exporterOptions),
         }),
       ],
     });

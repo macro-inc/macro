@@ -389,7 +389,7 @@ async fn archive_is_persisted_published_and_blocks_rename() {
         .await
         .expect("archive session");
 
-    assert!(repo.get(session).await.expect("get session").is_archived);
+    assert!(repo.get(session).await.expect("get session").is_archived());
     assert_eq!(realtime.updated(), vec![session]);
     assert!(matches!(
         service
@@ -446,7 +446,7 @@ async fn a_conversations_current_session_is_not_archived() {
         service.set_archived(&owner_access(session), true).await,
         Err(AgentSessionError::AnswersConversation(id)) if id == session
     ));
-    assert!(!repo.get(session).await.expect("get session").is_archived);
+    assert!(!repo.get(session).await.expect("get session").is_archived());
     assert!(realtime.updated().is_empty());
     // Unarchiving is never refused.
     service
@@ -755,6 +755,14 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -818,6 +826,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_turn_prompter(id, prompter).await
     }
 
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
+    }
+
     async fn turn_prompter(
         &self,
         id: AgentSessionId,
@@ -846,8 +858,8 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_name(id, name).await
     }
 
-    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
-        self.repo.set_archived(id, is_archived).await
+    async fn set_archived(&self, id: AgentSessionId, archived: bool) -> Result<()> {
+        self.repo.set_archived(id, archived).await
     }
 
     async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {
@@ -1672,6 +1684,64 @@ async fn a_recorded_frame_is_stored_and_published_at_once() {
         1,
         "viewers hear it without a flush"
     );
+}
+
+/// A review's change announcement is stored and reaches viewers at once,
+/// and projects nothing: viewers are not told to refetch the session.
+#[tokio::test]
+async fn an_unprojected_frame_is_stored_and_published_without_a_session_update() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    for entry in parse_log_as(
+        session,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"Draft the email"}]}}}"#,
+    ) {
+        AgentSessionLogRepo::create(&repo, entry)
+            .await
+            .expect("the prompt is stored");
+    }
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let update = agent_runtime_protocol::domain::review::ReviewUpdatedNotification {
+        review_id: Uuid::from_u128(0xA),
+        revision: 4,
+    };
+
+    service
+        .record_unprojected_frame(session, update.to_server_message())
+        .await
+        .expect("the frame is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert_eq!(stored.len(), 2);
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), 1);
+    assert_eq!(published[0].entries[0].id, stored[1].id);
+    assert_eq!(
+        serde_json::to_value(&published[0].entries[0].entry.content).unwrap(),
+        serde_json::json!({
+            "direction": "to_server",
+            "content": {
+                "type": "acp",
+                "jsonrpc": "2.0",
+                "method": "_macro/review_updated",
+                "params": {"reviewId": "00000000-0000-0000-0000-00000000000a", "revision": 4},
+            },
+        })
+    );
+    assert!(realtime.updated().is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -3018,4 +3088,77 @@ async fn a_fenced_turn_flushes_complete_and_in_order() {
             .map(|entry| serde_json::to_value(entry.content).unwrap())
             .collect::<Vec<_>>(),
     );
+}
+
+#[tokio::test]
+async fn shared_ready_restores_session_credentials_before_loading_and_closure_revokes_them() {
+    use crate::domain::credentials::authenticate_session;
+    use crate::domain::model::SessionStatus;
+    use crate::domain::session::{
+        CloseReason, InitializationContext, Input, SessionRestoreSupport,
+    };
+    use agent_client_protocol::{RawJsonRpcMessage, schema::v1::RequestId};
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    let mut row = test_agent_session(session);
+    row.status = SessionStatus::Disconnected;
+    repo.insert_session(row);
+    repo.set_egress_token_hash(session, "resumed-token-hash")
+        .await
+        .unwrap();
+    assert!(matches!(
+        authenticate_session(&repo, "resumed-token-hash").await,
+        Err(AgentSessionError::Disconnected(_))
+    ));
+    let claim = claim_for_test(&repo, session).await;
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, command_rx) = mpsc::channel(8);
+    let mut actor = SessionActor::new(
+        session,
+        Some("restored-acp".into()),
+        "/workspace".into(),
+        vec![],
+        PermissionPolicy::Prompt,
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let init_id = RequestId::Str("shared-initialize".into());
+    actor.dispatch(Input::SharedReady {
+        restore: SessionRestoreSupport { resume: false, load: true },
+        context: Arc::new(InitializationContext {
+            request: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::request(
+                "initialize".into(), serde_json::json!({"protocolVersion":1}), init_id.clone(),
+            ).unwrap())),
+            response: ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(init_id, Ok(serde_json::json!({"protocolVersion":1,"agentCapabilities":{"loadSession":true}}))))),
+        }),
+    }).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.try_recv().unwrap()
+    else {
+        panic!("load request")
+    };
+    assert_eq!(load.method.as_ref(), "session/load");
+    assert!(
+        authenticate_session(&repo, "resumed-token-hash")
+            .await
+            .is_ok(),
+        "the runtime must be able to use MCP and the model gateway during session/load"
+    );
+    actor
+        .dispatch(Input::Closed(CloseReason::TransportClosed))
+        .await;
+    assert!(matches!(
+        authenticate_session(&repo, "resumed-token-hash").await,
+        Err(AgentSessionError::Disconnected(_))
+    ));
 }

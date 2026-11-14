@@ -3,6 +3,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { projectRouteId } from '@app/features/projects/core/route';
 import { createSoupRowStore } from '@app/features/soup/collection/row-store';
 import { t } from '@app/lib/i18n';
+import { usePending } from '@app/observability/flow';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -12,7 +13,9 @@ import { toast } from '@core/component/Toast/Toast';
 import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import {
   type EntityData,
   ListEntity,
@@ -21,10 +24,17 @@ import {
   type SearchLocation,
 } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
-import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
@@ -50,6 +60,27 @@ function MobileNameResults(props: {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
+  usePending('search.names', source.isLoadingEntities);
+  const searchingShown = createSteadyFlag(source.isSearchingEntities);
+  usePending('search.rank', source.isSettling);
+  let previousWindow: string | undefined;
+  let previousWindowQuery = '';
+  createEffect(
+    on(
+      () => source.pagination.windowKey(),
+      (key) => {
+        if (key === undefined) return;
+        if (
+          previousWindow !== undefined &&
+          key !== previousWindow &&
+          previousWindowQuery === state.query()
+        )
+          virtualizer()?.scrollTo(0);
+        previousWindow = key;
+        previousWindowQuery = state.query();
+      }
+    )
+  );
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
@@ -119,10 +150,14 @@ function MobileNameResults(props: {
       source.pagination.isLoadingMore() ||
       source.hasError(),
     loadMore: source.pagination.loadMore,
+    replaceWindows: () =>
+      category() === 'people' ||
+      ((category() === 'all' || category() === 'dms') &&
+        state.query().trim().length > 0),
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const directMessage = useGetOrCreateDirectMessageMutation();
+  const openDirectMessage = useOpenDirectMessage();
   const open = async (item: QuickAccessItem) => {
     await Telemetry.span('mobile.search.open', async (span) => {
       span.setAttr('entity.id', item.id);
@@ -133,13 +168,7 @@ function MobileNameResults(props: {
           id: projectRouteId({ id: item.id, section: 'overview' }),
         });
       } else if (item.kind === 'user') {
-        const result = await directMessage.mutateAsync({
-          recipient_id: item.id,
-        });
-        openWithSplit(
-          { type: 'channel', id: result.channel_id },
-          { reopen: 'latest' }
-        );
+        await openDirectMessage(item.id, { parentSpan: span });
       } else {
         await openEntityInSplitFromUnifiedList(item.data, {
           splitHandle: panel.handle,
@@ -197,6 +226,11 @@ function MobileNameResults(props: {
           )}
         </VList>
       </Show>
+      <Show when={searchingShown() && items().length > 0}>
+        <p role="status" class="px-2 py-2 text-sm text-ink-muted">
+          {t('commandMenu.searching')}
+        </p>
+      </Show>
       <Show when={source.isLoadingEntities() && items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">
           {t('commandMenu.loading')}
@@ -204,6 +238,16 @@ function MobileNameResults(props: {
       </Show>
       <Show when={!source.isLoadingEntities() && items().length === 0}>
         <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
+        <Show when={source.pagination.hasMore()}>
+          <Button
+            disabled={source.pagination.isLoadingMore()}
+            onClick={() =>
+              fireAndForget(source.pagination.loadMore(), 'mobile-search')
+            }
+          >
+            {t('viewMenus.nextOptions')}
+          </Button>
+        </Show>
       </Show>
     </div>
   );
@@ -216,6 +260,7 @@ function MobileFullTextResults(props: {
   const state = props.session;
   const category = useMobileSearchCategory(state.category);
   const search = createMobileFullTextSearch(state.query, category);
+  usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
   const panel = useSplitPanelOrThrow();

@@ -2,13 +2,31 @@ use crate::cognition::model::stream::ToolSet;
 use ai_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::ConnectorSelect;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 #[cfg(test)]
 mod test;
 
 /// The tools this service runs for a turn, as one dispatchable set.
 pub(crate) type SelectedTools<Context> = Arc<dyn ai_toolset::ToolSet<Context> + Send + Sync>;
+
+/// Database-only agent instructions: the base prompt and how Macro databases
+/// work, from `DatabaseNamespace`'s `@agent` guidance.
+static DATABASE_TOOL_USE_PROMPT: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "{}# Macro databases\n{}\n",
+        prompt::BASE_PROMPT,
+        agent_code_mode::domain::entity_guide("databases").unwrap_or_default()
+    )
+});
+
+/// Whether the request's session is a scoped hidden one (a generation, or a
+/// run that sends nothing) asking for tools. Its chats and completions take
+/// none: tools run here with the person's full access, past the scope its
+/// credential carries.
+pub(crate) fn tools_refused_to_current_session(selection: &ToolSet) -> bool {
+    agent_correlation::context::current_scope().is_some() && !matches!(selection, ToolSet::None)
+}
 
 /// The system prompt that describes the tools `selection` grants.
 pub(crate) fn choose_tools_prompt<'a>(
@@ -19,7 +37,7 @@ pub(crate) fn choose_tools_prompt<'a>(
         ToolSet::All => all_tools_prompt,
         ToolSet::None => &prompt::BASE_PROMPT,
         ToolSet::DatabasesReadOnly => &prompt::DATABASE_READ_ONLY_TOOL_USE_PROMPT,
-        ToolSet::Databases => &prompt::DATABASE_TOOL_USE_PROMPT,
+        ToolSet::Databases => &*DATABASE_TOOL_USE_PROMPT,
     }
 }
 

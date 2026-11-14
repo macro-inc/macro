@@ -2,6 +2,7 @@ use super::*;
 use pollster::block_on;
 
 mod calendar;
+mod people;
 mod soup;
 mod watch;
 
@@ -41,6 +42,39 @@ fn soup_data(has_next_page: bool) -> serde_json::Value {
 fn spawn_handle() -> EngineHandle {
     let storage = TursoStorage::open_in_memory("scope-1").unwrap();
     EngineHandle::new(storage, None)
+}
+
+#[test]
+fn scoped_native_hydration_rejects_late_pages_after_clear() {
+    let handle = spawn_handle();
+    let scope = HydrationScope {
+        contact_fence: None,
+        storage_generation: block_on(handle.current_storage_generation())
+            .unwrap()
+            .parse()
+            .unwrap(),
+        identity: "viewer".into(),
+    };
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            "{ user { id } }".into(),
+            None,
+            Variables::new(),
+            serde_json::json!({"user":{"id":"viewer"}}),
+            Some("viewer".into()),
+            Some(scope.clone()),
+        ))
+    };
+    assert!(!hydrate().unwrap().write_result.reset);
+    block_on(handle.clear()).unwrap();
+    assert_eq!(
+        hydrate().err().as_deref(),
+        Some("cache hydration scope changed")
+    );
+    assert_ne!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        scope.storage_generation.to_string()
+    );
 }
 
 #[test]
@@ -100,6 +134,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
+        unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
@@ -242,6 +277,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
             variables(),
             soup_data(true),
             None,
+            None,
         ))
         .unwrap()
         .write_result
@@ -261,6 +297,7 @@ fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
     ))
     .unwrap();

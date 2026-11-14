@@ -13,6 +13,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AccountManagerRequestNode } from './nodes/AccountManagerRequestNode';
 import { AgentActivityNode } from './nodes/AgentActivityNode';
 import { AgentContextNode } from './nodes/AgentContextNode';
 import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
@@ -27,6 +28,7 @@ import { CursorSystemNotificationNode } from './nodes/CursorSystemNotificationNo
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DatabaseQueryNode } from './nodes/DatabaseQueryNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
+import { DetailsNode, DetailsSummaryNode } from './nodes/DetailsNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
 import { DiffNode } from './nodes/DiffNode';
@@ -122,12 +124,24 @@ export const SupportedNodeTypes = [
   ThemeMentionNode,
   TagMentionNode,
   ConnectAppNode,
+  AccountManagerRequestNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
   AgentActivityNode,
   AgentContextNode,
   CursorSystemNotificationNode,
+] as const;
+
+/**
+ * Nodes for read-only rendering (messages, PR comments): every supported node
+ * plus the ones only a renderer needs, such as GitHub's collapsible
+ * `<details>` sections. Keep editor-only behavior out of these.
+ */
+export const StaticRenderNodeTypes = [
+  ...SupportedNodeTypes,
+  DetailsNode,
+  DetailsSummaryNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [
@@ -138,7 +152,8 @@ export const NodeReplacements: LexicalNodeReplacement[] = [
   },
   {
     replace: ListNode,
-    with: (node: ListNode) => new TaskListNode(node.getListType()),
+    with: (node: ListNode) =>
+      new TaskListNode(node.getListType(), node.getStart()),
     withKlass: TaskListNode,
   },
 ];

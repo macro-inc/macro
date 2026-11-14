@@ -18,6 +18,11 @@ export {
 } from '@app/features/agent-interactions/components/PermissionOptions';
 export { ActionLine, type ActionLineProps } from './ActionLine';
 export {
+  ActivityLine,
+  type ActivityLineProps,
+  type ActivityLineStep,
+} from './ActivityLine';
+export {
   AGENT_INPUT_TEXT_AREA_ID,
   AgentInput,
   type AgentInputProps,
@@ -31,6 +36,7 @@ export {
 } from './ComposerNotice';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
+export { DisclosureCaret } from './DisclosureCaret';
 export {
   FailureNoticeCard,
   type FailureNoticeCardProps,
@@ -68,4 +74,5 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
+export { WorkingDots } from './WorkingDots';
 export { WorkingLine } from './WorkingLine';

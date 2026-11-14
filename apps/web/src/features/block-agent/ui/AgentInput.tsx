@@ -20,10 +20,6 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
-import {
-  ComposerAddDrawer,
-  ComposerAddMenu,
-} from '@channel/Input/ComposerAddMenu';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -31,7 +27,11 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import {
+  type AgentCommandItem,
+  TYPE_AGENT_COMMAND_SYMBOL_COMMAND,
+  TYPE_AT_SYMBOL_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -48,7 +48,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { agentAttachmentItems } from './attachment-menu';
+import { AgentComposerAddMenu } from './AgentComposerAddMenu';
+import { openComposerTypeahead } from './open-composer-typeahead';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -74,18 +75,6 @@ export interface AgentInputProps {
   onDraftChange?: (draft: string) => void;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
-  /**
-   * A waiting action can be flushed by ending the current turn. While the
-   * input is empty, Enter and the send button do exactly that. The button
-   * stays a send arrow, ringed so it reads as flush rather than a new message.
-   */
-  hasQueuedMessages?: boolean;
-  /**
-   * Enter or the send button with an empty input and a queued message. Falls
-   * back to `onStop`, which is the mechanism: the queue advances when the
-   * turn it waits on ends.
-   */
-  onSendNext?: () => void;
   disabled?: boolean;
   /** View-only sessions cannot edit drafts; pending sessions still can. */
   readOnly?: boolean;
@@ -132,7 +121,6 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
-  const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
   const imageUnsupportedReason = () =>
     props.supportsImages === false
       ? t('common.imagesUnsupported', {
@@ -212,30 +200,6 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content, attached);
   };
 
-  // Deliberately not gated on `busy`. A speculated stop reads as done
-  // everywhere else, so `busy` is already false while the runtime is still
-  // winding the turn down - and that is exactly when a waiting message is
-  // most worth advancing. Attached files are something to send in their own
-  // right, so they hold it back.
-  const canSendNext = () =>
-    !dictation.active() &&
-    markdown().trim().length === 0 &&
-    attachments().length === 0 &&
-    props.hasQueuedMessages === true &&
-    !props.disabled &&
-    !props.readOnly &&
-    props.onStop !== undefined;
-
-  const sendNext = () => {
-    if (!canSendNext()) return;
-    // Without `onSendNext`, Stop is the mechanism: it bypasses the server
-    // queue, the fold shows it at once as a pending Stopped line, and when the runtime ends the cancelled turn the server
-    // dispatches the oldest waiting action, so the queue remains FIFO. How
-    // soon that is depends on the runtime - a booting sandbox cannot be
-    // interrupted until it is up.
-    (props.onSendNext ?? props.onStop)?.();
-  };
-
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-input')
@@ -266,7 +230,6 @@ export function AgentInput(props: AgentInputProps) {
       // button is the only way to submit.
       if (isTouchDevice()) return false;
       if (canSend()) send();
-      else sendNext();
       return true;
     })
     .onFocusLeave({
@@ -399,6 +362,7 @@ export function AgentInput(props: AgentInputProps) {
               >
                 <div
                   id={AGENT_INPUT_TEXT_AREA_ID}
+                  data-composer-scroll
                   class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
                   classList={{
                     // While empty only the placeholder renders; keep it to one clipped
@@ -439,32 +403,28 @@ export function AgentInput(props: AgentInputProps) {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={props.disabled || props.readOnly}
-                      trigger={(openFiles, openImages) => {
-                        const groups = () => [
-                          {
-                            items: agentAttachmentItems(
-                              openFiles,
-                              openImages,
-                              imageUnsupportedReason()
-                            ),
-                          },
-                        ];
-                        return (
-                          <>
-                            <ComposerAddMenu
-                              groups={groups()}
-                              disabled={props.disabled || props.readOnly}
-                              onOpenDrawer={() => setAttachDrawerOpen(true)}
-                            />
-                            <ComposerAddDrawer
-                              groups={groups()}
-                              open={attachDrawerOpen()}
-                              onOpenChange={setAttachDrawerOpen}
-                              getEditor={() => editor.lexical.getRootElement()}
-                            />
-                          </>
-                        );
-                      }}
+                      trigger={(openFiles, openImages) => (
+                        <AgentComposerAddMenu
+                          openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={imageUnsupportedReason()}
+                          openLibrary={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AT_SYMBOL_COMMAND
+                            )
+                          }
+                          openSkills={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+                            )
+                          }
+                          getEditor={() => editor.lexical.getRootElement()}
+                          session
+                          disabled={props.disabled || props.readOnly}
+                        />
+                      )}
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
@@ -473,52 +433,31 @@ export function AgentInput(props: AgentInputProps) {
                       disabled={props.disabled || props.readOnly}
                     />
                     <Show
-                      when={
-                        props.hasQueuedMessages &&
-                        markdown().trim().length === 0 &&
-                        attachments().length === 0
-                      }
+                      when={props.busy && props.onStop && !canSend()}
                       fallback={
-                        <Show
-                          when={props.busy && props.onStop && !canSend()}
-                          fallback={
-                            <SendButton
-                              appearance="composer"
-                              tooltip="Send"
-                              disabled={!canSend()}
-                              onClick={send}
-                            />
-                          }
-                        >
-                          <Button
-                            aria-label="Stop"
-                            tooltip="Stop"
-                            variant={isTouchDevice() ? 'ghost' : 'secondary'}
-                            size="icon-md"
-                            disabled={props.disabled || props.readOnly}
-                            onClick={() => props.onStop?.()}
-                            class={
-                              isTouchDevice()
-                                ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
-                                : undefined
-                            }
-                          >
-                            <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
-                          </Button>
-                        </Show>
+                        <SendButton
+                          appearance="composer"
+                          tooltip="Send"
+                          disabled={!canSend()}
+                          onClick={send}
+                        />
                       }
                     >
-                      <SendButton
-                        appearance="composer"
-                        intent="flush"
-                        aria-label="Flush queued messages"
-                        tooltip={{
-                          content: 'Flush queued messages',
-                          shortcut: 'Enter',
-                        }}
-                        onClick={sendNext}
-                        disabled={!canSendNext()}
-                      />
+                      <Button
+                        aria-label="Stop"
+                        tooltip="Stop"
+                        variant={isTouchDevice() ? 'ghost' : 'secondary'}
+                        size="icon-md"
+                        disabled={props.disabled || props.readOnly}
+                        onClick={() => props.onStop?.()}
+                        class={
+                          isTouchDevice()
+                            ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                            : undefined
+                        }
+                      >
+                        <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
+                      </Button>
                     </Show>
                   </div>
                 </div>

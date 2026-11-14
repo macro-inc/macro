@@ -18,6 +18,7 @@ service.
 - `src/wiring.rs`: the one Postgres assembly every host builds from.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP router and AI
   authoring tools.
+- `set_appearance` replaces entity-owned icon/color metadata under Edit access, preserves content dates, and commits history-only activity in the same transaction.
 
 ## Scope
 
@@ -29,7 +30,9 @@ service.
 ## Boundaries
 
 - Depends on: `databases` (ports), `collab_surface` (outbound, ports),
-  `entity_access`, `models_forms`, `models_databases`, `macro_event_broker`.
+  `entity_access`, `models_forms`, `models_databases`, `macro_event_broker`,
+  `static_file_service_client` (feature `static_files`: branding images must
+  be the setter's own image uploads; `src/outbound/static_file_images.rs`).
 - Used by: `document_storage_service`, `ai_tools`.
 
 ## Recipes
@@ -37,12 +40,34 @@ service.
 - Add a layout field: `src/domain/authoring/models.rs` → `src/domain/authoring/edit.rs`
   → `src/domain/authoring/validate.rs` → `src/outbound/collaborative_layout.rs`.
 - Add an AI authoring tool: `src/inbound/toolset.rs` → `src/domain/authoring/workflow.rs`.
+- Change section rules (gates, a questions section's `showWhen` branching):
+  `models_forms` → `src/domain/service/layout.rs` (`validate_layout`,
+  `gates_fit_table`) → `src/domain/service/answers.rs` (`evaluate`) →
+  `src/domain/authoring/validate.rs` → `src/outbound/pg_forms_repo/layout.rs`.
+  A skipped section's answers are ignored and count as unanswered.
 - Add a submission rule: `src/domain/service.rs` (`submit`/`answers` modules)
   → `src/outbound/pg_forms_repo.rs`.
 
 ## Checks
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- An anonymous form (`forms.anonymous`) keeps who responded in
+  `form_submission_receipts` (no response, row or time) and writes ledger
+  entries with no respondent, a random v4 id and the day only. Nothing may
+  join the two: no span, log, event or row author names a voter next to a
+  response.
+- A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
+  owner only); its database stays where it is. The move checks the new folder
+  with `project_grants::refuse_filing` before it swaps the inherited grants,
+  which reach the database through form access, like any form grant.
+  Trashing the folder returns the form to the root without those grants
+  (`PgFormsRepo::unfile_from_projects`, through projects' `FiledItemsUnfiler`).
+- `POST /forms` attributes the creation to the SDK token's `agent_id` (code
+  mode), like the native tool, so channel delivery shares a poll an agent
+  posts; access checks still run as the plain user.
 
 ## Related
 

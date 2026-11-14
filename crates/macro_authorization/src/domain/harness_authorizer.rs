@@ -34,19 +34,15 @@ where
 {
     /// Resolve and verify the user this harness request acts for.
     ///
-    /// A forwarded claim must be authorized against harness ownership: the
-    /// owner for private harnesses, any current team member for team-owned
-    /// ones. The default (owner or creator) passes the same check so a
-    /// creator who left the owning team no longer authenticates its harness.
+    /// A forwarded claim must name someone who may run agents on the harness: its
+    /// owner, or a user through a live direct or team grant. The default is the owner.
     async fn resolve_acting_user(
         &self,
         token: &HarnessTokenAuthorization,
         claim: Option<String>,
     ) -> Result<ResolvedBotActingUser, Report<MacroAuthorizationError>> {
-        let user_id = claim.unwrap_or_else(|| match &token.owner {
-            HarnessAuthorizationOwner::User { user_id } => user_id.clone(),
-            HarnessAuthorizationOwner::Team { .. } => token.created_by.clone(),
-        });
+        let HarnessAuthorizationOwner::User { user_id: owner } = &token.owner;
+        let user_id = claim.unwrap_or_else(|| owner.clone());
 
         let acting_user = self
             .repo
@@ -55,16 +51,12 @@ where
             .map_err(|error| repository_error(error, "find harness acting user"))?
             .ok_or_else(|| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
 
-        let authorized = match &token.owner {
-            HarnessAuthorizationOwner::User { user_id: owner } => {
-                owner == acting_user.macro_user_id.as_ref()
-            }
-            HarnessAuthorizationOwner::Team { team_id } => self
+        let authorized = owner == acting_user.macro_user_id.as_ref()
+            || self
                 .repo
-                .user_has_team(&acting_user.fusion_user_id, *team_id)
+                .user_may_use_harness(token.harness_id, acting_user.macro_user_id.as_ref())
                 .await
-                .map_err(|error| repository_error(error, "check harness team membership"))?,
-        };
+                .map_err(|error| repository_error(error, "check harness access"))?;
 
         if !authorized {
             return Err(Report::new(
@@ -113,6 +105,7 @@ fn user_authentication(acting_user: ResolvedBotActingUser) -> MacroUserAuthentic
     MacroUserAuthentication {
         origin: CredentialOrigin::Harness,
         agent_id: None,
+        agent_via: None,
         macro_user_id: acting_user.macro_user_id,
         user_context: UserContext {
             user_id,

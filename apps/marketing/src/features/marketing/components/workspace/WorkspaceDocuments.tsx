@@ -1,10 +1,10 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Code from '@phosphor/code.svg';
-import FileText from '@phosphor/file-text.svg';
-import Hash from '@phosphor/hash.svg';
-import Shapes from '@phosphor/shapes.svg';
-import Share from '@phosphor/share.svg';
-import Table from '@phosphor/table.svg';
+import Share from '@icon/share.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Code from '@icon/system/regular/code.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import Table from '@icon/system/regular/table.svg';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
@@ -278,7 +278,7 @@ export function WorkspaceDocuments(props: {
                   role="textbox"
                   aria-label="Document title"
                   contentEditable
-                  class="text-2xl font-semibold outline-none mb-6"
+                  class="text-2xl font-medium outline-none mb-6"
                   onBlur={(e) =>
                     save({
                       title:

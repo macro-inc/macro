@@ -1,0 +1,34 @@
+/* Body slab headings share one scale. Keep hero H1s, app previews, sans-serif
+   headings, and the entire homepage on their own typography. */
+#app-scroll-root:not(.macro-homepage) :is(
+  .product-feature-intro h2,
+  .homepage-feature-heading h2,
+  .feature-page-end h2,
+  .homepage-demo-slide-copy h2,
+  .homepage-blog h2,
+  .unification-copy h2,
+  .macro-letter-prose h2,
+  .macro-tile-copy h2,
+  .macro-home-intro h2,
+  .documentation-body h2,
+  .documentation-body h3,
+  .documentation-body h4,
+  .post-body h2,
+  .post-body h3,
+  .post-body h4,
+  .legal-doc h2,
+  .partners-page h2,
+  .partners-closing-cta h2,
+  .startups-main h2,
+  .agents-page h2,
+  .tasks-h2,
+  .tasks-h3,
+  .lifetime-pricing__header h2,
+  .lifetime-pricing__card h3,
+  .lifetime-pricing__security-copy h2
+):not(.guide-graphic *, .post-product-ui *, .dummy-workspace *, .tutorial-video-embed *) {
+  font-size: 33px;
+  letter-spacing: -0.5px;
+  white-space: normal;
+  text-wrap: balance;
+}

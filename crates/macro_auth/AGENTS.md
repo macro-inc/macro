@@ -32,8 +32,11 @@ internal API key, and the Axum JWT-decode middleware.
 
 - `cargo test -p macro_auth` (`SQLX_OFFLINE` unset).
 
-Macro API tokens may include a signed `agent_id` for SDK message attribution;
-ordinary user token producers leave it absent.
+Macro API tokens may include a signed `agent_id` for SDK message attribution,
+and with it an `agent_via` client label ("Claude Code"), plus a signed
+`routine_id` naming the routine whose run the token acts for (loop protection,
+see `agent_correlation`). Ordinary user token producers leave them absent; only
+key-holders signing for a verified context set them, never from request input.
 
 ## Gotchas
 
@@ -44,3 +47,8 @@ ordinary user token producers leave it absent.
 ## Related
 
 - Rules: `.agents/rules/rust/security.md`
+
+- SDK JWTs optionally carry signed `agent_correlation_id` and managed-MCP `agent_session_id`; these are attribution, never additional authorization.
+  A code-mode credential whose session runs in a narrower scope also signs
+  `agent_scope` (the scope's stored name), so services with no database can
+  enforce it; it only narrows what the credential may do.

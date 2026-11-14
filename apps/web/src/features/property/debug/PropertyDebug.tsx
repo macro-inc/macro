@@ -10,13 +10,12 @@ import {
 import { Property } from '../property';
 import type { PropertyApiValues, Property as PropertyT } from '../types';
 
-// Seed mock display names so user properties render real first names.
-seedMockDisplayNames([
+const MOCK_NAMES = [
   { id: 'macro|alex@example.com', firstName: 'Alex', lastName: 'Owner' },
   { id: 'macro|sam@example.com', firstName: 'Sam', lastName: 'Shared' },
   { id: 'macro|jordan@example.com', firstName: 'Jordan', lastName: 'Team' },
   { id: 'macro|current@example.com', firstName: 'Current', lastName: 'User' },
-]);
+];
 
 const Section: Component<{ title: string; children: JSX.Element }> = (
   props
@@ -70,6 +69,7 @@ const Grid: Component<{
  * Mounted at /props-debug via componentRegistry (LOCAL_ONLY).
  */
 const PropertyDebug: Component = () => {
+  seedMockDisplayNames(MOCK_NAMES);
   // For now the demo renders straight from the fixtures. A future enhancement
   // could make edits round-trip through a local store so save/clear visibly
   // mutate state.
@@ -110,7 +110,12 @@ const PropertyDebug: Component = () => {
               >
                 <Property.Text
                   property={get(p)}
-                  fallback={<Property.Empty label="None" />}
+                  fallback={
+                    <Property.Empty
+                      propertyDefinitionId={p.propertyDefinitionId}
+                      label="None"
+                    />
+                  }
                 />
               </Property.Root>
             )}
@@ -130,7 +135,12 @@ const PropertyDebug: Component = () => {
                   <Property.Icon property={get(p)} class="size-3 shrink-0" />
                   <Property.Text
                     property={get(p)}
-                    fallback={<Property.Empty label="None" />}
+                    fallback={
+                      <Property.Empty
+                        propertyDefinitionId={p.propertyDefinitionId}
+                        label="None"
+                      />
+                    }
                   />
                 </div>
               </Property.Root>
@@ -154,6 +164,7 @@ const PropertyDebug: Component = () => {
                   property={get(p)}
                   fallback={
                     <Property.Empty
+                      propertyDefinitionId={p.propertyDefinitionId}
                       label={`Set ${p.displayName.toLowerCase()}`}
                     />
                   }
@@ -202,7 +213,12 @@ const PropertyDebug: Component = () => {
                     <Property.Icon property={get(p)} class="size-3 shrink-0" />
                     <Property.Text
                       property={get(p)}
-                      fallback={<Property.Empty label="None" />}
+                      fallback={
+                        <Property.Empty
+                          propertyDefinitionId={p.propertyDefinitionId}
+                          label="None"
+                        />
+                      }
                     />
                     <Property.Caret />
                   </Property.Pill>
@@ -364,7 +380,12 @@ const EditorRow: Component<{ initial: PropertyT }> = (props) => {
                 <Property.Icon property={property()} class="size-3 shrink-0" />
                 <Property.Text
                   property={property()}
-                  fallback={<Property.Empty label="None" />}
+                  fallback={
+                    <Property.Empty
+                      propertyDefinitionId={property().propertyDefinitionId}
+                      label="None"
+                    />
+                  }
                 />
                 <Property.Caret />
               </Property.Pill>

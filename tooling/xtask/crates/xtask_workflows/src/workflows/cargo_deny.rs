@@ -2,34 +2,26 @@
 //! workspace on PRs that touch manifests. Generated into `cargo_deny.yml`
 //! (replaces the hand-written `cargo-deny.yml`).
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Step, Use, Workflow,
-};
+use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::runners;
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("Cargo.toml"),
+    xtask_paths::repo_glob!("crates/**/Cargo.toml"),
+    xtask_paths::repo_glob!("services/**/Cargo.toml"),
+    xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"),
+    xtask_paths::repo_glob!("Cargo.lock"),
+    xtask_paths::repo_glob!("deny.toml"),
+    xtask_paths::repo_glob!(".github/workflows/cargo_deny.yml"),
+];
 
 /// Build the workflow.
 pub fn cargo_deny() -> Workflow {
     Workflow::new("cargo deny check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview)
-                .add_path(xtask_paths::repo_glob!("Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("crates/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("services/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("Cargo.lock"))
-                .add_path(xtask_paths::repo_glob!("deny.toml"))
-                .add_path(xtask_paths::repo_glob!(".github/workflows/cargo_deny.yml")),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new("cargo-deny-${{ github.ref }}"))
-                .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("cargo-deny", cargo_deny_job())
 }
 
@@ -37,6 +29,7 @@ pub fn cargo_deny() -> Workflow {
 /// cache volume needed. Small suffices.
 fn cargo_deny_job() -> Job {
     Job::default()
+        .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_step(checkout())
         .add_step(deny())

@@ -25,12 +25,14 @@ vi.mock('@queries/client', () => ({
     invalidateQueries: vi.fn(async () => {}),
   },
 }));
-vi.mock('@macro-inc/observability', () => ({
+vi.mock('@macro-inc/observability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: () => {},
   dssGraphqlFetch: vi.fn(),
+  graphqlSoupTransportDocument: (document: string) => document,
   getGraphqlCacheHost: () => undefined,
   getGraphqlSoupClient: () => undefined,
   graphqlCacheEnabled: () => true,

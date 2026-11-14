@@ -71,13 +71,14 @@ export type AgentSessionState = {
    * has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /**
+   * Why the last prompt could not run: the agent may not run on its
+   * registered runtime. Shown in the transcript; cleared by a prompt that is
+   * accepted.
+   */
+  runtimeRefusal: Accessor<string | undefined>;
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
-  /**
-   * Force-send the oldest queued message: the same as {@link steer} on the
-   * queue head. No-op with nothing queued.
-   */
-  sendNext: () => void;
   /**
    * Force-send one queued message: show it as sent at once, move it to the
    * front of the queue, and cancel the turn in flight so it runs next.

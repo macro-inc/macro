@@ -119,7 +119,7 @@ function MentionContainer(props: {
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
+        <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -632,8 +632,30 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
     if (i.access === 'does_not_exist' && isRecentMention()) return undefined;
     return i.access;
   };
+  // A pasted routine link carries no label; name it from the routine's read.
+  const resolvedName = () => {
+    const i = item();
+    if (i.loading || i.access !== 'access') return undefined;
+    return i.name;
+  };
+  // Save that name on the node too, so the sent message carries it. Like a
+  // label picked from the mention menu, it is kept from then on.
+  const editor = useContext(LexicalWrapperContext)?.editor;
+  createEffect(() => {
+    const name = resolvedName()?.trim();
+    if (!name || props.documentName) return;
+    const documentId = props.documentId;
+    setTimeout(() => {
+      editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+        [documentId]: name,
+      });
+    });
+  });
   return (
-    <Show when={unavailable()} fallback={<RoutineLink {...props} />}>
+    <Show
+      when={unavailable()}
+      fallback={<RoutineLink {...props} resolvedName={resolvedName()} />}
+    >
       {(access) => (
         <UnavailableMention
           access={access()}
@@ -650,10 +672,17 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
   );
 }
 
-/** Routine references use their saved label; routines have no hover preview. */
-function RoutineLink(props: DocumentMentionDecoratorProps) {
+/**
+ * Routine references use their saved label, else the routine's own name;
+ * routines have no hover preview.
+ */
+function RoutineLink(
+  props: DocumentMentionDecoratorProps & { resolvedName?: string }
+) {
   const name = () =>
-    props.documentName?.replaceAll('\n', ' ').trim() || 'Routine';
+    props.documentName?.replaceAll('\n', ' ').trim() ||
+    props.resolvedName?.replaceAll('\n', ' ').trim() ||
+    'Routine';
   const open = (event: MouseEvent | KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -677,7 +706,7 @@ function RoutineLink(props: DocumentMentionDecoratorProps) {
           if (event.key === 'Enter') open(event);
         }}
       >
-        <DocumentMentionStatic {...props} />
+        <DocumentMentionStatic {...props} documentName={name()} />
       </span>
     </Tooltip>
   );
@@ -719,7 +748,15 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             documentId={props.documentId}
             blockName="database"
             name={name() || 'Database'}
-            icon={<EntityIcon targetType="database" size="fill" />}
+            icon={
+              <EntityIcon
+                targetType="database"
+                appearance={
+                  detail.isSuccess ? detail.data.database.appearance : undefined
+                }
+                size="fill"
+              />
+            }
             collapsed={props.collapsed}
             onOpen={(event) =>
               openDocument(
@@ -779,7 +816,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
           documentId={props.documentId}
           blockName="form"
           name={name() || 'Form'}
-          icon={<EntityIcon targetType="form" size="fill" />}
+          icon={
+            <EntityIcon
+              targetType="form"
+              appearance={
+                detail.isSuccess ? detail.data.form.appearance : undefined
+              }
+              size="fill"
+            />
+          }
           collapsed={props.collapsed}
           onOpen={(event) =>
             openDocument(

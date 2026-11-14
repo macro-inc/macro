@@ -1,10 +1,11 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
+use crate::domain::people::{ChatNames, ChatRoster, SeenPerson};
 use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use external_chat::domain::timeline::{ExternalChatPersonRef, view::People};
+use external_chat::domain::timeline::view::People;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// The same facts, ignoring when they were read and listing-only fields.
@@ -119,6 +120,7 @@ pub(super) async fn store_groups_in(
     .execute(&mut **tx)
     .await
     .map_err(failure)?;
+    changed_groups.extend(name_people_in(tx, &fresh, &bindings).await?);
     if complete {
         let observed_at = groups
             .iter()
@@ -181,6 +183,59 @@ async fn signal_changes_in(
         notify_change(tx, Change::Chat { chat_id }).await?;
     }
     Ok(())
+}
+
+/// Names the people of these groups' chats who have no name yet from the
+/// names a roster read carries (the session fills them from the account's
+/// contacts). Returns the chats whose people were named.
+async fn name_people_in(
+    tx: &mut Transaction<'_, Postgres>,
+    groups: &[&GroupInfo],
+    bindings: &[(Uuid, String)],
+) -> ExternalChatResult<Vec<Uuid>> {
+    let mut chats = vec![];
+    let mut jids = vec![];
+    let mut names = vec![];
+    for (chat, group_jid) in bindings {
+        let Some(group) = groups.iter().find(|group| &group.jid == group_jid) else {
+            continue;
+        };
+        for participant in &group.participants {
+            let identity = &participant.identity;
+            let Some(name) = identity
+                .display_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+            else {
+                continue;
+            };
+            for jid in [Some(&identity.jid), identity.alternate_jid.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                chats.push(*chat);
+                jids.push(jid.clone());
+                names.push(name.to_owned());
+            }
+        }
+    }
+    if chats.is_empty() {
+        return Ok(vec![]);
+    }
+    sqlx::query_scalar!(
+        r#"UPDATE external_chat_person p SET display_name = named.name
+        FROM UNNEST($1::uuid[], $2::text[], $3::text[]) AS named(chat_id, jid, name)
+        JOIN whatsapp_identity_alias a ON a.chat_id = named.chat_id AND a.jid = named.jid
+        WHERE p.id = a.person_id AND p.chat_id = named.chat_id AND p.display_name IS NULL
+        RETURNING p.chat_id"#,
+        &chats,
+        &jids,
+        &names
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(failure)
 }
 
 /// The account is no longer in this group (a live group event).
@@ -300,6 +355,84 @@ async fn left_selected_in(
     .map_err(failure)
 }
 
+impl PgWhatsAppRepository {
+    /// What the people of `chat` are called: those stored as `persons` or
+    /// by one of `jids`, with the owner's chat-list names for all of them.
+    async fn chat_names(
+        &self,
+        chat: &ChatRef,
+        jids: &[String],
+        persons: &[Uuid],
+    ) -> ExternalChatResult<ChatNames> {
+        let seen: Vec<SeenPerson> = sqlx::query!(
+            r#"SELECT p.id, p.user_id, p.display_name,
+                COALESCE(array_agg(a.jid) FILTER (WHERE a.jid IS NOT NULL), '{}') AS "jids!"
+            FROM external_chat_person p
+            LEFT JOIN whatsapp_identity_alias a ON a.chat_id = p.chat_id AND a.person_id = p.id
+            WHERE p.chat_id = $1 AND (p.id = ANY($2) OR p.id IN (
+                SELECT person_id FROM whatsapp_identity_alias WHERE chat_id = $1 AND jid = ANY($3)))
+            GROUP BY p.id"#,
+            chat.id,
+            persons,
+            jids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| {
+            // The stand-in writes as the chat's remote id, so it goes by it:
+            // in a direct chat that is the other person, whose picture the
+            // chat's is.
+            let mut jids = row.jids;
+            if row.id == super::ingest::chat_stand_in(chat.id) {
+                jids.push(chat.remote_id.clone());
+            }
+            SeenPerson {
+                person_id: row.id,
+                user_id: row.user_id,
+                whatsapp_name: row.display_name,
+                jids,
+            }
+        })
+        .collect();
+        let mut named: Vec<String> = seen
+            .iter()
+            .flat_map(|person| person.jids.iter().cloned())
+            .collect();
+        named.extend_from_slice(jids);
+        let contacts = sqlx::query!(
+            r#"SELECT c.chat_jid, c.name AS "name!" FROM whatsapp_chat c
+            JOIN whatsapp_linked_account o ON o.id = c.account_id
+            JOIN external_chat g ON g.user_id = o.user_id
+            WHERE g.id = $1 AND c.kind = 'direct' AND c.chat_jid = ANY($2) AND c.name IS NOT NULL"#,
+            chat.id,
+            &named
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| (row.chat_jid, row.name))
+        .collect();
+        let pictures = sqlx::query!(
+            r#"SELECT p.jid, p.static_file_id AS "static_file_id!" FROM whatsapp_profile_picture p
+            JOIN whatsapp_linked_account o ON o.id = p.account_id
+            JOIN external_chat g ON g.user_id = o.user_id
+            WHERE g.id = $1 AND p.static_file_id IS NOT NULL AND p.jid = ANY($2)"#,
+            chat.id,
+            &named
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| (row.jid, row.static_file_id))
+        .collect();
+        Ok(ChatNames::new(contacts, pictures, seen))
+    }
+}
+
 #[async_trait]
 impl GroupRepository for PgWhatsAppRepository {
     async fn account_groups(&self, account: Uuid) -> ExternalChatResult<Vec<GroupInfo>> {
@@ -378,7 +511,7 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)
     }
 
-    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<GroupInfo>> {
+    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<ChatRoster>> {
         let roster = sqlx::query_scalar!(
             r#"SELECT r.metadata FROM whatsapp_roster r
             JOIN whatsapp_chat_membership m ON m.account_id = r.account_id
@@ -392,15 +525,13 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)?
         .map(decode::<GroupInfo>)
         .transpose()?;
-        let Some(mut roster) = roster else {
+        let Some(roster) = roster else {
             return Ok(None);
         };
-        // WhatsApp's group metadata has no names; people who wrote in the
-        // group are known by their WhatsApp name.
+        // WhatsApp's group metadata has no names.
         let jids: Vec<String> = roster
             .participants
             .iter()
-            .filter(|participant| participant.identity.display_name.is_none())
             .flat_map(|participant| {
                 [
                     Some(participant.identity.jid.clone()),
@@ -409,32 +540,11 @@ impl GroupRepository for PgWhatsAppRepository {
             })
             .flatten()
             .collect();
-        if jids.is_empty() {
-            return Ok(Some(roster));
-        }
-        let names = sqlx::query!(
-            r#"SELECT a.jid, p.display_name AS "display_name!" FROM whatsapp_identity_alias a
-            JOIN external_chat_person p ON p.id = a.person_id
-            WHERE a.chat_id = $1 AND a.jid = ANY($2) AND p.display_name IS NOT NULL"#,
-            chat.id,
-            &jids
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(failure)?;
-        for participant in &mut roster.participants {
-            let identity = &mut participant.identity;
-            if identity.display_name.is_none() {
-                identity.display_name = names
-                    .iter()
-                    .find(|row| {
-                        row.jid == identity.jid
-                            || identity.alternate_jid.as_deref() == Some(row.jid.as_str())
-                    })
-                    .map(|row| row.display_name.clone());
-            }
-        }
-        Ok(Some(roster))
+        Ok(Some(
+            self.chat_names(chat, &jids, &[])
+                .await?
+                .name_members(roster),
+        ))
     }
 
     async fn account_rosters(
@@ -491,21 +601,35 @@ impl GroupRepository for PgWhatsAppRepository {
             .collect())
     }
 
-    async fn people(&self, chat: &ChatRef, jids: &[String]) -> ExternalChatResult<People> {
-        let mut people = People::new(crate::domain::jid::phone_number);
-        if jids.is_empty() {
-            return Ok(people);
-        }
-        let seen = sqlx::query!(
-            r#"SELECT a.jid, p.user_id, p.display_name FROM whatsapp_identity_alias a
-            JOIN external_chat_person p ON p.id = a.person_id
-            WHERE a.chat_id = $1 AND a.jid = ANY($2)"#,
-            chat.id,
-            jids
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        let ids: Vec<Uuid> = chats.iter().map(|chat| chat.id).collect();
+        let rows = sqlx::query!(
+            r#"SELECT g.id AS "id!", p.static_file_id AS "static_file_id!"
+            FROM external_chat g
+            JOIN whatsapp_linked_account o ON o.user_id = g.user_id
+            JOIN whatsapp_profile_picture p ON p.account_id = o.id AND p.jid = g.remote_id
+            WHERE g.id = ANY($1) AND g.provider = 'whatsapp' AND p.static_file_id IS NOT NULL"#,
+            &ids
         )
         .fetch_all(&self.pool)
         .await
         .map_err(failure)?;
+        let pictures: std::collections::HashMap<Uuid, Uuid> = rows
+            .into_iter()
+            .map(|row| (row.id, row.static_file_id))
+            .collect();
+        Ok(chats
+            .iter()
+            .map(|chat| pictures.get(&chat.id).copied())
+            .collect())
+    }
+
+    async fn people(
+        &self,
+        chat: &ChatRef,
+        jids: &[String],
+        persons: &[Uuid],
+    ) -> ExternalChatResult<People> {
         let roster = sqlx::query_scalar!(
             r#"SELECT r.metadata FROM whatsapp_roster r
             JOIN whatsapp_linked_account a ON a.id = r.account_id
@@ -518,52 +642,13 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)?
         .map(decode::<GroupInfo>)
         .transpose()?;
-        for row in seen {
-            let roster_name = roster.as_ref().and_then(|roster| {
-                roster
-                    .participants
-                    .iter()
-                    .find(|participant| {
-                        participant.identity.jid == row.jid
-                            || participant.identity.alternate_jid.as_deref() == Some(&row.jid)
-                    })
-                    .and_then(|participant| participant.identity.label())
-            });
-            let name = row
-                .display_name
-                .filter(|name| !name.trim().is_empty())
-                .or(roster_name);
-            if let Some(name) = name {
-                people.learn(
-                    &row.jid,
-                    ExternalChatPersonRef {
-                        name,
-                        user_id: row.user_id,
-                    },
-                );
-            }
-        }
+        let mut named = jids.to_vec();
         for participant in roster.iter().flat_map(|roster| &roster.participants) {
-            let Some(name) = participant.identity.label() else {
-                continue;
-            };
-            for jid in [
-                Some(&participant.identity.jid),
-                participant.identity.alternate_jid.as_ref(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                people.learn(
-                    jid,
-                    ExternalChatPersonRef {
-                        name: name.clone(),
-                        user_id: None,
-                    },
-                );
-            }
+            named.push(participant.identity.jid.clone());
+            named.extend(participant.identity.alternate_jid.clone());
         }
-        Ok(people)
+        let names = self.chat_names(chat, &named, persons).await?;
+        Ok(names.people(roster.as_ref()))
     }
     async fn account_chats(&self, account: Uuid) -> ExternalChatResult<Vec<StoredChat>> {
         super::chats::account_chats(&self.pool, account).await

@@ -2,9 +2,10 @@
 //! Each recipient row carries its notification's entity and type, so the
 //! primary-entity path reads only the viewer's rows from
 //! `idx_user_notification_viewer_entity` instead of the entity's notifications
-//! for every user. The secondary and message-id paths match few notifications
-//! each and keep their `notification` indexes; the message-id path's `COALESCE`
-//! must match `idx_notification_message_id`.
+//! for every user, and an event-type filter reads the type from that index
+//! entry: only matching rows join `notification`. The secondary and message-id
+//! paths match few notifications each and keep their `notification` indexes;
+//! the message-id path's `COALESCE` must match `idx_notification_message_id`.
 
 use std::{collections::HashMap, str::FromStr};
 
@@ -40,6 +41,12 @@ pub(super) async fn get_filtered_entity_notifications(
         .map(|entity| entity.entity_type.as_ref().to_owned())
         .collect();
     let limit = query.limit.map(i64::from);
+    // The read's cost follows the viewer's notifications on each requested
+    // entity, so bound it.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *transaction)
+        .await?;
     let rows = sqlx::query!(
         r#"
         WITH requested AS (
@@ -92,6 +99,7 @@ pub(super) async fn get_filtered_entity_notifications(
                       AND un.state = ANY($4::notification_state[])
                       AND un.event_item_type = requested.entity_type
                       AND un.event_item_id = requested.entity_id
+                      AND (cardinality($5::text[]) = 0 OR un.notification_event_type = ANY($5))
                     UNION
                     SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
                     FROM notification n
@@ -100,6 +108,7 @@ pub(super) async fn get_filtered_entity_notifications(
                         FROM user_notification un
                         WHERE un.user_id = $1 AND un.notification_id = n.id
                           AND un.deleted_at IS NULL AND un.state = ANY($4::notification_state[])
+                          AND (cardinality($5::text[]) = 0 OR un.notification_event_type = ANY($5))
                         -- Probe the viewer's row per notification: a plain join
                         -- can scan the viewer's whole history for each entity.
                         OFFSET 0
@@ -114,24 +123,25 @@ pub(super) async fn get_filtered_entity_notifications(
                         FROM user_notification un
                         WHERE un.user_id = $1 AND un.notification_id = n.id
                           AND un.deleted_at IS NULL AND un.state = ANY($4::notification_state[])
+                          AND (cardinality($5::text[]) = 0 OR un.notification_event_type = ANY($5))
                         OFFSET 0
                     ) un
                     WHERE requested.entity_type = 'channel_message'
                       AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id
                 ) viewer_match
                 ORDER BY viewer_match.created_at DESC, viewer_match.notification_id DESC
-                -- With no filter on the notification row, the newest matches
-                -- are the result, so limit before reading notification rows.
-                LIMIT CASE WHEN cardinality($5::text[]) = 0 AND NOT $7::bool AND NOT $8::bool THEN $6::bigint END
+                -- Event types filter the recipient row's copy, so without a
+                -- top-level or feed filter the newest matches are the result:
+                -- limit before reading notification rows.
+                LIMIT CASE WHEN NOT $7::bool AND NOT $8::bool THEN $6::bigint END
             ) un
             JOIN notification n ON n.id = un.notification_id
-            WHERE (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))
-              AND (NOT $7::bool OR (
-                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention')
+            WHERE (NOT $7::bool OR (
+                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention', 'channel_access_requested')
                   AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
               ))
               AND (NOT $8::bool OR requested.entity_type <> 'channel' OR (
-                  n.notification_event_type = 'document_mention'
+                  n.notification_event_type IN ('document_mention', 'channel_access_requested')
                   OR (n.notification_event_type IN ('channel_message_send', 'channel_message_reply') AND (
                       -- Mention stacks consume the mention, not its duplicate send/reply.
                       EXISTS (
@@ -161,7 +171,8 @@ pub(super) async fn get_filtered_entity_notifications(
         "#,
         user_id.as_ref(), &ids, &types, &query.states as _, &query.event_types, limit,
         query.top_level_messages_only, query.channel_feed_only, NotificationState::ACTIVE as _,
-    ).fetch_all(pool).await?;
+    ).fetch_all(&mut *transaction).await?;
+    transaction.commit().await?;
 
     for row in rows {
         let requested =

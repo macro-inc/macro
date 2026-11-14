@@ -1,0 +1,41 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/observability_image.rs
+name: Observability image
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  build-image:
+    name: Build observability image
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Build the NixOS image
+      run: |
+        set -euo pipefail
+        if [ -e /dev/kvm ]; then
+          echo "KVM is available"
+        else
+          echo "::warning::No /dev/kvm: the image builds under QEMU emulation"
+        fi
+        features="$(nix config show system-features) kvm"
+        time nix build . --option system-features "$features" --print-build-logs --out-link result
+        du -shL result/*.vhd
+      shell: bash
+      working-directory: infra/stacks/observability
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

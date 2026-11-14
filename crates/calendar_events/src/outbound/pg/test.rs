@@ -2508,6 +2508,146 @@ async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_a_first_google_import_reports_syncing(pool: PgPool) {
+    let owner_id = "macro|calendar-routine-sync@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, _) = provider_ids(&repo, link_id).await;
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the first import should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Syncing
+    );
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    repo.complete_google_backfill(key, lease_token)
+        .await
+        .unwrap();
+
+    assert!(repo.schedule_google_sync_for_link(link_id).await.unwrap());
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the routine run should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Ready
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_sources_raises_the_team_hint_only_for_out_of_office_ones(pool: PgPool) {
+    let owner_id = "macro|calendar-retired-hint@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let provider = (account_id, calendar_id);
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let out_of_office = repo
+        .upsert_event_fixture(member_primary_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-ooo@example.com",
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let meeting = repo
+        .upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-meeting@example.com",
+            "Weekly sync",
+            1,
+        ))
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+
+    let retired = repo
+        .commit_google_calendar_sync(
+            key,
+            lease_token,
+            account_id,
+            GoogleCalendarSyncSnapshot {
+                calendar_id,
+                next_sync_token: "next".to_string(),
+                observed_provider_event_ids: None,
+                materialized_range: None,
+                cancelled_provider_event_ids: vec![
+                    "provider-retired-ooo@example.com".to_string(),
+                    "provider-retired-meeting@example.com".to_string(),
+                ],
+            },
+            0,
+        )
+        .await
+        .unwrap();
+
+    let hint_of = |event_id: Uuid| {
+        retired
+            .iter()
+            .find(|outcome| outcome.event_id == event_id)
+            .map(|outcome| outcome.team_ooo_changed)
+    };
+    assert_eq!(hint_of(out_of_office), Some(true));
+    assert_eq!(hint_of(meeting), Some(false));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
     let owner_id = "macro|calendar-idempotent@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -3524,16 +3664,30 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
 
     // A couple of isolated failures stay below the badge threshold.
     for _ in 0..2 {
-        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-            .await
-            .unwrap();
+        repo.record_google_calendar_sync_error(
+            key,
+            lease_token,
+            account_id,
+            calendar_id,
+            CalendarSyncFailure::Transient,
+            message,
+        )
+        .await
+        .unwrap();
     }
     assert_eq!(sync_error().await, None);
 
     // A third failure crosses the threshold and surfaces to the user.
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await.as_deref(), Some(message));
 
     // A successful sync clears the badge and resets the failure counter.
@@ -3558,17 +3712,31 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
 
     // A fresh failure after recovery starts the count over, so one blip does
     // not immediately re-badge.
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await, None);
 
     // A badged calendar that drops off the provider list and later returns
     // starts clean rather than resurrecting its old badge.
     for _ in 0..2 {
-        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-            .await
-            .unwrap();
+        repo.record_google_calendar_sync_error(
+            key,
+            lease_token,
+            account_id,
+            calendar_id,
+            CalendarSyncFailure::Transient,
+            message,
+        )
+        .await
+        .unwrap();
     }
     assert_eq!(sync_error().await.as_deref(), Some(message));
     repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
@@ -3587,9 +3755,16 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
         .id;
     assert_eq!(resurrected_id, calendar_id);
     assert_eq!(sync_error().await, None);
-    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
-        .await
-        .unwrap();
+    repo.record_google_calendar_sync_error(
+        key,
+        lease_token,
+        account_id,
+        calendar_id,
+        CalendarSyncFailure::Transient,
+        message,
+    )
+    .await
+    .unwrap();
     assert_eq!(sync_error().await, None);
 }
 
@@ -6158,6 +6333,7 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: false,
+            team_ooo_changed: true,
         }]
     );
     let content = entity_content(&pool, event_id).await;
@@ -6372,6 +6548,7 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: true,
+            team_ooo_changed: false,
         }]
     );
 }
@@ -7266,10 +7443,9 @@ mod join_requests;
 mod meeting_copies;
 mod meeting_uid;
 mod mention_join_link;
-#[cfg(feature = "notes")]
-mod notes;
 mod organizer_calendar;
 mod source_access;
+mod sync_health;
 
 mod replacement;
 

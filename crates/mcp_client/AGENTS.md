@@ -21,14 +21,23 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - `src/domain/service/`: connection/tool-execution orchestration
   (`toolset.rs`, `server_access.rs`, `persisting_credential_store.rs`), and
   `server_directory.rs` for adding servers.
-- `src/domain/ports.rs`: `McpServerStore`, `OAuthStateStore`, and the OAuth
-  port the outbound adapters implement.
+- `src/domain/ports.rs`: `McpServerStore`, `OAuthStateStore`, the OAuth
+  port, and `McpServerHttp` (the guarded HTTP clients) that the outbound
+  adapters implement. The address policy itself is pure domain code
+  (`src/domain/models/address_policy.rs`).
 - `src/domain/provider_registry.rs` (feature `providers`): pre-registered
   OAuth credentials for known MCP providers, keyed off `macro_env_var`.
+- `src/domain/service/linked_github.rs`: `WithLinkedGithub`, the store
+  decorator that answers GitHub's MCP server with the user's GitHub account
+  link token (same GitHub App), read through the `LinkedGithubTokens` port
+  (`outbound/auth_service_github_tokens.rs`). Hosts read the native store as
+  `outbound::NativeServerStore`.
 - `src/inbound/axum_router.rs`: HTTP routes for server management and the
   OAuth callback.
 - `src/inbound/toolset.rs`: the `ConnectMcpServer` AI tool, wired through
   `ai_tools` where the MCP credentials key is configured.
+- `src/outbound/guarded_http.rs`: `McpHttp`, the address-guarded clients every
+  connection to a user's server goes through (`agent_egress` reuses them).
 - `src/outbound/`: `oauth.rs` (RMCP-backed OAuth), `pg_server_repo.rs`
   (Postgres server store), `redis_state_store.rs` (OAuth state).
 
@@ -41,7 +50,8 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 
 ## Boundaries
 
-- Depends on: `agent`, `ai_toolset`, `macro_authorization` (feature `axum`),
+- Depends on: `agent`, `ai_toolset`, `authentication_service_client`,
+  `macro_authorization` (feature `axum`),
   `macro_user_id`, `rmcp`.
 - Used by: `agent_egress`, `agent_harness`, `ai_tools`, `mcp_select`,
   `onboarding`.
@@ -60,9 +70,15 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
   server config in Postgres (`pg_server_repo.rs`) — a server record surviving
   doesn't mean its OAuth state did.
 - `ServerDirectory`'s public-destination check for agent-added servers judges
-  hostnames by name and never resolves them, so a public name that resolves
-  to a private address passes. Protection against that belongs where the
-  backend connects, for every stored server.
+  hostnames by name only. The real guard is `src/outbound/guarded_http.rs`:
+  every connection to a stored server (transport, OAuth discovery,
+  registration, token refresh) goes through `McpHttp`, which refuses
+  non-public addresses on the address actually connected to, ignores system
+  proxies, and follows only same-origin 307/308 transport redirects. Build
+  `McpHttp` once at startup in each composition root from
+  `AddressPolicy::for_environment`; only `Local` reaches loopback and private
+  addresses. Never dial a stored server with `reqwest::Client::new()`,
+  `StreamableHttpClientTransport::from_uri`, or `AuthorizationManager::new`.
 
 ## Related
 

@@ -6,7 +6,6 @@ import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import {
-  getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
@@ -119,9 +118,12 @@ export function InlineTaskProperties() {
         )
     );
     if (documentKind !== 'task') return visible;
-    const order = [
-      ...getDefaultPinnedProperties('task'),
+    const order: readonly string[] = [
+      SYSTEM_PROPERTY_IDS.STATUS,
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
       SYSTEM_PROPERTY_IDS.PROJECT,
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
     return [...visible].sort((left, right) => {
       const leftIndex = order.indexOf(left.propertyDefinitionId);
@@ -179,6 +181,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
           {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
@@ -187,18 +190,18 @@ export function InlineTaskProperties() {
               <InlinePropertyValue
                 property={property()}
                 entityId={blockId}
+                showLabel={
+                  documentKind === 'task' &&
+                  property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? false
+                    : undefined
+                }
                 canManage={
                   !property().propertyId.startsWith('pending:') ||
                   defaultDefinitionIds().includes(
                     property().propertyDefinitionId
                   )
-                }
-                canRemove={
-                  !property().propertyId.startsWith('pending:') &&
-                  (documentKind !== 'task' ||
-                    !getBuiltinPropertyIds('task').includes(
-                      property().propertyDefinitionId
-                    ))
                 }
               />
             )}

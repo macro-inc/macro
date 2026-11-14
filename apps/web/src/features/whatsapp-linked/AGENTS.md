@@ -28,10 +28,14 @@ own shareable external chat (`POST /external-chats` with `provider:
   `NewChatFailure`); the `startChat` capability looks it up
   (`useLookUpWhatsappNumberMutation` polls `GET /whatsapp/lookups/{id}`),
   then adds and opens the chat.
-- `components/history-import-prompt.tsx`: the app-wide bottom-right prompt
-  (mounted lazily in `Layout.tsx`) to import earlier messages of the owner's
-  chats waiting for their phone (`core/history-import.ts`); its **Import** is
-  the only thing that asks the phone (`POST /whatsapp/history-import`).
+- `components/history-import-prompt.tsx`: the bottom-right prompt (mounted
+  lazily in `Layout.tsx`; not on phones, where it covers the composer) to
+  import earlier messages of the owner's chats waiting for their phone
+  (`core/history-import.ts`). It and the chat view's import bar
+  (`features/external-chat`) are the only things that ask the phone
+  (`POST /whatsapp/history-import`). The prompt uses an accent-colored import-tray
+  icon and a text-only **Not now** action that retains dismissal until another
+  chat needs history.
 - `core/chat.ts`: chat sections, search matching and row wording.
 
 ## Scope

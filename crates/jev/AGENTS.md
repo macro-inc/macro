@@ -16,6 +16,11 @@ composer's Auto mode.
 - `src/domain/decisions.rs`: named decision admission, capacity, deadline and
   cancellation-safe metering (`decisions` feature).
 - `src/domain/ports.rs`: `JevProvider` / `YesNoClassifier` port traits.
+- `src/domain/batches.rs` (`batches` feature): `decide_in_batches`, the one
+  way to ask more than 32 questions: parallel requests of at most 32 under one
+  deadline, answers typed and in question order, a late or failed request
+  losing only its own questions. Skill and SDK entity routing use it through
+  `cognition`; never chunk questions in a caller.
 - `src/outbound/system_one.rs`: `SystemOneJev`, the HTTP adapter for TypeSafe
   and Cloudflare Workers AI (feature `outbound`).
 
@@ -33,7 +38,8 @@ composer's Auto mode.
 - Used by: `scheduled_action` (trigger conditions),
   `document_cognition_service` (the `/decisions` endpoint), `agent_harness`
   (Auto mode choice, Clef Flash), `agent_session` (whether to retitle a
-  session after a turn, TypeSafe).
+  session after a turn, TypeSafe), `agent_trigger` (routing unmentioned
+  thread replies to agent sessions).
 
 ## Checks
 

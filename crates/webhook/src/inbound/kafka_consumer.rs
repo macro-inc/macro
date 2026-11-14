@@ -108,6 +108,11 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::ChannelMacroEvent(event) => {
                         service.ingest_channel_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::CallNotificationMacroEvent(event) => {
+                        service
+                            .ingest_call_notification_event(event.event().clone())
+                            .await
+                    }
                     DeclaredMacroEvent::MessageMacroEvent(event) => {
                         service.ingest_message_event(event.event().clone()).await
                     }
@@ -123,6 +128,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                         service
                             .ingest_agent_session_lifecycle_event(event.event().clone())
                             .await
+                    }
+                    DeclaredMacroEvent::UserMacroEvent(event) => {
+                        service.ingest_user_event(event.event().clone()).await
                     }
                 };
 

@@ -1,8 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, Dialog, Panel } from '@ui';
 import { Show } from 'solid-js';
+import { PipelineImportFailures } from '../components/pipeline-import-failures';
 import type { PipelineTransfer } from '../context/pipelines';
-import type { Pipeline } from '../core/pipeline';
+import type { TrackedPipeline } from '../core/pipeline';
 import { pipelineRecordHeaders } from '../core/pipeline-csv';
 import { createPipelineImport } from '../primitives/pipeline-transfer';
 
@@ -10,7 +11,7 @@ const entries = (count: number) =>
   `${count.toLocaleString()} ${count === 1 ? 'entry' : 'entries'}`;
 
 export function PipelineImport(props: {
-  pipeline: Pipeline;
+  pipeline: TrackedPipeline;
   transfer: PipelineTransfer;
   onClose: () => void;
 }) {
@@ -73,6 +74,12 @@ export function PipelineImport(props: {
                       empty that don't fit their column.
                     </p>
                   </Show>
+                  <Show when={current().invalidSystemRows}>
+                    <p class="text-ink-muted">
+                      Skips {current().invalidSystemRows.toLocaleString()} rows
+                      with unsupported Outcome or currency values.
+                    </p>
+                  </Show>
                 </div>
               )}
             </Show>
@@ -92,6 +99,14 @@ export function PipelineImport(props: {
                 </p>
               )}
             </Show>
+            <PipelineImportFailures
+              addLabel={
+                props.pipeline.recordType === 'company'
+                  ? 'Add deal'
+                  : 'Add contact'
+              }
+              failures={result()?.invalid}
+            />
             <Show when={error()}>
               <p role="alert" class="text-sm text-failure">
                 {error()}

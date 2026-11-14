@@ -14,7 +14,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
     ChatUpdate, ClaimedSend, InboundEvent, LookupAnswer, MediaImport, MessageAnchor, OutboundMedia,
-    OutgoingContent, SessionScope, Target,
+    OutgoingContent, PictureAnswer, PictureCheck, SessionScope, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
@@ -39,6 +39,7 @@ use crate::domain::ports::{
 use events::{Mapped, MediaLocator};
 
 pub mod events;
+mod pictures;
 #[cfg(test)]
 mod test;
 
@@ -57,6 +58,8 @@ pub struct WhatsmeowConnector<Kms> {
     dialer: Arc<dyn Dialer>,
     media_base_url: Option<String>,
     send_timeout: Duration,
+    /// Downloads profile pictures, whose URLs are plain HTTPS.
+    pictures_http: reqwest::Client,
 }
 
 impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
@@ -69,15 +72,16 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
         dialer: Arc<dyn Dialer>,
         media_base_url: Option<String>,
         send_timeout: Duration,
-    ) -> Self {
-        WhatsmeowConnector {
+    ) -> Result<Self, reqwest::Error> {
+        Ok(WhatsmeowConnector {
             pool,
             kms,
             signal,
             dialer,
             media_base_url,
             send_timeout,
-        }
+            pictures_http: pictures::http_client()?,
+        })
     }
 
     async fn open_store(&self, scope: SessionScope) -> Result<Arc<PgWhatsAppStore>, SessionError> {
@@ -186,6 +190,7 @@ impl<Kms: WhatsAppKms + 'static> WhatsmeowConnector<Kms> {
                 events: sender,
                 pairing: CancellationToken::new(),
                 send_timeout: self.send_timeout,
+                pictures_http: self.pictures_http.clone(),
             },
             receiver,
         ))
@@ -209,7 +214,17 @@ impl Forwarder {
     /// the event is left unacknowledged and WhatsApp redelivers it.
     async fn complete_addresses(&self, event: &mut InboundEvent) -> bool {
         match events::complete_addresses(self.store.as_ref(), event).await {
-            Ok(()) => true,
+            Ok(()) => {
+                // A name is only display: without one the sender is still stored.
+                if let Err(error) = events::complete_sender_name(self.store.as_ref(), event).await {
+                    tracing::warn!(
+                        account_id = %self.account,
+                        error = %error,
+                        "Reading the WhatsApp contact store failed; storing the sender unnamed"
+                    );
+                }
+                true
+            }
             Err(error) => {
                 tracing::warn!(
                     account_id = %self.account,
@@ -316,6 +331,9 @@ impl Forwarder {
             unreadable = tracing::field::Empty,
             skipped = tracing::field::Empty,
             skipped_stub_types = tracing::field::Empty,
+            push_named = tracing::field::Empty,
+            contact_named = tracing::field::Empty,
+            unnamed = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
         async {
@@ -323,6 +341,7 @@ impl Forwarder {
                 return;
             };
             let mut stored = 0usize;
+            let mut names = SenderNames::default();
             let mut unreadable: Vec<i32> = vec![];
             // Messages Macro does not import, by WhatsApp stub type (0: not
             // a stub), so a page that stores less than it got is explained.
@@ -356,8 +375,10 @@ impl Forwarder {
                 let votes = events::history_poll_votes(self.account, &parsed, now);
                 let mut message_kept = true;
                 for mut event in std::iter::once(event).chain(votes) {
-                    message_kept &= self.complete_addresses(&mut event).await
-                        && Box::pin(self.inbound.accept(&event)).await;
+                    let carried = events::sender_named(&event);
+                    let completed = self.complete_addresses(&mut event).await;
+                    names.count(carried, events::sender_named(&event));
+                    message_kept &= completed && Box::pin(self.inbound.accept(&event)).await;
                 }
                 if message_kept {
                     stored += 1;
@@ -367,6 +388,9 @@ impl Forwarder {
             }
             let span = tracing::Span::current();
             span.record("stored", stored);
+            span.record("push_named", names.push);
+            span.record("contact_named", names.contact);
+            span.record("unnamed", names.none);
             span.record("unreadable", unreadable.len());
             span.record("skipped", skipped.len());
             span.record("skipped_stub_types", format!("{skipped:?}"));
@@ -388,6 +412,26 @@ impl Forwarder {
         }
         .instrument(span)
         .await;
+    }
+}
+
+/// How the senders of a history page were named, for its span: by a
+/// WhatsApp name the message carries, from the account's contact store, or
+/// not at all. Counts only; never the names.
+#[derive(Default)]
+struct SenderNames {
+    push: usize,
+    contact: usize,
+    none: usize,
+}
+
+impl SenderNames {
+    fn count(&mut self, carried: bool, named: bool) {
+        match (carried, named) {
+            (true, _) => self.push += 1,
+            (false, true) => self.contact += 1,
+            (false, false) => self.none += 1,
+        }
     }
 }
 
@@ -448,6 +492,11 @@ impl EventHandler for Forwarder {
         {
             return vote;
         }
+        if let Event::Picture(picture) = event {
+            let _ = self
+                .events
+                .send(events::picture_changed(self.store.as_ref(), picture).await);
+        }
         let seal = |locator: &MediaLocator| self.seal(locator);
         let mapped = events::map_event(self.account, event, Utc::now(), &seal);
         if mapped.is_empty() && matches!(event, Event::Message(_)) {
@@ -481,6 +530,7 @@ pub struct WhatsmeowSession {
     events: mpsc::UnboundedSender<SessionEvent>,
     pairing: CancellationToken,
     send_timeout: Duration,
+    pictures_http: reqwest::Client,
 }
 
 impl Drop for WhatsmeowSession {
@@ -751,6 +801,17 @@ fn anchor_info(chat_jid: &str, anchor: &MessageAnchor) -> Result<MessageInfo, Se
     })
 }
 
+impl WhatsmeowSession {
+    /// The account's contacts, to name group participants; none when the
+    /// store can't be read (names are only display).
+    async fn contacts(&self) -> std::collections::HashMap<Jid, whatsmeow::types::ContactInfo> {
+        self.store.get_all_contacts().await.unwrap_or_else(|error| {
+            tracing::warn!(error = %error, "Reading the WhatsApp contact store failed");
+            Default::default()
+        })
+    }
+}
+
 fn group_info(group: whatsmeow::types::GroupInfo, observed_at: DateTime<Utc>) -> GroupInfo {
     GroupInfo {
         jid: group.jid.to_string(),
@@ -930,10 +991,15 @@ impl WhatsAppSession for WhatsmeowSession {
     async fn joined_groups(&self) -> Result<Vec<GroupInfo>, SessionError> {
         let observed_at = Utc::now();
         let groups = self.client.get_joined_groups().await.map_err(internal)?;
-        Ok(groups
+        let mut groups: Vec<GroupInfo> = groups
             .into_iter()
             .map(|group| group_info(group, observed_at))
-            .collect())
+            .collect();
+        let contacts = self.contacts().await;
+        for group in &mut groups {
+            events::complete_participant_names(&contacts, group);
+        }
+        Ok(groups)
     }
 
     async fn group(&self, group_jid: &str) -> Result<Option<GroupInfo>, SessionError> {
@@ -942,7 +1008,11 @@ impl WhatsAppSession for WhatsmeowSession {
             SessionError::Internal(rootcause::report!("invalid group JID").into_dynamic())
         })?;
         match self.client.get_group_info(&jid).await {
-            Ok(group) => Ok(Some(group_info(group, Utc::now()))),
+            Ok(group) => {
+                let mut group = group_info(group, Utc::now());
+                events::complete_participant_names(&self.contacts().await, &mut group);
+                Ok(Some(group))
+            }
             Err(error) if not_a_member(&error) => Ok(None),
             Err(error) => Err(internal(error)),
         }
@@ -988,6 +1058,15 @@ impl WhatsAppSession for WhatsmeowSession {
             .await
             .map_err(internal)?;
         Ok(events::lookup_answer(self.store.as_ref(), self.store.as_ref(), phone, &answers).await)
+    }
+
+    async fn profile_picture(&self, check: &PictureCheck) -> Result<PictureAnswer, SessionError> {
+        Ok(Box::pin(pictures::profile_picture(
+            &self.client,
+            &self.pictures_http,
+            check,
+        ))
+        .await)
     }
 
     async fn logout(&self) {

@@ -1,12 +1,10 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
@@ -20,11 +18,11 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import { Notifications } from '@core/component/Notifications';
+import { References } from '@core/component/References';
 import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -36,6 +34,8 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { queryReadyGate } from '@queries/gate';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import {
   type GithubPullRequestWithDetails,
@@ -47,12 +47,10 @@ import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { createPinnedProperties } from '../../primitives/create-pinned-properties';
-import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
-import { MarkdownReferencesSection } from './MarkdownReferencesSection';
 
-/** Registers markdown header actions, panel sections, and shared metadata. */
+/** Registers markdown panel sections and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -67,24 +65,6 @@ export function MarkdownSidePanelSections() {
 
   return (
     <>
-      <SidePanel.HeaderActions>
-        <div class="flex shrink-0 items-center gap-1">
-          <Show when={isTask() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
-          <HeaderActionGroup label="Actions">
-            <AskMacroButton
-              grouped
-              entity={{
-                type: 'document',
-                id: documentId(),
-                name: displayName() ?? '',
-                fileType: 'md',
-              }}
-            />
-          </HeaderActionGroup>
-        </div>
-      </SidePanel.HeaderActions>
       <SidePanel.Footer>
         <DetailsSectionContent documentId={documentId()} />
         <Show when={!isTask()}>
@@ -119,7 +99,7 @@ export function MarkdownSidePanelSections() {
       />
       <GithubSectionConditional documentId={documentId()} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
-      <MarkdownReferencesSection documentId={documentId()} />
+      <ReferencesSectionConditional documentId={documentId()} />
       <Show when={isTask()}>
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
@@ -180,7 +160,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-ink hover:bg-hover focus:bg-active"
     >
       <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
@@ -312,6 +292,33 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
             entity={props.entity}
             notificationSource={notificationSource}
           />
+        </div>
+      </SidePanel.Section>
+    </Show>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// References Section (conditional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ReferencesSectionConditional(props: { documentId: string }) {
+  const references = useAttachmentReferencesQuery(
+    () => props.documentId,
+    () => 'document'
+  );
+
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
+
+  return (
+    <Show when={count() > 0}>
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={33}
+      >
+        <div class="text-xs">
+          <References documentId={props.documentId} />
         </div>
       </SidePanel.Section>
     </Show>

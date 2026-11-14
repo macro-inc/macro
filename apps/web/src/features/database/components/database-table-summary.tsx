@@ -5,6 +5,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   type ColumnCalculation,
   summarizeColumn,
+  summarizeMoney,
 } from '../core/column-summary';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { type DatabaseRow, formatCellValue } from '../core/table';
@@ -28,13 +29,17 @@ const format = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 });
 export function DatabaseTableSummary(props: {
   columns: DatabaseViewColumn[];
   rows: DatabaseRow[];
+  hasMoreRows?: boolean;
   template: string;
   addColumn: boolean;
 }) {
   return (
     <div
       role="row"
-      aria-label="Table summary"
+      data-grid-summary
+      aria-label={
+        props.hasMoreRows ? 'Loaded records summary' : 'Table summary'
+      }
       class="sticky bottom-0 z-2 grid h-10 shrink-0 border-t border-edge-muted bg-panel text-xs"
       style={{ 'grid-template-columns': props.template }}
     >
@@ -47,7 +52,10 @@ export function DatabaseTableSummary(props: {
         <span class="tabular-nums text-ink">
           {format.format(props.rows.length)}
         </span>
-        <span>{props.rows.length === 1 ? 'record' : 'records'} in view</span>
+        <span>
+          {props.rows.length === 1 ? 'record' : 'records'}{' '}
+          {props.hasMoreRows ? 'loaded' : 'in view'}
+        </span>
       </div>
       <Key each={props.columns.slice(1)} by="id">
         {(column) => <SummaryCell column={column()} rows={props.rows} />}
@@ -80,6 +88,21 @@ function SummaryCell(props: {
       calculation().value
     )
   );
+  const displayed = () => {
+    if (props.column.percentage && calculation().numeric) {
+      const current = value();
+      return current === null ? '—' : formatCellValue(props.column, current);
+    }
+    if (props.column.currencyColumnId && calculation().numeric) {
+      return (
+        summarizeMoney(props.column, props.rows, calculation().value)
+          .map(({ currency, value }) => `${currency} ${format.format(value)}`)
+          .join(' · ') || '—'
+      );
+    }
+    const current = value();
+    return current === null ? '—' : format.format(current);
+  };
   return (
     <div
       role="gridcell"
@@ -101,12 +124,8 @@ function SummaryCell(props: {
               </>
             }
           >
-            <span class="tabular-nums text-ink">
-              {value() === null
-                ? '—'
-                : props.column.percentage && calculation().numeric
-                  ? formatCellValue(props.column, value()!)
-                  : format.format(value()!)}
+            <span class="truncate tabular-nums text-ink" title={displayed()}>
+              {displayed()}
             </span>
             <span class="truncate lowercase">{calculation().label}</span>
           </Show>

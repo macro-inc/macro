@@ -1,7 +1,13 @@
 use super::*;
-use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
-    expanded_dynamic_cursor_soup_grouped,
+use crate::{
+    domain::models::DynamicSortValue,
+    outbound::pg_soup_repo::{
+        candidate_gates::initiative_gate,
+        expanded::dynamic::{
+            ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
+            expanded_dynamic_cursor_soup_grouped,
+        },
+    },
 };
 use filter_ast::Expr;
 use item_filters::ast::{
@@ -47,7 +53,7 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             ExpandedDynamicCursorArgs {
                 user_id: user(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, without_initiatives),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), without_initiatives),
                 exclude_frecency: false,
             }
         )
@@ -61,7 +67,7 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 2,
-            cursor: Query::Sort(sort, filters()),
+            cursor: Query::Sort(sort.into(), filters()),
             exclude_frecency: false,
         },
     )
@@ -83,7 +89,12 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             cursor: Query::Cursor(CursorWithValAndFilter {
                 id: first[1].id(),
                 limit: 2,
-                val: SoupItem::sort_on(sort)(&first[1]),
+                val: models_pagination::CursorVal {
+                    sort_type: sort.into(),
+                    last_val: DynamicSortValue::Timestamp(
+                        SoupItem::sort_on(sort)(&first[1]).last_val,
+                    ),
+                },
                 filter: filters(),
             }),
             exclude_frecency: false,
@@ -138,7 +149,7 @@ async fn initiative_listing_and_candidate_gate_share_access_rules(
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
             exclude_frecency: false,
         },
     )
@@ -171,7 +182,7 @@ async fn initiative_listing_and_candidate_gate_share_access_rules(
         SELECT candidate.id FROM unnest($2::uuid[]) candidate(id)
         WHERE {}
         ORDER BY candidate.id"#,
-        crate::outbound::pg_soup_repo::candidate_gates::initiative_gate("candidate.id::text", None)
+        initiative_gate("candidate.id::text", None,)
     ))
     .bind(user().as_ref())
     .bind(
@@ -209,12 +220,13 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
         GroupedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field: GroupByField::Property {
                     property_definition_id: system_properties::SystemPropertyKey::STATUS_UUID,
                     entity_type: Some("INITIATIVE".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,
@@ -244,7 +256,7 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filtered),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filtered),
             exclude_frecency: false,
         },
     )
@@ -275,7 +287,7 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
             ExpandedDynamicCursorArgs {
                 user_id: user(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filter),
                 exclude_frecency: false,
             },
         )
@@ -285,6 +297,163 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
             expected,
             "due-date bounds exclude missing dates and include exact matches"
         );
+    }
+    Ok(())
+}
+
+#[sqlx::test(fixtures("test/access_paths.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn listings_and_per_row_gates_agree_on_every_access_path(pool: PgPool) -> anyhow::Result<()> {
+    // See the fixture for each initiative's path. In descending update order:
+    // the viewer sees direct, owner, folder, joined-channel and team grants
+    // (1-4, 7), teammates' and their own team links (9, 17), and 16, reached
+    // every way, once. Left and foreign channels (5, 6), another team's grant
+    // and link (8, 10), the public link (11), bot grants (12-14), a grant on
+    // another entity type (15) and no grant (18) stay out.
+    let cases = [
+        (
+            "macro|viewer@paths.test",
+            vec![
+                Uuid::from_u128(0xa7000000000000000000000000000017),
+                Uuid::from_u128(0xa7000000000000000000000000000016),
+                Uuid::from_u128(0xa7000000000000000000000000000009),
+                Uuid::from_u128(0xa7000000000000000000000000000007),
+                Uuid::from_u128(0xa7000000000000000000000000000004),
+                Uuid::from_u128(0xa7000000000000000000000000000003),
+                Uuid::from_u128(0xa7000000000000000000000000000002),
+                Uuid::from_u128(0xa7000000000000000000000000000001),
+            ],
+        ),
+        (
+            "macro|teammate@paths.test",
+            vec![
+                Uuid::from_u128(0xa7000000000000000000000000000017),
+                Uuid::from_u128(0xa7000000000000000000000000000016),
+                Uuid::from_u128(0xa7000000000000000000000000000009),
+                Uuid::from_u128(0xa7000000000000000000000000000007),
+            ],
+        ),
+        (
+            "macro|outsider@paths.test",
+            vec![
+                Uuid::from_u128(0xa7000000000000000000000000000010),
+                Uuid::from_u128(0xa7000000000000000000000000000008),
+                Uuid::from_u128(0xa7000000000000000000000000000006),
+            ],
+        ),
+        (
+            "macro|loner@paths.test",
+            vec![Uuid::from_u128(0xa7000000000000000000000000000010)],
+        ),
+    ];
+    // Gate and by-id reads are asked about every initiative in the fixture.
+    let all_ids = sqlx::query_scalar!("SELECT id FROM initiative")
+        .fetch_all(&pool)
+        .await?;
+    assert_eq!(all_ids.len(), 18);
+
+    for (viewer, expected) in cases {
+        let user_id = MacroUserIdStr::parse_from_str(viewer)?;
+        let listed = expanded_dynamic_cursor_soup(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.clone(),
+                limit: 50,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+        assert_eq!(
+            listed.iter().map(Identify::id).collect::<Vec<_>>(),
+            expected,
+            "flat listing for {viewer}"
+        );
+
+        // GraphQL hydrates initiatives through the same listing, naming them by id.
+        let mut named = filters();
+        named.initiative_filter = all_ids
+            .iter()
+            .map(|id| Expr::val(InitiativeLiteral::Id(*id)))
+            .reduce(Expr::or)
+            .map(Arc::new);
+        let listed_by_id = expanded_dynamic_cursor_soup(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.clone(),
+                limit: 50,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), named),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+        assert_eq!(
+            listed_by_id.iter().map(Identify::id).collect::<Vec<_>>(),
+            expected,
+            "listing by id for {viewer}"
+        );
+
+        let grouped = expanded_dynamic_cursor_soup_grouped(
+            &pool,
+            GroupedDynamicCursorArgs {
+                user_id: user_id.clone(),
+                limit: 50,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
+                exclude_frecency: false,
+                grouping: GroupingConfig {
+                    field: GroupByField::EntityType,
+                    group_key: None,
+                    per_group_limit: None,
+                },
+            },
+        )
+        .await?;
+        assert_eq!(
+            grouped.map(|row| row.item.id()).collect::<Vec<_>>(),
+            expected,
+            "grouped listing for {viewer}"
+        );
+
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "checks the gate SQL that initiative_gate generates"
+        )]
+        let gated: Vec<Uuid> = sqlx::query_scalar(&format!(
+            r#"WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
+                    WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1
+            )
+            SELECT candidate.id FROM unnest($2::uuid[]) candidate(id)
+            WHERE {}
+            ORDER BY candidate.id DESC"#,
+            initiative_gate("candidate.id::text", None)
+        ))
+        .bind(viewer)
+        .bind(&all_ids)
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(gated, expected, "candidate gate for {viewer}");
+
+        let entities = all_ids
+            .iter()
+            .map(|id| EntityType::Initiative.with_entity_string(id.to_string()))
+            .collect::<Vec<_>>();
+        let mut hydrated = by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: user_id.clone(),
+                entities: &entities,
+            },
+        )
+        .await?
+        .iter()
+        .map(Identify::id)
+        .collect::<Vec<_>>();
+        hydrated.sort_by(|a, b| b.cmp(a));
+        assert_eq!(hydrated, expected, "by-id read for {viewer}");
     }
     Ok(())
 }

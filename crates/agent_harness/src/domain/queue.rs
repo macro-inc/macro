@@ -26,7 +26,9 @@ use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::PrompterKind;
 use agent_session::domain::model::StoredQueuedAction;
+use agent_session::domain::model::UiClientId;
 use agent_session::domain::ports::QueuedControl;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
@@ -60,6 +62,8 @@ pub struct QueuedEntry {
     pub announce: Option<AnnounceOrigin>,
     /// Why the agent is being asked, composed into the prompt at dispatch.
     pub context: Option<TriggerContext>,
+    /// The app tab the prompt was typed in, recorded on the turn it opens.
+    pub client: Option<UiClientId>,
     /// The chip message, once posted. Set by the dispatch that posts it and
     /// carried through a requeue, so a dispatch that fails *after*
     /// announcing retries without posting a second chip.
@@ -162,6 +166,32 @@ impl From<&QueuedEntry> for QueuedControl {
 }
 
 impl QueuedEntry {
+    /// Who the turn this entry opens acts for: a system turn acts for nobody,
+    /// even when the batch names a user.
+    pub fn prompter_kind(&self) -> PrompterKind {
+        if matches!(&self.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
+        {
+            PrompterKind::System
+        } else {
+            PrompterKind::User
+        }
+    }
+
+    /// The person who typed this prompt into the session itself, from the
+    /// session view or the API: a human prompt with no thread to announce
+    /// into and no trigger behind it. A mention in a channel, document or call
+    /// thread carries its origin (`announce`), and a runtime forwarding a
+    /// triggered prompt carries its `context`; neither counts. A tool that
+    /// prompts on a person's behalf with no trigger counts as theirs.
+    /// Following a session is what lists a hidden one for this person.
+    pub fn direct_prompter(&self) -> Option<&MacroUserIdStr<'static>> {
+        let typed = matches!(self.action, AgentAction::Prompt(_))
+            && self.prompter_kind() == PrompterKind::User
+            && self.announce.is_none()
+            && self.context.is_none();
+        self.actor.as_ref().filter(|_| typed)
+    }
+
     /// The durable form written to the session store.
     pub fn to_stored(&self) -> anyhow::Result<StoredQueuedAction> {
         Ok(StoredQueuedAction {
@@ -176,6 +206,7 @@ impl QueuedEntry {
                 .transpose()?,
             announced_message_id: self.announced,
             context: self.context.clone(),
+            client: self.client,
         })
     }
 
@@ -188,6 +219,7 @@ impl QueuedEntry {
             announce: stored.announce.map(serde_json::from_value).transpose()?,
             announced: stored.announced_message_id,
             context: stored.context,
+            client: stored.client,
             created_at: stored.created_at,
         })
     }

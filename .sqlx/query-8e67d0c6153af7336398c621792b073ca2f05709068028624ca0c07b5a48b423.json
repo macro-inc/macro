@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_user (team_id, user_id, team_role, plan, seat_included)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "seat_plan",
+            "kind": {
+              "Enum": [
+                "premium",
+                "max"
+              ]
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e67d0c6153af7336398c621792b073ca2f05709068028624ca0c07b5a48b423"
+}

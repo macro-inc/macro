@@ -25,6 +25,7 @@ async fn protected_schema_ops_are_refused_and_stale_writes_are_rechecked(pool: P
     let guests = guests(&pool).await;
     // A write planned before the protection was registered must also be refused.
     let planned = Writes {
+        derivations: Vec::new(),
         database_id: guests.database_id,
         created_by: viewer().user_id,
         writes: vec![Write::DeleteColumn {
@@ -140,6 +141,7 @@ async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(poo
                                 value: CellValue::Options(vec![OptionRef::Id(crew)]),
                             }],
                         ],
+                        ids: None,
                     },
                 },
             ]
@@ -597,6 +599,7 @@ async fn a_stale_expected_version_conflicts_and_writes_nothing(pool: PgPool) {
 
     let outcome = cells(&pool)
         .apply_writes(&Writes {
+            derivations: Vec::new(),
             database_id: guests.database_id,
             created_by: viewer().user_id,
             writes: vec![
@@ -654,6 +657,7 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                                 value: CellValue::Text("7".into()),
                             }],
                         ],
+                        ids: None,
                     },
                 },
                 DatabaseOp::View {

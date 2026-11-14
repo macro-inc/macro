@@ -4,6 +4,7 @@
 use super::*;
 
 mod call_session;
+mod telemetry;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
     BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
@@ -48,6 +49,7 @@ struct MockRepo {
     form_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     external_chat_access: Arc<Mutex<Option<AccessLevel>>>,
     external_chat_access_callers: Arc<Mutex<Vec<Option<String>>>>,
+    harness_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -108,6 +110,7 @@ impl MockRepo {
             form_access_list: Arc::default(),
             external_chat_access: Arc::default(),
             external_chat_access_callers: Arc::default(),
+            harness_access: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_agent_session_access: Arc::default(),
@@ -348,6 +351,18 @@ impl AccessRepository for MockRepo {
         Ok(*self.document_access.lock().await)
     }
 
+    async fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        let level = *self.document_access.lock().await;
+        Ok(document_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (id.clone(), level)))
+            .collect())
+    }
+
     async fn get_chat_access(
         &self,
         _chat_id: &str,
@@ -480,7 +495,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.form_access.lock().await)
     }
 
-    /// Resolve ordinary shares on an external chat.
+    async fn get_harness_access(
+        &self,
+        _harness_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.harness_access.lock().await)
+    }
+
     async fn get_external_chat_access(
         &self,
         _group_id: &str,
@@ -991,6 +1013,33 @@ async fn test_get_entity_permission_document_returns_access_level() {
 
     let result = service
         .get_entity_permission(Some(&user_id), "doc-1", EntityType::Document, None)
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+/// A runtime someone else owns, reached through a grant: the grant's level,
+/// not a refusal for an unsupported type.
+#[tokio::test]
+async fn get_entity_permission_harness_returns_a_granted_level() {
+    let repo = MockRepo::new();
+    *repo.harness_access.lock().await = Some(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Harness,
+            None,
+        )
         .await
         .unwrap();
 

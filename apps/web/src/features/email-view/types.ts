@@ -4,10 +4,14 @@ import type { EmailFocusSort, EmailTab } from './constants';
 export type { EmailFocusSort, EmailTab };
 
 export type EmailFilterGroupId =
+  | 'people'
+  | 'importance'
   | 'read'
   | 'done'
+  | 'received'
+  | 'inboxes'
+  | 'has'
   | 'attachments'
-  | 'calendar'
   | 'focus'
   | 'tags';
 
@@ -23,6 +27,32 @@ export type EmailFilterOptionId =
   | 'has-calendar-invite'
   | 'focus-reply-needed'
   | 'focus-follow-up';
+
+/** Where a participant condition looks for its people. */
+export type EmailParticipantField = 'from' | 'to' | 'cc' | 'bcc';
+
+/** A person a view matches: one address, or a whole domain. */
+export type EmailParticipant =
+  | { type: 'address'; email: string }
+  | { type: 'domain'; domain: string };
+
+/** How many days back a view looks, by latest activity. */
+export const EMAIL_RECEIVED_WITHIN_DAYS = [1, 7, 30, 90] as const;
+export type EmailReceivedWithinDays =
+  (typeof EMAIL_RECEIVED_WITHIN_DAYS)[number];
+
+/**
+ * A tab's or saved view's restrictions beyond the Soup facets. Values within
+ * one condition are alternatives; separate conditions all apply.
+ */
+export type EmailViewConditions = {
+  importance?: 'signal' | 'noise';
+  participants: EmailParticipant[];
+  participantFields: EmailParticipantField[];
+  subject: string[];
+  receivedWithinDays?: EmailReceivedWithinDays;
+  starred: boolean;
+};
 
 export type EmailViewState = {
   tab: EmailTab;
@@ -40,6 +70,14 @@ export type EmailViewState = {
   focusSort: EmailFocusSort;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];
+  /**
+   * Conditions beyond the facets: a saveable tab's own and the edits on top,
+   * or an open view's. Undefined on tabs a view can't hold; an open view's
+   * are never persisted, since its definition restores them.
+   */
+  conditions?: EmailViewConditions;
+  /** Where leaving the open saved view returns, and what persists meanwhile. */
+  beforeSavedView?: Pick<EmailViewState, 'tab' | 'inboxIds' | 'aliasFilter'>;
 };
 
 export type EmailViewStateOptions = Partial<EmailViewState>;

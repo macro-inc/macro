@@ -253,6 +253,35 @@ describe('content and resource policy', () => {
     expect(result.html).toContain('background="https://example.com/table"');
     expect(result.html.match(/proxy\.test/g)).toHaveLength(1);
   });
+  it('drops hidden image prefixes before proxying and in quoted HTML', () => {
+    const html =
+      '<p>Hi</p><img src="HTTPS://mail.test/opens/abc" width="1"><img src="https://mail.test/logo.png">';
+    const hiddenUrlPrefixes = ['https://mail.test/opens/'];
+    const direct = prepareEmailBody(
+      { html },
+      { images: { remote: 'allow', hiddenUrlPrefixes } }
+    ).html;
+    expect(direct).not.toContain('/opens/');
+    expect(direct).toContain('src="https://mail.test/logo.png"');
+    const proxied = prepareEmailBody(
+      { html },
+      {
+        images: {
+          remote: 'allow',
+          proxyUrl: 'https://proxy.test',
+          hiddenUrlPrefixes,
+        },
+      }
+    ).html;
+    expect(proxied).not.toContain('opens');
+    expect(proxied).toContain('logo.png');
+    const quoted = sanitizeEmailHtml(html, {
+      remote: 'allow',
+      hiddenUrlPrefixes,
+    });
+    expect(quoted).not.toContain('/opens/');
+    expect(quoted).toContain('<p>Hi</p>');
+  });
   it('keeps CID and raster data images, excluding SVG data images', () => {
     const result = sanitizeEmailHtml(
       '<img src="cid:part"><img src="data:image/png;base64,AAAA"><img src="data:image/svg+xml;base64,AAAA">'

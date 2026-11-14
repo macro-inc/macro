@@ -4,6 +4,10 @@
 
 use super::*;
 use crate::domain::contact_listing::{CrmContactListQuery, CrmContactListScope};
+use crate::domain::email_privacy::{
+    EmailBlockScope, EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyRepository,
+    EmailPrivacyService, EmailPrivacySettings,
+};
 use crate::domain::model::CrmPermissionRole;
 use crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
 use entity_access::domain::models::{
@@ -17,9 +21,58 @@ use std::sync::{Arc, Mutex};
 /// empty store; everything else panics.
 #[derive(Clone, Default)]
 struct StubRepo {
+    privacy_changes: Arc<Mutex<Vec<(uuid::Uuid, String, EmailPrivacyChange)>>>,
     contact_calls: Arc<Mutex<Vec<ContactListCall>>>,
     association_calls: Arc<Mutex<Vec<Option<(uuid::Uuid, bool)>>>>,
     association: Option<crate::domain::association::CrmRecordAssociation>,
+    created_contact_emails: Arc<Mutex<Vec<String>>>,
+}
+
+impl EmailPrivacyRepository for StubRepo {
+    async fn contribution_mailbox(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<Option<EmailContributionMailbox>, CrmError> {
+        Ok(None)
+    }
+
+    async fn may_contribute_contact(
+        &self,
+        _: uuid::Uuid,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<bool, CrmError> {
+        Ok(false)
+    }
+
+    async fn email_privacy(
+        &self,
+        _: uuid::Uuid,
+        _: &str,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        Ok(EmailPrivacySettings {
+            mailbox_link_id: None,
+            enabled: false,
+            mailbox_email: None,
+            team_domains: vec![],
+            personal_domains: vec![],
+            can_remove_team_domains: false,
+        })
+    }
+
+    async fn change_email_privacy(
+        &self,
+        team: uuid::Uuid,
+        user: &str,
+        change: EmailPrivacyChange,
+    ) -> Result<(), CrmError> {
+        self.privacy_changes
+            .lock()
+            .unwrap()
+            .push((team, user.to_owned(), change));
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -95,7 +148,7 @@ impl CompaniesRepository for StubRepo {
     async fn create_company_for_team(
         &self,
         _team_id: &uuid::Uuid,
-        _domain: &str,
+        _domain: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
@@ -106,11 +159,54 @@ impl CompaniesRepository for StubRepo {
         &self,
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
-        _email: &str,
+        email: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
         _include_hidden: bool,
     ) -> Result<CrmContact, CrmError> {
+        self.created_contact_emails
+            .lock()
+            .unwrap()
+            .push(format!("{email:?}"));
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
+    async fn populate_unfiled_contact(
+        &self,
+        _team_id: &uuid::Uuid,
+        _link_id: &uuid::Uuid,
+        _domain: &str,
+        _email: &str,
+        _name: Option<&str>,
+        _first_at: DateTime<Utc>,
+        _last_at: DateTime<Utc>,
+        _is_sent: bool,
+    ) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn create_contact_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: Option<&str>,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _team_id: &uuid::Uuid,
+    ) -> Result<Vec<crate::domain::model::CrmBlockedDomain>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn block_domain(&self, _team_id: &uuid::Uuid, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn unblock_domain(&self, _team_id: &uuid::Uuid, _domain: &str) -> Result<(), CrmError> {
         unimplemented!()
     }
 
@@ -218,6 +314,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn update_contact(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+        _update: &crate::domain::contact_update::ContactFieldUpdate,
+        _include_hidden: bool,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::ContactNotFoundForTeam)
+    }
+
     async fn set_contact_hidden(
         &self,
         _team_id: &uuid::Uuid,
@@ -322,6 +428,145 @@ impl CompaniesRepository for StubRepo {
 
 fn service() -> CrmServiceImpl<StubRepo, NoOpCompanyMetadataResolver> {
     CrmServiceImpl::new(StubRepo::default(), NoOpCompanyMetadataResolver)
+}
+
+#[tokio::test]
+async fn members_can_add_team_blocks_but_only_admins_can_remove_them() {
+    let svc = service();
+    let member = receipt_with_role(TeamRole::Member);
+    let settings = svc
+        .change_email_privacy(
+            &member,
+            EmailPrivacyChange::AddDomain {
+                scope: EmailBlockScope::Team,
+                domain: " Acme.example.com ".into(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!settings.can_remove_team_domains);
+    let recorded = svc
+        .companies_repository
+        .privacy_changes
+        .lock()
+        .unwrap()
+        .clone();
+    assert_eq!(
+        recorded,
+        vec![(
+            member.team_id(),
+            "macro|user@example.com".into(),
+            EmailPrivacyChange::AddDomain {
+                scope: EmailBlockScope::Team,
+                domain: "acme.example.com".into()
+            }
+        )]
+    );
+    let remove = EmailPrivacyChange::RemoveDomain {
+        scope: EmailBlockScope::Team,
+        domain: "acme.example.com".into(),
+    };
+    assert!(matches!(
+        svc.change_email_privacy(&member, remove.clone()).await,
+        Err(CrmError::SettingsAdminRequired)
+    ));
+    assert_eq!(
+        svc.companies_repository
+            .privacy_changes
+            .lock()
+            .unwrap()
+            .len(),
+        1
+    );
+    for role in [TeamRole::Admin, TeamRole::Owner] {
+        assert!(
+            svc.change_email_privacy(&receipt_with_role(role), remove.clone())
+                .await
+                .unwrap()
+                .can_remove_team_domains
+        );
+    }
+}
+
+#[tokio::test]
+async fn personal_consent_and_exclusions_are_bound_to_the_authenticated_caller() {
+    let svc = service();
+    let member = receipt_with_role(TeamRole::Member);
+    for change in [
+        EmailPrivacyChange::SetConsent {
+            enabled: true,
+            link_id: Some(uuid::Uuid::nil()),
+        },
+        EmailPrivacyChange::SetConsent {
+            enabled: false,
+            link_id: None,
+        },
+        EmailPrivacyChange::RemoveDomain {
+            scope: EmailBlockScope::Personal,
+            domain: "acme.example.com".into(),
+        },
+    ] {
+        svc.change_email_privacy(&member, change).await.unwrap();
+    }
+    let calls = svc.companies_repository.privacy_changes.lock().unwrap();
+    assert_eq!(calls.len(), 3);
+    assert!(
+        calls
+            .iter()
+            .all(|(team, user, _)| *team == member.team_id() && user == "macro|user@example.com")
+    );
+}
+
+#[tokio::test]
+async fn invalid_blocklist_domains_are_rejected_before_persistence() {
+    let svc = service();
+    let member = receipt_with_role(TeamRole::Member);
+    for domain in [
+        "",
+        "*",
+        "acme..com",
+        "-acme.example.com",
+        "acme-.com",
+        "acme_com.test",
+    ] {
+        assert!(
+            svc.change_email_privacy(
+                &member,
+                EmailPrivacyChange::AddDomain {
+                    scope: EmailBlockScope::Personal,
+                    domain: domain.into()
+                }
+            )
+            .await
+            .is_err(),
+            "accepted {domain}"
+        );
+    }
+    assert!(
+        svc.companies_repository
+            .privacy_changes
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn unconsented_ingestion_stops_before_metadata_or_contact_writes() {
+    // All metadata/write methods on this stub panic; only admission returns false.
+    service()
+        .populate_contact(
+            &uuid::Uuid::now_v7(),
+            &uuid::Uuid::now_v7(),
+            "owner@example.com",
+            "person@acme.example.com",
+            None,
+            Utc::now(),
+            Utc::now(),
+            true,
+        )
+        .await
+        .unwrap();
 }
 
 fn receipt_with_role(role: TeamRole) -> CrmTeamReceipt<MemberTeamRole> {
@@ -601,6 +846,10 @@ async fn member_cannot_update_governance_fields() {
             closed_stage_ids: Some(Some(vec![uuid::Uuid::now_v7()])),
             ..Default::default()
         },
+        CrmTeamSettingsPatch {
+            exclude_personal_emails: Some(false),
+            ..Default::default()
+        },
     ] {
         let err = service()
             .update_team_settings(&access, patch)
@@ -645,7 +894,7 @@ async fn create_company_rejects_blank_name() {
     let access = receipt_with_role(TeamRole::Member);
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_company(&access, name, "acme.com")
+            .create_company(&access, name, Some("acme.example.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -657,7 +906,7 @@ async fn create_company_rejects_overlong_name() {
     let access = receipt_with_role(TeamRole::Member);
     let name = "x".repeat(201);
     let err = service()
-        .create_company(&access, &name, "acme.com")
+        .create_company(&access, &name, Some("acme.example.com"))
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::InvalidRequest(_)));
@@ -667,19 +916,17 @@ async fn create_company_rejects_overlong_name() {
 async fn create_company_rejects_malformed_domains() {
     let access = receipt_with_role(TeamRole::Member);
     for domain in [
-        "",
-        "   ",
         "acme",
-        ".acme.com",
+        ".acme.example.com",
         "acme..com",
-        "https://acme.com",
-        "acme.com/about",
-        "user@acme.com",
-        "acme.com:8080",
+        "https://acme.example.com",
+        "acme.example.com/about",
+        "user@acme.example.com",
+        "acme.example.com:8080",
         "acme .com",
     ] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -694,7 +941,7 @@ async fn create_company_rejects_generic_email_domains() {
     let access = receipt_with_role(TeamRole::Member);
     for domain in ["gmail.com", "Yahoo.com", "outlook.com"] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -757,7 +1004,7 @@ async fn create_contact_rejects_blank_name() {
     let access = company_receipt();
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_contact(&access, name, "jane@acme.com")
+            .create_contact(&access, name, Some("jane@example.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -765,22 +1012,44 @@ async fn create_contact_rejects_blank_name() {
 }
 
 #[tokio::test]
+async fn create_contact_normalizes_optional_email() {
+    let repo = StubRepo::default();
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let access = company_receipt();
+    for email in [
+        Some(" Jane@Example.com "),
+        Some("jane@EXAMPLE.net"),
+        Some("   "),
+        None,
+    ] {
+        let _ = service.create_contact(&access, "Jane", email).await;
+    }
+    assert_eq!(
+        *repo.created_contact_emails.lock().unwrap(),
+        [
+            r#"Some("jane@example.com")"#,
+            r#"Some("jane@example.net")"#,
+            "None",
+            "None",
+        ]
+    );
+}
+
+#[tokio::test]
 async fn create_contact_rejects_malformed_emails() {
     let access = company_receipt();
     for email in [
-        "",
-        "   ",
         "jane",
         "jane@",
-        "@acme.com",
+        "@acme.example.com",
         "jane@acme",
-        "ja ne@acme.com",
+        "ja ne@acme.example.com",
         "jane@ac me.com",
-        "jane@@acme.com",
-        "jane@acme.com/path",
+        "jane@@acme.example.com",
+        "jane@acme.example.com/path",
     ] {
         let err = service()
-            .create_contact(&access, "Jane", email)
+            .create_contact(&access, "Jane", Some(email))
             .await
             .unwrap_err();
         assert!(
@@ -870,5 +1139,27 @@ async fn set_contact_hidden_requires_admin_role() {
             .set_contact_hidden(&contact_edit_receipt_with_role(role), true)
             .await
             .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
+    let err = service()
+        .set_domain_blocked(
+            &receipt_with_role(TeamRole::Member),
+            "acme.example.com",
+            true,
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::SettingsAdminRequired));
+
+    let admin = receipt_with_role(TeamRole::Admin);
+    for domain in ["", "https://example.com", "jane@example.com", "example"] {
+        let err = service()
+            .set_domain_blocked(&admin, domain, true)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
     }
 }

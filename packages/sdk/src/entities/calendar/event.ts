@@ -15,14 +15,12 @@ import type {
   OutOfOfficeProperties,
   UpdateCalendarEventRequest,
 } from '../../../generated/calendar/types.gen';
-import type { CalendarOccurrence } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { Document } from '../documents/document';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
-import type { Team } from '../teams/team';
 import { Calendar } from './calendar';
-import { CalendarNote } from './note';
 import { CalendarReplacement } from './replacement';
 
 /** Fields to change on an event; omitted fields are left untouched. */
@@ -48,6 +46,11 @@ export interface UpdateEventOptions {
   /** Provider conference change; omit to retain it. Outlook removal requires a
    * separately confirmed replacement via prepareReplacement(). */
   conference?: ConferenceChange;
+  /** Switch the event to a Macro call in this update: create one, write its
+   * join link into the description and location, and remove any Google Meet or
+   * other conference. An event already holding a Macro call keeps it. Cannot be
+   * combined with `conference`. */
+  macroCall?: boolean;
   /** Replacement out-of-office properties, applied only to an event that is
    * already out-of-office. */
   outOfOffice?: OutOfOfficeProperties;
@@ -135,43 +138,6 @@ export interface RsvpEventOptions {
  * mutations, but reading a field on it throws.
  */
 export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
-  /** Notes linked to a specific occurrence returned by `calendar.occurrences()`. */
-  async notes(occurrence: CalendarOccurrence): Promise<CalendarNote[]> {
-    this.requireOwnOccurrence(occurrence);
-    const notes = unwrap(
-      await this.client.calendar.eventNotes({
-        path: { event_id: this.id },
-        query: { occurrenceKey: occurrence.occurrenceKey },
-      }),
-    );
-    return notes.map((note) =>
-      CalendarNote.fromRecord(this.client, this, occurrence, note),
-    );
-  }
-
-  /** Link a markdown document you own. Meeting-detail viewers gain read access;
-   * an optional team gains read access too. Editing and other sharing are preserved. */
-  async linkNote(
-    document: Document,
-    occurrence: CalendarOccurrence,
-    options: { team?: Team } = {},
-  ): Promise<CalendarNote> {
-    this.requireOwnOccurrence(occurrence);
-    unwrap(
-      await this.client.calendar.linkEventNote({
-        path: { event_id: this.id, document_id: document.id },
-        query: { occurrenceKey: occurrence.occurrenceKey },
-        body: { teamId: options.team?.id ?? null },
-      }),
-    );
-    return CalendarNote.forDocument(this.client, this, occurrence, document);
-  }
-
-  private requireOwnOccurrence(occurrence: CalendarOccurrence) {
-    if (occurrence.eventId !== this.id)
-      throw new MacroError('The occurrence belongs to a different event');
-  }
-
   protected async fetch(): Promise<CalendarEventRecord> {
     throw new MacroError(
       `calendar event ${this.id} has no fetch-by-id endpoint; read the record ` +
@@ -232,7 +198,10 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
   );
 
   /** The full synced event record. Available on a seeded handle (from create /
-   * update / rsvp); a bare `byId` handle throws (no fetch-by-id endpoint). */
+   * update / rsvp); a bare `byId` handle throws (no fetch-by-id endpoint).
+   *
+   * @readonly
+   */
   record(): Promise<CalendarEventRecord> {
     return this.detail.get();
   }
@@ -250,7 +219,16 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * to a meeting the user organizes from one of the inboxes (add them from
    * that copy and say why). Reminders belong to one copy, so set them on one
    * copy and say which inbox you used. Without `inbox` the call is refused
-   * with `copy_choice_required`, listing each copy and the question to ask. */
+   * with `copy_choice_required`, listing each copy and the question to ask.
+   *
+   * To change a meeting's link to a Macro call pass `macroCall: true`; never
+   * delete and recreate the event for it. The Teams meeting of an Outlook event
+   * cannot be removed this way: use {@link CalendarEvent.prepareReplacement}.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async update(options: UpdateEventOptions): Promise<CalendarEvent> {
     const record = await this.mutate((client) =>
       client.calendar.updateCalendarEvent({
@@ -276,7 +254,12 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * Deleting a copy where they are a guest takes the meeting off that inbox's
    * calendar: on Google it also declines the invitation and tells the
    * organizer, while on Outlook the organizer is not told and still sees the
-   * invitation unanswered. */
+   * invitation unanswered.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async delete(options: DeleteEventOptions = {}): Promise<void> {
     await this.mutate((client) =>
       client.calendar.deleteCalendarEvent({
@@ -292,7 +275,10 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
   }
 
   /** Preview an organizer replacement without cancelling or sending invitations.
-   * Review replacement.status() before explicitly calling replacement.confirm(). */
+   * Review replacement.status() before explicitly calling replacement.confirm().
+   *
+   * @write
+   */
   async prepareReplacement(options: {
     removeConference: boolean;
     recurrenceId?: string;
@@ -311,7 +297,11 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
     return new CalendarReplacement(this.client, preview.operationId);
   }
 
-  /** Open this calendar copy in its provider for actions unavailable through its API. */
+  /**
+   * Open this calendar copy in its provider for actions unavailable through its API.
+   *
+   * @readonly
+   */
   async providerUrl(
     options: { recurrenceId?: string; calendar?: Calendar } = {},
   ): Promise<string | undefined> {
@@ -340,7 +330,12 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    *
    * The organizer may add guests, and so may a guest the organizer lets
    * invite others (see {@link CalendarEvent.viewerCan}); Google emails the
-   * new guests. */
+   * new guests.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async inviteGuests(options: InviteGuestsOptions): Promise<CalendarEvent> {
     const record = await this.mutate((client) =>
       client.calendar.inviteCalendarEventGuests({
@@ -366,7 +361,11 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * their calendars, whichever calendar is named, so it cannot be added to
    * another of their calendars either; with `join_request_open` while their
    * request to join it is pending or accepted (the meeting then arrives as an
-   * invitation); and with `copy_refused` when Google will not import it. */
+   * invitation); and with `copy_refused` when Google will not import it.
+   *
+   * @write
+   * @openworld
+   */
   async addToCalendar(
     options: { calendar?: Calendar } = {},
   ): Promise<CalendarEvent> {
@@ -379,17 +378,40 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
     return CalendarEvent.fromRecord(this.client, record);
   }
 
+  /** Share the event with a channel's current members, as posting it in the
+   * channel does: they can then preview it, export it with {@link ics}, add it
+   * to their calendar with {@link addToCalendar} and ask to join. The caller
+   * must be in the channel and hold the event on their own calendar; private
+   * and confidential events are refused with a 403. Sharing again changes
+   * nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'calendar_event', this.id);
+  }
+
   /** The event as an iCalendar (`.ics`) document: its series, title,
    * description, location and organizer, never its guests or join link.
    * Available for the requester's own events and ones shared with a channel
-   * they belong to. */
+   * they belong to.
+   *
+   * @readonly
+   */
   async ics(): Promise<string> {
     return unwrap(
       await this.client.storage.eventIcs({ path: { event_id: this.id } }),
     );
   }
 
-  /** Record the requester's RSVP and return a handle to the synced record. */
+  /**
+   * Record the requester's RSVP and return a handle to the synced record.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async rsvp(options: RsvpEventOptions): Promise<CalendarEvent> {
     const record = await this.mutate((client) =>
       client.calendar.rsvpCalendarEvent({
@@ -418,6 +440,7 @@ function toUpdateBody(options: UpdateEventOptions): UpdateCalendarEventRequest {
     transparency: options.transparency,
     reminders: options.reminders,
     conference: options.conference,
+    macroCall: options.macroCall,
     outOfOffice: options.outOfOffice,
     guestPolicy: options.guestPolicy,
     scope: options.scope,

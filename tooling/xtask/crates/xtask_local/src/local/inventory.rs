@@ -9,7 +9,12 @@
 //! unrepresentable (`host_port: None` == portless worker).
 
 use super::Mode;
+use super::google_emulator;
 use super::instance::Port;
+use super::microsoft_emulator;
+
+/// OpenBao release with namespaces, KV v2, JWT auth, and TOTP support.
+pub const OPENBAO_IMAGE: &str = "openbao/openbao:2.7.2";
 
 /// A Rust service whose binary the orchestrator builds on the host and mounts
 /// into the runtime image at `/app/out/<cargo_bin>`. Several fields document
@@ -20,7 +25,7 @@ pub struct RustService {
     pub compose_name: &'static str,
     /// The cargo binary name (e.g. `authentication_service`). Run as
     /// `/app/out/<cargo_bin>`. Bin names are unique workspace-wide, so
-    /// `cargo zigbuild --bin <cargo_bin>` resolves the package automatically.
+    /// `cargo build --bin <cargo_bin>` resolves the package automatically.
     pub cargo_bin: &'static str,
     /// The owning crate's package name (for documentation / `--package`).
     pub package: &'static str,
@@ -41,21 +46,6 @@ pub struct RustService {
     /// Opt-in services (e.g. `search_processing_service`) only start with an
     /// explicit profile and are never converted to the runtime image.
     pub opt_in: bool,
-    /// Built locally in its own `cargo` invocation with `--no-default-features`
-    /// (plus [`Self::local_features`]), because the feature it must drop is a
-    /// *default* one and cargo can only drop defaults per-package.
-    ///
-    /// Keep this at zero services if you possibly can. A package-scoped
-    /// invocation resolves features over a different package selection than the
-    /// unified build, which invalidates the shared dependency artifacts the
-    /// unified build just produced — measured at 230 units and ~2 minutes of
-    /// rebuild on the *next* `run_local`, forever. Prefer an additive opt-out
-    /// feature (see `authentication_service`'s `no_rate_limit`), which composes
-    /// into the one unified invocation.
-    ///
-    /// `search_processing_service` genuinely cannot: its `pdf` default feature
-    /// pulls an optional dependency, and no additive feature can un-pull one.
-    pub no_default_features: bool,
 }
 
 impl RustService {
@@ -72,18 +62,18 @@ impl RustService {
 
     /// Cargo features this service's local build enables (empty = none).
     ///
-    /// For a unified-build service these are passed package-qualified
-    /// (`<package>/<feature>`) so they compose with every other binary in the
-    /// same invocation. For a [`Self::no_default_features`] service they are
-    /// the features re-enabled alongside the dropped defaults.
+    /// Passed package-qualified (`<package>/<feature>`) so they compose with
+    /// every other binary in the same invocation. Keep them additive: a service
+    /// that needs its own invocation costs a second build of the whole tree.
     ///
     /// `authentication_service` opts into local passwordless code responses and
-    /// out of the login-code throttles; `search_processing_service` loses
-    /// `processing`/`service` with its defaults and its bin requires them.
+    /// out of the login-code throttles; `search_processing_service` opts out of
+    /// pdfium, whose bundled library is amd64-only and absent from the runtime
+    /// image.
     pub fn local_features(&self) -> &'static [&'static str] {
         match self.cargo_bin {
             "authentication_service" => &["return_passwordless_code", "no_rate_limit"],
-            "search_processing_service" => &["processing", "service"],
+            "search_processing_service" => &["no_pdf"],
             _ => &[],
         }
     }
@@ -101,7 +91,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         // Explicit local Compose profile only; never consume shared-dev queues.
         modes: &[],
         opt_in: true,
-        no_default_features: false,
     },
     RustService {
         compose_name: "authentication-service",
@@ -112,9 +101,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        // Joins the unified invocation: the local behavior it needs
-        // (`no_rate_limit`, `return_passwordless_code`) is additive.
-        no_default_features: false,
     },
     RustService {
         compose_name: "connection_gateway",
@@ -125,7 +111,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: true,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "contacts_service",
@@ -136,7 +121,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "document_storage_service",
@@ -147,7 +131,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "document_upload_finalizer",
@@ -160,7 +143,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "email_service",
@@ -171,7 +153,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "email_pubsub_workers",
@@ -184,7 +165,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         // Not a service: the seed CLI binary, shipped into /app/out so the
@@ -198,7 +178,34 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[],
         opt_in: false,
-        no_default_features: false,
+    },
+    RustService {
+        // Not a service of ours: the Gmail emulator binary, shipped into
+        // /app/out for the gmail_emulator sidecar (a bespoke gen_compose
+        // block, hence no modes) that stands in for Google on a stack with
+        // no real Google client.
+        compose_name: google_emulator::SERVICE,
+        cargo_bin: "gmail_emulator",
+        package: "gmail_emulator",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
+    },
+    RustService {
+        // Not a service of ours: the Outlook emulator binary, shipped into
+        // /app/out for the outlook_emulator sidecar (a bespoke gen_compose
+        // block, hence no modes) that stands in for Microsoft on a stack
+        // with no real Microsoft client.
+        compose_name: microsoft_emulator::SERVICE,
+        cargo_bin: "outlook_emulator",
+        package: "outlook_emulator",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
     },
     RustService {
         compose_name: "calendar_service",
@@ -213,7 +220,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         // for its backfill queue — the same reason scheduled_action is local-only.
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "notification_service",
@@ -224,7 +230,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "static_file_service",
@@ -237,7 +242,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "unfurl_service",
@@ -248,7 +252,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "image_proxy_service",
@@ -259,7 +262,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "search_processing_service",
@@ -268,13 +270,11 @@ pub const RUST_SERVICES: &[RustService] = &[
         host_port: Some(Port::SearchProcessing),
         path_prefix: None,
         is_websocket: false,
-        // Local-only: the default `pdf` feature bundles an amd64-only libpdfium,
-        // so local builds drop it (see `build_features`) and cross-compile native
-        // like every other service. Dev/prod still deploy from the dedicated
-        // Dockerfile with the default (pdf-enabled) build.
+        // Local-only. The default `pdf` feature bundles an amd64-only libpdfium,
+        // so local builds opt out with `no_pdf`. Dev/prod still deploy from the
+        // dedicated Dockerfile with PDF parsing on.
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: true,
     },
     RustService {
         compose_name: "agent_harness_service",
@@ -288,7 +288,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: false,
     },
     RustService {
         compose_name: "whatsapp_session_service",
@@ -302,7 +301,6 @@ pub const RUST_SERVICES: &[RustService] = &[
         // accounts from the deployed replicas.
         modes: &[Mode::Local],
         opt_in: false,
-        no_default_features: false,
     },
 ];
 
@@ -313,7 +311,7 @@ pub fn services_for_mode(mode: Mode) -> impl Iterator<Item = &'static RustServic
 }
 
 /// The cargo binaries to build for a fully local stack (every non-opt-in
-/// service's bin, deduplicated). Used by `zigbuild`.
+/// service's bin, deduplicated). Used to validate a binaries dir.
 pub fn local_binaries() -> Vec<&'static str> {
     let mut bins: Vec<&'static str> = RUST_SERVICES
         .iter()
@@ -323,6 +321,30 @@ pub fn local_binaries() -> Vec<&'static str> {
     bins.sort_unstable();
     bins.dedup();
     bins
+}
+
+/// The services `names` refer to in `mode`, by compose name or cargo binary
+/// (`contacts_service`, `authentication-service`), for `--services`.
+pub fn services_named(mode: Mode, names: &[String]) -> anyhow::Result<Vec<&'static RustService>> {
+    let mut found: Vec<&'static RustService> = Vec::new();
+    for name in names.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let Some(svc) =
+            services_for_mode(mode).find(|s| s.compose_name == name || s.cargo_bin == name)
+        else {
+            let known: Vec<&str> = services_for_mode(mode).map(|s| s.compose_name).collect();
+            anyhow::bail!(
+                "no local service named {name}. Name one of: {}",
+                known.join(", ")
+            );
+        };
+        if !found.iter().any(|f| f.compose_name == svc.compose_name) {
+            found.push(svc);
+        }
+    }
+    if found.is_empty() {
+        anyhow::bail!("--services needs at least one service name");
+    }
+    Ok(found)
 }
 
 #[cfg(test)]

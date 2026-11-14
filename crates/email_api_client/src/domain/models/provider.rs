@@ -100,6 +100,10 @@ pub struct MailFolder {
     pub role: FolderRole,
     /// Whether the folder has children that must also be enumerated.
     pub has_children: bool,
+    /// How many items the provider counted in the folder when it was last
+    /// listed, whether or not they have been imported yet.
+    #[serde(default)]
+    pub total_items: Option<u32>,
 }
 
 impl MailFolder {
@@ -162,6 +166,9 @@ pub struct MailboxMessage {
     pub draft_correlation: Option<uuid::Uuid>,
     /// Existing content and invitation representation consumed by ingestion.
     pub content: MessageWithCalendarParts,
+    /// The message reads as an invitation, but its MIME source could not be
+    /// read, so `content.calendar_parts` is empty rather than complete.
+    pub calendar_parts_unavailable: bool,
     /// Normalized mailbox facts.
     pub state: MailboxState,
     /// Physical parent folder, if the provider uses folders.
@@ -224,6 +231,8 @@ pub struct MailboxChangePage {
     pub removed: Vec<ProviderId>,
     /// The continuation or committed checkpoint returned by the provider.
     pub position: StreamPosition,
+    /// The `FolderChangeReader::READER_REVISION` that read the page.
+    pub reader_revision: i16,
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

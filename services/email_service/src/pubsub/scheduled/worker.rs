@@ -1,5 +1,5 @@
+use crate::composition::workers::PubSubEventBroker;
 use crate::outbound::email_api::GmailApi;
-use crate::pubsub::context::PubSubEventBroker;
 use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::pubsub::scheduled::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
@@ -7,7 +7,49 @@ use futures::StreamExt;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
+/// Builds the scheduled worker context for the binary.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the scheduled worker composition inputs"
+)]
+pub fn context(
+    worker: sqs_worker::SQSWorker,
+    db: PgPool,
+    email_api: GmailApi,
+    attachment_bytes: std::sync::Arc<
+        dyn email::domain::attachment_access::AuthorizedAttachmentBytes,
+    >,
+    s3_client: s3_client::S3,
+    attachment_bucket: String,
+    macro_event_broker: PubSubEventBroker,
+    read_receipts: crate::composition::ReadReceipts,
+) -> ScheduledContext {
+    let adapter = crate::outbound::scheduled_delivery::ScheduledDeliveryAdapter {
+        db: db.clone(),
+        forwarded_attachments:
+            email::domain::forwarded_attachments::ForwardedAttachmentService::new(
+                crate::outbound::forwarded_attachments::PgForwardedAttachmentRepo(db),
+            ),
+        email_api,
+        attachment_bytes,
+        s3_client,
+        attachment_bucket,
+        macro_event_broker,
+        read_receipts,
+    };
+    ScheduledContext {
+        sqs_worker: worker,
+        service: std::sync::Arc::new(
+            email::domain::scheduled_delivery::ScheduledDeliveryService::new(adapter),
+        ),
+    }
+}
+
 /// method that ingests sqs messages and calls the process function for each
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the scheduled worker composition inputs"
+)]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
@@ -18,17 +60,19 @@ pub async fn run_worker(
     s3_client: s3_client::S3,
     attachment_bucket: String,
     macro_event_broker: PubSubEventBroker,
+    read_receipts: crate::composition::ReadReceipts,
 ) {
     run_worker_with_cancellation(
-        ScheduledContext {
-            sqs_worker: worker,
+        context(
+            worker,
             db,
             email_api,
             attachment_bytes,
             s3_client,
             attachment_bucket,
             macro_event_broker,
-        },
+            read_receipts,
+        ),
         CancellationToken::new(),
     )
     .await;

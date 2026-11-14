@@ -3,6 +3,7 @@
 
 mod casts;
 mod column_types;
+mod duplicate;
 mod infer_column_type;
 mod metadata;
 mod ops;
@@ -42,7 +43,7 @@ use crate::domain::models::{
     Database, DatabaseDetail, DatabaseError, DatabaseId, FirstTable, InferColumnType,
     InferColumnTypeOutcome, ListedDatabase, OpBatch, OptionId, PropertyDefinitionId,
     QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, SchemaError,
-    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer,
+    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer, grant_writes,
 };
 use crate::domain::ports::{
     AccessDirectory, CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService,
@@ -437,6 +438,32 @@ where
         Ok((database, tables))
     }
 
+    /// File a live database in a folder, or at the root, answering the
+    /// folder it left.
+    #[cfg(feature = "entity_mutation")]
+    pub(super) async fn move_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<&str>,
+    ) -> Result<Option<String>, DatabaseError> {
+        let database = self.database_by_receipt(&receipt).await?;
+        if database.trashed_at.is_some()
+            || !self
+                .repository
+                .move_database(database.id, project_id)
+                .await
+                .map_err(repository_error)?
+        {
+            return Err(DatabaseError::NotFound);
+        }
+        // The move has committed; a missed liveness ping must not turn it
+        // into a failed write.
+        let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database change");
+        });
+        Ok(database.project_id)
+    }
+
     /// One column as the client sees it.
     async fn column_detail(
         &self,
@@ -557,6 +584,52 @@ where
             tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database change");
         });
         Ok(Database { name, ..database })
+    }
+
+    #[tracing::instrument(skip_all, fields(database_id = %receipt.entity().entity_id), err)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        if receipt.entity().entity_type != model_entity::EntityType::Database {
+            return Err(DatabaseError::NotFound);
+        }
+        appearance
+            .validate()
+            .map_err(DatabaseError::InvalidAppearance)?;
+        let (database, _) = self.database_for_edit(&receipt).await?;
+        let attribution = receipt_attribution(&receipt);
+        let update = activity::AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: attribution.as_ref().map(|value| {
+                activity::Attribution::new(value.actor.clone(), value.on_behalf_of.clone())
+            }),
+            event_id: uuid::Uuid::now_v7(),
+            occurred_at: chrono::Utc::now(),
+        };
+        if let Some(previous) = self
+            .repository
+            .set_appearance(database.id, update)
+            .await
+            .map_err(repository_error)?
+        {
+            self.emit(DatabaseMacroEvent::new(
+                database.id.to_string(),
+                events::DatabaseTopicEvent::AppearanceChanged {
+                    database_id: database.id,
+                    attribution,
+                    change: activity::AppearanceChange {
+                        from: (!previous.is_default()).then_some(previous),
+                        to: (!appearance.is_default()).then(|| appearance.clone()),
+                    },
+                },
+            ));
+            let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+                tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database appearance change");
+            });
+        }
+        Ok(appearance)
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -852,8 +925,13 @@ where
         state: Awareness,
     ) -> Result<(), DatabaseError> {
         let database_id = receipt_database_id(&receipt)?;
+        let can_edit = grant_writes(receipt_grant(&receipt, AccessLevel::View));
+        let state = Awareness {
+            editing: state.editing && can_edit,
+            ..state
+        };
         self.events
-            .awareness(database_id, &viewer.user_id, &state)
+            .awareness(database_id, &viewer.user_id, can_edit, &state)
             .await
             .map_err(repository_error)
     }

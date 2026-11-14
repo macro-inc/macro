@@ -112,7 +112,17 @@ async fn rpc(
     app: Router,
     token: Option<&str>,
     method: &str,
+    params: serde_json::Value,
+) -> (StatusCode, serde_json::Value) {
+    rpc_host(app, token, method, params, "localhost").await
+}
+
+async fn rpc_host(
+    app: Router,
+    token: Option<&str>,
+    method: &str,
     mut params: serde_json::Value,
+    host: &str,
 ) -> (StatusCode, serde_json::Value) {
     if method == "tools/call"
         && !matches!(
@@ -125,7 +135,7 @@ async fn rpc(
     let mut request = Request::builder()
         .method("POST")
         .uri("/mcp/internal")
-        .header("host", "localhost")
+        .header("host", host)
         .header("content-type", "application/json")
         .header("accept", "application/json, text/event-stream");
     if let Some(token) = token {
@@ -165,7 +175,12 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         let tasks = FixedTasks::default();
         let app = router(
             Arc::new(repo.clone()),
-            "localhost".into(),
+            configured_hosts(&[
+                "http://agent-harness-service:8102",
+                "http://localhost:31327",
+                "http://10.210.0.1:31327",
+            ])
+            .unwrap(),
             InternalTools {
                 service: Arc::new(SessionPullRequestService::new(
                     repo.clone(),
@@ -177,8 +192,17 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 cognition: None,
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
             },
         );
+        for (host, expected) in [
+            ("10.210.0.1:31327", StatusCode::OK),
+            ("unconfigured.test", StatusCode::FORBIDDEN),
+        ] {
+            assert_eq!(rpc_host(app.clone(), Some("secret"), "initialize", serde_json::json!({
+                "protocolVersion":"2025-03-26", "capabilities":{}, "clientInfo":{"name":"test","version":"1"}
+            }), host).await.0, expected);
+        }
         assert_eq!(
             rpc(app.clone(), None, "tools/list", serde_json::json!({}))
                 .await
@@ -339,6 +363,15 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         })).await;
         assert!(called.get("error").is_none(), "{called}");
         assert_ne!(called["result"]["isError"], true, "{called}");
+        let output: serde_json::Value =
+            serde_json::from_str(called["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            output,
+            serde_json::json!({
+                "pull_request_url": "https://github.com/org/repo/pull/1",
+                "session_url": format!("https://macro.com/app/agent/{}", session.id),
+            })
+        );
         assert_eq!(
             repo.get(session.id)
                 .await

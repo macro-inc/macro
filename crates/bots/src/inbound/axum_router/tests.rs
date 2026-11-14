@@ -431,6 +431,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -520,7 +521,11 @@ fn router(service: TestBotService, role: EntityParticipantRole) -> Router {
 }
 
 fn real_router(pool: PgPool, user_id: &str) -> Router {
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
     let bearer_token = user_id.to_string();
     bots_router(BotsRouterState::new(
@@ -964,7 +969,11 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     insert_user(&pool, CHANNEL_ADMIN_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, CHANNEL_ADMIN_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(BOT_OWNER_ID),
@@ -1064,7 +1073,11 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
     insert_user(&pool, ADMIN_USER_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, ADMIN_USER_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(ADMIN_USER_ID),
@@ -1226,6 +1239,84 @@ async fn bot_owner_can_create_and_patch_has_agent_via_http(pool: PgPool) -> anyh
     let disable_response = router.oneshot(disable_request).await.unwrap();
     assert_eq!(disable_response.status(), StatusCode::OK);
     assert!(!read_bot(disable_response).await.has_agent);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patching_an_agent_changes_only_the_fields_sent(pool: PgPool) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|agent-owner@example.com";
+    insert_user(&pool, OWNER_ID).await?;
+    let router = real_router(pool, OWNER_ID);
+
+    let created = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agents")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "name": "Web maintainer",
+                        "handle": "web-maintainer",
+                        "harness": "in-memory",
+                        "instructions": "Owns acme/web.",
+                        "channel_scope": "all",
+                        "default_model": "claude-sonnet",
+                        "is_coding": true,
+                        "auto_accept_permissions": true,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(created.into_body(), 1 << 20).await?)?;
+    let agent_id = created["bot"]["id"].as_str().unwrap().to_string();
+
+    let patched = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"instructions": "Ship small diffs."}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), StatusCode::OK);
+    let patched: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(patched.into_body(), 1 << 20).await?)?;
+    assert_eq!(patched["instructions"], "Ship small diffs.");
+    assert_eq!(patched["default_model"], "claude-sonnet");
+    assert_eq!(patched["harness"], "in-memory");
+    assert_eq!(patched["is_coding"], true);
+    assert_eq!(patched["auto_accept_permissions"], true);
+    assert_eq!(patched["channel_scope"], "all");
+    assert_eq!(patched["bot"]["name"], "Web maintainer");
+
+    let flat_channels = router
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"channel_ids": [Uuid::new_v4()]}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(flat_channels.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     Ok(())
 }

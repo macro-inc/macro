@@ -1,5 +1,5 @@
 //! Bounded SDK documentation selection through the shared cognition service.
-use cognition::domain::{Cognition, DecisionRequest};
+use cognition::domain::{Answer, BatchedOutcome, Cognition, RoutingRequest, decide_in_batches};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -8,17 +8,34 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod eval;
+
 /// One SDK entity, generated from the real SDK by TypeDoc.
 #[derive(Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SdkDocumentation {
     /// SDK namespace.
     pub name: String,
-    /// Compact capability summary.
+    /// When to use the entity: its `@routing` sentence, "Use when …; not …".
     pub description: String,
+    /// How this area of Macro works: the entity's `@agent` guidance, when it
+    /// has some; omitted in a compact catalog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guide: Option<String>,
     /// Every class, method and type the entity declares, one line each and
     /// named by the symbol `ReadCodeDocs` reads; omitted in a compact catalog.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<String>,
+}
+
+/// Where a turn's area guidance lives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Guidance {
+    /// Every area's guidance is in the prompt already ([`inline_guides`]), so
+    /// selected entities bring only their index.
+    Inline,
+    /// Selected entities bring their guidance with their index.
+    Selected,
 }
 
 /// The SDK reference as generated: an index per entity, and each symbol's own
@@ -30,7 +47,7 @@ struct Generated {
 }
 
 static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("documentation.json"))
+    serde_json::from_str(code_mode_assets::DOCUMENTATION)
         .expect("generated SDK documentation is valid")
 });
 
@@ -44,6 +61,116 @@ pub fn symbol_reference(symbol: &str) -> Option<&'static str> {
     GENERATED.symbols.get(symbol).map(String::as_str)
 }
 
+/// A compact reference for a prompt that always needs the same methods:
+/// from each entity index, the header of every class or namespace that
+/// declares one of `methods` (such as `EmailThread.messages`) with those
+/// method lines, and the `Fields:` line of each class in `fields_of`. A
+/// session given it needs no `ReadCodeDocs` call for these. Names the SDK
+/// doesn't have are left out.
+pub fn index_digest(methods: &[&str], fields_of: &[&str]) -> String {
+    let mut digest = Vec::new();
+    for index in sdk_documentation()
+        .iter()
+        .filter_map(|doc| doc.index.as_deref())
+    {
+        for section in index.split("\n### ").skip(1) {
+            let mut lines = section.lines();
+            let Some(header) = lines.next() else {
+                continue;
+            };
+            let class = header.split(' ').next().unwrap_or(header);
+            let mut kept = Vec::new();
+            for line in lines {
+                let symbol = line
+                    .strip_prefix("- `")
+                    .and_then(|rest| rest.split('`').next());
+                if symbol.is_some_and(|symbol| methods.contains(&symbol))
+                    || (line.starts_with("Fields:") && fields_of.contains(&class))
+                {
+                    kept.push(line);
+                }
+            }
+            if !kept.is_empty() {
+                digest.push(format!("### {header}"));
+                digest.extend(kept.into_iter().map(str::to_owned));
+            }
+        }
+    }
+    digest.join("\n")
+}
+
+/// One entity's `@agent` guidance, for hosts that carry a single area whole.
+pub fn entity_guide(name: &str) -> Option<&'static str> {
+    sdk_documentation()
+        .iter()
+        .find(|doc| doc.name == name)
+        .and_then(|doc| doc.guide.as_deref())
+}
+
+/// The entity whose guidance is searching across the workspace.
+const SEARCH_ENTITY: &str = "search";
+
+/// How to search across the workspace in code: the `search` entity's guidance,
+/// also the `search` guide topic.
+pub fn search_guide() -> &'static str {
+    entity_guide(SEARCH_ENTITY).unwrap_or_default()
+}
+
+/// The areas MCP clients write into and must know the rules of before the
+/// first call: database tables, CRM pipelines and document content.
+const MCP_GUIDES: [&str; 3] = ["databases", "crm", "documents"];
+
+/// The guidance external MCP clients get in the server instructions.
+pub fn mcp_guides() -> &'static str {
+    static MCP: LazyLock<String> = LazyLock::new(|| {
+        MCP_GUIDES
+            .iter()
+            .filter_map(|name| {
+                entity_guide(name).map(|guide| format!("\n# Macro {name}\n{guide}\n"))
+            })
+            .collect()
+    });
+    &MCP
+}
+
+/// Which prompt carries the area guidance inline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuideHost {
+    /// A code-mode agent session: every area.
+    Code,
+    /// A host whose tools run directly: the areas whose guidance does not
+    /// depend on calling the SDK.
+    Direct,
+}
+
+/// Entities whose guidance is about calling the SDK, which direct-tool hosts
+/// cannot do; those hosts keep their own tool guidance for them.
+const SDK_ONLY_GUIDES: [&str; 2] = ["agentSessions", "tasks"];
+
+/// Every area's guidance as one prompt section, for prompts that do not route
+/// entities per turn. The search guide stays a `DescribeCodeTools` topic, as
+/// it is SDK how-to rather than how an area works.
+pub fn inline_guides(host: GuideHost) -> &'static str {
+    fn render(host: GuideHost) -> String {
+        sdk_documentation()
+            .iter()
+            .filter(|doc| doc.name != SEARCH_ENTITY)
+            .filter(|doc| host == GuideHost::Code || !SDK_ONLY_GUIDES.contains(&doc.name.as_str()))
+            .filter_map(|doc| {
+                doc.guide
+                    .as_deref()
+                    .map(|guide| format!("\n# Macro {}\n{guide}\n", doc.name))
+            })
+            .collect()
+    }
+    static CODE: LazyLock<String> = LazyLock::new(|| render(GuideHost::Code));
+    static DIRECT: LazyLock<String> = LazyLock::new(|| render(GuideHost::Direct));
+    match host {
+        GuideHost::Code => &CODE,
+        GuideHost::Direct => &DIRECT,
+    }
+}
+
 /// How the Jev relevance pass ended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -54,9 +181,9 @@ pub enum SelectionStatus {
     Unconfigured,
     /// The caller cancelled before Jev answered.
     Cancelled,
-    /// Jev returned an error.
+    /// Every Jev call failed.
     ProviderError,
-    /// Jev did not answer before the deadline.
+    /// No Jev call answered before the deadline.
     Timeout,
 }
 
@@ -72,63 +199,92 @@ impl SelectionStatus {
     }
 }
 
-/// Ask Jev once which entities help with `text`; most relevant first.
+/// The entities Jev considers relevant, most relevant first.
+struct Ranking<'a> {
+    entities: Vec<&'a SdkDocumentation>,
+    status: SelectionStatus,
+    /// Parallel Jev calls made, 32 entities per call.
+    batches: usize,
+}
+
+impl Ranking<'_> {
+    fn nothing(status: SelectionStatus) -> Self {
+        Self {
+            entities: Vec::new(),
+            status,
+            batches: 0,
+        }
+    }
+}
+
+/// Ask Jev which entities help with `request`, every entity in parallel calls
+/// of 32. Entities whose call fails or misses the deadline are not ranked; the
+/// rest still are.
 async fn rank_entities<'a>(
     user: &MacroUserIdStr<'static>,
-    text: &str,
+    request: RoutingRequest<'_>,
     docs: &'a [SdkDocumentation],
     cognition: Option<&Arc<dyn Cognition>>,
     deadline: Duration,
     cancel: &CancellationToken,
-) -> (Vec<&'a SdkDocumentation>, SelectionStatus) {
+) -> Ranking<'a> {
     let Some(cognition) = cognition else {
-        return (Vec::new(), SelectionStatus::Unconfigured);
+        return Ranking::nothing(SelectionStatus::Unconfigured);
     };
-    let request = DecisionRequest {
-        input: serde_json::json!({"userRequest": text.chars().take(8000).collect::<String>()}),
-        questions: docs
-            .iter()
-            .map(|doc| {
-                (
-                    doc.name.clone(),
-                    format!(
-                        "Would documentation for SDK entity {} help fulfill this request? {}",
-                        doc.name, doc.description
-                    ),
-                )
-            })
-            .collect(),
-    };
-    let answer = tokio::select! {
+    let input = request.decision_input("userRequest");
+    let questions: Vec<String> = docs
+        .iter()
+        .map(|doc| {
+            format!(
+                "Would the SDK entity {} help with this request? {}",
+                doc.name, doc.description
+            )
+        })
+        .collect();
+    let decision = tokio::select! {
         biased;
-        _ = cancel.cancelled() => return (Vec::new(), SelectionStatus::Cancelled),
-        result = tokio::time::timeout(deadline, cognition.decide(user, request)) => match result {
-            Ok(Ok(answer)) => answer,
-            Ok(Err(_)) => return (Vec::new(), SelectionStatus::ProviderError),
-            Err(_) => return (Vec::new(), SelectionStatus::Timeout),
-        },
+        _ = cancel.cancelled() => return Ranking::nothing(SelectionStatus::Cancelled),
+        decision = decide_in_batches(&input, &questions, deadline, |request| cognition.decide(user, request)) => decision,
     };
+
+    let status = match decision.outcome() {
+        BatchedOutcome::Answered => SelectionStatus::Selected,
+        BatchedOutcome::TimedOut => SelectionStatus::Timeout,
+        BatchedOutcome::Failed => SelectionStatus::ProviderError,
+    };
+    if status != SelectionStatus::Selected {
+        return Ranking {
+            batches: decision.batches,
+            ..Ranking::nothing(status)
+        };
+    }
+
     let mut ranked: Vec<_> = docs
         .iter()
-        .filter_map(|doc| {
-            let score = answer.probabilities.get(&doc.name).copied()?;
-            (score.is_finite() && score >= 0.5).then_some((score, doc))
+        .zip(decision.answers)
+        .filter_map(|(doc, answer)| match answer {
+            Answer::Probability(score) if score.is_finite() && score >= 0.5 => Some((score, doc)),
+            Answer::Probability(_) | Answer::Failed | Answer::TimedOut => None,
         })
         .collect();
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.name.cmp(&b.1.name)));
-    (
-        ranked.into_iter().map(|(_, doc)| doc).collect(),
-        SelectionStatus::Selected,
-    )
+    Ranking {
+        entities: ranked.into_iter().map(|(_, doc)| doc).collect(),
+        status: SelectionStatus::Selected,
+        batches: decision.batches,
+    }
 }
 
-/// Load relevant entity indexes in one Jev call; failures retain the compact catalog.
-/// The byte cap bounds prompt growth; it is not an exact tokenizer count.
-#[tracing::instrument(skip_all, fields(selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
+/// Load the entities a request needs, ranked by Jev, at most four: their
+/// indexes, and with [`Guidance::Selected`] their guidance too. Failures retain
+/// the compact catalog. The byte cap bounds prompt growth; it is not an exact
+/// tokenizer count.
+#[tracing::instrument(skip_all, fields(guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
     user: &MacroUserIdStr<'static>,
-    prompt: &str,
+    request: RoutingRequest<'_>,
     cognition: Option<&Arc<dyn Cognition>>,
+    guidance: Guidance,
     cancel: &CancellationToken,
 ) -> String {
     let docs = sdk_documentation();
@@ -139,9 +295,9 @@ pub async fn select_documentation(
         output.push_str(&format!("{}: {}\n", doc.name, doc.description));
     }
     let started = tokio::time::Instant::now();
-    let (ranked, status) = rank_entities(
+    let ranking = rank_entities(
         user,
-        prompt,
+        request,
         docs,
         cognition,
         Duration::from_millis(1000),
@@ -149,19 +305,29 @@ pub async fn select_documentation(
     )
     .await;
     let mut selected_entities = Vec::new();
-    for doc in ranked.into_iter().take(4) {
-        let remaining = (48 * 1024_usize).saturating_sub(output.len() + 1);
-        if let Some(index) = doc.index.as_ref().filter(|index| index.len() <= remaining) {
-            output.push('\n');
-            output.push_str(index);
+    for doc in ranking.entities.into_iter().take(4) {
+        let Some(index) = doc.index.as_ref() else {
+            continue;
+        };
+        let guide = match guidance {
+            Guidance::Selected => doc.guide.as_deref(),
+            Guidance::Inline => None,
+        };
+        let section = match guide {
+            Some(guide) => format!("\n{index}\n{guide}\n"),
+            None => format!("\n{index}"),
+        };
+        if output.len() + section.len() <= 48 * 1024 {
+            output.push_str(&section);
             selected_entities.push(doc.name.as_str());
         }
     }
     let span = tracing::Span::current();
+    span.record("batches", ranking.batches);
     span.record("selected", selected_entities.len());
     span.record("selected_entities", selected_entities.join(","));
     span.record("bytes", output.len());
-    span.record("selection_status", status.as_str());
+    span.record("selection_status", ranking.status.as_str());
     tracing::debug!(
         elapsed_ms = started.elapsed().as_millis() as u64,
         selected = selected_entities.len(),
@@ -190,7 +356,7 @@ pub struct TaskDocumentation {
 
 /// Select entity indexes for a task the agent describes, for clients that
 /// never show the server the user's request.
-#[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
+#[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(batches = tracing::field::Empty, selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn documentation_for_task(
     user: &MacroUserIdStr<'static>,
     task: &str,
@@ -199,13 +365,24 @@ pub async fn documentation_for_task(
 ) -> TaskDocumentation {
     let docs = sdk_documentation();
     // The agent is waiting on this call, unlike the per-turn prompt path.
-    let (ranked, status) =
-        rank_entities(user, task, docs, cognition, Duration::from_secs(5), cancel).await;
+    let ranking = rank_entities(
+        user,
+        RoutingRequest {
+            latest: task,
+            previous: None,
+        },
+        docs,
+        cognition,
+        Duration::from_secs(5),
+        cancel,
+    )
+    .await;
     let mut bytes = 0;
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
-    for doc in ranked {
-        let size = doc.index.as_ref().map_or(0, String::len);
+    for doc in ranking.entities {
+        let size =
+            doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len);
         if bytes + size <= DOCUMENTATION_BYTES {
             bytes += size;
             entities.push(doc.clone());
@@ -214,10 +391,11 @@ pub async fn documentation_for_task(
         }
     }
     let span = tracing::Span::current();
+    span.record("batches", ranking.batches);
     span.record("selected", entities.len());
     span.record("omitted", omitted.len());
     span.record("bytes", bytes);
-    span.record("selection_status", status.as_str());
+    span.record("selection_status", ranking.status.as_str());
     span.record(
         "selected_entities",
         entities
@@ -227,7 +405,7 @@ pub async fn documentation_for_task(
             .join(","),
     );
     TaskDocumentation {
-        status,
+        status: ranking.status,
         entities,
         omitted,
     }

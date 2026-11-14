@@ -12,6 +12,7 @@ export {
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  usePurchaseAiCreditsMutation,
   useSubscriptionStatusQuery,
   useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
@@ -19,6 +20,7 @@ export {
 export {
   type GithubLink,
   type GithubLinkStatus,
+  githubLinkAuthorizationUrl,
   invalidateGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
@@ -28,7 +30,6 @@ export {
 export { useInitGmailLink } from './gmail-link';
 export { authKeys } from './keys';
 export { useSendMobileWelcomeEmail } from './mobile-welcome-email';
-export {} from './mutations';
 export {
   type CreateCheckoutSessionArgs,
   useCreateBillingPortalMutation,
@@ -42,7 +43,6 @@ export {
 } from './user-language';
 export {
   normalizeUserNameQueryId,
-  userNameQueryOptions,
-  useUserNamesQuery,
+  useUserNames,
 } from './user-names';
 export { invalidateUserQuota } from './user-quota';

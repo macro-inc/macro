@@ -1,7 +1,8 @@
+import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { SoupChatInput } from '@app/features/chat/SoupChatInput';
+import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import {
   makeMarkDoneAction,
   resolveEntityActionViewContext,
@@ -49,7 +50,6 @@ import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/view
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -59,6 +59,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { usePending } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -101,6 +102,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -121,7 +123,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
@@ -248,6 +250,8 @@ interface SoupViewProps {
   header?: JSX.Element;
   /** Compose a detail outlet while keeping the list's state initialized. */
   renderContent?: (list: () => JSX.Element) => JSX.Element;
+  /** Pinned above the list's rows, such as a block's tutorial row. */
+  listStart?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -474,7 +478,7 @@ export const SoupView = (props: SoupViewProps) => {
                 }
               >
                 <Show when={props.filterBarVariant !== 'tag'}>
-                  <HeaderActionGroup label="Filters">
+                  <HeaderActionGroup label="Filters" size="md">
                     <UnifiedFilterDropdown
                       grouped
                       hideLabel
@@ -484,7 +488,7 @@ export const SoupView = (props: SoupViewProps) => {
                     />
                   </HeaderActionGroup>
                 </Show>
-                <HeaderActionGroup label="View options">
+                <HeaderActionGroup label="View options" size="md">
                   <Show when={!isComponentListView('home')}>
                     <SoupViewContextSort grouped />
                   </Show>
@@ -514,7 +518,7 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <SoupViewList />
+          <SoupViewList listStart={props.listStart} />
         </Suspense>
       </div>
       <Suspense>
@@ -529,7 +533,7 @@ export const SoupView = (props: SoupViewProps) => {
         >
           <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
             <div class="pointer-events-auto w-full min-w-0 max-w-3xl">
-              <SoupChatInput />
+              <MobileAgentComposer />
             </div>
           </div>
         </Show>
@@ -542,6 +546,8 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   rowEntry?: SoupRowEntry;
   listHeader?: JSX.Element;
+  /** Scrolls above the rows, outside them, so list focus skips it. */
+  listStart?: JSX.Element;
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
@@ -576,6 +582,7 @@ export const SoupViewList = (props: SoupViewListProps) => (
     <SoupViewListContent
       rowEntry={props.rowEntry}
       listHeader={props.listHeader}
+      listStart={props.listStart}
       groupHeader={props.groupHeader}
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
@@ -609,6 +616,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetchingGroupPage,
     groupPageError,
   } = useSoupView();
+  usePending('list.items', source.isLoading);
+  usePending('list.search.remote', isSearchServiceLoading);
+  usePending('list.search.local', isLocalSearchSettling);
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
 
@@ -1232,12 +1242,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                           soupNavigationTouchHighlight(el);
                         }}
                         scrollerRef={setListScrollerRef}
-                        virtualizerClass="scrollbar-hidden space-y-2"
+                        virtualizerClass="scrollbar-hidden"
                         class="overflow-hidden flex min-w-0"
+                        start={props.listStart}
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
                         scrollBottomOffset={300}
                         rows={rows()}
+                        isSticky={
+                          currentView() === 'tasks'
+                            ? (row) => row.getIsGrouped()
+                            : undefined
+                        }
                       >
                         {(row, i) => {
                           const timestamp = () => {
@@ -1488,7 +1504,10 @@ interface SoupListProps {
   onScrollBottom?: VoidFunction;
   scrollBottomOffset?: number;
   rows: SoupRow[];
+  isSticky?: (row: SoupRow) => boolean;
   cache?: CacheSnapshot;
+  /** Scrolls above the rows, below the touch inset. */
+  start?: JSX.Element;
 }
 
 const SoupList = (props: SoupListProps) => {
@@ -1499,12 +1518,16 @@ const SoupList = (props: SoupListProps) => {
 
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
+  const [topInsetRef, setTopInsetRef] = createSignal<HTMLDivElement>();
+  const topInsetSize = createElementSize(topInsetRef);
 
   // Full-frame touch devices: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
   // Keyed on touch, not width: an iPad is a full-frame native app but is wider
   // than the mobile breakpoint, so a width check would leave it at 0.
-  const topInset = () => (isTouchDevice() ? (topSpacerSize.height ?? 0) : 0);
+  const topInset = () => (isTouchDevice() ? (topInsetSize.height ?? 0) : 0);
+  // Rows start below the inset and any leading content.
+  const startMargin = () => topSpacerSize.height ?? 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1561,16 +1584,21 @@ const SoupList = (props: SoupListProps) => {
         }}
         {...soupListContainerAttribute}
       >
-        <div
-          ref={setTopSpacerRef}
-          aria-hidden
-          class="h-0 block touch:h-(--mobile-content-inset-top)"
-        />
-        <Virtualizer
+        <div ref={setTopSpacerRef}>
+          <div
+            ref={setTopInsetRef}
+            aria-hidden
+            class="h-0 block touch:h-(--mobile-content-inset-top)"
+          />
+          {props.start}
+        </div>
+        <StickyVirtualizer
           cache={props.cache}
           ref={registerVirtualizerHandler}
-          startMargin={topInset()}
+          startMargin={startMargin()}
           data={props.rows}
+          isSticky={props.isSticky}
+          stickyInset={topInset()}
           // Leave itemSize unset for heterogeneous lists so Virtua measures
           // larger rows; 40px is only the default overscan estimate.
           itemSize={props.itemSize}
@@ -1580,7 +1608,7 @@ const SoupList = (props: SoupListProps) => {
           onScroll={handleScroll}
         >
           {(row, i) => props.children(row, i)}
-        </Virtualizer>
+        </StickyVirtualizer>
         <Show when={isTouchDevice()}>
           <div aria-hidden class="h-(--mobile-content-inset-bottom)" />
         </Show>

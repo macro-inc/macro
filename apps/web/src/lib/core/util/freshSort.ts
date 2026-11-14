@@ -1,6 +1,5 @@
 /**
- * Wrap the fuzzy library in some addition utils for ranking by fuzzy match score
- * alongside freshness.
+ * Deterministic per-row name matching blended with freshness and surface boosts.
  */
 
 import uFuzzy from '@leeoniya/ufuzzy';
@@ -12,8 +11,9 @@ import {
   parsedDurationToMilliseconds,
 } from './dateSearch/dateParser';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
+import { nameMatchQuality, normalizeNameText } from './name-match-score';
 
-const uf = new uFuzzy({});
+const fuzzyEligibility = new uFuzzy({});
 
 interface FuzzyFilterResult<T> {
   original: T;
@@ -50,7 +50,7 @@ export interface FreshSortConfig<T = unknown> {
   channelBoost?: number;
   /** Boost multiplier for DM items. Default: 1.0 (no boost) */
   dmBoost?: number;
-  /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
+  /** Also match channel names holding every query term in any order, and rank channels whose participants the query names exactly above all but exact names. When enabled, query "b,a" matches channel name "a,c,b", which the fuzzy matcher alone misses. Default: false */
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
   boostFn?: BoostFn<T>;
@@ -58,7 +58,7 @@ export interface FreshSortConfig<T = unknown> {
   gapPenaltyWeight?: number;
   /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0 */
   startBonusDecay?: number;
-  /** Rank names equal to the query first, then names starting with it, then other matches, ignoring case; the blended score orders each group. Default: false */
+  /** Rank names equal to the query first, then names starting with it, then other matches, ignoring case; the blended score orders each group. People whose first name equals the query count as equal to it. Default: false */
   rankNameMatchesFirst?: boolean;
 }
 
@@ -76,7 +76,7 @@ export interface FreshSortResult<T> {
   timeScore: number;
   brevityScore: number;
   combinedScore: number;
-  /** 2 for an exact name, 1 for a name starting with the query, else 0; always 0 unless `rankNameMatchesFirst`. */
+  /** 3 for an exact name or person's first name, 2 for a participant set, 1 for a name starting with the query, else 0. Without `rankNameMatchesFirst` only participant sets rank above 0, under `commaSeparatedChannelMatch`. */
   nameMatchRank: number;
 }
 
@@ -113,9 +113,10 @@ function calculateTimeScore(
   config: FreshSortConfigWithDefaults,
   now: Date
 ): number {
-  if (!timestamp) return 0;
+  if (timestamp == null) return 0;
 
   const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
+  if (!Number.isFinite(ageMs)) return 0;
   const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
 
   if (ageMs >= maxAgeMs) {
@@ -143,33 +144,71 @@ export function normalizeFuzzyScore(
   return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
 }
 
-function calculateNameMatchRank(name: string, term: string): number {
-  if (!term) return 0;
-  const normalizedName = name.trim().toLocaleLowerCase();
-  if (normalizedName === term) return 2;
-  if (normalizedName.startsWith(term)) return 1;
-  return 0;
+/** Whether a query names everyone in a comma-separated channel name, in any
+ * order: each term starts a word of some participant and every participant has
+ * a term of their own, so a group with more people than the query names does
+ * not qualify, even when one term starts several of their names. */
+function namesEveryParticipant(normalizedName: string, term: string): boolean {
+  const participants = normalizedName
+    .split(',')
+    .map((participant) => participant.trim().split(/\s+/));
+  if (participants.length < 2) return false;
+
+  const terms = term.split(/[\s,]+/).filter(Boolean);
+  if (terms.length < participants.length) return false;
+
+  const startsWordOf = (queryTerm: string, words: string[]) =>
+    words.some((word) => word.startsWith(queryTerm));
+  if (
+    !terms.every((queryTerm) =>
+      participants.some((words) => startsWordOf(queryTerm, words))
+    )
+  ) {
+    return false;
+  }
+
+  // Bipartite matching by augmenting paths: a term taken by an earlier
+  // participant is freed when that participant can move to another term.
+  const holderOfTerm = new Map<number, number>();
+  const assignTerm = (participant: number, triedTerms: Set<number>): boolean =>
+    terms.some((queryTerm, termIndex) => {
+      if (triedTerms.has(termIndex)) return false;
+      if (!startsWordOf(queryTerm, participants[participant])) return false;
+      triedTerms.add(termIndex);
+
+      const holder = holderOfTerm.get(termIndex);
+      if (holder !== undefined && !assignTerm(holder, triedTerms)) return false;
+
+      holderOfTerm.set(termIndex, participant);
+      return true;
+    });
+
+  return participants.every((_, participant) =>
+    assignTerm(participant, new Set())
+  );
 }
 
-type MatchPosition = { start: number; ranges: number[] | undefined };
+function containsEveryTerm(normalizedText: string, term: string): boolean {
+  return term
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .every((word) => normalizedText.includes(word));
+}
 
-/** Where the query matches each label, for rows whose search text adds more than the label. */
-function labelMatchPositions(
-  labels: string[],
-  query: string,
-  idxs: number[]
-): Map<number, MatchPosition> {
-  const positions = new Map<number, MatchPosition>();
-  const labelIdxs = uf.filter(labels, query, idxs);
-  if (!labelIdxs || labelIdxs.length === 0) return positions;
-  const info = uf.info(labelIdxs, labels, query);
-  info.idx.forEach((labelIdx, infoIdx) => {
-    positions.set(labelIdx, {
-      start: info.start[infoIdx] ?? 0,
-      ranges: info.ranges[infoIdx],
-    });
-  });
-  return positions;
+function calculateNameMatchRank(
+  normalizedName: string,
+  term: string,
+  isPerson: boolean
+): number {
+  if (!term) return 0;
+  if (normalizedName === term) return 3;
+
+  // A comma lists several people, so its first word is only one person's name.
+  const namesOnePerson = isPerson && !normalizedName.includes(',');
+  if (namesOnePerson && normalizedName.split(/\s+/)[0] === term) return 3;
+
+  if (normalizedName.startsWith(term)) return 1;
+  return 0;
 }
 
 function calculateBrevityScore(text: string): number {
@@ -179,7 +218,7 @@ function calculateBrevityScore(text: string): number {
   return Math.exp(-2 * normalizedLength);
 }
 
-function ufuzzyFilter<T>(
+function filterNameMatches<T>(
   items: T[],
   getName: NameFn<T>,
   getDisplayName: NameFn<T>,
@@ -187,47 +226,40 @@ function ufuzzyFilter<T>(
   gapPenaltyWeight: number,
   startBonusDecay: number
 ): FuzzyFilterResult<T>[] {
-  const haystack = items.map(getName);
-  const idxs = uf.filter(haystack, query);
+  return items.flatMap((item) => {
+    const text = getName(item);
+    const label = getDisplayName === getName ? text : getDisplayName(item);
+    const quality = nameMatchQuality(
+      label,
+      text,
+      query,
+      gapPenaltyWeight,
+      startBonusDecay
+    );
+    return quality === undefined
+      ? []
+      : [{ original: item, string: text, score: quality * 100 }];
+  });
+}
 
-  if (!idxs || idxs.length === 0) return [];
+/** Channels holding every query term out of order, which uFuzzy skips. Rows it
+ * matched keep their score, so this only adds to its results. */
+function outOfOrderChannelMatches<T>(
+  items: T[],
+  fuzzyResults: FuzzyFilterResult<T>[],
+  query: string,
+  getName: NameFn<T>,
+  isChannelItem: BooleanFn<T>
+): FuzzyFilterResult<T>[] {
+  const fuzzyMatched = new Set(fuzzyResults.map((result) => result.original));
+  return items.flatMap((item) => {
+    if (!isChannelItem(item) || fuzzyMatched.has(item)) return [];
 
-  const info = uf.info(idxs, haystack, query);
-  const order = uf.sort(info, haystack, query);
+    const name = getName(item);
+    const score = fuzzyScoreCommaSpaceSeparated(query, name);
+    if (score < 0) return [];
 
-  if (!order || order.length === 0) return [];
-
-  // Score where the query falls in the label when it matches there, so
-  // aliases or keywords placed before the label don't count as a late start.
-  const labelPositions =
-    getDisplayName === getName
-      ? undefined
-      : labelMatchPositions(items.map(getDisplayName), query, idxs);
-
-  const queryLen = query.length;
-  return order.map((orderIdx) => {
-    const haystackIdx = info.idx[orderIdx];
-    const labelPosition = labelPositions?.get(haystackIdx);
-    const ranges = labelPosition ? labelPosition.ranges : info.ranges[orderIdx];
-    const start = labelPosition ? labelPosition.start : info.start[orderIdx];
-
-    let matchSpan = queryLen;
-    if (ranges && ranges.length >= 2) {
-      matchSpan = ranges[ranges.length - 1] - ranges[0];
-    }
-
-    const clampedGapWeight = Math.max(0, Math.min(1, gapPenaltyWeight));
-    const clampedStartDecay = Math.max(0, startBonusDecay);
-    const rawGapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
-    const gapPenalty = 1 - (1 - rawGapPenalty) * clampedGapWeight;
-    const startBonus = 1 / (1 + (start ?? 0) * clampedStartDecay);
-    const score = gapPenalty * startBonus * 100;
-
-    return {
-      original: items[haystackIdx],
-      string: haystack[haystackIdx],
-      score,
-    };
+    return [{ original: item, string: name, score: score * 100 }];
   });
 }
 
@@ -251,18 +283,14 @@ function freshSort<T>(
   const normalizedTimeWeight = finalConfig.timeWeight / totalWeight;
   const normalizedBrevityWeight = finalConfig.brevityWeight / totalWeight;
 
-  const filterNoInfResults = filterResults.filter((r) => r.score !== Infinity);
-  const maxFuzzyScore =
-    filterNoInfResults.length > 0
-      ? Math.max(...filterNoInfResults.map((r) => r.score))
-      : 1;
+  // A row keeps the same score in every window and corpus.
+  const maxFuzzyScore = 100;
 
   const now = new Date();
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
     const timestampInfo = getTimestamp(result.original);
     const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
-    const fuzzyScore =
-      maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
+    const fuzzyScore = normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(timestampInfo, finalConfig.useViewedAt),
       finalConfig,
@@ -319,6 +347,8 @@ interface CreateFreshSearchArgs<T> {
   getDisplayName?: NameFn<T>;
   isChannelItem?: BooleanFn<T>;
   isDmItem?: BooleanFn<T>;
+  /** Rows named after a person, whose first name alone counts as an exact name under `rankNameMatchesFirst`. Default: none */
+  isPersonItem?: BooleanFn<T>;
   getTimestamp: TimestampFn<T>;
 }
 
@@ -328,27 +358,47 @@ export function createFreshSearch<T>({
   getDisplayName = getName,
   isChannelItem = () => false,
   isDmItem = () => false,
+  isPersonItem = () => false,
   getTimestamp,
 }: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
-    const trimmedQuery = query.trim();
-    const term = trimmedQuery.toLocaleLowerCase();
-    const getNameMatchRank = (item: T) =>
-      finalConfig.rankNameMatchesFirst
-        ? calculateNameMatchRank(getDisplayName(item), term)
+    const trimmedQuery = normalizeNameText(query);
+    const term = trimmedQuery;
+    const getNameMatchRank = (item: T) => {
+      const name = normalizeNameText(getDisplayName(item));
+      let nameRank = finalConfig.rankNameMatchesFirst
+        ? calculateNameMatchRank(name, term, isPersonItem(item))
         : 0;
+      // Letters scattered across a row match as a subsequence. Such a row
+      // never outranks one that contains the typed words themselves.
+      if (
+        finalConfig.rankNameMatchesFirst &&
+        nameRank === 0 &&
+        !containsEveryTerm(normalizeNameText(getName(item)), term)
+      )
+        nameRank = -1;
+      const namesParticipants =
+        finalConfig.commaSeparatedChannelMatch &&
+        isChannelItem(item) &&
+        namesEveryParticipant(name, term);
+
+      return namesParticipants ? Math.max(nameRank, 2) : nameRank;
+    };
 
     const hasComma = trimmedQuery.includes(',');
     const hasSpace = trimmedQuery.includes(' ');
+    const hasTerms = /[^\s,]/.test(trimmedQuery);
     const useMultiTermChannelMatch =
-      finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
+      finalConfig.commaSeparatedChannelMatch &&
+      hasTerms &&
+      (hasComma || hasSpace);
 
     if (!trimmedQuery) {
       const allResults: FuzzyFilterResult<T>[] = items.map((item) => ({
         original: item,
         string: getName(item),
-        score: 1,
+        score: 100,
       }));
       return freshSort(
         allResults,
@@ -360,55 +410,38 @@ export function createFreshSearch<T>({
       );
     }
 
-    if (useMultiTermChannelMatch) {
-      const channelResults: FuzzyFilterResult<T>[] = [];
-      const nonChannelItems: T[] = [];
+    if (finalConfig.commaSeparatedChannelMatch && !hasTerms) return [];
 
-      for (const item of items) {
-        if (isChannelItem(item)) {
-          const name = getName(item);
-          const score = fuzzyScoreCommaSpaceSeparated(trimmedQuery, name);
-          if (score >= 0) {
-            channelResults.push({
-              original: item,
-              string: name,
-              score: score * 100,
-            });
-          }
-        } else {
-          nonChannelItems.push(item);
-        }
-      }
-
-      const nonChannelResults = ufuzzyFilter(
-        nonChannelItems,
-        getName,
-        getDisplayName,
-        trimmedQuery,
-        finalConfig.gapPenaltyWeight,
-        finalConfig.startBonusDecay
-      );
-      const allResults = [...channelResults, ...nonChannelResults];
-      return freshSort(
-        allResults,
-        getNameMatchRank,
-        config,
-        isChannelItem,
-        isDmItem,
-        getTimestamp
-      );
-    }
-
-    const fuzzyResults = ufuzzyFilter(
-      items,
+    // Multi-person channel matching adds reversed participant terms without
+    // widening other local entity rows. Single-token subsequences retain the
+    // shared corpus-independent matcher used by cached/local rows.
+    const eligible = useMultiTermChannelMatch
+      ? (fuzzyEligibility.filter(items.map(getName), trimmedQuery) ?? []).map(
+          (index) => items[index]
+        )
+      : items;
+    const fuzzyResults = filterNameMatches(
+      eligible,
       getName,
       getDisplayName,
-      query,
+      trimmedQuery,
       finalConfig.gapPenaltyWeight,
       finalConfig.startBonusDecay
     );
+    const results = useMultiTermChannelMatch
+      ? [
+          ...fuzzyResults,
+          ...outOfOrderChannelMatches(
+            items,
+            fuzzyResults,
+            trimmedQuery,
+            getName,
+            isChannelItem
+          ),
+        ]
+      : fuzzyResults;
     return freshSort(
-      fuzzyResults,
+      results,
       getNameMatchRank,
       config,
       isChannelItem,

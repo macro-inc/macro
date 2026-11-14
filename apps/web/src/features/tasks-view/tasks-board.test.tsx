@@ -1,3 +1,10 @@
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({}),
+}));
+vi.mock('@notifications/mark-row-seen', () => ({
+  markRowNotificationsSeenOnOpen: vi.fn(),
+}));
+
 import type {
   EntityActionListState,
   EntityActionViewContext,
@@ -13,6 +20,7 @@ import {
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { TaskBoardColumn, TaskBoardTask } from './core/task-board';
+import { createDateBucketBoundaries } from './core/task-due-date';
 import { TasksBoard } from './tasks-board';
 import { boardEntity } from './tests/task-board-fixture';
 
@@ -59,6 +67,8 @@ vi.mock('./tasks-view-context', () => ({
     openTask: mocks.openTask,
     projectsEnabled: () => false,
     showTaskProject: () => false,
+    calendar: () =>
+      createDateBucketBoundaries(new Date('2026-10-01T12:00:00Z'), 'UTC'),
     setFacets: vi.fn(),
   }),
 }));

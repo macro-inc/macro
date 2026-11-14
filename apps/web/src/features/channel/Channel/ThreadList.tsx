@@ -107,11 +107,23 @@ type ThreadListProps = {
    * scrolls behind the floating chrome. Included in virtual measurements and navigation.
    */
   insets?: ScrollInsets;
+  /**
+   * Pressing a disclosure (`[aria-expanded]`) in a row stops following the
+   * end until the reader scrolls back to it or navigates. Rows that keep
+   * growing below, like a streaming reply, then leave what they opened under
+   * the pointer instead of carrying it away.
+   */
+  holdOnDisclosure?: boolean;
+  /** Keep a tall thread's reading gap through responsive width changes. */
+  preserveReflowGap?: boolean;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
 const HISTORY_BUFFER_VIEWPORTS = 3;
 const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
+// How far above the reading position WebKit keeps rows measured: about as far
+// as one long momentum fling travels.
+const WEBKIT_MEASURED_HISTORY_VIEWPORTS = 12;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -126,6 +138,7 @@ export function ThreadList(props: ThreadListProps) {
   let contentRef: HTMLDivElement | undefined;
   const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
   const [viewportSize, setViewportSize] = createSignal(0);
+  const [holding, setHolding] = createSignal(false);
   const insets = () => props.insets ?? NO_SCROLL_INSETS;
   // Capture each key array so the previous virtualizer options still describe
   // the previous page while TanStack resolves its prepend anchor.
@@ -133,7 +146,10 @@ export function ThreadList(props: ThreadListProps) {
     const keys = [...props.keys()];
     return (index: number) => keys[index];
   });
+  let trackReadingGap = false;
   const scrollIntent = createScrollIntentTracker(() => {
+    trackReadingGap = true;
+    cancelReflow();
     lifecycle.send('user-scroll');
     props.onUserNavigation?.();
   });
@@ -153,30 +169,55 @@ export function ThreadList(props: ThreadListProps) {
   let nearTopKey: string | undefined;
   let nearBottomFired = false;
   let previousScrollOffset = snapshot?.scrollOffset ?? 0;
+  let readingGap = snapshot?.isNearBottom === false ? undefined : 0;
+  let observedWidth = 0;
+  let reflowFrame: number | undefined;
+  let reflowing = false;
+  let hiddenForReflow = false;
+  function cancelReflow() {
+    reflowing = false;
+    if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+    reflowFrame = undefined;
+  }
+  onCleanup(() => {
+    if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+  });
   let explicitScrollDownDistance = 0;
   let releaseNavigation: void | (() => void);
   // Rows that mounted or moved in the current tick, measured together.
   const pendingRows = new Set<HTMLDivElement>();
-  // Heights read for the batch being applied; see flushRowMeasurements.
-  const batchHeights = new Map<Element, number>();
+  // Sizes read for the batch being applied; see flushRowMeasurements.
+  const batchSizes = new Map<Element, { height: number; width: number }>();
+  // Each row's width when it was last measured. A row measured at another
+  // width rewrapped because the pane resized (a split opened beside it).
+  const measuredWidths = new Map<string, number>();
+  let measuringRewrap = false;
   let applyingBatch = false;
   let deferredScroll: Parameters<ScrollToFn> | undefined;
+  // Rows shift by the gesture adjustment. The sizer's end moves with them, so
+  // native scrolling stops at the latest row instead of blank space past it.
+  let gestureAdjustment = 0;
+  const sizerHeight = (total: number) =>
+    Math.max(viewportSize(), total - gestureAdjustment);
   const scrollCompensation =
     isSafari || isIOS
       ? createScrollCompensation({
           getElement: () => scrollEl(),
           setAdjustment: (adjustment) => {
+            gestureAdjustment = adjustment;
             if (!contentRef) return;
             contentRef.style.setProperty(
               '--channel-scroll-adjustment',
               `${adjustment}px`
             );
-            // Shifted rows must not change the logical scroll extent.
-            contentRef.style.overflow = adjustment === 0 ? '' : 'clip';
           },
           writeOffset: (offset) => {
             const element = scrollEl();
             if (!element) return;
+            // Restore the logical extent before the offset replaces the adjustment.
+            if (contentRef) {
+              contentRef.style.height = `${sizerHeight(virtualizer.getTotalSize())}px`;
+            }
             writingScroll = true;
             try {
               element.scrollTo({ top: offset });
@@ -229,6 +270,49 @@ export function ThreadList(props: ThreadListProps) {
     },
   });
 
+  // Assigned once the virtualizer exists; its first range is computed inside
+  // the constructor, before the binding below is initialized.
+  let measured: { instance: typeof virtualizer } | undefined;
+  // The core reuses extracted indexes while the visible range holds still,
+  // so a pass that stopped at its unmeasured-row cap would not resume once
+  // those rows are measured. Measurements past such a pass start the next.
+  const [historyPass, setHistoryPass] = createSignal(0);
+  let resumeHistoryAfter: number | undefined;
+
+  // A WebKit gesture cannot move the native top boundary, so rows above that
+  // are taller than their estimate grow only the visual adjustment, and a
+  // fling stops at scrollTop 0 with history still above it. Keep the rows a
+  // fling can reach mounted and measured before it starts, a few unmeasured
+  // rows per pass, so the native extent above them is the real one.
+  function withMeasuredHistory(range: Range): number[] {
+    const indexes = defaultRangeExtractor(range);
+    const instance = measured?.instance;
+    const first = indexes[0];
+    const visibleStart = instance?.measurementsCache[range.startIndex]?.start;
+    if (
+      !scrollCompensation ||
+      !instance ||
+      first === undefined ||
+      visibleStart === undefined
+    )
+      return indexes;
+    const buffer = viewportSize() * WEBKIT_MEASURED_HISTORY_VIEWPORTS;
+    const added: number[] = [];
+    let unmeasured = 0;
+    let top = instance.measurementsCache[first]?.start ?? visibleStart;
+    for (let index = first - 1; index >= 0; index--) {
+      const item = instance.measurementsCache[index];
+      if (!item || visibleStart - top >= buffer || unmeasured >= OVERSCAN)
+        break;
+      added.unshift(index);
+      top = item.start;
+      if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
+    }
+    resumeHistoryAfter =
+      unmeasured >= OVERSCAN ? instance.itemSizeCache.size : undefined;
+    return added.length === 0 ? indexes : [...added, ...indexes];
+  }
+
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     // Do not consume initialOffset against an empty query result. Enabling
     // with the first page lets TanStack render the latest rows immediately.
@@ -247,10 +331,41 @@ export function ThreadList(props: ThreadListProps) {
     // A restored snapshot or a newly remounted message can have a different
     // height. The default sync path returns cached sizes, exposing the old
     // layout until ResizeObserver fires. Read mounted rows before first paint.
-    measureElement: (element, entry, instance) =>
-      entry
-        ? measureElement(element, entry, instance)
-        : (batchHeights.get(element) ?? element.offsetHeight),
+    measureElement: (element, entry, instance) => {
+      // A hidden pane (mid-reflow) keeps its cached sizes and widths.
+      if (
+        props.preserveReflowGap &&
+        (element.offsetWidth === 0 ||
+          element.offsetHeight === 0 ||
+          !scrollEl()?.clientHeight)
+      ) {
+        const index = Number(element.getAttribute('data-index'));
+        const key = instance.options.getItemKey(index);
+        return (
+          instance.itemSizeCache.get(key) ??
+          instance.measurementsCache[index]?.size ??
+          BASE_ITEM_SIZE
+        );
+      }
+      const batched = batchSizes.get(element);
+      // Like the core's measureElement, read the element without a box size.
+      const width =
+        entry?.borderBoxSize?.[0]?.inlineSize ??
+        batched?.width ??
+        element.offsetWidth;
+      const key = String(
+        instance.options.getItemKey(instance.indexFromElement(element))
+      );
+      const previousWidth = measuredWidths.get(key);
+      // A restored size has no recorded width, so its first measurement may
+      // be a rewrap too.
+      measuringRewrap =
+        previousWidth === undefined || Math.abs(previousWidth - width) >= 1;
+      measuredWidths.set(key, width);
+      if (entry && !props.preserveReflowGap)
+        return measureElement(element, entry, instance);
+      return batched?.height ?? element.offsetHeight;
+    },
     // Apply row and composer measurements before paint. Deferring them to the
     // next frame exposes stale geometry and can lose the end anchor on send.
     useAnimationFrameWithResizeObserver: false,
@@ -263,7 +378,11 @@ export function ThreadList(props: ThreadListProps) {
     },
     // Use the same end tolerance for append, resize, navigation, and snapshots.
     // A loose tolerance also mistakes optimistic row estimates for a pin.
-    scrollEndThreshold: NEAR_BOTTOM_THRESHOLD,
+    // While the reader holds a position, no offset counts as the end, so the
+    // core neither pins it across row growth nor follows appended rows.
+    get scrollEndThreshold() {
+      return holding() ? Number.NEGATIVE_INFINITY : NEAR_BOTTOM_THRESHOLD;
+    },
     // The core reads scrollHeight for the end offset, forcing a layout whenever
     // rows just mounted (the initial scroll to latest, each reconcile frame,
     // every end check). The scroller holds only the sizer, max(viewport,
@@ -297,12 +416,13 @@ export function ThreadList(props: ThreadListProps) {
               )
           : 0,
     get rangeExtractor() {
+      historyPass();
       const index =
         props.targetId === undefined
           ? -1
           : props.keys().indexOf(props.targetId);
       return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
+        const indexes = withMeasuredHistory(range);
         if (index < 0 || index >= range.count || indexes.includes(index))
           return indexes;
         return [...indexes, index].sort((a, b) => a - b);
@@ -333,6 +453,19 @@ export function ThreadList(props: ThreadListProps) {
           writingScroll ||
           (programmaticOffset !== undefined &&
             Math.abs(offset - programmaticOffset) < 1.5);
+        const tracking = trackReadingGap || readingGap === undefined;
+        const visible =
+          element && element.clientWidth > 0 && element.clientHeight > 0;
+        const stableWidth = visible && element.clientWidth === observedWidth;
+        const canReadGap = props.preserveReflowGap && tracking && !reflowing;
+        if (canReadGap && stableWidth) {
+          const gap = Math.max(
+            0,
+            element.scrollHeight - element.clientHeight - offset
+          );
+          readingGap = gap <= NEAR_BOTTOM_THRESHOLD ? 0 : gap;
+        }
+        if (!isScrolling) trackReadingGap = false;
         programmaticOffset = undefined;
         if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
         const logicalOffset =
@@ -340,7 +473,17 @@ export function ThreadList(props: ThreadListProps) {
             offset,
             isScrolling && !isOwnScroll
           ) ?? offset;
+        const previousOffset = instance.scrollOffset ?? 0;
         callback(logicalOffset, isScrolling && !isOwnScroll);
+        // Scrolling back down to the end resumes following.
+        if (
+          holding() &&
+          isScrolling &&
+          !isOwnScroll &&
+          logicalOffset > previousOffset &&
+          instance.getDistanceFromEnd() <= NEAR_BOTTOM_THRESHOLD
+        )
+          setHolding(false);
       };
       const cleanup = observeElementOffset(instance, reportOffset);
       // A short list clamps the initial end scroll to zero without emitting a
@@ -362,6 +505,23 @@ export function ThreadList(props: ThreadListProps) {
     observeElementRect: (instance, callback) =>
       observeElementRect(instance, (rect) => {
         const previousHeight = instance.scrollRect?.height ?? 0;
+        const visible = rect.width > 0 && rect.height > 0;
+        const widthChanged =
+          visible &&
+          observedWidth > 0 &&
+          (hiddenForReflow || observedWidth !== rect.width);
+        if (visible) {
+          observedWidth = rect.width;
+          hiddenForReflow = false;
+        } else if (props.preserveReflowGap && observedWidth > 0) {
+          hiddenForReflow = true;
+          trackReadingGap = false;
+          reflowing = false;
+          if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+        }
+        const preserveGap = props.preserveReflowGap && readingGap !== undefined;
+        if (preserveGap && lifecycle.isReady() && widthChanged)
+          reflowing = true;
         const wasAtEnd =
           instance.getTotalSize() -
             previousHeight -
@@ -372,30 +532,63 @@ export function ThreadList(props: ThreadListProps) {
         scheduleScrollState();
         // The core anchors item resizes; viewport resizes (composer, keyboard,
         // split pane) need an explicit end scroll when previously pinned.
-        if (previousHeight > 0 && previousHeight !== rect.height && wasAtEnd) {
+        if (
+          previousHeight > 0 &&
+          previousHeight !== rect.height &&
+          wasAtEnd &&
+          !holding()
+        ) {
           scrollCompensation?.finish();
           instance.scrollToEnd();
         }
+        if (props.preserveReflowGap && reflowing) {
+          if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
+          reflowFrame = requestAnimationFrame(() => {
+            reflowFrame = requestAnimationFrame(() => {
+              reflowFrame = undefined;
+              if (lifecycle.isDisposed()) return;
+              instance.scrollToOffset(
+                Math.max(
+                  0,
+                  instance.getTotalSize() -
+                    (instance.scrollRect?.height ?? 0) -
+                    (readingGap ?? 0)
+                ),
+                { align: 'start', behavior: 'auto' }
+              );
+              reflowing = false;
+            });
+          });
+        }
       }),
-    onChange: scheduleScrollState,
+    onChange: (instance) => {
+      scheduleScrollState();
+      if (
+        resumeHistoryAfter !== undefined &&
+        instance.itemSizeCache.size > resumeHistoryAfter
+      ) {
+        resumeHistoryAfter = undefined;
+        queueMicrotask(() => setHistoryPass((pass) => pass + 1));
+      }
+    },
   });
 
+  measured = { instance: virtualizer };
+
   function writeScroll(...[offset, options, instance]: Parameters<ScrollToFn>) {
+    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
+    // offset, but counter-shift the rows until wheel/touch scrolling settles.
+    // Explicit navigation finishes compensation before calculating its target.
+    const deferred =
+      lifecycle.isReady() &&
+      !!scrollCompensation?.defer(offset + (options.adjustments ?? 0));
     // Size corrections happen before the Solid adapter publishes its new
     // total. Commit the sizer first so the browser cannot clamp the requested
     // scroll to the old range (especially with padding below a growing row).
     if (contentRef) {
-      contentRef.style.height = `${Math.max(viewportSize(), instance.getTotalSize())}px`;
+      contentRef.style.height = `${sizerHeight(instance.getTotalSize())}px`;
     }
-    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
-    // offset, but counter-shift the rows until wheel/touch scrolling settles.
-    // Explicit navigation finishes compensation before calculating its target.
-    if (
-      lifecycle.isReady() &&
-      scrollCompensation?.defer(offset + (options.adjustments ?? 0))
-    ) {
-      return;
-    }
+    if (deferred) return;
     writingScroll = true;
     try {
       elementScroll(offset, options, instance);
@@ -415,13 +608,18 @@ export function ThreadList(props: ThreadListProps) {
   function flushRowMeasurements() {
     const rows = [...pendingRows].filter((row) => row.isConnected);
     pendingRows.clear();
-    for (const row of rows) batchHeights.set(row, row.offsetHeight);
+    for (const row of rows) {
+      batchSizes.set(row, {
+        height: row.offsetHeight,
+        width: row.offsetWidth,
+      });
+    }
     applyingBatch = true;
     try {
       for (const row of rows) virtualizer.measureElement(row);
     } finally {
       applyingBatch = false;
-      batchHeights.clear();
+      batchSizes.clear();
     }
     const scroll = deferredScroll;
     deferredScroll = undefined;
@@ -435,21 +633,26 @@ export function ThreadList(props: ThreadListProps) {
     if (pendingRows.size === 1) queueMicrotask(flushRowMeasurements);
   };
 
-  if (scrollCompensation) {
-    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
-      item,
-      _delta,
-      instance
-    ) => {
-      const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
-      // The core skips remeasurement corrections while scrolling backward.
-      // Our counter-translation makes these safe: a late-loading image above
-      // the viewport must preserve the reading anchor in either direction.
-      return instance.itemSizeCache.has(item.key)
-        ? item.end <= offset
-        : item.start < offset;
-    };
-  }
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+    item,
+    _delta,
+    instance
+  ) => {
+    const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
+    // A first measurement or a rewrap also resizes the row spanning the top
+    // edge. Compensate it too, so the first message starting in view stays
+    // where it is when a split opens beside the channel.
+    if (measuringRewrap || !instance.itemSizeCache.has(item.key))
+      return item.start < offset;
+    // The core skips remeasurement corrections while scrolling backward.
+    // WebKit's counter-translation makes these safe: a late-loading image
+    // above the viewport must preserve the reading anchor in either direction.
+    return (
+      item.end <= offset &&
+      (scrollCompensation !== undefined ||
+        instance.scrollDirection !== 'backward')
+    );
+  };
 
   const shortListOffset = () =>
     props.shortListAlign === 'start'
@@ -468,7 +671,9 @@ export function ThreadList(props: ThreadListProps) {
   ): boolean => {
     const index = props.keys().indexOf(id);
     if (index < 0) return false;
+    cancelReflow();
     scrollCompensation?.finish();
+    readingGap = undefined;
     virtualizer.scrollToIndex(index, { align });
     scheduleScrollState();
     return true;
@@ -483,8 +688,11 @@ export function ThreadList(props: ThreadListProps) {
     requestLayoutUpdate: scheduleScrollState,
     scrollToLatest: (behavior) => {
       if (!canNavigate() || !props.keys().length) return false;
+      cancelReflow();
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
+      readingGap = 0;
       virtualizer.scrollToEnd({ behavior });
       scheduleScrollState();
       return true;
@@ -492,16 +700,20 @@ export function ThreadList(props: ThreadListProps) {
     scrollToMessage: (id, options) => {
       if (!canNavigate() || !props.keys().includes(id)) return false;
       lifecycle.send('navigate');
+      setHolding(false);
       if (options?.userIntent) scrollIntent.markUserIntent(options.userIntent);
       return scrollToMessage(id, options?.align);
     },
     scrollToElement: (targetElement) => {
       const el = scrollEl();
       if (!canNavigate() || !el || !el.contains(targetElement)) return false;
+      cancelReflow();
       lifecycle.send('navigate');
+      setHolding(false);
       scrollCompensation?.finish();
       // Both rects come from the same committed layout, including short-list
       // bottom alignment and floating chrome. No stale estimate is involved.
+      readingGap = undefined;
       const targetRect = targetElement.getBoundingClientRect();
       const scrollRect = el.getBoundingClientRect();
       const { start, end } = insets();
@@ -524,11 +736,13 @@ export function ThreadList(props: ThreadListProps) {
     if (!el) return;
     // This microtask runs after synchronous row measurements, before paint.
     lifecycle.send('layout');
-    const distanceFromTop = logicalScrollOffset(el.scrollTop);
+    const scrollTop = el.scrollTop;
+    const distanceFromTop = logicalScrollOffset(scrollTop);
     // The virtualizer's cached offset can trail scrollTop: this publish may run
     // in the microtask before its own scroll listener records the new position.
+    // The sizer excludes the gesture adjustment, so compare native positions.
     const distanceFromBottom = Math.max(
-      el.scrollHeight - el.clientHeight - distanceFromTop,
+      el.scrollHeight - el.clientHeight - scrollTop,
       0
     );
     // WebKit cannot move the native top boundary during a fling without a
@@ -605,13 +819,45 @@ export function ThreadList(props: ThreadListProps) {
         delta -
         viewportSize() -
         (virtualizer.scrollOffset ?? 0);
-      if (delta !== 0 && previousDistance <= NEAR_BOTTOM_THRESHOLD) {
+      if (
+        delta !== 0 &&
+        previousDistance <= NEAR_BOTTOM_THRESHOLD &&
+        !holding()
+      ) {
         scrollCompensation?.finish();
         virtualizer.scrollToEnd();
       }
       scheduleScrollState();
     })
   );
+
+  // Capture phase: a disclosure may stop propagation of its own events.
+  createEffect(() => {
+    const element = scrollEl();
+    if (!element || !props.holdOnDisclosure) return;
+    const holdOnDisclosure = (target: EventTarget | null) => {
+      if (
+        target instanceof Element &&
+        contentRef?.contains(target) &&
+        target.closest('[aria-expanded]')
+      )
+        setHolding(true);
+    };
+    const onPointerDown = (event: PointerEvent) =>
+      holdOnDisclosure(event.target);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ')
+        holdOnDisclosure(event.target);
+    };
+    element.addEventListener('pointerdown', onPointerDown, { capture: true });
+    element.addEventListener('keydown', onKeyDown, { capture: true });
+    onCleanup(() => {
+      element.removeEventListener('pointerdown', onPointerDown, {
+        capture: true,
+      });
+      element.removeEventListener('keydown', onKeyDown, { capture: true });
+    });
+  });
 
   onMount(() => {
     // Suspense can construct a channel in an inert template document and
@@ -653,7 +899,7 @@ export function ThreadList(props: ThreadListProps) {
           style={{
             position: 'relative',
             width: '100%',
-            height: `${Math.max(viewportSize(), virtualizer.getTotalSize())}px`,
+            height: `${sizerHeight(virtualizer.getTotalSize())}px`,
           }}
         >
           <Key each={virtualItems()} by="key">

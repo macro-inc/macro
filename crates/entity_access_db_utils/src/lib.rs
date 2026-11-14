@@ -7,6 +7,8 @@ mod test;
 
 pub mod channel_share;
 pub mod direct_share;
+pub mod project_grants;
+pub mod scoped_grants;
 pub mod source_grants;
 pub mod team_share;
 
@@ -19,11 +21,15 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+use scoped_grants::{Grant, refuse_added_access, refuse_grant};
 pub use source_grants::delete_source_grants;
-use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
+use sqlx::{PgConnection, Postgres, QueryBuilder, Transaction};
 
 /// Inserts a row into the entity access table
 /// *NOTE*: The transaction does not get committed automatically
+///
+/// A scope that may not share writes only a user's or bot's owner grant
+/// (see [`scoped_grants`]).
 #[tracing::instrument(skip(transaction), err)]
 pub async fn insert_entity_access_row(
     transaction: &mut Transaction<'_, Postgres>,
@@ -33,6 +39,13 @@ pub async fn insert_entity_access_row(
     source_type: EntityAccessSourceType,
     access_level: AccessLevel,
 ) -> Result<(), sqlx::Error> {
+    // The row is new, so anything but its owner's grant adds access.
+    let owner_grant = access_level == AccessLevel::Owner
+        && matches!(
+            source_type,
+            EntityAccessSourceType::User | EntityAccessSourceType::Bot
+        );
+    refuse_grant(!owner_grant)?;
     sqlx::query!(
         r#"
             INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
@@ -82,6 +95,15 @@ pub async fn upsert_owner_grant(
     owner: &Owner,
 ) -> Result<(), sqlx::Error> {
     let source = OwnerGrantSource::from_owner(owner);
+    // A team that owns an item shares it with every member.
+    if source.source_type == EntityAccessSourceType::Team {
+        let grant = Grant {
+            source_id: &source.source_id,
+            source_type: source.source_type,
+            access_level: AccessLevel::Owner,
+        };
+        refuse_added_access(transaction.as_mut(), entity_id, entity_type, &[grant]).await?;
+    }
     // Conflict WHERE only steers index inference onto the direct unique index.
     sqlx::query!(
         r#"
@@ -106,6 +128,7 @@ pub async fn upsert_owner_grant(
 /// Removes all user source level entity access rows for the provided entity aside from the owner
 /// one.
 /// This is used when an item goes from public to private.
+/// A scope that may not share removes nothing (see [`scoped_grants`]).
 #[tracing::instrument(skip(transaction), err)]
 pub async fn remove_non_owner_user_entity_access(
     transaction: &mut Transaction<'_, Postgres>,
@@ -113,7 +136,7 @@ pub async fn remove_non_owner_user_entity_access(
     entity_type: EntityType,
     owner_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+    let removed = sqlx::query!(
         r#"
             DELETE FROM entity_access 
             WHERE entity_id = $1 
@@ -129,8 +152,7 @@ pub async fn remove_non_owner_user_entity_access(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    Ok(())
+    refuse_grant(removed.rows_affected() > 0)
 }
 
 /// Deletes the direct user grants named by `user_ids` on the given entity.
@@ -141,6 +163,7 @@ pub async fn remove_non_owner_user_entity_access(
 /// grants it. Team, bot, and channel grants are out of scope. Use this to revoke
 /// one membership. [`remove_non_owner_user_entity_access`] is the wider
 /// public-to-private sweep.
+/// A scope that may not share removes nothing (see [`scoped_grants`]).
 ///
 /// *NOTE*: The transaction does not get committed automatically.
 #[tracing::instrument(skip(transaction), err)]
@@ -156,7 +179,7 @@ pub async fn delete_user_entity_access_rows(
 
     let macro_ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
 
-    sqlx::query!(
+    let removed = sqlx::query!(
         r#"
         DELETE FROM entity_access
         WHERE entity_id = $1
@@ -173,8 +196,7 @@ pub async fn delete_user_entity_access_rows(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    Ok(())
+    refuse_grant(removed.rows_affected() > 0)
 }
 
 /// Deletes all entity_access rows for a given (entity_id, entity_type).
@@ -204,14 +226,17 @@ pub async fn delete_entity_access_rows(
 /// The participant must already have been admitted by the call domain. The query
 /// cannot grant access to other entities, channel calls, or nonparticipants, and
 /// preserves stronger grants. It does not commit the caller's transaction.
-pub async fn ensure_call_participant_comment_access<'e, E>(
-    executor: E,
+pub async fn ensure_call_participant_comment_access(
+    connection: &mut PgConnection,
     call_id: &macro_uuid::Uuid,
     user_id: MacroUserIdStr<'_>,
-) -> Result<(), sqlx::Error>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> Result<(), sqlx::Error> {
+    let grant = Grant {
+        source_id: user_id.as_ref(),
+        source_type: EntityAccessSourceType::User,
+        access_level: AccessLevel::Comment,
+    };
+    refuse_added_access(&mut *connection, call_id, EntityType::Call, &[grant]).await?;
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
            SELECT c.id, 'call', p.user_id, 'user', 'comment'
@@ -224,7 +249,7 @@ where
         call_id,
         user_id.as_ref(),
     )
-    .execute(executor)
+    .execute(&mut *connection)
     .await?;
     Ok(())
 }
@@ -234,20 +259,26 @@ where
 /// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where
 /// it filters the conflicting row, not on the conflict target, where it would
 /// only steer index inference.
-#[tracing::instrument(skip(executor), err)]
-pub async fn upsert_user_entity_access_bulk<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(connection), err)]
+pub async fn upsert_user_entity_access_bulk(
+    connection: &mut PgConnection,
     user_ids: &[MacroUserIdStr<'_>],
     entity_id: &macro_uuid::Uuid,
     entity_type: EntityType,
     access_level: AccessLevel,
-) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<()> {
     if user_ids.is_empty() {
         return Ok(());
     }
+    let grants: Vec<Grant<'_>> = user_ids
+        .iter()
+        .map(|user_id| Grant {
+            source_id: user_id.as_ref(),
+            source_type: EntityAccessSourceType::User,
+            access_level,
+        })
+        .collect();
+    refuse_added_access(&mut *connection, entity_id, entity_type, &grants).await?;
 
     let macro_ids: Vec<String> = user_ids.iter().map(|s| s.to_string()).collect();
 
@@ -266,7 +297,7 @@ where
         access_level as _,
         macro_ids.as_slice(),
     )
-    .execute(executor)
+    .execute(&mut *connection)
     .await?;
 
     Ok(())
@@ -314,6 +345,16 @@ pub async fn get_nested_project_entities(
 
             SELECT et.id::text as "entity_id!", 'email_thread' as "entity_type!" FROM email_threads et
             WHERE et.project_id IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT de.database_id::text as "entity_id!", 'database' as "entity_type!" FROM database_entities de
+            WHERE de.project_id IN (SELECT id FROM child_projects)
+
+            UNION ALL
+
+            SELECT f.id::text as "entity_id!", 'form' as "entity_type!" FROM forms f
+            WHERE f.project_id IN (SELECT id FROM child_projects)
             "#,
             &project_id.to_string()
         )
@@ -385,6 +426,16 @@ pub async fn update_entity_access_channel_share_permissions(
             }
         }
     }
+    let grants: Vec<Grant<'_>> = upsert_channel_ids
+        .iter()
+        .map(|(channel_id, access_level)| Grant {
+            source_id: channel_id,
+            source_type: EntityAccessSourceType::Channel,
+            access_level: *access_level,
+        })
+        .collect();
+    refuse_added_access(transaction.as_mut(), entity_id, entity_type, &grants).await?;
+    refuse_grant(!remove_channel_ids.is_empty())?;
 
     // We need to remove all required items from entity_access for the given entity id for all channels
     if !remove_channel_ids.is_empty() {
@@ -403,6 +454,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {
@@ -482,6 +535,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {

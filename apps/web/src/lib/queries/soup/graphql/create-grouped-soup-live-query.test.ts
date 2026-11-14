@@ -27,6 +27,7 @@ import {
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import type {
+  GraphqlEntityFilterAst,
   GroupedSoupInput,
   GroupSoupQuery,
   GroupSoupQueryVariables,
@@ -41,26 +42,16 @@ vi.mock('../../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: mocks.host,
   getGraphqlSoupClient: mocks.client,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: () => ({
-      setAttr: vi.fn(),
-      error: vi.fn(),
-      end: vi.fn(),
-      run: (operation: () => unknown) => operation(),
-    }),
-    error: vi.fn(),
-  },
-}));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-function setup() {
+function setup(filters: GraphqlEntityFilterAst = {}) {
   type Execution = {
     variables: GroupSoupQueryVariables;
+    context: Partial<OperationContext>;
     publish(
       data: GroupSoupQuery,
       persistence?: Promise<string | undefined>,
@@ -87,6 +78,7 @@ function setup() {
       });
       const execution: Execution = {
         variables: request.variables,
+        context,
         publish: (data, persistence, source = 'live-network') =>
           subject.next({
             operation,
@@ -157,7 +149,7 @@ function setup() {
           propertyDefinitionId: 'status-definition',
         },
         limit: 2,
-        filters: {},
+        filters,
       },
     });
     const query = createGroupedSoupLiveQuery(
@@ -191,8 +183,9 @@ function page(
         bins: [
           {
             key: 'todo',
-            label: null,
             items,
+            displayOrder: null,
+            label: null,
             totalCount: 20,
             nextCursor: cursor,
           },
@@ -232,6 +225,27 @@ const ids = (data: GroupSoupQuery | undefined) =>
   }));
 
 describe('grouped Soup live ownership', () => {
+  it('retains CRM membership dependencies on group continuations', async () => {
+    const state = setup({
+      crmCompanyFilter: {
+        literal: { id: '00000000-0000-0000-0000-000000000000' },
+      },
+      crmContactFilter: { literal: { hidden: false } },
+    });
+    const initial = await state.execution(0);
+    expect(initial.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    initial.publish(page([], 'next'));
+    const more = state.query.paging.fetchNextPage('todo');
+    const continuation = await state.execution(1);
+    expect(continuation.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    continuation.publish(page([], null));
+    await more;
+  });
+
   it('does not refetch a continuation started automatically during the initial result', async () => {
     const state = setup();
     createRoot((dispose) => {
@@ -578,6 +592,7 @@ describe('grouped Soup live ownership', () => {
       key: 'done',
       label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

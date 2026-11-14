@@ -134,7 +134,7 @@
   transform: translateY(-50%);
   background: #000;
   color: var(--color-ink-placeholder);
-  font: 400 12px/1.65 'Inter Variable', Inter, sans-serif;
+  font: 370 12px/1.65 'Inter Variable', Inter, sans-serif;
 }
 
 .homepage-history-caption > span {
@@ -171,4 +171,17 @@
   background: url('../../../assets/desktop/gradient-grain.svg') repeat;
   mix-blend-mode: soft-light;
   opacity: .12;
+}
+
+/* Match the homepage chat mentions and email composer without the extra wash. */
+.macro-homepage .homepage-collaborative-doc .mds {
+  --mds-mention-color: var(--marketing-mention);
+  --mds-mention-background: color-mix(in srgb, var(--marketing-mention) 12%, transparent);
+  --mds-mention-weight: 370;
+}
+.macro-homepage .homepage-collaborative-doc::before,
+.macro-homepage .homepage-collaborative-doc::after { display: none; }
+.macro-homepage .homepage-collaborative-doc .mds-card::before {
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
 }

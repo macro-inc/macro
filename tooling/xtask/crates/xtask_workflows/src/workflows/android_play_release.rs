@@ -1,10 +1,15 @@
 //! `Android Play Release` — add the `android-update` label to a PR with
 //! Android native changes and this workflow builds the signed App Bundle
-//! from the PR head, uploads it to Google Play's internal track and promotes
-//! it to production (full rollout; Google review applies) — the release the
+//! from the PR head and keeps it as the `android-release` workflow artifact.
+//! When it succeeds, [`super::android_play_publish`] (which runs `main`'s
+//! copy) uploads it to Google Play's internal track and promotes it to
+//! production (full rollout; Google review applies) — the release the
 //! `Android Native Check` merge gate (a job of [`super::web_app_check_main`])
 //! then waits on; [`super::android_release_watch`] re-runs the gate once the
 //! release is live. The iOS counterpart is [`super::ios_app_store_release`].
+//!
+//! This workflow runs the PR's code, so it gets no Play access: only the
+//! publisher can sign in to Play.
 //!
 //! The PR must already contain the version code bump (`just android-bump`
 //! in `apps/web`, committed): the preconditions verify it against the base
@@ -12,23 +17,19 @@
 //! and re-add `android-update`).
 //!
 //! Play is the only artifact store that matters: the bundle and its R8
-//! mapping are also kept as a workflow artifact, but nothing ties releases to
-//! production release tags any more (the former tag-driven
-//! `release-android.yml` is gone). Each upload carries a provenance stamp in
-//! its release notes — the Android native hash it was built from and the PR
-//! number — that the gate and the watcher compare against the PR's merge
-//! result, exactly like the iOS TestFlight stamp.
+//! mapping are also kept as a workflow artifact (90 days), but nothing ties
+//! Play releases to production release tags. Each production release gets a
+//! sideloadable APK instead, from [`super::android_apk_on_release`].
 //!
 //! Credentials: the signing keystore and Firebase config come from Doppler
-//! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`); Play access is
-//! keyless (Workload Identity Federation through the repository variables
-//! `GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER` / `GOOGLE_PLAY_SERVICE_ACCOUNT`).
+//! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
     Step, Use, Workflow,
 };
 
+use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{steps, vars};
 
 /// Build the workflow.
@@ -61,7 +62,6 @@ fn release_job() -> Job {
                 .actions(Level::Read)
                 .checks(Level::Read)
                 .contents(Level::Read)
-                .id_token(Level::Write)
                 .pull_requests(Level::Write)
                 .statuses(Level::Read),
         )
@@ -73,20 +73,16 @@ fn release_job() -> Job {
         .add_step(checkout_pr_head())
         .add_step(setup_bun())
         .add_step(preconditions())
-        .add_step(install_android_sdk())
+        .add_step(android_build::install_android_sdk())
         .add_step(setup_nix())
         .add_step(setup_prereqs())
         .add_step(prepare_version_and_signing())
-        .add_step(build_bundle())
-        .add_step(preserve_build_log())
+        .add_step(android_build::build(Artifact::Aab))
+        .add_step(android_build::preserve_build_log())
         .add_step(verify_and_collect())
         .add_step(head_guard())
-        .add_step(provenance_stamp())
         .add_step(upload_workflow_artifact())
-        .add_step(play_auth())
-        .add_step(upload_internal())
-        .add_step(promote_production())
-        .add_step(remove_signing_material())
+        .add_step(android_build::remove_signing_material())
         .add_step(pr_comment())
 }
 
@@ -104,13 +100,7 @@ fn checkout_pr_head() -> Step<Use> {
 /// Bun before Nix: the preconditions run the Android scripts before the
 /// toolchain is set up.
 fn setup_bun() -> Step<Use> {
-    Step::new("Setup Bun")
-        .uses(
-            "oven-sh",
-            "setup-bun",
-            "0c5077e51419868618aeaa5fe8019c62421857d6",
-        ) // v2.2.0
-        .add_with(("bun-version", "1.3.13"))
+    steps::setup_bun_pinned()
 }
 
 /// `android-update` means "release this and merge it when it is live", so the
@@ -123,27 +113,15 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/android_git_fetch.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
             include_str!("scripts/merge_result_native_check.sh"),
-            include_str!("scripts/android_release_preconditions.sh")
+            include_str!("scripts/android_release_preconditions.sh"),
+            include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
     .id("preconditions")
     .working_directory(xtask_paths::repo_dir!("apps/web"))
     .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
     .add_env(("WAIT_MINUTES", "30"))
-}
-
-fn install_android_sdk() -> Step<Run> {
-    Step::new("Install Android SDK components")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            export JAVA_HOME="$JAVA_HOME_21_X64"
-            export PATH="$JAVA_HOME/bin:$PATH"
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-              'platforms;android-36' 'build-tools;36.0.0' 'ndk;30.0.16248370'
-            echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-            echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
-        "#})
-        .shell("bash")
+    .add_env(("RELEASE_LABEL", "android-update"))
 }
 
 fn setup_nix() -> Step<Use> {
@@ -172,55 +150,6 @@ fn prepare_version_and_signing() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
-}
-
-fn build_bundle() -> Step<Run> {
-    Step::new("Build production App Bundle")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            # The Nix environment is already loaded. Do not reload it in nested
-            # bash processes and re-enable its local-development sccache wrapper.
-            # This ephemeral runner has no compiler cache/server to reuse.
-            unset BASH_ENV
-            export RUSTC_WRAPPER=""
-            cargo tauri --version
-            # Tauri has shipped both switch-only and value-taking APK/AAB flags.
-            # Nix and local installations can differ; build only the AAB with either CLI.
-            android_help=$(cargo tauri android build --help)
-            artifact_args=(--aab)
-            if [[ "$android_help" == *'--apk <APK>'* ]]; then
-              artifact_args=(--apk false --aab true)
-            fi
-            just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
-              "${artifact_args[@]}" --ci --config "$RUNNER_TEMP/android-release.json" \
-              2>&1 | tee "$RUNNER_TEMP/android-build.log"
-        "#})
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env((
-            "VITE_SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        ))
-        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env((
-            "VITE_OTEL_EXPORTER_URL",
-            "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces",
-        ))
-        .add_env(("VITE_OTEL_ENV", "prod"))
-}
-
-fn preserve_build_log() -> Step<Use> {
-    Step::new("Preserve Android build log")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .if_condition(Expression::new("always()"))
-        .add_with(("name", "android-build-log"))
-        .add_with(("path", "${{ runner.temp }}/android-build.log"))
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
 }
 
 fn verify_and_collect() -> Step<Run> {
@@ -280,22 +209,6 @@ fn head_guard() -> Step<Run> {
     .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
-/// The release notes carry the native hash and PR number, which the gate and
-/// the watcher compare against the merge result (the TestFlight stamp's twin).
-fn provenance_stamp() -> Step<Run> {
-    steps::logged_run(
-        "Write the provenance stamp as release notes",
-        indoc::indoc! {r#"
-            set -euo pipefail
-            hash=$(bun scripts/android-native.mjs hash HEAD)
-            mkdir -p "$RUNNER_TEMP/whatsnew"
-            printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
-            echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
-        "#},
-    )
-    .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
 fn upload_workflow_artifact() -> Step<Use> {
     Step::new("Upload verified Android artifact")
         .uses(
@@ -309,84 +222,6 @@ fn upload_workflow_artifact() -> Step<Use> {
         .add_with(("retention-days", 90))
 }
 
-/// Keyless Play access: a credentials file for the upload action and an
-/// access token for the promotion script.
-fn play_auth() -> Step<Use> {
-    Step::new("Authenticate to Google Play")
-        .uses(
-            "google-github-actions",
-            "auth",
-            "7c6bc770dae815cd3e89ee6cdf493a5fab2cc093",
-        ) // v3
-        .id("auth")
-        .add_with((
-            "workload_identity_provider",
-            "${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}",
-        ))
-        .add_with(("service_account", "${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}"))
-        .add_with(("token_format", "access_token"))
-        .add_with((
-            "access_token_scopes",
-            "https://www.googleapis.com/auth/androidpublisher",
-        ))
-        .add_with(("export_environment_variables", false))
-}
-
-fn upload_internal() -> Step<Use> {
-    Step::new("Upload to internal testing")
-        .uses(
-            "r0adkll",
-            "upload-google-play",
-            "e738b9dd8f2476ea806d921b64aacd24f34515a5",
-        ) // v1
-        .add_with((
-            "serviceAccountJson",
-            "${{ steps.auth.outputs.credentials_file_path }}",
-        ))
-        .add_with(("packageName", "com.macro.workspace.mobile"))
-        .add_with(("releaseFiles", "${{ steps.artifact.outputs.bundle }}"))
-        .add_with(("mappingFile", "${{ steps.artifact.outputs.mapping }}"))
-        .add_with(("releaseName", "${{ steps.metadata.outputs.release_name }}"))
-        .add_with(("track", "internal"))
-        .add_with(("status", "completed"))
-        .add_with(("whatsNewDirectory", "${{ runner.temp }}/whatsnew"))
-}
-
-/// Internal → production, full rollout. Play can take a moment to show the
-/// internal release in a fresh edit, so the promotion is retried briefly.
-fn promote_production() -> Step<Run> {
-    steps::logged_run(
-        "Promote to production",
-        indoc::indoc! {r#"
-            set -euo pipefail
-            for attempt in 1 2 3 4 5; do
-              if node scripts/android-play-promote.mjs; then
-                exit 0
-              fi
-              echo "Promotion attempt ${attempt} failed; retrying in 30s."
-              sleep 30
-            done
-            echo "Could not promote version code ${VERSION_CODE} to production; promote it by hand with publish-android-play.yml (operation=promote-production)." >&2
-            exit 1
-        "#},
-    )
-    .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", "${{ steps.auth.outputs.access_token }}"))
-    .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
-    .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
-}
-
-fn remove_signing_material() -> Step<Run> {
-    Step::new("Remove signing material")
-        .run(indoc::indoc! {r#"
-            rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/android-release.json" \
-              "$RUNNER_TEMP/android-google-services.json" "$RUNNER_TEMP/whatsnew" || true
-            rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
-        "#})
-        .if_condition(Expression::new("always()"))
-        .shell("bash")
-}
-
 fn pr_comment() -> Step<Use> {
     Step::new("Comment on the PR")
         .uses(
@@ -394,9 +229,11 @@ fn pr_comment() -> Step<Use> {
             "github-script",
             "f28e40c7f34bde8b3046d885e986cb6290c5673b",
         )
-        // Not `always()`: a run the drift workflow cancelled must not post
-        // "failed, re-add the label" next to drift's own comment.
-        .if_condition(Expression::new("success() || failure()"))
+        // Failures only: Android Play Publish comments the outcome of a
+        // successful build. Not `always()` either: a run the drift workflow
+        // cancelled must not post "failed, re-add the label" next to drift's
+        // own comment.
+        .if_condition(Expression::new("failure()"))
         .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
         .add_with((
             "script",
@@ -408,55 +245,39 @@ fn pr_comment() -> Step<Use> {
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
-                const success = '${{ job.status }}' === 'success';
-                const SUCCESS_BODY = [
-                  `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
-                  '',
-                  'When Google approves it, the version goes live, the **Android Release Watch** workflow',
-                  're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
-                  'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
-                  'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
-                  '',
-                  `[Workflow run](${runUrl})`,
-                ].join('\n');
-                let body;
-                if (success) {
-                  body = SUCCESS_BODY;
-                } else {
-                  // Name the failed step and, when it is one that logs its
-                  // output (steps::logged_run), quote the end of that output.
-                  let failedStep = null;
-                  try {
-                    const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      run_id: context.runId,
-                      attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    });
-                    const job = data.jobs.find((j) => j.name === 'Android Play Release');
-                    failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
-                  } catch (error) {
-                    core.warning(`Could not list this job's steps: ${error.message}`);
-                  }
-                  const read = (file) => {
-                    try {
-                      return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
-                    } catch {
-                      return '';
-                    }
-                  };
-                  let tail = '';
-                  if (failedStep && read('last-step.name').trim() === failedStep) {
-                    const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
-                    tail = lines.slice(-30).join('\n').slice(-3000);
-                  }
-                  body = [
-                    `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
-                    ...(tail ? ['', '```text', tail, '```'] : []),
-                    '',
-                    'Fix the problem, then remove and re-add the `android-update` label to retry.',
-                  ].join('\n');
+                // Name the failed step and, when it is one that logs its
+                // output (steps::logged_run), quote the end of that output.
+                let failedStep = null;
+                try {
+                  const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: context.runId,
+                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                  });
+                  const job = data.jobs.find((j) => j.name === 'Android Play Release');
+                  failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+                } catch (error) {
+                  core.warning(`Could not list this job's steps: ${error.message}`);
                 }
+                const read = (file) => {
+                  try {
+                    return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
+                  } catch {
+                    return '';
+                  }
+                };
+                let tail = '';
+                if (failedStep && read('last-step.name').trim() === failedStep) {
+                  const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+                  tail = lines.slice(-30).join('\n').slice(-3000);
+                }
+                const body = [
+                  `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
+                  ...(tail ? ['', '```text', tail, '```'] : []),
+                  '',
+                  'Fix the problem, then remove and re-add the `android-update` label to retry.',
+                ].join('\n');
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -466,3 +287,6 @@ fn pr_comment() -> Step<Use> {
             "#},
         ))
 }
+
+#[cfg(test)]
+mod test;

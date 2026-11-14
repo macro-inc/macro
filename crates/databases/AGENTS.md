@@ -14,11 +14,13 @@ service with Axum, agent-tool and Postgres adapters.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope
 
 - Owns: database/table/column/row/view/saved-query persistence, the typed ops
-  batch API, sharing, provisioning, and the `database_entities` app-entity layer.
+  batch API, sharing, provisioning, duplication, and the `database_entities`
+  app-entity layer.
 - Not here: the SQL grammar agents and the console compile → `crates/database_sql`
   (pure parse/resolve/fold engine, also runs in wasm); the agent-facing SQL
   adapter that runs that engine over this crate's ops and Soup →
@@ -29,9 +31,12 @@ service with Axum, agent-tool and Postgres adapters.
 - Depends on: `entity_access` (permission scoping), `entity_access_db_utils` and
   `share_permission_db_utils` (channel grants and the team share), `properties` (cell values),
   `macro_event_broker`/`macro_event_topics` (change notifications),
-  `connection_gateway_client` (liveness), `entity_mutation` (rename/trash/restore).
+  `connection_gateway_client` (liveness), `entity_mutation`
+  (rename/move/duplicate/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
-  `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
+  `DatabaseStorage`, no `database_entities` row), `database_webhooks` (writes
+  as its creator, re-checked through the `CreatorAccess` port and its
+  `outbound::entity_access_creators` adapter), `ai_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
 
 ## Recipes
@@ -51,6 +56,17 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
+- `POST /databases` and `POST /databases/{id}/duplicate` attribute the
+  creation to the SDK token's `agent_id` (code mode, `agent_attribution`), like
+  the native tool, so channel delivery shares a database an agent makes; access
+  checks still run as the plain user (`viewer_of`).
+- Hosts authorize the database through their own entity before calling
+  `storage_view_positions`; the operation also checks database, table and view
+  membership.
+- A duplicate rewrites IDs while walking each column config, view and card
+  position as JSON. Cells are rewritten only in their option and row references,
+  never in text. Copy saved appearance into the duplicate's app entity in the
+  same transaction as storage and grants; keep the copy outside any folder.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").
@@ -58,6 +74,13 @@ service with Axum, agent-tool and Postgres adapters.
   never silently drop data outside an explicit delete. Percentage is Number
   storage plus placement config; Number↔Percentage does not convert or rescale
   cells.
+- Filing in a folder (`database_entities.project_id`, `MoveEntity`): owner
+  only; the repository swaps the folder-inherited `entity_access` rows in the
+  same transaction (`entity_access_db_utils::project_grants`), after
+  `refuse_filing` checks the new folder against the rows it holds. Trashing or
+  purging the folder returns the database to the root without the folder's
+  grants; trashing goes through `PgDatabaseFolders`, which the projects
+  domain reaches through its `FiledItemsUnfiler` port.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
   link. The team share's state lives in a `SharePermission` row that
   `database_entities.share_permission_id` points at, made the first time the

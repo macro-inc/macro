@@ -81,6 +81,7 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod agent_name;
 mod channel_media;
 #[cfg(any(test, feature = "test-support"))]
 pub use channel_media::build_channel_media_upload_tool_context_test;
@@ -168,6 +169,10 @@ impl MacroEventBroker for MaybeToolEventBroker {
 pub type ToolBotService = BotServiceImpl<
     PgBotsRepo,
     MaybeToolEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
     crate::mcp_app_catalog::PipedreamMcpAppCatalog,
 >;
 
@@ -185,9 +190,17 @@ pub fn build_bot_tool_context(
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
-            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
-                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
-            ),
+            BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                event_broker,
+                harnesses::domain::service::HarnessServiceImpl::new(
+                    harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                ),
+            )
+            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
+                pipedream,
+            )),
         ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
@@ -975,6 +988,45 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,
@@ -1456,6 +1508,7 @@ pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
     projects::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
     projects::domain::ports::UnavailableProjectSearchIndexer,
+    projects::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1467,17 +1520,19 @@ pub type ToolProjectToolContext = ProjectToolContext<
     ToolEntityAccessService,
     ToolDocumentService,
     ToolUserEmailService,
+    ToolDatabasesService,
 >;
 
 /// Build the project tool context from shared domain and access services.
-/// The move services must be the same instances the document and
-/// email tool contexts run on so moves share their side-effect wiring.
+/// The move services must be the same instances the document, email and
+/// databases tool contexts run on so mutations share their side-effect wiring.
 pub fn build_project_tool_context(
     pool: sqlx::PgPool,
     macro_event_broker: ToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_service: Arc<ToolDocumentService>,
     email_service: Arc<ToolUserEmailService>,
+    databases_service: Arc<ToolDatabasesService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
         projects::outbound::PgProjectRepo::new(
@@ -1491,6 +1546,7 @@ pub fn build_project_tool_context(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
         projects::domain::ports::UnavailableProjectSearchIndexer,
+        projects::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );
@@ -1499,6 +1555,7 @@ pub fn build_project_tool_context(
         entity_access_service,
         document_service,
         email_service,
+        databases_service,
     )
 }
 
@@ -1967,17 +2024,17 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// Type alias for the import service implementation used by AI tools.
-/// The MCP connection to Pipedream's remote server: `None` on deployments
-/// where Pipedream isn't configured (its toolsets then come up empty).
+/// The connector backends (Pipedream, plus Macro Connect when configured):
+/// `None` on deployments where Pipedream isn't configured (its toolsets then
+/// come up empty).
 pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
 
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
 /// serves a user's tools (Pipedream connectors win; see `mcp_select`).
 pub type ToolMcpSelector = mcp_select::McpToolSelector<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    mcp_client::outbound::NativeServerStore,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     ToolPipedreamConnection,
 >;
@@ -1990,41 +2047,43 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
     import_notion::outbound::pipedream::PipedreamNotionConnections<
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::api::PipedreamClient,
+        pipedream_mcp::outbound::dispatch::ConnectorBackends,
     >,
 >;
 
 /// The custom MCP server tools, wired by hosts holding the MCP credentials
 /// key.
-pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
->;
+pub type ToolMcpServerToolContext =
+    mcp_client::inbound::toolset::McpServerToolContext<mcp_client::outbound::NativeServerStore>;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
-pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
+/// The acting user's own activity, as `GET /activity` serves it.
+pub type ToolActivityReadService = activity::ActivityReadService<
     initiative::domain::personal_activity::ProjectVisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         ToolEntityAccessService,
     >,
 >;
 
-pub fn build_activity_tool_context(
+pub fn build_activity_read_service(
     pool: sqlx::PgPool,
     properties: Arc<ToolPropertiesService>,
     entity_access_service: Arc<ToolEntityAccessService>,
-) -> ToolActivityToolContext {
-    activity::inbound::toolset::ActivityToolContext::new(
-        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-            entity_access_service.clone(),
-        ),
+) -> Arc<ToolActivityReadService> {
+    Arc::new(
+        activity::ActivityReadService::new(
+            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+                entity_access_service.clone(),
+            ),
+        )
+        .with_metadata_resolver(ToolActivityMetadataResolver::new(
+            properties,
+            entity_access_service,
+        )),
     )
-    .with_metadata_resolver(ToolActivityMetadataResolver::new(
-        properties,
-        entity_access_service,
-    ))
 }
 
 pub use routines::inbound::RoutineToolContext;
@@ -2048,15 +2107,19 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Private explicit memory edits and current-team activity reads.
+    pub memory_tool_context: crate::memory::ToolMemoryContext,
     /// Read-only discovery of connectors the caller has not yet authorized.
     pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
-    pub activity_tool_context: ToolActivityToolContext,
+    #[from_ref(skip)]
+    pub activity_service: Arc<ToolActivityReadService>,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    #[from_ref(skip)]
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     /// Shared cognition-backed generation and decisions, attributed per request.
     pub cognition_tool_context: ToolCognitionToolContext,
@@ -2110,6 +2173,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// The web search vendor behind `WebSearch` and `WebFetch`.
+    #[from_ref(skip)]
+    pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
     /// Shared admission for independently initiated AI work. Hosts must inject
     /// their configured service; request identity always comes from RequestContext.
     pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
@@ -2117,15 +2183,15 @@ pub struct ToolServiceContext {
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
     /// this context. Set per-session by the caller so AI calls made by tools
-    /// (e.g. subagents) are attributed to the feature that spawned them.
+    /// (e.g. GenerateObject) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
 }
 
 /// Pipedream discovery dependencies shared by chat tools.
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
 
 /// Wire connector discovery at the composition boundary.
@@ -2134,8 +2200,8 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 /// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
-    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
+    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
+    native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
@@ -2155,6 +2221,28 @@ impl FromRef<ToolServiceContext> for AnthropicToolContext {
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        Self {
+            service: Arc::new(web_search::domain::service::WebSearchService::new(
+                context.web_search_provider.clone(),
+                context.admission.clone(),
+                context.recorder.clone(),
+            )),
+            entity: context.usage_context.entity,
+        }
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolImageGenerationToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .image_generation_tool_context
+            .clone()
+            .with_agent_session(context.usage_context.agent_session_id)
     }
 }
 
@@ -2189,15 +2277,25 @@ impl ToolServiceContext {
     }
 
     /// Run the tools for `caller`, as the public MCP authenticated it: an
-    /// agent writes as itself; an MCP client writes as the Macro bot with its
-    /// name on the post ("via Claude Code"); a pasted API key writes as the
-    /// Macro bot.
-    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+    /// agent writes as itself, under its own name; an MCP client writes as the
+    /// Macro bot with its name on the post, shown as the author ("Claude Code ·
+    /// Agent"); a pasted API key writes as the Macro bot.
+    pub async fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
         match caller {
-            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
-            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
-            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
-                self
+            ai_toolset::ToolCaller::Agent(agent) => {
+                let name =
+                    agent_name::agent_name(self.bot_tool_context.service.as_ref(), *agent).await;
+                let context = self.with_actor(*agent);
+                match name {
+                    Some(name) => context.with_actor_name(&name),
+                    None => context,
+                }
+            }
+            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+                match caller.via() {
+                    Some(client) => self.with_via(client),
+                    None => self,
+                }
             }
         }
     }
@@ -2207,6 +2305,7 @@ impl ToolServiceContext {
     fn with_via(mut self, client: &str) -> Self {
         self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
         self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
+        self.document_tool_context = self.document_tool_context.with_via(client.to_owned());
         self
     }
 

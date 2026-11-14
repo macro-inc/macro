@@ -51,6 +51,37 @@ impl ContactsService for MockService {
     }
 }
 
+/// Echoes the limit it was given as that many people, so tests see the cap.
+impl PeopleSearchService for MockService {
+    async fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        if query.searchable().is_none() {
+            return Ok(Vec::new());
+        }
+        Ok((0..limit.get())
+            .map(|index| {
+                let user_id =
+                    MacroUserIdStr::try_from(format!("macro|person{index}@example.com")).unwrap();
+                PersonMatch {
+                    contact: crate::domain::models::contact::Contact {
+                        id: crate::domain::models::contact::ContactId::for_viewer(
+                            &viewer, &user_id,
+                        ),
+                        user_id,
+                        name: (index == 0).then(|| "Person Zero".to_string()),
+                    },
+                    is_teammate: index == 0,
+                    is_agent: index == 1,
+                }
+            })
+            .collect())
+    }
+}
+
 #[derive(Clone, Default)]
 struct FakeJwtValidator {
     validation_count: Arc<AtomicUsize>,
@@ -80,6 +111,7 @@ impl JwtValidator for FakeJwtValidator {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: "fusion-user-id".to_string(),
                 permissions: None,
@@ -269,4 +301,135 @@ async fn internal_request_without_an_identity_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(validator.validation_count(), 0);
+}
+
+fn search_request(query_string: &str) -> Request<Body> {
+    Request::get(format!("/contacts/search?{query_string}"))
+        .header(header::AUTHORIZATION, "Bearer found")
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn search_body(response: axum::response::Response) -> serde_json::Value {
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn search_returns_ranked_people_with_the_default_limit() {
+    let (api, _) = build_test_router(false);
+
+    let response = api.oneshot(search_request("query=pe")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    let people = body["people"].as_array().unwrap();
+    assert_eq!(people.len(), 20);
+    assert_eq!(
+        people[0],
+        serde_json::json!({
+            "userId": "macro|person0@example.com",
+            "name": "Person Zero",
+            "isTeammate": true,
+            "isAgent": false,
+        })
+    );
+    assert_eq!(
+        people[1],
+        serde_json::json!({
+            "userId": "macro|person1@example.com",
+            "name": null,
+            "isTeammate": false,
+            "isAgent": true,
+        })
+    );
+}
+
+#[tokio::test]
+async fn search_caps_the_limit_at_fifty_and_rejects_zero() {
+    let (api, _) = build_test_router(false);
+    let response = api
+        .clone()
+        .oneshot(search_request("query=pe&limit=500"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        search_body(response).await["people"]
+            .as_array()
+            .unwrap()
+            .len(),
+        50
+    );
+
+    let response = api
+        .clone()
+        .oneshot(search_request("query=pe&limit=7"))
+        .await
+        .unwrap();
+    assert_eq!(
+        search_body(response).await["people"]
+            .as_array()
+            .unwrap()
+            .len(),
+        7
+    );
+
+    let response = api
+        .oneshot(search_request("query=pe&limit=0"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn search_with_a_blank_or_short_query_returns_nobody() {
+    let (api, _) = build_test_router(false);
+    for query_string in ["query=", "query=%20%20", "query=p"] {
+        let response = api
+            .clone()
+            .oneshot(search_request(query_string))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{query_string}");
+        assert_eq!(
+            search_body(response).await,
+            serde_json::json!({"people": []})
+        );
+    }
+}
+
+#[tokio::test]
+async fn search_rate_limit_is_enforced() {
+    let (api, validator) = build_test_router(true);
+
+    let response = api.oneshot(search_request("query=pe")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(validator.validation_count(), 1);
+}
+
+#[tokio::test]
+async fn search_rejects_oversized_or_missing_queries_and_anonymous_callers() {
+    let (api, _) = build_test_router(false);
+    let long = "a".repeat(subsequence_match::MAX_QUERY_BYTES + 1);
+    let response = api
+        .clone()
+        .oneshot(search_request(&format!("query={long}")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let response = api
+        .clone()
+        .oneshot(search_request("limit=5"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let anonymous = Request::get("/contacts/search?query=pe")
+        .body(Body::empty())
+        .unwrap();
+    let response = api.oneshot(anonymous).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

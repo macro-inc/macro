@@ -1,7 +1,10 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestComputerSetup } from '@app/features/settings/computers/primitives/setup-request';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { analytics } from '@app/lib/analytics';
+import { paneRoute } from '@app/routes/app-route';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -31,6 +34,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -38,6 +42,7 @@ import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
 import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
@@ -269,6 +274,7 @@ function getSupportedHandler(
       })
       .with(
         'channel_invite',
+        'channel_access_requested',
         () =>
           async (lm: SplitManager, newSplit: boolean = false) =>
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
@@ -294,6 +300,27 @@ function getSupportedHandler(
             !isFeatureEnabled(enableWhatsappLinked))
         )
           return null;
+        // A runtime has no page of its own: its requests wait in its Share menu.
+        if (target.entityType === 'harness') {
+          const harnessId = target.entityId;
+          return async (lm: SplitManager, newSplit = false) =>
+            Telemetry.span(
+              'access_requests.notification.open',
+              async (span) => {
+                span.setAttr('entity.id', harnessId);
+                span.setAttr('entity.type', 'harness');
+                span.setAttr('notification.id', notification.id);
+                span.setAttr('notification.type', meta.tag);
+                span.setAttr('access_request.id', meta.content.requestId);
+                requestRuntimeShare(
+                  harnessId,
+                  meta.tag === 'entity_access_requested'
+                );
+                openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+              }
+            );
+        }
+        const sharedEntityType = target.entityType;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -353,15 +380,15 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'external_chat'
+                sharedEntityType === 'external_chat'
                   ? 'external_chat'
-                  : target.entityType === 'initiative'
+                  : sharedEntityType === 'initiative'
                     ? 'initiative'
                     : itemToBlockName({
                         type:
-                          target.entityType === 'email_thread'
+                          sharedEntityType === 'email_thread'
                             ? 'email'
-                            : target.entityType,
+                            : sharedEntityType,
                         fileType:
                           document?.fileType ??
                           entity?.fileType ??
@@ -379,9 +406,9 @@ function getSupportedHandler(
                   openShareModal({
                     id: target.entityId,
                     itemType:
-                      target.entityType === 'email_thread'
+                      sharedEntityType === 'email_thread'
                         ? 'email'
-                        : target.entityType,
+                        : sharedEntityType,
                     blockAlias: block,
                     name: meta.content.entityName,
                     owner: state.owner ?? undefined,
@@ -648,7 +675,113 @@ function getSupportedHandler(
         };
       })
       .with('inbox_reauth_required', () => null)
+      .with('routine_run_finished', () => {
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openContent(lm, routineContent(notification.entity_id), {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
+      // Signing in again happens on the computer's row in Settings → Runtimes.
+      .with(
+        'agent_sign_in_expiry',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({
+                    id: 'settings',
+                    params: { tab: 'runtimes' },
+                  }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
+      // Back into the computer's guided setup, at Bring your AI: a ready
+      // computer continues there, a failed one offers Retry setup. An agent
+      // teammate's computer has no setup of its own: a ready agent opens its
+      // DM, and a failed one its row in Members, which offers Retry.
+      .with('computer_setup', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'computer_setup') return null;
+        const computerId = meta.content.computerId;
+        const agent = meta.content.agent;
+        if (agent) {
+          const ready = meta.content.outcome.kind === 'ready';
+          return async (lm: SplitManager, newSplit = false) => {
+            if (!ready) {
+              openTeamMembersSettings(lm, {
+                newSplit,
+                sourceHandle,
+                onApplied,
+              });
+              return;
+            }
+            // Loaded on demand: the DM lookup pulls in the channel list.
+            const { openDirectMessage } = await import(
+              '@core/util/open-direct-message'
+            );
+            await openDirectMessage(cachedUserId(), agent.userId, (content) =>
+              openContent(lm, content, { newSplit, sourceHandle, onApplied })
+            );
+          };
+        }
+        return async (lm: SplitManager, newSplit = false) => {
+          requestComputerSetup(computerId);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
+      // Its machine has no page of its own; Settings → Runtimes points it out.
+      .with('runtime_access_removed', () => {
+        const harnessId = notification.entity_id;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestRuntimeShare(harnessId, false);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       .exhaustive(() => null)
+  );
+}
+
+/** Settings → Runtimes, where a runtime's sharing and access live. */
+export function openRuntimesSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
+  );
+}
+
+/** Settings → Members, where an agent teammate's row shows its setup. */
+export function openTeamMembersSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'team-members' } }),
+      },
+    },
+    options
   );
 }
 

@@ -10,6 +10,7 @@ use crate::domain::{
     },
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
+use call::domain::notification_events::{CallNotificationEvent, CallNotificationMetadata};
 use channel_sender::ChannelSender;
 use channels::domain::{
     broker_events::{
@@ -47,6 +48,98 @@ const COPIED_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
 const PERSONAL_WORKSPACE_ID: &str = "macro|reader@example.com";
 const BOT_PRINCIPAL_ID: &str = "bot|66666666-6666-6666-6666-666666666666";
 const TEAM_WORKSPACE_ID: &str = "33333333-3333-3333-3333-333333333333";
+const CALL_ID: &str = "0198a1b2-c3d4-7e5f-8061-728394a5b6c7";
+
+#[tokio::test]
+async fn private_call_invitation_reaches_only_the_recipient_workspace() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let mut metadata = CallNotificationMetadata::new(call_id, None);
+    metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+    metadata.invited_by = Some("macro|sender@example.com".to_string());
+    let event = Event::new(CallNotificationEvent::Invited(metadata));
+    let access = MockAccessService::with_users(Vec::new());
+    let repository = MockRepository::new(
+        vec![TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_recipient", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    service(access.clone(), repository.clone(), enqueuer.clone())
+        .ingest_call_notification_event(event)
+        .await
+        .unwrap();
+
+    assert!(lock(&access.calls).is_empty());
+    let state = lock(&repository.state);
+    assert!(state.workspace_calls.is_empty());
+    assert_eq!(
+        state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
+    );
+    drop(state);
+    let messages = lock(&enqueuer.state);
+    let delivered = &messages.attempted_messages[0].event;
+    assert_eq!(delivered.event_name, "call.invited");
+    assert_eq!(delivered.entity_id, CALL_ID);
+    assert!(
+        delivered.broker_envelope["metadata"]
+            .get("recipient_user_id")
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn private_call_event_without_recipient_is_never_fanned_out() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let event = Event::new(CallNotificationEvent::Invited(
+        CallNotificationMetadata::new(call_id, None),
+    ));
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    let result = service(access, repository.clone(), enqueuer.clone())
+        .ingest_call_notification_event(event)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(WebhookEventIngestionError::MissingCallRecipient)
+    ));
+    assert!(lock(&repository.state).match_calls.is_empty());
+    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
+}
+
+#[tokio::test]
+async fn public_call_event_resolves_current_call_accessors() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let event = Event::new(CallNotificationEvent::Ended(CallNotificationMetadata::new(
+        call_id, None,
+    )));
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![
+            PERSONAL_WORKSPACE_ID.to_string(),
+            TEAM_WORKSPACE_ID.to_string(),
+        ],
+        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    service(access.clone(), repository.clone(), enqueuer)
+        .ingest_call_notification_event(event)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(CALL_ID.to_string(), EntityType::Call)]
+    );
+    assert_eq!(lock(&repository.state).workspace_calls.len(), 1);
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().expect("test mutex is not poisoned")
@@ -481,6 +574,7 @@ fn document_event_cases() -> Vec<EventCase> {
         EventCase::new(
             TestBrokerEvent::Document(Event::with_schema_version(
                 DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                    appearance_change: None,
                     document_id: DOCUMENT_ID.to_string(),
                     owner: Owner::User(user_id("macro|owner@example.com")),
                     actor_user_id: Some(user_id("macro|editor@example.com")),
@@ -1396,6 +1490,7 @@ fn agent_trigger_requested_event()
 
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::Requested(AgentSessionRequestedEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
             repo_url: None,
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::new_from_uuid(
@@ -1403,6 +1498,7 @@ fn agent_trigger_requested_event()
             ),
             owner: "macro|asker@example.com".to_owned(),
             context: None,
+            runtime_user: None,
         }),
     ))
 }
@@ -1488,6 +1584,7 @@ fn agent_trigger_task_assignment_event() -> Event<AgentTriggerTopicEvent> {
 
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
+            origin: trigger_context::TriggerOrigin::Unknown,
             bot_id: bot_id::BotId::TEST_A,
             parent: messages::domain::models::MessageParent::parse("document", DOCUMENT_ID)
                 .unwrap(),
@@ -1903,4 +2000,82 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
             },
         ]),
     );
+}
+
+#[tokio::test]
+async fn user_picture_changed_reaches_only_the_changed_users_workspaces() {
+    let user = "macro|owner@example.com";
+    let event = Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id(user),
+            file_id: Some("file_1".to_string()),
+            url: Some("https://example.com/picture.png".to_string()),
+        },
+    ));
+    let expected_envelope = serde_json::to_value(&event).unwrap();
+    let access = MockAccessService::with_users(vec![user_id("macro|contact@example.com")]);
+    let repository = MockRepository::new(
+        vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_match", user)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_user_event(event.clone())
+        .await
+        .expect("user event is ingested");
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.workspace_calls, vec![vec![user_id(user)]]);
+    assert_eq!(
+        repository_state.match_calls,
+        vec![MatchCall {
+            workspace_ids: vec![user.to_string(), TEAM_WORKSPACE_ID.to_string()],
+            event_name: "user.picture_changed".to_string(),
+            entity_id: user.to_string(),
+        }]
+    );
+    drop(repository_state);
+
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let message = &enqueuer_state.attempted_messages[0];
+    assert_eq!(message.webhook_id, "wh_match");
+    assert_eq!(message.event.event_id, event.event_id.to_string());
+    assert_eq!(message.event.event_name, "user.picture_changed");
+    assert_eq!(message.event.entity_type, "user");
+    assert_eq!(message.event.entity_id, user);
+    assert_eq!(message.event.ordering_key, user);
+    assert_eq!(message.event.broker_envelope, expected_envelope);
+    assert_eq!(
+        message.event.broker_envelope["event_type"],
+        "user.picture_changed"
+    );
+}
+
+#[tokio::test]
+async fn user_event_workspace_resolution_failure_is_transient() {
+    let event = Event::new(user_events::UserTopicEvent::PictureChanged(
+        user_events::UserPictureChangedMetadata {
+            user_id: user_id("macro|owner@example.com"),
+            file_id: None,
+            url: None,
+        },
+    ));
+    let repository = MockRepository::new(Vec::new(), Vec::new());
+    lock(&repository.state).fail_workspace_resolution = true;
+    let service = service(
+        MockAccessService::with_users(Vec::new()),
+        repository,
+        MockEnqueuer::default(),
+    );
+
+    let error = service
+        .ingest_user_event(event)
+        .await
+        .expect_err("resolution failure surfaces");
+
+    assert!(error.is_transient());
 }

@@ -9,7 +9,7 @@ use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
-    MatchType, SearchOn, call_record::SimpleCallRecordSearchResponseBaseItem,
+    MatchType, SearchOn, TermMatching, call_record::SimpleCallRecordSearchResponseBaseItem,
     channel::SimpleChannelSearchReponseBaseItem, chat::SimpleChatSearchResponseBaseItem,
     document::SimpleDocumentSearchResponseBaseItem, email::SimpleEmailSearchResponseBaseItem,
     project::SimpleProjectSearchResponseBaseItem,
@@ -87,7 +87,7 @@ pub fn entity_filters_from_include(
 // TODO: query, match_type are common to all requests. consolidate.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
-    /// The search query string. Must be at least 3 characters.
+    /// The search query string. Must not be empty; one character is enough.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
@@ -114,6 +114,13 @@ pub struct UnifiedSearchRequest {
     /// their calendars.
     #[serde(default)]
     pub calendar_event_scope: CalendarEventSearchScope,
+
+    /// How a query of several terms matches document content. Defaults to
+    /// `all`, the strict AND that AI tools and the SDK rely on; the web
+    /// app's Search view asks for `dynamic`.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub term_matching: TermMatching,
 
     #[schemars(skip)]
     pub collapse: Option<bool>,

@@ -2,6 +2,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import {
   type Client,
+  cacheExchange,
   createClient,
   type Exchange,
   getOperationName,
@@ -12,8 +13,9 @@ import {
   createSignal,
   type ParentProps,
   Show,
+  Suspense,
 } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { filter, fromPromise, mergeMap, pipe } from 'wonka';
 
 const mocks = vi.hoisted(() => ({
@@ -39,11 +41,23 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({}));
 vi.mock('@ui', () => ({
   Button: (props: ParentProps) => <button>{props.children}</button>,
 }));
+vi.mock('@app/components/view-shell', () => ({
+  ViewBreadcrumbs: {
+    Item: (props: {
+      children: (item: { isActive(): boolean; onSelect(): void }) => unknown;
+    }) => props.children({ isActive: () => true, onSelect: () => {} }),
+    Button: (props: ParentProps) => <button>{props.children}</button>,
+  },
+}));
+vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('./primitives/project-collection', () => ({}));
 vi.mock('./project-collection-persistence', () => ({}));
 vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
+vi.mock('../entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
+}));
 vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
   TasksCreateAction: () => null,
 }));
@@ -85,6 +99,7 @@ import {
   type ProjectsContext,
   useProjectsContext,
 } from './context/projects-context';
+import { ProjectBreadcrumb } from './project-breadcrumb';
 import { Projects } from './projects';
 import { createProjectSources } from './queries/project-sources';
 
@@ -124,21 +139,27 @@ function setupGraphql() {
     completedTaskCount: 0,
     sharePermission: { id: 'share', owner: 'viewer', linkShare: 'DISABLED' },
   };
-  mocks.soup.mockImplementation(async (operation) => ({
-    operation,
-    stale: false,
-    hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        ...(['Initiative', 'InitiativeIdentity'].includes(
-          getOperationName(operation.query) ?? ''
-        )
-          ? { initiative }
-          : { soup: { nextCursor: 'next', items: [initiative] } }),
+  mocks.soup.mockImplementation(async (operation) => {
+    const requestedProject =
+      operation.variables?.initiativeId === 'other-project'
+        ? { ...initiative, id: 'other-project', displayName: 'Another project' }
+        : initiative;
+    return {
+      operation,
+      stale: false,
+      hasNext: false,
+      data: {
+        user: {
+          id: 'viewer',
+          ...(['Initiative', 'InitiativeIdentity'].includes(
+            getOperationName(operation.query) ?? ''
+          )
+            ? { initiative: requestedProject }
+            : { soup: { nextCursor: 'next', items: [initiative] } }),
+        },
       },
-    },
-  }));
+    };
+  });
   const exchange: Exchange = () => (operations) =>
     pipe(
       operations,
@@ -149,6 +170,7 @@ function setupGraphql() {
     url: 'http://test.invalid/graphql',
     exchanges: [exchange],
   });
+  return exchange;
 }
 const callsFor = (name: string) =>
   mocks.soup.mock.calls.filter(([op]) => getOperationName(op.query) === name);
@@ -198,10 +220,19 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   setEnabled(true);
   await vi.waitFor(() => expect(sources.detail.project()?.name).toBe('Launch'));
   await vi.waitFor(() => expect(sources.collection.rows()).toHaveLength(1));
+  expect(sources.detail.project()).toMatchObject({
+    taskCount: 1,
+    completedTaskCount: 0,
+  });
+  expect(sources.collection.rows()?.[0].project).toMatchObject({
+    taskCount: 1,
+    completedTaskCount: 0,
+  });
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(2);
+  // Nothing reads an open project again on a timer.
   await vi.advanceTimersByTimeAsync(30_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
@@ -214,7 +245,7 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  expect(callsFor('Initiative')).toHaveLength(2);
+  expect(callsFor('Initiative')).toHaveLength(1);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
   setEnabled(true);
@@ -222,6 +253,25 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     expect(mocks.soup.mock.calls.length).toBeGreaterThan(soupRequests)
   );
   expect(sources.detail.project()?.name).toBe('Launch');
+});
+
+it("names a route's project without the project's full read", async () => {
+  mocks.enabled = () => true;
+  setupGraphql();
+  const view = render(() => (
+    <ProjectBreadcrumb
+      entry={{
+        value: 'initiative:launch',
+        data: { type: 'initiative', id: 'launch' },
+      }}
+      order={1}
+    />
+  ));
+  await vi.waitFor(() =>
+    expect(view.getByRole('button').textContent).toBe('Launch')
+  );
+  expect(callsFor('Initiative')).toHaveLength(0);
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
 });
 
 it('keeps standalone source adapters enabled when no rollout gate is injected', async () => {
@@ -270,6 +320,7 @@ it('reads chip identity without the fields that check every task', async () => {
       id: 'launch',
       name: 'Launch',
       access: 'owner',
+      appearance: null,
     })
   );
   expect(callsFor('Initiative')).toHaveLength(0);
@@ -283,6 +334,46 @@ it('reads chip identity without the fields that check every task', async () => {
     'sharePermission',
   ])
     expect(selection).not.toContain(field);
+});
+
+it('reuses cached chip identities when virtual rows remount but still fetches misses', async () => {
+  const exchange = setupGraphql();
+  const client = createClient({
+    url: 'http://test.invalid/graphql',
+    exchanges: [cacheExchange, exchange],
+  });
+  const mount = (id: string) =>
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      return {
+        dispose,
+        query: createProjectIdentityQuery(
+          () => client,
+          () => 'viewer',
+          () => id
+        ),
+      };
+    });
+
+  const first = mount('launch');
+  await vi.waitFor(() => expect(first.query.data?.name).toBe('Launch'));
+  first.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+
+  const remounted = mount('launch');
+  expect(remounted.query.data?.name).toBe('Launch');
+  remounted.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(1);
+
+  const missing = mount('other-project');
+  await vi.waitFor(() =>
+    expect(missing.query.data).toMatchObject({
+      id: 'other-project',
+      name: 'Another project',
+    })
+  );
+  missing.dispose();
+  expect(callsFor('InitiativeIdentity')).toHaveLength(2);
 });
 
 function controlledClient() {
@@ -335,6 +426,41 @@ function controlledClient() {
   };
 }
 
+it('keeps the list mounted while a cold identity read settles', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  function Row() {
+    const query = createProjectIdentityQuery(
+      () => client,
+      () => 'viewer',
+      () => 'launch'
+    );
+    return <span>{query.data?.name ?? 'Loading'}</span>;
+  }
+  const view = render(() => (
+    <Suspense fallback={<span>Suspended</span>}>
+      <div data-testid="scroller">
+        <Row />
+      </div>
+    </Suspense>
+  ));
+  const scroller = view.getByTestId('scroller');
+  scroller.scrollTop = 480;
+  expect(view.queryByText('Suspended')).toBeNull();
+  requests[0].next(data);
+  expect(scroller.textContent).toBe('Launch');
+  expect(view.getByTestId('scroller')).toBe(scroller);
+  expect(scroller.scrollTop).toBe(480);
+  expect(view.queryByText('Suspended')).toBeNull();
+});
+
 it('keeps permission denials latched across cache hits and hides disabled detail identities', async () => {
   setupGraphql();
   const data = (
@@ -362,6 +488,10 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   expect(query.data).toBeUndefined();
   expect(query.error).toBe(denial);
   requests[0].next(data);
+  expect(query.data).toBeUndefined();
+  const recovery = query.refetch({ requestPolicy: 'network-only' });
+  requests[1].next(data);
+  await recovery;
   expect(query.data?.project.name).toBe('Launch');
   setViewer(undefined);
   expect(query.data).toBeUndefined();
@@ -370,4 +500,126 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   setId('');
   expect(query.data).toBeUndefined();
   expect(query.isSuccess).toBe(false);
+});
+
+it('settles a project the server cannot load as an error without data', () => {
+  const { client, requests } = controlledClient();
+  const reads = createRoot((dispose) => {
+    disposeSource = dispose;
+    return {
+      identity: createProjectIdentityQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+      detail: createProjectDetailQuery(
+        () => client,
+        () => 'viewer',
+        () => 'deleted'
+      ),
+    };
+  });
+  const notFound = new CombinedError({
+    graphQLErrors: [
+      {
+        message: 'initiative not found',
+        path: ['user', 'initiative'],
+        extensions: { code: 'NOT_FOUND' },
+      },
+    ],
+  });
+  expect(requests).toHaveLength(2);
+  for (const request of requests)
+    request.next({ user: { id: 'viewer' } }, notFound);
+  for (const query of [reads.identity, reads.detail]) {
+    expect(query.data).toBeUndefined();
+    expect(query.isPending).toBe(false);
+    expect(query.isError).toBe(true);
+  }
+});
+
+it('reauthorizes a denied identity after remount without exposing cached data', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const mount = () =>
+    createRoot((dispose) => {
+      onTestFinished(dispose);
+      return {
+        dispose,
+        query: createProjectIdentityQuery(
+          () => client,
+          () => 'viewer',
+          () => 'launch'
+        ),
+      };
+    });
+  const first = mount();
+  requests[0].next(data);
+  expect(first.query.data?.name).toBe('Launch');
+  const denial = new CombinedError({
+    graphQLErrors: [{ message: 'Denied', extensions: { code: 'FORBIDDEN' } }],
+  });
+  requests[0].next(undefined, denial);
+  expect(first.query.data).toBeUndefined();
+  first.dispose();
+
+  const second = mount();
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data, undefined, true);
+  expect(second.query.data).toBeUndefined();
+  expect(second.query.error).toBe(denial);
+  requests[1].next(data);
+  expect(second.query.data?.name).toBe('Launch');
+});
+
+it('immediately reauthorizes another viewer cache hit once per activation', async () => {
+  setupGraphql();
+  const data = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeIdentityDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const [viewer, setViewer] = createSignal('next-viewer');
+  const [gate, setGate] = createSignal({ enabled: true });
+  const query = createRoot((dispose) => {
+    onTestFinished(dispose);
+    return createProjectIdentityQuery(
+      () => client,
+      viewer,
+      () => 'launch',
+      () => gate().enabled
+    );
+  });
+  requests[0].next(data, undefined, true);
+  expect(query.data).toBeUndefined();
+  await vi.waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+  requests[1].next(data, undefined, true);
+  expect(query.data).toBeUndefined();
+  expect(requests).toHaveLength(2);
+  setGate({ enabled: true });
+  expect(requests).toHaveLength(2);
+  requests[1].next({ user: { ...data.user, id: 'next-viewer' } });
+  expect(query.data?.name).toBe('Launch');
+
+  setViewer('last-viewer');
+  expect(query.data).toBeUndefined();
+  const recovery = requests.at(-1)!;
+  expect(recovery.operation.context.requestPolicy).toBe('network-only');
+  recovery.next(
+    undefined,
+    new CombinedError({ networkError: new Error('Offline') })
+  );
+  expect(query.data).toBeUndefined();
+  expect(requests.at(-1)).toBe(recovery);
 });

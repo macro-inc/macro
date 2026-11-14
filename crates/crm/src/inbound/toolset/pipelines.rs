@@ -1,6 +1,7 @@
 //! Agent tools over CRM pipelines, in the CRM's own words: pipelines hold
-//! entries, each entry tracks a company or contact, and fields such as Stage,
-//! Owner and Revenue belong to the entry. Every tool is a thin adapter over
+//! entries, each entry tracks a company or contact (a generic pipeline's track
+//! nothing), and fields such as Stage, Owner and Revenue belong to the entry.
+//! Every tool is a thin adapter over
 //! [`PipelineWorkflowService`], which resolves names and labels against the
 //! pipeline's schema and writes through the pipeline's own access boundary.
 
@@ -301,10 +302,13 @@ pub struct ToolField {
     /// Whether the user cannot write it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub read_only: bool,
+    /// For monetary amounts, the field that stores this entry's currency code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub currency_field: Option<String>,
 }
 
-impl From<&PipelineField> for ToolField {
-    fn from(field: &PipelineField) -> Self {
+impl ToolField {
+    fn for_pipeline(field: &PipelineField, overview: &PipelineOverview) -> Self {
         Self {
             name: field.name.clone(),
             field_type: field.kind.into(),
@@ -314,8 +318,11 @@ impl From<&PipelineField> for ToolField {
                 .iter()
                 .map(|(_, label)| label.clone())
                 .collect(),
-            required: field.required,
+            required: overview.requires(field),
             read_only: !field.writable,
+            currency_field: overview
+                .currency_field(field)
+                .map(|currency| currency.name.clone()),
         }
     }
 }
@@ -340,13 +347,16 @@ pub struct ToolPipeline {
     pub id: Uuid,
     /// Its name.
     pub name: String,
-    /// What each entry tracks: `company` or `contact`.
-    pub tracks: ToolRecordType,
+    /// What each entry tracks: `company` or `contact`. Missing for a generic
+    /// pipeline, whose entries are free-form rows that track no CRM record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracks: Option<ToolRecordType>,
     /// What the user may do with it.
     pub access: ToolPipelineAccess,
     /// Whether the owner's team may edit it; otherwise it is private.
     pub shared_with_team: bool,
-    /// Its fields in column order; the first names the tracked record.
+    /// Its fields in column order; the first names the tracked record, or in a
+    /// generic pipeline the entry itself.
     pub fields: Vec<ToolField>,
     /// Its version now; pass as `baseVersion` to refuse an update if the
     /// pipeline changed in between.
@@ -359,14 +369,18 @@ impl From<&PipelineOverview> for ToolPipeline {
         Self {
             id: pipeline.id,
             name: pipeline.name.clone(),
-            tracks: pipeline.record_type.into(),
+            tracks: pipeline.record_type.map(Into::into),
             access: match overview.pipeline.grant {
                 AccessLevel::View | AccessLevel::Comment => ToolPipelineAccess::View,
                 AccessLevel::Edit => ToolPipelineAccess::Edit,
                 AccessLevel::Owner => ToolPipelineAccess::Owner,
             },
             shared_with_team: pipeline.sharing == PipelineSharing::Team,
-            fields: overview.fields.iter().map(ToolField::from).collect(),
+            fields: overview
+                .fields
+                .iter()
+                .map(|field| ToolField::for_pipeline(field, overview))
+                .collect(),
             version: overview.version.0,
         }
     }
@@ -402,18 +416,23 @@ impl From<&PipelineRecord> for ToolRecord {
 pub struct ToolEntry {
     /// Pass as `entryId`.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: ToolRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<ToolRecord>,
     /// Its filled-in fields by name: text, a number, true/false, a date, or a
     /// list when a field holds several values. People are macro| user ids.
     pub fields: BTreeMap<String, serde_json::Value>,
+    /// Currency codes keyed by monetary field name, including renamed fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub currencies: BTreeMap<String, String>,
 }
 
 impl From<&PipelineEntryView> for ToolEntry {
     fn from(entry: &PipelineEntryView) -> Self {
         Self {
             entry_id: entry.entry_id.into_uuid(),
-            record: (&entry.record).into(),
+            record: entry.record.as_ref().map(Into::into),
+            currencies: entry.currencies.clone(),
             fields: entry
                 .fields
                 .iter()
@@ -444,8 +463,11 @@ pub(crate) fn json(value: &FieldValue) -> serde_json::Value {
     }
 }
 
-/// The record a summary line names.
-pub(crate) fn record_name(record: &ToolRecord) -> String {
+/// What a summary line calls an entry: its record, or its id in a generic pipeline.
+pub(crate) fn entry_name(record: Option<&ToolRecord>, entry_id: Uuid) -> String {
+    let Some(record) = record else {
+        return format!("entry {entry_id}");
+    };
     record
         .name
         .clone()
@@ -456,7 +478,7 @@ pub(crate) fn record_name(record: &ToolRecord) -> String {
 /// A workflow failure in words the model can act on.
 pub(crate) fn workflow_error(error: WorkflowError) -> ToolCallError {
     let description = match &error {
-        WorkflowError::Invalid(message) => message.clone(),
+        WorkflowError::Invalid(message) | WorkflowError::Forbidden(message) => message.clone(),
         WorkflowError::NoTeam => {
             "The user is not in a team, so they have no CRM pipelines.".to_owned()
         }

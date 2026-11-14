@@ -52,7 +52,8 @@ vi.mock('@app/features/soup/search/context', () => ({
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
 vi.mock('@queries/soup/search', () => ({
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -324,6 +325,28 @@ function mount(search = '') {
 describe('Email list query transitions', () => {
   const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
 
+  it.each(['spam', 'trash'] as const)(
+    'ignores stale search and isolates %s discovery and retained previews',
+    (tab) => {
+      const root = mount('invoice');
+      root.setState({ tab, facets: { read: ['unread'] } });
+      root.setEntities([email('folder-result')]);
+      expect(ids(root.source)).toEqual(['folder-result']);
+      for (const [args, options] of vi.mocked(useSoupAstItemsQuery).mock
+        .calls) {
+        const request = typeof args === 'function' ? args() : args;
+        const settings = options?.();
+        expect(request.transport).toBe('rest');
+        expect(settings?.keepPreviousData).toBe(false);
+        expect(settings?.meta?.normalize).toBe(false);
+        expect(settings?.meta?.insertFilter?.({} as never)).toBe(false);
+      }
+      for (const [, options] of searchQueryMock.mock.calls) {
+        expect(options().enabled).toBe(false);
+      }
+    }
+  );
+
   it('refreshes the current alias membership readers after refreshing search, but not inactive readers', async () => {
     const root = mount('invoice');
     root.setSearchHasMore(false);
@@ -502,6 +525,7 @@ describe('Email list query transitions', () => {
             importance: 87,
             needsReply: true,
             needsFollowUp: false,
+            importanceTrend: 'FLAT',
           },
         },
       } as EmailDataSourceItem,
@@ -566,7 +590,33 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['archived', 'active']);
   });
 
-  it('trims archived search results to done threads', () => {
+  it('offers no inbox pages while the search text holds nothing the service can search for', async () => {
+    const { source, query } = mount('"');
+    expect(source.items()).toEqual([]);
+    expect(source.hasMore()).toBe(false);
+    expect(source.isLoading()).toBe(false);
+    await source.loadMore();
+    expect(query.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('pages past search hits the tab drops instead of offering Load More over no rows', async () => {
+    const { source, setState, setSearchEntities, searchNext } =
+      mount('invoice');
+    searchNext.mockImplementationOnce(async () => {
+      setSearchEntities([
+        { ...email('active'), done: false },
+        { ...email('archived'), done: true },
+      ]);
+    });
+    batch(() => {
+      setState('tab', 'archived');
+      setSearchEntities([{ ...email('active'), done: false }]);
+    });
+    await vi.waitFor(() => expect(ids(source)).toEqual(['archived']));
+    expect(searchNext).toHaveBeenCalledOnce();
+  });
+
+  it('trims archived search results to done threads', async () => {
     const { source, setState, setSearchEntities } = mount('invoice');
     const archived = { ...email('archived'), done: true };
     const active = { ...email('active'), done: false };
@@ -579,7 +629,8 @@ describe('Email list query transitions', () => {
 
     setSearchEntities([{ ...archived, done: false }, active]);
     expect(ids(source)).toEqual([]);
-    expect(source.isLoading()).toBe(false);
+    await vi.waitFor(() => expect(source.isLoading()).toBe(false));
+    expect(source.hasMore()).toBe(false);
   });
 
   it('does not suspend on pending native data while its fetch is paused', () => {

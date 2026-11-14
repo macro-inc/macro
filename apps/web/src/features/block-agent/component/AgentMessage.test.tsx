@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { publishSessionActivity } from '@core/agent-session/session-activity';
 import type {
   FoldedMessage,
   MessagePart,
@@ -114,27 +115,50 @@ vi.mock('../ui', () => ({
       {props.notice.title}
     </div>
   ),
-}));
-vi.mock('../views/LiveToolGroup', () => ({
-  LiveToolGroup: (props: {
+  ToolGroup: (props: {
     count: number;
-    active: boolean;
-    activeIndex?: number;
+    failed?: number;
+    live?: boolean;
+    steps?: readonly { label: string; status: string }[];
+    summary?: string;
     children: JSX.Element;
   }) => (
     <div
-      data-active={String(props.active)}
       data-count={props.count}
-      data-active-index={props.activeIndex}
+      data-failed={props.failed ?? 0}
+      data-live-line={String(props.live ?? false)}
+      data-steps={props.steps
+        ?.map((step) => `${step.label}:${step.status}`)
+        .join('|')}
+      data-summary={props.summary}
       data-testid="group"
     >
       {props.children}
     </div>
   ),
 }));
+const programs = vi.hoisted(() => ({
+  steps: {} as Record<string, number>,
+  failures: {} as Record<string, number>,
+  activity: {} as Record<
+    string,
+    { id: number; label: string; status: string }[]
+  >,
+}));
+vi.mock('../views/code-execution-record', () => ({
+  useCodeExecutionRecord: (part: () => { id: string }) => ({
+    steps: () => programs.steps[part().id] ?? 0,
+    failures: () => programs.failures[part().id] ?? 0,
+    record: () => {
+      const activity = programs.activity[part().id];
+      return activity ? { activity } : undefined;
+    },
+  }),
+}));
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  publishSessionActivity('session', null);
   renderTelemetry.context.mockReset();
   renderTelemetry.observe.mockReset();
   cleanup();
@@ -159,15 +183,33 @@ const permission = (toolCall: string): MessagePart => ({
   options: [],
   outcome: { kind: 'pending' },
 });
+type Row = FoldedMessage['segments'][number]['rows'][number];
+const row = (
+  id: string,
+  label: string,
+  status: Row['status'] = 'completed',
+  detail: string | null = null
+): Row => ({ id, label, detail, status, card: null });
 const message = (
   parts: MessagePart[],
-  stop: FoldedMessage['stop'] = { kind: 'end_turn' }
+  stop: FoldedMessage['stop'] = { kind: 'end_turn' },
+  rows: Row[] = []
 ): FoldedMessage => ({
   agentSessionId: 'session',
+  key: '0:agent',
   requestId: null,
   pending: false,
   postedAt: null,
-  segments: [],
+  segments: [
+    {
+      index: 0,
+      kind: 'activity',
+      start: 0,
+      end: parts.length,
+      sealed: stop !== null,
+      rows,
+    },
+  ],
   phase: null,
   turn: 0,
   author: { kind: 'agent' },
@@ -265,13 +307,38 @@ describe('Message tool grouping', () => {
     ));
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.active).toBe('false');
-    expect(group.dataset.activeIndex).toBeUndefined();
+    expect(group.dataset.liveLine).toBe('false');
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
       '3',
     ]);
+    expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
+      'Looking.',
+      'Done.',
+    ]);
+  });
+
+  it('keeps one group across blank lines and thoughts between its calls', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          text('Looking.'),
+          tool('read'),
+          text('\n'),
+          { kind: 'thought', text: 'Next file.' },
+          text('\n\n'),
+          tool('edit'),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(group.dataset.count).toBe('2');
+    // The thought is inside the fold, not a visible row between two groups.
+    expect(group.contains(view.getByTestId('thought'))).toBe(true);
     expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
       'Looking.',
       'Done.',
@@ -351,7 +418,7 @@ describe('Message tool grouping', () => {
           tool('display', {
             name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
             status: 'pending',
-            detail: { kind: 'macro', input: null, output: null, error: null },
+            detail: { kind: 'view', view: null, error: null },
           }),
           tool('c'),
           tool('d'),
@@ -381,27 +448,97 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('group')).toEqual(groups);
   });
 
-  it('reads as active while a call in the run is still running', () => {
+  it('is the live line while a call in the run is still running', () => {
     const view = render(() => (
       <Message
         message={message([tool('a'), tool('b', { status: 'running' })], null)}
         inFlight
       />
     ));
-    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
   });
 
-  it('follows unfinished work even when later calls have completed', () => {
+  it('names each call by its fold row and what it acted on', () => {
     const view = render(() => (
       <Message
         message={message(
           [tool('slow', { status: 'running' }), tool('fast')],
+          null,
+          [
+            row('slow', 'Reading', 'running', 'slow.rs'),
+            row('fast', 'Read', 'completed', 'fast.rs'),
+          ]
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.steps).toBe(
+      'Reading slow.rs:running|Read fast.rs:completed'
+    );
+  });
+
+  it('puts the session status line on the live run only', () => {
+    publishSessionActivity('session', 'Checking the launch plan');
+    const view = render(() => (
+      <Message
+        message={message([tool('a'), text('So far.'), tool('b')], null)}
+        inFlight
+      />
+    ));
+    const groups = view.getAllByTestId('group');
+    expect(groups.map((group) => group.dataset.liveLine)).toEqual([
+      'false',
+      'true',
+    ]);
+    expect(groups.map((group) => group.dataset.summary)).toEqual([
+      undefined,
+      'Checking the launch plan',
+    ]);
+  });
+
+  it('keeps an earlier run settled when the log left a call in it running', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [tool('a', { status: 'running' }), text('Meanwhile.'), tool('b')],
           null
         )}
         inFlight
       />
     ));
-    expect(view.getByTestId('group').dataset.activeIndex).toBe('0');
+    expect(
+      view.getAllByTestId('group').map((group) => group.dataset.liveLine)
+    ).toEqual(['false', 'true']);
+  });
+
+  it('stays live while one of its calls waits on a permission', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [tool('a'), tool('b', { status: 'running' }), permission('b')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
+    expect(view.getByTestId('permission')).toBeTruthy();
+    expect(view.queryByTestId('working')).toBeNull();
+  });
+
+  it('counts the failed calls of a settled run', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('a'),
+          tool('b', { status: 'failed' }),
+          tool('c', { status: 'failed' }),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('group').dataset.failed).toBe('2');
   });
 
   it('keeps delegated agents visible between tool bursts', () => {
@@ -447,7 +584,7 @@ describe('Message tool grouping', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('group').dataset.active).toBe('false');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('false');
     expect(view.queryByTestId('working')).toBeNull();
   });
 
@@ -467,7 +604,6 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.activeIndex).toBeUndefined();
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -512,15 +648,15 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
   });
 
-  it('keeps completed batches inactive even at the live tail', () => {
+  it('stays live between calls at the tail of an open turn', () => {
     const view = render(() => (
       <Message message={message([tool('a'), tool('b')], null)} inFlight />
     ));
-    expect(view.getByTestId('group').dataset.activeIndex).toBeUndefined();
-    expect(view.getByTestId('group').dataset.active).toBe('false');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
+    expect(view.queryByTestId('working')).toBeNull();
   });
 
-  it('preserves unfinished call status when another part follows the group', () => {
+  it('settles once prose follows, leaving its calls their own status', () => {
     const view = render(() => (
       <Message
         message={message(
@@ -530,8 +666,7 @@ describe('Message tool grouping', () => {
         inFlight
       />
     ));
-    expect(view.getByTestId('group').dataset.active).toBe('true');
-    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('false');
     expect(view.getAllByTestId('tool').map((row) => row.dataset.live)).toEqual([
       'true',
       'true',
@@ -539,15 +674,196 @@ describe('Message tool grouping', () => {
   });
 });
 
+describe('Message tool runs', () => {
+  const program = (
+    id: string,
+    status: 'running' | 'completed' = 'completed'
+  ): MessagePart =>
+    tool(id, {
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+      status,
+    });
+  const lookup = (id: string, name: string): MessagePart =>
+    tool(id, { name: { kind: 'mcp', server: 'macro_internal', tool: name } });
+
+  it('counts one group per segment: shown calls and program steps, never lookups or programs', () => {
+    programs.steps.first = 5;
+    programs.steps.second = 2;
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            lookup('load', 'LoadTools'),
+            program('first'),
+            tool('read'),
+            program('second'),
+          ],
+          null
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(view.getByTestId('group').dataset.count).toBe('8');
+    expect(view.getAllByTestId('tool').map((row) => row.textContent)).toEqual([
+      'first',
+      'read',
+      'second',
+    ]);
+  });
+
+  it('folds programs and the thoughts between them before their records load', () => {
+    const thought = (value: string): MessagePart => ({
+      kind: 'thought',
+      text: value,
+    });
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            text('Looking.'),
+            program('find'),
+            thought('Found the thread.'),
+            program('read'),
+            text('\n'),
+            thought('Now the draft.'),
+            program('draft', 'completed'),
+            text('Done.'),
+          ],
+          { kind: 'end_turn' },
+          [
+            row('find:0', 'Search email'),
+            row('read:0', 'Read email thread'),
+            row('read:1', 'Read attachment'),
+            row('draft', 'Workspace step failed', 'failed'),
+          ]
+        )}
+        inFlight={false}
+      />
+    ));
+    // No saved record yet: the fold's receipt rows stand for each program.
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('4');
+    expect(group.dataset.failed).toBe('1');
+    expect(
+      view.getAllByTestId('thought').every((row) => group.contains(row))
+    ).toBe(true);
+  });
+
+  it("names a running program's observed operations ahead of its receipt", () => {
+    programs.steps.live = 2;
+    programs.activity.live = [
+      { id: 0, label: 'Searched documents', status: 'completed' },
+      { id: 1, label: 'Reading a document', status: 'running' },
+    ];
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            tool('a'),
+            program('live', 'running'),
+          ],
+          null,
+          [
+            row('a', 'Read', 'completed', 'a.rs'),
+            row('live', 'Working in your workspace', 'running'),
+          ]
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.steps).toBe(
+      'Read a.rs:completed|Searched documents:completed|Reading a document:running'
+    );
+  });
+
+  it("counts a program's failed steps with the run's failed calls", () => {
+    programs.steps.timedOut = 1;
+    programs.failures.timedOut = 1;
+    programs.steps.partly = 3;
+    programs.failures.partly = 1;
+    const view = render(() => (
+      <Message
+        message={message([
+          program('timedOut'),
+          tool('a', { status: 'failed' }),
+          program('partly'),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('5');
+    expect(group.dataset.failed).toBe('3');
+  });
+
+  it('opens a live run before its first call names itself', () => {
+    const view = render(() => (
+      <Message
+        message={message([lookup('search', 'SearchTools')], null)}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.steps).toBe('Working:running');
+  });
+});
+
 describe('Message working tail', () => {
-  it('names the work after the last part of an open turn', () => {
+  it('lets the live run stand for the working row', () => {
     const view = render(() => (
       <Message
         message={message([text('Looking.'), tool('a')], null)}
         inFlight
       />
     ));
-    expect(view.getByTestId('working').textContent).toBe('Running tools');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
+    expect(view.queryByTestId('working')).toBeNull();
+  });
+
+  it('reads as working after a call that stands outside the runs', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('a'),
+            tool('display', {
+              name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+              detail: { kind: 'view', view: null, error: null },
+            }),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.liveLine).toBe('false');
+    expect(view.getByTestId('working').textContent).toBe('Working');
+  });
+
+  it('reads as working when only a settled run still has a call out', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('a', { status: 'running' }),
+            text('Here is what I found.'),
+            tool('display', {
+              name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+              detail: { kind: 'view', view: null, error: null },
+            }),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    // The earlier run reads as settled, so it can't be the turn's indicator.
+    expect(view.getByTestId('group').dataset.liveLine).toBe('false');
+    expect(view.getByTestId('working').textContent).toBe('Working');
   });
 
   it('does not duplicate the active tool or group with a working shimmer', () => {
@@ -557,7 +873,7 @@ describe('Message working tail', () => {
         inFlight
       />
     ));
-    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
     expect(view.queryByTestId('working')).toBeNull();
   });
 
@@ -568,7 +884,7 @@ describe('Message working tail', () => {
         inFlight
       />
     ));
-    expect(view.getByTestId('group').dataset.active).toBe('true');
+    expect(view.getByTestId('group').dataset.liveLine).toBe('true');
     expect(view.queryByTestId('working')).toBeNull();
   });
 });
@@ -641,7 +957,7 @@ describe('Message thought shimmer', () => {
     ]);
   });
 
-  it('shimmers only the trailing thought of an open turn', () => {
+  it('folds the trailing thought into the run, whose live line says Thinking', () => {
     const view = render(() => (
       <Message
         message={message(
@@ -650,17 +966,21 @@ describe('Message thought shimmer', () => {
             tool('read'),
             thought('still weighing this'),
           ],
-          null
+          null,
+          [row('read', 'Read', 'completed', 'read.rs')]
         )}
         inFlight
       />
     ));
+    const group = view.getByTestId('group');
     const rows = view.getAllByTestId('thought');
     expect(rows.map((el) => el.textContent)).toEqual([
       'already decided',
       'still weighing this',
     ]);
+    expect(rows.every((el) => group.contains(el))).toBe(true);
     expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
+    expect(group.dataset.steps).toBe('Read read.rs:completed|Thinking:running');
   });
 
   it('settles the trailing thought of an unclosed turn the session is not working on', () => {

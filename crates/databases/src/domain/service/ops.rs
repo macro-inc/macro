@@ -21,6 +21,7 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 
 use super::*;
 use crate::domain::catalog::{ColumnEntry, StorageTable};
+use crate::domain::derivation::Derivation;
 use crate::domain::journal::{JournalPlan, Restoration};
 use crate::domain::models::{AppliedOps, CommittedChange};
 use crate::domain::models::{
@@ -183,10 +184,12 @@ where
             now: models_databases::views::written_at(),
             related: Vec::new(),
             written_rows: 0,
+            minted_rows: HashSet::new(),
             written_tables: HashSet::new(),
             created_tables: HashSet::new(),
             changed_options: HashSet::new(),
             restoration: restoration.clone(),
+            rederived: Vec::new(),
         };
         let writes = ops
             .iter()
@@ -215,6 +218,7 @@ where
                 ),
                 acting_bot: viewer.acting_bot,
             },
+            derivations: planner.derivations(),
         };
         Ok((writes, planner))
     }
@@ -821,6 +825,7 @@ fn refuse_taken(op: usize, id: TakenId) -> DatabaseError {
         TakenId::Column(id) => ("a column", "column", Some(id), id.into_uuid()),
         TakenId::Option(id) => ("an option", "option", None, id.into_uuid()),
         TakenId::View(id) => ("a view", "view", None, id.into_uuid()),
+        TakenId::Row(id) => ("a row", "row", None, id.into_uuid()),
     };
     DatabaseError::InvalidOp(OpRefusal {
         op,
@@ -919,6 +924,8 @@ pub(super) struct Planner {
     now: DateTime<Utc>,
     related: Vec<RelatedRow>,
     written_rows: usize,
+    /// The row ids an insert so far minted.
+    minted_rows: HashSet<RowId>,
     /// The tables whose rows an op so far wrote.
     written_tables: HashSet<TableId>,
     /// The tables an op so far created.
@@ -927,6 +934,9 @@ pub(super) struct Planner {
     changed_options: HashSet<PropertyDefinitionId>,
     /// What the batch's row inserts put back and its type changes bind back.
     restoration: Restoration,
+    /// The columns whose formula, type or creation changes what the
+    /// derived columns reading them hold on every row.
+    rederived: Vec<(TableId, ColumnId)>,
 }
 
 /// Where in the batch a cell is: its op, the row's index within the op
@@ -945,6 +955,25 @@ impl Place {
 }
 
 impl Planner {
+    /// The derived columns of each table, as the batch leaves it, that read
+    /// a column the batch retyped or that the batch created or gave a new
+    /// formula.
+    fn derivations(&self) -> Vec<Derivation> {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                self.rederived
+                    .iter()
+                    .any(|(table, _)| *table == entry.table.id)
+            })
+            .filter_map(|entry| {
+                Derivation::reading(&catalog::engine_table(entry, ""), |column| {
+                    self.rederived.contains(&(entry.table.id, column.placement))
+                })
+            })
+            .collect()
+    }
+
     pub(super) fn finish(
         &self,
         entries: &[StorageTable],

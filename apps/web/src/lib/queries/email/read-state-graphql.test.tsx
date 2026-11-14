@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountEmailMutation } from './tests/mutation';
 
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   legacyPatch: vi.fn(),
   graphqlMutation: vi.fn(),
   refresh: vi.fn(),
+  refetch: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
@@ -33,7 +34,7 @@ vi.mock('../client', () => ({
 }));
 vi.mock('../soup/cache', () => ({
   optimisticUpdateSoupEntity: mocks.legacyPatch,
-  refetchSoupEntity: vi.fn(),
+  refetchSoupEntity: mocks.refetch,
 }));
 vi.mock('../soup/graphql/active-queries', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../soup/graphql/active-queries')>()),
@@ -67,7 +68,9 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { emailKeys } from './keys';
+import { markEmailThreadSeen } from './read-state';
 import {
   trackExternalThreadArchive,
   useMarkThreadAsSeenMutation,
@@ -141,6 +144,20 @@ describe('email read state with GraphQL Soup', () => {
     'propagates isRead=$read before the request settles (GraphQL=$graphql)',
     async ({ read, graphql }) => {
       mocks.graphqlEnabled = graphql;
+      const folderKeys = ['spam', 'trash'].map(
+        (emailView) =>
+          soupKeys.astItems({
+            params: {},
+            body: { emailView },
+            transport: 'rest',
+          }).queryKey
+      );
+      const allKey = soupKeys.astItems({
+        params: {},
+        body: { emailView: 'all' },
+      }).queryKey;
+      for (const key of [...folderKeys, allKey])
+        client.setQueryData(key, { pages: [] });
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -211,8 +228,11 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      // The cached record carries the change to every list.
+      // Shared-cache lists stay local; isolated folder previews need a new read.
       expect(mocks.refresh).not.toHaveBeenCalled();
+      for (const key of folderKeys)
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
     }
   );
 
@@ -339,4 +359,55 @@ describe('email read state with GraphQL Soup', () => {
       }
     }
   );
+});
+
+describe('row-open email read operation', () => {
+  it('patches the REST row synchronously, preserves inbox targeting and refreshes only the failed thread', async () => {
+    mocks.graphqlEnabled = false;
+    const folderKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'spam' },
+      transport: 'rest',
+    }).queryKey;
+    const allKey = soupKeys.astItems({
+      params: {},
+      body: { emailView: 'all' },
+    }).queryKey;
+    client.setQueryData(folderKey, { pages: [] });
+    client.setQueryData(allKey, { pages: [] });
+    const pending = Promise.withResolvers<ReturnType<typeof ok<void>>>();
+    mocks.markSeen.mockReturnValueOnce(pending.promise);
+    const request = markEmailThreadSeen({
+      threadId: 'thread',
+      linkId: 'secondary-inbox',
+    });
+    expect(mocks.legacyPatch).toHaveBeenCalledExactlyOnceWith({
+      tag: 'emailThread',
+      data: { id: 'thread', isRead: true },
+      frecency_score: 0,
+    });
+    expect(mocks.markSeen).toHaveBeenCalledExactlyOnceWith(
+      { thread_id: 'thread' },
+      'secondary-inbox'
+    );
+    pending.resolve(ok(undefined));
+    await request;
+    expect(mocks.refetch).not.toHaveBeenCalled();
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+
+    client.setQueryData(folderKey, { pages: [] });
+    mocks.markSeen.mockResolvedValueOnce(
+      err([{ code: 'NETWORK', message: 'offline' }])
+    );
+    await expect(
+      markEmailThreadSeen({ threadId: 'thread', linkId: 'secondary-inbox' })
+    ).rejects.toThrow('offline');
+    expect(mocks.refetch).toHaveBeenCalledExactlyOnceWith(
+      'thread',
+      'emailThread'
+    );
+    expect(client.getQueryState(folderKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(allKey)?.isInvalidated).toBe(false);
+  });
 });

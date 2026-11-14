@@ -11,6 +11,7 @@ import type { CreateAgentSessionRequestModel } from './createAgentSessionRequest
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestPromptActionId } from './createAgentSessionRequestPromptActionId';
+import type { CreateAgentSessionRequestPromptClientId } from './createAgentSessionRequestPromptClientId';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
@@ -25,9 +26,10 @@ external session: the runtime is the bot operator's, so the caller has to
 say which bot and which directory, and must own that bot. Omitting it asks
 for a managed session, whose runtime this deployment provisions. A managed
 request may select an authorized persisted persona with `botId`; omitting
-it uses the deployment's default coding persona. Fields describing someone
-else's runtime must still be omitted rather than quietly ignored. Mixing
-the two shapes is refused rather than guessed at.
+it uses the deployment's default coding persona, or Cursor when `repoUrl`
+is set. Fields describing someone else's runtime must still be omitted
+rather than quietly ignored. Mixing the two shapes is refused rather
+than guessed at.
 
 Clients serialize this, so both derives are used.
  */
@@ -35,9 +37,9 @@ export interface CreateAgentSessionRequest {
   /** Bot the session runs for. On a managed request this optionally selects
 a persisted persona the user owns, may use through team membership, or
 can `@` mention in a shared channel; omitting it uses the deployment's
-default coding persona. On an external request, bot callers may omit it
-(their own identity is used) and must not name another bot; user callers
-must supply a bot they own. */
+default coding persona, or Cursor when `repoUrl` is set. On an
+external request, bot callers may omit it (their own identity is used)
+and must not name another bot; user callers must supply a bot they own. */
   botId?: CreateAgentSessionRequestBotId;
   /** Id to create the session under, minted by the caller. Lets a surface
 open on the session's final id - URL, history row, references - the
@@ -69,20 +71,30 @@ for the bot's own sessions. With no claim, a team bot owns the session
 itself only while non-user owners are enabled. Every other bot still
 needs an owner. */
   owner?: CreateAgentSessionRequestOwner;
-  /** First prompt to deliver once the session is running. Managed sessions
-only - an external runtime sends its own first prompt through the
-control endpoint. Omitted, the session opens idle. */
+  /** First prompt to deliver once the session is running. The managed shape
+only: a persona its operator runs gets it through the session's control
+path once its runtime opens the session, while a runtime opening its
+own (the `workspace` shape) sends its first prompt through the control
+endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
   promptActionId?: CreateAgentSessionRequestPromptActionId;
   /** Files `prompt` refers to, in the order the user attached them.
 Requires `prompt`. */
   promptAttachments?: PromptAttachment[];
+  /** The app tab the person typed `prompt` in, as `clientId` on a control
+request, so what the first turn opens in the app reaches that tab
+only. Requires `prompt`. Only a person's own request may send it; a
+runtime's is refused, and a program using a person's credential has
+it dropped. */
+  promptClientId?: CreateAgentSessionRequestPromptClientId;
   /** Starting branch for a managed coding session's selected repository.
 Omitted, the session starts on the repository's default branch. */
   repoBranch?: CreateAgentSessionRequestRepoBranch;
   /** Explicit GitHub repository for a managed Cursor session, as one of the
 urls `GET /agent-repositories` lists for the caller. Access is checked
-for the session owner. For external sessions this is informational:
+for the session owner. On a managed request that names no `botId`,
+this starts the session as Cursor — the only managed persona that
+honors a repository. For external sessions this is informational:
 cloning it is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;

@@ -43,6 +43,7 @@ export function useChannelRailItemState(
         item_type: 'channel',
       }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
+      mentions: rail.channelActivity.mentionCount(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
       incomingCallId: rail.channelActivity.incomingCallIds().get(id),
     };
@@ -70,6 +71,13 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
       muted:
         muteItem !== undefined &&
         isMutedItem(notificationSource.mutedEntities(), muteItem),
+      unread:
+        current.entityType === 'channel' &&
+        rail.channelActivity.unreadChannelIds().has(current.entityId),
+      mentions:
+        current.entityType === 'channel'
+          ? rail.channelActivity.mentionCount(current.entityId)
+          : 0,
     };
   });
 }
@@ -98,7 +106,16 @@ export function useChannelRailScopeState(
   return createMemo(() => {
     const currentScope = scope();
     const source = rail.sources[currentScope];
-    const items = source.items();
+    const items =
+      currentScope === 'direct_messages'
+        ? rail.list.items
+            .all()
+            .flatMap((row) =>
+              row.kind === 'conversation' && row.scope === currentScope
+                ? [row.channel]
+                : []
+            )
+        : source.items();
     // The Team channels section renders label headings between its channels,
     // so its virtualizer indexes come from those rows, not the source.
     const rows =

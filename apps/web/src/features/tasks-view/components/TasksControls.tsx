@@ -19,6 +19,7 @@ import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
+import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
 export function TasksControls() {
   return (
@@ -44,6 +45,7 @@ function DesktopTasksControls() {
         return current === menu ? undefined : current;
       });
     };
+  const isSearching = () => !!state.search.trim();
 
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -59,6 +61,7 @@ function DesktopTasksControls() {
     },
     sort: {
       description: 'Sort tasks',
+      condition: () => !isSearching(),
       run: () => {
         if (!sortTrigger) return false;
 
@@ -69,7 +72,6 @@ function DesktopTasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isBoardSearch = () => state.layout === 'board' && !!state.search.trim();
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
@@ -140,17 +142,7 @@ function DesktopTasksControls() {
         </Show>
       </HeaderActionGroup>
       <HeaderActionGroup label="Task view options" size="md">
-        <Show
-          when={!isBoardSearch()}
-          fallback={
-            <span
-              class="text-xs text-ink-muted"
-              title="Search results are ranked by relevance. Clear search to sort the board."
-            >
-              Relevance
-            </span>
-          }
-        >
+        <Show when={!isSearching()}>
           <ListSortDropdown
             grouped
             size="icon-md"
@@ -172,6 +164,11 @@ function DesktopTasksControls() {
           onChange={(groupBy) => setState('groupBy', groupBy)}
         />
       </HeaderActionGroup>
+      <TaskDueDateRangeDialog
+        value={filters.customRange()}
+        onChange={filters.setCustomRange}
+        onApply={filters.applyCustomRange}
+      />
     </>
   );
 }

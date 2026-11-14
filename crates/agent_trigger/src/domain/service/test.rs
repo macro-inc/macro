@@ -3,6 +3,7 @@ use super::*;
 #[cfg(feature = "admission")]
 mod admission;
 mod call;
+mod configured_agent;
 mod task_assignment;
 
 use agent_session::domain::error::AgentSessionError;
@@ -70,6 +71,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: false,
+        stopped_reason: None,
     }
 }
 
@@ -107,12 +109,13 @@ fn message(mentions: Vec<SimpleMention>) -> MessagePostedMetadata {
 
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        is_archived: false,
+        archived: None,
         owner_id: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
         ),
@@ -140,6 +143,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
 /// A session rooted at the test message's thread.
 fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        origin: Default::default(),
         thread_id: Some(Uuid::from_u128(3)),
         originating_message_id: Some(Uuid::from_u128(3)),
         ..session(id, bot_id)
@@ -674,12 +678,12 @@ fn reply_to_user_message(target_message_id: Uuid) -> ExtractedExplicitReply {
     }
 }
 
-fn judge_saying(result: Result<bool>) -> MockImplicitTriggerJudge {
+fn judge_saying(result: Result<Vec<f32>>) -> MockImplicitTriggerJudge {
     let mut judge = MockImplicitTriggerJudge::new();
     judge
-        .expect_is_addressed_to_agent()
+        .expect_addressee_probabilities()
         .once()
-        .return_once(move |_, _| Box::pin(async move { result }));
+        .return_once(move |_, _, _| Box::pin(async move { result }));
     judge
 }
 
@@ -687,11 +691,11 @@ fn judge_saying(result: Result<bool>) -> MockImplicitTriggerJudge {
 fn judge_expecting(transcript: &'static str) -> MockImplicitTriggerJudge {
     let mut judge = MockImplicitTriggerJudge::new();
     judge
-        .expect_is_addressed_to_agent()
+        .expect_addressee_probabilities()
         .once()
-        .return_once(move |_, given| {
+        .return_once(move |_, given, _| {
             assert_eq!(given, transcript);
-            Box::pin(async { Ok(true) })
+            Box::pin(async { Ok(vec![0.9]) })
         });
     judge
 }
@@ -731,7 +735,7 @@ async fn a_message_the_judge_reads_as_addressed_triggers_as_inferred() {
         sessions,
         agent_bots(),
         extractor(Ok(None)),
-        judge_saying(Ok(true)),
+        judge_saying(Ok(vec![0.9])),
     );
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
@@ -747,7 +751,7 @@ async fn a_message_addressed_to_nobody_yields_nothing() {
         sessions,
         agent_bots(),
         extractor(Ok(None)),
-        judge_saying(Ok(false)),
+        judge_saying(Ok(vec![0.1])),
     );
 
     assert!(
@@ -825,18 +829,38 @@ async fn implicit_triggering_skips_sessions_of_agentless_bots() {
     assert_eq!(metadata.bot_id, BotId::TEST_B);
 }
 
-#[tokio::test]
-async fn two_live_agents_in_a_thread_yield_nothing() {
-    let posted = message(vec![]);
-    let sessions = implicit_sessions(vec![
+fn two_live_sessions() -> MockAgentSessionRepo {
+    implicit_sessions(vec![
         thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
         thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
-    ]);
+    ])
+}
+
+#[tokio::test]
+async fn the_judge_picks_which_of_two_live_agents_a_message_is_for() {
+    let posted = message(vec![]);
     let service = service(
-        sessions,
+        two_live_sessions(),
         agent_bots(),
         extractor(Ok(None)),
-        MockImplicitTriggerJudge::new(),
+        judge_saying(Ok(vec![0.2, 0.8])),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    let metadata = existing_channel_metadata(&events);
+    assert_eq!(metadata.session_id, AgentSessionId::TEST_B);
+    assert_eq!(metadata.bot_id, BotId::TEST_B);
+    assert_eq!(metadata.kind, ThreadMessageKind::Inferred);
+}
+
+#[tokio::test]
+async fn a_message_the_judge_reads_as_for_both_live_agents_yields_nothing() {
+    let posted = message(vec![]);
+    let service = service(
+        two_live_sessions(),
+        agent_bots(),
+        extractor(Ok(None)),
+        judge_saying(Ok(vec![0.7, 0.8])),
     );
 
     assert!(
@@ -845,6 +869,62 @@ async fn two_live_agents_in_a_thread_yield_nothing() {
             .await
             .expect("evaluate message")
             .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_judge_answering_for_the_wrong_number_of_agents_yields_nothing() {
+    let posted = message(vec![]);
+    let service = service(
+        two_live_sessions(),
+        agent_bots(),
+        extractor(Ok(None)),
+        judge_saying(Ok(vec![0.9])),
+    );
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn the_judge_reads_every_live_agent_numbered_in_the_thread() {
+    let posted = message(vec![]);
+    let history = thread_of(vec![
+        thread_message(0, ChannelSender::new_from_bot(BotId::TEST_A), "on it"),
+        thread_message(1, ChannelSender::new_from_bot(BotId::TEST_B), "me too"),
+        thread_message(2, ChannelSender::new_from_user(user()), "hello"),
+    ]);
+    let mut judge = MockImplicitTriggerJudge::new();
+    judge
+        .expect_addressee_probabilities()
+        .once()
+        .return_once(|_, transcript, agents| {
+            assert_eq!(agents, 2);
+            assert_eq!(
+                transcript,
+                "[agent 1] on it\n\
+                 [agent 2] me too\n\
+                 [user macro|trigger-service-test@macro.com] hello\n"
+            );
+            Box::pin(async { Ok(vec![0.9, 0.1]) })
+        });
+    let service = service_reading(
+        two_live_sessions(),
+        agent_bots(),
+        extractor(Ok(None)),
+        judge,
+        history,
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    assert_eq!(
+        existing_channel_metadata(&events).session_id,
+        AgentSessionId::TEST_A
     );
 }
 
@@ -858,7 +938,7 @@ async fn a_failing_extractor_falls_through_to_the_judge() {
         extractor(Err(AgentSessionError::Unknown(anyhow::anyhow!(
             "lexical service unavailable"
         )))),
-        judge_saying(Ok(true)),
+        judge_saying(Ok(vec![0.9])),
     );
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
@@ -907,7 +987,7 @@ async fn the_judge_reads_the_thread_around_the_agent() {
         extractor(Ok(None)),
         judge_expecting(
             "[user macro|trigger-service-test@macro.com] unrelated chatter\n\
-             [agent] on it\n\
+             [agent 1] on it\n\
              [user macro|trigger-service-test@macro.com] hello\n",
         ),
         history,
@@ -1000,7 +1080,7 @@ async fn an_explicit_reply_to_another_user_falls_through_to_the_judge() {
         sessions,
         agent_bots(),
         extractor(Ok(Some(reply_to_user()))),
-        judge_saying(Ok(true)),
+        judge_saying(Ok(vec![0.9])),
     );
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
@@ -1032,7 +1112,7 @@ async fn an_explicit_reply_to_one_of_two_live_agents_routes_to_that_agent() {
 }
 
 #[tokio::test]
-async fn an_explicit_reply_to_neither_of_two_live_agents_yields_nothing() {
+async fn an_explicit_reply_to_neither_of_two_live_agents_is_left_to_the_judge() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![
         thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
@@ -1042,7 +1122,7 @@ async fn an_explicit_reply_to_neither_of_two_live_agents_yields_nothing() {
         sessions,
         agent_bots(),
         extractor(Ok(Some(reply_to_user()))),
-        MockImplicitTriggerJudge::new(),
+        judge_saying(Ok(vec![0.1, 0.1])),
     );
 
     assert!(
@@ -1055,7 +1135,7 @@ async fn an_explicit_reply_to_neither_of_two_live_agents_yields_nothing() {
 }
 
 #[tokio::test]
-async fn an_explicit_reply_to_a_shared_originating_message_yields_nothing() {
+async fn an_explicit_reply_to_a_shared_originating_message_is_left_to_the_judge() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![
         thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
@@ -1065,7 +1145,7 @@ async fn an_explicit_reply_to_a_shared_originating_message_yields_nothing() {
         sessions,
         agent_bots(),
         extractor(Ok(Some(reply_to_user_message(Uuid::from_u128(3))))),
-        MockImplicitTriggerJudge::new(),
+        judge_saying(Ok(vec![0.1, 0.1])),
     );
 
     assert!(
@@ -1499,7 +1579,7 @@ async fn an_agents_unmentioned_follow_up_reaches_another_agents_session() {
     for (replies, judge, kind) in [
         (
             extractor(Ok(None)),
-            judge_saying(Ok(true)),
+            judge_saying(Ok(vec![0.9])),
             ThreadMessageKind::Inferred,
         ),
         (

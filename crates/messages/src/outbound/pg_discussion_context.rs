@@ -134,23 +134,12 @@ impl<
             .await?
             .ok_or_else(|| rootcause::report!("crm record no longer exists"))?;
         // Contacts have no owner property: a contact's discussion reaches its
-        // company's owner. This machine-only read selects notification
-        // candidates; delivery rechecks each candidate's current access.
-        let access = properties::domain::model::ViewReceipt::dangerously_assert_internal_user(
-            &record.company_id.to_string(),
-            entity_access::domain::models::EntityType::CrmCompany,
-        );
-        let owner = match self
-            .properties
-            .get_system_property_value(&access, system_properties::SystemPropertyKey::CompanyOwner)
-            .await?
-        {
-            Some(models_properties::service::property_value::PropertyValue::EntityRef(refs)) => {
-                refs.into_iter()
-                    .find(|reference| reference.entity_type == models_properties::EntityType::User)
-                    .map(|reference| reference.entity_id)
-            }
-            _ => None,
+        // company's owner, and a contact without a company has none. This
+        // machine-only read selects notification candidates; delivery
+        // rechecks each candidate's current access.
+        let owner = match record.company_id {
+            Some(company_id) => self.company_owner(company_id).await?,
+            None => None,
         };
         Ok(DiscussionContext {
             name: record.name,
@@ -162,6 +151,31 @@ impl<
             sender_profile_picture: None,
             link_share_access: None,
         })
+    }
+    /// The owner property of a CRM company, if set.
+    async fn company_owner(&self, company_id: Uuid) -> Result<Option<String>, rootcause::Report> {
+        let access = properties::domain::model::ViewReceipt::dangerously_assert_internal_user(
+            &company_id.to_string(),
+            entity_access::domain::models::EntityType::CrmCompany,
+        );
+        Ok(
+            match self
+                .properties
+                .get_system_property_value(
+                    &access,
+                    system_properties::SystemPropertyKey::CompanyOwner,
+                )
+                .await?
+            {
+                Some(models_properties::service::property_value::PropertyValue::EntityRef(
+                    refs,
+                )) => refs
+                    .into_iter()
+                    .find(|reference| reference.entity_type == models_properties::EntityType::User)
+                    .map(|reference| reference.entity_id),
+                _ => None,
+            },
+        )
     }
 }
 
@@ -243,7 +257,7 @@ impl DiscussionContextReader for PgDiscussionContext {
         if context.is_task {
             context.assignees = sqlx::query_scalar!(r#"SELECT ref->>'entity_id' AS "user_id!"
                 FROM entity_properties p CROSS JOIN LATERAL jsonb_array_elements(p.values->'value') ref
-                WHERE p.entity_type = 'DOCUMENT' AND p.entity_id = $1 AND p.property_definition_id = $2
+                WHERE p.entity_type = 'TASK' AND p.entity_id = $1 AND p.property_definition_id = $2
                     AND p.values->>'type' = 'EntityReference' AND ref->>'entity_type' = 'USER'"#,
                 parent.entity_id(), system_properties::SystemPropertyKey::Assignees.uuid())
                 .fetch_all(&self.0).await?;

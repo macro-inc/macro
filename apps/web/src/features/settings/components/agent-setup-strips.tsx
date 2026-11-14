@@ -2,7 +2,7 @@ import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type JSX, Show } from 'solid-js';
@@ -56,7 +56,7 @@ export function AgentSetupStrips(props: {
   onManageRuntimes: () => void;
 }) {
   const cursorStatus = useCursorApiKeyStatusQuery();
-  const harnesses = useHarnessesQuery();
+  const harnesses = useRunnableHarnessesQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const paired = () => (harnesses.isSuccess ? harnesses.data : []);
@@ -103,7 +103,7 @@ export function AgentSetupStrips(props: {
         <SetupStrip
           icon={<TerminalIcon />}
           title="Bring your own agent"
-          subject="paired runtimes"
+          subject="paired machines"
           description={paired()
             .map((harness) => harness.name)
             .join(', ')}

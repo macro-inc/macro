@@ -28,7 +28,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Continue' }).click();
 
   // Google sign-up leaves the page; the account exists when it returns.
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
   await expect(heading(page, /Connect your work/)).toBeVisible();
   expect((await fakeWorld(page)).accent).toBe('#f77d67');
 
@@ -55,6 +55,12 @@ test('a new user signs up, connects everything, and starts the trial', async ({
     'grace@acme.com'
   );
   await page.getByRole('button', { name: 'Create team & invite 2' }).click();
+  await expect(page.getByText("You're on Acme")).toBeVisible();
+  await page.getByRole('button', { name: 'Copy invite link' }).click();
+  await expect
+    .poll(async () => (await fakeEvents(page)).map((e) => e.data))
+    .toContainEqual({ action: 'invite_link_copied' });
+  await page.getByRole('button', { name: 'Continue' }).click();
 
   await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);
@@ -84,7 +90,9 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Skip for now' }).click();
+  // A work domain must create its team; there is no Skip on this step.
+  await page.getByRole('button', { name: 'Create team & invite 2' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
   await expectLanded(page, 'Entered Macro at /channel/launch');
@@ -297,6 +305,35 @@ test('an existing team member just confirms and moves on', async ({ page }) => {
   await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
 });
 
+test('a personal address refers friends instead of creating a team', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow', {
+    record: { status: 'active', suggestedTeamDomain: undefined },
+  });
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'team' })
+    );
+  });
+  await page.reload();
+  await expect(heading(page, 'Invite friends.')).toBeVisible();
+  await expect(page.getByText('Workspace name')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Copy referral link' }).click();
+  await page.getByLabel('Friend 1 email').fill('grace@example.com');
+  await page.getByRole('button', { name: 'Send 1 invite' }).click();
+  await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
+  const world = await fakeWorld(page);
+  expect(world.teams).toEqual([]);
+  expect((await fakeEvents(page)).map((e) => e.data)).toEqual(
+    expect.arrayContaining([
+      { action: 'referral_link_copied' },
+      { action: 'referrals_sent', invites_sent: 1 },
+    ])
+  );
+});
+
 test('staff can bypass onboarding from any step', async ({ page }) => {
   await openFixture(page, '/?view=flow', {
     viewer: {
@@ -334,7 +371,7 @@ test.describe('with motion', () => {
     const steps: [string, string | RegExp][] = [
       ['Get started', 'Which features do you want to try first?'],
       ['Continue', 'A workspace built to earn your trust.'],
-      ['Continue', /Connect your work/],
+      ['Continue', /Continue with your work/],
     ];
     await expect(heading(page, 'Create your workspace')).toBeVisible();
     for (const [button, next] of steps) {

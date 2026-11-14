@@ -1,13 +1,14 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CornersOut from '@phosphor/corners-out.svg';
-import DotsThreeVertical from '@phosphor/dots-three-vertical.svg';
-import FileIcon from '@phosphor/file.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import SpeakerHigh from '@phosphor/speaker-high.svg';
-import Pause from '@phosphor-fill/pause-fill.svg';
-import Play from '@phosphor-fill/play-fill.svg';
+import ShareIcon from '@icon/share.svg';
+import Pause from '@icon/system/fill/pause-fill.svg';
+import Play from '@icon/system/fill/play-fill.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
+import DotsThreeVertical from '@icon/system/regular/dots-three-vertical.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import SpeakerHigh from '@icon/system/regular/speaker-high.svg';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -43,7 +44,7 @@ export const cameraPhoto: Record<CallPerson, string> = {
   julia: juliaVideo,
   gabriel: gabrielVideo,
   teo: teoVideo,
-  valentina: homepagePeople.valentina.photo,
+  austin: homepagePeople.austin.photo,
 };
 
 /** Local stand-in for the recording's <video>: seeks and plays a clock only. */
@@ -81,24 +82,6 @@ export function createCallPlayback(duration: number) {
   };
 }
 export type CallPlayback = ReturnType<typeof createCallPlayback>;
-
-/** components/icon/share.svg */
-export function ShareIcon(props: { class?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={props.class}
-      aria-hidden="true"
-    >
-      <path d="M4 13v4a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4M12 14V4m-4 4 4-4 4 4" />
-    </svg>
-  );
-}
 
 /** CallRecordingSplitHeader: label, Call Again, Ask Macro, Share. */
 export function CallRecordTopBar(props: {
@@ -477,7 +460,7 @@ export function CallRecordBody(props: {
       <div class="call-record-column">
         <div class="flex flex-col gap-10">
           <header>
-            <h1 class="text-2xl font-semibold text-balance text-ink">
+            <h1 class="text-2xl font-medium text-balance text-ink">
               {props.call.title}
             </h1>
             <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
@@ -487,7 +470,7 @@ export function CallRecordBody(props: {
             </div>
           </header>
           <section class="flex flex-col gap-3" data-call-section="participants">
-            <h3 class="text-sm font-semibold text-ink">
+            <h3 class="text-sm font-medium text-ink">
               Participants
               <span class="ml-1.5 font-normal text-ink-muted tabular-nums">
                 {props.call.people.length}
@@ -515,19 +498,19 @@ export function CallRecordBody(props: {
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="summary">
-            <h3 class="text-sm font-semibold text-ink">Summary</h3>
+            <h3 class="text-sm font-medium text-ink">Summary</h3>
             <div class="call-summary text-sm/6 text-pretty text-ink">
               <DemoMarkdown markdown={props.call.summary} />
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="recording">
-            <h3 class="text-sm font-semibold text-ink">Recording</h3>
+            <h3 class="text-sm font-medium text-ink">Recording</h3>
             <div class="overflow-hidden rounded border border-edge-muted/50">
               <RecordingPlayer call={props.call} playback={props.playback} />
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="transcript">
-            <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+            <h3 class="text-sm font-medium text-ink">Transcript</h3>
             <CallTranscriptBox
               segments={props.call.segments}
               playback={props.playback}
@@ -541,7 +524,7 @@ export function CallRecordBody(props: {
                 class="flex min-w-0 flex-col gap-3"
                 aria-label="Call chat"
               >
-                <h3 class="text-sm font-semibold text-ink">Call chat</h3>
+                <h3 class="text-sm font-medium text-ink">Call chat</h3>
                 <div class="call-chat-history min-w-0 rounded border border-edge-muted/50 py-2">
                   <For each={chat()}>
                     {(message) => (

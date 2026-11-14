@@ -4,7 +4,7 @@
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 
 use super::*;
-use crate::domain::models::{FormError, UpdateForm};
+use crate::domain::models::{AccentColor, FormBranding, FormError, StoredImageFile, UpdateForm};
 use crate::domain::ports::FormsService;
 
 #[tokio::test]
@@ -48,6 +48,14 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
             tally_visible: Some(true),
             ..UpdateForm::default()
         },
+        UpdateForm {
+            responses_visible: Some(true),
+            ..UpdateForm::default()
+        },
+        UpdateForm {
+            anonymous: Some(true),
+            ..UpdateForm::default()
+        },
     ] {
         let refused = forms
             .update_form(
@@ -67,6 +75,8 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
                 status: Some(FormStatus::Closed),
                 closes_at: Some(Some(closing)),
                 tally_visible: Some(true),
+                responses_visible: Some(true),
+                anonymous: Some(true),
                 ..UpdateForm::default()
             },
         )
@@ -76,6 +86,8 @@ async fn an_editor_changes_the_wording_but_only_the_owner_changes_who_responds_a
     assert_eq!(owned.status, FormStatus::Closed);
     assert_eq!(owned.closes_at, Some(closing));
     assert!(owned.tally_visible);
+    assert!(owned.responses_visible);
+    assert!(owned.anonymous);
 
     let reopened = forms
         .update_form(
@@ -273,4 +285,186 @@ async fn a_database_receipt_is_not_a_form_receipt() {
         ))
         .await;
     assert!(matches!(refused, Err(FormError::NotFound)));
+}
+
+#[cfg(feature = "entity_mutation")]
+#[tokio::test]
+async fn moving_a_form_files_it_names_both_folders_and_leaves_its_database() {
+    use entity_mutation::{
+        EntityMutationEffect, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
+    };
+    use model_entity::EntityType;
+
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let entity = EntityType::Form.with_entity_string(RSVP_FORM.to_string());
+    let owner = || form_receipt::<OwnerAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner);
+    let into = |project_id: &str| MoveEntityRequest::MoveToProject {
+        entity: entity.clone(),
+        receipt: owner(),
+        project_id: project_id.to_string(),
+        project_receipt: form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
+    };
+
+    assert_eq!(
+        forms.move_entity(into("clients")).await.unwrap(),
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+        ]
+    );
+    assert_eq!(
+        forms
+            .move_entity(MoveEntityRequest::MoveToRoot {
+                entity: entity.clone(),
+                receipt: owner(),
+            })
+            .await
+            .unwrap(),
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+        ]
+    );
+    forms.move_entity(into("archive")).await.unwrap();
+    assert_eq!(
+        world.lock().unwrap().forms[0].form.project_id.as_deref(),
+        Some("archive")
+    );
+    assert!(world.lock().unwrap().batches.is_empty());
+
+    forms.trash_form(owner()).await.unwrap();
+    assert!(matches!(
+        forms.move_entity(into("clients")).await,
+        Err(EntityMutationErrorCode::NotFound(_))
+    ));
+    assert_eq!(
+        world.lock().unwrap().forms[0].form.project_id.as_deref(),
+        Some("archive")
+    );
+}
+
+#[tokio::test]
+async fn appearance_validates_preserves_dates_and_emits_only_changes() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let receipt = || form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit);
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "unknown-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        forms.set_appearance(receipt(), invalid).await,
+        Err(FormError::InvalidAppearance(_))
+    ));
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    assert_eq!(
+        forms
+            .set_appearance(receipt(), appearance.clone())
+            .await
+            .unwrap(),
+        appearance
+    );
+    forms
+        .set_appearance(receipt(), appearance.clone())
+        .await
+        .unwrap();
+    let world = world.lock().unwrap();
+    assert_eq!(world.forms[0].form.appearance, Some(appearance));
+    assert_eq!(world.forms[0].form.updated_at, start_of_tests());
+    assert_eq!(world.event_types(), ["form.appearance_changed"]);
+    assert_eq!(world.events[0]["metadata"]["attribution"]["actor"], EDITOR);
+}
+
+#[tokio::test]
+async fn an_editor_brands_the_form_with_images_they_uploaded() {
+    let logo = Uuid::from_u128(0x1060);
+    let cover = Uuid::from_u128(0xc0e2);
+    let theirs = Uuid::from_u128(0x7e125);
+    let document = Uuid::from_u128(0xd0c);
+    let world = world();
+    seed_rsvp(&world, Audience::Public);
+    {
+        let mut world = world.lock().unwrap();
+        for (id, owner, content_type) in [
+            (logo, EDITOR, "image/png"),
+            (cover, EDITOR, "image/jpeg"),
+            (theirs, STRANGER, "image/png"),
+            (document, EDITOR, "application/pdf"),
+        ] {
+            world.image_files.insert(
+                id,
+                StoredImageFile {
+                    owner_id: owner.into(),
+                    content_type: content_type.into(),
+                },
+            );
+        }
+    }
+    let forms = service(&world);
+
+    let branded = forms
+        .update_form(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
+            UpdateForm {
+                logo_file_id: Some(Some(logo)),
+                cover_file_id: Some(Some(cover)),
+                accent_color: Some(Some(AccentColor::try_from("#1F6FEB".to_string()).unwrap())),
+                ..UpdateForm::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        branded.branding,
+        FormBranding {
+            logo_file_id: Some(logo),
+            cover_file_id: Some(cover),
+            accent_color: Some(AccentColor::try_from("#1f6feb".to_string()).unwrap()),
+        }
+    );
+
+    for refused in [Uuid::from_u128(0x404), theirs, document] {
+        let result = forms
+            .update_form(
+                form_receipt::<EditAccessLevel>(RSVP_FORM, EDITOR, AccessLevel::Edit),
+                UpdateForm {
+                    logo_file_id: Some(Some(refused)),
+                    ..UpdateForm::default()
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(FormError::InvalidBranding(_))),
+            "{refused} was accepted: {result:?}"
+        );
+    }
+
+    // The owner keeps the editor's logo while removing the cover.
+    let kept = forms
+        .update_form(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
+            UpdateForm {
+                logo_file_id: Some(Some(logo)),
+                cover_file_id: Some(None),
+                ..UpdateForm::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(kept.branding.logo_file_id, Some(logo));
+    assert_eq!(kept.branding.cover_file_id, None);
+    assert_eq!(
+        kept.branding.accent_color,
+        Some(AccentColor::try_from("#1f6feb".to_string()).unwrap())
+    );
 }

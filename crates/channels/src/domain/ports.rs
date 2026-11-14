@@ -344,11 +344,17 @@ pub trait ChannelRepo: Send + Sync + 'static {
         req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete a channel.
+    /// Whether the user is an admin or owner of this exact team.
+    fn user_is_team_admin<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Delete a channel after the domain service has authorized the caller.
     fn delete_channel(
         &self,
         channel_id: Uuid,
-        user_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Atomically add or reactivate a participant, returning whether membership changed.
@@ -975,6 +981,15 @@ pub trait AgentCreations: Clone + Send + Sync + 'static {
     fn request_sent_at(
         &self,
         thread_root: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// When `person` last wrote anywhere in `channel_id` before `before`: the
+    /// request a bot message that starts its own thread is answering.
+    fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
         person: &MacroUserIdStr<'static>,
         before: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
