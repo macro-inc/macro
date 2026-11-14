@@ -25,6 +25,9 @@ subscriber gets a fresh snapshot.
 - `src/inbound/grpc.rs` and `src/client.rs`: socket rules, server, client.
 - `src/domain/join.rs`: the join table in code, status rules, cost estimates
   and per-minute spend; `src/domain/pricing.rs`: list prices and their sources.
+- `src/outbound/transcript_feed.rs`: `LocalTranscripts`, the drill-in's
+  `TranscriptFeed` for Claude Code transcripts and Codex rollouts (tail of
+  the agent's `transcript` file, then appends woken by a directory watch).
 - `src/outbound/local.rs`: every real-machine source from a few roots. File
   sources share `outbound/transcripts.rs` (tailed JSON lines) or
   `outbound/records.rs` (small whole-file records).

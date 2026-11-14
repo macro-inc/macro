@@ -13,17 +13,16 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_monitor::client::{ClientEvent, watch as watch_collector};
+use agent_monitor::client::{ClientEvent, MonitorClient, watch as watch_collector};
 use agent_monitor::domain::clock::SystemClock;
-use agent_monitor::domain::model::Agent;
-use agent_monitor::domain::source::{
-    AgentSource, TranscriptError, TranscriptFeed, TranscriptStream,
-};
+use agent_monitor::domain::model::AgentId;
+use agent_monitor::domain::source::AgentSource;
 use agent_monitor::domain::store::{Store, StoreConfig};
 use agent_monitor::domain::supervisor::spawn_source;
 use agent_monitor::inbound::grpc::{self, BindError, BoundSocket, MonitorService, ServeError};
 use agent_monitor::outbound::demo::DemoConfig;
 use agent_monitor::outbound::local::LocalSources;
+use agent_monitor::outbound::transcript_feed::LocalTranscripts;
 use futures::StreamExt as _;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -79,9 +78,13 @@ enum MonitorCommand {
     },
     /// Print the snapshot, then every update, as JSON lines on stdout.
     Dump {
-        /// Exit after this many updates.
+        /// Exit after this many updates (or transcript items).
         #[arg(long)]
         count: Option<usize>,
+        /// Print this agent's transcript instead: its last items, then each
+        /// new one, as `{"item": ...}` lines.
+        #[arg(long, value_name = "AGENT_ID")]
+        transcript: Option<String>,
     },
 }
 
@@ -92,7 +95,14 @@ pub async fn run(args: MonitorArgs) -> ExitCode {
             let _telemetry = crate::telemetry::install();
             serve(args.socket, exit_when_idle).await
         }
-        Some(MonitorCommand::Dump { count }) => dump(args.socket, count).await,
+        Some(MonitorCommand::Dump {
+            count,
+            transcript: None,
+        }) => dump(args.socket, count).await,
+        Some(MonitorCommand::Dump {
+            count,
+            transcript: Some(agent),
+        }) => dump_transcript(args.socket, agent, count).await,
         None => view(args.socket, args.demo).await,
     };
     match result {
@@ -197,7 +207,7 @@ impl Collector {
 
         let service = MonitorService::new(
             store.clone(),
-            Arc::new(NoTranscripts),
+            Arc::new(LocalTranscripts),
             crate::update::VERSION.to_owned(),
             tracker.clone(),
             cancel.clone(),
@@ -216,21 +226,6 @@ impl Collector {
         self.cancel.cancel();
         self.tracker.close();
         self.tracker.wait().await;
-    }
-}
-
-/// The drill-in transcript reader until the transcript sources provide one:
-/// every agent reads as having no readable transcript.
-struct NoTranscripts;
-
-#[async_trait::async_trait]
-impl TranscriptFeed for NoTranscripts {
-    async fn follow(
-        &self,
-        _agent: &Agent,
-        _tail: usize,
-    ) -> Result<TranscriptStream, TranscriptError> {
-        Err(TranscriptError::Unavailable)
     }
 }
 
@@ -385,6 +380,40 @@ async fn dump(socket: Option<PathBuf>, count: Option<usize>) -> rootcause::Resul
             .map_err(|error| rootcause::report!("cannot write to stdout: {error}"))?;
         if count.is_some_and(|count| updates >= count) {
             cancel.cancel();
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// `macrod monitor dump --transcript <agent>`: the agent's transcript tail,
+/// then each new item, one `{"item": ...}` JSON line each.
+async fn dump_transcript(
+    socket: Option<PathBuf>,
+    agent: String,
+    count: Option<usize>,
+) -> rootcause::Result<()> {
+    use std::io::Write as _;
+
+    let socket = socket_path(socket)?;
+    let mut client = MonitorClient::connect(&socket)
+        .await
+        .map_err(|error| rootcause::report!("{error}"))?;
+    let items = client
+        .follow_transcript(&AgentId::from_wire(agent), 0)
+        .await
+        .map_err(|error| rootcause::report!("{error}"))?;
+    tokio::pin!(items);
+    let mut stdout = std::io::stdout().lock();
+    let mut printed = 0;
+
+    while let Some(item) = items.next().await {
+        let item = item.map_err(|error| rootcause::report!("{error}"))?;
+        writeln!(stdout, "{}", serde_json::json!({ "item": item }))
+            .and_then(|()| stdout.flush())
+            .map_err(|error| rootcause::report!("cannot write to stdout: {error}"))?;
+        printed += 1;
+        if count.is_some_and(|count| printed >= count) {
             break;
         }
     }

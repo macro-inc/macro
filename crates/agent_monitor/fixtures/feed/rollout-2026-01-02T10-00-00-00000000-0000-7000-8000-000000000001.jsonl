@@ -1,0 +1,8 @@
+{"timestamp":"2026-01-02T10:00:00.000Z","type":"session_meta","payload":{"id":"00000000-0000-7000-8000-000000000001","cwd":"/work"}}
+{"timestamp":"2026-01-02T10:00:01.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"instructions"}]}}
+{"timestamp":"2026-01-02T10:00:01.500Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Run the tests"}]}}
+{"timestamp":"2026-01-02T10:00:02.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"x"}}
+{"timestamp":"2026-01-02T10:00:03.000Z","type":"response_item","payload":{"type":"custom_tool_call","status":"completed","call_id":"call_1","name":"exec","input":"cargo test"}}
+{"timestamp":"2026-01-02T10:00:05.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":[{"type":"input_text","text":"test result: ok"}]}}
+{"timestamp":"2026-01-02T10:00:05.500Z","type":"event_msg","payload":{"type":"token_count","info":null}}
+{"timestamp":"2026-01-02T10:00:06.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"All tests pass."}]}}

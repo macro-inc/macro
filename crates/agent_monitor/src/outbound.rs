@@ -16,5 +16,6 @@ pub mod run_records;
 mod tail;
 #[cfg(test)]
 mod test_support;
+pub mod transcript_feed;
 mod transcripts;
 mod watch;

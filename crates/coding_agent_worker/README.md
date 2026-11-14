@@ -236,13 +236,16 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor.sock`.
   and refuses to start while another collector answers.
 - **`macrod monitor dump`** prints `{"connected": ...}`, then one
   `{"update": ...}` per update (snapshot first) as JSON lines; `--count N`
-  stops after N updates.
+  stops after N updates. `--transcript <agent id>` prints that agent's
+  transcript instead (`{"item": ...}`: its last items, then each new one),
+  the same feed as the viewer's drill-in.
 - **`macrod monitor --demo`** shows the scripted demo fleet from the viewer's
   own process, with no collector. Recordings shared outside the machine use it.
 - `--socket <path>` points any of them at another socket (tests).
 - A hosting panel or service adds the `daemon` source: its harness id,
   whether the runtime is connected, and its open prompts, as that source's
-  health. The Config tab toggles hosting (`Agent monitor`); `history_hours`,
+  health (detail = harness id, items = open prompts); the viewer's header
+  shows it as `HOST <harness> ● ON  PROMPTS n` or `○ OFFLINE`. The Config tab toggles hosting (`Agent monitor`); `history_hours`,
   `fps` and `run_record_dirs` take effect on the next start.
 - `macrod monitor serve` and `macrod service` export `macrod.monitor*` spans
   when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Rows, spans and logs carry ids

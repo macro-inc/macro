@@ -1,0 +1,9 @@
+{"type":"file-history-snapshot","messageId":"m0","snapshot":{"files":{}}}
+{"type":"user","isMeta":true,"timestamp":"2026-01-02T10:00:00.000Z","message":{"role":"user","content":"<local-command-caveat>ignored</local-command-caveat>"}}
+{"type":"user","timestamp":"2026-01-02T10:00:01.000Z","message":{"role":"user","content":"Rename the widget module"}}
+{"type":"assistant","timestamp":"2026-01-02T10:00:02.000Z","message":{"id":"msg_1","model":"claude-opus-5-5","content":[{"type":"thinking","thinking":"private"}]}}
+{"type":"assistant","timestamp":"2026-01-02T10:00:03.000Z","message":{"id":"msg_1","model":"claude-opus-5-5","content":[{"type":"text","text":"Looking at the module first."}]}}
+{"type":"assistant","timestamp":"2026-01-02T10:00:04.000Z","message":{"id":"msg_1","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls src"}}]}}
+{"type":"user","timestamp":"2026-01-02T10:00:06.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"lib.rs\nwidget.rs"}]}}
+{"type":"assistant","timestamp":"2026-01-02T10:00:07.000Z","message":{"id":"msg_2","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"/work/src/missing.rs"}}]}}
+{"type":"user","timestamp":"2026-01-02T10:00:07.250Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_2","is_error":true,"content":[{"type":"text","text":"File does not exist."}]}]}}
