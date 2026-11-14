@@ -1,0 +1,23 @@
+packages/sdk-ocaml/AGENTS.md
+  s_e722a0e50d8d61::t_e22c8375c2f752 1-33
+packages/sdk-ocaml/CLAUDE.md
+  s_e722a0e50d8d61::t_df109762375128 1
+packages/sdk-ocaml/README.md
+  s_e722a0e50d8d61::t_30e4d5156755b5 9-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9e74467847d83b42adaf6802d7c702f7bed879c4",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
