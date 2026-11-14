@@ -1,0 +1,43 @@
+crates/mesh_man/convert/Cargo.toml
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-16
+crates/mesh_man/src/assets.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-114
+crates/mesh_man/Cargo.toml
+  s_ecd11f6b53251a::t_7f1d405f32f12c 12-15,17
+crates/mesh_man/src/lib.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 29-30
+crates/mesh_man/convert/src/main.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-603
+.gitignore
+  s_ecd11f6b53251a::t_7f1d405f32f12c 73-74
+crates/mesh_man/convert/src/rig.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-237
+crates/mesh_man/examples/spin.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 3-5,11,41-48,59-66,78-85,158-165,169,196-197,212-218,229,231
+crates/mesh_man/src/figure.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 335-336
+crates/mesh_man/convert/src/mesh.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-271
+crates/mesh_man/convert/src/format.rs
+  s_ecd11f6b53251a::t_7f1d405f32f12c 1-115
+Cargo.lock
+  s_ecd11f6b53251a::t_0e2415341d92cb 13484
+crates/mesh_man/convert/Cargo.lock
+  s_ecd11f6b53251a::t_40b50a28d6b8ab 1-593
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "be67e6a0c8bff036d9ceac1f10c24152ce92523e",
+  "prompts": {},
+  "sessions": {
+    "s_ecd11f6b53251a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05fe3463-3f3e-43f5-9eb5-0d7198627dfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
