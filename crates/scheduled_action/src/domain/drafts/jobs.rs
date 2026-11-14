@@ -443,10 +443,17 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let drafting = async {
             // Dropped once the draft is done, which ends the writer.
             let reporter = reporter;
-            let brief = match drafts
-                .briefed(&owner, &request, &program, &context, &reporter)
-                .await?
-            {
+            // Finding its items reads no row, so a cancel is watched for
+            // here until its session starts.
+            let briefed = tokio::select! {
+                briefed = drafts.briefed(&owner, &request, &program, &context, &reporter) => briefed?,
+                () = drafts.cancelled(session) => {
+                    tracing::Span::current().record("routine.draft.outcome", "cancelled");
+                    drafts.forget_draft(&drafts.action(&owner, session), true).await;
+                    return Ok(None);
+                }
+            };
+            let brief = match briefed {
                 Ok(brief) => brief,
                 Err(message) => return Ok(Some(failed(message))),
             };

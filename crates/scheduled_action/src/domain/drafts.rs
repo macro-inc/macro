@@ -493,6 +493,22 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         code
     }
 
+    /// Returns once background draft `session`'s owner cancels it, read from
+    /// its row every [`POLL`].
+    async fn cancelled(&self, session: AgentSessionId) {
+        loop {
+            tokio::time::sleep(POLL).await;
+            if self
+                .hand_backs
+                .handed_back(session.as_uuid())
+                .await
+                .is_ok_and(|row| row.cancelled)
+            {
+                return;
+            }
+        }
+    }
+
     /// Delete a draft's session, unless it was `stopped`, and its row.
     async fn forget_draft(&self, action: &RoutineSessionAction, stopped: bool) {
         clean_up(

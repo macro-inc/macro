@@ -1002,6 +1002,34 @@ async fn a_draft_that_finds_its_items_answers_its_start_once_admitted() {
     ));
 }
 
+/// A cancel while the draft still finds its items stops it at its next read
+/// of the row, before any session starts, and leaves nothing.
+#[tokio::test(start_paused = true)]
+async fn a_cancel_while_finding_stops_the_drafter_before_its_session() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::finding(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let cancelled_at = tokio::time::Instant::now();
+    replica.jobs.discard(owner(), job.id).await.unwrap();
+    replica.settled().await;
+
+    assert!(
+        cancelled_at.elapsed() <= POLL,
+        "{:?}",
+        cancelled_at.elapsed()
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    assert!(rows.drafts.lock().unwrap().is_empty());
+    assert!(rows.jobs.lock().unwrap().is_empty());
+    assert_eq!(
+        replica.published.of(job.id).last().unwrap().state,
+        DraftUpdateState::Removed
+    );
+}
+
 /// A refused admission is the blocking route's error, and leaves nothing.
 #[tokio::test(start_paused = true)]
 async fn a_refused_admission_is_an_error_and_leaves_nothing() {
