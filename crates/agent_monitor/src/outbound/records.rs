@@ -156,7 +156,11 @@ impl<F: RecordFormat> Engine<F> {
         let mut health = SourceHealth::starting(F::SOURCE);
         health.state = state;
         health.detail = detail.map(str::to_owned);
-        let items = self.known.values().filter(|known| known.fact.is_some()).count();
+        let items = self
+            .known
+            .values()
+            .filter(|known| known.fact.is_some())
+            .count();
         health.items = u32::try_from(items).unwrap_or(u32::MAX);
         health.last_event = Some(Utc::now());
         self.send(Change::Health(health)).await
@@ -230,7 +234,10 @@ impl<F: RecordFormat> Engine<F> {
         let previous: Vec<(PathBuf, Option<Fingerprint>)> = records
             .into_iter()
             .map(|record| {
-                let fingerprint = self.known.get(&record).map(|known| known.fingerprint.clone());
+                let fingerprint = self
+                    .known
+                    .get(&record)
+                    .map(|known| known.fingerprint.clone());
                 (record, fingerprint)
             })
             .collect();

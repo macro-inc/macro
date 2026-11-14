@@ -56,8 +56,7 @@ impl LocalSources {
     pub fn makers(&self) -> Vec<SourceMaker> {
         let hc = HcSource::new(self.hc.clone(), self.hc_labels.clone());
         let registry = ClaudeRegistrySource::new(self.claude.join("sessions"));
-        let transcripts =
-            ClaudeTranscriptsSource::new(self.claude.join("projects"), self.history);
+        let transcripts = ClaudeTranscriptsSource::new(self.claude.join("projects"), self.history);
         let codex = CodexRolloutsSource::new(self.codex.join("sessions"), self.history);
         let macrod = MacrodSessionsSource::new(self.macrod.join("herdr"));
         let managers = ManagersSource::new(self.herdr.join("managers"));

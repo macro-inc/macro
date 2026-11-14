@@ -12,8 +12,11 @@ fn entry(pid: u32, session: &str, status: &str) -> String {
 async fn running_entries_become_sessions_and_key_files_are_never_read() {
     let dir = tempfile::tempdir().expect("tempdir");
     let me = std::process::id();
-    std::fs::write(dir.path().join(format!("{me}.json")), entry(me, "s-1", "busy"))
-        .expect("write");
+    std::fs::write(
+        dir.path().join(format!("{me}.json")),
+        entry(me, "s-1", "busy"),
+    )
+    .expect("write");
     // Not JSON at all: reading it would fail the decode, never panic, but it
     // must not even be listed.
     std::fs::write(dir.path().join(format!("{me}.abc123.key")), "secret").expect("write");
@@ -32,8 +35,11 @@ async fn running_entries_become_sessions_and_key_files_are_never_read() {
         })])
     );
 
-    std::fs::write(dir.path().join(format!("{me}.json")), entry(me, "s-1", "idle"))
-        .expect("rewrite");
+    std::fs::write(
+        dir.path().join(format!("{me}.json")),
+        entry(me, "s-1", "idle"),
+    )
+    .expect("rewrite");
     match source.next_fact().await {
         Change::Upsert(Fact::ClaudeSession(session)) => assert!(!session.busy),
         other => panic!("expected a session upsert, got {other:?}"),

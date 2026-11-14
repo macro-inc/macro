@@ -482,7 +482,9 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
         if let Some(agent) = built.agents.get_mut(&id) {
             merge_registry(agent, owned);
         }
-        built.owners.insert(FactKey::ClaudeSession(*pid), id.clone());
+        built
+            .owners
+            .insert(FactKey::ClaudeSession(*pid), id.clone());
         session_owner.insert(owned.fact.session_id.clone(), id);
     }
 
@@ -729,13 +731,17 @@ fn join_run_records(facts: &Facts, built: &mut Built) {
         let run = &owned.fact;
         // The record names its terminal by address or by name; the terminal
         // may instead carry the run id in a label.
-        let terminal = facts.terminals.values().map(|owned| &owned.fact).find(|terminal| {
-            let named = run
-                .terminal
-                .as_ref()
-                .is_some_and(|name| *name == terminal.address || *name == terminal.name);
-            named || terminal.run_id.as_ref() == Some(id)
-        });
+        let terminal = facts
+            .terminals
+            .values()
+            .map(|owned| &owned.fact)
+            .find(|terminal| {
+                let named = run
+                    .terminal
+                    .as_ref()
+                    .is_some_and(|name| *name == terminal.address || *name == terminal.name);
+                named || terminal.run_id.as_ref() == Some(id)
+            });
 
         let agent_id = match terminal {
             Some(terminal) => AgentId::terminal(&terminal.address),

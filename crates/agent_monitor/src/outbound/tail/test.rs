@@ -79,9 +79,16 @@ fn stale_only_when_the_file_grew_shrank_or_was_replaced() {
     let mut tail = Tail::default();
     tail.read(&path).expect("read");
 
-    assert!(!tail.position().is_stale(&std::fs::metadata(&path).expect("stat")));
+    assert!(
+        !tail
+            .position()
+            .is_stale(&std::fs::metadata(&path).expect("stat"))
+    );
     append(&path, "two\n");
-    assert!(tail.position().is_stale(&std::fs::metadata(&path).expect("stat")));
+    assert!(
+        tail.position()
+            .is_stale(&std::fs::metadata(&path).expect("stat"))
+    );
 }
 
 #[test]

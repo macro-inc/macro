@@ -151,7 +151,10 @@ async fn events_patch_the_terminal_they_name() {
     assert_eq!(finished.exit_code, Some(1));
     assert_eq!(finished.finish_reason, Some(FinishReason::Exited));
 
-    assert_eq!(changes[9], Change::Remove(FactKey::Terminal("t2".to_owned())));
+    assert_eq!(
+        changes[9],
+        Change::Remove(FactKey::Terminal("t2".to_owned()))
+    );
 }
 
 #[tokio::test]
@@ -194,7 +197,10 @@ async fn an_event_for_an_unknown_terminal_restarts_the_feed() {
     let Err(SourceError::Internal(report)) = result else {
         panic!("expected a restart, got {result:?}");
     };
-    assert!(format!("{report:?}").contains("UnknownTerminal"), "{report:?}");
+    assert!(
+        format!("{report:?}").contains("UnknownTerminal"),
+        "{report:?}"
+    );
 }
 
 #[tokio::test]

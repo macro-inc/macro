@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use rootcause::{Report, report};
+use rootcause::report;
 use tokio::io::{AsyncBufReadExt as _, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -66,6 +66,8 @@ impl AgentSource for HcSource {
 enum FeedError {
     #[error("hc events exited")]
     Exited,
+    #[error("hc events has no stdout")]
+    NoStdout,
     #[error("no heartbeat from hc events for {0:?}")]
     Silent(Duration),
     #[error("hc events sent an event for an unknown terminal")]
@@ -100,7 +102,7 @@ impl HcSource {
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| Report::from(report!("hc events has no stdout")))?;
+            .ok_or_else(|| feed_error(FeedError::NoStdout))?;
         let mut lines = BufReader::new(stdout).lines();
 
         let mut terminals = Terminals::default();

@@ -118,11 +118,7 @@ const PRICES: &[(&str, Price)] = &[
     ("claude-haiku-4-5", flat(anthropic(1.0, 5.0, 0.10))),
     (
         "gpt-6-astra",
-        tiered(
-            openai(10.0, 50.0, 1.0),
-            272_000,
-            openai(20.0, 75.0, 2.0),
-        ),
+        tiered(openai(10.0, 50.0, 1.0), 272_000, openai(20.0, 75.0, 2.0)),
     ),
     (
         "gpt-6.1-sol",

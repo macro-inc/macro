@@ -71,7 +71,12 @@ impl RecordFormat for ManagersSource {
     }
 
     fn record_of(&self, changed: &Path) -> Option<PathBuf> {
-        match changed.strip_prefix(&self.managers).ok()?.components().next()? {
+        match changed
+            .strip_prefix(&self.managers)
+            .ok()?
+            .components()
+            .next()?
+        {
             Component::Normal(name) => Some(self.managers.join(name)),
             _ => None,
         }
@@ -96,9 +101,7 @@ impl RecordFormat for ManagersSource {
         let goal = first_line(&record.join(GOAL_FILE));
         let state = first_line(&record.join(STATE_FILE));
         let verdicts = verdicts(&record.join(REVIEWS_DIR));
-        let last_verdict = verdicts
-            .last()
-            .and_then(|(_, path)| first_line(path));
+        let last_verdict = verdicts.last().and_then(|(_, path)| first_line(path));
         Some(Fact::Manager(ManagerFact {
             dir: record.to_owned(),
             goal,

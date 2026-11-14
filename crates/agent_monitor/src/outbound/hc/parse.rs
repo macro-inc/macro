@@ -226,15 +226,20 @@ fn decode(terminal: &Map<String, Value>, labels: &HcLabels) -> Option<TerminalFa
     };
 
     let status = raw.status.as_ref();
-    let program = status
-        .and_then(|status| status.app.clone())
-        .or_else(|| raw.foreground.as_ref().and_then(|fg| fg.name.as_deref()).map(program_name));
-    let kind = label(LABEL_KIND).and_then(|kind| agent_kind(&kind)).or_else(|| {
-        program
-            .as_deref()
-            .filter(|program| SHELLS.contains(program))
-            .map(|_| AgentKind::Shell)
+    let program = status.and_then(|status| status.app.clone()).or_else(|| {
+        raw.foreground
+            .as_ref()
+            .and_then(|fg| fg.name.as_deref())
+            .map(program_name)
     });
+    let kind = label(LABEL_KIND)
+        .and_then(|kind| agent_kind(&kind))
+        .or_else(|| {
+            program
+                .as_deref()
+                .filter(|program| SHELLS.contains(program))
+                .map(|_| AgentKind::Shell)
+        });
     let name = raw
         .name
         .clone()
