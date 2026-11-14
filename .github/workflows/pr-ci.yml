@@ -539,6 +539,7 @@ jobs:
             - 'crates/calendar_*/**'
             - 'crates/gmail_*/**'
             - 'crates/outlook_*/**'
+            - 'services/document_storage_service/**'
             - 'services/search_processing_service/**'
             - 'crates/opensearch_client/**'
             - 'infra/stacks/opensearch/helpers/**'
@@ -546,6 +547,8 @@ jobs:
             - 'tooling/xtask/crates/xtask_email_coverage/**'
             - 'apps/web/tests/email-e2e/ledger/**'
             - 'crates/macro_db_client/migrations/**'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
             - '.config/nextest.toml'
             - '.github/workflows/email_e2e.yml'
           observability_image:

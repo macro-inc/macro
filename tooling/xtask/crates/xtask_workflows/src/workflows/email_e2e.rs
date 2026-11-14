@@ -42,6 +42,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/calendar_*/**"),
     xtask_paths::repo_glob!("crates/gmail_*/**"),
     xtask_paths::repo_glob!("crates/outlook_*/**"),
+    xtask_paths::repo_glob!("services/document_storage_service/**"),
     xtask_paths::repo_glob!("services/search_processing_service/**"),
     xtask_paths::repo_glob!("crates/opensearch_client/**"),
     xtask_paths::repo_glob!("infra/stacks/opensearch/helpers/**"),
@@ -49,6 +50,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/crates/xtask_email_coverage/**"),
     xtask_paths::repo_glob!("apps/web/tests/email-e2e/ledger/**"),
     xtask_paths::repo_glob!("crates/macro_db_client/migrations/**"),
+    xtask_paths::repo_glob!("Cargo.toml"),
+    xtask_paths::repo_glob!("Cargo.lock"),
     xtask_paths::repo_glob!(".config/nextest.toml"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e.yml"),
 ];
