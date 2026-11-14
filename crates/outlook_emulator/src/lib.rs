@@ -67,7 +67,7 @@ pub use control::{CalendarSummary, MessageChange, MessageSummary, SubscriptionSu
 pub use fault::{Fault, FaultError, Route};
 pub use seed::{
     NewAttachment, NewEvent, NewMessage, Seed, SeedCalendar, SeedContact, SeedError, SeedFolder,
-    SeedMailbox,
+    SeedMailbox, SeedPhoto,
 };
 
 use crate::signing_key::{SigningKey, SigningKeyError};

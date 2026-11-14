@@ -320,6 +320,18 @@ pub(crate) struct Mailbox {
 }
 
 impl Mailbox {
+    /// The content type and bytes of a seeded profile photo.
+    fn seeded_photo(photo: &crate::seed::SeedPhoto) -> Result<(String, Vec<u8>), EmulatorError> {
+        let bytes = STANDARD.decode(&photo.base64).map_err(|_| {
+            EmulatorError::InvalidMessage("the profile photo is not base64".to_string())
+        })?;
+        let content_type = photo
+            .mime_type
+            .clone()
+            .unwrap_or_else(|| "image/jpeg".to_string());
+        Ok((content_type, bytes))
+    }
+
     pub(crate) fn new(seed: &SeedMailbox, now: DateTime<Utc>) -> Result<Self, EmulatorError> {
         let email = seed.email.to_lowercase();
         let user_id = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_DNS, email.as_bytes());
@@ -355,7 +367,7 @@ impl Mailbox {
             contact_folder_id: String::new(),
             contacts: BTreeMap::new(),
             removed_contacts: Vec::new(),
-            photo: None,
+            photo: seed.photo.as_ref().map(Self::seeded_photo).transpose()?,
             requests_per_ten_minutes: seed
                 .requests_per_ten_minutes
                 .unwrap_or(GRAPH_REQUESTS_PER_TEN_MINUTES),

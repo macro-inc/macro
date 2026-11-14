@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{Path, RawQuery, Request, State as AxumState};
+use axum::extract::{DefaultBodyLimit, Path, RawQuery, Request, State as AxumState};
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -37,6 +37,9 @@ pub(crate) const API_VERSION: &str = "v1.0";
 const CONTROL_PREFIX: &str = "/_emulator";
 const DEFAULT_PAGE_SIZE: usize = 10;
 const MAX_PAGE_SIZE: usize = 1000;
+/// The largest request body taken: Graph takes requests of up to 4 MB, and
+/// one range of an upload session may be nearly that large.
+const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 /// What Graph's front end answers a write that names no body length.
 const LENGTH_REQUIRED_PAGE: &str = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Length Required</TITLE></HEAD>\r\n<BODY><h2>Length Required</h2>\r\n<hr><p>HTTP Error 411. The request must be chunked or have a content length.</p>\r\n</BODY></HTML>\r\n";
 
@@ -724,7 +727,9 @@ fn length_required() -> Response {
 }
 
 pub(crate) fn router() -> Router<OutlookEmulator> {
-    Router::new().route(&format!("/{API_VERSION}/{{*path}}"), any(graph))
+    Router::new()
+        .route(&format!("/{API_VERSION}/{{*path}}"), any(graph))
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
 }
 
 /// Records every provider request, with the route and mailbox its handler
