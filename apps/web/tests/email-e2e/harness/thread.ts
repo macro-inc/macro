@@ -62,6 +62,10 @@ export async function threadMessages(
   const response = await mailbox.api(
     `/email/email/threads/${threadId}?limit=100`
   );
+  // An answer that is not the thread must not read as a thread without
+  // messages.
+  if (!response.ok)
+    throw new Error(`no thread ${threadId}: ${response.status}`);
   const body = (await response.json()) as {
     thread?: { messages?: ThreadMessage[] };
   };

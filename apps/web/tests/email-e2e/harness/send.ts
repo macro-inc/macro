@@ -41,16 +41,20 @@ export function replyEditor(page: Page): Locator {
 /**
  * Opens the composer from a message's own Reply (0) or Forward (1) button.
  * They carry no name, only a tooltip, so they are found by their place next
- * to the message's date.
+ * to the date of the first message that holds `messageText`.
  */
 export async function messageAction(
   page: Page,
   messageText: string,
   action: 'reply' | 'forward'
 ): Promise<void> {
-  await page.getByText(messageText).first().hover();
-  await page
-    .locator('main .gap-0\\.5 > button')
+  const message = page
+    .locator('main [data-message-body-id]')
+    .filter({ hasText: messageText })
+    .first();
+  await message.getByText(messageText).first().hover();
+  await message
+    .locator('.gap-0\\.5 > button')
     .nth(action === 'reply' ? 0 : 1)
     .click();
   if (action === 'reply') {

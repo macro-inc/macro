@@ -422,24 +422,34 @@ export class LocalStack implements EmailStack {
     // Also the inboxes a test connected through the app itself.
     const all = [...this.linked];
     for (const user of this.users.values()) {
-      const { links } = await this.as<{ links: { id: string }[] }>(
-        user,
-        '/email/email/links'
-      );
+      // One user or inbox that fails must not leave the others connected.
+      let links: { id: string }[] = [];
+      try {
+        ({ links } = await this.as<{ links: { id: string }[] }>(
+          user,
+          '/email/email/links'
+        ));
+      } catch (error) {
+        kept.push(`the inboxes of a user could not be listed: ${error}`);
+      }
       for (const { id } of links) {
         if (!all.some((each) => each.linkId === id))
           all.push({ user, linkId: id });
       }
     }
     for (const { user, linkId } of all) {
-      const removed = await send(
-        `${this.addresses.proxyUrl}/email/email/links/${linkId}`,
-        { method: 'DELETE', headers: { cookie: user.cookie ?? '' } }
-      );
-      if (removed.status !== 204 && removed.status !== 404) {
-        kept.push(
-          `the inbox ${linkId} was not disconnected (${removed.status}):\n${removed.body.toString('utf8')}`
+      try {
+        const removed = await send(
+          `${this.addresses.proxyUrl}/email/email/links/${linkId}`,
+          { method: 'DELETE', headers: { cookie: user.cookie ?? '' } }
         );
+        if (removed.status !== 204 && removed.status !== 404) {
+          kept.push(
+            `the inbox ${linkId} was not disconnected (${removed.status}):\n${removed.body.toString('utf8')}`
+          );
+        }
+      } catch (error) {
+        kept.push(`the inbox ${linkId} was not disconnected: ${error}`);
       }
     }
     if (kept.length > 0) throw new Error(kept.join('\n'));

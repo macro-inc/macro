@@ -242,6 +242,17 @@ for (const provider of PROVIDERS) {
           { message: 'no sent message of the thread has the person in Cc' }
         )
         .toContain(mailbox.inbox.email);
+      // And the reply the provider holds copies them. They wrote to
+      // themselves, so Outlook holds it twice: sent and received.
+      await expect
+        .poll(
+          async () =>
+            (await readMailbox(mailbox, mailbox.inbox.email))
+              .filter((message) => message.subject === 'Re: Offsite')
+              .map((message) => message.cc.includes(mailbox.inbox.email)),
+          { message: 'the reply at the provider has nobody in Cc' }
+        )
+        .toContain(true);
       confirmed('F-106');
     });
 
