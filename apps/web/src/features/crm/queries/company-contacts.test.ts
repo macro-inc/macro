@@ -1,12 +1,17 @@
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { QueryClient } from '@tanstack/solid-query';
-import { expect, it } from 'vitest';
+import { ok } from 'neverthrow';
+import { createRoot, createSignal } from 'solid-js';
+import { expect, it, vi } from 'vitest';
+import type { CompanyContactsFilter } from '../context/crm-sources';
 import {
   companyContactsHold,
   flattenCompanyContactsPages,
   isCompanyContactsQuery,
   patchCompanyContacts,
+  useCompanyContactsQuery,
 } from './company-contacts';
+import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
 const contact = (id: string, companyId: string): CrmContactResponse => ({
@@ -83,4 +88,47 @@ it('lists a contact that arrives on two pages once, where it came first', () => 
     renamed,
     contact('c', 'company-1'),
   ]);
+});
+
+it('names the search its rows answer, the earlier one while the next is loading', async () => {
+  const held = Promise.withResolvers<void>();
+  const listCompanyContactsPage = vi.fn(
+    async ({ query }: { query?: string }) => {
+      if (query) await held.promise;
+      return ok({
+        contacts: [contact(query ?? 'all', 'company-1')],
+        nextCursor: null,
+      });
+    }
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const deps = {
+    client,
+    storage: { listCompanyContactsPage },
+  } as unknown as CrmRecordDependencies;
+  const [filter, setFilter] = createSignal<CompanyContactsFilter>({
+    companyId: 'company-1',
+    archived: false,
+    search: '',
+  });
+  const { source, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, filter),
+    dispose,
+  }));
+
+  await vi.waitFor(() => expect(source.loadedSearch).toBe(''));
+  setFilter({ companyId: 'company-1', archived: false, search: 'an' });
+  await vi.waitFor(() =>
+    expect(listCompanyContactsPage).toHaveBeenCalledTimes(2)
+  );
+  expect(source.loadedSearch).toBe('');
+  expect(source.contacts.map((row) => row.id)).toEqual(['all']);
+
+  held.resolve();
+  await vi.waitFor(() => expect(source.loadedSearch).toBe('an'));
+  expect(source.contacts.map((row) => row.id)).toEqual(['an']);
+  dispose();
+  client.clear();
 });
