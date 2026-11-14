@@ -2955,12 +2955,16 @@ export const storageServiceClient = {
       { method: 'DELETE' }
     );
   },
-  async getContact({ contactId }: { contactId: string }) {
+  async getContact({
+    contactId,
+    signal,
+  }: {
+    contactId: string;
+    signal?: AbortSignal;
+  }) {
     return await dssFetch<CrmContactDetailResponse>(
       `/crm/contacts/${contactId}`,
-      {
-        method: 'GET',
-      }
+      { method: 'GET', signal }
     );
   },
   async getContactByEmail({
