@@ -2739,8 +2739,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         // Mirrors `list_companies_for_soup`'s domain + directory join shape
         // but scoped to a single id. Domains arrive ordered by their
-        // `created_at` so the first row carries the "primary" domain and
-        // its `crm_domain_directory` row contributes name/description.
+        // `created_at`, then id (as the preview batch orders them), so the
+        // first row carries the "primary" domain and its
+        // `crm_domain_directory` row contributes name/description.
         // First-interaction / last-interaction are aliased into the
         // CrmCompany.created_at / updated_at slots — same convention as
         // the soup listing.
@@ -2765,7 +2766,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             WHERE c.id = $1
               AND c.team_id = $2
               AND ($3 OR c.hidden = FALSE)
-            ORDER BY d.created_at ASC NULLS LAST
+            ORDER BY d.created_at ASC NULLS LAST, d.id
             "#,
             company_id,
             team_id,
@@ -2782,7 +2783,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // Display name is the team-scoped override when set, otherwise
         // the primary domain's directory name (first row by
-        // `created_at ASC` per the ORDER BY). Description comes from
+        // `created_at ASC, id` per the ORDER BY). Description comes from
         // the directory.
         let name = first.display_name.clone();
         let description = first.dir_description.clone();

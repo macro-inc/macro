@@ -20,7 +20,8 @@ INSERT INTO team_user (team_id, user_id, team_role) VALUES
 
 -- 101 has a name override; 102 takes its first domain's directory name; 103's
 -- domain differs in case from its directory row; 104's domain has no
--- directory row; 105 has no domain; 106 is hidden; 201 is team 2's.
+-- directory row; 105 has no domain; 106 is hidden; 107's two domains share a
+-- creation time; 201 is team 2's.
 INSERT INTO crm_companies (id, team_id, custom_name, hidden, first_interaction, last_interaction) VALUES
     ('00000000-0000-0000-0000-000000000065', '00000000-0000-0000-0000-00000000000a', 'Custom Co', FALSE, '2026-01-01', '2026-02-01'),
     ('00000000-0000-0000-0000-000000000066', '00000000-0000-0000-0000-00000000000a', NULL, FALSE, '2026-01-01', '2026-02-02'),
@@ -28,6 +29,7 @@ INSERT INTO crm_companies (id, team_id, custom_name, hidden, first_interaction, 
     ('00000000-0000-0000-0000-000000000068', '00000000-0000-0000-0000-00000000000a', NULL, FALSE, '2026-01-01', '2026-02-04'),
     ('00000000-0000-0000-0000-000000000069', '00000000-0000-0000-0000-00000000000a', NULL, FALSE, '2026-01-01', '2026-02-05'),
     ('00000000-0000-0000-0000-00000000006a', '00000000-0000-0000-0000-00000000000a', 'Hidden Co', TRUE, '2026-01-01', '2026-02-06'),
+    ('00000000-0000-0000-0000-00000000006b', '00000000-0000-0000-0000-00000000000a', NULL, FALSE, '2026-01-01', '2026-02-08'),
     ('00000000-0000-0000-0000-0000000000c9', '00000000-0000-0000-0000-00000000000b', 'Other Team Co', FALSE, '2026-01-01', '2026-02-07');
 INSERT INTO crm_domains (company_id, team_id, domain, created_at) VALUES
     ('00000000-0000-0000-0000-000000000065', '00000000-0000-0000-0000-00000000000a', 'a.example', '2026-01-01'),
@@ -37,12 +39,19 @@ INSERT INTO crm_domains (company_id, team_id, domain, created_at) VALUES
     ('00000000-0000-0000-0000-000000000068', '00000000-0000-0000-0000-00000000000a', 'd.example', '2026-01-01'),
     ('00000000-0000-0000-0000-00000000006a', '00000000-0000-0000-0000-00000000000a', 'h.example', '2026-01-01'),
     ('00000000-0000-0000-0000-0000000000c9', '00000000-0000-0000-0000-00000000000b', 'o.example', '2026-01-01');
+-- 107's domains tie on created_at. The higher id, and its directory row, go in
+-- first, so no insertion or heap order picks the lower one.
+INSERT INTO crm_domains (id, company_id, team_id, domain, created_at) VALUES
+    ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-00000000006b', '00000000-0000-0000-0000-00000000000a', 't2.example', '2026-01-01'),
+    ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-00000000006b', '00000000-0000-0000-0000-00000000000a', 't1.example', '2026-01-01');
 INSERT INTO crm_domain_directory (domain, name) VALUES
     ('a.example', 'Directory A'),
     ('b1.example', 'Directory B1'),
     ('b2.example', 'Directory B2'),
     ('c.example', 'Directory C'),
-    ('h.example', 'Directory H');
+    ('h.example', 'Directory H'),
+    ('t2.example', 'Directory T2'),
+    ('t1.example', 'Directory T1');
 
 -- 1001 is plain; 1002 sits under the hidden company; 1003 is hidden; 1004 has
 -- no company and no name; 1005's name is blank; 2001 is team 2's.
