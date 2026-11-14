@@ -1,0 +1,68 @@
+crates/agent_monitor_tui/src/format.rs
+  s_bff08e8d0bbe79::t_2e313458f72d49 4,9,109,156
+  s_bff08e8d0bbe79::t_2a7c71e18f6fb7 125,127,146,148
+crates/agent_monitor_tui/src/body.rs
+  s_bff08e8d0bbe79::t_2a7c71e18f6fb7 425
+  s_bff08e8d0bbe79::t_2e313458f72d49 176
+  s_ecd11f6b53251a::t_3125034743c663 22,187,189,194,197,299-300,306,310,336,343,357,360-364,375,392,406,413-414,418
+crates/agent_monitor_tui/src/ui/board.rs
+  s_bff08e8d0bbe79::t_2e313458f72d49 19
+  s_ecd11f6b53251a::t_aa7587ce8a87b6 13,50-51,64,71,79,81,89,96,110,115,119,128,135,154,157,165,168,173
+crates/agent_monitor_tui/src/ui/drill.rs
+  s_bff08e8d0bbe79::t_2a7c71e18f6fb7 416
+  s_bff08e8d0bbe79::t_2e313458f72d49 156-163,167,173,179,185,191,197,207,213,215,234
+  s_bff08e8d0bbe79::t_578eaeedecfb2d 20,36,77,80,90,101,103,124,127,251-255,272-274,276,278,302,314,349,366,378,409,412,421,459,464,479,486-487,491-492,496,503,509-511,525-526,529,531,542,549,554,566,580,590-594,602,607,612,624,636,660
+crates/agent_monitor_tui/src/ui/panes.rs
+  s_bff08e8d0bbe79::t_2e313458f72d49 6
+  s_bff08e8d0bbe79::t_9fd392842d8d07 19,46,110,115-116,120-122,133,141,146,159,168,177-181,190,204,206,244,246,249,302,330,332,334,336,344-348,355-358,363,365-368,395,404,406,410,412,420,427,437,469,480,512,533,540,542-556,570-571,584,588,614,617,640,669,671,688,698,707,710,714,719,737,739,747,771,783,785,788,797,810,826,828,846,850-854,868,871,873-874,880,899-900,906,923,933,950-951,971,977,980,982,990,993,1019
+crates/agent_monitor_tui/AGENTS.md
+  s_bff08e8d0bbe79::t_b2da504027c6ef 29-32,62-64
+crates/agent_monitor_tui/src/theme.rs
+  s_bff08e8d0bbe79::t_98f929b9219657 1-6,17-156,160-165,168-170,173-175,180,185-187,204-205,209,231,233-238,246-252,326,333,363,366-367,401-402,404-409,440-441,443-446
+crates/agent_monitor_tui/src/ui.rs
+  s_bff08e8d0bbe79::t_64e31750175c9e 27,100-103,106,116-117,122,126,130,132,138,143,149,151,177,183,186,189,217-220,236,242,245,248-250,253,273,282-283,293,306,315,404-405,408,415-419,426,430,433,438,441,454-455,460,524-525,534
+crates/agent_monitor_tui/src/ui/tree.rs
+  s_bff08e8d0bbe79::t_b071424ca051a9 16,85,103,140-141,195-198,201,207-208,211,215,219,222
+crates/agent_monitor_tui/src/ui/wall.rs
+  s_bff08e8d0bbe79::t_d5b23769a38db2 14,50,89-93,98,107,115,118,122,124,139,143,145-149,153,155,158,160,167,169
+crates/mesh_man/AGENTS.md
+  s_bff08e8d0bbe79::t_c1ab925fa52892 20-22,30-31
+crates/mesh_man/src/lib.rs
+  s_0a8995f15d1f80::t_ea88e45d584f20 30,38,79-80,126,135-139
+crates/mesh_man/src/palette.rs
+  s_0a8995f15d1f80::t_0ad08a6e174f43 1-76
+crates/mesh_man/src/widget.rs
+  s_bff08e8d0bbe79::t_bb099333d1e461 22,195,199-201,207,219,247,258,273-275,287,289-290,295-296,317,325,328,352,359-361,378,395,397,400,402,436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e0e7573e1d2f82abe0639fc6527ebc159eb2daad",
+  "prompts": {},
+  "sessions": {
+    "s_0a8995f15d1f80": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1f467b7-8e40-417c-a8e5-717313d5bd2c",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_bff08e8d0bbe79": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ff0aedd-8506-4b4c-afbd-a44b2c9aca30",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ecd11f6b53251a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05fe3463-3f3e-43f5-9eb5-0d7198627dfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
