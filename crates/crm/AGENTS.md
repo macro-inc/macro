@@ -92,6 +92,20 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+  `activity_property_edges` returns the items whose Companies or Contacts
+  property names a record of the same scope: it reads only the scope's visible
+  company and contact ids and probes each property's partial GIN index once
+  per id, so its cost follows the scope's records (about 2.6 us and 2.4
+  buffers each warm: 38 ms for 4k companies and 10k contacts), never other
+  teams' property rows. Keep each probe a fenced lateral: as a plain join, a
+  selective kind filter flipped the plan into testing every record against
+  every property row (1.8 s). Revisit if a team's records near 40k (100 ms).
+  Keep its visibility rules identical to the Activity arm's. It reads the
+  pool `with_activity_edges_replica` names, the replica for DSS's list Soup,
+  so it lags like the rest of a list: a record hidden or a member removed
+  moments ago can still match, and a record just added may not yet. Each item
+  still passes its own source's access check. Every other CRM read and write
+  stays on the primary.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with
