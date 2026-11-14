@@ -158,7 +158,15 @@ struct Areas {
 }
 
 /// The SDK areas [`Areas`] has a reference of.
-const SDK_AREAS: &[&str] = &["ai", "routines", "channels", "tasks", "email", "databases"];
+const SDK_AREAS: &[&str] = &[
+    "ai",
+    "routines",
+    "channels",
+    "tasks",
+    "email",
+    "databases",
+    "users",
+];
 
 impl RoutineCode for Areas {
     fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
@@ -573,6 +581,13 @@ async fn names_of_kinds_the_lookup_doesnt_search_go_to_the_session_unreported() 
     assert!(brief.prompt.contains(
         "Not looked up:\n- \"Jordan\" (person)\n- \"Finance\" (email label or channel)\n- \"eng\" (channel or person)\n"
     ));
+    // With the reference of the areas that find them, after the ones the
+    // routine uses.
+    assert!(
+        brief
+            .prompt
+            .contains("<sdk>\nthe reference of tasks, channels, users, email\n</sdk>")
+    );
     assert!(!brief.prompt.contains("Left for the owner"));
     let reported = milestones.0.lock().unwrap();
     assert_eq!(
@@ -586,6 +601,44 @@ async fn names_of_kinds_the_lookup_doesnt_search_go_to_the_session_unreported() 
         })
     );
     assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_areas_that_find_names_not_looked_up_take_each_names_likeliest_kind_first() {
+    let channel = Uuid::now_v7();
+    let model = Arc::new(Model::finding(named(&[
+        ("Finance", &["label", "tag", "agent"]),
+        ("Jordan", &["person"]),
+        ("Hiring", &["database"]),
+        ("Ops", &["initiative"]),
+    ])));
+    let names = Arc::new(Names {
+        searched: Some(vec![ItemKind::Channel]),
+        ..Names::default()
+    });
+    let (drafts, _, code) = finding(&model, &names, checks_bug_tasks(channel));
+    let request = routine(BUG_REPORTS);
+    let (program, context) = drafts.read_request(&request, context()).unwrap();
+
+    drafts
+        .briefed(
+            &owner(),
+            &request,
+            &program,
+            &context,
+            &Milestones::default(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    // The routine's areas, then one per name by its likeliest kind, at most
+    // three: a name's less likely kinds don't push out another's likeliest.
+    let asked = code.asked.lock().unwrap();
+    assert_eq!(
+        asked.last().unwrap(),
+        &["tasks", "channels", "email", "users", "databases"]
+    );
 }
 
 #[tokio::test(start_paused = true)]

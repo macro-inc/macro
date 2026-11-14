@@ -81,7 +81,10 @@ each run.
   the owner something is an Ask AI step's job. The prompt carries only the
   request, the owner and time, the found and left items, and the reference
   of the areas named, or of the commonest ones when the SDK has none of
-  them (`RoutineCode::area_reference`). A draft that may not write code
+  them, then of up to three areas that find the names not looked up (a
+  person in `users`, a database in `databases`: `kind_area`), each name's
+  likeliest kind first, as the budget allows
+  (`RoutineCode::area_reference`). A draft that may not write code
   (`code_available` is false: it needs the SDK, and `DraftContext::code` or
   a request changing a code step) is told to use an Ask AI step instead.
   Progress reports the admission (`DraftMilestone::Admitted`, which answers

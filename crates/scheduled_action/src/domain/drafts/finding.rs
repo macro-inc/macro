@@ -6,8 +6,9 @@
 //! only for names the lookup didn't look up and writes one program that
 //! ends with the check. A name no item has, or several do, is left out for
 //! the person to pick. A name of a kind the lookup doesn't search is left
-//! for the session to look up with its tools. The drafter reports what it
-//! found by name as it goes.
+//! for the session to look up with its tools, given the reference of the
+//! SDK areas that find it. The drafter reports what it found by name as it
+//! goes.
 //!
 //! The session's instructions are the same for every draft on one model
 //! with the same mix of code and conditions, so the prompt cache reads them
@@ -45,8 +46,10 @@ const ITEMS: &str = include_str!("finding/items.md");
 const MAX_NAMES: usize = 10;
 /// The longest name one lookup takes; it refuses the whole lookup for one.
 const MAX_NAME_CHARS: usize = 200;
-/// The most SDK areas the prompt carries the reference of.
+/// The most SDK areas the fast call adds the reference of to the prompt.
 const MAX_AREAS: usize = 6;
+/// The most SDK areas added to look up the names the lookup didn't.
+const MAX_LOOKUP_AREAS: usize = 3;
 /// The longest the fast call may take; the draft goes on without it after.
 const FIND_TIMEOUT: Duration = Duration::from_secs(10);
 /// The SDK area every code step may use, in the instructions.
@@ -236,7 +239,8 @@ impl FindingPrompts {
 }
 
 /// The session's prompt: `task`, for `owner`, with the items `lookup` found
-/// and the reference of the areas the routine uses, if any.
+/// and the reference of the areas the routine uses or finds names in, if
+/// any.
 fn prompt(
     task: &str,
     owner: &MacroUserIdStr<'static>,
@@ -252,7 +256,7 @@ fn prompt(
     );
     if !areas.trim().is_empty() {
         prompt.push_str(&format!(
-            "\n\n## The SDK reference for the areas this routine uses\n\n<sdk>\n{}\n</sdk>",
+            "\n\n## The SDK reference for the areas this routine uses or finds names in\n\n<sdk>\n{}\n</sdk>",
             areas.trim()
         ));
     }
@@ -373,6 +377,22 @@ fn kind_words(kind: ItemKind) -> &'static str {
     }
 }
 
+/// The SDK area whose methods find an item of `kind` by name.
+fn kind_area(kind: ItemKind) -> &'static str {
+    match kind {
+        ItemKind::Channel | ItemKind::ChannelLabel => "channels",
+        ItemKind::Person => "users",
+        ItemKind::Project => "projects",
+        ItemKind::Initiative => "initiatives",
+        ItemKind::Document => "documents",
+        ItemKind::Task => "tasks",
+        ItemKind::Database => "databases",
+        ItemKind::Agent => "agents",
+        ItemKind::Label => "email",
+        ItemKind::Tag => "properties",
+    }
+}
+
 /// Settle each name on the one item of its likeliest kind that has it
 /// exactly; a name no item has, or several items of that kind do, is left.
 /// A name a likelier kind that couldn't be searched might have is left for
@@ -488,7 +508,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
         lookup.record(&span);
         progress.report(DraftMilestone::Found(lookup.names()));
         let areas = if code {
-            self.areas_reference(&named)
+            self.areas_reference(&named, &lookup)
         } else {
             String::new()
         };
@@ -503,25 +523,45 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
     }
 
     /// The reference of the areas the fast call named, past the ones the
-    /// instructions carry; with none the SDK has, the commonest ones.
-    fn areas_reference(&self, named: &Named) -> String {
-        let areas: Vec<String> = named
+    /// instructions carry, or of the commonest ones when the SDK has none of
+    /// them; then of the areas that find the names not looked up, as the
+    /// budget allows.
+    fn areas_reference(&self, named: &Named, lookup: &Lookup) -> String {
+        let mut areas: Vec<String> = named
             .sdk
             .iter()
             .map(|area| area.trim().to_owned())
             .filter(|area| !area.is_empty() && area != AI_AREA && area != ROUTINES_AREA)
             .take(MAX_AREAS)
             .collect();
-        match self.code.area_reference(&areas) {
-            reference if reference.trim().is_empty() => {
-                let fallback: Vec<String> = FALLBACK_AREAS
-                    .iter()
-                    .map(|area| (*area).to_owned())
-                    .collect();
-                self.code.area_reference(&fallback)
-            }
-            reference => reference,
+        if self.code.area_reference(&areas).trim().is_empty() {
+            areas = FALLBACK_AREAS
+                .iter()
+                .map(|area| (*area).to_owned())
+                .collect();
         }
+        // After the areas the routine uses, so they keep the budget first:
+        // every name's likeliest kind, then its next likeliest, and so on.
+        let mut added = 0;
+        let ranks = lookup
+            .unsearched
+            .iter()
+            .map(|asked| asked.kinds.len())
+            .max()
+            .unwrap_or(0);
+        for rank in 0..ranks {
+            for asked in &lookup.unsearched {
+                let Some(kind) = asked.kinds.get(rank) else {
+                    continue;
+                };
+                let area = kind_area(*kind).to_owned();
+                if added < MAX_LOOKUP_AREAS && !areas.contains(&area) {
+                    areas.push(area);
+                    added += 1;
+                }
+            }
+        }
+        self.code.area_reference(&areas)
     }
 
     /// The items and SDK areas the words name, from the fast model; none
