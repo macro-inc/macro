@@ -122,6 +122,14 @@ pub fn generate(
         {
             environment.extend(microsoft_emulator::authentication_service_env());
         }
+        let pubsub_workers_env = microsoft_emulator::pubsub_workers_env(instance);
+        if sidecars.outlook_emulator && svc.compose_name == microsoft_emulator::PUBSUB_WORKERS {
+            environment.extend(
+                pubsub_workers_env
+                    .iter()
+                    .map(|(name, value)| (*name, value.as_str())),
+            );
+        }
         let mut s = dct::Service {
             image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
@@ -181,6 +189,7 @@ pub fn generate(
     if sidecars.outlook_emulator {
         let mut volumes = mounts.clone();
         volumes.push(microsoft_emulator::seed_volume());
+        volumes.push(microsoft_emulator::authority_volume());
         services.insert(
             microsoft_emulator::SERVICE.to_string(),
             Some(dct::Service {
