@@ -9,11 +9,17 @@ version = "0.1.0"
 async-trait = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+notify = { workspace = true }
 prost = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
+  "fs",
+  "io-util",
   "macros",
+  "process",
   "rt-multi-thread",
   "sync",
   "time",
@@ -23,6 +29,9 @@ tonic = { workspace = true }
 tonic-prost = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [build-dependencies]
 protox = { workspace = true }
