@@ -916,6 +916,52 @@ fn deleting_a_table_row_undoes_the_open_document_edit_boundary()
     Ok(())
 }
 
+/// A wall clock before the Unix epoch is a host error. The input fails before it changes the
+/// model, the document, the undo history or the merge tracker.
+#[test]
+fn a_wall_clock_before_the_epoch_fails_the_input_and_changes_nothing() {
+    let at = |mono: u64, wall: i64| Now {
+        mono: doc_sync_core::Millis(mono),
+        wall: doc_sync_core::UnixMillis(wall),
+    };
+    let (mut surface, doc, mut view) = fresh_application_history();
+    let type_at = |surface: &mut EditorSurface, view: &mut Vec<ViewEffect>, text: &str, now| {
+        surface.apply(
+            &doc,
+            Input::Command {
+                command: Command::InsertText(text.into()),
+                selection: ViewSelection::KeepModel,
+            },
+            now,
+            Access::Edit,
+            view,
+        )
+    };
+    type_at(&mut surface, &mut view, "a", at(1_000, 1_000)).expect("type a");
+    let version = doc.oplog_vv();
+    let availability = surface.history();
+    let refused = type_at(&mut surface, &mut view, "x", at(1_050, -1));
+    assert!(
+        matches!(refused, Err(SessionError::Configuration(_))),
+        "{refused:?}"
+    );
+    assert_eq!(&*surface.state().root_text_content(), "a");
+    assert_eq!(doc.oplog_vv(), version);
+    assert_eq!(surface.history(), availability);
+    // The tracker still holds 'a' at wall 1000, so 'b' 100 ms later merges with it.
+    type_at(&mut surface, &mut view, "b", at(1_100, 1_100)).expect("type b");
+    surface
+        .apply(
+            &doc,
+            Input::Undo,
+            at(50_000, 50_000),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("undo");
+    assert_eq!(&*surface.state().root_text_content(), "");
+}
+
 /// Source groups typing for undo by `Date.now` alone (registerLoroHistory's
 /// getMergeAction and Loro's mergeInterval both read it), so only the wall
 /// clock decides; the host's monotonic clock must not.
@@ -928,7 +974,7 @@ fn typing_history_groups_by_the_wall_clock_like_source() {
         wall: doc_sync_core::UnixMillis(wall),
     };
     let mut rows = Vec::new();
-    for (mono_gap, wall_gap) in [(100, 100), (100, 10_000), (10_000, 100)] {
+    for (mono_gap, wall_gap) in [(100, 100), (100, 10_000), (10_000, 100), (10_000, -500)] {
         let (mut surface, doc, mut view) = fresh_application_history();
         for (character, time) in [
             ("a", at(1_000, 1_000)),
@@ -970,6 +1016,9 @@ fn typing_history_groups_by_the_wall_clock_like_source() {
             (100, 100, String::new()),
             (100, 10_000, "a".to_string()),
             (10_000, 100, String::new()),
+            // The wall clock moved back: a negative delta merges in Source too
+            // (applyAiOps.source-controls.test.ts 'typing undo follows the wall clock').
+            (10_000, -500, String::new()),
         ]
     );
 }

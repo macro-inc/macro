@@ -89,6 +89,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
+        let time = history_time(now)?;
         if access != Access::Edit || self.projection.is_none() {
             return Ok(false);
         }
@@ -97,7 +98,7 @@ impl EditorSurface {
                 command: document_metadata_upgrade(),
                 selection: ViewSelection::KeepModel,
             },
-            HistoryTime(now.mono.0),
+            time,
         ) {
             Ok(output) => output,
             Err(error) => {
@@ -112,7 +113,7 @@ impl EditorSurface {
                 return Ok(false);
             }
         };
-        self.group(&output.commits, HistoryTime(now.mono.0))?;
+        self.group(&output.commits, time)?;
         let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
         let projected = if self
             .undo

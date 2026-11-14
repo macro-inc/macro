@@ -55,6 +55,7 @@ impl EditorSurface {
         now: Now,
         view: &mut Vec<ViewEffect>,
     ) -> Result<(), SessionError> {
+        let time = history_time(now)?;
         self.history_selection.applied();
         if let Some((anchor, focus)) = points {
             let mut range = RangeSelection::new(anchor, focus);
@@ -75,7 +76,7 @@ impl EditorSurface {
                         )),
                         selection: ViewSelection::KeepModel,
                     },
-                    HistoryTime(now.mono.0),
+                    time,
                 )
                 .map_err(|error| {
                     #[cfg(feature = "application")]

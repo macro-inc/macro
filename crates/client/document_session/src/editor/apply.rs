@@ -32,6 +32,7 @@ impl EditorSurface {
         view: &mut Vec<ViewEffect>,
         main_commit: Option<&mut MainCommitOutcome>,
     ) -> Result<bool, SessionError> {
+        let time = history_time(now)?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
         self.handled = Handled::No;
         let cold_span = match &input {
@@ -105,7 +106,7 @@ impl EditorSurface {
             self.group_active = false;
             self.history_ready = true;
             self.handled = Handled::Yes;
-            self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
+            self.tracker = MergeTracker::new(self.config.delay_ms, time);
             self.history_changed(view);
             return Ok(false);
         }
@@ -125,11 +126,8 @@ impl EditorSurface {
             capture.clear();
         }
         let result = match main_commit {
-            Some(outcome) => {
-                self.core
-                    .apply_with_main_commit(input, HistoryTime(now.mono.0), outcome)
-            }
-            None => self.core.apply(input, HistoryTime(now.mono.0)),
+            Some(outcome) => self.core.apply_with_main_commit(input, time, outcome),
+            None => self.core.apply(input, time),
         };
         // Run KeyDown and routed command listeners through the model first. Its
         // snapshot history is disabled here; only an unhandled successful route
@@ -156,7 +154,7 @@ impl EditorSurface {
                     self.projection.as_ref()?.cursor(doc, previous, selection)
                 }));
         }
-        self.group(commits, HistoryTime(now.mono.0))?;
+        self.group(commits, time)?;
         #[cfg(feature = "test-faults")]
         let fault = if std::mem::take(&mut self.wrong_next_type) {
             self.prepare_projection_type_write(doc)?
@@ -195,7 +193,7 @@ impl EditorSurface {
                 undo.clear();
             }
             self.group_active = false;
-            self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
+            self.tracker = MergeTracker::new(self.config.delay_ms, time);
             self.history_ready = true;
         }
         let failed = result.is_err();

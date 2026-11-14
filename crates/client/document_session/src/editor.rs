@@ -25,6 +25,15 @@ pub use builder::{
 };
 static PLAIN: PlainPolicy = PlainPolicy;
 
+/// History grouping time. Source's merge rule and Loro's merge interval both read Date.now
+/// (collaboration/undo.ts getMergeAction, `changeTime < prevChangeTime + delay`), so a
+/// backwards wall jump merges there as it does here, and only the wall clock decides.
+fn history_time(now: Now) -> Result<HistoryTime, SessionError> {
+    u64::try_from(now.wall.0)
+        .map(HistoryTime)
+        .map_err(|_| SessionError::Configuration("wall clock is before the Unix epoch"))
+}
+
 /// Outcome of rebuilding the editor from the document.
 pub(super) enum Attached {
     /// An empty document opened without edit access; Initialize is already queued.
@@ -120,6 +129,7 @@ pub struct EditorSurface {
 }
 impl EditorSurface {
     pub(crate) fn new(config: EditorConfig, peer: u64, now: Now) -> Result<Self, SessionError> {
+        let time = history_time(now)?;
         i64::try_from(config.delay_ms)
             .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         let editor = Self::builder(&config, config.mode, peer).build()?;
@@ -131,7 +141,7 @@ impl EditorSurface {
             checklist: Default::default(),
             projection: None,
             undo: None,
-            tracker: MergeTracker::new(config.delay_ms, HistoryTime(now.mono.0)),
+            tracker: MergeTracker::new(config.delay_ms, time),
             config,
             history_selection: history::HistorySelection::default(),
             group_active: false,
@@ -272,6 +282,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<Attached, SessionError> {
+        let time = history_time(now)?;
         let interval = i64::try_from(self.config.delay_ms)
             .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
@@ -366,7 +377,7 @@ impl EditorSurface {
         self.history_selection = history::HistorySelection::default();
         self.history_selection.install(&undo);
         self.undo = Some(undo);
-        self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
+        self.tracker = MergeTracker::new(self.config.delay_ms, time);
         self.group_active = false;
         self.availability = HistoryAvailability::default();
         // Initialization's ClearHistory boundary makes the manager ready for user edits.
@@ -657,6 +668,7 @@ impl EditorSurface {
         view: &mut Vec<ViewEffect>,
         historic: bool,
     ) -> Result<bool, SessionError> {
+        let time = history_time(now)?;
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
         let browser_history = (historic && self.config.browser_history_awareness)
             .then(|| browser_history::AwarenessSelection::capture(self));
@@ -714,14 +726,11 @@ impl EditorSurface {
         } else {
             apply
         };
-        let output = self
-            .core
-            .apply(input, HistoryTime(now.mono.0))
-            .map_err(|error| {
-                #[cfg(feature = "application")]
-                self.checklist.observe(&error.committed);
-                SessionError::Model(error.error)
-            })?;
+        let output = self.core.apply(input, time).map_err(|error| {
+            #[cfg(feature = "application")]
+            self.checklist.observe(&error.committed);
+            SessionError::Model(error.error)
+        })?;
         #[cfg(feature = "application")]
         {
             self.checklist.remote_applied();
@@ -790,14 +799,11 @@ impl EditorSurface {
             if let Some(capture) = &self.follow_up_errors {
                 capture.clear();
             }
-            let output = self
-                .core
-                .apply(input, HistoryTime(now.mono.0))
-                .map_err(|error| {
-                    #[cfg(feature = "application")]
-                    self.checklist.observe(&error.committed);
-                    SessionError::Model(error.error)
-                })?;
+            let output = self.core.apply(input, time).map_err(|error| {
+                #[cfg(feature = "application")]
+                self.checklist.observe(&error.committed);
+                SessionError::Model(error.error)
+            })?;
             Self::output(
                 output,
                 view,
@@ -863,14 +869,11 @@ impl EditorSurface {
             if let Some(capture) = &self.follow_up_errors {
                 capture.clear();
             }
-            let output = self
-                .core
-                .apply(input, HistoryTime(now.mono.0))
-                .map_err(|error| {
-                    #[cfg(feature = "application")]
-                    self.checklist.observe(&error.committed);
-                    SessionError::Model(error.error)
-                })?;
+            let output = self.core.apply(input, time).map_err(|error| {
+                #[cfg(feature = "application")]
+                self.checklist.observe(&error.committed);
+                SessionError::Model(error.error)
+            })?;
             Self::output(
                 output,
                 view,

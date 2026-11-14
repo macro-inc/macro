@@ -605,12 +605,13 @@ describe('Source applyAiOps controls', () => {
 
   it('typing undo follows the wall clock', async () => {
     // Source has one clock for history: Date.now (getMergeAction and Loro's
-    // mergeInterval). Two typed characters 100 ms or 10 s apart on it.
+    // mergeInterval). Two typed characters 100 ms or 10 s apart on it, and
+    // one with the wall clock moved 500 ms back between them.
     const rows: { gap: number; undo1: string }[] = [];
     const start = new Date('2026-01-01T00:00:00.000Z').getTime();
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
-      for (const gap of [100, 10_000]) {
+      for (const gap of [100, 10_000, -500]) {
         vi.setSystemTime(start);
         const r = await rig(SEED);
         r.editor.update(
@@ -654,6 +655,8 @@ describe('Source applyAiOps controls', () => {
     expect(rows).toEqual([
       { gap: 100, undo1: SEED },
       { gap: 10_000, undo1: 'Alpha beta gammaa\n\nSecond line' },
+      // A backwards jump is a negative delta, under both 400 ms rules: merged.
+      { gap: -500, undo1: SEED },
     ]);
   });
 
