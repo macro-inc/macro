@@ -118,8 +118,26 @@ async fn insert_bot_participant(pool: &PgPool, channel_id: Uuid, bot_id: BotId, 
     .unwrap();
 }
 
-fn source_id_set(source_ids: SourceIds) -> HashSet<String> {
-    source_ids.0.into_iter().collect()
+/// The sources a bot reaches in `team_id`: none unless it is live in that
+/// team.
+async fn team_scope_sources(
+    pool: &PgPool,
+    bot_principal: &bot_id::BotIdStr<'_>,
+    team_id: Uuid,
+) -> anyhow::Result<HashSet<String>> {
+    let viewer = team_bot_viewer(pool, bot_principal, team_id).await?;
+    if viewer.is_anonymous() {
+        return Ok(HashSet::new());
+    }
+    Ok(sqlx::query_scalar!(
+        r#"SELECT s.source AS "source!" FROM entity_access_viewer_sources($1, $2) s(source)"#,
+        viewer.id(),
+        viewer.scope_team(),
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .collect())
 }
 
 /// An empty link + thread owned by `owner_macro_id`. Returns `(link_id, thread_id)`.
@@ -151,7 +169,7 @@ async fn insert_thread(pool: &PgPool, owner_macro_id: &str, email: &str) -> (Uui
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
+async fn team_scope_sources_include_only_owning_team_and_active_bot_sources(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
@@ -183,9 +201,7 @@ async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
     insert_bot_participant(&pool, private_channel_id, bot_id, false).await;
     insert_bot_participant(&pool, departed_channel_id, bot_id, true).await;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &team_id).await?;
-    let source_count = source_ids.0.len();
-    let actual = source_id_set(source_ids);
+    let actual = team_scope_sources(&pool, &bot_principal, team_id).await?;
     let expected = HashSet::from([
         team_id.to_string(),
         team_channel_id.to_string(),
@@ -194,18 +210,13 @@ async fn team_scope_source_ids_include_only_owning_team_and_active_bot_sources(
     ]);
 
     assert_eq!(actual, expected);
-    assert_eq!(
-        source_count,
-        actual.len(),
-        "source ids must be deduplicated"
-    );
     assert!(!actual.contains(&other_team_channel_id.to_string()));
     assert!(!actual.contains(&departed_channel_id.to_string()));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_reject_mismatched_team(pool: PgPool) -> anyhow::Result<()> {
+async fn team_scope_sources_reject_mismatched_team(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let bot_principal = bot_id.into_storage_id();
     let owning_team_id = Uuid::new_v4();
@@ -214,14 +225,14 @@ async fn team_scope_source_ids_reject_mismatched_team(pool: PgPool) -> anyhow::R
     insert_team(&pool, owning_team_id).await;
     insert_owned_bot(&pool, bot_id, None, Some(owning_team_id)).await;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &supplied_team_id).await?;
+    let sources = team_scope_sources(&pool, &bot_principal, supplied_team_id).await?;
 
-    assert!(source_ids.0.is_empty());
+    assert!(sources.is_empty());
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_scope_source_ids_reject_soft_deleted_bot(pool: PgPool) -> anyhow::Result<()> {
+async fn team_scope_sources_reject_soft_deleted_bot(pool: PgPool) -> anyhow::Result<()> {
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());
     let bot_principal = bot_id.into_storage_id();
     let team_id = Uuid::new_v4();
@@ -238,9 +249,9 @@ async fn team_scope_source_ids_reject_soft_deleted_bot(pool: PgPool) -> anyhow::
     .execute(&pool)
     .await?;
 
-    let source_ids = get_team_scope_source_ids(&pool, &bot_principal, &team_id).await?;
+    let sources = team_scope_sources(&pool, &bot_principal, team_id).await?;
 
-    assert!(source_ids.0.is_empty());
+    assert!(sources.is_empty());
     Ok(())
 }
 
@@ -352,4 +363,143 @@ async fn foreign_recipients_follow_exact_source_and_current_team_membership(
             .is_empty()
     );
     Ok(())
+}
+
+/// Source files of the access statements (Rust, and SQL files that
+/// `query_file!` reads), without the tests and the test-only copy of the old
+/// statements.
+fn statement_sources(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).expect("read the source directory") {
+        let path = entry.expect("read a directory entry").path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if path.is_dir() {
+            if name != ORACLE {
+                statement_sources(&path, files);
+            }
+        } else if name.ends_with(".sql")
+            || (name.ends_with(".rs")
+                && name != "test.rs"
+                && !name.ends_with("_test.rs")
+                // `entity_audiences.rs` binds the teams and channels that grants
+                // name, to list their members; it checks no viewer.
+                && !matches!(
+                    name,
+                    "test_viewers.rs" | "source_list_oracle.rs" | "entity_audiences.rs"
+                ))
+        {
+            files.push(path);
+        }
+    }
+}
+
+/// The module, and the directory of SQL files, that keep the old statements.
+const ORACLE: &str = "source_list_oracle";
+
+/// What in `sql` would bind a viewer's source list instead of checking
+/// membership: a source column compared with a bound array, the old
+/// two-argument `external_chat_access_level`, or a membership check under
+/// NOT, which an anonymous viewer would pass.
+fn source_list_uses(sql: &str) -> Vec<String> {
+    const SOURCE_COLUMNS: [&str; 4] = [
+        "source_id",
+        "team_id::text",
+        "channel_id",
+        "channel_id::text",
+    ];
+    // Lowercase, with `=` spaced and whitespace collapsed, so every spelling
+    // of `source_id = ANY($n)` reads the same.
+    let sql = sql
+        .to_lowercase()
+        .replace('=', " = ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace("( ", "(")
+        .replace("any (", "any(");
+    let mut uses = Vec::new();
+    for (at, _) in sql.match_indices(" = any($") {
+        let column = sql[..at].rsplit([' ', '(', '.']).next().unwrap_or_default();
+        if SOURCE_COLUMNS.contains(&column) {
+            let start = (0..=at.saturating_sub(40))
+                .rev()
+                .find(|&i| sql.is_char_boundary(i))
+                .unwrap_or(0);
+            let end = ((at + 12).min(sql.len())..=sql.len())
+                .find(|&i| sql.is_char_boundary(i))
+                .unwrap_or(sql.len());
+            uses.push(sql[start..end].to_string());
+        }
+    }
+    for banned in [
+        "external_chat_access_level($1, $2)",
+        "external_chat_sources(",
+        "not exists (select from entity_access_source_matches",
+    ] {
+        if sql.contains(banned) {
+            uses.push(banned.to_string());
+        }
+    }
+    uses
+}
+
+/// No access statement binds the viewer's source list, so none costs more
+/// for a viewer in more teams and channels.
+#[test]
+fn no_statement_binds_a_source_list() {
+    let mut files = Vec::new();
+    statement_sources(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    assert!(files.len() > 20, "found only {} source files", files.len());
+    assert!(
+        files
+            .iter()
+            .any(|path| path.ends_with("documents_access.sql")),
+        "the batched document statement is not scanned"
+    );
+    let found: Vec<String> = files
+        .iter()
+        .flat_map(|path| {
+            let text = std::fs::read_to_string(path).expect("read a source file");
+            source_list_uses(&text)
+                .into_iter()
+                .map(move |found| format!("{}: {found}", path.display()))
+        })
+        .collect();
+    assert!(
+        found.is_empty(),
+        "source lists bound:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
+fn source_list_uses_finds_each_old_form() {
+    for sql in [
+        "AND source_id = ANY($2)",
+        "WHERE ea.source_id = ANY($1)",
+        "ON owner_tu.team_id::text = ANY($2)",
+        "WHERE c.channel_id = ANY(\n $3)",
+        "AND source_id=ANY($2)",
+        "AND ea.source_id =any ( $2 )",
+        "and team_id::text = any($1)",
+        "SELECT external_chat_access_level($1, $2)",
+        "AND NOT EXISTS (SELECT FROM entity_access_source_matches(x, $1, $2))",
+        include_str!("source_list_oracle/documents_access.sql"),
+    ] {
+        assert!(!source_list_uses(sql).is_empty(), "{sql}");
+    }
+    for sql in [
+        "AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))",
+        "AND source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))",
+        "WHERE r.id = ANY($1)",
+        "AND entity_id = ANY($2)",
+        "SELECT external_chat_access_level($1, $2, $3)",
+    ] {
+        assert!(source_list_uses(sql).is_empty(), "{sql}");
+    }
 }

@@ -7,17 +7,19 @@ mod test;
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 
-/// Highest access level the caller's `source_ids` reach on an initiative.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_initiative_access(
+/// Highest access level the viewer reaches on an initiative.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_initiative_access(
     pool: &PgPool,
     initiative_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let levels: Vec<AccessLevel> = sqlx::query_scalar!(
         r#"
@@ -26,7 +28,7 @@ pub async fn get_initiative_access(
             FROM entity_access ea
             WHERE ea.entity_id = $1
               AND ea.entity_type = 'initiative'
-              AND ea.source_id = ANY($2)
+              AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         ),
         link_share_grants AS (
             SELECT sp."linkShareAccessLevel" AS access_level
@@ -42,7 +44,7 @@ pub async fn get_initiative_access(
                           SELECT 1
                           FROM team_user owner_team
                           WHERE owner_team.user_id = i.owner_user_id
-                            AND owner_team.team_id::text = ANY($2)
+                            AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $3))
                       )
                   )
               )
@@ -55,7 +57,8 @@ pub async fn get_initiative_access(
         ) AS grants
         "#,
         initiative_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -65,14 +68,14 @@ pub async fn get_initiative_access(
 
 /// Every grant path behind [`get_initiative_access`], labeled.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_initiative_access(
     pool: &PgPool,
     initiative_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, initiative_id, EntityType::Initiative, source_ids).await?;
+        list_entity_access_grants(pool, initiative_id, EntityType::Initiative, user_id).await?;
 
     let public_level: Option<AccessLevel> = sqlx::query_scalar!(
         r#"
@@ -98,13 +101,13 @@ pub async fn explain_initiative_access(
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
         JOIN team_user owner_team
           ON owner_team.user_id = i.owner_user_id
-         AND owner_team.team_id::text = ANY($2)
+         AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL))
         WHERE i.id = $1
           AND sp."linkShare" = 'TEAM'
           AND sp."linkShareAccessLevel" IS NOT NULL
         "#,
         initiative_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;

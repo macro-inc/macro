@@ -7,23 +7,26 @@ mod test;
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{
+    domain::{models::AccessLevel, telemetry::span_count},
+    outbound::pg_access_repo::queries::Viewer,
+};
+#[cfg(feature = "explain_binary")]
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 use std::{collections::HashMap, str::FromStr};
 
-/// Get the highest access level a user has for a document.
-#[tracing::instrument(err, skip(pool, source_ids, user_id))]
-pub async fn get_document_access(
+/// Get the highest access level a viewer has for a document.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_document_access(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     // Check share permission access only
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
@@ -52,12 +55,13 @@ pub async fn get_document_access(
             FROM entity_access
             WHERE entity_id = $1
               AND entity_type = 'document'
-              AND source_id = ANY($2)
               AND access_level = 'owner'
+              AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))
         ) AS "is_direct_owner!"
         "#,
         document_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_one(pool)
     .await?;
@@ -66,7 +70,8 @@ pub async fn get_document_access(
         return Ok(Some(AccessLevel::Owner));
     }
 
-    let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
+    // A bot reaches documents only through grants, never as an inbox owner.
+    let user_id_str = viewer.user_id().unwrap_or("");
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
@@ -76,7 +81,7 @@ pub async fn get_document_access(
                 access_level::text FROM entity_access
             WHERE entity_id = $1
             AND entity_type = 'document'
-            AND source_id = ANY($2)
+            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $5))
 
             UNION ALL
             -- Source 2: document link share permission
@@ -96,7 +101,7 @@ pub async fn get_document_access(
                       AND EXISTS (
                           SELECT 1
                           FROM owner_team(document.owner) owner_team
-                          WHERE owner_team.team_id::text = ANY($2)
+                          WHERE EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $5))
                       )
                   )
               )
@@ -139,7 +144,7 @@ pub async fn get_document_access(
                       FROM entity_access thread_access
                       WHERE thread_access.entity_id = t.id
                         AND thread_access.entity_type = 'email_thread'
-                        AND thread_access.source_id = ANY($2)
+                        AND EXISTS (SELECT FROM entity_access_source_matches(thread_access.source_id, $2, $5))
                   )
               )
 
@@ -168,7 +173,7 @@ pub async fn get_document_access(
                       FROM entity_access pa
                       WHERE pa.entity_type = 'document'
                         AND pa.entity_id::text = parent_doc.id
-                        AND pa.source_id = ANY($2)
+                        AND EXISTS (SELECT FROM entity_access_source_matches(pa.source_id, $2, $5))
                   )
                   OR (
                       sp."linkShareAccessLevel" IS NOT NULL
@@ -179,7 +184,7 @@ pub async fn get_document_access(
                               AND EXISTS (
                                   SELECT 1
                                   FROM owner_team(parent_doc.owner) tu
-                                  WHERE tu.team_id::text = ANY($2)
+                                  WHERE EXISTS (SELECT FROM entity_access_source_matches(tu.team_id::text, $2, $5))
                               )
                           )
                       )
@@ -188,9 +193,10 @@ pub async fn get_document_access(
         ) AS combined_access
         "#,
         document_id,
-        &source_ids.0,
+        viewer.id(),
         &document_id.to_string(),
         user_id_str,
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -209,36 +215,25 @@ pub async fn get_document_access(
 /// Gives each document the answer [`get_document_access`] gives it, from the
 /// same four sources; documents the user cannot reach are left out. A project
 /// read checks every task it holds, and one statement per task at two round
-/// trips each was most of its time. `source_ids` must be the user's own
-/// (from [`get_user_source_ids`](super::get_user_source_ids)), which always
-/// include the user id: the anonymous public-link-only check stays in
-/// [`get_document_access`].
-#[tracing::instrument(err, skip_all, fields(document_count = document_ids.len()))]
-pub async fn get_documents_access(
+/// trips each was most of its time. Users only: the anonymous
+/// public-link-only check and bots stay in [`get_document_access`].
+#[tracing::instrument(err, skip_all, fields(document_count = span_count(document_ids.len())))]
+pub(crate) async fn get_documents_access(
     pool: &PgPool,
     document_ids: &[uuid::Uuid],
-    source_ids: &SourceIds,
-    user_id: &MacroUserId<Lowercase<'_>>,
+    user_id: &str,
 ) -> Result<HashMap<uuid::Uuid, AccessLevel>, sqlx::Error> {
     let mut highest: HashMap<uuid::Uuid, AccessLevel> = HashMap::new();
     if document_ids.is_empty() {
         return Ok(highest);
     }
-    // Its cost follows the caller's source ids (one per channel and team), which
-    // no caller bounds, so bound the statement. The services' pools set no timeout.
-    let mut transaction = pool.begin().await?;
-    sqlx::query!("SET LOCAL statement_timeout = '5s'")
-        .execute(&mut *transaction)
-        .await?;
     let rows = sqlx::query_file!(
         "src/outbound/pg_access_repo/queries/document_access/documents_access.sql",
         document_ids,
-        &source_ids.0,
-        user_id.as_ref(),
+        user_id,
     )
-    .fetch_all(&mut *transaction)
+    .fetch_all(pool)
     .await?;
-    transaction.commit().await?;
 
     for row in rows {
         highest
@@ -250,22 +245,16 @@ pub async fn get_documents_access(
 }
 
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids, user_id))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_document_access(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, document_id, EntityType::Document, source_ids).await?;
-    grants.extend(explain_document_link_shares(pool, document_id, source_ids).await?);
-
-    if let Some(user_id) = user_id {
-        grants.extend(
-            explain_document_email_attachments(pool, document_id, source_ids, user_id).await?,
-        );
-    }
+        list_entity_access_grants(pool, document_id, EntityType::Document, user_id).await?;
+    grants.extend(explain_document_link_shares(pool, document_id, user_id).await?);
+    grants.extend(explain_document_email_attachments(pool, document_id, user_id).await?);
 
     Ok(grants)
 }
@@ -274,7 +263,7 @@ pub async fn explain_document_access(
 async fn explain_document_link_shares(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let document_id_str = document_id.to_string();
     let mut grants = Vec::new();
@@ -301,10 +290,6 @@ async fn explain_document_link_shares(
             .map(|access_level| AccessGrant::PublicLink { access_level }),
     );
 
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
-
     let team_rows = sqlx::query!(
         r#"
         SELECT
@@ -316,13 +301,13 @@ async fn explain_document_link_shares(
         JOIN "SharePermission" share_permission
           ON share_permission.id = document_permission."sharePermissionId"
         JOIN owner_team(document.owner) owner_team
-          ON owner_team.team_id::text = ANY($2)
+          ON EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, NULL))
         WHERE document.id = $1
           AND share_permission."linkShare" = 'TEAM'
           AND share_permission."linkShareAccessLevel" IS NOT NULL
         "#,
         &document_id_str,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
@@ -339,7 +324,6 @@ async fn explain_document_link_shares(
 async fn explain_document_email_attachments(
     pool: &PgPool,
     document_id: &uuid::Uuid,
-    source_ids: &SourceIds,
     user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let user_id_str = user_id.as_ref();
@@ -348,12 +332,12 @@ async fn explain_document_email_attachments(
         SELECT
             t.id AS thread_id,
             CASE
-                WHEN l.macro_id = $3 THEN 'inbox_owner'
+                WHEN l.macro_id = $2 THEN 'inbox_owner'
                 WHEN EXISTS (
                     SELECT 1
                     FROM macro_user_links mul
                     WHERE mul.link_id = l.id
-                      AND mul.primary_macro_id = $3
+                      AND mul.primary_macro_id = $2
                 ) THEN 'inbox_delegate'
                 ELSE 'thread_grant'
             END AS "reason!"
@@ -364,24 +348,23 @@ async fn explain_document_email_attachments(
         JOIN email_links l ON l.id = t.link_id
         WHERE de.document_id = $1
           AND (
-              l.macro_id = $3
+              l.macro_id = $2
               OR EXISTS (
                   SELECT 1
                   FROM macro_user_links mul
                   WHERE mul.link_id = l.id
-                    AND mul.primary_macro_id = $3
+                    AND mul.primary_macro_id = $2
               )
               OR EXISTS (
                   SELECT 1
                   FROM entity_access thread_access
                   WHERE thread_access.entity_id = t.id
                     AND thread_access.entity_type = 'email_thread'
-                    AND thread_access.source_id = ANY($2)
+                    AND EXISTS (SELECT FROM entity_access_source_matches(thread_access.source_id, $2, NULL))
               )
           )
         "#,
         &document_id.to_string(),
-        &source_ids.0,
         user_id_str,
     )
     .fetch_all(pool)
@@ -403,12 +386,14 @@ async fn explain_document_email_attachments(
 /// Historical document ids are not UUIDs and cannot occur in `entity_access`
 /// rows. Their ownership, link grants, channel grants, and project grants still
 /// live in the ordinary document and share tables.
-#[tracing::instrument(err, skip(pool, source_ids, user_id))]
-pub async fn get_legacy_document_access(
+///
+/// Only users reach this path (a bot's checks need a UUID), so `$2` is both
+/// the owner to compare and the viewer whose sources the grants match.
+#[tracing::instrument(err, skip(pool, user_id))]
+pub(crate) async fn get_legacy_document_access(
     pool: &PgPool,
     document_id: &str,
-    source_ids: &SourceIds,
-    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    user_id: Option<&str>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let levels = sqlx::query_scalar!(
         r#"
@@ -439,24 +424,24 @@ pub async fn get_legacy_document_access(
                   "linkShare" = 'TEAM'
                   AND EXISTS (
                       SELECT 1 FROM owner_team(p.owner) t
-                      WHERE t.team_id::text = ANY($3)
+                      WHERE EXISTS (SELECT FROM entity_access_source_matches(t.team_id::text, $2, NULL))
                   )
               )
           )
         UNION ALL
         SELECT c.access_level::text FROM document_permissions p
         JOIN "ChannelSharePermission" c ON c.share_permission_id = p.id
-        WHERE c.channel_id = ANY($3)
+        WHERE EXISTS (SELECT FROM entity_access_source_matches(c.channel_id, $2, NULL))
         UNION ALL
         SELECT 'edit'::text FROM parent_projects WHERE "userId" = $2
         UNION ALL
         SELECT a.access_level::text FROM entity_access a
         JOIN parent_projects p ON a.entity_id::text = p.id
-        WHERE a.entity_type = 'project' AND a.source_id = ANY($3)
+        WHERE a.entity_type = 'project'
+          AND EXISTS (SELECT FROM entity_access_source_matches(a.source_id, $2, NULL))
         "#,
         document_id,
-        user_id.map(AsRef::as_ref),
-        &source_ids.0,
+        user_id,
     )
     .fetch_all(pool)
     .await?;

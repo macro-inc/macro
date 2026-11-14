@@ -18,7 +18,7 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
     EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
-use entity_access::domain::telemetry::{SOURCE_ID_COUNT_FIELD, observe_source_ids, span_count};
+use entity_access::domain::telemetry::span_count;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
@@ -295,7 +295,6 @@ where
             initiative_id = %receipt.entity().entity_id,
             task_count = tracing::field::Empty,
             visible_task_count = tracing::field::Empty,
-            source_id_count = tracing::field::Empty,
         )
     )]
     async fn read(
@@ -313,14 +312,7 @@ where
         let task_ids = self.resources.project_tasks(id).await?;
         let span = tracing::Span::current();
         span.record("task_count", span_count(task_ids.len()));
-        // Each task's check binds the viewer's source ids, so their count
-        // predicts what this read costs.
-        let (tasks, source_ids) =
-            observe_source_ids(self.visible_tasks(receipt.auth(), task_ids)).await;
-        if let Some(count) = source_ids {
-            span.record(SOURCE_ID_COUNT_FIELD, span_count(count));
-        }
-        let tasks = tasks?;
+        let tasks = self.visible_tasks(receipt.auth(), task_ids).await?;
         span.record("visible_task_count", span_count(tasks.len()));
         Ok(InitiativeRead::new(receipt, detail, tasks))
     }

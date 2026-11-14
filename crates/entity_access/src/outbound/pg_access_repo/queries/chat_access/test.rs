@@ -1,4 +1,8 @@
 use super::*;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers, user_in_team},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -6,6 +10,7 @@ use uuid::Uuid;
 const OWNER_WITH_TEAM: &str = "macro|chat-owner@corp.test";
 const OWNER_WITHOUT_TEAM: &str = "macro|chat-owner-no-team@corp.test";
 const REQUESTER: &str = "macro|chat-requester@corp.test";
+const OTHER_TEAM_REQUESTER: &str = "macro|chat-requester@other.test";
 const OWNER_TEAM: Uuid = Uuid::from_u128(0x000000000000000000000000000c4a01);
 const OTHER_TEAM: Uuid = Uuid::from_u128(0x000000000000000000000000000c4a02);
 
@@ -193,9 +198,11 @@ async fn enforces_complete_link_access_matrix(pool: PgPool) -> anyhow::Result<()
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
 
-    let anonymous = SourceIds(vec![]);
-    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, OTHER_TEAM_REQUESTER, OTHER_TEAM).await?;
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let anonymous = Viewer::Anonymous;
+    let other_team = Viewer::User(OTHER_TEAM_REQUESTER);
+    let same_team = Viewer::User(REQUESTER);
 
     for case in LINK_ACCESS_CASES {
         let chat_id = insert_chat(
@@ -207,19 +214,19 @@ async fn enforces_complete_link_access_matrix(pool: PgPool) -> anyhow::Result<()
         .await?;
 
         assert_eq!(
-            get_chat_access(&pool, &chat_id, &anonymous).await?,
+            get_chat_access(&pool, &chat_id, anonymous).await?,
             case.anonymous,
             "anonymous access for {:?}",
             case.link_share,
         );
         assert_eq!(
-            get_chat_access(&pool, &chat_id, &other_team).await?,
+            get_chat_access(&pool, &chat_id, other_team).await?,
             case.other_team,
             "other-team access for {:?}",
             case.link_share,
         );
         assert_eq!(
-            get_chat_access(&pool, &chat_id, &same_team).await?,
+            get_chat_access(&pool, &chat_id, same_team).await?,
             case.same_team,
             "same-team access for {:?}",
             case.link_share,
@@ -233,9 +240,10 @@ async fn enforces_complete_link_access_matrix(pool: PgPool) -> anyhow::Result<()
 async fn team_link_denies_access_when_owner_has_no_team(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
     let chat_id = insert_chat(&pool, OWNER_WITHOUT_TEAM, Some("TEAM"), Some("view")).await?;
-    let requester = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let requester = Viewer::User(REQUESTER);
 
-    let access = get_chat_access(&pool, &chat_id, &requester).await?;
+    let access = get_chat_access(&pool, &chat_id, requester).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -245,7 +253,8 @@ async fn team_link_denies_access_when_owner_has_no_team(pool: PgPool) -> anyhow:
 async fn takes_maximum_of_link_and_explicit_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
-    let requester = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let requester = Viewer::User(REQUESTER);
 
     let explicit_wins_chat =
         insert_chat(&pool, OWNER_WITH_TEAM, Some("PUBLIC"), Some("view")).await?;
@@ -255,11 +264,11 @@ async fn takes_maximum_of_link_and_explicit_access(pool: PgPool) -> anyhow::Resu
     insert_explicit_access(&pool, link_wins_chat, REQUESTER, AccessLevel::View).await?;
 
     assert_eq!(
-        get_chat_access(&pool, &explicit_wins_chat, &requester).await?,
+        get_chat_access(&pool, &explicit_wins_chat, requester).await?,
         Some(AccessLevel::Edit),
     );
     assert_eq!(
-        get_chat_access(&pool, &link_wins_chat, &requester).await?,
+        get_chat_access(&pool, &link_wins_chat, requester).await?,
         Some(AccessLevel::Edit),
     );
     Ok(())
@@ -272,14 +281,16 @@ async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::R
     let chat_id = insert_chat(&pool, OWNER_WITH_TEAM, None, None).await?;
     insert_team_access(&pool, chat_id, OWNER_TEAM, AccessLevel::Comment).await?;
 
-    let anonymous = SourceIds(vec![]);
-    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, OTHER_TEAM_REQUESTER, OTHER_TEAM).await?;
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let anonymous = Viewer::Anonymous;
+    let other_team = Viewer::User(OTHER_TEAM_REQUESTER);
+    let same_team = Viewer::User(REQUESTER);
 
-    assert_eq!(get_chat_access(&pool, &chat_id, &anonymous).await?, None);
-    assert_eq!(get_chat_access(&pool, &chat_id, &other_team).await?, None);
+    assert_eq!(get_chat_access(&pool, &chat_id, anonymous).await?, None);
+    assert_eq!(get_chat_access(&pool, &chat_id, other_team).await?, None);
     assert_eq!(
-        get_chat_access(&pool, &chat_id, &same_team).await?,
+        get_chat_access(&pool, &chat_id, same_team).await?,
         Some(AccessLevel::Comment)
     );
     Ok(())
@@ -289,7 +300,8 @@ async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::R
 async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITH_TEAM).await?;
     add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
-    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+    user_in_team(&pool, REQUESTER, OWNER_TEAM).await?;
+    let same_team = Viewer::User(REQUESTER);
 
     let team_grant_wins = insert_chat(&pool, OWNER_WITH_TEAM, Some("PUBLIC"), Some("view")).await?;
     insert_team_access(&pool, team_grant_wins, OWNER_TEAM, AccessLevel::Edit).await?;
@@ -298,12 +310,38 @@ async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::
     insert_team_access(&pool, link_wins, OWNER_TEAM, AccessLevel::View).await?;
 
     assert_eq!(
-        get_chat_access(&pool, &team_grant_wins, &same_team).await?,
+        get_chat_access(&pool, &team_grant_wins, same_team).await?,
         Some(AccessLevel::Edit)
     );
     assert_eq!(
-        get_chat_access(&pool, &link_wins, &same_team).await?,
+        get_chat_access(&pool, &link_wins, same_team).await?,
         Some(AccessLevel::Edit)
     );
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_chat")
+    )
+)]
+async fn chat_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let chats = sqlx::query_scalar!(r#"SELECT id FROM "Chat" ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+    let chats: Vec<Uuid> = chats
+        .iter()
+        .map(|id| id.parse())
+        .collect::<Result<_, _>>()?;
+
+    assert_matrix_agrees(&viewers, &chats, async |viewer, chat_id| {
+        Ok((
+            source_list_oracle::get_chat_access(&pool, chat_id, &viewer.sources).await?,
+            get_chat_access(&pool, chat_id, viewer.viewer()).await?,
+        ))
+    })
+    .await
 }

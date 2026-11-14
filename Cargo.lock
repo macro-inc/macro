@@ -7983,7 +7983,6 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
- "single_flight",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",

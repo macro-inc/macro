@@ -1,6 +1,10 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::domain::models::AccessLevel;
+use crate::outbound::pg_access_repo::queries::{
+    source_list_oracle,
+    test_viewers::{assert_matrix_agrees, matrix_viewers},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -17,21 +21,7 @@ fn user(s: &str) -> MacroUserIdStr<'static> {
 /// Runs `get_thread_access` as `REQUESTER` (authenticated, so the unauthenticated
 /// share-only branch is skipped).
 async fn access_as_requester(pool: &PgPool, thread_id: &Uuid) -> Option<AccessLevel> {
-    let requester = user(REQUESTER);
-    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
-    get_thread_access(pool, thread_id, &source_ids, Some(&*requester))
-        .await
-        .unwrap()
-}
-
-async fn access_as_requester_on_team(
-    pool: &PgPool,
-    thread_id: &Uuid,
-    team_id: Uuid,
-) -> Option<AccessLevel> {
-    let requester = user(REQUESTER);
-    let source_ids = SourceIds(vec![REQUESTER.to_string(), team_id.to_string()]);
-    get_thread_access(pool, thread_id, &source_ids, Some(&*requester))
+    get_thread_access(pool, thread_id, Viewer::User(REQUESTER))
         .await
         .unwrap()
 }
@@ -404,16 +394,10 @@ async fn crm_consent_withdrawal_revokes_direct_access_but_keeps_mailbox_owner_ac
     .await
     .unwrap();
     assert_eq!(access_as_requester(&pool, &thread).await, None);
-    let owner = user(OWNER);
     assert_eq!(
-        get_thread_access(
-            &pool,
-            &thread,
-            &SourceIds(vec![OWNER.to_string()]),
-            Some(&*owner)
-        )
-        .await
-        .unwrap(),
+        get_thread_access(&pool, &thread, Viewer::User(OWNER))
+            .await
+            .unwrap(),
         Some(AccessLevel::Owner)
     );
 }
@@ -604,16 +588,15 @@ async fn delegation_scoped_to_another_link_denies_access(pool: PgPool) -> anyhow
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unauthenticated_user_never_gets_crm_access(pool: PgPool) -> anyhow::Result<()> {
-    // Even a fully-synced thread is invisible to an unauthenticated caller: with
-    // no user_id there are no source_ids, so the share-only branch returns before
-    // the CRM path runs.
+    // Even a fully-synced thread is invisible to an unauthenticated caller: an
+    // anonymous viewer takes the share-only branch, which returns before the
+    // CRM path runs.
     let team_id = setup_shared_team(&pool, true).await;
     let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
     let company = insert_crm_company(&pool, team_id, true, false).await;
     insert_crm_contact(&pool, company, "alice@client.test", false).await;
 
-    let source_ids = SourceIds(vec![]);
-    let result = get_thread_access(&pool, &thread_id, &source_ids, None).await?;
+    let result = get_thread_access(&pool, &thread_id, Viewer::Anonymous).await?;
 
     assert_eq!(result, None);
     Ok(())
@@ -636,7 +619,7 @@ async fn public_link_grants_anonymous_access(pool: PgPool) -> anyhow::Result<()>
     )
     .await;
 
-    let access = get_thread_access(&pool, &thread_id, &SourceIds(vec![]), None).await?;
+    let access = get_thread_access(&pool, &thread_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, Some(AccessLevel::Comment));
     Ok(())
@@ -672,7 +655,7 @@ async fn team_link_grants_same_team_member(pool: PgPool) -> anyhow::Result<()> {
     .await;
 
     assert_eq!(
-        access_as_requester_on_team(&pool, &thread_id, team_id).await,
+        access_as_requester(&pool, &thread_id).await,
         Some(AccessLevel::Edit)
     );
     Ok(())
@@ -701,10 +684,7 @@ async fn team_link_denies_other_team_member(pool: PgPool) -> anyhow::Result<()> 
     )
     .await;
 
-    assert_eq!(
-        access_as_requester_on_team(&pool, &thread_id, requester_team_id).await,
-        None
-    );
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
 
@@ -724,7 +704,7 @@ async fn team_link_denies_anonymous_access(pool: PgPool) -> anyhow::Result<()> {
     )
     .await;
 
-    let access = get_thread_access(&pool, &thread_id, &SourceIds(vec![]), None).await?;
+    let access = get_thread_access(&pool, &thread_id, Viewer::Anonymous).await?;
 
     assert_eq!(access, None);
     Ok(())
@@ -747,10 +727,7 @@ async fn team_link_denies_when_owner_has_no_team(pool: PgPool) -> anyhow::Result
     )
     .await;
 
-    assert_eq!(
-        access_as_requester_on_team(&pool, &thread_id, requester_team_id).await,
-        None
-    );
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
 
@@ -1463,4 +1440,33 @@ async fn no_project_grant_when_thread_has_no_project(pool: PgPool) -> anyhow::Re
 
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_thread")
+    )
+)]
+async fn thread_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let threads = sqlx::query_scalar!(r#"SELECT id FROM email_threads ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+
+    assert_matrix_agrees(&viewers, &threads, async |viewer, thread_id| {
+        let user_id = viewer.user_id();
+        Ok((
+            source_list_oracle::get_thread_access(
+                &pool,
+                thread_id,
+                &viewer.sources,
+                user_id.as_deref(),
+            )
+            .await?,
+            get_thread_access(&pool, thread_id, viewer.viewer()).await?,
+        ))
+    })
+    .await
 }

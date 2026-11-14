@@ -69,23 +69,23 @@ the entity-access domain service.
   (`queries/document_access/documents_access.sql`) and must answer each one as
   `get_document_access` does: change their sources together, and extend
   `test/documents_access.rs` and its fixture, which compare the two.
-- Spans here never record a user id (a `MacroUserId` is an email): skip it.
-  Checks record how many source ids they bound as `source_id_count`, through
-  `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
-  wraps its checks in `observe_source_ids` to record the count on its own span,
-  as `initiative.read` does. A new check that fetches source ids goes through
-  `user_source_ids` so its span gets the count.
+- Spans here never record a user id (a `MacroUserId` is an email, and a
+  `Viewer` carries one): skip it.
 - `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
   once: kinds whose users are exactly their `entity_access` grants go through
   one grouped lookup (`queries/entity_audiences.rs`: grants, then team and
   channel members once per distinct source); other kinds and a single id use the
   cached per-entity `get_users_by_entity`. Keep it in step with
   `get_entity_users`.
-- `get_user_source_ids` is cached for 10 s per process and concurrent misses
-  for one user share one query through `single_flight`. A failure then arrives
-  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
-  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- Access statements pass the viewer (`queries::Viewer`) and check a grant's
+  source with `entity_access_source_matches(source, viewer, scope_team)`, or
+  list from `entity_access_viewer_sources(viewer, scope_team)`; never load or
+  bind the viewer's teams and channels as an array, which makes a check cost
+  grow with their memberships. `no_statement_binds_a_source_list` fails on a
+  bound source list in a statement's `.rs` or `.sql` file, and each family's
+  `*_matches_the_source_list_form` test compares it with the old statement in
+  `source_list_oracle`.
 
 ## Related
 

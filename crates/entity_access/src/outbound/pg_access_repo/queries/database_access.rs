@@ -4,7 +4,8 @@
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -15,20 +16,20 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// The highest access level `source_ids` hold on a database: its own grants,
+/// The highest access level a viewer holds on a database: its own grants,
 /// Edit through edit or owner on any live form over it, so form editors
 /// can read and change their responses, and View through view on a live form
 /// that shares its responses. View on a form grants nothing here otherwise.
 /// Databases have no share link, so there is no public-sharing arm; a team
 /// share is a team-source grant like any other.
 /// Both grant paths require an app entity; core storage alone is not shareable.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_database_access(
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_database_access(
     pool: &PgPool,
     database_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         return Ok(None);
     }
 
@@ -39,7 +40,7 @@ pub async fn get_database_access(
         JOIN database_entities d ON d.database_id = entity_access.entity_id
         WHERE entity_id = $1
         AND entity_type = 'database'
-        AND source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))
 
         UNION ALL
 
@@ -49,7 +50,7 @@ pub async fn get_database_access(
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level IN ('edit', 'owner')
 
         UNION ALL
@@ -61,11 +62,12 @@ pub async fn get_database_access(
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
         AND f.responses_visible
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, $3))
         AND ea.access_level = 'view'
         "#,
         database_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
@@ -88,26 +90,22 @@ pub(super) fn highest_access_level(
         })
 }
 
-/// The highest access level a user has on every database their source ids
+/// The highest access level a user has on every database their sources
 /// reach, directly, as Edit through a live form they edit, or as View through
 /// a live form that shares its responses, ordered by database id. Trash is
 /// the databases domain's concern: a trashed database's grants are still listed.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn list_database_access(
+#[tracing::instrument(err, skip(pool, user_id))]
+pub(crate) async fn list_database_access(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<(Uuid, AccessLevel)>, sqlx::Error> {
-    if source_ids.0.is_empty() {
-        return Ok(Vec::new());
-    }
-
     let rows = sqlx::query!(
         r#"
         SELECT entity_id AS "entity_id!", access_level AS "access_level!: AccessLevel"
         FROM entity_access
         JOIN database_entities d ON d.database_id = entity_access.entity_id
         WHERE entity_type = 'database'
-        AND source_id = ANY($1)
+        AND source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))
 
         UNION ALL
 
@@ -116,7 +114,7 @@ pub async fn list_database_access(
         JOIN forms f ON f.id = ea.entity_id
         JOIN database_entities d ON d.database_id = f.database_id
         WHERE ea.entity_type = 'form'
-        AND ea.source_id = ANY($1)
+        AND ea.source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))
         AND ea.access_level IN ('edit', 'owner')
         AND f.trashed_at IS NULL
 
@@ -127,12 +125,12 @@ pub async fn list_database_access(
         JOIN forms f ON f.id = ea.entity_id
         JOIN database_entities d ON d.database_id = f.database_id
         WHERE ea.entity_type = 'form'
-        AND ea.source_id = ANY($1)
+        AND ea.source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))
         AND ea.access_level = 'view'
         AND f.responses_visible
         AND f.trashed_at IS NULL
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
@@ -151,17 +149,14 @@ pub async fn list_database_access(
 /// then a [`AccessGrant::ViaForm`] for each live form over it the caller
 /// edits, in form id order.
 #[cfg(feature = "explain_binary")]
-#[tracing::instrument(err, skip(pool, source_ids))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn explain_database_access(
     pool: &PgPool,
     database_id: &Uuid,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
     let mut grants =
-        list_entity_access_grants(pool, database_id, EntityType::Database, source_ids).await?;
-    if source_ids.0.is_empty() {
-        return Ok(grants);
-    }
+        list_entity_access_grants(pool, database_id, EntityType::Database, user_id).await?;
     let form_ids = sqlx::query_scalar!(
         r#"
         SELECT DISTINCT f.id
@@ -170,7 +165,7 @@ pub async fn explain_database_access(
         JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
         WHERE f.database_id = $1
         AND f.trashed_at IS NULL
-        AND ea.source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(ea.source_id, $2, NULL))
         AND (
             ea.access_level IN ('edit', 'owner')
             OR (ea.access_level = 'view' AND f.responses_visible)
@@ -178,7 +173,7 @@ pub async fn explain_database_access(
         ORDER BY f.id
         "#,
         database_id,
-        &source_ids.0,
+        user_id.as_ref(),
     )
     .fetch_all(pool)
     .await?;
