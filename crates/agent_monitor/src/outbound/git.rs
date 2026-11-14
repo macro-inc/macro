@@ -336,6 +336,9 @@ impl<B: GitBackend> Mapper<B> {
     async fn sync(&mut self, wanted: Arc<GitWanted>) -> Result<(), SourceError> {
         self.wanted = wanted.clone();
         let now = Instant::now();
+        // Forget directories no agent works in any more.
+        self.discovered
+            .retain(|cwd, _| wanted.cwds.contains_key(cwd));
         // Directories to repositories.
         let mut by_repo: BTreeMap<PathBuf, BTreeMap<PathBuf, bool>> = BTreeMap::new();
         for (cwd, live) in &wanted.cwds {
