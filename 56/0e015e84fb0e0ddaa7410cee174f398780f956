@@ -1,0 +1,80 @@
+crates/mesh_man/examples/frames.rs
+  s_ecd11f6b53251a::t_ad5d17d5138aad 60,66
+  s_ecd11f6b53251a::t_9ceb70230fbfbb 54,74,76,82
+  s_ecd11f6b53251a::t_78b68030adfba0 1-51,57,69,72-73,75,77-81,83-100
+  s_ecd11f6b53251a::t_bbe58acf2d1cc2 52-53,55-56,58-59,61-65,67-68,70-71
+crates/mesh_man/src/model.rs
+  s_ecd11f6b53251a::t_c416a8f56da885 131
+  s_ecd11f6b53251a::t_6a8af2ac09d71d 129-130
+crates/mesh_man/src/widget.rs
+  s_ecd11f6b53251a::t_c416a8f56da885 367-369
+  s_ecd11f6b53251a::t_bbe58acf2d1cc2 331-335,356,371
+  s_ecd11f6b53251a::t_1cf65f9a5ceddd 219-222,228,231-232,256-260,288,299,314-316,329-330,336,341-342,376
+  s_ecd11f6b53251a::t_91203d1df33236 22,54-57,206-207,236-248,351-355
+  s_ecd11f6b53251a::t_eedced661b7b84 208,249,417-419,423-454
+crates/mesh_man/src/figures/cyborg.rs
+  s_ecd11f6b53251a::t_74f30a989fdbb1 1-12,14-39,41-353,358-392,394-418,420-451,453-532
+  s_ecd11f6b53251a::t_ad5d17d5138aad 393
+  s_ecd11f6b53251a::t_77a2e38b9bff60 13,40,354-357,419,452
+crates/mesh_man/src/figures/neural.rs
+  s_ecd11f6b53251a::t_a5058bb9efa5ab 131-132
+  s_ecd11f6b53251a::t_1e50584bad0943 1-130,133-354
+crates/mesh_man/src/palette.rs
+  s_ecd11f6b53251a::t_85748fe49e56c0 96-97
+  s_ecd11f6b53251a::t_bbe58acf2d1cc2 50-52,89,115,141,152-155,162-163,167
+  s_ecd11f6b53251a::t_c416a8f56da885 161
+  s_ecd11f6b53251a::t_7eeec83da12590 110-111
+  s_ecd11f6b53251a::t_1cf65f9a5ceddd 1-49,53-88,90-95,98-109,112-114,116-125,128-129,132-140,142-151,156-160,164-166,168-182
+  s_ecd11f6b53251a::t_4fa5a68a8b0c41 126-127,130-131
+crates/mesh_man/src/figures/xray.rs
+  s_ecd11f6b53251a::t_78b68030adfba0 1-32,34-46,48-566,569-575,580,583-584,588-626,628-738,742-744,746-749,751-752,755-759
+  s_ecd11f6b53251a::t_7eeec83da12590 567-568,576-577,627
+  s_ecd11f6b53251a::t_85748fe49e56c0 47,578-579,581-582,585-587,739-741,745,750,753-754
+  s_ecd11f6b53251a::t_133356e06fb98c 33
+crates/mesh_man/src/figure.rs
+  s_ecd11f6b53251a::t_91203d1df33236 13-14,104-108,150-151,277-294
+  s_ecd11f6b53251a::t_78b68030adfba0 333-335
+  s_ecd11f6b53251a::t_c416a8f56da885 109-111,152,295-303
+  s_ecd11f6b53251a::t_04effd607eb99c 304
+crates/mesh_man/src/figures/common.rs
+  s_ecd11f6b53251a::t_ad5d17d5138aad 339-341,343
+  s_ecd11f6b53251a::t_78b68030adfba0 1-27,29-30,32-338,342,344-472,497,531,535-536
+  s_ecd11f6b53251a::t_3cad9d31507287 28,31,473-496,498-530,532-534
+crates/mesh_man/src/figures.rs
+  s_ecd11f6b53251a::t_c416a8f56da885 48
+  s_ecd11f6b53251a::t_78b68030adfba0 1-4,7-13,19-41,44-47,49-50
+  s_ecd11f6b53251a::t_74f30a989fdbb1 5,14-16,18
+  s_ecd11f6b53251a::t_2f5919fdb64fb5 51-53
+  s_ecd11f6b53251a::t_f2a01d1785d928 6,17,42-43
+crates/mesh_man/src/figures/test.rs
+  s_ecd11f6b53251a::t_2f5919fdb64fb5 1-124
+crates/mesh_man/src/lib.rs
+  s_ecd11f6b53251a::t_78b68030adfba0 30
+  s_ecd11f6b53251a::t_b3e8e8826f3cdd 236-254,258
+  s_ecd11f6b53251a::t_91203d1df33236 32,41
+  s_ecd11f6b53251a::t_cb3dbd7e3000df 230-231,233
+crates/mesh_man/AGENTS.md
+  s_ecd11f6b53251a::t_07a497e671551d 29-32,37-43
+crates/mesh_man/src/figures/snapshots/mesh_man__figures__test__cyborg_frame_zero_snapshot.snap
+  s_ecd11f6b53251a::t_0a54691f1e4169 1-39
+crates/mesh_man/src/figures/snapshots/mesh_man__figures__test__neural_frame_zero_snapshot.snap
+  s_ecd11f6b53251a::t_2292ae4fafce45 1-39
+crates/mesh_man/src/figures/snapshots/mesh_man__figures__test__xray_frame_zero_snapshot.snap
+  s_ecd11f6b53251a::t_79a5b7ee6ca528 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "560e015e84fb0e0ddaa7410cee174f398780f956",
+  "prompts": {},
+  "sessions": {
+    "s_ecd11f6b53251a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "05fe3463-3f3e-43f5-9eb5-0d7198627dfe",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
