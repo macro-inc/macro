@@ -908,8 +908,9 @@ outlook = ["provider outlook:attachments.value"]
 ui = "a cloud attachment is a link the browser opens"
 
 [F-130]  # Clean up stored files of discarded drafts
-# Proved on Outlook for a file taken out of a draft; a discarded draft's
-# file is kept, so the function stays open there.
+# A discarded Outlook draft keeps its stored file, so the function stays
+# open there. The Outlook check and proof (a file taken out of a draft) count
+# once the bug line is removed.
 bug = "outlook-discarded-draft-file-kept"
 bug_on = "outlook"
 by = ["lambda email_sfs_delete_handler", "queue sfs-delete:SFSDeleteMessage"]
@@ -1015,6 +1016,10 @@ outlook = ["provider outlook:messages.send"]
 also = ["kafka macro.email:MessageSent"]
 
 [F-147]  # Report and recover a scheduled send that failed
+# On Outlook no queue message delivers a send and the sweep delivers
+# nothing: the draft worker (loop mailbox_sync_worker::run_drafts, which no
+# record shows) recovers a due send, and that is what the Outlook scenario
+# and its break are about.
 by = ["lambda email_scheduled_handler"]
 
 # -------------------------------------------------------------- signature

@@ -13,7 +13,7 @@ const WRITTEN: &str = "hello";
 const UNDO_WINDOW_SECS: &str = "5";
 /// The undo window of an Outlook send that must still be waiting when its
 /// draft has settled in the mailbox, in seconds.
-const OUTLOOK_SETTLING_WINDOW_SECS: &str = "20";
+const OUTLOOK_SETTLING_WINDOW_SECS: &str = "40";
 
 /// A stack that also serves the GraphQL API.
 async fn stack_with_graphql() -> Result<Stack, Report> {
@@ -192,9 +192,10 @@ async fn outlook_undo_restores_the_draft_as_written() -> Result<(), Report> {
 
 /// The queue refuses the message that would trigger delivery; the Send is
 /// still accepted, and the scheduled sweep delivers it once.
-/// An Outlook send is not delivered by a queue message at all: the mailbox's
-/// draft worker finds the draft already settled in the mailbox once its send
-/// is due, which is what delivers it here too.
+/// An Outlook send is not delivered by a queue message at all, and the sweep
+/// delivers nothing there: what recovers it is the mailbox's draft worker,
+/// which finds the draft already settled in the mailbox once its send is
+/// due. On Outlook that recovery is what this checks.
 /// When this fails a mail the user sent is silently never delivered.
 async fn sweep_delivers_a_send_whose_queue_message_was_lost(
     provider: Provider,

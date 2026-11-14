@@ -38,7 +38,8 @@ scenarios.
   started with an environment the harness builds (`src/stack/environment.rs`)
   and nothing else. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
-  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,calendar_service,document_storage_service,search_processing_service}.log`.
+  `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,calendar_service,document_storage_service,search_processing_service}.log`,
+  with `<handler>.log` for each Lambda the scenario ran.
   A failing scenario prints the directory and the end of the logs.
 
 ## Writing a scenario

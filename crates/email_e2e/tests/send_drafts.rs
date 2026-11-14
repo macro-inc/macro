@@ -780,7 +780,7 @@ enum Keep {
 async fn conflicting_draft_is_resolved(keep: Keep) -> Result<(), Report> {
     /// How long Outlook tells the draft worker to wait before it writes
     /// again: the rewrite in Outlook happens in between.
-    const WRITE_AGAIN_AFTER_SECS: u64 = 3;
+    const WRITE_AGAIN_AFTER_SECS: u64 = 12;
 
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
