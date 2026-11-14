@@ -1,0 +1,625 @@
+{
+  "status": "FROZEN_SOURCE_GENERATED_BYTES_PENDING_REVIEW_NOT_APPROVED_CI_CORPUS",
+  "sourceRun": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS",
+  "sourceCommand": "bash /home/wolf/tmp/lexical-port/list-item-indent-c04-proof/run-js-red-07.sh",
+  "sourceReviewSHA": "f1ad430d0060398ba4722158e7963e37116db6002b49e8adfda4ca22ce5fa506",
+  "runReceiptSHA256": "ddb5b21b31283e075c1777551bc4d50fabaa894ecbefaec7a7478ad4987d3f4f",
+  "vitestLogSHA256": "0264e5af6fd0f0482f8e438455005c7130a00c54f76fd789f008379e7e57ee77",
+  "generator": "Actual createLexicalWrapper markdown-sync/block-md-main withIds, real source providerA->server Loro bytes->source providerB; Source sourceFacts raw/getter/export+DOM precede asserts. All input bytes copied verbatim; no handwritten JSON or wire changes.",
+  "sourceInputs": [
+    {
+      "name": "lexical",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/node_modules/lexical/dist/Lexical.dev.mjs",
+      "realpath": "/home/wolf/tmp/lexical-port/native-comments-locations-next/node_modules/lexical/dist/Lexical.dev.mjs",
+      "sha256": "449d061d3198fff549cf53786b589b99e298cb2ff368d88607a65494c66158ab",
+      "bytes": 592407
+    },
+    {
+      "name": "list",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/node_modules/@lexical/list/dist/LexicalList.dev.mjs",
+      "realpath": "/home/wolf/tmp/lexical-port/native-comments-locations-next/node_modules/@lexical/list/dist/LexicalList.dev.mjs",
+      "sha256": "0611294f9ce0539b55904910e64433442dd9aba62611a3b3cf943cc48ac649aa",
+      "bytes": 74158
+    },
+    {
+      "name": "selection",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/node_modules/@lexical/selection/dist/LexicalSelection.dev.mjs",
+      "realpath": "/home/wolf/tmp/lexical-port/native-comments-locations-next/node_modules/@lexical/selection/dist/LexicalSelection.dev.mjs",
+      "sha256": "b898687438c82c557bf3a245e58675445a9e41a6a4fd668ded270f96ced4b8d8",
+      "bytes": 39785
+    },
+    {
+      "name": "cursor",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/collaboration/remote-cursor.tsx",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/collaboration/remote-cursor.tsx",
+      "sha256": "9d12c31e85eb6dd6bc0cf9bcb8b1284e4aa1a35af82e7aba5e932f3f7af2c435",
+      "bytes": 10844
+    },
+    {
+      "name": "wrapper",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/context/LexicalWrapperContext.tsx",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/context/LexicalWrapperContext.tsx",
+      "sha256": "fc8a543337d6930880add1581d41ba7a0a8161cf19081c2715b5b7c9252e8291",
+      "bytes": 4781
+    },
+    {
+      "name": "server",
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/sync_server_core/src/domain/room/frame.rs",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/sync_server_core/src/domain/room/frame.rs",
+      "sha256": "9431fde1cd1105b26b50e89d5392aa14ae25b22baed31a1de8e712d61f6fa37e",
+      "bytes": 21710
+    },
+    {
+      "name": "query-pattern",
+      "path": "/home/wolf/tmp/lexical-port/native-database-slash-c04/apps/web/src/lib/core/component/LexicalMarkdown/editing/overlay-hosts/native-query-callback.test.ts",
+      "realpath": "/home/wolf/tmp/lexical-port/native-database-slash-c04/apps/web/src/lib/core/component/LexicalMarkdown/editing/overlay-hosts/native-query-callback.test.ts",
+      "sha256": "a4566ac149e8468a919389b46255e3e6094171794168954289aab97dae18300e",
+      "bytes": 26707
+    }
+  ],
+  "sourceGenerationFiles": [
+    {
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/source.ts",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/source.ts",
+      "sha256": "c5b9cf13d5667bbd93b49cccdc04dac6fa8fbcc00101f4d30b78a7c857d4a950",
+      "bytes": 5741
+    },
+    {
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/collab.tsx",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/collab.tsx",
+      "sha256": "7dcf3624bc05ba8b4d1abf87ecf422f002eb8be7d7aefb054753c3f4b985da8d",
+      "bytes": 3901
+    },
+    {
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/server.ts",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-test/server.ts",
+      "sha256": "bbc3cb3ccc55460251f759bdab8a03ba4ee2c1e70689e3cc80bc15837e760c62",
+      "bytes": 3122
+    },
+    {
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent.test.ts",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent.test.ts",
+      "sha256": "535bc2d2ee8e0ebb2efd840d49ddce0fb94f2f48f8c61c7900e00de04f24e471",
+      "bytes": 18099
+    },
+    {
+      "path": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-remote.test.tsx",
+      "realpath": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/list-indent-remote.test.tsx",
+      "sha256": "9bb6a4537a06c4cdf4b9e2909bc427b05613fedccdb04496ba465df7ee283864",
+      "bytes": 8389
+    }
+  ],
+  "remoteOrder": "Original source batch/packet filenames and update-files metadata preserved; generated include declarations retain batch+packet order, no coalescing/redelivery rewrite.",
+  "evidenceScope": "Source raw/getter0/1 receiver rows are observed in source-receiver.jsonl at initial/nest/reparent; outdentSource0 except excludedcheck. These are actual two-peer Source controls, not inferred from code. Native Rust raw evidence is NOT yet run. Checklist remote not included until its fixture confound closes; storedcheckSource is clean.",
+  "files": [
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/local/source-bullet.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/stored/bullet.json",
+      "relative": "stored/bullet.json",
+      "sha256": "87d7cbc47d2c50c41667498c997bc40af1b5cf011852069854399a9d8f1dafec",
+      "bytes": 980
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/local/source-number.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/stored/number.json",
+      "relative": "stored/number.json",
+      "sha256": "37d0e232ab1b8240a8e580ae52d729d029285dc533c0b503115453af5e859bf2",
+      "bytes": 980
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/local/source-check.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/stored/check.json",
+      "relative": "stored/check.json",
+      "sha256": "f6258a71d803b92ea8c70b99d11e68c046bb13c646a866470b29cdccb744e491",
+      "bytes": 1026
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial.json",
+      "relative": "remote/bullet/initial.json",
+      "sha256": "c9f77643ff6f3dd917a323ea03ef69711f642ff9db0d1875a76a1509460690dd",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial.snapshot.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial.snapshot.bin",
+      "relative": "remote/bullet/initial.snapshot.bin",
+      "sha256": "a632dc516f11d9f4103216e46854fbdd14bdd78e5c62e144fb4f12fa1b42d0b3",
+      "bytes": 793
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/source-receiver.jsonl",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/source-receiver.jsonl",
+      "relative": "remote/bullet/source-receiver.jsonl",
+      "sha256": "85c9cff9a4dc2e3004b42ce1e5a02d9b1097c5b98b96c58953c43d5b6e591052",
+      "bytes": 14353
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial-nested.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial-nested.source.json",
+      "relative": "remote/bullet/initial-nested.source.json",
+      "sha256": "8ec193f58730d5ed02e1e1c603abdfb1311100b701c7c38cb352f4efa0a32af2",
+      "bytes": 1610
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial-nested.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial-nested.update-files.json",
+      "relative": "remote/bullet/initial-nested.update-files.json",
+      "sha256": "48dcb433b08ce4d1717d593717e66b852fec96ffd58a569f04d6ab572688aa5f",
+      "bytes": 65
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial-nested-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial-nested-0-0.update.bin",
+      "relative": "remote/bullet/initial-nested-0-0.update.bin",
+      "sha256": "43cce08f7363d2cf10ad4b59e0b1da8364e56e6fd7901f37e89a1b14212b3ad0",
+      "bytes": 1193
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/initial-nested-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/initial-nested-1-0.update.bin",
+      "relative": "remote/bullet/initial-nested-1-0.update.bin",
+      "sha256": "eeb30de97e94ea55b74c5720827f6fbfdfe255c735888677249fe9985507cd87",
+      "bytes": 120
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/outdent.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/outdent.source.json",
+      "relative": "remote/bullet/outdent.source.json",
+      "sha256": "ae0dcb41a076a5f5a7aa07c68b7e8cc7d25b706c6a8cb07363eb29dcd5d6ad22",
+      "bytes": 1344
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/outdent.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/outdent.update-files.json",
+      "relative": "remote/bullet/outdent.update-files.json",
+      "sha256": "9af55825717ec492d3c730cd982f9e67efa5c405292e6218b6293960a6fdb6e8",
+      "bytes": 51
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/outdent-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/outdent-0-0.update.bin",
+      "relative": "remote/bullet/outdent-0-0.update.bin",
+      "sha256": "226c6bc56f0bc174fe6cb559d55a1d010620006d2e0fa169a437ea68cf8c9f16",
+      "bytes": 353
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/outdent-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/outdent-1-0.update.bin",
+      "relative": "remote/bullet/outdent-1-0.update.bin",
+      "sha256": "807a8adc2ed65d9be53a8fb5a33574343910bda6b2d83d0cecf2aa9cc190f367",
+      "bytes": 103
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/nest.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/nest.source.json",
+      "relative": "remote/bullet/nest.source.json",
+      "sha256": "6002b6897187415c3d7db72119c173a1315fec9a98c8109c3a82d6b278dc3f2f",
+      "bytes": 1610
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/nest.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/nest.update-files.json",
+      "relative": "remote/bullet/nest.update-files.json",
+      "sha256": "4fdbf11cdd2a4283043b3626bc843bc0680d19fac1663d3866b61931a35ade9e",
+      "bytes": 45
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/nest-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/nest-0-0.update.bin",
+      "relative": "remote/bullet/nest-0-0.update.bin",
+      "sha256": "30141c277ed5ef8e06b92d56fd614a0e8493746cc89a25a2adf106fd94f1642e",
+      "bytes": 535
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/nest-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/nest-1-0.update.bin",
+      "relative": "remote/bullet/nest-1-0.update.bin",
+      "sha256": "6433f89756f3285555625e5807e79dfdd30911a5ae4a555c5fd825c4cb66b50c",
+      "bytes": 110
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/reparent.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/reparent.source.json",
+      "relative": "remote/bullet/reparent.source.json",
+      "sha256": "6f756a9b926e47c45caaebf0b9e75e3980944c25ba05a3d741422a4d7bf8ce9e",
+      "bytes": 1877
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/reparent.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/reparent.update-files.json",
+      "relative": "remote/bullet/reparent.update-files.json",
+      "sha256": "81576a220c878cbd1a90d302000ab50853ee49f448bfd8bae986201e6789840c",
+      "bytes": 53
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/reparent-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/reparent-0-0.update.bin",
+      "relative": "remote/bullet/reparent-0-0.update.bin",
+      "sha256": "bc54dc9b5e6a6a353429a4b6f0b38efafc2bcff3ff4dc527a751e23a7a1d1da2",
+      "bytes": 542
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/reparent-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/reparent-1-0.update.bin",
+      "relative": "remote/bullet/reparent-1-0.update.bin",
+      "sha256": "12241bacb10d1ad2754dab2cab05418af4403bde5fd3f131ab3609608871c110",
+      "bytes": 110
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-1.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-1.source.json",
+      "relative": "remote/bullet/paragraph-1.source.json",
+      "sha256": "8ecebf206f5e4f933be288f052876267126201119f0328edfd122b784d43538f",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-1.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-1.update-files.json",
+      "relative": "remote/bullet/paragraph-1.update-files.json",
+      "sha256": "efee337bb255fd29d99f3e192763af69da82305ffa9c78032214d73ea505650a",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-1-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-1-0-0.update.bin",
+      "relative": "remote/bullet/paragraph-1-0-0.update.bin",
+      "sha256": "78f263d37476e5ac9b5c956eff33b992f3b0a435678fe299e6fadd475c2d7780",
+      "bytes": 252
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-3.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-3.source.json",
+      "relative": "remote/bullet/paragraph-3.source.json",
+      "sha256": "ed976cca03a3356e58eae185be2b67d25d49bc15930e893e617e98cfceddc022",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-3.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-3.update-files.json",
+      "relative": "remote/bullet/paragraph-3.update-files.json",
+      "sha256": "1db7c254e99746bd56228c69c83ca9a30a1affdca47a9ae05133e9f274cef596",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-3-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-3-0-0.update.bin",
+      "relative": "remote/bullet/paragraph-3-0-0.update.bin",
+      "sha256": "0e87c6c01dba43605fe2fd97c90b7ea1170af47fe495b9172a2da7eb682a9b6f",
+      "bytes": 94
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-0.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-0.source.json",
+      "relative": "remote/bullet/paragraph-0.source.json",
+      "sha256": "3ef8f3874c44238052afbf52895aff27a33d884e10322a9cb3f515eb34b2a945",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-0.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-0.update-files.json",
+      "relative": "remote/bullet/paragraph-0.update-files.json",
+      "sha256": "8317f917a154f77f205719c8c2498840ac31e0d41ee78bfbd2dc9b071317a5de",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/paragraph-0-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/paragraph-0-0-0.update.bin",
+      "relative": "remote/bullet/paragraph-0-0-0.update.bin",
+      "sha256": "2a19f258021bd12b1c22ebcf709190d9d68039c55c262eea38d3ad5571b8137b",
+      "bytes": 94
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-1.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-1.source.json",
+      "relative": "remote/bullet/heading-1.source.json",
+      "sha256": "9f4788807699c56b9162e23534d0e3ae61dfa564594e473054097d1c86fdd6db",
+      "bytes": 229
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-1.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-1.update-files.json",
+      "relative": "remote/bullet/heading-1.update-files.json",
+      "sha256": "73a775fef617ab1c3fdaccea91c1501c76b9c56adbed73747dcc5c5cde6088ee",
+      "bytes": 28
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-1-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-1-0-0.update.bin",
+      "relative": "remote/bullet/heading-1-0-0.update.bin",
+      "sha256": "59b7d7673001af9c49747216f5d3c73ffcd7d9219526427000c2a09f6521dab1",
+      "bytes": 213
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-0.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-0.source.json",
+      "relative": "remote/bullet/heading-0.source.json",
+      "sha256": "ee3b0688994fe6ba6202dbf3346e18c9e42213ad4e9cfd845e14aeb2a17e2fb7",
+      "bytes": 229
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-0.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-0.update-files.json",
+      "relative": "remote/bullet/heading-0.update-files.json",
+      "sha256": "f11b3f03a91c666a7a2680d45e000aab59c7e2b677c577a10627dabc4f1006a6",
+      "bytes": 28
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/bullet/heading-0-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/bullet/heading-0-0-0.update.bin",
+      "relative": "remote/bullet/heading-0-0-0.update.bin",
+      "sha256": "341b123d476dac1029d337e1a7c8afc90553c00661983755ce61f1ba267e0d2d",
+      "bytes": 94
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial.json",
+      "relative": "remote/number/initial.json",
+      "sha256": "114af39557e0ff21d56b04eef1891163b7c2228bd74eb9f8f430bf8ca2acf099",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial.snapshot.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial.snapshot.bin",
+      "relative": "remote/number/initial.snapshot.bin",
+      "sha256": "26a35ea68094ebc7c9970f7461974919e25456bd296e772bb358d600c24afaca",
+      "bytes": 793
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/source-receiver.jsonl",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/source-receiver.jsonl",
+      "relative": "remote/number/source-receiver.jsonl",
+      "sha256": "d1cd17463fd985164430e2d77cb5dce6c958cbba9f66f4dff0e878f9e2e670b8",
+      "bytes": 14353
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial-nested.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial-nested.source.json",
+      "relative": "remote/number/initial-nested.source.json",
+      "sha256": "36d819329c084c2959257abcd58c5d6c532d4d3e4c279e954375f2f5a949c6a3",
+      "bytes": 1610
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial-nested.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial-nested.update-files.json",
+      "relative": "remote/number/initial-nested.update-files.json",
+      "sha256": "48dcb433b08ce4d1717d593717e66b852fec96ffd58a569f04d6ab572688aa5f",
+      "bytes": 65
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial-nested-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial-nested-0-0.update.bin",
+      "relative": "remote/number/initial-nested-0-0.update.bin",
+      "sha256": "d49aa4d57d98d7fc546742463dea2d07b76f1e15345b5717ad1978d256589e3a",
+      "bytes": 1193
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/initial-nested-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/initial-nested-1-0.update.bin",
+      "relative": "remote/number/initial-nested-1-0.update.bin",
+      "sha256": "eb7416767f3b10f768f8deef540f4b14d45afce2d690424a6d32fd31acc3c66a",
+      "bytes": 120
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/outdent.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/outdent.source.json",
+      "relative": "remote/number/outdent.source.json",
+      "sha256": "21dd1024ca0edd528ff493a99c6d55706ca9bec8ab42023af664f35f8828b299",
+      "bytes": 1344
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/outdent.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/outdent.update-files.json",
+      "relative": "remote/number/outdent.update-files.json",
+      "sha256": "9af55825717ec492d3c730cd982f9e67efa5c405292e6218b6293960a6fdb6e8",
+      "bytes": 51
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/outdent-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/outdent-0-0.update.bin",
+      "relative": "remote/number/outdent-0-0.update.bin",
+      "sha256": "1195ec67dc82eea2a37827c2906b0e8d6e8b146a200b55541927a2100079e642",
+      "bytes": 353
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/outdent-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/outdent-1-0.update.bin",
+      "relative": "remote/number/outdent-1-0.update.bin",
+      "sha256": "64d27cb15a5457cb7a2fe9086febed8e2f6aaf7924bbbdba5a4227ff11ab6e09",
+      "bytes": 103
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/nest.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/nest.source.json",
+      "relative": "remote/number/nest.source.json",
+      "sha256": "7b11d3317e556bbf4d22b5ffaccfcd17ff8f77f78426d83bb64b5aa08c59bcdd",
+      "bytes": 1610
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/nest.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/nest.update-files.json",
+      "relative": "remote/number/nest.update-files.json",
+      "sha256": "4fdbf11cdd2a4283043b3626bc843bc0680d19fac1663d3866b61931a35ade9e",
+      "bytes": 45
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/nest-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/nest-0-0.update.bin",
+      "relative": "remote/number/nest-0-0.update.bin",
+      "sha256": "0d5036626b81c8a74acea935a5bfe718b1aad2a21bb966940e8da6ed46ec804d",
+      "bytes": 535
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/nest-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/nest-1-0.update.bin",
+      "relative": "remote/number/nest-1-0.update.bin",
+      "sha256": "b6bdbf27dca7e3eaa0befba63adae888eb99bd79a3ccabc5e01ac59851c91a59",
+      "bytes": 110
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/reparent.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/reparent.source.json",
+      "relative": "remote/number/reparent.source.json",
+      "sha256": "5ed939334ad2c58a995697cb8f4dd08ddb38881679f104c4f63f6f892b73ae72",
+      "bytes": 1877
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/reparent.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/reparent.update-files.json",
+      "relative": "remote/number/reparent.update-files.json",
+      "sha256": "81576a220c878cbd1a90d302000ab50853ee49f448bfd8bae986201e6789840c",
+      "bytes": 53
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/reparent-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/reparent-0-0.update.bin",
+      "relative": "remote/number/reparent-0-0.update.bin",
+      "sha256": "25e98d7af4a79140feb4486598e7ec271302bd55ddbc36c3420750e271fd5424",
+      "bytes": 542
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/reparent-1-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/reparent-1-0.update.bin",
+      "relative": "remote/number/reparent-1-0.update.bin",
+      "sha256": "3ac4d4b6b955fbbe54548dd0260c909aeac4a9ad8a2feac49cfeba47c33f469b",
+      "bytes": 110
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-1.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-1.source.json",
+      "relative": "remote/number/paragraph-1.source.json",
+      "sha256": "757963105d7795a12a008118a213f21fb4f0177cd0e33e47121ee9aaca3623ca",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-1.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-1.update-files.json",
+      "relative": "remote/number/paragraph-1.update-files.json",
+      "sha256": "efee337bb255fd29d99f3e192763af69da82305ffa9c78032214d73ea505650a",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-1-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-1-0-0.update.bin",
+      "relative": "remote/number/paragraph-1-0-0.update.bin",
+      "sha256": "5891cfb96fb2f19ce9f2edcf2649925a3d72a3792decfc1e91b1ce0e5a05cba9",
+      "bytes": 252
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-3.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-3.source.json",
+      "relative": "remote/number/paragraph-3.source.json",
+      "sha256": "16963282ed1450e0723586e460bc3ead7c0ef6781354c0eaa3af1485a7db2fff",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-3.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-3.update-files.json",
+      "relative": "remote/number/paragraph-3.update-files.json",
+      "sha256": "1db7c254e99746bd56228c69c83ca9a30a1affdca47a9ae05133e9f274cef596",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-3-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-3-0-0.update.bin",
+      "relative": "remote/number/paragraph-3-0-0.update.bin",
+      "sha256": "3f1f0c0869a839ce3b790bb8606940988c3f097229bc9af0463f040acb400fad",
+      "bytes": 94
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-0.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-0.source.json",
+      "relative": "remote/number/paragraph-0.source.json",
+      "sha256": "8736d6bdd5e9c4fb1156ee7b9609aa451818899afa65af373e2b95438f5a80f8",
+      "bytes": 250
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-0.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-0.update-files.json",
+      "relative": "remote/number/paragraph-0.update-files.json",
+      "sha256": "8317f917a154f77f205719c8c2498840ac31e0d41ee78bfbd2dc9b071317a5de",
+      "bytes": 30
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/paragraph-0-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/paragraph-0-0-0.update.bin",
+      "relative": "remote/number/paragraph-0-0-0.update.bin",
+      "sha256": "0c5a0cd64f69e5cdacdc5eb76617267473360df5fa44415d2045400fc1c9281d",
+      "bytes": 94
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-1.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-1.source.json",
+      "relative": "remote/number/heading-1.source.json",
+      "sha256": "ebfada14958b3e9f4366c1ddb9d64f60947997f0fa3a6e3b23b53a94ffe349a2",
+      "bytes": 229
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-1.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-1.update-files.json",
+      "relative": "remote/number/heading-1.update-files.json",
+      "sha256": "73a775fef617ab1c3fdaccea91c1501c76b9c56adbed73747dcc5c5cde6088ee",
+      "bytes": 28
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-1-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-1-0-0.update.bin",
+      "relative": "remote/number/heading-1-0-0.update.bin",
+      "sha256": "3007140e86e25cb8e5f0fa285f462a545e79a54c0cfc7c63aa3715d1c42cb0ac",
+      "bytes": 213
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-0.source.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-0.source.json",
+      "relative": "remote/number/heading-0.source.json",
+      "sha256": "fccea8f147a2e3d350e9a42582aa158c0a11d65ca25c08cd28e247a7fb827a60",
+      "bytes": 229
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-0.update-files.json",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-0.update-files.json",
+      "relative": "remote/number/heading-0.update-files.json",
+      "sha256": "f11b3f03a91c666a7a2680d45e000aab59c7e2b677c577a10627dabc4f1006a6",
+      "bytes": 28
+    },
+    {
+      "source": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/remote/number/heading-0-0-0.update.bin",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/remote/number/heading-0-0-0.update.bin",
+      "relative": "remote/number/heading-0-0-0.update.bin",
+      "sha256": "15b78fa21063b2787ee06d9b03a74a35b61600726cae0174dfb75934008c7449",
+      "bytes": 94
+    }
+  ],
+  "sourceLineSlices": [
+    {
+      "original": "/home/wolf/tmp/lexical-port/list-item-indent-c04-proof/js-red-07.Lw2e8wgS/local/js.jsonl",
+      "originalSHA256": "3e89a635d9aca67986a7141cd64f7dda2aaefaa2926b471fc4104b47a5883760",
+      "fixture": "/home/wolf/tmp/lexical-port/native-list-item-indent-c04/crates/client/document_session/tests/corpus/list-item-indent/authored-style-observations.jsonl",
+      "lines": [
+        {
+          "line1based": 46,
+          "sha256": "47c19d84658b75b928e7860567c49d20ab657cf7c338b5d1bd739a7dc7b3335f",
+          "bytes": 1986
+        },
+        {
+          "line1based": 47,
+          "sha256": "38856825a2b0da8169185921c6a553a5a84aa47369078bb271c88f1d6cd7d0bc",
+          "bytes": 687
+        },
+        {
+          "line1based": 55,
+          "sha256": "7c7463f0084acb6aa90543e21c9fcfef893abb69ce4417195f91358385d42bd5",
+          "bytes": 2128
+        },
+        {
+          "line1based": 56,
+          "sha256": "117849936f7899b5dffc33c3e6005526be77d37ae30fcd19d80d20d02d335057",
+          "bytes": 773
+        }
+      ],
+      "sha256": "1ab9f215c3db4732dea4d95f7cb671ef5f4c2623634a14b763357cef237287e4",
+      "bytes": 5574,
+      "meaning": "Exact original whole JSONL lines, no parse/re-encode. Actual Source authored create/reused DOM raw style observations."
+    }
+  ]
+}

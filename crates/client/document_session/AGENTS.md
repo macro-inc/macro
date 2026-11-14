@@ -162,3 +162,5 @@ Complete accepted InsertClipboardNodes through clipboard::insert_nodes_and_updat
 Keep checklist reader settings in the session producer and stale/local intent
 returns before Core dispatch; notify its required sealed access hook only after
 the real access cache changes value, preserving equal-value refreshes.
+
+Keep list-indent CI fixtures in tests/corpus/list-item-indent byte-exact to their frozen Source provenance; read approval.json with provenance.json for current approval, and obtain a new freeze review before changing fixture bytes. Use builder.initial_state for stored-load controls and label SetState controls as local pipeline replacements.
