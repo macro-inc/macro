@@ -113,7 +113,7 @@ function source(split: boolean) {
     if (split)
       editor.update(
         () => {
-          const text = $getRoot().getFirstChild()?.getChildren()[0];
+          const text = $getRoot().getFirstDescendant();
           if (!$isTextNode(text)) throw new Error('Missing Source text');
           text.select(SPLIT.from, SPLIT.to);
           const selection = $getSelection();
