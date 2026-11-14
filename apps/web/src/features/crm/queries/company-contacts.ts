@@ -69,6 +69,24 @@ function companyContactsQueryOptions(
   });
 }
 
+/**
+ * The rows of loaded pages in order, each contact once. A contact renamed
+ * between page loads can move onto a later page and arrive twice; the first
+ * copy stays.
+ */
+export function flattenCompanyContactsPages(
+  pages: readonly { contacts: readonly CrmContactResponse[] }[]
+): CrmContactResponse[] {
+  const seen = new Set<string>();
+  return pages.flatMap((page) =>
+    page.contacts.filter((contact) => {
+      if (seen.has(contact.id)) return false;
+      seen.add(contact.id);
+      return true;
+    })
+  );
+}
+
 const NO_FILTER: CompanyContactsFilter = {
   companyId: '',
   archived: false,
@@ -89,11 +107,14 @@ export function useCompanyContactsQuery(
     () => deps.client
   );
   const contacts = createMemo<CrmContactResponse[]>(() =>
-    query.isSuccess ? query.data.pages.flatMap((page) => page.contacts) : []
+    query.isSuccess ? flattenCompanyContactsPages(query.data.pages) : []
   );
   return {
     get contacts() {
       return contacts();
+    },
+    get loadedSearch() {
+      return query.isSuccess ? query.data.pages[0]?.search : undefined;
     },
     get isPending() {
       return query.isPending;

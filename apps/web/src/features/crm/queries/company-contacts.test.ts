@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { expect, it } from 'vitest';
 import {
   companyContactsHold,
+  flattenCompanyContactsPages,
   isCompanyContactsQuery,
   patchCompanyContacts,
 } from './company-contacts';
@@ -69,4 +70,17 @@ it('patches and drops rows in every cached page, keeping untouched pages and cur
   expect(patched?.pageParams).toEqual([null, 'cursor-0']);
   expect(client.getQueryData(teamKey('company-2'))).toBe(other);
   client.clear();
+});
+
+it('lists a contact that arrives on two pages once, where it came first', () => {
+  const renamed = contact('b', 'company-1');
+  const { pages: loaded } = pages(
+    [contact('a', 'company-1'), renamed],
+    [{ ...renamed, name: 'z renamed' }, contact('c', 'company-1')]
+  );
+  expect(flattenCompanyContactsPages(loaded)).toEqual([
+    contact('a', 'company-1'),
+    renamed,
+    contact('c', 'company-1'),
+  ]);
 });

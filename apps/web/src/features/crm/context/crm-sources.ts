@@ -56,8 +56,13 @@ export type CompanyContactsFilter = {
 };
 /** A company's Team list, read a page at a time. */
 export type CompanyContactsSource = {
-  /** The loaded rows, in the server's order. */
+  /** The loaded rows, in the server's order, each contact once. */
   readonly contacts: CrmContact[];
+  /**
+   * The search the loaded rows answer; a placeholder's rows answer an
+   * earlier one. `undefined` while nothing is loaded.
+   */
+  readonly loadedSearch: string | undefined;
   /** True until the first page of the filter is readable. */
   readonly isPending: boolean;
   /** Rows of the previous search stay on screen while this one loads. */

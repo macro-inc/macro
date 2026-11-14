@@ -136,10 +136,13 @@ export function CompanyContactsSection(props: {
     isFetchingNextPage: () => source.isFetchingNextPage,
     fetchNextPage: () => fireAndForget(source.fetchNextPage(), 'crm'),
   });
-  // The loaded rows are filtered again, so an archive change or a new search
-  // narrows them before the server answers.
+  // The server answers the search and folds its case; its rows are shown as
+  // they came. Rows that answer an earlier search (a placeholder until this
+  // one's first page arrives) are narrowed here meanwhile. The archive state
+  // is checked on every row, so an archive change moves a row at once.
   const filtered = createMemo(() => {
-    const query = search().trim().toLowerCase();
+    const typed = search().trim();
+    const query = source.loadedSearch === typed ? '' : typed.toLowerCase();
     return source.contacts.filter(
       (contact) =>
         (contact.hidden || !!props.company?.hidden) === archived() &&

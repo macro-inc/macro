@@ -7,7 +7,10 @@ import { CompanyContactsSection } from './company-contacts-section';
 
 const { openCreateContact, team } = vi.hoisted(() => ({
   openCreateContact: vi.fn(),
-  team: { contacts: [] as CrmContact[] },
+  team: {
+    contacts: [] as CrmContact[],
+    loadedSearch: '' as string | undefined,
+  },
 }));
 
 vi.mock('../components/record-visibility-filter', () => ({
@@ -79,6 +82,9 @@ vi.mock('../context/crm-context', () => ({
         return team.contacts;
       },
       isPending: false,
+      get loadedSearch() {
+        return team.loadedSearch;
+      },
       isSearching: false,
       isError: false,
       hasNextPage: false,
@@ -92,6 +98,7 @@ vi.mock('../context/crm-context', () => ({
 afterEach(() => {
   cleanup();
   team.contacts = [];
+  team.loadedSearch = '';
   vi.clearAllMocks();
 });
 
@@ -197,4 +204,32 @@ it('excludes hidden contacts from an admin response, including search matches', 
   // Presentation must preserve the record for authorized detail/restore access.
   expect(response).toContain(removed);
   expect(removed.companyId).toBe('co');
+});
+
+it('shows the rows the server matched for the typed search, narrowing only an earlier search', () => {
+  // Postgres folds 'İ' to 'i'; JavaScript folds it to 'i̇', which
+  // 'istanbul' does not contain.
+  team.contacts = [
+    { ...contacts[0], id: 'o', name: 'Istanbul office', email: 'o@example.com' },
+  ];
+  const typeSearch = () =>
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search team' }), {
+      target: { value: ' İstanbul ' },
+    });
+
+  // Rows of the empty search wait for the server, narrowed here.
+  render(() => (
+    <CompanyContactsSection company={{ id: 'co' } as CrmCompanyEntity} />
+  ));
+  typeSearch();
+  expect(screen.queryByRole('button', { name: /Istanbul office/ })).toBeNull();
+  cleanup();
+
+  // The server's answer to this search is shown as it came.
+  team.loadedSearch = 'İstanbul';
+  render(() => (
+    <CompanyContactsSection company={{ id: 'co' } as CrmCompanyEntity} />
+  ));
+  typeSearch();
+  screen.getByRole('button', { name: /Istanbul office/ });
 });
