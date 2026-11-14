@@ -377,6 +377,7 @@ md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
+nix = "0.29.0"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
 openssl-sys = "0.9"
