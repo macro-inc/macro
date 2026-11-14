@@ -1,0 +1,40 @@
+crates/coding_agent_worker/Cargo.toml
+  s_f2380eb080e56a::t_f40cacc8cf63ad 77
+crates/agent_monitor_tui/src/body/mesh.rs
+  s_f2380eb080e56a::t_06e42dad5de057 26,29-36,47-80,86,128-136
+crates/agent_monitor_tui/src/lib.rs
+  s_f2380eb080e56a::t_fe55bd29311d8e 57-59,72-77,82,93,99-108
+crates/agent_monitor_tui/src/body.rs
+  s_f2380eb080e56a::t_06e42dad5de057 50-55
+crates/agent_monitor_tui/src/app.rs
+  s_f2380eb080e56a::t_06e42dad5de057 138
+crates/agent_monitor_tui/Cargo.toml
+  s_f2380eb080e56a::t_f40cacc8cf63ad 29,32-33
+crates/agent_monitor_tui/src/keys/test.rs
+  s_f2380eb080e56a::t_349bb16389666e 241-256
+  s_f2380eb080e56a::t_cb72b48829f1a5 240
+crates/agent_monitor_tui/examples/demo.rs
+  s_f2380eb080e56a::t_fe55bd29311d8e 32-34,42-47
+crates/coding_agent_worker/src/monitor.rs
+  s_f2380eb080e56a::t_fe55bd29311d8e 76-79,134,564,582
+crates/agent_monitor_tui/src/keys.rs
+  s_f2380eb080e56a::t_06e42dad5de057 319-320,366-371
+crates/agent_monitor_tui/src/ui.rs
+  s_f2380eb080e56a::t_06e42dad5de057 482,499
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e2b01d071d6e78c62cfba155156063daaf1509e0",
+  "prompts": {},
+  "sessions": {
+    "s_f2380eb080e56a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4404a78-1231-4bc5-a738-064998a50e3d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
