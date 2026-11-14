@@ -128,6 +128,9 @@ pub(crate) struct Paint {
     /// Draw resting nerves over the bones rather than under them, for a
     /// figure whose nerves are the point.
     pub nerves_on_top: bool,
+    /// Keep even glowing nerves under the bones (pulses still draw on
+    /// top), so the skeleton stays the brightest thing.
+    pub bones_on_top: bool,
     pub floor_bright: Rgb,
     pub floor: Rgb,
     pub floor_dark: Rgb,
@@ -193,6 +196,7 @@ impl Look {
             scan_line: p.nerve_dark,
             scan_slices: false,
             nerves_on_top: false,
+            bones_on_top: false,
             floor_bright: p.skin,
             floor: p.skin_faint,
             floor_dark: p.skin_dark,
@@ -234,6 +238,7 @@ impl Look {
                 scan_far: mix(p.nerve_dim, p.nerve, 0.4),
                 scan_line: p.nerve_dark,
                 scan_slices: true,
+                bones_on_top: true,
                 floor_bright: mix(p.nerve_dim, p.nerve, 0.6),
                 floor: mix(p.nerve_dark, p.nerve_dim, 0.6),
                 floor_dark: p.nerve_dark,

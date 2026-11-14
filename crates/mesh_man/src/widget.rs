@@ -354,8 +354,10 @@ impl Body {
                 glow = glow.max(heartbeat * (0.3 + 0.5 * load));
             }
 
-            let layer = if glow > FIRING_GLOW {
+            let layer = if glow > FIRING_GLOW && !palette.bones_on_top {
                 NERVES_FIRING
+            } else if glow > FIRING_GLOW {
+                NERVES_RESTING
             } else if self.figure().quiet_paths {
                 // Its nerve lines already draw the path at rest.
                 continue;
