@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use chrono::{DurationRound, TimeDelta};
@@ -33,9 +33,9 @@ const TASK_CHARS: usize = 160;
 /// Longest `doing` text kept on a row.
 const DOING_CHARS: usize = 80;
 
-/// A Codex terminal started at most this long after its rollout's first
-/// record still counts as the terminal that wrote it.
-const CODEX_START_SLACK: TimeDelta = TimeDelta::seconds(60);
+/// A terminal started at most this long after a transcript's first record
+/// still counts as the terminal that wrote it.
+const TERMINAL_START_SLACK: TimeDelta = TimeDelta::seconds(60);
 
 /// One transcript record worth a tape line, from [`Facts::apply`].
 #[derive(Clone, Debug, PartialEq)]
@@ -395,9 +395,9 @@ pub fn minute_counts(facts: &Facts, now: Timestamp) -> BTreeMap<Timestamp, Minut
 /// 1. every hc terminal is an agent, enriched by the registry entry of its
 ///    foreground process and by its manager directory;
 /// 2. a registry entry no terminal claimed is an agent of its own;
-/// 3. a main transcript joins the agent holding its session, or a Codex
-///    terminal by working directory and start time, or becomes an agent of
-///    its own; a subagent transcript is an agent whose parent holds its
+/// 3. a main transcript joins the agent holding its session, or a terminal
+///    running its program in its working directory, started before it, or
+///    becomes an agent of its own; a subagent transcript is an agent whose parent holds its
 ///    session;
 /// 4. a macrod session enriches the agent holding its native session or its
 ///    transcript, and never stands alone;
@@ -482,7 +482,7 @@ fn join_transcripts(
     session_owner: &mut BTreeMap<String, AgentId>,
     now: Timestamp,
 ) {
-    let mut codex_terminals = codex_terminals(facts);
+    claim_terminals(facts, session_owner);
 
     // Main transcripts first, so subagents find their parent.
     let (mains, subagents): (Vec<_>, Vec<_>) = facts
@@ -492,11 +492,7 @@ fn join_transcripts(
 
     for (key, owned) in mains.into_iter().chain(subagents) {
         let transcript = &owned.fact;
-        let owner = session_owner.get(&key.session).cloned().or_else(|| {
-            (key.subagent.is_none() && key.program == TranscriptProgram::Codex)
-                .then(|| claim_codex_terminal(&mut codex_terminals, transcript))
-                .flatten()
-        });
+        let owner = session_owner.get(&key.session).cloned();
 
         let id = match (&key.subagent, owner) {
             (None, Some(owner)) => owner,
@@ -550,32 +546,62 @@ fn join_transcripts(
     }
 }
 
-/// A live Codex terminal waiting for its rollout.
-struct CodexTerminal {
+/// A terminal running a coding agent whose session no registry entry named.
+struct UnclaimedTerminal {
     id: AgentId,
+    program: TranscriptProgram,
     cwd: Option<PathBuf>,
     created: Option<Timestamp>,
 }
 
-fn codex_terminals(facts: &Facts) -> Vec<CodexTerminal> {
-    facts
+/// Joins transcripts nothing else claimed to the terminals that wrote them,
+/// by program, working directory and start time: Codex has no registry, and
+/// Claude Code run behind a wrapper or without a session registry entry has
+/// no pid join. A terminal claims the newest such transcript, and at most
+/// one.
+fn claim_terminals(facts: &Facts, session_owner: &mut BTreeMap<String, AgentId>) {
+    let claimed: BTreeSet<&AgentId> = session_owner.values().collect();
+    let mut terminals: Vec<UnclaimedTerminal> = facts
         .terminals
         .values()
         .map(|owned| &owned.fact)
-        .filter(|terminal| terminal.program.as_deref() == Some(CODEX_PROGRAM))
-        .map(|terminal| CodexTerminal {
-            id: AgentId::terminal(&terminal.address),
-            cwd: terminal.cwd.clone(),
-            created: terminal.created,
+        .filter_map(|terminal| {
+            let program = match terminal.program.as_deref() {
+                Some(CLAUDE_PROGRAM) => TranscriptProgram::Claude,
+                Some(CODEX_PROGRAM) => TranscriptProgram::Codex,
+                _ => return None,
+            };
+            let id = AgentId::terminal(&terminal.address);
+            (!claimed.contains(&id)).then(|| UnclaimedTerminal {
+                id,
+                program,
+                cwd: terminal.cwd.clone(),
+                created: terminal.created,
+            })
         })
-        .collect()
+        .collect();
+
+    let mut unowned: Vec<(&TranscriptKey, &TranscriptState)> = facts
+        .transcripts
+        .iter()
+        .filter(|(key, _)| key.subagent.is_none() && !session_owner.contains_key(&key.session))
+        .map(|(key, owned)| (key, &owned.fact))
+        .collect();
+    unowned.sort_by_key(|(_, transcript)| std::cmp::Reverse(transcript.last_at));
+
+    for (key, transcript) in unowned {
+        if let Some(id) = claim_terminal(&mut terminals, key.program, transcript) {
+            session_owner.insert(key.session.clone(), id);
+        }
+    }
 }
 
-/// The Codex terminal that wrote a rollout: same working directory, started
-/// before the rollout's first record (with some slack), the latest such.
-/// Each terminal claims at most one rollout.
-fn claim_codex_terminal(
-    terminals: &mut Vec<CodexTerminal>,
+/// The terminal that wrote a transcript: same program and working directory,
+/// started before the transcript's first record (with some slack), the
+/// latest such.
+fn claim_terminal(
+    terminals: &mut Vec<UnclaimedTerminal>,
+    program: TranscriptProgram,
     transcript: &TranscriptState,
 ) -> Option<AgentId> {
     let first = transcript.first_at?;
@@ -583,9 +609,9 @@ fn claim_codex_terminal(
     let (index, _) = terminals
         .iter()
         .enumerate()
-        .filter(|(_, terminal)| terminal.cwd.as_ref() == Some(cwd))
+        .filter(|(_, terminal)| terminal.program == program && terminal.cwd.as_ref() == Some(cwd))
         .filter_map(|(index, terminal)| Some((index, terminal.created?)))
-        .filter(|(_, created)| *created <= first + CODEX_START_SLACK)
+        .filter(|(_, created)| *created <= first + TERMINAL_START_SLACK)
         .max_by_key(|(_, created)| *created)?;
     Some(terminals.swap_remove(index).id)
 }
