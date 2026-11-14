@@ -495,8 +495,8 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     assert!(read.iter().all(|name| *name == "superset"), "{read:?}");
     let read = streams(&pool, &both, &dense, 7, superset).await?;
     assert!(read.iter().all(|name| *name == "superset"), "{read:?}");
-    // The inbox stream fills every page but the short last one and the
-    // empty one after it.
+    // The inbox stream fills every page but the last ones, whose window
+    // holds every thread left, so the superset never runs.
     let read = streams(&pool, &both, &dense, 7, inboxes).await?;
     let (last, full) = read.split_last().expect("at least one page");
     assert!(full.len() > 30, "{read:?}");
@@ -504,7 +504,7 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
         full[..full.len() - 1].iter().all(|name| *name == "inboxes"),
         "{read:?}"
     );
-    assert_eq!(*last, "inboxes_then_superset");
+    assert_eq!(*last, "inboxes_to_end");
     // A window of one thread per row seldom fills a page.
     let read = streams(&pool, &both, &dense, 7, fallback).await?;
     assert_eq!(read.first(), Some(&"inboxes_then_superset"), "{read:?}");

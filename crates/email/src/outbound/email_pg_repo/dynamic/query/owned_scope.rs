@@ -15,15 +15,16 @@
 //!   indexes list (`matching_threads`, without mailbox facts), which is cheap
 //!   when the addresses are rare in the mail. The *inbox* stream merges each
 //!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
-//!   to a window of `limit × window_per_row`, which is cheap when they are
-//!   common.
+//!   to a window of `limit × window_per_row` threads (at most
+//!   [`MAX_WINDOW`]), which is cheap when they are common.
 //! - Each streamed thread then gets the general builder's preview pick, its
 //!   latest message the view and the filter accept, in order, until the page
 //!   fills; a thread with none drops out. The pick is the general builder's
 //!   message match, so the page holds its threads, order and previews.
 //!
 //! A probe counts the superset up to `superset_limit` to choose the stream.
-//! The inbox stream's page is final when its window filled the page;
+//! The inbox stream's page is final when it filled the page, or when its
+//! window held every thread left in the inboxes (a list's last page);
 //! otherwise the superset stream reads it.
 //!
 //! The inbox stream never reads the domains' contacts: it relies on a message
@@ -73,6 +74,12 @@ impl OwnedReadTuning {
     };
 }
 
+/// The most threads the inbox stream reads for one page: a Sales Email page
+/// of 100 at 100 per row. Past it the superset stream finishes the page, so
+/// a larger limit (Soup allows 500) doesn't stretch a window that the
+/// addresses fill slowly.
+const MAX_WINDOW: i64 = 10_000;
+
 /// The stream a page reads its threads from, in page order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stream {
@@ -92,6 +99,9 @@ pub(crate) enum OwnedStreams {
     Superset,
     /// The inbox stream filled the page.
     Inboxes,
+    /// The inbox stream came up short of a page, but its window held every
+    /// thread left in the inboxes, so the page is final.
+    InboxesToEnd,
     /// The inbox stream came up short of a page, so the superset read it.
     InboxesThenSuperset,
 }
@@ -210,8 +220,53 @@ impl<'a> OwnedRead<'a> {
         if rows.len() as i64 >= self.params.query_limit {
             return Ok((OwnedStreams::Inboxes, rows));
         }
+        // The superset costs a dense list's whole address set, so a short
+        // page skips it when the window read every thread there is.
+        limit_statement_time(connection, deadline).await?;
+        let window_threads: i64 = self
+            .window_count()
+            .build_query_scalar()
+            .persistent(false)
+            .fetch_one(&mut *connection)
+            .await?;
+        if window_threads < self.window() {
+            return Ok((OwnedStreams::InboxesToEnd, rows));
+        }
         let rows = self.page(connection, deadline, Stream::Superset).await?;
         Ok((OwnedStreams::InboxesThenSuperset, rows))
+    }
+
+    /// The inbox stream's window: `limit × window_per_row` threads, at most
+    /// [`MAX_WINDOW`].
+    fn window(&self) -> i64 {
+        self.params
+            .query_limit
+            .saturating_mul(self.tuning.window_per_row)
+            .min(MAX_WINDOW)
+    }
+
+    /// Counts the threads in the inbox stream's window, stopping at the
+    /// window: fewer means the stream read every thread left in the inboxes.
+    /// Each inbox's walk is the stream's, so the count reads its index.
+    fn window_count(&self) -> QueryBuilder<'static, Postgres> {
+        let sort_ts_field = get_sort_timestamp_field(self.view);
+        let window = self.window();
+        let mut builder = QueryBuilder::new("SELECT count(*) FROM (SELECT 1 FROM (");
+        for (index, inbox) in self.inboxes.iter().enumerate() {
+            if index > 0 {
+                builder.push("\n            UNION ALL");
+            }
+            builder.push("\n            (SELECT 1 FROM email_threads t WHERE t.link_id = ");
+            builder.push_bind(*inbox);
+            self.push_stream_filters(&mut builder, sort_ts_field);
+            builder.push(format!(" ORDER BY {sort_ts_field} DESC, t.id DESC LIMIT "));
+            builder.push_bind(window);
+            builder.push(")");
+        }
+        builder.push("\n        ) AS inbox_threads LIMIT ");
+        builder.push_bind(window);
+        builder.push(") AS window_threads");
+        builder
     }
 
     async fn page(
@@ -337,10 +392,7 @@ impl<'a> OwnedRead<'a> {
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
-                let window = self
-                    .params
-                    .query_limit
-                    .saturating_mul(self.tuning.window_per_row);
+                let window = self.window();
                 builder.push("\n                    SELECT * FROM (");
                 for (index, inbox) in self.inboxes.iter().enumerate() {
                     if index > 0 {
