@@ -1,17 +1,24 @@
 //! Parity of the owned All Mail address read (`dynamic/query/owned_scope.rs`)
 //! with the general builder: each way the read can take a page returns the
 //! general builder's rows, in its order, page after page, for every filter
-//! shape the Sales Email view and a CRM record under Me send.
+//! shape the Sales Email view, a CRM record under Me, an All Mail address
+//! search and Soup's hydration by id send. Requests the read doesn't cover
+//! go to the general builder.
 //!
-//! Fixture: `email/fixtures/email_owned_address_read.sql` (generated, see
-//! its header).
+//! Fixtures: `email/fixtures/email_owned_address_read.sql` (generated, see
+//! its header) and `email_owned_address_foreign_contacts.sql`.
 
 use super::*;
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
-use crate::outbound::email_pg_repo::dynamic::{OwnedReadTuning, OwnedStreams};
+use crate::outbound::email_pg_repo::dynamic::{
+    OwnedReadTuning, OwnedStreams, begin_snapshot, inbox_window,
+};
+use item_filters::NotificationState;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::{AttachmentKind, SubjectQuery};
+use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::cowlike::CowLike;
+use std::collections::HashMap;
 
 const CALLER: &str = "macro|u0@owned.test";
 
@@ -97,7 +104,65 @@ fn and(tree: Expr<EmailLiteral>, literal: EmailLiteral) -> Expr<EmailLiteral> {
     Expr::and(tree, Expr::Literal(literal))
 }
 
-/// A caller's pages until one comes back empty, and the owned read's
+/// A balanced OR of `trees`, as Soup builds its id trees.
+fn balanced_or(mut trees: Vec<Expr<EmailLiteral>>) -> Expr<EmailLiteral> {
+    while trees.len() > 1 {
+        let mut pairs = trees.into_iter();
+        let mut next = Vec::new();
+        while let Some(first) = pairs.next() {
+            next.push(match pairs.next() {
+                Some(second) => Expr::or(first, second),
+                None => first,
+            });
+        }
+        trees = next;
+    }
+    trees.pop().expect("at least one tree")
+}
+
+fn date(day: u32) -> chrono::DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 5, day, 0, 0, 0).unwrap()
+}
+
+/// One request, paged by [`pages`]: the caller's All Mail by update unless
+/// changed.
+#[derive(Clone)]
+struct Request<'a> {
+    links: &'a [Uuid],
+    filter: Expr<EmailLiteral>,
+    limit: u32,
+    view: PreviewView,
+    sort: SimpleSortMethod,
+    caller: &'a str,
+    team: Option<Uuid>,
+}
+
+impl<'a> Request<'a> {
+    fn all(links: &'a [Uuid], filter: &Expr<EmailLiteral>, limit: u32) -> Self {
+        Self {
+            links,
+            filter: filter.clone(),
+            limit,
+            view: PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+            sort: SimpleSortMethod::UpdatedAt,
+            caller: CALLER,
+            team: None,
+        }
+    }
+
+    fn view(self, label: PreviewViewStandardLabel) -> Self {
+        Self {
+            view: PreviewView::StandardLabel(label),
+            ..self
+        }
+    }
+
+    fn sort(self, sort: SimpleSortMethod) -> Self {
+        Self { sort, ..self }
+    }
+}
+
+/// A request's pages until one comes back empty, and the owned read's
 /// streams for each page (`None` when the general builder read it).
 struct Pages {
     rows: Vec<Vec<ThreadPreviewCursorDbRow>>,
@@ -116,36 +181,33 @@ impl Pages {
 
 async fn pages(
     pool: &Pool<Postgres>,
-    caller_links: &[Uuid],
-    filter: &Expr<EmailLiteral>,
-    limit: u32,
+    request: &Request<'_>,
     read: Option<OwnedReadTuning>,
 ) -> anyhow::Result<Pages> {
-    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
-    let filter = Arc::new(filter.clone());
+    let filter = Arc::new(request.filter.clone());
     let mut pages = Pages {
         rows: Vec::new(),
         streams: Vec::new(),
     };
     let mut cursor = None;
     loop {
-        let query = Query::new(cursor.take(), SimpleSortMethod::UpdatedAt, filter.clone());
+        let query = Query::new(cursor.take(), request.sort, filter.clone());
         let (page, streams) = dynamic::dynamic_email_thread_cursor_with(
             pool,
-            caller_links,
-            limit,
-            &view,
+            request.links,
+            request.limit,
+            &request.view,
             query,
-            CALLER,
-            None,
+            request.caller,
+            request.team,
             read,
         )
         .await?;
         cursor = page.last().map(|last| Cursor {
             id: last.id,
-            limit: limit as usize,
+            limit: request.limit as usize,
             val: CursorVal {
-                sort_type: SimpleSortMethod::UpdatedAt,
+                sort_type: request.sort,
                 last_val: last.sort_ts,
             },
             filter: filter.clone(),
@@ -159,52 +221,73 @@ async fn pages(
     }
 }
 
-/// Asserts each owned read takes every page and returns the general
-/// builder's pages, and returns how many rows those pages hold.
+/// Asserts each owned read takes every page of `request` and returns the
+/// general builder's pages, and returns their rows.
+async fn parity(
+    pool: &Pool<Postgres>,
+    request: &Request<'_>,
+) -> anyhow::Result<Vec<ThreadPreviewCursorDbRow>> {
+    let expected = pages(pool, request, None).await?;
+    assert!(expected.streams.iter().all(Option::is_none));
+    for (name, tuning) in READS {
+        let actual = pages(pool, request, Some(tuning)).await?;
+        assert!(
+            actual.streams.iter().all(Option::is_some),
+            "{name} read left pages to the general builder for {:?}: {:?}",
+            request.filter,
+            actual.streams
+        );
+        assert_eq!(
+            actual.printed(),
+            expected.printed(),
+            "{name} read differs for {:?} with {:?} in pages of {}",
+            request.links,
+            request.filter,
+            request.limit
+        );
+    }
+    Ok(expected.rows.concat())
+}
+
+/// [`parity`] for the caller's All Mail, returning how many rows it holds.
 async fn assert_parity(
     pool: &Pool<Postgres>,
     caller_links: &[Uuid],
     filter: &Expr<EmailLiteral>,
     limit: u32,
 ) -> anyhow::Result<usize> {
-    let expected = pages(pool, caller_links, filter, limit, None).await?;
-    assert!(expected.streams.iter().all(Option::is_none));
-    for (name, tuning) in READS {
-        let actual = pages(pool, caller_links, filter, limit, Some(tuning)).await?;
-        assert!(
-            actual.streams.iter().all(Option::is_some),
-            "{name} read left pages to the general builder for {filter:?}: {:?}",
-            actual.streams
-        );
-        assert_eq!(
-            actual.printed(),
-            expected.printed(),
-            "{name} read differs for {caller_links:?} with {filter:?} in pages of {limit}"
-        );
-    }
-    Ok(expected.rows.iter().map(Vec::len).sum())
+    Ok(parity(pool, &Request::all(caller_links, filter, limit))
+        .await?
+        .len())
 }
 
 /// Asserts the general builder reads every page of a request the owned read
-/// doesn't take, and returns how many rows the pages hold.
+/// doesn't take, and returns the rows.
+async fn general(
+    pool: &Pool<Postgres>,
+    request: &Request<'_>,
+) -> anyhow::Result<Vec<ThreadPreviewCursorDbRow>> {
+    let expected = pages(pool, request, None).await?;
+    let actual = pages(pool, request, Some(OwnedReadTuning::DEFAULT)).await?;
+    assert!(
+        actual.streams.iter().all(Option::is_none),
+        "{:?}",
+        request.filter
+    );
+    assert_eq!(actual.printed(), expected.printed());
+    Ok(expected.rows.concat())
+}
+
+/// [`general`] for the caller's All Mail, returning how many rows it holds.
 async fn assert_general(
     pool: &Pool<Postgres>,
     caller_links: &[Uuid],
     filter: &Expr<EmailLiteral>,
     limit: u32,
 ) -> anyhow::Result<usize> {
-    let expected = pages(pool, caller_links, filter, limit, None).await?;
-    let actual = pages(
-        pool,
-        caller_links,
-        filter,
-        limit,
-        Some(OwnedReadTuning::DEFAULT),
-    )
-    .await?;
-    assert!(actual.streams.iter().all(Option::is_none), "{filter:?}");
-    assert_eq!(actual.printed(), expected.printed());
-    Ok(expected.rows.iter().map(Vec::len).sum())
+    Ok(general(pool, &Request::all(caller_links, filter, limit))
+        .await?
+        .len())
 }
 
 /// The ids of the threads the general builder lists.
@@ -213,13 +296,27 @@ async fn listed(
     caller_links: &[Uuid],
     filter: &Expr<EmailLiteral>,
 ) -> anyhow::Result<Vec<Uuid>> {
-    Ok(pages(pool, caller_links, filter, 100, None)
-        .await?
-        .rows
-        .concat()
-        .iter()
-        .map(|row| row.id)
-        .collect())
+    Ok(ids(&pages(
+        pool,
+        &Request::all(caller_links, filter, 100),
+        None,
+    )
+    .await?
+    .rows
+    .concat()))
+}
+
+fn ids(rows: &[ThreadPreviewCursorDbRow]) -> Vec<Uuid> {
+    rows.iter().map(|row| row.id).collect()
+}
+
+/// `md5(text)` as a uuid, as the fixtures name their rows.
+async fn md5_id(pool: &Pool<Postgres>, text: &str) -> anyhow::Result<Uuid> {
+    Ok(
+        sqlx::query_scalar!(r#"SELECT md5($1)::uuid AS "id!""#, text)
+            .fetch_one(pool)
+            .await?,
+    )
 }
 
 #[sqlx::test(
@@ -235,6 +332,47 @@ async fn company_pages_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // Both of the caller's inboxes.
     let rows = assert_parity(&pool, &[link(0), link(1)], &dense, 25).await?;
     assert!(rows > 200, "{rows}");
+    Ok(())
+}
+
+/// How many listed threads share their date with another of the same inbox,
+/// and with one of another inbox.
+fn ties(rows: &[ThreadPreviewCursorDbRow]) -> (usize, usize) {
+    let mut inboxes: HashMap<_, Vec<Uuid>> = HashMap::new();
+    for row in rows {
+        inboxes.entry(row.sort_ts).or_default().push(row.link_id);
+    }
+    let tied = inboxes.values().filter(|links| links.len() > 1);
+    let same = tied
+        .clone()
+        .filter(|links| {
+            links
+                .iter()
+                .any(|a| links.iter().filter(|b| *b == a).count() > 1)
+        })
+        .count();
+    let across = tied
+        .filter(|links| links.iter().any(|a| links.iter().any(|b| b != a)))
+        .count();
+    (same, across)
+}
+
+/// Threads with equal dates, in one inbox and across inboxes, page by id.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn tied_dates_page_alike(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let dense = company(&["dense.test"]);
+    for limit in [1, 2] {
+        let rows = parity(&pool, &Request::all(&both, &dense, limit)).await?;
+        let (same, across) = ties(&rows);
+        assert!(
+            same > 3 && across > 3,
+            "ties: {same} in an inbox, {across} across"
+        );
+    }
     Ok(())
 }
 
@@ -290,6 +428,13 @@ async fn contact_pages_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
         "nobody@dense.test",
     ]);
     let rows = assert_parity(&pool, &[link(0), link(1)], &several, 4).await?;
+    assert!(rows > 10, "{rows}");
+    // A search on one sender, and on one recipient.
+    let from = Expr::Literal(EmailLiteral::Sender(complete("p2@sparse.test")));
+    let rows = assert_parity(&pool, &[link(0), link(1)], &from, 3).await?;
+    assert!(rows > 0, "{rows}");
+    let to = Expr::Literal(EmailLiteral::Recipient(complete("p0@dense.test")));
+    let rows = assert_parity(&pool, &[link(0), link(1)], &to, 6).await?;
     assert!(rows > 10, "{rows}");
     // No address resolves, so the request ends before either read.
     let unknown = contact(&["only.u1@solo.test", "nobody@dense.test"]);
@@ -360,6 +505,103 @@ async fn facets_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Negated facets, and a term that mixes a message term with a thread term.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn negated_and_mixed_terms_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let dense = company(&["dense.test"]);
+    for literal in [
+        EmailLiteral::Importance(true),
+        EmailLiteral::Read(true),
+        EmailLiteral::Attachment(AttachmentKind::Pdf),
+        EmailLiteral::CalendarOnly(true),
+    ] {
+        let not = Expr::and(dense.clone(), Expr::is_not(Expr::Literal(literal)));
+        let rows = assert_parity(&pool, &both, &not, 9).await?;
+        assert!(rows > 50, "{rows}");
+    }
+    let subject_or_signal = Expr::and(
+        dense.clone(),
+        Expr::or(
+            Expr::Literal(EmailLiteral::Subject(SubjectQuery::try_from(
+                "Subject 1".to_owned(),
+            )?)),
+            Expr::Literal(EmailLiteral::Importance(true)),
+        ),
+    );
+    let rows = assert_parity(&pool, &both, &subject_or_signal, 9).await?;
+    assert!(rows > 50, "{rows}");
+    Ok(())
+}
+
+/// Thread terms the streams apply as they read: Soup's hydration by id,
+/// dates, notification states, a property and calendar threads.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn thread_terms_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let dense = company(&["dense.test"]);
+    // Soup hydrates listed threads by id under the list's template, in one
+    // page of as many rows as ids; some ids here don't match the template.
+    let mut threads = listed(&pool, &both, &dense).await?;
+    threads.truncate(40);
+    threads.extend(
+        listed(&pool, &both, &company(&["other3.test", "other4.test"]))
+            .await?
+            .into_iter()
+            .take(10),
+    );
+    let by_id = Expr::and(
+        balanced_or(
+            threads
+                .iter()
+                .map(|id| Expr::Literal(EmailLiteral::ThreadId(*id)))
+                .collect(),
+        ),
+        dense.clone(),
+    );
+    let rows = parity(&pool, &Request::all(&both, &by_id, threads.len() as u32)).await?;
+    assert_eq!(rows.len(), 40);
+    for term in [
+        EmailLiteral::CreatedAt(DateLiteral::GreaterThan(date(25))),
+        EmailLiteral::UpdatedAt(DateLiteral::LessThanOrEqual(date(25))),
+        EmailLiteral::NotificationState(NotificationState::Unseen),
+        EmailLiteral::NotificationState(NotificationState::Seen),
+        EmailLiteral::NotificationState(NotificationState::Done),
+        EmailLiteral::CalendarOnly(true),
+        EmailLiteral::Property(PropertiesLiteral {
+            property_definition_id: md5_id(&pool, "owned-property").await?,
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(md5_id(&pool, "owned-option1").await?),
+        }),
+    ] {
+        let rows = assert_parity(&pool, &both, &and(dense.clone(), term.clone()), 4).await?;
+        assert!(rows > 3, "{term:?}: {rows}");
+    }
+    let window = and(
+        and(
+            dense.clone(),
+            EmailLiteral::UpdatedAt(DateLiteral::LessThan(date(28))),
+        ),
+        EmailLiteral::CreatedAt(DateLiteral::GreaterThanOrEqual(date(20))),
+    );
+    let rows = assert_parity(&pool, &both, &window, 6).await?;
+    assert!(rows > 50, "{rows}");
+    // All Mail sorts by its own date under either sort.
+    let rows = parity(
+        &pool,
+        &Request::all(&both, &dense, 13).sort(SimpleSortMethod::CreatedAt),
+    )
+    .await?;
+    assert!(rows.len() > 200, "{}", rows.len());
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
@@ -390,13 +632,29 @@ async fn owner_terms_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A repeated inbox reads as one, in either read.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn repeated_inboxes_read_once(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let dense = company(&["dense.test"]);
+    let once = [link(0), link(1)];
+    let repeated = [link(0), link(1), link(0)];
+    let expected = pages(&pool, &Request::all(&once, &dense, 30), None).await?;
+    let reads = [None]
+        .into_iter()
+        .chain(READS.map(|(_, tuning)| Some(tuning)));
+    for read in reads {
+        let actual = pages(&pool, &Request::all(&repeated, &dense, 30), read).await?;
+        assert_eq!(actual.printed(), expected.printed(), "{read:?}");
+    }
+    Ok(())
+}
+
 /// The id of the fixture's thread written by hand as `name`.
 async fn hand(pool: &Pool<Postgres>, name: &str) -> anyhow::Result<Uuid> {
-    Ok(
-        sqlx::query_scalar!(r#"SELECT md5('owned-hand:' || $1)::uuid AS "id!""#, name)
-            .fetch_one(pool)
-            .await?,
-    )
+    md5_id(pool, &format!("owned-hand:{name}")).await
 }
 
 /// The general builder (and so every owned read) never lists a thread whose
@@ -419,9 +677,7 @@ async fn hidden_messages_dont_list_threads(pool: Pool<Postgres>) -> anyhow::Resu
     assert!(ids.contains(&spam_newest_id));
     let rows = pages(
         &pool,
-        &[link(0)],
-        &dense,
-        100,
+        &Request::all(&[link(0)], &dense, 100),
         Some(OwnedReadTuning::DEFAULT),
     )
     .await?
@@ -436,6 +692,79 @@ async fn hidden_messages_dont_list_threads(pool: Pool<Postgres>) -> anyhow::Resu
         Some("Snippet spam-newest:0")
     );
     assert_parity(&pool, &[link(0)], &dense, 2).await?;
+    Ok(())
+}
+
+/// The snippet of each listed thread the foreign-contacts fixture wrote, by
+/// name.
+async fn foreign_listed(
+    pool: &Pool<Postgres>,
+    rows: &[ThreadPreviewCursorDbRow],
+) -> anyhow::Result<Vec<(&'static str, Option<String>)>> {
+    let mut listed = Vec::new();
+    for name in [
+        "foreign-only",
+        "foreign-newest",
+        "junk-and-foreign",
+        "trash-and-foreign",
+        "second-inbox-contact",
+        "foreign-copy",
+        "foreign-recipient",
+        "own-match-foreign-copy",
+    ] {
+        let id = md5_id(pool, &format!("owned-foreign:{name}")).await?;
+        if let Some(row) = rows.iter().find(|row| row.id == id) {
+            listed.push((name, row.snippet.clone()));
+        }
+    }
+    Ok(listed)
+}
+
+/// A message that lists another inbox's contact lists its thread only when a
+/// present message outside trash matches through the queried inboxes' own
+/// contacts, as the general builder's `matching_threads` requires, whichever
+/// stream reads the page; the preview is still the newest message that
+/// matches.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_owned_address_read", "email_owned_address_foreign_contacts")
+    )
+)]
+async fn other_inboxes_contacts_list_as_in_general(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let snippet = |text: &str| Some(text.to_owned());
+    for tree in [
+        company(&["dense.test"]),
+        any_direction(Email::Partial("@dense".to_owned())),
+        Expr::Literal(EmailLiteral::Sender(Email::Domain("dense.test".to_owned()))),
+    ] {
+        let mut expected = vec![
+            ("foreign-newest", snippet("Snippet foreign-newest:1")),
+            ("junk-and-foreign", snippet("Snippet junk-and-foreign:1")),
+            (
+                "second-inbox-contact",
+                snippet("Snippet second-inbox-contact:0"),
+            ),
+            (
+                "own-match-foreign-copy",
+                snippet("Snippet own-match-foreign-copy:0"),
+            ),
+        ];
+        for limit in [1, 4, 100] {
+            let rows = parity(&pool, &Request::all(&both, &tree, limit)).await?;
+            assert_eq!(foreign_listed(&pool, &rows).await?, expected, "{tree:?}");
+        }
+        // Under one Owner term the contacts of every queried inbox still count.
+        let mine = and(tree.clone(), EmailLiteral::Owner(link(0)));
+        let rows = parity(&pool, &Request::all(&both, &mine, 3)).await?;
+        assert_eq!(foreign_listed(&pool, &rows).await?, expected, "{tree:?}");
+        // Without the second inbox, its contact is another inbox's.
+        expected.retain(|(name, _)| *name != "second-inbox-contact");
+        let rows = parity(&pool, &Request::all(&[link(0)], &tree, 3)).await?;
+        assert_eq!(foreign_listed(&pool, &rows).await?, expected, "{tree:?}");
+    }
     Ok(())
 }
 
@@ -466,6 +795,108 @@ async fn uncovered_requests_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Other views, and the viewed sorts and terms, which read the caller's view
+/// history, go to the general builder.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn other_views_and_viewed_requests_read_general(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let dense = company(&["dense.test"]);
+    for label in [
+        PreviewViewStandardLabel::Inbox,
+        PreviewViewStandardLabel::Important,
+    ] {
+        let rows = general(&pool, &Request::all(&both, &dense, 25).view(label)).await?;
+        assert!(!rows.is_empty(), "{label:?}");
+    }
+    for sort in [SimpleSortMethod::ViewedAt, SimpleSortMethod::ViewedUpdated] {
+        let rows = general(&pool, &Request::all(&both, &dense, 25).sort(sort)).await?;
+        assert!(rows.len() > 10, "{sort:?}: {}", rows.len());
+    }
+    let viewed = and(
+        dense.clone(),
+        EmailLiteral::ViewedAt(DateLiteral::GreaterThan(date(1))),
+    );
+    let rows = general(&pool, &Request::all(&both, &viewed, 25)).await?;
+    assert!(rows.len() > 10, "{}", rows.len());
+    Ok(())
+}
+
+/// A request in a project reads the threads shared into it, so it goes to
+/// the general builder.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
+)]
+async fn project_requests_read_general(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let both = [link(0), link(1)];
+    let project = md5_id(&pool, "owned-project").await?.to_string();
+    let in_project = and(company(&["dense.test"]), EmailLiteral::ProjectId(project));
+    let rows = general(&pool, &Request::all(&both, &in_project, 7)).await?;
+    assert!(rows.iter().any(|row| row.link_id == link(0)));
+    assert!(
+        rows.iter().any(|row| row.link_id == link(2)),
+        "the project's threads of u1's inbox are listed"
+    );
+    Ok(())
+}
+
+/// A team request applies the CRM's privacy rule and lists each
+/// conversation once, so it goes to the general builder.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn team_requests_read_general(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team = Uuid::parse_str("e0000002-0000-0000-0000-000000000002")?;
+    let dave = [Uuid::parse_str("d0000001-0000-0000-0000-000000000001")?];
+    // Each member's copy of conversations X, Z and W (Dave) and X, Y and W
+    // (Erin), as `email_dynamic_query_crm_dedupe.sql` names them.
+    let thread = |member: u8, conversation: u8| {
+        Uuid::parse_str(&format!(
+            "5555000{member}-0000-0000-0000-00000000000{conversation}"
+        ))
+    };
+    let (dave_x, dave_z, dave_w) = (thread(1, 1)?, thread(1, 2)?, thread(1, 3)?);
+    let (erin_x, erin_y, erin_w) = (thread(2, 1)?, thread(2, 2)?, thread(2, 3)?);
+    let acme = Expr::Literal(EmailLiteral::Sender(Email::Domain(
+        "acme.example.com".to_owned(),
+    )));
+    let caller = sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", dave[0])
+        .fetch_one(&pool)
+        .await?;
+    let request = Request {
+        caller: &caller,
+        team: Some(team),
+        ..Request::all(&dave, &acme, 100)
+    };
+    // One row per conversation, the caller's copy where the caller has one.
+    assert_eq!(
+        ids(&general(&pool, &request).await?),
+        [dave_z, dave_x, erin_y, dave_w]
+    );
+    // The caller's block on the domain hides the caller's own copies from the
+    // team's view.
+    sqlx::query!(
+        "INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) \
+         VALUES ($1, $2, 'acme.example.com')",
+        team,
+        caller
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        ids(&general(&pool, &request).await?),
+        [erin_w, erin_y, erin_x]
+    );
+    Ok(())
+}
+
 /// The owned read's streams by name, one per page.
 async fn streams(
     pool: &Pool<Postgres>,
@@ -474,7 +905,12 @@ async fn streams(
     limit: u32,
     tuning: OwnedReadTuning,
 ) -> anyhow::Result<Vec<&'static str>> {
-    let pages = pages(pool, caller_links, filter, limit, Some(tuning)).await?;
+    let pages = pages(
+        pool,
+        &Request::all(caller_links, filter, limit),
+        Some(tuning),
+    )
+    .await?;
     Ok(pages
         .streams
         .into_iter()
@@ -518,4 +954,28 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     let rows = assert_parity(&pool, &[], &dense, 10).await?;
     assert_eq!(rows, 0);
     Ok(())
+}
+
+/// The read's statements share one snapshot and write nothing.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reads_share_one_snapshot(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let mut transaction = begin_snapshot(&pool).await?;
+    let settings = sqlx::query!(
+        r#"SELECT current_setting('transaction_isolation') AS "isolation!",
+                  current_setting('transaction_read_only') AS "read_only!""#
+    )
+    .fetch_one(&mut *transaction)
+    .await?;
+    assert_eq!(settings.isolation, "repeatable read");
+    assert_eq!(settings.read_only, "on");
+    transaction.commit().await?;
+    Ok(())
+}
+
+#[test]
+fn window_grows_with_the_page_up_to_its_cap() {
+    assert_eq!(inbox_window(20, 100), 2_000);
+    assert_eq!(inbox_window(100, 100), 10_000);
+    assert_eq!(inbox_window(500, 100), 10_000);
+    assert_eq!(inbox_window(i64::MAX, 2), 10_000);
 }

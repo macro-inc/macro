@@ -82,6 +82,12 @@ impl OwnedReadTuning {
 /// addresses fill slowly.
 const MAX_WINDOW: i64 = 10_000;
 
+/// The inbox stream's window for a page of `query_limit` rows: `window_per_row`
+/// threads per row, at most [`MAX_WINDOW`].
+pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
+    query_limit.saturating_mul(window_per_row).min(MAX_WINDOW)
+}
+
 /// The stream a page reads its threads from, in page order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stream {
@@ -236,13 +242,9 @@ impl<'a> OwnedRead<'a> {
         Ok((OwnedStreams::InboxesThenSuperset, rows))
     }
 
-    /// The inbox stream's window: `limit × window_per_row` threads, at most
-    /// [`MAX_WINDOW`].
+    /// The inbox stream's window for this page ([`inbox_window`]).
     fn window(&self) -> i64 {
-        self.params
-            .query_limit
-            .saturating_mul(self.tuning.window_per_row)
-            .min(MAX_WINDOW)
+        inbox_window(self.params.query_limit, self.tuning.window_per_row)
     }
 
     /// Counts the threads in the inbox stream's window, stopping at the

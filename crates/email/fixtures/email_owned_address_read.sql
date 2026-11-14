@@ -14,6 +14,11 @@
 --   • Drafts, trashed, spam and provider-missing messages, Signal, read,
 --     done and attachment threads, and threads whose non-spam timestamp is
 --     NULL.
+--   • Equal thread timestamps: conversation k ties with k - 1 in link 0 when
+--     k % 10 = 1, and link 1's thread ties with link 0's when k % 8 = 0.
+--   • Calendar threads, u0's view history, notification states, a select
+--     property, and a project u1 shares with u0 that holds threads of links
+--     0 and 2.
 --   • A few threads of link 0 written by hand where only a message the view
 --     hides carries the participant (see the end).
 
@@ -65,7 +70,9 @@ FROM generate_series(0, 599) k;
 CREATE TEMP TABLE owned_thread AS
 SELECT l.i, l.id AS link_id, d.k + 1000 * l.i AS k,
        md5('owned-thread' || l.i || ':' || d.k)::uuid AS id,
-       '2026-06-01 00:00:00+00'::timestamptz - make_interval(mins => d.k * 50 + l.i * 7) AS ts,
+       '2026-06-01 00:00:00+00'::timestamptz - make_interval(
+         mins => (d.k - (d.k % 10 = 1)::int) * 50 + CASE WHEN d.k % 8 = 0 THEN 0 ELSE l.i * 7 END
+       ) AS ts,
        1 + (d.k % 3) AS nmsg,
        CASE
          WHEN d.k >= 500 AND d.k % 2 = 0 THEN 'old.test'
@@ -77,12 +84,51 @@ FROM owned_link l
 JOIN owned_draw d
   ON l.i = 0 OR (l.i = 1 AND d.k % 4 = 0) OR (l.i = 2 AND d.k % 3 = 0);
 
+-- u1's project, shared with u0, holding threads of links 0 and 2.
+INSERT INTO "Project" (id, name, "userId")
+VALUES (md5('owned-project')::uuid::text, 'Shared', 'macro|u1@owned.test');
+
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+VALUES (md5('owned-project')::uuid, 'project', 'macro|u0@owned.test', 'user', 'view');
+
 INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read, latest_inbound_message_ts,
-  latest_non_spam_message_ts, created_at, updated_at, is_signal, has_pdf_attachment)
+  latest_non_spam_message_ts, created_at, updated_at, is_signal, has_pdf_attachment,
+  has_calendar_attachment, project_id)
 SELECT id, 'pt-owned' || i || ':' || k, link_id, k % 9 <> 0, k % 3 = 1, ts,
        CASE WHEN k % 151 = 3 THEN NULL ELSE ts END, ts, ts + interval '1 minute', k % 5 = 0,
-       k % 6 = 0
+       k % 6 = 0, k % 13 = 0,
+       CASE WHEN k % 7 = 3 AND i <> 1 THEN md5('owned-project')::uuid::text END
 FROM owned_thread;
+
+-- u0's view history, out of the threads' order.
+INSERT INTO email_user_history (link_id, thread_id, created_at, updated_at)
+SELECT link_id, id, ts, ts + make_interval(hours => (k * 7) % 61)
+FROM owned_thread
+WHERE i < 2 AND k % 5 = 1;
+
+-- u0's notifications on some of link 0's threads, one in each state.
+INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender)
+SELECT md5('owned-notification' || k)::uuid, 'new_email', id::text, 'email_thread', 'email'
+FROM owned_thread
+WHERE i = 0 AND k % 4 = 2;
+
+INSERT INTO user_notification (user_id, notification_id, state, deleted_at)
+SELECT 'macro|u0@owned.test', md5('owned-notification' || k)::uuid,
+       (ARRAY['unseen', 'seen', 'done'])[1 + k % 3]::notification_state,
+       CASE WHEN k % 20 = 10 THEN NOW() END
+FROM owned_thread
+WHERE i = 0 AND k % 4 = 2;
+
+-- A select property on some threads of both inboxes.
+INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select, specific_entity_type)
+VALUES (md5('owned-property')::uuid, 'macro|u0@owned.test', 'Deal phase', 'SELECT_STRING', false, 'THREAD');
+
+INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+SELECT md5('owned-property' || id::text)::uuid, id::text, 'THREAD', md5('owned-property')::uuid,
+       jsonb_build_object('type', 'SelectOption', 'value',
+         jsonb_build_array(md5('owned-option' || (k % 2))::uuid::text))
+FROM owned_thread
+WHERE i < 2 AND k % 6 = 3;
 
 CREATE TEMP TABLE owned_message AS
 SELECT t.*, j,
