@@ -37,6 +37,8 @@ pub(crate) const API_VERSION: &str = "v1.0";
 const CONTROL_PREFIX: &str = "/_emulator";
 const DEFAULT_PAGE_SIZE: usize = 10;
 const MAX_PAGE_SIZE: usize = 1000;
+/// What Graph's front end answers a write that names no body length.
+const LENGTH_REQUIRED_PAGE: &str = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Length Required</TITLE></HEAD>\r\n<BODY><h2>Length Required</h2>\r\n<hr><p>HTTP Error 411. The request must be chunked or have a content length.</p>\r\n</BODY></HTML>\r\n";
 
 /// One Graph request, as the route table reads it.
 pub(crate) struct Call {
@@ -683,6 +685,9 @@ async fn graph(
         body.to_vec(),
         emulator.graph_url(),
     );
+    if lacks_length(&call.method, &headers) {
+        return logged(length_required(), None, None);
+    }
     let token = bearer(&headers);
     let segments: Vec<&str> = call.segments.iter().map(String::as_str).collect();
     match (&call.method, segments.as_slice()) {
@@ -697,6 +702,25 @@ async fn graph(
             logged(response(served.result, date), served.route, served.mailbox)
         }
     }
+}
+
+/// Whether a write names no body length. A client that sends a `POST` or
+/// `PATCH` with no body (`/send`, `/createReply`) and leaves `Content-Length`
+/// out is refused by Graph's front end before the request reaches a mailbox.
+fn lacks_length(method: &Method, headers: &HeaderMap) -> bool {
+    matches!(*method, Method::POST | Method::PATCH)
+        && !headers.contains_key(header::CONTENT_LENGTH)
+        && !headers.contains_key(header::TRANSFER_ENCODING)
+}
+
+/// The front end's 411 page: HTML, with no Graph error code.
+fn length_required() -> Response {
+    (
+        StatusCode::LENGTH_REQUIRED,
+        [(header::CONTENT_TYPE, "text/html; charset=us-ascii")],
+        LENGTH_REQUIRED_PAGE,
+    )
+        .into_response()
 }
 
 pub(crate) fn router() -> Router<OutlookEmulator> {
