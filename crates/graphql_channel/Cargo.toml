@@ -5,14 +5,23 @@ edition = "2024"
 publish = false
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 async-graphql = { workspace = true }
 channels = { path = "../channels", default-features = false, features = ["ports"] }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "ports"] }
 graphql_common = { path = "../graphql_common" }
+macro_authorization = { path = "../macro_authorization", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
+messages = { path = "../messages", default-features = false, features = ["inbound", "ports"] }
+models_pagination = { path = "../models_pagination" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-chrono = { workspace = true }
+channel_sender = { path = "../channel_sender" }
+rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

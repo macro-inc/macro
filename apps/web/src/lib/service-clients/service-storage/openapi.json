@@ -50859,6 +50859,11 @@
           "parent": {
             "$ref": "#/components/schemas/MessageParent",
             "description": "Changed parent, used for subscriptions and cache invalidation."
+          },
+          "seq": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The sequence number this change took in its channel's change log. A\nreader that has applied the number before it applies the change; any\nother reader asks for the changes it missed. Absent for parents other\nthan channels and for changes that are not stored, such as typing."
           }
         }
       },

@@ -14192,6 +14192,13 @@ export type MessageEvent = {
      * Changed parent, used for subscriptions and cache invalidation.
      */
     parent: MessageParent;
+    /**
+     * The sequence number this change took in its channel's change log. A
+     * reader that has applied the number before it applies the change; any
+     * other reader asks for the changes it missed. Absent for parents other
+     * than channels and for changes that are not stored, such as typing.
+     */
+    seq?: number | null;
 };
 
 /**

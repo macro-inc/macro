@@ -16,9 +16,15 @@ import {
 
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
+/** Each channel's unread witness, with the channel it stands for. */
 function unreadWitnesses(data: ChannelUnreadPresenceQuery) {
   return data.user.soup.items.flatMap((item) =>
-    item.__typename === 'GraphqlSoupChannel' ? item.unreadNotifications : []
+    item.__typename === 'GraphqlSoupChannel'
+      ? item.unreadNotifications.map((notification) => ({
+          ...notification,
+          channelId: item.id,
+        }))
+      : []
   );
 }
 

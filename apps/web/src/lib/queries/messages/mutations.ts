@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
+import { keepUnsentPostText } from '@channel/Input/utils/unsent-text';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -36,6 +37,18 @@ import { useMutation } from '@tanstack/solid-query';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
+import {
+  channelWriteResponseApplies,
+  channelWriteStarted,
+  reconcileFailedChannelWrite,
+} from './graphql/channel-sync';
+import {
+  channelWriteHost,
+  editWrite,
+  postWrite,
+  startChannelWrite,
+  startedChannelWrite,
+} from './graphql/writes';
 import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -179,6 +192,8 @@ function makeOptimisticThreadReply(
 /**
  * Optimistically insert a new message into the channel cache.
  * Returns minimal context for rollback (just the optimistic ID).
+ * `restoredAt` puts back a message sent earlier, at the time it was typed and
+ * without the send motion.
  */
 export function optimisticInsertMessage(
   vars: WithParent<
@@ -186,12 +201,13 @@ export function optimisticInsertMessage(
       WithSenderId<
         PostMessage & {
           optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
+          restoredAt?: string;
         }
       >
     >
   >
 ): InsertMessageContext | undefined {
-  const now = new Date().toISOString();
+  const now = vars.restoredAt ?? new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
     vars.optimisticAttachments ??
       (vars.attachments ?? []).map((attachment) => ({ attachment })),
@@ -208,7 +224,7 @@ export function optimisticInsertMessage(
     target,
   };
 
-  markMessageSent(`channel:${vars.optimisticId}`);
+  if (!vars.restoredAt) markMessageSent(`channel:${vars.optimisticId}`);
 
   if (target.kind === 'thread_reply') {
     const optimisticReply = makeOptimisticThreadReply(
@@ -419,11 +435,12 @@ type SendMessageContext = {
 };
 
 /**
- * Mutation to send an channel message.
+ * Mutation to send a message. A channel read through the device cache sends
+ * it through the cache's queue; it resolves with nothing when it was queued.
  */
 export function useSendMessageMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     SendMessageParams,
     SendMessageContext
@@ -434,6 +451,8 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
+      const queued = startedChannelWrite(vars);
+      if (queued) return queued;
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
       const parent = vars.parentSpan ?? Telemetry.captureContext();
@@ -454,7 +473,7 @@ export function useSendMessageMutation(
       }
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       SendMessageParams,
       SendMessageContext
@@ -462,6 +481,26 @@ export function useSendMessageMutation(
       {
         onMutate: async (vars) => {
           registerMessageNonces(vars.optimisticId);
+          channelWriteStarted(vars.parent, vars);
+          // Queued before anything awaits, so writes keep the order they
+          // were typed in and one typed offline outlives the page.
+          const host = vars.message.anchor
+            ? undefined
+            : channelWriteHost(vars.parent);
+          if (host)
+            startChannelWrite(
+              vars,
+              host,
+              postWrite({
+                channelId: vars.parent.id,
+                messageId: vars.optimisticId,
+                senderId: vars.senderId,
+                content: vars.message.content,
+                mentions: vars.message.mentions,
+                attachments: vars.message.attachments,
+                threadId: vars.message.thread_id,
+              })
+            );
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -485,7 +524,8 @@ export function useSendMessageMutation(
           return { insert, updatedAt };
         },
         onSuccess(data, variables, context) {
-          const threadId = data.thread_id ?? undefined;
+          const threadId =
+            (data ? data.thread_id : variables.message.thread_id) ?? undefined;
           // A server predating client-minted ids ignores `id` and mints its
           // own. Rebuild the optimistic row under the server id so it keeps
           // its thread state (including the anchor) and never holds a dead id;
@@ -493,6 +533,7 @@ export function useSendMessageMutation(
           // A concurrent first call message may become a reply to the root
           // another participant just created, while retaining its client id.
           if (
+            data &&
             (data.id !== variables.optimisticId ||
               threadId !== (variables.message.thread_id ?? undefined)) &&
             context?.insert
@@ -534,7 +575,8 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'posted');
+          if (data && channelWriteResponseApplies(variables.parent, variables))
+            applyMessage(data, 'posted');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -543,6 +585,20 @@ export function useSendMessageMutation(
             rollbackInsertChannelMessage(vars.parent, context.insert);
           }
           context?.updatedAt?.rollback();
+          reconcileFailedChannelWrite(vars.parent);
+          // After the composer that sent it had its turn to take the draft
+          // back: what was typed is kept wherever that left it out.
+          // Every surface that posts to a channel gets this: one that keeps
+          // its own copy leaves a second in the channel's draft, which costs
+          // less than a surface that closed losing the text.
+          if (vars.parent.type === 'channel' && !vars.message.anchor) {
+            const post = {
+              channelId: vars.parent.id,
+              threadId: vars.message.thread_id,
+              content: vars.message.content,
+            };
+            setTimeout(() => keepUnsentPostText(post), 0);
+          }
         },
         onSettled: (data, _error, variables) => {
           softInvalidateTargetCaches(
@@ -563,6 +619,17 @@ export function useSendMessageMutation(
   }));
 }
 
+/**
+ * The message a post answered with, for a parent whose writes are never
+ * queued (anything but a channel): only a queued post answers without one.
+ */
+export function storedMessage(
+  message: EntityMessage | undefined
+): EntityMessage {
+  if (!message) throw new Error('A post to a comment thread was queued');
+  return message;
+}
+
 type DeleteMessageParams = {
   parent: MessageParent;
   messageID: string;
@@ -581,7 +648,7 @@ const deleteNonce = createMutationNonce<DeleteMessageParams>(
  */
 export function useDeleteMessageMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     DeleteMessageParams,
     DeleteMutationContext
@@ -590,6 +657,8 @@ export function useDeleteMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
+      const queued = startedChannelWrite(vars);
+      if (queued) return queued;
       return entityMessagesClient.delete(
         vars.parent,
         vars.messageID,
@@ -597,14 +666,26 @@ export function useDeleteMessageMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       DeleteMessageParams,
       DeleteMutationContext
     >(
       {
         onMutate: async (vars) => {
-          deleteNonce.prepare(vars);
+          const nonce = deleteNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
+          const host = channelWriteHost(vars.parent);
+          if (host)
+            startChannelWrite(vars, host, {
+              kind: 'delete',
+              input: {
+                channelId: vars.parent.id,
+                messageId: vars.messageID,
+                nonce,
+              },
+              threadId: vars.threadID,
+            });
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -614,8 +695,9 @@ export function useDeleteMessageMutation(
             threadId: vars.threadID,
           });
         },
-        onSuccess(data, _vars, context) {
-          applyRootDeletion(data, context?.threadState);
+        onSuccess(data, vars, context) {
+          if (data && channelWriteResponseApplies(vars.parent, vars))
+            applyRootDeletion(data, context?.threadState);
           // The deleted message may have referenced a CRM record.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
@@ -625,6 +707,7 @@ export function useDeleteMessageMutation(
           if (context) {
             rollbackDeleteMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
@@ -664,7 +747,7 @@ const patchNonce = createMutationNonce<PatchMessageParams>(
  */
 export function usePatchMessageMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     PatchMessageParams,
     PatchMutationContext
@@ -673,6 +756,8 @@ export function usePatchMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
+      const queued = startedChannelWrite(vars);
+      if (queued) return queued;
       return entityMessagesClient.patch(vars.parent, vars.messageID, {
         content: vars.content,
         mentions: vars.mentions,
@@ -687,14 +772,30 @@ export function usePatchMessageMutation(
       });
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       PatchMessageParams,
       PatchMutationContext
     >(
       {
         onMutate: async (vars) => {
-          patchNonce.prepare(vars);
+          const nonce = patchNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
+          const host = channelWriteHost(vars.parent);
+          if (host)
+            startChannelWrite(
+              vars,
+              host,
+              editWrite({
+                parent: vars.parent,
+                messageId: vars.messageID,
+                content: vars.content,
+                mentions: vars.mentions,
+                attachmentIdsToDelete: vars.attachmentIDsToDelete,
+                attachmentsToAdd: vars.attachmentsToAdd,
+                nonce,
+              })
+            );
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -706,8 +807,9 @@ export function usePatchMessageMutation(
             attachments_to_add: vars.attachmentsToAdd,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'edited');
+        onSuccess(data, vars) {
+          if (data && channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'edited');
           // An edit can add or remove a CRM record reference.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
@@ -717,6 +819,7 @@ export function usePatchMessageMutation(
           if (context) {
             rollbackUpdateMessage(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);

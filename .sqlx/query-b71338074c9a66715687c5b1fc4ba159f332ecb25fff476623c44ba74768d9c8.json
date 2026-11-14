@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH doomed AS (\n                SELECT channel_id, seq\n                FROM comms_channel_change_log\n                WHERE created_at < $1\n                ORDER BY created_at, channel_id, seq\n                LIMIT $2\n            )\n            DELETE FROM comms_channel_change_log log\n            USING doomed\n            WHERE log.channel_id = doomed.channel_id\n              AND log.seq = doomed.seq\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b71338074c9a66715687c5b1fc4ba159f332ecb25fff476623c44ba74768d9c8"
+}

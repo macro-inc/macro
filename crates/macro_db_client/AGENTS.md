@@ -38,6 +38,12 @@ errors; extend it additively before services begin writing new turn states.
 Install widened checks as `NOT VALID` and validate in a separate migration so
 the scan does not retain the replacement migration's exclusive table lock.
 
+`comms_channel_change_counters` and `comms_channel_change_log` hold each
+channel's change sequence; their queries, retention and lock order belong to
+`messages`. A counter is deleted with its channel; log rows have no foreign key and
+retention removes them by age. The migration is additive, and older writers
+that skip the log only delay a reader until its next full read.
+
 Entity appearance is nullable JSON on each owning entity table (including routine
 template snapshots); appearance-only writes preserve content timestamps. Document
 lists and content save responses retain the stored appearance alongside ordinary metadata.

@@ -11,6 +11,7 @@ import {
 } from '@core/comments/Thread';
 import {
   newMessageId,
+  storedMessage,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
 import type { MessageListItem } from '@service-storage/messages';
@@ -110,7 +111,7 @@ export function DocxCommentMargin(props: {
             })
           );
           props.comments.setActive(optimisticId);
-          return created;
+          return storedMessage(created);
         } catch (error) {
           console.error('Failed to post DOCX comment', error);
           return null;

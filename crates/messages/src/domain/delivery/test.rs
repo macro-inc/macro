@@ -94,6 +94,7 @@ fn event() -> MessageEvent {
         parent,
         actor,
         nonce: None,
+        seq: None,
         change: MessageChange::Posted {
             notification_policy: Default::default(),
             message,

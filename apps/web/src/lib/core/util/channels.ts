@@ -63,7 +63,10 @@ export function useSendMessageToPeople() {
     if (!senderId) return;
     const { navigate } = args;
     await args.beforeSend?.(channelId);
-    const messageResponse = await sendMessage
+    const optimisticId = args.messageId ?? newMessageId();
+    // A message sent through the queue resolves without a response; it keeps
+    // the id it was sent with.
+    const messageId = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
         message: {
@@ -72,11 +75,14 @@ export function useSendMessageToPeople() {
           mentions: args.mentions,
         },
         senderId,
-        optimisticId: args.messageId ?? newMessageId(),
+        optimisticId,
         parentSpan: args.parentSpan,
       })
-      .catch(() => null);
-    if (!messageResponse) return;
+      .then(
+        (response) => response?.id ?? optimisticId,
+        () => null
+      );
+    if (!messageId) return;
 
     fireAndForget(invalidateListChannels(), 'messages');
     requestContactRefresh();
@@ -91,7 +97,7 @@ export function useSendMessageToPeople() {
       });
       const handle = await orchestrator.getBlockHandle(channelId);
       await handle?.goToLocationFromParams({
-        [CHANNEL_PARAMS.message]: messageResponse.id,
+        [CHANNEL_PARAMS.message]: messageId,
       });
     };
 
@@ -99,7 +105,7 @@ export function useSendMessageToPeople() {
       await navigateToChannel();
     }
 
-    return { channelId, messageResponse, navigateToChannel };
+    return { channelId, messageId, navigateToChannel };
   }
 
   async function resolvePeopleChannel(

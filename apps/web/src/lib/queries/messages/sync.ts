@@ -1,5 +1,4 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import type { MessageEvent } from '@service-storage/generated/schemas/messageEvent';
 import type {
   Message,
@@ -10,6 +9,12 @@ import type {
 } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
+import {
+  admitChannelEvent,
+  catchUpTrackedChannel,
+  channelEventApplied,
+  isChannelSequenced,
+} from './graphql/channel-sync';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { normalizeMessageSender } from './message-sender';
 import {
@@ -29,59 +34,10 @@ import {
   insertActivitiesIntoMessageTimeline,
   invalidateMessageTimeline,
   type MessageTimelineData,
+  restartPendingChannelTimeline,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
-
-/**
- * A refetch can have read before this committed event, including on a page that
- * has already resolved while older pages are still loading. Restart the whole
- * fetch after updating the visible cache so its eventual commit cannot undo the
- * event. Idle timelines still apply live updates without making a request.
- */
-async function restartPendingChannelTimeline(parent: MessageParent) {
-  if (parent.type !== 'channel') return;
-  const pending = queryClient.getQueryCache().findAll({
-    queryKey: getMessageTimelineQueryKeyPrefix(parent),
-    type: 'active',
-    predicate: (query) =>
-      query.state.data !== undefined && query.state.fetchStatus === 'fetching',
-  });
-  if (pending.length === 0) return;
-  await Telemetry.span('channel.timeline_restart', async (span) => {
-    span.setAttr('channel.id', parent.id);
-    span.setAttr('query.count', pending.length);
-    span.setAttr(
-      'query.fetch_more_directions',
-      pending.map(
-        (query) => query.state.fetchMeta?.fetchMore?.direction ?? 'refetch'
-      )
-    );
-    // Keep fetchMore direction: replacing pagination with an ordinary refetch
-    // would silently discard the user's request for an older/newer page.
-    const results = await Promise.allSettled(
-      pending.map((query) =>
-        query.fetch(undefined, {
-          cancelRefetch: true,
-          meta: query.state.fetchMeta ?? undefined,
-        })
-      )
-    );
-    const rejected = results.filter(
-      (result) => result.status === 'rejected'
-    ).length;
-    span.setAttr(
-      'query.outcomes',
-      results.map((result) => result.status)
-    );
-    span.setAttr('query.fulfilled_count', results.length - rejected);
-    span.setAttr('query.rejected_count', rejected);
-    if (rejected > 0) {
-      // Request errors can contain URLs or message data; record only a category.
-      span.error('Channel timeline restart failed');
-    }
-  });
-}
 
 /** Committed timeline activity, delivered whole so loaded history needs no re-read. */
 export function handleTimelineActivity(event: {
@@ -111,11 +67,15 @@ export function onThreadStateUpdated(listener: ThreadStateListener) {
   return () => threadStateListeners.delete(listener);
 }
 
-/** Preserve the event kind: only posts insert messages, and only deletes remove them. */
+/**
+ * Preserve the event kind: only posts insert messages, and only deletes remove
+ * them. Returns false when the loaded pages cannot take the change exactly
+ * and the server's state was asked for instead.
+ */
 export function applyMessage(
   message: Message,
   change: Extract<MessageEvent['change'], { message: unknown }>['type']
-) {
+): boolean {
   const parent = message.parent;
   const target = resolveMessageTarget({
     parent,
@@ -133,7 +93,9 @@ export function applyMessage(
     patchTargetMessage(parent, target, normalized);
     if (target.kind === 'thread_reply' && !existing) {
       // A deletion outside the preview (or one already applied) needs the
-      // authoritative count, not another guessed decrement.
+      // authoritative count, not another guessed decrement. A channel that
+      // follows its change sequence gets the root's current state from there.
+      if (catchUpTrackedChannel(parent)) return false;
       queryClient.invalidateQueries({
         queryKey: getMessageTimelineQueryKeyPrefix(parent),
       });
@@ -180,6 +142,7 @@ export function applyMessage(
   ) {
     fireAndForget(refreshUnloadedCallThread(parent), 'messages-sync');
   }
+  return true;
 }
 
 async function refreshUnloadedCallThread(parent: MessageParent) {
@@ -250,8 +213,11 @@ export function handleMessageEvent(
     applyThreadState(parent, change.state);
     return;
   }
+  const admission = admitChannelEvent(parent, event.seq);
   if (change.type === 'call_root_posted') {
     // The call's row carries server-owned life facts, so it is read, not built.
+    if (admission === 'duplicate') return;
+    if (catchUpTrackedChannel(parent)) return;
     fireAndForget(invalidateMessageTimeline(parent), 'messages-sync');
     return;
   }
@@ -266,8 +232,31 @@ export function handleMessageEvent(
   // sender's own optimistic insert no-ops there too — so recover it with a
   // fresh fetch once the page settles, even when the echo is the sender's own.
   if (isRootPost && refetchTimelineAwaitingFirstPage(parent)) return;
+  if (admission === 'duplicate') return;
+  if (admission === 'gap') {
+    // Applying this change over the ones before it that never arrived would
+    // leave the timeline claiming a sequence number it does not hold.
+    catchUpTrackedChannel(parent);
+    return;
+  }
+  if (admission === 'next') {
+    // The sender's own change is applied too. Its optimistic copy may have
+    // been overwritten by changes read before it, and the number the
+    // timeline moves to has to describe rows the timeline holds.
+    const applied = applyMessage(change.message, change.type);
+    if (applied && typeof event.seq === 'number') {
+      channelEventApplied(parent, event.seq);
+    }
+  } else if (!isOwnEcho) {
+    // The sender's own change is already in the timeline from its response.
+    applyMessage(change.message, change.type);
+  } else if (isChannelSequenced(parent)) {
+    // The timeline is being read again without a number. That read may
+    // predate this write, and its number would then keep the write's
+    // response out, so it starts over now that the write is committed.
+    fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');
+  }
   if (isOwnEcho) return;
-  applyMessage(change.message, change.type);
   if (isRootPost && parent.type !== 'channel') {
     fireAndForget(
       loadDiscussionRootState(parent, change.message.id),

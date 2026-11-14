@@ -130,7 +130,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     retryable failures retain their optimistic layer. Ten retryable server
     failures (GraphQL errors or HTTP 5xx responses) permanently fail the mutation
     through ordinary rollback so the next queued mutation can run. Transport
-    failures/timeouts do not consume or reset that budget. The separate server
+    failures/timeouts do not consume or reset that budget, and neither does a
+    refusal the `isMutationBackPressure` callback marks as the server shedding
+    load (a channel message write's `BUSY`). The separate server
     failure counter survives reloads and tab handoff in pending-mutation metadata;
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.

@@ -7,6 +7,7 @@ import appearance from './en/appearance';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
+import channelMessages from './en/channel-messages';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
@@ -52,6 +53,7 @@ export default {
   calls,
   channelComposer,
   channelLabels,
+  channelMessages,
   channelSections,
   commandMenu,
   commands,

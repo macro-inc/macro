@@ -13,6 +13,7 @@ import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import {
   newMessageId,
+  storedMessage,
   usePatchThreadMutation,
   useSendMessageMutation,
 } from '@queries/messages/mutations';
@@ -138,7 +139,7 @@ export function useFigCommentSource(options: {
         ...payload,
         message: { ...payload.message, anchor: { type: 'fig', ...anchor } },
       });
-      return message.id;
+      return storedMessage(message).id;
     },
   };
 }

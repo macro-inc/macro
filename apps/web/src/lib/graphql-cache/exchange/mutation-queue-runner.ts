@@ -291,6 +291,7 @@ export type MutationQueueRunnerDeps = {
     | 'beforeMutationAttempt'
     | 'onMutationAttemptResult'
     | 'shouldRetryMutation'
+    | 'isMutationBackPressure'
     | 'onCacheError'
     | 'mutationQueueTelemetry'
   >;
@@ -931,21 +932,31 @@ export function createMutationQueueRunner(
       if (result.error || result.data == null) {
         details = failureDetails(result.error, response);
         let retry = false;
+        let backPressure = false;
         if (result.error && options.shouldRetryMutation) {
           try {
             retry = await options.shouldRetryMutation(
               result.error,
               attempt.mutation
             );
+            backPressure =
+              retry &&
+              (options.isMutationBackPressure?.(
+                result.error,
+                attempt.mutation
+              ) ??
+                false);
           } catch (error) {
             options.onCacheError?.(error, op);
           }
         }
         if (!isCurrent(attempt)) return detachedResult();
         // urql represents HTTP 5xx as networkError too. Count actual
-        // server responses, never connection failures or timeouts.
+        // server responses, never connection failures or timeouts. A server
+        // shedding load is answering, not failing.
         const serverFailure =
-          httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0;
+          !backPressure &&
+          (httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0);
         const exhausted =
           retry &&
           serverFailure &&

@@ -48,6 +48,7 @@ use super::*;
 
 mod calendar;
 mod channel;
+mod channel_messages;
 mod contacts;
 mod crm_record;
 mod database_activity;

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT target.message AS \"message!: Json<StoredMessage>\"\n                   FROM (\n                       SELECT to_jsonb(m) AS message, m.thread_id, m.parent_entity_type,\n                           m.parent_entity_id, m.deleted_at\n                       FROM comms_messages m\n                       WHERE m.id = $3\n                       OFFSET 0\n                   ) target\n                   WHERE target.thread_id = $4\n                       AND target.parent_entity_type = $1 AND target.parent_entity_id = $2\n                       AND target.deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5b527f82956e265b76c31974e56b1fd126284699cb9a4abc959d261777146243"
+}

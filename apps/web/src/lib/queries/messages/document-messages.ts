@@ -11,6 +11,7 @@ import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createEffect } from 'solid-js';
 import {
   newMessageId,
+  storedMessage,
   useDeleteMessageMutation,
   useDeleteThreadMutation,
   usePatchThreadMutation,
@@ -80,12 +81,14 @@ export function useMessageActions(parent: Accessor<MessageParent>) {
     post: (message: PostMessage) => {
       const senderId = userId();
       if (!senderId) throw new Error('Sign in to comment');
-      return send.mutateAsync({
-        parent: parent(),
-        message,
-        senderId,
-        optimisticId: newMessageId(),
-      });
+      return send
+        .mutateAsync({
+          parent: parent(),
+          message,
+          senderId,
+          optimisticId: newMessageId(),
+        })
+        .then(storedMessage);
     },
     delete: (id: string) =>
       remove.mutateAsync({ parent: parent(), messageID: id }),

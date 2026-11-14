@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET CONSTRAINTS comms_messages_thread_parent_fkey IMMEDIATE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "27adc177334aa948d6f9946ccd9bf397b58afce2b475ad3a5b8c1fae87d2a1ef"
+}

@@ -1,6 +1,9 @@
 import { CombinedError } from '@urql/core';
 import { describe, expect, it } from 'vitest';
-import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import {
+  isGraphqlMutationBackPressure,
+  shouldRetryGraphqlMutation,
+} from './graphql-mutation-retry';
 
 describe('GraphQL mutation retries', () => {
   it.each([
@@ -150,6 +153,76 @@ describe('GraphQL mutation retries', () => {
           write('SetEmailThreadArchived')
         )
       ).toBe(false);
+    });
+  });
+
+  describe('channel message writes', () => {
+    const refusal = (...codes: string[]) =>
+      new CombinedError({
+        graphQLErrors: codes.map((code) => ({
+          message: 'refused',
+          extensions: { code },
+        })),
+      });
+    const write = (operationName: string) => ({
+      transactionId: '1',
+      uuid: crypto.randomUUID(),
+      operationName,
+    });
+
+    it.each([
+      'PostChannelMessage',
+      'EditChannelMessage',
+      'DeleteChannelMessage',
+      'ReactToChannelMessage',
+    ])('retries %s the server was too busy for, as back pressure', (name) => {
+      const mutation = write(name);
+      for (let attempt = 0; attempt < 20; attempt++) {
+        expect(shouldRetryGraphqlMutation(refusal('BUSY'), mutation)).toBe(
+          true
+        );
+      }
+      expect(isGraphqlMutationBackPressure(refusal('BUSY'), mutation)).toBe(
+        true
+      );
+    });
+
+    it.each([
+      'NOT_FOUND',
+      'FORBIDDEN',
+      'BAD_USER_INPUT',
+      'CONFLICT',
+      'INTERNAL_SERVER_ERROR',
+    ])('does not retry a %s refusal', (code) => {
+      const mutation = write('PostChannelMessage');
+      expect(shouldRetryGraphqlMutation(refusal(code), mutation)).toBe(false);
+      expect(isGraphqlMutationBackPressure(refusal(code), mutation)).toBe(
+        false
+      );
+    });
+
+    it('does not retry BUSY mixed with a final refusal', () => {
+      const mutation = write('PostChannelMessage');
+      expect(
+        shouldRetryGraphqlMutation(refusal('BUSY', 'FORBIDDEN'), mutation)
+      ).toBe(false);
+    });
+
+    it('does not treat BUSY on any other mutation as back pressure', () => {
+      const mutation = write('SetEmailThreadArchived');
+      expect(shouldRetryGraphqlMutation(refusal('BUSY'), mutation)).toBe(false);
+      expect(isGraphqlMutationBackPressure(refusal('BUSY'), mutation)).toBe(
+        false
+      );
+    });
+
+    it('does not count a transport failure as back pressure', () => {
+      const mutation = write('PostChannelMessage');
+      const lost = new CombinedError({
+        networkError: new Error('connection lost'),
+      });
+      expect(shouldRetryGraphqlMutation(lost, mutation)).toBe(true);
+      expect(isGraphqlMutationBackPressure(lost, mutation)).toBe(false);
     });
   });
 

@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   CallEntryStatus,
   Message as EntityMessage,
@@ -23,6 +24,11 @@ import {
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { queryClient } from '../client';
+import {
+  isChannelTracked,
+  loadChannelTimelinePage,
+} from './graphql/channel-sync';
+import { channelCacheHost } from './graphql/source';
 import { messageKeys } from './keys';
 import {
   normalizeChannelMessageSender,
@@ -42,8 +48,17 @@ import {
   timelineMessages,
 } from './timeline-entries';
 
+/**
+ * A loaded page. A channel's latest page read through the device cache
+ * carries the change sequence number its rows are current to, so whatever
+ * replaces or restores the rows replaces or restores the number with them.
+ */
+export type LoadedTimelinePage = MessageTimelinePage & {
+  channel_seq?: number;
+};
+
 export type MessageTimelineData = InfiniteData<
-  MessageTimelinePage,
+  LoadedTimelinePage,
   MessageTimelinePageParam | null
 >;
 
@@ -60,7 +75,7 @@ export type ThreadPreviewReplySnapshot = {
   reply: EntityMessage;
 };
 
-type MessageTimelinePageParam = {
+export type MessageTimelinePageParam = {
   next_cursor: MessageCursor | null;
   previous_cursor: MessageCursor | null;
 };
@@ -223,6 +238,18 @@ export function messageTimelineQueryOptions(
     }) => {
       // Observe cancellation so a restarted refetch stops paging its old result.
       signal?.throwIfAborted();
+      // Channels read through the device cache where it is on; the REST
+      // reads below serve every other parent and a channel without it.
+      const host = parent.type === 'channel' ? channelCacheHost() : undefined;
+      if (host) {
+        return loadChannelTimelinePage(
+          host,
+          parent,
+          pageParam,
+          loadAroundMessageId,
+          signal
+        );
+      }
       if (pageParam) {
         return fetchMessageTimelinePage(parent, pageParam, null);
       }
@@ -390,6 +417,56 @@ function rootPage(items: MessageListItem[]): MessageTimelineData {
     ],
     pageParams: [null],
   };
+}
+
+/**
+ * A refetch can have read before this committed event, including on a page that
+ * has already resolved while older pages are still loading. Restart the whole
+ * fetch after updating the visible cache so its eventual commit cannot undo the
+ * event. Idle timelines still apply live updates without making a request.
+ */
+export async function restartPendingChannelTimeline(parent: MessageParent) {
+  if (parent.type !== 'channel') return;
+  const pending = queryClient.getQueryCache().findAll({
+    queryKey: getMessageTimelineQueryKeyPrefix(parent),
+    type: 'active',
+    predicate: (query) =>
+      query.state.data !== undefined && query.state.fetchStatus === 'fetching',
+  });
+  if (pending.length === 0) return;
+  await Telemetry.span('channel.timeline_restart', async (span) => {
+    span.setAttr('channel.id', parent.id);
+    span.setAttr('query.count', pending.length);
+    span.setAttr(
+      'query.fetch_more_directions',
+      pending.map(
+        (query) => query.state.fetchMeta?.fetchMore?.direction ?? 'refetch'
+      )
+    );
+    // Keep fetchMore direction: replacing pagination with an ordinary refetch
+    // would silently discard the user's request for an older/newer page.
+    const results = await Promise.allSettled(
+      pending.map((query) =>
+        query.fetch(undefined, {
+          cancelRefetch: true,
+          meta: query.state.fetchMeta ?? undefined,
+        })
+      )
+    );
+    const rejected = results.filter(
+      (result) => result.status === 'rejected'
+    ).length;
+    span.setAttr(
+      'query.outcomes',
+      results.map((result) => result.status)
+    );
+    span.setAttr('query.fulfilled_count', results.length - rejected);
+    span.setAttr('query.rejected_count', rejected);
+    if (rejected > 0) {
+      // Request errors can contain URLs or message data; record only a category.
+      span.error('Channel timeline restart failed');
+    }
+  });
 }
 
 /** Apply every optimistic and realtime operation to timelines and selected source roots. */
@@ -716,6 +793,9 @@ export function findThreadPreviewReplySnapshotInMessageTimeline(
  * Marks the channel messages query as stale without triggering an immediate refetch.
  */
 export function softInvalidateMessageTimeline(parent: MessageParent) {
+  // A tracked channel has every change up to its sequence number; reading
+  // its page again would only replace it with a possibly older replica read.
+  if (isChannelTracked(parent)) return;
   queryClient.invalidateQueries({
     queryKey: getMessageTimelineQueryKeyPrefix(parent),
     refetchType: 'inactive',

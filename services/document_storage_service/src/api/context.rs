@@ -996,6 +996,7 @@ pub(crate) struct ApiContext {
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
+    pub graphql_channel_messages_context: graphql_channel::messages::ChannelMessagesGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,

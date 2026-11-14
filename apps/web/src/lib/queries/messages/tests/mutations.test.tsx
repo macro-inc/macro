@@ -845,7 +845,7 @@ describe('sending', () => {
       optimisticId: id,
     });
 
-    expect(sent.id).toBe(id);
+    expect(sent?.id).toBe(id);
     expect(mocks.get.mock.calls).toEqual([[parent, id]]);
     expect(toast.failure).not.toHaveBeenCalled();
     expect(

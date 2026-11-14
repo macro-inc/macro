@@ -9,6 +9,16 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
+import {
+  channelWriteResponseApplies,
+  channelWriteStarted,
+  reconcileFailedChannelWrite,
+} from './graphql/channel-sync';
+import {
+  channelWriteHost,
+  startChannelWrite,
+  startedChannelWrite,
+} from './graphql/writes';
 import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
@@ -203,12 +213,30 @@ const removeReactionNonce = createMutationNonce<ReactionParams>(
   (v) => `remove:${v.parent.type}:${v.parent.id}:${v.messageId}:${v.emoji}`
 );
 
+/** Queue a channel reaction through the device cache, when it is on. */
+function startReaction(vars: ReactionParams, add: boolean, nonce: string) {
+  const host = channelWriteHost(vars.parent);
+  if (!host) return;
+  startChannelWrite(vars, host, {
+    kind: 'react',
+    input: {
+      channelId: vars.parent.id,
+      messageId: vars.messageId,
+      emoji: vars.emoji,
+      add,
+      nonce,
+    },
+    userId: vars.userId,
+    threadId: vars.threadId,
+  });
+}
+
 /**
  * Mutation to add a reaction to a channel message.
  */
 export function useAddReactionMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     ReactionParams,
     ReactionMutationContext
@@ -217,6 +245,8 @@ export function useAddReactionMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
+      const queued = startedChannelWrite(vars);
+      if (queued) return queued;
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -226,14 +256,16 @@ export function useAddReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       ReactionParams,
       ReactionMutationContext
     >(
       {
         onMutate: async (vars) => {
-          addReactionNonce.prepare(vars);
+          const nonce = addReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
+          startReaction(vars, true, nonce);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -246,8 +278,9 @@ export function useAddReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (data && channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
@@ -255,6 +288,7 @@ export function useAddReactionMutation(
           if (context) {
             rollbackAddReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
@@ -278,7 +312,7 @@ export function useAddReactionMutation(
  */
 export function useRemoveReactionMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     ReactionParams,
     ReactionMutationContext
@@ -287,6 +321,8 @@ export function useRemoveReactionMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
+      const queued = startedChannelWrite(vars);
+      if (queued) return queued;
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -296,14 +332,16 @@ export function useRemoveReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       ReactionParams,
       ReactionMutationContext
     >(
       {
         onMutate: async (vars) => {
-          removeReactionNonce.prepare(vars);
+          const nonce = removeReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
+          startReaction(vars, false, nonce);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -316,8 +354,9 @@ export function useRemoveReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (data && channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);
@@ -325,6 +364,7 @@ export function useRemoveReactionMutation(
           if (context) {
             rollbackRemoveReaction(vars.parent, context);
           }
+          reconcileFailedChannelWrite(vars.parent);
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);

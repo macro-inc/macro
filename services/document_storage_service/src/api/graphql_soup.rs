@@ -20,8 +20,8 @@ use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
-    MacroUserAuthentication, OptionalMacroAuthorizationExtractor, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    MacroAuthorization, MacroUserAuthentication, OptionalMacroAuthorizationExtractor,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -63,6 +63,7 @@ async fn graphql_handler(
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user);
+    let caller = auth.authorization.as_ref().map(rest_principal);
     let mail_profile = MailCacheProfile::from_advertised(
         request_parts
             .headers
@@ -76,6 +77,7 @@ async fn graphql_handler(
             acting_user.map(|user| user.macro_user_id.clone()),
             acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
             acting_user.and_then(opaque_viewer_id),
+            caller,
         );
         state.graphql_soup_schema.execute(
             request
@@ -117,9 +119,16 @@ async fn subscription_handler(
     let macro_user_id = acting_user.macro_user_id.clone();
     let organization_id = acting_user.user_context.organization_id.map(i64::from);
     let viewer_id = opaque_viewer_id(acting_user);
+    let caller = auth.authorization.as_ref().map(rest_principal);
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_subscription_context_data(&state, macro_user_id, organization_id, viewer_id);
+    let data = graphql_subscription_context_data(
+        &state,
+        macro_user_id,
+        organization_id,
+        viewer_id,
+        caller,
+    );
     upgrade.serve(schema, data)
 }
 
@@ -129,14 +138,33 @@ fn opaque_viewer_id(user: &MacroUserAuthentication) -> Option<Uuid> {
     Uuid::parse_str(&user.user_context.fusion_user_id).ok()
 }
 
+/// The caller as the REST routes receive it, so GraphQL writes that share
+/// their service authorize the same principal the same way.
+fn rest_principal(authorization: &UserOrInternalServiceAuthorization) -> MacroAuthorization {
+    match authorization {
+        UserOrInternalServiceAuthorization::User(user) => MacroAuthorization::User(user.clone()),
+        UserOrInternalServiceAuthorization::Internal(user) => {
+            MacroAuthorization::Internal(user.clone())
+        }
+    }
+}
+
 fn graphql_subscription_context_data(
     state: &ApiContext,
     user: MacroUserIdStr<'static>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
+    caller: Option<MacroAuthorization>,
 ) -> Data {
     let mut data = Data::default();
-    insert_graphql_context_data(&mut data, state, Some(user), organization_id, viewer_id);
+    insert_graphql_context_data(
+        &mut data,
+        state,
+        Some(user),
+        organization_id,
+        viewer_id,
+        caller,
+    );
     data
 }
 
@@ -146,6 +174,7 @@ fn graphql_query_context_data(
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
+    caller: Option<MacroAuthorization>,
 ) -> async_graphql::Request {
     insert_graphql_context_data(
         &mut req.data,
@@ -153,6 +182,7 @@ fn graphql_query_context_data(
         macro_user_id,
         organization_id,
         viewer_id,
+        caller,
     );
     req
 }
@@ -163,6 +193,7 @@ fn insert_graphql_context_data(
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
+    caller: Option<MacroAuthorization>,
 ) {
     data.insert(state.clone());
     let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
@@ -207,6 +238,14 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_scheduled_action_context.clone());
     data.insert(state.graphql_contacts_context.clone());
     data.insert(state.graphql_calendar_context.clone());
+    let channel_messages = state
+        .graphql_channel_messages_context
+        .for_organization(organization_id);
+    // Channel message writes authorize the caller as the REST routes do.
+    data.insert(match caller {
+        Some(caller) => channel_messages.with_caller(caller),
+        None => channel_messages,
+    });
     data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_work_feed_context.clone());
     data.insert(state.graphql_registered_work_context.clone());

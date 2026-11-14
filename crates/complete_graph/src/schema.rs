@@ -116,6 +116,7 @@ pub struct CompleteMutationRoot<
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
+    graphql_channel::messages::ChannelMessageMutationRoot,
 );
 
 impl<
@@ -144,6 +145,7 @@ impl<
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
+            graphql_channel::messages::ChannelMessageMutationRoot,
         )
     }
 }
@@ -953,6 +955,12 @@ where
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {
         GraphqlCalendarQuery::new(self.user_id.clone())
+    }
+
+    /// Channel message reads supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channel_messages(&self) -> graphql_channel::messages::GraphqlChannelMessagesQuery {
+        graphql_channel::messages::GraphqlChannelMessagesQuery::new(self.user_id.clone())
     }
 
     /// A page of the authenticated user's work feed, newest first: items

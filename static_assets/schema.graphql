@@ -529,6 +529,22 @@ type CompleteMutationRoot {
 	revisions are unchanged. Returns the views in their new order.
 	"""
 	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
+	"""
+	Post a message in a channel, at most once per client-minted `id`.
+	"""
+	postChannelMessage(input: GraphqlChannelPostMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Edit a channel message.
+	"""
+	editChannelMessage(input: GraphqlChannelEditMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Delete a channel message, leaving its tombstone.
+	"""
+	deleteChannelMessage(input: GraphqlChannelDeleteMessageInput!): GraphqlChannelMessageWrite!
+	"""
+	Add or remove the caller's reaction to a channel message.
+	"""
+	reactToChannelMessage(input: GraphqlChannelReactInput!): GraphqlChannelMessageWrite!
 }
 
 """
@@ -3396,6 +3412,56 @@ type GraphqlChannelActivity {
 }
 
 """
+How an edit changes a message's attachments.
+"""
+input GraphqlChannelAttachmentChangeInput @oneOf {
+	"""
+	Replace every attachment with these.
+	"""
+	replace: [GraphqlChannelAttachmentInput!]
+	"""
+	Remove some attachments and append others.
+	"""
+	delta: GraphqlChannelAttachmentDeltaInput
+}
+
+"""
+Attachments to remove from a message and attachments to add to it.
+"""
+input GraphqlChannelAttachmentDeltaInput {
+	"""
+	`attachmentId`s of the attachments to remove.
+	"""
+	remove: [ID!]!
+	"""
+	Attachments to append.
+	"""
+	add: [GraphqlChannelAttachmentInput!]!
+}
+
+"""
+An entity to attach to a message.
+"""
+input GraphqlChannelAttachmentInput {
+	"""
+	Kind of the attached entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the attached entity.
+	"""
+	entityId: String!
+	"""
+	Pixel width, for media.
+	"""
+	width: Int
+	"""
+	Pixel height, for media.
+	"""
+	height: Int
+}
+
+"""
 The two operands of a recursive `ChannelFilterExpr` binary expression.
 """
 input GraphqlChannelBinaryExpr {
@@ -3407,6 +3473,140 @@ input GraphqlChannelBinaryExpr {
 	Right expression.
 	"""
 	right: GraphqlChannelExpr!
+}
+
+"""
+The persona a bot posted under.
+"""
+type GraphqlChannelBotProfile {
+	"""
+	Display name of the persona.
+	"""
+	name: String!
+	"""
+	Avatar of the persona, when it has one.
+	"""
+	avatarUrl: String
+}
+
+"""
+Where a call root's call stands.
+"""
+enum GraphqlChannelCallState {
+	"""
+	The call is in progress.
+	"""
+	LIVE
+	"""
+	The call ended and its record exists.
+	"""
+	ENDED
+	"""
+	The call's record was deleted.
+	"""
+	RECORD_DELETED
+}
+
+"""
+The call a call root stands for.
+"""
+type GraphqlChannelCallStatus {
+	"""
+	Where the call stands.
+	"""
+	state: GraphqlChannelCallState!
+	"""
+	When the call ended, RFC 3339.
+	"""
+	endedAt: String
+	"""
+	How long the call lasted, in milliseconds.
+	"""
+	durationMs: Int
+}
+
+"""
+What changed in a channel after a sequence number.
+"""
+type GraphqlChannelChanges {
+	"""
+	The log cannot answer from that number: drop what is cached for the
+	channel and read its latest page again.
+	"""
+	reset: Boolean!
+	"""
+	The number these changes bring the reader to.
+	"""
+	seq: Int!
+	"""
+	More changes follow; ask again from `seq`.
+	"""
+	hasMore: Boolean!
+	"""
+	Roots that were posted or changed, in their current state.
+	"""
+	entries: [GraphqlChannelTimelineEntry!]!
+	"""
+	Replies that were posted or changed, in their current state.
+	"""
+	replies: [GraphqlChannelMessage!]!
+	"""
+	Timeline facts that were recorded.
+	"""
+	activities: [GraphqlChannelTimelineActivity!]!
+	"""
+	Messages that no longer exist for a reader.
+	"""
+	removed: [ID!]!
+}
+
+"""
+A channel message to delete.
+"""
+input GraphqlChannelDeleteMessageInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to delete. A message already deleted returns its
+	tombstone with a null `seq`.
+	"""
+	messageId: ID!
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
+}
+
+"""
+An edit of a channel message. An absent field keeps its current value.
+"""
+input GraphqlChannelEditMessageInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to edit.
+	"""
+	messageId: ID!
+	"""
+	Replacement body.
+	"""
+	content: String
+	"""
+	Replacement mentions.
+	"""
+	mentions: [GraphqlChannelMentionInput!]
+	"""
+	How the attachments change.
+	"""
+	attachments: GraphqlChannelAttachmentChangeInput
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
 }
 
 """
@@ -3429,6 +3629,16 @@ input GraphqlChannelExpr @oneOf {
 	Match a literal.
 	"""
 	literal: GraphqlChannelLiteral
+}
+
+"""
+The name an imported message's original author had.
+"""
+type GraphqlChannelImportedAuthor {
+	"""
+	Display name in the source workspace.
+	"""
+	name: String!
 }
 
 """
@@ -3502,6 +3712,20 @@ input GraphqlChannelLiteral @oneOf {
 }
 
 """
+An entity a message mentions.
+"""
+input GraphqlChannelMentionInput {
+	"""
+	Kind of the mentioned entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the mentioned entity.
+	"""
+	entityId: String!
+}
+
+"""
 Metadata for a channel mention notification.
 """
 type GraphqlChannelMentionMetadata {
@@ -3537,6 +3761,166 @@ type GraphqlChannelMentionMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+}
+
+"""
+A channel message: a root or a reply. Normalized by `id`, so a page, a
+thread and a change page all describe the same record.
+"""
+type GraphqlChannelMessage {
+	"""
+	The message id.
+	"""
+	id: ID!
+	"""
+	The channel the message belongs to.
+	"""
+	channelId: ID!
+	"""
+	The root this message replies to; null on a root.
+	"""
+	threadId: ID
+	"""
+	Ordinary message or call root.
+	"""
+	kind: GraphqlChannelMessageKind!
+	"""
+	Who sent it: a user id or a bot identity.
+	"""
+	senderId: String!
+	"""
+	Display name of a guest sender.
+	"""
+	guestName: String
+	"""
+	Original author of an imported message.
+	"""
+	importedAuthor: GraphqlChannelImportedAuthor
+	"""
+	Persona a bot posted under.
+	"""
+	botProfile: GraphqlChannelBotProfile
+	"""
+	Entities the message mentions.
+	"""
+	mentions: [GraphqlChannelMessageMention!]!
+	"""
+	The user a bot posted for.
+	"""
+	triggeredBy: String
+	"""
+	The client a bot post was made through.
+	"""
+	triggeredVia: String
+	"""
+	Message body; empty on a deleted message.
+	"""
+	content: String!
+	"""
+	When it was posted, RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When it last changed, RFC 3339.
+	"""
+	updatedAt: String!
+	"""
+	When its body was last edited, RFC 3339.
+	"""
+	editedAt: String
+	"""
+	When it was deleted, RFC 3339.
+	"""
+	deletedAt: String
+	"""
+	Attached entities.
+	"""
+	attachments: [GraphqlChannelMessageAttachment!]!
+	"""
+	Reactions grouped by emoji.
+	"""
+	reactions: [GraphqlChannelMessageReaction!]!
+	"""
+	The thread this root starts; null on a reply.
+	"""
+	thread: GraphqlChannelThreadSummary
+	"""
+	The call this root stands for; null unless it is a call root.
+	"""
+	call: GraphqlChannelCallStatus
+}
+
+"""
+An entity attached to a message. Embedded in its message: the list is
+replaced whole when the message changes.
+"""
+type GraphqlChannelMessageAttachment {
+	"""
+	Identifier of the attachment row.
+	"""
+	attachmentId: ID!
+	"""
+	Kind of the attached entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the attached entity.
+	"""
+	entityId: String!
+	"""
+	Pixel width, for media.
+	"""
+	width: Int
+	"""
+	Pixel height, for media.
+	"""
+	height: Int
+	"""
+	When it was attached, RFC 3339.
+	"""
+	createdAt: String!
+}
+
+"""
+Whether a message is an ordinary post or stands for a call.
+"""
+enum GraphqlChannelMessageKind {
+	"""
+	An ordinary post or reply.
+	"""
+	MESSAGE
+	"""
+	The root that stands for a channel call.
+	"""
+	CALL_ROOT
+}
+
+"""
+An entity a message mentions.
+"""
+type GraphqlChannelMessageMention {
+	"""
+	Kind of the mentioned entity.
+	"""
+	entityType: String!
+	"""
+	Identifier of the mentioned entity.
+	"""
+	entityId: String!
+}
+
+"""
+One emoji and everyone who reacted with it.
+"""
+type GraphqlChannelMessageReaction {
+	"""
+	The emoji.
+	"""
+	emoji: String!
+	"""
+	Users who reacted with it, in reaction order.
+	"""
+	users: [String!]!
 }
 
 """
@@ -3612,6 +3996,70 @@ type GraphqlChannelMessageSendMetadata {
 }
 
 """
+A channel message write: the message after it, and the sequence number
+it took in the channel's change log.
+"""
+type GraphqlChannelMessageWrite {
+	"""
+	The message as the write left it, as the REST write routes return it.
+	It is not read again, so `thread` and `call` are always null here,
+	even on a root: read them from the timeline and thread pages, and do
+	not select them in a write, or a normalized cache stores the nulls
+	over the record's values.
+	"""
+	message: GraphqlChannelMessage!
+	"""
+	The channel change sequence number the write took; null when this
+	call wrote nothing, as when it repeated a write that already happened.
+	"""
+	seq: Int
+}
+
+"""
+The messages of one channel.
+"""
+type GraphqlChannelMessages {
+	"""
+	The channel's id.
+	"""
+	id: ID!
+	"""
+	One page of the channel's timeline, newest row first like a REST
+	page: root messages with their thread summaries, and the facts shown
+	between them. `seq`
+	is read before the rows, so `changes(since: seq)` returns everything
+	the page can lack.
+	"""
+	timeline(input: GraphqlChannelTimelineInput): GraphqlChannelTimelinePage!
+	"""
+	One window of a thread's live replies, in thread order, with the
+	sequence number read before it. A window read without a cursor also
+	returns the thread's root.
+	"""
+	thread(rootId: ID!, input: GraphqlChannelThreadInput): GraphqlChannelThreadPage!
+	"""
+	What changed in the channel after sequence number `since`, as the
+	current state of each changed message, or a reset when the log can
+	no longer answer from there.
+	"""
+	changes(since: Int!): GraphqlChannelChanges!
+}
+
+"""
+Which side of a cursor a timeline page continues on.
+"""
+enum GraphqlChannelPageDirection {
+	"""
+	The newest rows, or those older than the cursor.
+	"""
+	OLDER
+	"""
+	Rows newer than the cursor.
+	"""
+	NEWER
+}
+
+"""
 Channel role resolved for the current viewer.
 """
 enum GraphqlChannelParticipantRole {
@@ -3627,6 +4075,71 @@ enum GraphqlChannelParticipantRole {
 	Channel member.
 	"""
 	MEMBER
+}
+
+"""
+A message to post in a channel: a root, or a reply to one.
+"""
+input GraphqlChannelPostMessageInput {
+	"""
+	The channel to post in.
+	"""
+	channelId: ID!
+	"""
+	Client-minted UUIDv7 for the message, stamped within a day of the
+	server clock. Posting an id the caller already posted in this channel
+	and thread returns that message with a null `seq`; another holder's id
+	is a `CONFLICT`. The server mints one when absent, and then a resent
+	post posts again.
+	"""
+	id: ID
+	"""
+	Macro Markdown body.
+	"""
+	content: String!
+	"""
+	The root to reply to; absent posts a root.
+	"""
+	threadId: ID
+	"""
+	Mentions tracked by the editor.
+	"""
+	mentions: [GraphqlChannelMentionInput!]! = []
+	"""
+	Attachments.
+	"""
+	attachments: [GraphqlChannelAttachmentInput!]! = []
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
+}
+
+"""
+The caller's reaction to add to or remove from a channel message.
+"""
+input GraphqlChannelReactInput {
+	"""
+	The message's channel.
+	"""
+	channelId: ID!
+	"""
+	The message to react to.
+	"""
+	messageId: ID!
+	"""
+	The emoji.
+	"""
+	emoji: String!
+	"""
+	Add when true, remove when false. A reaction already as asked returns
+	the message with a null `seq`.
+	"""
+	add: Boolean!
+	"""
+	Client nonce echoed to realtime listeners.
+	"""
+	nonce: String
 }
 
 """
@@ -3722,6 +4235,30 @@ input GraphqlChannelThreadExpr @oneOf {
 }
 
 """
+Which window of a thread's replies to read. With neither a cursor nor
+`around`, the newest replies.
+"""
+input GraphqlChannelThreadInput {
+	"""
+	Continue from a cursor a previous window returned.
+	"""
+	cursor: String
+	"""
+	Which side of the cursor to read; older when absent. With no cursor,
+	older reads the end of the thread and newer its start.
+	"""
+	direction: GraphqlChannelPageDirection
+	"""
+	Center the window on this reply. Cannot be combined with a cursor.
+	"""
+	around: ID
+	"""
+	Window size, 1 to 100; 50 when absent.
+	"""
+	limit: Int
+}
+
+"""
 GraphQL input representing the channel thread literal.
 """
 input GraphqlChannelThreadLiteral @oneOf {
@@ -3749,6 +4286,184 @@ input GraphqlChannelThreadLiteral @oneOf {
 	Whether the thread has at least one undeleted reply.
 	"""
 	hasReplies: Boolean
+}
+
+"""
+One page of a thread's replies, in thread order.
+"""
+type GraphqlChannelThreadPage {
+	"""
+	The channel's change sequence number, read before the page.
+	"""
+	seq: Int!
+	"""
+	The thread's root.
+	"""
+	rootId: ID!
+	"""
+	The thread's root, with its thread summary and call. Present in a
+	window read without a cursor; a continued window leaves it out.
+	"""
+	root: GraphqlChannelMessage
+	"""
+	The page's replies.
+	"""
+	replies: [GraphqlChannelMessage!]!
+	"""
+	Continues toward earlier replies; null when none remain.
+	"""
+	olderCursor: String
+	"""
+	Continues toward later replies; null when none remain.
+	"""
+	newerCursor: String
+}
+
+"""
+The thread a root message starts: its state and a preview of its replies.
+"""
+type GraphqlChannelThreadSummary {
+	"""
+	Who started the thread.
+	"""
+	userId: String!
+	"""
+	Whether the thread is resolved.
+	"""
+	resolved: Boolean!
+	"""
+	When the thread was created, RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When the thread state last changed, RFC 3339.
+	"""
+	updatedAt: String!
+	"""
+	When the thread was deleted, RFC 3339.
+	"""
+	deletedAt: String
+	"""
+	Live replies in the thread.
+	"""
+	replyCount: Int!
+	"""
+	When the newest live reply was posted, RFC 3339.
+	"""
+	latestReplyAt: String
+	"""
+	The oldest few live replies.
+	"""
+	preview: [GraphqlChannelMessage!]!
+}
+
+"""
+A fact the channel timeline shows between messages: a rename, a join.
+"""
+type GraphqlChannelTimelineActivity {
+	"""
+	The activity id.
+	"""
+	id: ID!
+	"""
+	Who did it.
+	"""
+	actorId: String!
+	"""
+	When it happened, RFC 3339.
+	"""
+	occurredAt: String!
+	"""
+	What happened, as the stored action tag.
+	"""
+	action: String!
+	"""
+	The action's stored payload.
+	"""
+	payload: JSON
+}
+
+"""
+A position in a channel timeline: the row a page ends at. A client
+passes it back to continue, and compares rows against it to tell
+whether a row falls inside the pages it holds.
+"""
+type GraphqlChannelTimelineCursor {
+	"""
+	When the row at this position was created or occurred, RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	The row's id, which orders rows of one instant. Not named `id`: a
+	position is not an entity for a client cache to keep by id.
+	"""
+	entryId: ID!
+}
+
+"""
+A timeline position a previous page returned as a cursor.
+"""
+input GraphqlChannelTimelineCursorInput {
+	"""
+	The cursor's `createdAt`.
+	"""
+	createdAt: String!
+	"""
+	The cursor's `entryId`.
+	"""
+	entryId: ID!
+}
+
+"""
+One row of a channel timeline.
+"""
+union GraphqlChannelTimelineEntry = GraphqlChannelMessage | GraphqlChannelTimelineActivity
+
+"""
+Which page of a channel timeline to read. With neither a cursor nor
+`around`, the latest page.
+"""
+input GraphqlChannelTimelineInput {
+	"""
+	Continue from a cursor a previous page returned.
+	"""
+	cursor: GraphqlChannelTimelineCursorInput
+	"""
+	Which side of the cursor to read; older when absent.
+	"""
+	direction: GraphqlChannelPageDirection
+	"""
+	Center the page on the root containing this message. Cannot be
+	combined with a cursor.
+	"""
+	around: ID
+	"""
+	Page size, 1 to 100; 50 when absent.
+	"""
+	limit: Int
+}
+
+"""
+One page of a channel timeline, newest entry first.
+"""
+type GraphqlChannelTimelinePage {
+	"""
+	The channel's change sequence number, read before the page: asking
+	for changes after it misses nothing the page lacks.
+	"""
+	seq: Int!
+	"""
+	The page's rows.
+	"""
+	entries: [GraphqlChannelTimelineEntry!]!
+	"""
+	Continues toward older rows; null when none remain.
+	"""
+	olderCursor: GraphqlChannelTimelineCursor
+	"""
+	Continues toward newer rows; null when none remain.
+	"""
+	newerCursor: GraphqlChannelTimelineCursor
 }
 
 """
@@ -10863,6 +11578,11 @@ type GraphqlUser {
 	time. An empty `since` returns only the current watermark.
 	"""
 	calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!
+	"""
+	The messages of one channel. Each read under it checks that the
+	user can view the channel.
+	"""
+	channelMessages(channelId: ID!): GraphqlChannelMessages!
 	"""
 	A page of the authenticated user's work feed, newest first: items
 	with outstanding attention (notifications, inbox Signal email,

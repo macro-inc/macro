@@ -1,6 +1,6 @@
 //! Hydration must not accumulate query entry points or change offline intents.
 use cache_core::engine::{Engine, ReadResult};
-use cache_core::page_retention::{MAX_SOUP_PAGE_BYTES, MAX_SOUP_PAGES};
+use cache_core::page_retention::{MAX_CHANNEL_PAGES, MAX_SOUP_PAGE_BYTES, MAX_SOUP_PAGES};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey};
 use pollster::block_on;
@@ -187,5 +187,91 @@ fn capped_database_read_remains_available_after_reopen() {
                 if page == 40 { 0 } else { 500 }
             );
         }
+    });
+}
+
+const CHANNEL_QUERY: &str = "query Timeline($channelId: ID!) { user { id channelMessages(channelId: $channelId) { id timeline(input: null) { seq entries { __typename ... on GraphqlChannelMessage { id } } olderCursor { __typename } newerCursor { __typename } } } } }";
+fn channel_id(n: usize) -> String {
+    format!("00000000-0000-7000-8000-{n:012}")
+}
+fn channel_variables(n: usize) -> serde_json::Map<String, Value> {
+    json!({"channelId":channel_id(n)})
+        .as_object()
+        .unwrap()
+        .clone()
+}
+fn channel_data(n: usize) -> Value {
+    json!({"user":{"id":"viewer","channelMessages":{"id":channel_id(n),"timeline":{
+        "seq":1,
+        "entries":[{"__typename":"GraphqlChannelMessage","id":format!("message-{n}")}],
+        "olderCursor":null,
+        "newerCursor":null
+    }}}})
+}
+
+#[test]
+fn channel_pages_beyond_the_bound_miss_without_evicting_soup_pages() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(None, QUERY, Some("Page"), &variables(0), &data(0), None)
+            .await
+            .unwrap();
+        for n in 0..MAX_CHANNEL_PAGES + 10 {
+            engine
+                .write_query(
+                    None,
+                    CHANNEL_QUERY,
+                    Some("Timeline"),
+                    &channel_variables(n),
+                    &channel_data(n),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+        let mut reopened = Engine::new(engine.into_storage());
+        let read = |n: usize| channel_variables(n);
+        assert!(matches!(
+            reopened
+                .read_query(None, CHANNEL_QUERY, Some("Timeline"), &read(0))
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+        assert!(matches!(
+            reopened
+                .read_query(
+                    None,
+                    CHANNEL_QUERY,
+                    Some("Timeline"),
+                    &read(MAX_CHANNEL_PAGES + 9)
+                )
+                .await
+                .unwrap(),
+            ReadResult::Hit { .. }
+        ));
+        assert!(matches!(
+            reopened
+                .read_query(None, QUERY, Some("Page"), &variables(0))
+                .await
+                .unwrap(),
+            ReadResult::Hit { .. }
+        ));
+        // Only the viewer's link goes; the channel's records are the client's
+        // to delete, by key.
+        let channel = format!("GraphqlChannelMessages:{}", channel_id(0));
+        assert!(
+            reopened
+                .storage()
+                .get_batch(&[
+                    EntityKey(channel.into()),
+                    EntityKey("GraphqlChannelMessage:message-0".into()),
+                ])
+                .await
+                .unwrap()
+                .iter()
+                .all(Option::is_some)
+        );
     });
 }

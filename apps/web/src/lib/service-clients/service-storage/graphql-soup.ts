@@ -116,7 +116,10 @@ import {
   type SoupQuery,
 } from './graphql/generated/graphql';
 import { isActivityUpdatesSubscription } from './graphql-activity-updates';
-import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import {
+  isGraphqlMutationBackPressure,
+  shouldRetryGraphqlMutation,
+} from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
@@ -656,6 +659,14 @@ function disposeSessionClients(): void {
  * Browser: wasm engine in a worker. Tauri: native engine in the host
  * process (graphql_cache_plugin).
  */
+/**
+ * The client with no cache behind it, for reads the device cache must not
+ * keep (a channel's older pages).
+ */
+export function getUncachedGraphqlSoupClient(): Client {
+  return graphqlSoupClient;
+}
+
 export function graphqlCacheEnabled(): boolean {
   cacheAvailability();
   if (!sessionActive()) return false;
@@ -930,6 +941,8 @@ export function getGraphqlSoupClient(): Client {
                 ?.id,
             // Preserve optimistic intent only while transport failures retry.
             shouldRetryMutation: shouldRetryGraphqlMutation,
+            // A channel write the server was too busy for waits it out.
+            isMutationBackPressure: isGraphqlMutationBackPressure,
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,

@@ -136,4 +136,6 @@ request data and run the `contacts` schema tests after changes.
 
 Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
 
+Channel message writes (`graphql_channel`'s `ChannelMessageMutationRoot`) act for the caller document storage puts on `ChannelMessagesGraphqlContext`. Their composed tests run the real message and access services on a test database (`fixtures/channel_messages.sql`); run `cargo test -p complete_graph --lib channel_message` after changing them.
+
 - Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.

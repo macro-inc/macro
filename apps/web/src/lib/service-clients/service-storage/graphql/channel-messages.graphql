@@ -1,0 +1,157 @@
+# Channel message reads. Every page carries `seq`, the channel's change
+# sequence number read before the page, so `changes(since: seq)` returns
+# everything the page can lack.
+
+fragment ChannelMessageFields on GraphqlChannelMessage {
+	id
+	channelId
+	threadId
+	kind
+	senderId
+	guestName
+	importedAuthor {
+		name
+	}
+	botProfile {
+		name
+		avatarUrl
+	}
+	mentions {
+		entityType
+		entityId
+	}
+	triggeredBy
+	triggeredVia
+	content
+	createdAt
+	updatedAt
+	editedAt
+	deletedAt
+	attachments {
+		attachmentId
+		entityType
+		entityId
+		width
+		height
+		createdAt
+	}
+	reactions {
+		emoji
+		users
+	}
+}
+
+fragment ChannelRootFields on GraphqlChannelMessage {
+	...ChannelMessageFields
+	thread {
+		userId
+		resolved
+		createdAt
+		updatedAt
+		deletedAt
+		replyCount
+		latestReplyAt
+		preview {
+			...ChannelMessageFields
+		}
+	}
+	call {
+		state
+		endedAt
+		durationMs
+	}
+}
+
+fragment ChannelActivityFields on GraphqlChannelTimelineActivity {
+	id
+	actorId
+	occurredAt
+	action
+	payload
+}
+
+fragment ChannelTimelinePageFields on GraphqlChannelTimelinePage {
+	seq
+	entries {
+		__typename
+		... on GraphqlChannelMessage {
+			...ChannelRootFields
+		}
+		... on GraphqlChannelTimelineActivity {
+			...ChannelActivityFields
+		}
+	}
+	olderCursor {
+		createdAt
+		entryId
+	}
+	newerCursor {
+		createdAt
+		entryId
+	}
+}
+
+query ChannelTimeline($channelId: ID!, $input: GraphqlChannelTimelineInput) {
+	user {
+		id
+		channelMessages(channelId: $channelId) {
+			id
+			timeline(input: $input) {
+				...ChannelTimelinePageFields
+			}
+		}
+	}
+}
+
+query ChannelChanges($channelId: ID!, $since: Int!) {
+	user {
+		id
+		channelMessages(channelId: $channelId) {
+			id
+			changes(since: $since) {
+				reset
+				seq
+				hasMore
+				entries {
+					__typename
+					... on GraphqlChannelMessage {
+						...ChannelRootFields
+					}
+					... on GraphqlChannelTimelineActivity {
+						...ChannelActivityFields
+					}
+				}
+				replies {
+					...ChannelMessageFields
+				}
+				activities {
+					...ChannelActivityFields
+				}
+				removed
+			}
+		}
+	}
+}
+
+# The rows of the latest page the device cache keeps for a channel, read by
+# the record that holds the page rather than through the viewer: the engine
+# may drop the viewer's link to a page whose rows are still stored.
+fragment ChannelCachedPageRows on GraphqlChannelMessages {
+	id
+	timeline(input: null) {
+		entries {
+			__typename
+			... on GraphqlChannelMessage {
+				id
+				thread {
+					preview {
+						id
+					}
+				}
+			}
+			... on GraphqlChannelTimelineActivity {
+				id
+			}
+		}
+	}
+}

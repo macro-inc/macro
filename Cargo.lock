@@ -5009,6 +5009,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
+ "messages",
  "model-entity",
  "model_notifications",
  "model_owner",
@@ -6813,6 +6814,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_channel",
  "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
@@ -9408,13 +9410,22 @@ dependencies = [
 name = "graphql_channel"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
+ "channel_sender",
  "channels",
  "chrono",
  "entity_access",
  "graphql_common",
+ "macro_authorization",
  "macro_user_id",
+ "messages",
+ "models_pagination",
+ "rootcause",
+ "serde",
+ "serde_json",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

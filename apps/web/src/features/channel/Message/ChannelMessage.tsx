@@ -4,12 +4,14 @@ import type { MessageActions, MessageData } from '@core/messages/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { MessageParent } from '@service-storage/messages';
+import { cn } from '@ui';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
 import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
+import { useNotSentDim } from './NotSentIndicator';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 
 type ChannelMessageProps = {
@@ -90,6 +92,7 @@ function MessageFooter(props: { messageEditor?: MessageEditor }) {
     <Show when={!isEditingMessage(props.messageEditor, message().id)}>
       <Message.Attachments />
       <Message.Reactions />
+      <Message.NotSentIndicator />
     </Show>
   );
 }
@@ -133,12 +136,17 @@ function RegularMessageLayout(props: {
   messageEditor?: MessageEditor;
   hideTriggeredBy?: boolean;
 }) {
+  const dim = useNotSentDim();
+
   return (
     <Message.Layout class="pt-(--regular-message-padding-t)">
-      <Message.Slot placement="icon">
+      <Message.Slot placement="icon" class={dim()}>
         <Message.SenderIcon />
       </Message.Slot>
-      <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
+      <Message.Slot
+        placement="header"
+        class={cn('flex flex-col gap-0.5 min-w-0', dim())}
+      >
         {/* In a narrow card (a document comment) the session link wraps to
             its own line rather than running past the card's edge. */}
         <div class="flex flex-wrap items-baseline gap-x-1 gap-y-0.5 min-w-0">
@@ -160,7 +168,7 @@ function RegularMessageLayout(props: {
           <Message.FromPill />
         </Show>
       </Message.Slot>
-      <Message.Slot placement="content" class="ph-no-capture">
+      <Message.Slot placement="content" class={cn('ph-no-capture', dim())}>
         <MessageContentSlot
           renderContent={props.renderContent}
           parent={props.parent}
@@ -170,7 +178,7 @@ function RegularMessageLayout(props: {
       </Message.Slot>
       <Message.Slot
         placement="footer"
-        class="ph-no-capture flex flex-col min-w-0"
+        class={cn('ph-no-capture flex flex-col min-w-0', dim())}
       >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
@@ -185,12 +193,14 @@ function GroupedMessageLayout(props: {
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
 }) {
+  const dim = useNotSentDim();
+
   return (
     <Message.Layout>
       {/* No icon placeholder: the grid template already reserves the gutter
           column, and an invisible 36px icon would stretch the row, leaving
           more space below the text than above it. */}
-      <Message.Slot placement="content">
+      <Message.Slot placement="content" class={dim()}>
         <div class="ph-no-capture flex gap-3 min-w-0 items-start">
           <MessageContentSlot
             renderContent={props.renderContent}
@@ -206,7 +216,7 @@ function GroupedMessageLayout(props: {
       </Message.Slot>
       <Message.Slot
         placement="footer"
-        class="ph-no-capture flex flex-col min-w-0"
+        class={cn('ph-no-capture flex flex-col min-w-0', dim())}
       >
         <MessageFooter messageEditor={props.messageEditor} />
       </Message.Slot>
