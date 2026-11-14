@@ -151,8 +151,8 @@ where
         records: &[Uuid],
     ) -> Result<Vec<PipelineReference>, Self::Error> {
         let records: Vec<String> = records.iter().map(Uuid::to_string).collect();
-        // Starts from each pipeline's primary column: entity_properties has no
-        // index on referenced ids, so this reads those pipelines' primary cells.
+        // Starts from each pipeline's primary column, so this reads those
+        // pipelines' primary cells.
         let rows = sqlx::query!(
             r#"SELECT p.id AS "pipeline_id!", r.id AS "row_id!",
                       reference.value ->> 'entity_id' AS "record_id!"
