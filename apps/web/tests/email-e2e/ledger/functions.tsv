@@ -71,7 +71,7 @@ F-069	organise	Mark a thread unread	yes	yes	yes	provider
 F-070	organise	Mark a thread read automatically when it is opened	yes	yes	yes	provider
 F-071	organise	Mark a thread done (archive)	yes	yes	yes	provider
 F-072	organise	Mark a thread not done (back to the inbox)	yes	yes	yes	provider
-F-073	organise	Star a thread	yes	yes	yes	provider
+F-073	organise	Star a thread	yes	yes	yes	service
 F-074	organise	Unstar a thread	yes	yes	yes	provider
 F-075	organise	Move a thread to Trash	yes	yes	yes	provider
 F-076	organise	Restore a thread from Trash	yes	yes	yes	provider

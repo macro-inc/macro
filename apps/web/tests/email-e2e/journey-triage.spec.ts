@@ -110,6 +110,8 @@ for (const provider of PROVIDERS) {
       await page.keyboard.press('Escape');
       did('AL-123');
       await expect(page).toHaveURL(/\/app\/mail$/);
+      await expect(row(page, ids.Question)).toBeVisible();
+      saw('STL-966');
       await focusRow(page, ids.Question);
       await page.keyboard.press('u');
       did('AL-066');
@@ -134,6 +136,18 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => rowIds(page)).toEqual([ids.Question]);
       saw('STL-972');
       saw('STL-923');
+      // The star is a Macro favorite: the storage service holds it.
+      const favorites = await mailbox.api('/dss/favorites');
+      const starred = (await favorites.json()) as {
+        favorites: { entityType: string; entityId: string }[];
+      };
+      expect(
+        starred.favorites.map(({ entityType, entityId }) => ({
+          entityType,
+          entityId,
+        }))
+      ).toEqual([{ entityType: 'email_thread', entityId: ids.Question }]);
+      confirmed('F-073');
 
       // Restored from Trash: back in the inbox at the provider.
       await library.getByRole('button', { name: 'Trash' }).click();

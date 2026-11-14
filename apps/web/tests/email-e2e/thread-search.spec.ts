@@ -3,16 +3,24 @@
 
 import type { Page } from '@playwright/test';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { anInbox, PROVIDERS } from './harness/providers';
 import {
   deliverThread,
   messageCard,
   type ThreadMessage,
   threadMessages,
 } from './harness/thread';
-import { did } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 const THIRD = 'Step 3: the zeppelin is booked for the whole week.';
 const TENTH = 'Step 10: zeppelin confirmed.';
+
+/** The message of the thread whose text is `text`. */
+function withText(messages: ThreadMessage[], text: string): ThreadMessage {
+  const found = messages.find((message) => message.snippet === text);
+  if (!found) throw new Error(`no message reads "${text}"`);
+  return found;
+}
 
 /**
  * A ten-message thread whose 3rd and 10th messages hold the search word, and
@@ -32,10 +40,26 @@ async function searchFindsThread(
           : `Step ${index + 1}: nothing to add.`,
   }));
   const thread = await deliverThread(mailbox, 'Travel plan', bodies);
+  // Read before it is searched: the thread view opens unread messages
+  // expanded, and these tests tell the message a result opens by which one
+  // is expanded.
+  const seen = await mailbox.api(`/email/email/threads/${thread.id}/seen`, {
+    method: 'POST',
+  });
+  expect(seen.status).toBe(200);
+  await expect
+    .poll(async () =>
+      (await threadMessages(mailbox, thread.id)).every(
+        (message) => message.is_read
+      )
+    )
+    .toBe(true);
   const messages = await threadMessages(mailbox, thread.id);
   const now = Date.now();
-  const hit = (index: number, text: string) => ({
-    message_id: messages[index].db_id,
+  // By its text: a provider that stamps mail to the second (Outlook) does
+  // not keep the order of messages that arrive together.
+  const hit = (text: string) => ({
+    message_id: withText(messages, text).db_id,
     highlight: {
       content: [text.replace('zeppelin', '<macro_em>zeppelin</macro_em>')],
     },
@@ -67,7 +91,7 @@ async function searchFindsThread(
             participants: [],
             snippet: TENTH,
             properties: [],
-            email_message_search_results: [hit(2, THIRD), hit(9, TENTH)],
+            email_message_search_results: [hit(THIRD), hit(TENTH)],
           },
         ],
         next_cursor: null,
@@ -83,39 +107,49 @@ async function searchFindsThread(
   return { threadId: thread.id, messages };
 }
 
-test.describe('a thread opened from a search result', () => {
-  // Class search-result-opens-wrong-message: when this fails, clicking the
-  // result row opens the thread at the oldest message that matched (here the
-  // 3rd) instead of at the latest message, expanded, like any other row.
-  test('the row opens the thread at its latest message', async ({
-    page,
-    mailbox,
-  }) => {
-    const { threadId, messages } = await searchFindsThread(page, mailbox);
-    await page.getByText('Travel plan').first().click();
-    did('AX-056', 'F-051');
+for (const provider of PROVIDERS) {
+  test.describe(`a thread opened from a search result in ${anInbox(provider)}`, () => {
+    test.use({ provider });
 
-    await expect(page).toHaveURL(new RegExp(threadId));
-    await expect(messageCard(page, TENTH).getByText('to Me')).toBeVisible();
-    // The 3rd message is neither the target nor expanded.
-    expect(page.url()).not.toContain(messages[2].db_id);
-    await expect(messageCard(page, THIRD).getByText('to Me')).toHaveCount(0);
+    // Class search-result-opens-wrong-message: when this fails, clicking the
+    // result row opens the thread at the oldest message that matched (here the
+    // 3rd) instead of at the latest message, expanded, like any other row.
+    test('the row opens the thread at its latest message', async ({
+      page,
+      mailbox,
+    }) => {
+      // Outlook stamps mail to the second, and the thread view does not keep
+      // the order of ten messages that arrive together: which one is the
+      // latest is not known there.
+      test.skip(provider === 'OUTLOOK', 'needs messages in a known order');
+      const { threadId, messages } = await searchFindsThread(page, mailbox);
+      await page.getByText('Travel plan').first().click();
+      did('AX-056', 'F-051');
+
+      await expect(page).toHaveURL(new RegExp(threadId));
+      await expect(messageCard(page, TENTH).getByText('to Me')).toBeVisible();
+      // The 3rd message is neither the target nor expanded.
+      expect(page.url()).not.toContain(withText(messages, THIRD).db_id);
+      await expect(messageCard(page, THIRD).getByText('to Me')).toHaveCount(0);
+    });
+
+    // Class search-result-opens-wrong-message: when this fails, clicking one hit
+    // of the result ignores which message the hit is in, and the thread opens
+    // somewhere else (at its latest message) with that message still hidden.
+    test('a hit opens the thread at the message of the hit', async ({
+      page,
+      mailbox,
+    }) => {
+      const { threadId, messages } = await searchFindsThread(page, mailbox);
+      await page.getByRole('button', { name: /^Show more/ }).click();
+      await page.getByText(THIRD).last().click();
+      did('AX-056', 'F-052');
+
+      await expect(page).toHaveURL(new RegExp(threadId));
+      await expect(page).toHaveURL(new RegExp(withText(messages, THIRD).db_id));
+      await expect(messageCard(page, THIRD).getByText('to Me')).toBeVisible();
+      await expect(messageCard(page, THIRD)).toBeInViewport();
+      saw('STL-105', 'F-052');
+    });
   });
-
-  // Class search-result-opens-wrong-message: when this fails, clicking one hit
-  // of the result ignores which message the hit is in, and the thread opens
-  // somewhere else (at its latest message) with that message still hidden.
-  test('a hit opens the thread at the message of the hit', async ({
-    page,
-    mailbox,
-  }) => {
-    const { threadId, messages } = await searchFindsThread(page, mailbox);
-    await page.getByRole('button', { name: /^Show more/ }).click();
-    await page.getByText(THIRD).last().click();
-    did('AX-056', 'F-052');
-
-    await expect(page).toHaveURL(new RegExp(threadId));
-    await expect(page).toHaveURL(new RegExp(messages[2].db_id));
-    await expect(messageCard(page, THIRD).getByText('to Me')).toBeVisible();
-  });
-});
+}

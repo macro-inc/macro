@@ -210,3 +210,38 @@ export async function focusRow(page: Page, threadId: string): Promise<void> {
   await expect.poll(() => focusedRowId(page)).toBe(threadId);
   saw('STL-403', 'F-038');
 }
+
+/**
+ * Puts a message in the mailbox that the provider sets aside from the
+ * important mail, which is what Macro lists under Noise: Gmail's Promotions
+ * category, Outlook's Other inbox.
+ */
+export async function deliverNoise(
+  mailbox: Mailbox,
+  mail: Mail
+): Promise<void> {
+  if (mailbox.inbox.provider === 'GMAIL') {
+    return deliverLabelled(mailbox, mail, [
+      'INBOX',
+      'UNREAD',
+      'CATEGORY_PROMOTIONS',
+    ]);
+  }
+  const delivered = await fetch(
+    `${mailbox.stack.info.outlookUrl}/_emulator/mailboxes/${encodeURIComponent(
+      mailbox.inbox.email
+    )}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        from: mail.from,
+        subject: mail.subject,
+        text: mail.text,
+        other: true,
+      }),
+    }
+  );
+  if (!delivered.ok)
+    throw new Error(`Outlook refused the message: ${delivered.status}`);
+}
