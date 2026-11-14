@@ -47,7 +47,7 @@ use super::*;
 mod agent_metadata;
 mod attention;
 mod crm_association;
-mod crm_scope;
+pub(crate) mod crm_scope;
 mod exclusions;
 mod favorites;
 
@@ -69,7 +69,7 @@ impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
     }
 }
 
-struct NoopCommsService;
+pub(crate) struct NoopCommsService;
 
 impl ChannelListService for NoopCommsService {
     async fn get_channels(
@@ -187,7 +187,7 @@ impl ChannelListService for RecordingCommsService {
     }
 }
 
-struct NoopCallRecordQueryService;
+pub(crate) struct NoopCallRecordQueryService;
 
 impl CallRecordQueryService for NoopCallRecordQueryService {
     async fn get_user_call_records(
@@ -283,7 +283,7 @@ fn call_record(
 use crm::domain::service::NoOpCrmService;
 
 #[derive(Clone)]
-struct NoopPullRequestListing;
+pub(crate) struct NoopPullRequestListing;
 
 impl GithubPullRequestListing for NoopPullRequestListing {
     async fn list_pull_requests(
@@ -446,7 +446,7 @@ fn soup_document_with_updated(id: &str, updated_at: DateTime<Utc>) -> SoupDocume
     soup_document_uuid_with_updated(uuid, updated_at)
 }
 
-fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupDocument {
+pub(crate) fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupDocument {
     soup_document_with_is_completed(id, updated_at, None)
 }
 
