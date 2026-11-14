@@ -486,17 +486,17 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                   fireAndForget(changeType(change), 'database')
                                 }
                                 onFormula={
-                                  formulas &&
-                                  !props.column.formula &&
-                                  (() => {
-                                    const replace = formulaReplaces();
-                                    requested = () =>
-                                      setFormulaEditing({
-                                        kind: 'create',
-                                        replace,
-                                      });
-                                    setMenuOpen(false);
-                                  })
+                                  formulas && !props.column.formula
+                                    ? () => {
+                                        const replace = formulaReplaces();
+                                        requested = () =>
+                                          setFormulaEditing({
+                                            kind: 'create',
+                                            replace,
+                                          });
+                                        setMenuOpen(false);
+                                      }
+                                    : undefined
                                 }
                                 onConvertToNewColumn={
                                   props.onConvert &&
