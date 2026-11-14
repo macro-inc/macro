@@ -21,6 +21,7 @@ mod containers;
 mod conversation_admission;
 mod external_session_requests;
 mod harness_bindings;
+mod health;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
@@ -753,6 +754,7 @@ async fn run() -> anyhow::Result<()> {
     };
     let service_shutdown = tokio_util::sync::CancellationToken::new();
     let (http_listening, http_ready) = tokio::sync::watch::channel(false);
+    let health_api_listening = http_ready.clone();
     let scheduling_runtime = scheduling::build(
         scheduling::config::Config::from_env()?
             .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
@@ -1761,6 +1763,10 @@ async fn run() -> anyhow::Result<()> {
             },
         )
         .await;
+        // Retries only reset readiness before the next attempt; the last one
+        // must not leave it set, or the health check keeps passing with no
+        // consumer.
+        runtime_commands_ready.send_replace(false);
         if let Err(error) = result {
             tracing::error!(
                 error = ?error,
@@ -1988,6 +1994,18 @@ async fn run() -> anyhow::Result<()> {
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
     let http_port = config.port;
+    let heartbeat_tasks = tokio_util::task::TaskTracker::new();
+    health::serve_on_own_thread(
+        config.health_port,
+        health::Liveness {
+            heartbeat: health::MainRuntimeHeartbeat::spawn(
+                service_shutdown.clone(),
+                &heartbeat_tasks,
+            ),
+            api_listening: health_api_listening,
+            runtime_commands_ready: runtime_commands_readiness.clone(),
+        },
+    )?;
     let pull_requests =
         agent_session::inbound::axum_router::pull_requests::agent_session_pull_request_router(
             AgentSessionRouterState::new(
@@ -2668,6 +2686,8 @@ async fn run() -> anyhow::Result<()> {
     import_jobs.hand_over().await;
 
     service_shutdown.cancel();
+    heartbeat_tasks.close();
+    heartbeat_tasks.wait().await;
     cognition_runtime.shutdown().await;
     scheduling_runtime.shutdown().await;
     event_broker_tracker.close();

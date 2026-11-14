@@ -407,7 +407,12 @@ listener failure shuts down the process so ECS can replace the task.
 ## Gotchas
 
 - Keep computer domain IDs, harness IDs, and Incus resource names typed in `computers.rs`; unwrap only when calling the existing harness registry or SQL boundary.
-
+- `src/health.rs` serves a liveness check on `HEALTH_PORT` (8103) from its
+  own OS thread, so a busy main runtime still answers it. It fails when the
+  main runtime's heartbeat is 30 s stale or its task has exited, before the
+  API listens, or while the command bus is down. Keep it a liveness signal,
+  never an always-200. `/health` on the API and egress ports stays for direct
+  checks.
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
   forwards directly to that owner. Keep preview security-group self-ingress on

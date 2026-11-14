@@ -29,9 +29,8 @@ use serde::de::DeserializeOwned;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc;
-// Tokio's clock rather than the standard library's, so the silence deadline is
-// on the same clock as the interval that checks it - and so a test can drive
-// both without waiting out six real seconds.
+// Tokio's clock rather than the standard library's, so a test's paused clock
+// drives the ping interval.
 use tokio::time::Instant;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
@@ -52,14 +51,20 @@ mod test;
 /// end depends on the other being new enough to ping.
 const PING_INTERVAL: Duration = Duration::from_secs(2);
 
-/// How long a socket may go without any inbound frame before this side
-/// declares it dead.
+/// How many pings in a row this side may send with no inbound frame in
+/// between before it declares the socket dead (~20 s at [`PING_INTERVAL`]).
 ///
-/// Three missed pings. A live peer answers every ping with a pong, and a pong
-/// is an inbound frame, so silence this long means the peer is gone or the
-/// path to it is - the case a half-open socket produces, where writes keep
+/// A live peer answers every ping with a pong, and a pong is an inbound
+/// frame, so this many unanswered pings means the peer is gone or the path
+/// to it is - the case a half-open socket produces, where writes keep
 /// succeeding into a connection that will never answer again.
-const SILENCE_TIMEOUT: Duration = Duration::from_secs(6);
+///
+/// Counted in pings this side actually got to send, not wall-clock time: a
+/// pump that tokio did not poll for a while had the peer's pongs waiting
+/// unread, and that wait is this side's starvation, not the peer's silence.
+/// Generous so that a peer whose own runtime is starved for a few seconds
+/// (and so answers late) is not cut off either.
+const UNANSWERED_PING_LIMIT: u32 = 10;
 
 /// A physical WebSocket frame type: one JSON text payload, or a ping.
 ///
@@ -139,6 +144,11 @@ async fn run_pump<Rx, Socket, Frame, Error>(
     // however many it slept through.
     ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut last_inbound = Instant::now();
+    // Ticks since the last inbound frame. Each one is a ping the peer has
+    // had the chance to answer (while closing, a close it has had the chance
+    // to send). Missed ticks collapse into one, so a pump that was not polled
+    // for a while counts that as one tick, not as the peer's silence.
+    let mut unanswered_pings: u32 = 0;
     // Set once this side has nothing more to send: its close frame is out,
     // and the pump keeps reading until the peer closes too.
     let mut closing = false;
@@ -162,6 +172,7 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 // Every frame counts, text or not: a pong carries no logical
                 // message and is exactly what proves the peer is still there.
                 last_inbound = Instant::now();
+                unanswered_pings = 0;
                 match next_incoming {
                     Some(Ok(frame)) => {
                         let Some(text) = frame.into_text() else { continue };
@@ -180,14 +191,15 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
             }
             _ = ping.tick() => {
-                let silent_for = last_inbound.elapsed();
-                if silent_for >= SILENCE_TIMEOUT {
+                if unanswered_pings >= UNANSWERED_PING_LIMIT {
                     tracing::warn!(
-                        silent_for_ms = silent_for.as_millis(),
+                        unanswered_pings,
+                        silent_for_ms = last_inbound.elapsed().as_millis(),
                         "closing a WebSocket that stopped answering pings"
                     );
                     break;
                 }
+                unanswered_pings += 1;
                 // Both halves of a split socket share one connection, so this
                 // is also what flushes any pong the read half queued.
                 if !closing && sink.send(Frame::ping()).await.is_err() {
