@@ -202,6 +202,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         hosted_runtimes::domain::ports::NoComps,
         hosted_runtimes::outbound::pg::PgComputerRepo,
     >,
+    agent_credentials::rollout::PgAgentCreators,
     feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
@@ -225,6 +226,10 @@ pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
 pub(crate) type BotsServiceType = bots::domain::service::BotServiceImpl<
     bots::outbound::pg_bots_repo::PgBotsRepo,
     AuthenticationEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
 >;
 
 #[derive(Clone, FromRef)]

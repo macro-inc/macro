@@ -48,6 +48,9 @@ through them and the per-runtime APIs.
   IP); use opaque ids. `#[tracing::instrument]` records every argument it
   doesn't skip, by `Debug`, and a `MacroUserId` is an email: skip user ids (and
   structs holding one) or use `skip_all` with explicit `fields`.
+- A background loop opens one span per round, never one around the whole loop:
+  `#[tracing::instrument]` on a function that loops forever opens a span that
+  never closes, so its rounds never form a finished trace.
 - Async work that outlives the request (spawned tasks, queued jobs) links to or
   parents on the span that started it, so the flow stays one trace. DataLoader
   batches spawn with `|batch| tokio::spawn(batch.in_current_span())` (ast-grep

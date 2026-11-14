@@ -532,7 +532,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -541,6 +541,7 @@ pub(crate) type DssBotsState =
 /// Type alias for the harnesses service wired into DSS.
 pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
     harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+    hosted_runtimes::outbound::pg::PgComputerAgents,
 >;
 
 /// Type alias for the harnesses router state.

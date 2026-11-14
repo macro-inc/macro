@@ -3,6 +3,7 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { ClaudeSignInEntry } from '@queries/computers/claude';
 import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
@@ -10,14 +11,18 @@ import {
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { confirmDialog } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { TeamAgentClaudeStatus } from '../components/team-agent-claude-status';
-import { ClaudeSignInDialog } from '../computers/views/claude-sign-in-dialog';
 import {
   agentClaudeMode,
   agentClaudeState,
   agentComputerHarness,
 } from '../core/team-agent-claude';
+import {
+  agentClaudeRequest,
+  consumeAgentClaudeRequest,
+} from '../primitives/team-agent-claude-request';
+import { AgentClaudeDialog } from './agent-claude-step';
 
 /**
  * An agent teammate's Claude on its row in Members: sign its computer in to
@@ -43,7 +48,18 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     harness()?.claude_mode === 'own_account' ? harnessId() : undefined
   );
   const signOut = useClaudeSignOutMutation();
-  const [signingIn, setSigningIn] = createSignal(false);
+  // Where Bring your AI was opened from, while it is open.
+  const [signingIn, setSigningIn] = createSignal<ClaudeSignInEntry>();
+
+  // The agent's ready notification asks for Bring your AI; it opens once
+  // the computer's runtime is listed as connected and the viewer's own.
+  createEffect(() => {
+    const request = agentClaudeRequest();
+    if (!request || request.agentUserId !== props.agent.userId) return;
+    if (!harness()?.connected) return;
+    consumeAgentClaudeRequest(request.id);
+    setSigningIn('notification');
+  });
 
   const useCredits = async (id: string) => {
     const name = props.agent.name;
@@ -74,17 +90,20 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
             )}
             connected={!!harness()?.connected}
             pending={signOut.isPending}
-            onSignIn={() => setSigningIn(true)}
+            onSignIn={() => setSigningIn('team_agent_row')}
             onUseCredits={() =>
               fireAndForget(useCredits(id()), 'team-agent.claude')
             }
           />
           <Show when={signingIn()}>
-            <ClaudeSignInDialog
-              harnessId={id()}
-              entry="team_agent_row"
-              onClose={() => setSigningIn(false)}
-            />
+            {(entry) => (
+              <AgentClaudeDialog
+                agent={props.agent}
+                harnessId={id()}
+                entry={entry()}
+                onClose={() => setSigningIn(undefined)}
+              />
+            )}
           </Show>
         </>
       )}

@@ -71,7 +71,7 @@ before acting"); paired machines keep it off until their owner turns it on.
 
 - Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`,
   `entity_access_db_utils`, `models_permissions`.
-- Used by: `coding_agent_worker`.
+- Used by: `coding_agent_worker`, `bots` (`HarnessTeamAgents`).
 
 - `authorize_harness(caller, harness_id, HarnessPermission::{View, Use, Manage})` is
   the access boundary for other services' routes: View requires effective
@@ -100,6 +100,12 @@ before acting"); paired machines keep it off until their owner turns it on.
   preserving computer identity and Claude billing mode.
 - Harness rows carry `computer_id` (set only for Macro computers; unique
   among live rows).
+- An agent teammate's computer: `HarnessServiceImpl` takes a
+  `ComputerTeamAgents` port (hosted_runtimes' `PgComputerAgents`). The usable
+  list, the directory and a patch's answer set `team_agent_user_id`, and
+  `HarnessTeamAgents::harness_team_agent` (trusted) answers for one harness;
+  bots and the session opener refuse such a harness. It stays in the listings,
+  where Bring your AI finds it by `computer_id`.
 
 ## Recipes
 

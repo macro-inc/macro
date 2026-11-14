@@ -17,6 +17,7 @@ import {
   tryMacroId,
 } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -25,6 +26,7 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import { useAiBillingSummaryQuery } from '@queries/auth';
+import { useComputersQuery } from '@queries/computers/computers';
 import {
   useDeleteTeamInviteMutation,
   useResendTeamInviteMutation,
@@ -62,12 +64,14 @@ import { AgentVoiceDialog } from './components/agent-voice-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
+import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
 import {
   SettingsCard,
   SettingsPage,
   SettingsRow,
   SettingsSection,
 } from './primitives';
+import { useRetryTeamAgentSetup } from './primitives/team-agent-status';
 import { InviteToTeamDialog, useTeamViewer } from './Team';
 import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
@@ -305,6 +309,23 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const agents = () =>
     agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
   const agentUserIds = () => agents().map((agent) => agent.userId);
+  // The step a new agent's computer is on, read while one is being set up
+  // or has failed; any member can read the team's computers.
+  const computersQuery = useComputersQuery(() =>
+    agents().some(
+      (agent) => agent.status === 'provisioning' || agent.status === 'failed'
+    )
+  );
+  const agentSetupStep = (agent: TeamAgent) =>
+    agent.status === 'provisioning'
+      ? teamAgentSetupStep(
+          teamAgentComputer(
+            agent,
+            computersQuery.isSuccess ? computersQuery.data : undefined
+          )
+        )
+      : undefined;
+  const retryAgent = useRetryTeamAgentSetup();
   // Voices are team-admin only on the server, like the rest of agent management.
   const canChangeVoice = () => agentsOn() && isAdminOrOwner();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
@@ -590,6 +611,19 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       agent={agent}
                       canRemove={isAdminOrOwner()}
                       onRemove={() => setAgentToRemove(agent)}
+                      setupStep={agentSetupStep(agent)}
+                      onRetry={
+                        isAdminOrOwner() &&
+                        agent.status === 'failed' &&
+                        agent.computerId
+                          ? () =>
+                              fireAndForget(
+                                retryAgent.run(agent),
+                                'team-agent.retry'
+                              )
+                          : undefined
+                      }
+                      retrying={retryAgent.pending()}
                       claude={
                         isAdminOrOwner() ? (
                           <TeamAgentClaude agent={agent} />
@@ -699,14 +733,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <ConfirmDialog
         open={!!agentToRemove()}
         onOpenChange={(open) => !open && setAgentToRemove(null)}
-        title={t('teamAgents.removeTitle')}
+        title={t('teamAgents.removeTitle', {
+          name: agentToRemove()?.name ?? '',
+        })}
         tone="danger"
         confirmLabel={t('teamAgents.removeConfirm')}
         pending={removeAgentMutation.isPending}
         onConfirm={handleRemoveAgent}
-        body={t('teamAgents.removeBody', {
-          name: agentToRemove()?.name ?? '',
-        })}
+        body={t('teamAgents.removeBody')}
       />
       <ConfirmDialog
         open={!!showCancelInviteModal()}

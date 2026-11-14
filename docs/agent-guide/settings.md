@@ -239,34 +239,74 @@ everyone while the flag is off or still loading, see the people form unchanged.
 (**Upload**), and the agent's computer size from the same catalog and prices as
 Buy a computer (sold-out sizes are disabled and marked **Sold out**). The agent's seat is
 included, so **Invite agent · $X/month** shows the computer's price, or
-**Invite agent** when it is included. Inviting calls `POST /team_agents` on the
-auth service, which creates the agent's account, buys its computer and adds it
-to the team; refusals show inline (sold out or no subscription, a failed
-workspace that charged nothing). The new agent appears in **Team → Members** as
-its own row (name, **Agent** tag, job description) with a status in place of a
-role: **Setting up** with a spinner while its computer provisions (the list
-polls every 3 seconds), then **Running**, **Paused**, **Needs attention** or
-**Released**. The invite form also has a **Voice** picker (`GET /voices` on the
+**Invite agent** when it is included; while it is disabled, a line beside it
+says why (fields to fill in or shorten, no size for sale, a picture still
+uploading). Inviting calls `POST /team_agents` on the auth service, which
+creates the agent's account, buys its computer and adds it to the team;
+refusals show inline at the end of the form, which scrolls them into view and
+focuses them (sold out or no subscription, a failed workspace that charged
+nothing), and a retry reuses the dialog's purchase key. A successful invite
+closes the dialog at once with the notice "<name> is being set up. We'll let
+you know when it's ready." The new agent appears in **Team → Members** as its
+own row (name, **Agent** tag, job description) with a status in place of a
+role: **Setting up** with a spinner while its computer provisions, with the
+computer's setup step under the job description (**Updating billing…**,
+**Creating the computer**, **Starting up**, **Connecting to Macro**; the agent
+and computer lists poll), then **Running**, **Paused**, **Needs attention** or
+**Released**. A failed computer's row offers owners and admins **Retry**,
+the computer's own retry (`POST /team/computers/{id}/retry`), so it never buys
+a second computer. The invite form also has a **Voice** picker (`GET /voices` on the
 agent harness): it suggests a voice from the personality, **Play sample** plays
 a fixed line (the first play of a voice is billed to the team), and the chosen
 model goes out as `voice`. Owners and admins change a voice later with the
 row's waveform button (**Change voice**): **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
-pick for retry. With `enable-macro-computers` on as well, **Invite agent**
-continues to **Bring your AI to <name>**, the computer setup's Claude sign-in
-for the agent's new computer: **Preparing sign-in…** until its macrod connects
-(the agent list and `/harnesses` polls find the computer's runtime by
-`computer_id`), then **Open claude.ai** and the pasted code. **Skip, use Macro
-credits** (or **Use Macro credits instead**) closes it and the agent keeps
-Macro credits. Later, owners and admins see the agent's Claude under its job
-description: **Claude: Macro credits · Sign in to Claude** (offered only while
-the computer is connected), **Claude: your plan · Use Macro credits** (a
-confirmation, then sign-out), or **Claude sign-in expired · Sign in to
-Claude**. The sign-in spans carry `claude.sign_in.entry`
-(`team_agent_invite`, `team_agent_row`). Owners and admins remove an agent with its trash button and a
-confirmation; that releases its computer and deletes its account. On phones the
-dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
+pick for retry.
+
+When the agent's computer first connects, its inviter (the team agent's
+`created_by`) gets the `computer_setup` notification with the agent's
+`agent { userId, name }`: "<name> is ready", in-app as a one-minute notice
+with **Message <name>** (the DM, through the same open-DM path as any member)
+and, for owners and admins (who own the computer's runtime), **Bring your
+AI**. A failed first setup notifies "<name> couldn't be set up" with the
+reason and **Retry**. Clicking the notification opens the DM (ready) or
+**Team → Members** (failed). The agent flow has no **Try it**; that stays in
+the computer purchase flow. With `enable-macro-computers` on, **Bring your AI
+to <name>** is the Claude sign-in for the agent's computer, opened from the
+notification or the row, never as a step of the invite: it shows the
+computer's setup progress above **Open claude.ai** and the pasted code, and
+**Close** or **Use Macro credits instead** leaves it. Owners and admins see
+the agent's Claude under its job description: **Claude: Macro credits · Sign
+in to Claude** (offered only while the computer is connected), **Claude: your
+plan · Use Macro credits** (a confirmation, then sign-out), or **Claude
+sign-in expired · Sign in to Claude**. The sign-in spans carry
+`claude.sign_in.entry` (`team_agent_row`, `notification`).
+
+A DM with an agent teammate that isn't running says so in its header (a
+short chip) and above the composer; messages still send. **Setting up**: "<name>
+is still being set up. It'll answer once it's ready."; a failed setup:
+"<name> isn't running: setup failed." with **Retry** for owners and admins;
+a powered-off computer, or one whose macrod isn't connected: "<name> isn't
+running: its computer is offline."; a released one: "<name> isn't running
+right now." The state comes from the team's agents and `/harnesses`, the same
+sources as the Members row; members can't see the computer's runtime, so a
+running computer whose macrod dropped shows them no banner.
+
+Owners and admins remove an agent with its trash button and a destructive
+confirmation, **Remove <name>?** ("Its computer and files are deleted. This
+can't be undone."), with **Cancel** and **Remove**; removing releases its
+computer and deletes its account.
+
+An agent teammate is reached only by DM or in channels, like any member: its
+computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
+**Where it runs**, the Agents page or composer roster, the machine strips,
+Settings → Runtimes, or teammates' machines; its computer setup offers no
+**Try it** or **Create agent here**; and the API refuses saving an agent or
+opening a session on it (409). Bring your AI and the DM banner still read it
+from the full `/harnesses` list. On phones the dialog and
+confirmation are sheets and rows stay touch rows. Backend-free check (invite,
+Members row, notifications, Bring your AI and the DM banner):
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
 from `apps/web` (desktop 1440 and phone 390).
 
@@ -973,28 +1013,38 @@ To buy one as a team admin:
    would cover the sheet's footer; the progress list says the same. Either way the modal moves
    straight to **Configure agent**.
 
-While the computer provisions, a **Setup progress** list under the step bar
-follows the same phases the row shows (Updating billing…, Creating the
+While the computer provisions, one progress line sits under the step bar: the current stage and how long it has taken, "Starting
+up · 0:24" (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
+else from when the step was first seen here, the billing wait from the
+purchase; "Waiting for space on the host" while it waits for capacity; "Sign
+in to Claude", without a timer, once the computer is up). Pressing it
+(`aria-expanded`) opens the **Setup progress** list, which stays open across
+steps: the same phases the row shows (Updating billing…, Creating the
 computer, Starting up, Connecting to Macro, Sign in to Claude; the same five
 on every step, the sign-in marked with a dash as "Sign in to Claude · skipped",
-"Not needed", once Macro's Claude is chosen): done stages carry a check and
-read as done (Billing updated, Computer created, Started up, Connected to
-Macro, Signed in to Claude), the current one a spinner and how long it
-has taken (`0:42`, from the API's `setup.stepStartedAt` when it sends one,
-else from when the step was first seen here, the billing wait from the
-purchase), and a stuck one says why (waiting for capacity, or
-`failed` with "The computer could not be set up…" and **Retry setup**, which is
-`POST .../retry`; a server `failureReason`, once the API sends one, is shown
-before that copy). No control in the flow is disabled without a line beside it
-saying why (**Continue**: name the agent / choose which Claude; **Buy**: sizes
-loading; **Complete sign-in**: paste the code; **Try it** and **Create an
-agent on this computer**: setup finishing). The row in Machines shows the same live line, `Setting up ·
+"Not needed", once Macro credits is chosen), done stages with a check and
+worded as done (Billing updated, Computer created, Started up, Connected to
+Macro, Signed in to Claude), the current one a spinner and its time. A
+stopped setup replaces the line with one banner at the top of the dialog:
+`failed` says which stage failed and why on one line ("Couldn't create the
+computer: the host ran out of disk", the server's `failureReason` in lower
+case after the colon), with **Retry setup** (`POST .../retry`) and
+**Details** ("Retry sets it up again at no extra charge. Contact support if
+it fails again."); `needs_attention` reads "Needs attention — contact
+support" with neither. The agent form below stays usable. Disabled controls
+say why beside them (**Buy**: sizes loading; **Complete sign-in**: paste the
+code; **Try it** and **Create an agent on this computer**: setup finishing),
+except **Continue**, whose two fields sit right above it. The row in Machines shows the same live line, `Setting up ·
 Starting up (2 of 3) · 0:42`. The dialog closes at any time while setup
 carries on; the row's **Finish setup** reopens the same dialog where it left
-off. **Let's set up an agent on it** names the agent Macro
+off. **Let's set up an agent on it** (no subtitle) names the agent Macro
 creates on the computer ("<buyer first name>'s Agent", a coding agent that
-bypasses permission prompts) and asks for an explicit choice between **Your
-Claude account** and **Macro's Claude**; nothing is preselected. The name and
+bypasses permission prompts) and asks **Which Claude should it use?** with a
+two-option segmented control, **Your Claude account** or **Macro credits**
+(each option's hint is its description and desktop tooltip); nothing is
+preselected. Both options must stay reachable at any viewport height: the
+step's body scrolls above a footer that never covers it, and the buy-flow
+browser test checks both options at 1280x720/600/480 and 390x664/560. The name and
 choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
 Claude, then setup-complete.
 
@@ -1007,12 +1057,13 @@ Claude, then setup-complete.
   instead**. Once connected, **Open claude.ai** appears and the tab title
   becomes "● Sign in to Claude — Macro". Closed meanwhile, the setup notice
   (below) reopens the modal on that step. The code is pasted in the same modal.
-- **Macro's Claude** skips **Bring your AI**, shown muted with a dash as
+- **Macro credits** skips **Bring your AI**, shown muted with a dash as
   "Bring your AI · skipped" (phones keep "Your AI" with the dash), never struck
   through. Choosing **Use Macro credits instead** after opening **Bring your
   AI** marks it done instead: a check and "Bring your AI · Macro credits".
 - A **failed** or stuck setup stops the **Bring your AI** step: it says setup
-  stopped before the computer came up and to use **Retry setup** above, with
+  stopped before the computer came up and to use the banner's **Retry setup**
+  above, with
   no spinner, no elapsed time, no shared-sign-in note and no **Use Macro
   credits instead**.
 
@@ -1044,7 +1095,8 @@ Closing at any step keeps its place; the row's **Finish setup** reopens it.
 
 **Setup notices.** Buying is asynchronous: the dialog closes at any step and
 nothing is cancelled. When the computer first connects, its buyer gets a
-`computer_setup` notification ("Your computer is ready: connect your AI and
+`computer_setup` notification (an agent teammate's computer names its agent
+instead; see [Agent teammates](#agent-teammates)) ("Your computer is ready: connect your AI and
 finish setup", in-app notice, browser and phone push); when first setup fails,
 one titled "<computer> could not be set up" with the failure reason. In the
 app it shows as a one-minute notice whose **Finish setup** / **Retry setup**

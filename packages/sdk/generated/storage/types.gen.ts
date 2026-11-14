@@ -10221,6 +10221,11 @@ export type ExternalChatParticipant = {
      * else a generic name.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
 };
 
 /**
@@ -10232,6 +10237,11 @@ export type ExternalChatPersonRef = {
      * Display name, never authentication evidence.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * Verified Macro user, if any.
      */
@@ -10449,6 +10459,11 @@ export type ExternalChatSender = {
      */
     personId: string;
     /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
+    /**
      * Verified Macro user association, if present.
      */
     userId?: string | null;
@@ -10480,6 +10495,12 @@ export type ExternalChatSummary = {
      * Display name: the group's, or a direct chat's other person.
      */
     name: string;
+    /**
+     * The group's picture, or a direct chat's person's, as the owner's
+     * account sees it: a static file id; `null` when hidden, unset or not
+     * fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * The service the chat lives in.
      */
@@ -12396,7 +12417,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property' | 'name';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -12602,6 +12623,7 @@ export type Harness = {
      * Teams it is a team machine for: their every member is a user of it.
      */
     shared_team_ids?: Array<string>;
+    team_agent_user_id?: null | MacroUserIdStr;
     /**
      * Update timestamp.
      */
@@ -18573,7 +18595,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property' | 'name';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -33144,7 +33166,8 @@ export type GetItemsSoupData = {
         /**
          * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
          * Missing definitions, unsupported types, and mismatched values sort as missing.
-         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+         * Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
          * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;

@@ -117,6 +117,18 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   request unanswered after `backfill_timeout` `waiting_for_phone`. It never
   asks the phone on its own: each request wakes WhatsApp on the phone (on
   iOS, a "syncing stopped" notification when it can't finish).
+- Profile pictures (`domain/pictures.rs`): a per-account loop, started
+  `PICTURE_WARMUP` after connecting, claims one due check at a time
+  (`claim_picture_checks`; the hourly and daily budget is the domain's),
+  asks `WhatsAppSession::profile_picture` (`outbound/whatsapp/pictures.rs`:
+  one `w:profile:picture` preview query with the stored id, so an unchanged
+  picture downloads nothing, and the common added group for a person; a new
+  picture's URL expires, so its bytes are downloaded at once, ≤ 1 MiB and
+  `image/*`), and records the answer. Queries are `PICTURE_SPACING` (3 s)
+  apart; a 429 pauses them `PICTURE_BACKOFF` (15 min), doubling up to 6 h.
+  `Event::Picture` becomes `SessionEvent::PictureChanged` (with the other
+  half of a person's phone-number/LID pair) and wakes the loop; a group's
+  change also stays a system line.
 - QR pairing: whatsmeow rotates codes (60 s, then 20 s each) and then
   times out; that timeout ends the pairing as `expired`
   (`SessionEvent::PairExpired`), not `failed`, so the web starts a new one.
@@ -150,12 +162,16 @@ Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
 (outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
 `whatsapp.account.signal`, `whatsapp.drain`,
-`whatsapp.history.{sync,page}`, `whatsapp.backfill.request`
+`whatsapp.history.{sync,page}`, `whatsapp.backfill.request`,
+`whatsapp.picture.check` (`kind` person/group, `offered_existing`,
+`outcome` `unchanged`/`stored`/`hidden`/`not_set`/`rate_limited`/`failed`,
+`bytes`) with `whatsapp.picture.download`
 (`whatsapp.inbound.ingest` records the message `kind`; `whatsapp.history.page`
 counts what a page stored, could not parse and skipped, by stub type). Log events read by `infra/stacks/monitoring/monitors/
 whatsapp-session.ts` (`telemetry_event` = `whatsapp_session_health`,
 `whatsapp_session_reconnect`, `whatsapp_send_outcome`,
-`whatsapp_session_drain`): keep their field names. Opaque ids only; never
+`whatsapp_session_drain`; `whatsapp_picture_rate_limited` with
+`pause_seconds`): keep their field names. Opaque ids only; never
 JIDs, phone numbers, QR codes or message text.
 
 ## Runbook

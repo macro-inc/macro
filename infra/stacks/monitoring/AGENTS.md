@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -92,6 +92,9 @@ From `infra/`:
 - Keep `monitors/oauth.ts` in sync with the linked-token, native MCP OAuth,
   and Pipedream failure logs it names; preserve channel-only routing and
   exclude normal authentication challenges and explicit consent cancellations.
+- `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
+  cloud-storage-service records and the `perform_unified_search` span fields
+  from `crates/search_service`; its header is the name and tag contract.
 - `monitors/computer-capacity.ts` reads the `computer.capacity.*` gauges that
   `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns

@@ -4,6 +4,7 @@
 
 mod api;
 mod config;
+mod db_pools;
 mod external_chat;
 pub mod model;
 mod outbound;

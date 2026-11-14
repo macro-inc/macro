@@ -287,6 +287,13 @@ reserved from `previewData.poll.optionCount`, keeps that height through load,
 and never scrolls or clips inside:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
+Contact mention chips (`<m-contact-mention>`, which agents write) are one
+unbreakable box, so a long address truncates at the message width instead of
+scrolling the channel sideways, and the hover card wraps it whole. The
+backend-free regression mounts the real message body on desktop, a narrow
+split, and phone:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts contact-mention.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
@@ -369,10 +376,13 @@ Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
-Team, behind `enable-agent-teammates`), Bring your AI for its new computer
-(skipped, and signed in), its row's Setting up → Running status, its row's
-Claude sign-in and switch back to credits, and its removal have a backend-free browser regression at desktop 1440 and
-phone 390 over a scripted auth service. It launches Chromium with
+Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
+refused invite's error in view, its row's Setting up step → Running and failed
+Retry, the ready and failed notifications (Message, Bring your AI for admins
+only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+back to credits, the DM status banner, and its removal have a backend-free
+browser regression at desktop 1440 and phone 390 over a scripted auth
+service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 

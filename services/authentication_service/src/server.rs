@@ -757,6 +757,7 @@ async fn run_server() -> anyhow::Result<()> {
             computer_service.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
         ),
+        agent_credentials::rollout::PgAgentCreators::new(db.clone()),
         feature_flags.clone(),
         crate::outbound::agent_addresses::AgentAddresses,
     ));
@@ -844,6 +845,10 @@ async fn run_server() -> anyhow::Result<()> {
     let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
         PgBotsRepo::new(db.clone()),
         macro_event_broker.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(
+            harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
+        ),
     ));
 
     let server_result = api::setup_and_serve(

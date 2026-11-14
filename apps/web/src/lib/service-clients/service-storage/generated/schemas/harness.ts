@@ -11,6 +11,7 @@ import type { HarnessComputerId } from './harnessComputerId';
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
 import type { HarnessOwner } from './harnessOwner';
+import type { HarnessTeamAgentUserId } from './harnessTeamAgentUserId';
 
 /**
  * A registered user-run harness.
@@ -45,6 +46,7 @@ it has an active Claude login. Only meaningful for Macro computers. */
   owner: HarnessOwner;
   /** Teams it is a team machine for: their every member is a user of it. */
   shared_team_ids?: string[];
+  team_agent_user_id?: HarnessTeamAgentUserId;
   /** Update timestamp. */
   updated_at: string;
 }

@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::models::sort::DynamicSortValue;
+use crate::domain::models::{DynamicSort, SoupSortDirection};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped,
@@ -17,7 +18,9 @@ use item_filters::ast::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_grouping::{GroupByField, GroupingConfig};
-use models_pagination::{Cursor, CursorVal, Identify, Query, SimpleSortMethod};
+use models_pagination::{
+    Cursor, CursorVal, CursorWithValAndFilter, Identify, Query, SimpleSortMethod,
+};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::database_row::SoupDatabaseRow;
 use std::sync::Arc;
@@ -551,4 +554,42 @@ async fn a_trashed_form_owner_reads_no_rows(pool: PgPool) {
     grant_the_stranger_a_crm_form(&pool, "owner", true, false).await;
 
     assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
+}
+
+/// Rows have no name of their own, so a name-sorted page keeps every one of
+/// them in the missing-name tail and still pages through it exactly once.
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn unnamed_rows_page_through_the_missing_name_tail(pool: PgPool) {
+    let sort = DynamicSort::name(SoupSortDirection::Asc);
+    let mut cursor = Query::Sort(
+        sort,
+        rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
+    );
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        let page = expanded_dynamic_cursor_soup(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: viewer(),
+                limit: 1,
+                cursor,
+                exclude_frecency: false,
+            },
+        )
+        .await
+        .unwrap();
+        let Some(item) = page.first() else { break };
+        seen.push(item.id());
+        cursor = Query::Cursor(CursorWithValAndFilter {
+            id: item.id(),
+            limit: 1,
+            val: CursorVal {
+                sort_type: sort,
+                last_val: sort.position(None, item.name(), item.updated_at()),
+            },
+            filter: rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
+        });
+    }
+
+    assert_eq!(seen, vec![DEAL_3, DEAL_2, DEAL_1]);
 }

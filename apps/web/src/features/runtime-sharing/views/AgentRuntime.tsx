@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import { Show } from 'solid-js';
 import { RuntimeAccessAction } from '../components/RuntimeAccessAction';
 
@@ -10,7 +10,7 @@ import { RuntimeAccessAction } from '../components/RuntimeAccessAction';
  */
 export function AgentRuntime(props: { botId: string; class?: string }) {
   const agents = useAgentsQuery();
-  const directory = useHarnessDirectoryQuery();
+  const directory = useRunnableHarnessDirectoryQuery();
   const agent = () =>
     agents.isSuccess
       ? agents.data.find((candidate) => candidate.bot.id === props.botId)

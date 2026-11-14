@@ -36,7 +36,7 @@ Lets the session service and its tests run end to end without WhatsApp.
   no one, as changes WhatsApp makes.
 - `FakeWhatsApp::create_community` makes a community and its announcement
   group (admins-only); `create_community_group` adds a group to it.
-- `src/state.rs`: routing, IQ handlers (encrypt, usync, w:g2, w:m), offline queues.
+- `src/state.rs`: routing, IQ handlers (encrypt, usync, w:g2, w:m, w:profile:picture), offline queues.
 - `src/phone.rs`: fake phones: send/receive with real Signal, QR approval.
   Phones remember chat messages and answer their linked devices' peer
   requests: on-demand history pages and placeholder resends
@@ -48,6 +48,13 @@ Lets the session service and its tests run end to end without WhatsApp.
   `send_message` it) and `vote` (a poll vote encrypted with the poll's
   message secret for the voter's LID; take the secret from the poll's
   `message_context_info`, e.g. `whatsmeow::msgsecret::build_poll_creation`).
+- `src/picture.rs`: profile pictures. `set_picture` (user by either
+  address, or group), `hide_picture` (401 for everyone but the owner) and
+  `remove_picture`; set and remove send a `picture` notification to everyone
+  sharing a group with the target. The `w:profile:picture` IQ answers 304
+  for the client's id, 401, 404, or the picture with a `/pps/{file}` URL on
+  the media host (served with its content type); `rate_limit_pictures`
+  answers 429, and `picture_queries` counts queries.
 - `src/connection.rs`: handshake, login, `conflict replaced`, pairing.
 
 ## Checks
