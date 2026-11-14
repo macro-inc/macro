@@ -9,6 +9,10 @@
 -- so the cost follows the scope's records, not every team's property rows. The
 -- property ids are literals so the planner can use those partial indexes;
 -- `test` pins them to `SystemPropertyKey`.
+--
+-- Bound: one probe per visible company and contact, about 2.6 us and 2.4
+-- buffers each warm: 38 ms for 4k companies and 10k contacts, 1 ms for 30
+-- companies. Revisit if a team's records near 40k (100 ms).
 WITH scope AS MATERIALIZED (
     SELECT ARRAY(
         SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
@@ -41,7 +45,7 @@ WITH scope AS MATERIALIZED (
 )
 -- Each probe is a fenced lateral, so the records always drive: when the kind
 -- filter makes the property rows look few, a plain join reads them first and
--- tests every record against every row (1.7 s for Calls on the largest team).
+-- tests every record against every row (1.8 s for Calls on the largest team).
 SELECT ep.entity_type AS "entity_type!: EntityType", ep.entity_id AS "entity_id!"
 FROM companies co
 CROSS JOIN LATERAL (
