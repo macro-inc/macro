@@ -239,6 +239,12 @@ impl ViewState {
         self.repos.insert(graph.id.clone(), graph);
     }
 
+    /// Forgets commits that arrived more than [`FRESH_FOR`] before `now`,
+    /// so the page stops animating once their glitch has played.
+    pub fn prune_fresh(&mut self, now: Timestamp) {
+        self.fresh.retain(|_, at| *at > now - FRESH_FOR);
+    }
+
     fn push_tape(&mut self, event: TapeEvent) {
         if self.tape.len() == TAPE_CAPACITY {
             self.tape.pop_front();

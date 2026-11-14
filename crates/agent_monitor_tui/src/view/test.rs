@@ -451,4 +451,11 @@ fn commits_are_fresh_only_when_a_delta_brings_them() {
     });
     assert_eq!(view.fresh.len(), 1);
     assert!(view.fresh.contains_key(&landed.oid));
+
+    // The clock retires it, with no further update.
+    let arrived = view.fresh[&landed.oid];
+    view.prune_fresh(arrived + FRESH_FOR - TimeDelta::seconds(1));
+    assert_eq!(view.fresh.len(), 1);
+    view.prune_fresh(arrived + FRESH_FOR);
+    assert!(view.fresh.is_empty(), "nothing left to animate");
 }
