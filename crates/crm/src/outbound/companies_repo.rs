@@ -55,6 +55,9 @@ struct DepopulateTarget {
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
+    /// Where the activity edges are read: `pool` unless
+    /// [`Self::with_activity_edges_replica`] names a replica.
+    activity_edges_pool: PgPool,
     #[cfg(test)]
     after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]
@@ -67,6 +70,7 @@ impl CompaniesRepositoryImpl {
     /// Creates a new instance of CompaniesRepositoryImpl
     pub fn new(pool: PgPool) -> Self {
         Self {
+            activity_edges_pool: pool.clone(),
             pool,
             #[cfg(test)]
             after_depopulate_source: None,
@@ -75,6 +79,17 @@ impl CompaniesRepositoryImpl {
             #[cfg(test)]
             after_eligible_scan: None,
         }
+    }
+
+    /// Read the activity edges (`activity_property_edges`, the Sales views'
+    /// per-record probes) from `replica`, off the primary. They then follow
+    /// the replica's lag: a record hidden or a member removed a moment ago can
+    /// still match. That only widens which accessible items a view lists, as
+    /// every item still passes its own source's access check. Every other read
+    /// and write stays on the primary.
+    pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
+        self.activity_edges_pool = replica.0;
+        self
     }
 
     /// The transaction behind `populate_contact`, after its no-op precheck.

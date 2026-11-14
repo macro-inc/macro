@@ -15,11 +15,12 @@ use crate::domain::{
 };
 
 impl CompaniesRepositoryImpl {
-    /// A transaction whose statements stop after 15 seconds, for
+    /// A transaction on `pool` whose statements stop after 15 seconds, for
     /// the activity scope's reads.
-    async fn bounded_read(&self) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CrmError> {
-        let mut transaction = self
-            .pool
+    async fn bounded_read(
+        pool: &sqlx::PgPool,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CrmError> {
+        let mut transaction = pool
             .begin()
             .await
             .map_err(|error| CrmError::StorageLayerError(error.into()))?;
@@ -67,7 +68,7 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
         // The read's cost follows the team's record count, so bound it.
-        let mut transaction = self.bounded_read().await?;
+        let mut transaction = Self::bounded_read(&self.pool).await?;
         // Every step is a probe by key, so the cost stays with the team's own
         // records whatever the planner knows about the tables. The teams are
         // collected into an array first, so every arm starts from its team
@@ -168,8 +169,9 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
         // Bounded like the scope read it stands beside: both grow with the
-        // scope's records.
-        let mut transaction = self.bounded_read().await?;
+        // scope's records. On the replica when one is set
+        // ([`Self::with_activity_edges_replica`]).
+        let mut transaction = Self::bounded_read(&self.activity_edges_pool).await?;
         let rows = sqlx::query_file!(
             "src/outbound/companies_repo/activity_property_edges.sql",
             viewer,
