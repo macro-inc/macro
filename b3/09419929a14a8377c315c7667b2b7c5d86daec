@@ -1,0 +1,62 @@
+packages/sdk-ocaml/gen/syntax.ml
+  s_65316fb49f4b19::t_87c7f8212f67b0 1-30
+packages/sdk-ocaml/gen/emit_types.ml
+  s_65316fb49f4b19::t_428091615728d1 1-2,4-369
+  s_65316fb49f4b19::t_87c7f8212f67b0 3
+packages/sdk-ocaml/gen/ir.ml
+  s_65316fb49f4b19::t_4e241f5eacfe55 1-110
+packages/sdk-ocaml/gen/emit_tests.ml
+  s_65316fb49f4b19::t_87c7f8212f67b0 5
+  s_65316fb49f4b19::t_f28b3d2ba81384 1-4,6-62,64-129
+  s_65316fb49f4b19::t_516989589928c5 63
+packages/sdk-ocaml/gen/main.ml
+  s_65316fb49f4b19::t_d43627e01d4a3f 83
+  s_65316fb49f4b19::t_7ef415cc532ceb 1-11,13-53,55,58-82,84-105
+  s_65316fb49f4b19::t_87c7f8212f67b0 12,54
+  s_65316fb49f4b19::t_0282ca14124c1c 56-57
+packages/sdk-ocaml/gen/spec.ml
+  s_65316fb49f4b19::t_2151ea57fbf021 1-68
+packages/sdk-ocaml/gen/naming.ml
+  s_65316fb49f4b19::t_9eb18352b0289c 1-51,54-77
+  s_65316fb49f4b19::t_8f5f88b7d31231 52-53
+packages/sdk-ocaml/gen/lower_schema.ml
+  s_65316fb49f4b19::t_045f974c2f1615 169
+  s_65316fb49f4b19::t_1720ac122e844e 201-203
+  s_65316fb49f4b19::t_d8ad1a207fe53f 171-180
+  s_65316fb49f4b19::t_b27375db6c493f 1-168,170,181-200,204-439
+packages/sdk-ocaml/gen/lower_ops.ml
+  s_65316fb49f4b19::t_a24b73030f03f3 192,194
+  s_65316fb49f4b19::t_e73f5af6c80e3c 1-191,193,195-237
+packages/sdk-ocaml/gen/emit_ops.ml
+  s_65316fb49f4b19::t_68c861f7f760d3 145
+  s_65316fb49f4b19::t_2bef3491bb7d17 133
+  s_65316fb49f4b19::t_87c7f8212f67b0 3
+  s_65316fb49f4b19::t_e7f00a954b642c 1-2,4-132,134-144,146-253
+packages/sdk-ocaml/gen/print.ml
+  s_65316fb49f4b19::t_63c4728f495eaf 152
+  s_65316fb49f4b19::t_22606de7879342 126-127
+  s_65316fb49f4b19::t_56594b9c19804b 78-79,82
+  s_65316fb49f4b19::t_3204eac345ce7f 1-8,43-77,80-81,83-125,128
+  s_65316fb49f4b19::t_4fae37ccd24998 9-42
+  s_65316fb49f4b19::t_687c5482a0ab2e 145
+  s_65316fb49f4b19::t_b85b7bbc7865f2 135-136,159
+  s_65316fb49f4b19::t_04f89d785eba3b 129-134,137-144,146-151,153-158,160-200
+packages/sdk-ocaml/gen/dune
+  s_65316fb49f4b19::t_d43627e01d4a3f 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b309419929a14a8377c315c7667b2b7c5d86daec",
+  "prompts": {},
+  "sessions": {
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
