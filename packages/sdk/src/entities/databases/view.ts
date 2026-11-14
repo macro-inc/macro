@@ -92,7 +92,21 @@ export class DatabaseView {
     return this.table.database.viewPositions(this);
   }
 
-  toJSON(): { id: string; tableId: string } {
-    return { id: this.id, tableId: this.table.id };
+  /**
+   * This view's URL in the Macro web app: the database, opened on this
+   * view's table and this view. Hand it to users as the link to a view you
+   * built.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    const url = new URL(this.table.webUrl());
+    url.searchParams.set('viewId', this.id);
+    return url.toString();
+  }
+
+  /** Identity and {@link webUrl}, so serialized handles carry their link. */
+  toJSON(): { id: string; tableId: string; url: string } {
+    return { id: this.id, tableId: this.table.id, url: this.webUrl() };
   }
 }
