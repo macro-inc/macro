@@ -219,7 +219,11 @@ impl Body {
         let palette = self.figure().look.palette();
         let bone_near = mix(palette.bone_idle, palette.bone_busy, load);
         let bone_far = mix(palette.bone_far, palette.bone_far_busy, load);
-        let skin_near = mix(palette.skin_idle, palette.skin_busy, load * palette.skin_load);
+        let skin_near = mix(
+            palette.skin_idle,
+            palette.skin_busy,
+            load * palette.skin_load,
+        );
         let scan = self.scan_height();
         for segment in &self.figure().segments {
             let depth = frame.view.depth((segment.a + segment.b) * 0.5);
@@ -296,7 +300,11 @@ impl Body {
             let a = k as f32 / sides as f32 * TAU;
             let b = (k + 1) as f32 / sides as f32 * TAU;
             let near = frame.view.depth(point((a + b) / 2.0, TURNTABLE_RADIUS)) >= 0.0;
-            let rgb = if near { palette.floor } else { palette.floor_dark };
+            let rgb = if near {
+                palette.floor
+            } else {
+                palette.floor_dark
+            };
             frame.line(
                 FLOOR,
                 point(a, TURNTABLE_RADIUS),
@@ -362,8 +370,10 @@ impl Body {
                 glow = glow.max(heartbeat * (0.3 + 0.5 * load));
             }
 
-            let layer = if glow > FIRING_GLOW {
+            let layer = if glow > FIRING_GLOW && !palette.bones_on_top {
                 NERVES_FIRING
+            } else if glow > FIRING_GLOW {
+                NERVES_RESTING
             } else if self.figure().quiet_paths {
                 // Its nerve lines already draw the path at rest.
                 continue;

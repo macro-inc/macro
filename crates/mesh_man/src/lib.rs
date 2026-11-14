@@ -326,7 +326,12 @@ impl Body {
 
     /// The index of the nerve a key fires.
     fn nerve_index(&self, key: &str) -> usize {
-        if let Some(index) = self.figure().nerves.iter().position(|nerve| nerve.name == key) {
+        if let Some(index) = self
+            .figure()
+            .nerves
+            .iter()
+            .position(|nerve| nerve.name == key)
+        {
             return index;
         }
 

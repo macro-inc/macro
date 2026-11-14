@@ -50,6 +50,9 @@ pub(crate) struct Palette {
     /// Draw resting nerves over the bones rather than under them, for a
     /// figure whose nerves are the point.
     pub nerves_on_top: bool,
+    /// Keep even glowing nerves under the bones (pulses still draw on
+    /// top), so the skeleton stays the brightest thing.
+    pub bones_on_top: bool,
     pub floor_bright: Rgb,
     pub floor: Rgb,
     pub floor_dark: Rgb,
@@ -87,6 +90,7 @@ const CLASSIC: Palette = Palette {
     scan_far: AMBER_DIM,
     scan_slices: false,
     nerves_on_top: false,
+    bones_on_top: false,
     floor_bright: AMBER,
     floor: AMBER_FAINT,
     floor_dark: AMBER_DARK,
@@ -113,6 +117,7 @@ const XRAY: Palette = Palette {
     scan_far: (70, 140, 190),
     scan_slices: true,
     nerves_on_top: false,
+    bones_on_top: true,
     floor_bright: (90, 170, 230),
     floor: (34, 78, 120),
     floor_dark: (16, 40, 66),
@@ -139,6 +144,7 @@ const CYBORG: Palette = Palette {
     scan_far: AMBER_DIM,
     scan_slices: false,
     nerves_on_top: false,
+    bones_on_top: false,
     floor_bright: AMBER,
     floor: AMBER_FAINT,
     floor_dark: AMBER_DARK,
@@ -165,6 +171,7 @@ const NEURAL: Palette = Palette {
     scan_far: (110, 70, 170),
     scan_slices: false,
     nerves_on_top: true,
+    bones_on_top: false,
     floor_bright: (170, 110, 255),
     floor: (70, 44, 120),
     floor_dark: (38, 24, 66),

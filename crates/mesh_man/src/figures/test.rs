@@ -34,7 +34,11 @@ fn the_procedural_figures_follow_the_mesh_man_in_the_catalog() {
     assert_eq!(names.first().map(String::as_str), Some("MESH MAN"));
     assert_eq!(
         names.get(1..4).map(<[String]>::to_vec),
-        Some(vec!["XRAY".to_owned(), "CYBORG".to_owned(), "NEURAL".to_owned()])
+        Some(vec![
+            "XRAY".to_owned(),
+            "CYBORG".to_owned(),
+            "NEURAL".to_owned()
+        ])
     );
 }
 
@@ -103,7 +107,10 @@ fn every_procedural_figure_renders_while_pulsing() {
         }
         body.tick(Duration::from_millis(400));
         let text = render_text(&body);
-        let dots = text.chars().filter(|c| ('\u{2801}'..='\u{28ff}').contains(c)).count();
+        let dots = text
+            .chars()
+            .filter(|c| ('\u{2801}'..='\u{28ff}').contains(c))
+            .count();
         assert!(dots > 300, "{name} draws a figure, got {dots} cells");
     }
 }

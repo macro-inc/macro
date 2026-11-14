@@ -431,7 +431,14 @@ fn grow(
     }
 
     // Turn off the parent by a random angle about a random axis across it.
-    let (u, v) = frame(parent, if parent.y.abs() > 0.9 { Vec3::X } else { Vec3::Y });
+    let (u, v) = frame(
+        parent,
+        if parent.y.abs() > 0.9 {
+            Vec3::X
+        } else {
+            Vec3::Y
+        },
+    );
     let spin = rng.range(0.0, TAU);
     let axis = u * spin.cos() + v * spin.sin();
     let angle = rng.range(rules.angle.0, rules.angle.1);
@@ -470,7 +477,6 @@ fn grow(
     }
 }
 
-
 /// A plain skeleton for one side, like the classic figure's: half a rib
 /// cage, collarbone, hip, long bones, fingers and a foot fan.
 pub(crate) fn simple_bones(out: &mut Vec<Seg>, side: &Side) {
@@ -501,7 +507,10 @@ pub(crate) fn simple_bones(out: &mut Vec<Seg>, side: &Side) {
     );
     line(
         out,
-        &[Vec3::new(s * 0.015, 0.62, 0.08), side.shoulder + Vec3::Y * 0.02],
+        &[
+            Vec3::new(s * 0.015, 0.62, 0.08),
+            side.shoulder + Vec3::Y * 0.02,
+        ],
     );
     line(
         out,
@@ -531,6 +540,9 @@ pub(crate) fn simple_bones(out: &mut Vec<Seg>, side: &Side) {
     }
     line(out, &[side.ankle, side.heel]);
     for offset in [-0.03, 0.0, 0.03] {
-        line(out, &[side.ankle, side.toe + Vec3::new(s * offset, 0.0, -0.01)]);
+        line(
+            out,
+            &[side.ankle, side.toe + Vec3::new(s * offset, 0.0, -0.01)],
+        );
     }
 }
