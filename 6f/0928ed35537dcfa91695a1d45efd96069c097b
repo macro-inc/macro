@@ -1,0 +1,24 @@
+crates/agent_monitor/AGENTS.md
+  s_d3c0ee1e1835ed::t_86f62d191ab783 83-84,111-113
+  s_d3c0ee1e1835ed::t_00465495d1955a 37-44,55-60,99-101,104-110,114
+crates/coding_agent_worker/README.md
+  s_d3c0ee1e1835ed::t_00465495d1955a 265-274,290
+crates/agent_monitor_tui/AGENTS.md
+  s_d3c0ee1e1835ed::t_86f62d191ab783 26-36,76-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6f0928ed35537dcfa91695a1d45efd96069c097b",
+  "prompts": {},
+  "sessions": {
+    "s_d3c0ee1e1835ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b58c49c-4e91-4ba4-b404-09b201a70ffd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
