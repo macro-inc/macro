@@ -9,30 +9,30 @@ expression: "render(&mut app(), 200, 56)"
 ┃of 30 live · 4 idle    ┃┃on a person            ┃┃permission / stuck     ┃┃9/h avg                ┃┃7.5% failed            ┃┃2 agents failed        ┃┃▁▁▁▁▁▁▁▁▁▁▁▁█▆ 22.5M/h ┃┃▁▁▁▁▁▁▁▁▁▇█▁▁▁▁▁▁▁▁▁▁▁▁┃
 ┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛┗━━━─────────────────━━━┛
 ┏━◢ 01 // AGENTS ◤ 30 LIVE · 34 ROWS / 34 ALL  a SHOWS ENDED ─────────────────────────────────────────────────────────━━━┓┏━◢ 07 // BODY ◤ BIOSCAN  VITALS ───━━━┓┏━◢ 03 // SPEND TODAY ◤ ~$25.28 ──━━━┓
-┃  KIND     NAME                STAT DOING              AGE  TRN  TOOLS ERR TOKENS  COST     ACTIVITY 60M                ┃┃┌╴SCAN 0x001.0M TOK/M  25 WORKIREC ●╶┐┃┃          █                         ┃
-│◆ subagent rpc-server/explore  WORK explore the reduce   0s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││             █        █        █      ││         ██                         │
-│◆ builder  fix-19              WORK Follow-up from rev  28s    2     4   0  163.8k   ~$0.13 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶  ▁  ▄     ▁█ ▄     ▁█ ▄     ▁█ ▄   ╴││         ██                         │
-│◆ builder  rpc-server    #4211 WORK Task explore the r  33m   18    52   6    1.7M   ~$2.01 ▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││▃▃▃█ ▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃││         ██                         │
-│◆ builder  fix-16              WORK Follow-up from rev   1m    9    24   4  850.2k   ~$0.51 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││╶─                                  ─╴││         ██                         │
+┃  KIND     NAME                STAT DOING              AGE  TRN  TOOLS ERR TOKENS  COST     ACTIVITY 60M                ┃┃┌╴SCAN 0x001                   REC ●╶┐┃┃          █                         ┃
+│◆ subagent rpc-server/explore  WORK explore the reduce   0s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││♥ 168 BPM  5.0M TOK/M  25 WORKING     ││         ██                         │
+│◆ builder  fix-19              WORK Follow-up from rev  28s    2     4   0  163.8k   ~$0.13 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶            █        █        █     ╴││         ██                         │
+│◆ builder  rpc-server    #4211 WORK Task explore the r  33m   18    52   6    1.7M   ~$2.01 ▂▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁██││╶  ▁  ▄     ▁█ ▄     ▁█ ▄     ▁█ ▄   ╴││         ██                         │
+│◆ builder  fix-16              WORK Follow-up from rev   1m    9    24   4  850.2k   ~$0.51 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁██││▃▃▃█ ▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃▃██▃█▃▃▃▃││         ██                         │
 │◆ manager  release-train    ⎇2 WORK building            22m   14    38  12    1.5M   ~$1.43 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▂▁█▅││╶                                    ╴││         ██                         │
-│◆ other    scratch-notes       WORK scratch-notes sess  36m   20    65  16    2.0M   ~$1.19 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁█▆││EVENT      /MIN                      ╴││         ██                         │
-│◆ other    lint-sweep session  WORK lint-sweep session  26m   14    39   8    1.4M        — ▁▂▂▂▁▁▁▂▂▁▁▁▂▁▁▁▁▂▁▁▂▁▁▁▂▁██││TOOL    ██████████████░░░░░░░░░░░  188││00    06    12    18                │
-│◆ builder  fix-18              WORK Follow-up from rev  54s    6    16   4  510.8k   ~$0.32 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃█││TURN    ██████████░░░░░░░░░░░░░░░  138││KIND        USD    %                │
-│◆ chatter  chat-desk           WORK Answer questions    46m   22    53   6    2.1M   ~$2.47 ▂▁▂▁▁▁▂▁▁▁▂▂▁▂▁▁▂▂▁▂▁▁▁▂▂▂██││SPWN    ██░░░░░░░░░░░░░░░░░░░░░░░   29││builder    ~$6.99  28 ▰▰▰▱▱▱▱▱▱▱▱▱  │
-│◆ planner  q4-roadmap          WORK Draft the quarter'  21m   15    45   2    1.8M   ~$3.58 ▁▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▅█││ERR     █░░░░░░░░░░░░░░░░░░░░░░░░   14││planner    ~$6.84  27 ▰▰▰▱▱▱▱▱▱▱▱▱  │
-│◆ builder  fix-20              WORK Follow-up from rev  12s    1     2   0  163.5k   ~$0.08 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││DONE    ██░░░░░░░░░░░░░░░░░░░░░░░   31││reviewer   ~$3.78  15 ▰▰▱▱▱▱▱▱▱▱▱▱  │
-│◆ subagent fix-16/explore the  WORK explore the reduce   2s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││SOURCE     /MIN                     ─╴││manager    ~$3.76  15 ▰▰▱▱▱▱▱▱▱▱▱▱  │
-│◆ planner  mesh-plan           WORK Plan the figure wi  31m   15    42   2    1.7M   ~$3.26 ▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││hc      █████████████████████████  347│┃chatter    ~$2.47  10 ▰▱▱▱▱▱▱▱▱▱▱▱  ┃
-│◆ subagent chat-desk/explore t WORK explore the reduce   4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││claude  ██████████░░░░░░░░░░░░░░░  132│┗━━━──────────────────────────────━━━┛
-│◆ subagent q4-roadmap/explore  WORK explore the reduce   4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││codex   ██░░░░░░░░░░░░░░░░░░░░░░░   21│┏━◢ 06 // SOURCES ◤ 1/1 OK ───────━━━┓
-│◆ subagent scratch-notes/explo WORK explore the reduce   6s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││TOOL       /MIN                     ─╴│┃  SOURCE            AGT  ITEMS LAST ┃
-│◆ subagent mesh-plan/explore t WORK explore the reduce   8s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Read    ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮   56││◆ demo                34      —    —│
-│◆ subagent fix-19/explore the  WORK explore the reduce   9s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               29││                                    │
-│◆ subagent billing-revamp/expl WORK explore the reduce  13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│◆ subagent ui-pages/explore th WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮▮               27││                                    │
-│◆ subagent fix-18/explore the  WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                26││     ·   ·   ·   ·   ·   ·   ·   ·  │
-│◆ subagent release-train/explo WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││                                    │
-│◆ subagent find-17/explore the WORK explore the reduce  34s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶                                    ╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ other    scratch-notes       WORK scratch-notes sess  36m   20    65  16    2.0M   ~$1.19 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁█▆││╶                                    ╴││         ██                         │
+│◆ other    lint-sweep session  WORK lint-sweep session  26m   14    39   8    1.4M        — ▁▂▂▂▁▁▁▂▂▁▁▁▂▁▁▁▁▂▁▁▂▁▁▁▂▁██││EVENT      /MIN                      ╴││00    06    12    18                │
+│◆ builder  fix-18              WORK Follow-up from rev  54s    6    16   4  510.8k   ~$0.32 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃█││TOOL    ██████████████░░░░░░░░░░░  188││KIND        USD    %                │
+│◆ chatter  chat-desk           WORK Answer questions    46m   22    53   6    2.1M   ~$2.47 ▂▁▂▁▁▁▂▁▁▁▂▂▁▂▁▁▂▂▁▂▁▁▁▂▂▂██││TURN    ██████████░░░░░░░░░░░░░░░  138││builder    ~$6.99  28 ▰▰▰▱▱▱▱▱▱▱▱▱  │
+│◆ planner  q4-roadmap          WORK Draft the quarter'  21m   15    45   2    1.8M   ~$3.58 ▁▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▅█││SPWN    ██░░░░░░░░░░░░░░░░░░░░░░░   29││planner    ~$6.84  27 ▰▰▰▱▱▱▱▱▱▱▱▱  │
+│◆ builder  fix-20              WORK Follow-up from rev  12s    1     2   0  163.5k   ~$0.08 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││ERR     █░░░░░░░░░░░░░░░░░░░░░░░░   14││reviewer   ~$3.78  15 ▰▰▱▱▱▱▱▱▱▱▱▱  │
+│◆ subagent fix-16/explore the  WORK explore the reduce   2s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││DONE    ██░░░░░░░░░░░░░░░░░░░░░░░   31││manager    ~$3.76  15 ▰▰▱▱▱▱▱▱▱▱▱▱  │
+│◆ planner  mesh-plan           WORK Plan the figure wi  31m   15    42   2    1.7M   ~$3.26 ▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▅││SOURCE     /MIN                      ╴│┃chatter    ~$2.47  10 ▰▱▱▱▱▱▱▱▱▱▱▱  ┃
+│◆ subagent chat-desk/explore t WORK explore the reduce   4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││hc      █████████████████████████  347│┗━━━──────────────────────────────━━━┛
+│◆ subagent q4-roadmap/explore  WORK explore the reduce   4s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││claude  ██████████░░░░░░░░░░░░░░░  132│┏━◢ 06 // SOURCES ◤ 1/1 OK ───────━━━┓
+│◆ subagent scratch-notes/explo WORK explore the reduce   6s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││codex   ██░░░░░░░░░░░░░░░░░░░░░░░   21│┃  SOURCE            AGT  ITEMS LAST ┃
+│◆ subagent mesh-plan/explore t WORK explore the reduce   8s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││TOOL       /MIN                      ╴││◆ demo                34      —    —│
+│◆ subagent fix-19/explore the  WORK explore the reduce   9s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Read    ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮   56││                                    │
+│◆ subagent billing-revamp/expl WORK explore the reduce  13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               29││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent ui-pages/explore th WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││                                    │
+│◆ subagent fix-18/explore the  WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮▮               27││     ·   ·   ·   ·   ·   ·   ·   ·  │
+│◆ subagent release-train/explo WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                26││                                    │
+│◆ subagent find-17/explore the WORK explore the reduce  34s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││     ·   ·   ·   ·   ·   ·   ·   ·  │
 │◆ subagent review-rpc/explore  WORK explore the reduce  46s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶─                                  ─╴││                                    │
 │◆ subagent store-reducer/explo WORK explore the reduce   1m    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││     ·   ·   ·   ·   ·   ·   ·   ·    ││     ·   ·   ·   ·   ·   ·   ·   ·  │
 ┃▲ manager  billing-revamp   ⎇3 BLCK permission          59m   22    65   8    2.1M   ~$2.34 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▂┃┃└╴SUBJ 25 LIVE            TOK/M 5.0M╶┘┃┃                                    ┃

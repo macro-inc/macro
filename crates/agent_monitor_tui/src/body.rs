@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use chrono::TimeDelta;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Sparkline, Widget as _};
@@ -286,6 +286,11 @@ impl BodyPane for Vitals {
     }
 
     fn render(&self, area: Rect, buffer: &mut Buffer) {
+        // The pane's scanner readouts take the first and last rows.
+        let area = area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        });
         let width = usize::from(area.width);
         let beat = self.heart_phase < 0.18;
         let heart = if beat { "♥" } else { "♡" };
