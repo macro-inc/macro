@@ -1723,9 +1723,113 @@ fn undo_brings_stored_search_text_into_untouched_blocks_like_source()
         "the untouched first paragraph carries its stored searchText, as Source's reconcile does: {}",
         live["root"]["children"][0]["$"]
     );
-    let streamed: serde_json::Value = serde_json::from_str(&surface.state().to_json_string()?)?;
+    // owner-40 forensics: Source's reconcile gives every block its stored searchText,
+    // the emptied second paragraph included.
     assert_eq!(
-        streamed["root"]["children"][0]["$"],
+        live["root"]["children"][1]["$"]["searchText"],
+        json!(""),
+        "the emptied paragraph carries its stored searchText too: {}",
+        live["root"]["children"][1]["$"]
+    );
+    let streamed: serde_json::Value = serde_json::from_str(&surface.state().to_json_string()?)?;
+    assert_eq!(streamed["root"]["children"], live["root"]["children"]);
+    Ok(())
+}
+
+/// Source's collab reconcile (reconcile.ts 2bae81a4 :48-62, :130-148) runs on every
+/// Loro-driven update and copies each block's stored own JSON, `$.searchText` included, into
+/// the live model when it differs. So a remote edit in one block also brings this peer's own
+/// stored searchText into the other block's model.
+#[test]
+fn a_remote_update_brings_stored_search_text_into_the_live_model_like_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    use lexical_model::*;
+    let stored = json!({ "root": {
+        "type":"root", "version":1, "format":"", "indent":0, "direction":null,
+        "$":{"id":"root","documentMetadata":{"version":10}}, "children":[
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Ts1gplV5"},"children":[]},
+            {"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+             "textFormat":0,"textStyle":"","$":{"id":"Pb2remot"},"children":[]}
+        ]
+    }});
+    let snapshot = lexical_loro::snapshot::raw_state_to_loro_snapshot(&stored, None)?;
+    let (mut a, a_doc, _) = open_stored_in_browser(&snapshot)?;
+    let first = a
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("paragraph");
+    let point = Point::element(first, ChildIndex(0));
+    local_input(
+        &mut a,
+        &a_doc,
+        Input::Command {
+            command: Command::InsertText("ab".into()),
+            selection: ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            },
+        },
+        2000,
+    )?;
+    assert_eq!(
+        stored_root(&a_doc)["children"][0]["$"]["searchText"],
+        json!("ab")
+    );
+    // A local commit runs no reconcile, so the live model still lacks it.
+    let typed = serde_json::to_value(a.state().to_json()?)?;
+    assert!(
+        typed["root"]["children"][0]["$"]
+            .get("searchText")
+            .is_none(),
+        "{}",
+        typed["root"]["children"][0]["$"]
+    );
+    // A peer changes only the second paragraph's own map, and adds an ordinary state key
+    // to it: other `$` keys already track Loro on import.
+    let b_doc = lexical_loro::new_doc(60)?;
+    b_doc.import(&a_doc.export(loro::ExportMode::Snapshot)?)?;
+    let before = b_doc.oplog_vv();
+    let second = match b_doc.get_map("root").get("children") {
+        Some(loro::ValueOrContainer::Container(loro::Container::MovableList(children))) => {
+            match children.get(1) {
+                Some(loro::ValueOrContainer::Container(loro::Container::Map(map))) => map,
+                _ => return Err("second paragraph map".into()),
+            }
+        }
+        _ => return Err("root children".into()),
+    };
+    second.insert("textStyle", "color: red")?;
+    match second.get("$") {
+        Some(loro::ValueOrContainer::Container(loro::Container::Map(state))) => {
+            state.insert("peerNote", "kept")?;
+        }
+        _ => return Err("second paragraph state map".into()),
+    }
+    b_doc.commit();
+    a_doc.import(&b_doc.export(loro::ExportMode::updates(&before))?)?;
+    Surface::remote(
+        &mut a,
+        &a_doc,
+        Now {
+            mono: Millis(3000),
+            wall: UnixMillis(3000),
+        },
+        Access::Edit,
+        &mut Vec::new(),
+    )?;
+    let live = serde_json::to_value(a.state().to_json()?)?;
+    assert_eq!(
+        live["root"]["children"][1]["textStyle"],
+        json!("color: red")
+    );
+    assert_eq!(live["root"]["children"][1]["$"]["peerNote"], json!("kept"));
+    assert_eq!(
+        live["root"]["children"][0]["$"]["searchText"],
+        json!("ab"),
+        "the untouched block carries its stored searchText after the remote update: {}",
         live["root"]["children"][0]["$"]
     );
     Ok(())

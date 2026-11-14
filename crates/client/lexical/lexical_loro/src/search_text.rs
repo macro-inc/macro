@@ -172,6 +172,22 @@ impl SearchText {
         }
     }
 
+    /// Blocks whose stored search text this peer wrote while the live model lacks it. A
+    /// Loro-driven update imports their stored search text into the model, as Source's
+    /// collab reconcile does for every node whose stored own JSON differs.
+    pub(crate) fn authored_keys(&self, index: &NodeIndex) -> OrderedSet<NodeKey> {
+        self.authored
+            .iter()
+            .filter(|(key, authored)| {
+                index
+                    .nodes
+                    .get(*key)
+                    .is_some_and(|slot| slot.map == authored.container)
+            })
+            .map(|(key, _)| *key)
+            .collect()
+    }
+
     pub(crate) fn apply_expected(
         &self,
         key: NodeKey,

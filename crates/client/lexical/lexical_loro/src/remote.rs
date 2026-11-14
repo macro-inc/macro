@@ -182,8 +182,21 @@ impl LoroProjection {
             }
             self.build_children(&mut building, NodeTarget::Key(key), &map)?;
         }
+        // Source's collab reconcile compares every node's stored own JSON, `$` included, on
+        // each Loro-driven update, so blocks whose stored search text this peer wrote are
+        // imported too, whether or not this update changed them.
+        let authored = self
+            .search_text
+            .as_ref()
+            .map(|search| search.authored_keys(&self.index))
+            .unwrap_or_default();
         // Slot replacements now become visible to subsequent event classification.
         let mut ordered_fields = building.fields.iter().copied().collect::<Vec<_>>();
+        for key in &authored {
+            if !building.fields.contains(key) {
+                ordered_fields.push(*key);
+            }
+        }
         ordered_fields.sort_by_key(|key| {
             self.container_of(*key)
                 .map(|id| path(doc, id))
@@ -265,6 +278,7 @@ impl LoroProjection {
                 current.remove(*field);
             }
             if compare != current
+                || authored.contains(&key)
                 || comparison::raw_paragraph_changed(state.view(), key, &incoming, self.policy)?
             {
                 if state.view().is_text(key) {
