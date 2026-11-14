@@ -12,6 +12,11 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
+- Email and calendar against the real email services and the Gmail and Outlook
+  emulators, in a built bundle in Chromium: `just email-e2e-browser` from the
+  repository root (`tests/email-e2e/README.md`). Add a test there for an email
+  bug only the whole path can decide; one component's logic stays in its
+  feature's `browser-test/` suite.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 - Supported browsers are the `browserslist` in `package.json`. Safari and iOS
   16.4 is the oldest WebKit the app starts on: startup code, including
