@@ -56,7 +56,7 @@ const REWRITE_DECLARATION_BYTES: usize = 48 * 1024;
 /// SDK reference a draft reads, in bytes: the symbols its model names,
 /// then the types their references name.
 const DRAFT_REFERENCE_BYTES: usize = 48 * 1024;
-/// SDK reference a direct draft's writer reads for the areas its request
+/// SDK reference a routine draft's session reads for the areas its request
 /// uses, in bytes; of that, one area's; and the generated types their
 /// declarations import.
 const AREA_REFERENCE_BYTES: usize = 64 * 1024;
@@ -577,7 +577,7 @@ fn sdk_areas() -> String {
         .join("\n")
 }
 
-/// What a direct draft's writer reads of the SDK areas `areas` names, in
+/// What a routine draft's session reads of the SDK areas `areas` names, in
 /// order, each whole or not at all, within [`AREA_REFERENCE_BYTES`]: each
 /// area's index, guidance and declarations, then the generated types those
 /// declarations import.
@@ -613,7 +613,7 @@ fn area_reference(areas: &[String]) -> String {
     output
 }
 
-/// One SDK area as a direct draft's writer reads it.
+/// One SDK area as a routine draft's session reads it.
 struct AreaReference {
     text: String,
     /// The generated types its declarations import, which the SDK's

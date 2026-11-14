@@ -386,8 +386,9 @@ struct JobProgress {
 
 impl DraftProgress for JobProgress {
     fn report(&self, milestone: DraftMilestone) {
-        // A direct draft says so once its usage is admitted; a session draft
-        // once its prompt is accepted. Either may skip ahead.
+        // A draft that finds its items says so once its usage is admitted;
+        // any other once its session's prompt is accepted. Either may skip
+        // ahead.
         let writing = matches!(
             milestone,
             DraftMilestone::Admitted | DraftMilestone::Found(_) | DraftMilestone::Writing
@@ -442,18 +443,10 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let drafting = async {
             // Dropped once the draft is done, which ends the writer.
             let reporter = reporter;
-            if let Some(direct) = &drafts.direct {
-                let run = super::DirectRun {
-                    id,
-                    progress: &reporter,
-                    cancellable: true,
-                    interrupt,
-                };
-                return drafts
-                    .direct_draft(direct, &owner, &request, &program, &context, run)
-                    .await;
-            }
-            let brief = match drafts.briefed(&owner, &request, &program, &context) {
+            let brief = match drafts
+                .briefed(&owner, &request, &program, &context, &reporter)
+                .await?
+            {
                 Ok(brief) => brief,
                 Err(message) => return Ok(Some(failed(message))),
             };

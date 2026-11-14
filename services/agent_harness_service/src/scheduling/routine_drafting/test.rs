@@ -1,4 +1,5 @@
 use macro_user_id::cowlike::CowLike as _;
+use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -8,37 +9,6 @@ const OWNER: &str = "macro|owner@example.com";
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap().into_owned()
-}
-
-#[test]
-fn a_writer_is_told_its_effort_and_thinking_only_where_its_model_takes_them() {
-    assert_eq!(
-        model_params("anthropic/claude-sonnet-5-5", Some(Effort::Low), false),
-        Some(json!({ "output_config": { "effort": "low" } }))
-    );
-    assert_eq!(
-        model_params("anthropic/claude-sonnet-5-5", Some(Effort::Medium), true),
-        Some(json!({
-            "thinking": { "type": "adaptive" },
-            "output_config": { "effort": "medium" }
-        }))
-    );
-    assert_eq!(
-        model_params("anthropic/claude-haiku-4-5", Some(Effort::Low), true),
-        Some(json!({ "thinking": { "type": "enabled", "budget_tokens": 4_000 } }))
-    );
-    assert_eq!(
-        model_params("openai/gpt-5.5", Some(Effort::Low), true),
-        Some(json!({ "reasoning": { "effort": "low" } }))
-    );
-    assert_eq!(
-        model_params("anthropic/claude-haiku-4-5", Some(Effort::Low), false),
-        None
-    );
-    assert_eq!(
-        model_params("anthropic/claude-sonnet-5-5", None, false),
-        None
-    );
 }
 
 #[tokio::test]

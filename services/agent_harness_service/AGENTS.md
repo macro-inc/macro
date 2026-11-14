@@ -169,17 +169,18 @@ Pulumi stacks; they do not host extra agent processes.
   sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
-  (`POST /scheduled-actions/drafts`) directly, in two or three model calls
-  on the router and no session (`src/scheduling/routine_drafting.rs`):
-  `RouterDraftModels` admits and bills them as the person's automation
-  usage, a fast call on Haiku names what the words refer to, and the
-  writer runs on the person's Ask AI model at low effort;
-  `DocumentStorageNames` looks the names up through document storage's
-  `POST /search/names` as the person (internal key, five-second timeout).
-  `routine_code.rs` gives the writer each SDK area it needs
+  (`POST /scheduled-actions/drafts`) in a hidden session of the in-process
+  agent, which runs a background session given instructions at low effort
+  and delivers its replies unseen (`containers.rs`, `reply_delivery`).
+  Before the session starts, a fast call on the router names what the
+  words refer to (`src/scheduling/routine_drafting.rs`:
+  `RouterDraftModels` admits and bills it as the person's automation
+  usage), and `DocumentStorageNames` looks the names up through document
+  storage's `POST /search/names` as the person (internal key, five-second
+  timeout). `routine_code.rs` gives the session each SDK area it needs
   (`area_reference`: the area's index, guidance and declarations, then
   the generated types they import). `scheduling.rs` composes the drafter
-  after the service, whose `check_draft` it calls, with its
+  after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the
   sweep of drafts a stopped process left.

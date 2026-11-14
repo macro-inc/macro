@@ -264,14 +264,6 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
-    /// [`Self::check_action`] for a routine the drafter wrote itself for
-    /// `owner`, outside any session: nothing is kept.
-    fn check_draft(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        input: ActionConfiguration,
-    ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
-
     /// `create_action` for a routine activated from `template_id`, recorded
     /// as given: callers check that the template exists.
     fn create_action_from_template(
@@ -440,8 +432,8 @@ pub trait DraftHandBacks: Send + Sync + 'static {
     async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
 }
 
-/// The model a routine draft is written with, admitted and billed as the
-/// person's automation usage. Object-safe (`async_trait`): the drafter holds
+/// The fast model a routine draft finds its items with, admitted and billed
+/// as the person's automation usage. Object-safe (`async_trait`): the drafter holds
 /// it erased.
 #[async_trait::async_trait]
 pub trait DraftModel: Send + Sync + 'static {
@@ -455,8 +447,8 @@ pub trait DraftModel: Send + Sync + 'static {
     async fn complete(
         &self,
         owner: &MacroUserIdStr<'static>,
-        call: super::drafts::direct::DraftCall<'_>,
-    ) -> Result<String, super::drafts::direct::DraftCallError>;
+        call: super::drafts::finding::DraftCall<'_>,
+    ) -> Result<String, super::drafts::finding::DraftCallError>;
 }
 
 /// Finds the items a person can access by the names a request uses, of
@@ -469,19 +461,8 @@ pub trait NameLookups: Send + Sync + 'static {
     async fn look_up(
         &self,
         owner: &MacroUserIdStr<'static>,
-        names: &[super::drafts::direct::NameAsked],
-    ) -> Result<super::drafts::direct::NameAnswers, super::drafts::direct::NameLookupError>;
-}
-
-/// Saving's checks for a routine a drafter wrote, as its owner, saving
-/// nothing. Object-safe (`async_trait`): the drafter holds it erased.
-#[async_trait::async_trait]
-pub trait DraftChecks: Send + Sync + 'static {
-    async fn check(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        routine: ActionConfiguration,
-    ) -> Result<super::models::RoutineCheck>;
+        names: &[super::drafts::finding::NameAsked],
+    ) -> Result<super::drafts::finding::NameAnswers, super::drafts::finding::NameLookupError>;
 }
 
 /// Background drafts' rows: the same rows [`DraftHandBacks`] keeps checks

@@ -12,6 +12,11 @@
 //! the turn ends first), then deletes the session and the row. The session's
 //! usage is agent session usage, admitted and metered as any session's.
 //!
+//! With [`finding::DraftFinding`], the drafter looks the items up itself
+//! before the session starts and gives the session what it found and the SDK
+//! reference it needs ([`finding`]), so the session writes one program and
+//! searches for nothing.
+//!
 //! A draft runs in the request that waits for it ([`RoutineDraftService`]),
 //! or in the background ([`jobs`]), where its row also keeps its progress and
 //! result for its owner to open later.
@@ -43,10 +48,10 @@ use super::ports::{
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-use self::direct::{DirectDrafting, DirectPrompts, DirectRun};
+use self::finding::{DraftFinding, FindingPrompts};
 use self::progress::{CheckSummary, DraftMilestone, DraftProgress, Unreported};
 
-pub mod direct;
+pub mod finding;
 pub mod jobs;
 pub mod progress;
 #[cfg(test)]
@@ -64,8 +69,9 @@ const POLL: Duration = Duration::from_millis(250);
 /// turn read every 2 s, only to notice a turn that ends without a passing
 /// check.
 const ROW_READS_PER_TURN_READ: u32 = 8;
-/// How long the drafter waits, once the session has stopped, for the
-/// activity its last creations wrote, which is recorded asynchronously.
+/// How long the drafter waits, once a session that handed back no passing
+/// check has stopped, for the activity its last creations wrote, which is
+/// recorded asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
@@ -247,25 +253,22 @@ pub struct RoutineDrafts<Code, Sessions> {
     agent: DraftAgent,
     /// Whether this host can answer trigger conditions.
     conditions_enabled: bool,
-    /// Drafts written directly, in a few model calls and no session.
-    direct: Option<Arc<Direct>>,
+    /// What drafts find before their session starts.
+    finding: Option<Arc<Finding>>,
 }
 
-/// What a direct draft uses, and the prompts it builds once.
-struct Direct {
-    drafting: DirectDrafting,
-    prompts: DirectPrompts,
+/// What finding a draft's items uses, and the prompts it builds once.
+struct Finding {
+    drafting: DraftFinding,
+    prompts: FindingPrompts,
 }
 
 impl<Code: RoutineCode, Sessions> RoutineDrafts<Code, Sessions> {
-    /// Write every draft directly with `drafting` instead of in a session.
-    pub fn with_direct(mut self, drafting: DirectDrafting) -> Self {
-        let prompts = DirectPrompts::new(
-            self.code.as_ref(),
-            self.agent.guide,
-            drafting.tuning.item_knobs,
-        );
-        self.direct = Some(Arc::new(Direct { drafting, prompts }));
+    /// Find the items every draft's words name with `drafting` before its
+    /// session starts, and give the session what it found.
+    pub fn with_finding(mut self, drafting: DraftFinding) -> Self {
+        let prompts = FindingPrompts::new(self.code.as_ref());
+        self.finding = Some(Arc::new(Finding { drafting, prompts }));
         self
     }
 }
@@ -286,7 +289,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
             creations: Arc::new(NoSessionCreations),
             agent,
             conditions_enabled: false,
-            direct: None,
+            finding: None,
         }
     }
 
@@ -359,7 +362,6 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         agent.session.id = tracing::field::Empty,
         routine.draft.found = tracing::field::Empty,
         routine.draft.left = tracing::field::Empty,
-        routine.draft.fixes = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
         routine.draft.created = tracing::field::Empty,
         routine.draft.created_unused = tracing::field::Empty,
@@ -386,21 +388,10 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         let span = draft_span(&request);
         async {
             let (program, context) = self.read_request(&request, context)?;
-            if let Some(direct) = &self.direct {
-                let run = DirectRun {
-                    id: macro_uuid::generate_uuid_v7(),
-                    progress: &Unreported,
-                    cancellable: false,
-                    interrupt: CancellationToken::new(),
-                };
-                let draft = self
-                    .direct_draft(direct, &owner, &request, &program, &context, run)
-                    .await?
-                    // Only a background draft can be cancelled.
-                    .unwrap_or_else(|| failed(request.failed()));
-                return Ok(finish(draft));
-            }
-            let brief = match self.briefed(&owner, &request, &program, &context) {
+            let brief = match self
+                .briefed(&owner, &request, &program, &context, &Unreported)
+                .await?
+            {
                 Ok(brief) => brief,
                 Err(message) => return Ok(finish(failed(message))),
             };
@@ -470,54 +461,50 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         Ok((program, context))
     }
 
-    /// The draft's first prompt, or why it can't be drafted, for the
-    /// person. Any lookup of the items the words name, before the model
-    /// runs, belongs here, and reports [`DraftMilestone::Found`].
-    fn briefed(
+    /// The brief of the draft's session, reporting as it goes, or why it
+    /// can't be drafted, for the person. With finding, the items the words
+    /// name are looked up first ([`DraftMilestone::Found`]). Only a refused
+    /// admission is an error.
+    async fn briefed(
         &self,
         owner: &MacroUserIdStr<'static>,
         request: &DraftRequest,
         program: &[Step],
         context: &DraftContext,
-    ) -> Result<String, &'static str> {
+        progress: &dyn DraftProgress,
+    ) -> Result<Result<Brief, &'static str>> {
+        if let Some(finding) = &self.finding {
+            return self
+                .found_brief(finding, owner, request, program, context, progress)
+                .await;
+        }
         tracing::Span::current().record("routine.draft.drafter", "session");
         let code = self.code_available(request, context);
-        brief(request, program, context, code, owner, self.agent.guide)
+        Ok(brief(request, program, context, code, owner, self.agent.guide).map(Brief::from))
     }
 
-    /// Delete a draft's session, unless it was `stopped`, and its row. A
-    /// direct draft has no session, but a row a replica on older code drafted
-    /// has one, so a direct drafter tries it too, expecting none.
+    /// Whether `request` may be written with code steps here.
+    fn code_available(&self, request: &DraftRequest, context: &DraftContext) -> bool {
+        let code = self.code.sdk().is_some()
+            && (context.code || matches!(request, DraftRequest::ChangeStep { .. }));
+        tracing::Span::current().record("routine.draft.code_available", code);
+        code
+    }
+
+    /// Delete a draft's session, unless it was `stopped`, and its row.
     async fn forget_draft(&self, action: &RoutineSessionAction, stopped: bool) {
-        if self.direct.is_none() {
-            clean_up(
-                self.sessions.as_ref(),
-                self.hand_backs.as_ref(),
-                action,
-                stopped,
-            )
-            .await;
-            return;
-        }
-        if !stopped {
-            self.stop_draft(action).await;
-        }
-        if let Err(error) = self.sessions.delete(action.clone()).await {
-            tracing::debug!(error = ?error, "no routine draft session to delete");
-        }
-        if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
-            tracing::warn!(error = ?error, "could not forget a routine draft");
-        }
+        clean_up(
+            self.sessions.as_ref(),
+            self.hand_backs.as_ref(),
+            action,
+            stopped,
+        )
+        .await;
     }
 
-    /// Stop a draft's session; a direct drafter tries it as
-    /// [`Self::forget_draft`] does.
+    /// Stop a draft's session.
     async fn stop_draft(&self, action: &RoutineSessionAction) {
-        if self.direct.is_none() {
-            stop(self.sessions.as_ref(), action).await;
-        } else if let Err(error) = self.sessions.cancel(action.clone()).await {
-            tracing::debug!(error = ?error, "no routine draft session to stop");
-        }
+        stop(self.sessions.as_ref(), action).await;
     }
 
     /// Who a draft's session belongs to, for the session operations.
@@ -544,7 +531,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         request: &DraftRequest,
         program: &[Step],
         context: &DraftContext,
-        brief: String,
+        brief: Brief,
         drafting: Drafting<'_>,
     ) -> Result<Option<Draft>> {
         let span = tracing::Span::current();
@@ -575,7 +562,12 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             cleanup.forget().await;
             return Ok(None);
         }
-        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        // A passing check names what the session created and ends the draft
+        // at once; only a session that ended without one waits for the
+        // activity of creations it may not have named.
+        if !matches!(ending, Ok(Ok(Ending::Checked))) {
+            tokio::time::sleep(ACTIVITY_SETTLE).await;
+        }
         let recorded = self
             .creations
             .created_by(session.as_uuid())
@@ -627,12 +619,13 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         &self,
         action: &RoutineSessionAction,
         model: &str,
-        brief: String,
+        brief: Brief,
         progress: &dyn DraftProgress,
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
                 billing: Default::default(),
+                instructions: brief.instructions,
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
@@ -653,7 +646,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         self.sessions
             .prompt(PromptRoutineSession {
                 action: action.clone(),
-                prompt: brief,
+                prompt: brief.prompt,
                 context: None,
             })
             .await?;
@@ -978,6 +971,23 @@ fn created_items(
             entity_id: item.entity_id,
         })
         .collect()
+}
+
+/// What a draft's hidden session is given: the instructions it keeps, the
+/// same for every draft of its kind so the prompt cache reads them back
+/// across drafts, and its one prompt, with what is particular to the request.
+struct Brief {
+    instructions: Option<String>,
+    prompt: String,
+}
+
+impl From<String> for Brief {
+    fn from(prompt: String) -> Self {
+        Self {
+            instructions: None,
+            prompt,
+        }
+    }
 }
 
 /// The draft's first prompt: what to draft, from what words, and how to hand

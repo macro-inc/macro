@@ -39,104 +39,85 @@ each run.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
-  boxes in the web editor). The harness drafts directly
-  (`drafts/direct.rs`, `RoutineDrafts::with_direct`), in two or three model
-  calls and no session. A call on the fast model (`direct/find.md`) names
-  the items the words refer to and the SDK areas the routine needs
-  (`RoutineCode::sdk_areas`). The `NameLookups` port (document storage's
+  boxes in the web editor). The draft runs in a hidden agent session
+  (`RoutineSessions`) of the in-process Macro agent: the person's own
+  (source `user`, origin `requested`) but hidden, a background session
+  (`AgentSession::is_background`) that notifies nobody and
+  only the scheduler may delete, never counted as a routine's run. It runs
+  as the person, with its usual tools, on the model their Ask AI steps use
+  (`DraftContext::agent_model`), and the session admits and bills its
+  turns as agent session usage. In the harness the drafter first finds
+  what the words name (`drafts/finding.rs`, `RoutineDrafts::with_finding`):
+  a call on the fast model (`finding/find.md`, admitted and billed as the
+  person's automation usage through `DraftModel`) names the items the words
+  refer to and the SDK areas the routine needs (`RoutineCode::sdk_areas`),
+  given up after `FIND_TIMEOUT`. The `NameLookups` port (document storage's
   `POST /search/names`, as the person) finds each name, and `settle` keeps
   it only when exactly one item of its likeliest kind has it; a name none
-  or several have is left for the person to pick, never guessed (unless no
-  item has it and the request asks to make it, which `setup` may do). A name a
+  or several have is left for the person to pick, never guessed. A name a
   likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
   might have (for a name of no likely kind, any kind it couldn't search,
-  unless two items already have it) is left as unknown, and names the lookup would refuse (empty
-  past a leading `#`/`@`, over 200 characters) are never asked. One call
-  on the person's Ask AI model (`DraftContext::agent_model`) writes the
-  whole routine as JSON from its own system prompt (`direct/write.md`: the
-  routines guide, the code-step guide, the SDK's `ai` area and Macro's
-  catalog code routines as examples), built once per mix of code and
-  trigger conditions (`DirectPrompts`) so the provider caches it; its user
-  turn carries the request, the found items (name and id) and the
-  reference of the areas named, or of the commonest ones when the SDK has
-  none of them (`RoutineCode::area_reference`). A found item goes in a
-  trigger filter by id, in a code step's knob by its exact name, which the
-  step resolves when it runs, since the owner reads a text knob as written,
-  and in Ask AI instructions or a trigger condition by name and id
-  (`ItemKnobs::Names`, `direct/items_by_name.md`; `ItemKnobs::Ids` and
-  `direct/items_by_id.md` put the id alone in knobs and Ask AI
-  instructions). A `setup` module creating
-  what the routine uses runs once, as the person, and its ids replace each
-  `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
-  writer changed it and only if it changed nothing, and a placeholder left
-  unfilled goes back to the writer, never to the check. A draft that may
-  not write code (`code_available` is false: it needs the SDK, and
-  `DraftContext::code` or a request changing a code step) has no `setup`: the writer is
-  told never to write one instead of `direct/setup.md`, and it never runs
-  (`Setup::Unavailable`).
-  Saving's checks (`DraftChecks`, the service's `check_draft`) run on the result; only
-  their problems, with the SDK declarations they name, go back to the
-  model, at most `DirectTuning::max_fixes` times. A whole routine needs a
-  trigger of its own; only a step drafted for a routine without one, or
-  whose trigger isn't one yet, is checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
-  draft still hands back its last check and what setup made
-  (`DirectSoFar`); cut off while setup runs, it fails saying it may have
-  made something, as does a draft whose setup failed partway through and
-  that ends before a check passes. The calls are admitted and billed as the person's
-  automation usage (`DraftModel`, `AiFeature::Automation`). Progress
-  reports the admission (`DraftMilestone::Admitted`, which answers a
-  background start before anything is looked up), what was found and
-  left by name (`DraftMilestone::Found`), and fixing only once a check
-  ran. Spans: `routine.draft` records
-  drafter `direct`, names found and left, checks, fixes, items created and
-  `ended`, once each; `routine.draft.call` each call's purpose and answer
-  size; `routine.draft.lookup`; `routine.draft.setup` what it made and
-  whether a failed run wrote; never the words or the names. With it, a
-  job discarded, expired or swept still has its session stopped and
-  deleted, failures logged only at debug: a job a replica on older code
-  drafted has one. Without direct drafting (tests), the draft runs in an ordinary
-  hidden agent session (`RoutineSessions`) of the in-process Macro agent:
-  the person's own
-  (source `user`, origin `requested`) but hidden, a background session
-  (`AgentSession::is_background`) that notifies nobody and only the scheduler
-  may delete, never counted as a routine's run. It runs as the person, with its usual
-  tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
-  the session admits and bills its turns as agent session usage. One
-  prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
-  the `@agent` text on `RoutineNamespace` every code-mode session reads, so
-  the rules for writing a routine live there, not here), the code-step guide,
-  and only what is particular to drafting: leave out an item it can't
-  match exactly, and hand the routine back by checking it with `macro.routines.check`
-  (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
-  saved), naming what it created. The draft's `created` merges what its
-  checks named with what its recorded activity shows (`SessionCreations`,
-  read `ACTIVITY_SETTLE` after the turn stops, since activity is written
-  asynchronously), each marked `used` when the routine references it, so the
-  review can show items made for nothing or the routine's work done early. A check from a draft's
-  session, found from the request's code-mode invocation (`RequestSessions`),
-  is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
-  session and the drafter may run on different replicas. The drafter reads
-  the row every `POLL` and the session's turn every few polls (it reads the
-  whole log); the first passing check ends the draft, else the turn ending
-  does (all bounded by `DRAFT_TIMEOUT`). It turns the last
-  passing check (else the last check) into the draft, then stops and deletes
-  the session and the row, also once it sees the request dropped mid-draft
-  (the web composer, given no answer, sends the draft once more,
-  `compose-routine.ts`);
+  unless two items already have it) is left as unknown, and names the
+  lookup would refuse (empty past a leading `#`/`@`, over 200 characters)
+  are never asked. A failed find or lookup still drafts, with nothing
+  found. The session is then given instructions (`finding/instructions.md`,
+  built by `FindingPrompts`): drafting's rules, how to use found and left
+  items (`finding/items.md`: a trigger filter by id, a code step's text
+  knob by exact name, Ask AI instructions or a condition by name and id;
+  a new item the request asks for is created once and used by id), the
+  code-step guide, Macro's catalog code routines as examples, and the
+  reference of the routines and `ai` areas. They are the same for every
+  draft on one model with the same mix of code and conditions, so the
+  agent puts them in its cached prompt prefix
+  (`PrepareRoutineSession::instructions`). A code step never messages or
+  emails the routine's owner (Macro refuses a message to oneself): telling
+  the owner something is an Ask AI step's job. The prompt carries only the
+  request, the owner and time, the found and left items, and the reference
+  of the areas named, or of the commonest ones when the SDK has none of
+  them (`RoutineCode::area_reference`). A draft that may not write code
+  (`code_available` is false: it needs the SDK, and `DraftContext::code` or
+  a request changing a code step) is told to use an Ask AI step instead.
+  Progress reports the admission (`DraftMilestone::Admitted`, which answers
+  a background start before anything is looked up) and what was found and
+  left by name (`DraftMilestone::Found`). Without finding (tests), the
+  prompt is the brief (`brief`): the SDK's routines guide
+  (`DraftAgent::guide`, the `@agent` text on `RoutineNamespace` every
+  code-mode session reads, so the rules for writing a routine live there,
+  not here), the code-step guide, and what is particular to drafting.
+  Either way the session hands the routine back by checking it with
+  `macro.routines.check` (`POST /scheduled-actions/check`, `check_action`:
+  saving's checks, nothing saved), naming what it created. The draft's
+  `created` merges what its checks named with what its recorded activity
+  shows (`SessionCreations`, read `ACTIVITY_SETTLE` after a turn that ended
+  without a passing check, since activity is written asynchronously; a
+  passing check already names it), each marked `used` when the routine
+  references it, so the review can show items made for nothing or the
+  routine's work done early. A check from a draft's session, found from the
+  request's code-mode invocation (`RequestSessions`), is kept on its
+  `scheduled_action_draft` row (`DraftHandBacks`), so the session and the
+  drafter may run on different replicas. The drafter reads the row every
+  `POLL` and the session's turn every few polls (it reads the whole log);
+  the first passing check ends the draft, else the turn ending does (all
+  bounded by `DRAFT_TIMEOUT`). It turns the last passing check (else the
+  last check) into the draft, then stops and deletes the session and the
+  row, also once it sees the request dropped mid-draft (the web composer,
+  given no answer, sends the draft once more, `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
-  again. The `routine.draft` span records the session id, checks, items
-  created, the session's tool calls and turns, status reads and outcome
-  (`timeout` included), never the words; `routine.check` records
-  whether a check passed and kept a draft's answer. `DraftContext` still
-  accepts and ignores the `workspace` older web clients send. `bench/`
-  times drafting on a local stack against the live model, phase by phase,
-  and checks the drafts (see its README); rerun it when changing the brief
-  or the wait.
+  again. The `routine.draft` span records the drafter (`found` or
+  `session`), names found and left, the session id, checks, items created,
+  the session's tool calls and turns, status reads and outcome (`timeout`
+  included), never the words or the names; `routine.draft.find` records
+  the answer's size and `routine.draft.lookup` what it found;
+  `routine.check` records whether a check passed and kept a draft's
+  answer. `DraftContext` still accepts and ignores the `workspace` older
+  web clients send. `bench/` times drafting on a local stack against the
+  live model, phase by phase, and checks the drafts (see its README); rerun
+  it when changing the instructions or the wait.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for
-  its usage to be admitted (a direct draft's admission, or a session's
+  its usage to be admitted (the find call's admission, or a session's
   prompt; the blocking route's 400/402/503,
   plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
   job. The body carries a client-made `clientId`; a start sent again with

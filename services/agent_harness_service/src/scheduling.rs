@@ -25,7 +25,7 @@ mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
-use scheduled_action::domain::drafts::direct::{DirectDrafting, DirectTuning, ServiceChecks};
+use scheduled_action::domain::drafts::finding::DraftFinding;
 use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
@@ -730,13 +730,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
-    // AI drafts routines directly: a fast call names the items the request
-    // refers to and the SDK areas it needs, document storage finds those
-    // items by name, one call on the person's Ask AI model writes the
-    // routine, and saving's checks run on it, so the model goes again only to
-    // fix what they found. The calls are admitted and billed as the person's
-    // automation usage. Rows a replica on older code drafted in a session
-    // still have that session stopped and deleted with them.
+    // AI drafts routines in a hidden session of the in-process Macro agent.
+    // Before it starts, a fast call names the items the request refers to and
+    // the SDK areas it needs, and document storage finds those items by
+    // name, so the session is given them and the reference it needs and
+    // writes one program that ends with the check. The fast call is admitted
+    // and billed as the person's automation usage.
     let drafts = Arc::new(
         RoutineDrafts::new(
             draft_code,
@@ -752,7 +751,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
         .with_conditions_enabled(conditions_enabled)
-        .with_direct(DirectDrafting {
+        .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
                 admission: Arc::clone(&ai_admission),
                 recorder: ai_billing::composition::pg_settling_recorder(
@@ -766,8 +765,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 DocumentStorageServiceUrl::new()?.as_ref(),
                 config.internal_api_key.to_string(),
             )?),
-            checks: Arc::new(ServiceChecks(Arc::clone(&service))),
-            tuning: DirectTuning::default(),
         }),
     );
     // Background drafts run here, on the replica they were started on, and

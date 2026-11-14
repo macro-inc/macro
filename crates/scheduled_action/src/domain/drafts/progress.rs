@@ -7,7 +7,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 use super::StepKind;
-use super::direct::ItemKind;
+use super::finding::ItemKind;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::RoutineCheck;
 
@@ -30,7 +30,7 @@ impl DraftProgress for Unreported {
 /// Something the drafter reached.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DraftMilestone {
-    /// A direct draft's usage was admitted, before it looks anything up:
+    /// The draft's usage was admitted, before it looks anything up:
     /// the start of a background draft can answer.
     Admitted,
     /// The items the person’s words name were looked up, before the
