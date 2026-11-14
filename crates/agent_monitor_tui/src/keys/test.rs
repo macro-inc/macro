@@ -34,7 +34,7 @@ fn number_keys_open_pages_and_drop_focus() {
         ('5', Page::Tree),
         ('6', Page::Zoom(Pane::Sources)),
         ('7', Page::Zoom(Pane::Body)),
-        ('8', Page::Zoom(Pane::Prs)),
+        ('8', Page::Zoom(Pane::Changes)),
     ];
     for (digit, page) in cases {
         assert_eq!(
@@ -310,8 +310,10 @@ fn every_mnemonic_parses_case_insensitively() {
         ("SRC", Page::Zoom(Pane::Sources)),
         ("BODY", Page::Zoom(Pane::Body)),
         ("WALL", Page::Wall),
-        ("PRS", Page::Zoom(Pane::Prs)),
-        ("pr", Page::Zoom(Pane::Prs)),
+        ("PRS", Page::Zoom(Pane::Changes)),
+        ("pr", Page::Zoom(Pane::Changes)),
+        ("CHG", Page::Zoom(Pane::Changes)),
+        ("changes", Page::Zoom(Pane::Changes)),
     ];
     for (line, page) in cases {
         assert_eq!(

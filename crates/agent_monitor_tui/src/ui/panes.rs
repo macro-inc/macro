@@ -1,5 +1,6 @@
 //! The numbered panes: 1 AGENTS, 2 TAPE, 3 SPEND, 4 FAILURES, 6 SOURCES,
-//! 7 BODY and 8 PRS, each drawn in a monitor grid cell or zoomed to a page.
+//! 7 BODY and 8 CHANGES (in `ui/changes`), each drawn in a monitor grid cell
+//! or zoomed to a page.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -37,7 +38,7 @@ pub fn draw(
         Pane::Failures => failures(frame, area, app, clock, focused),
         Pane::Sources => sources(frame, area, app, clock, focused),
         Pane::Body => body(frame, area, app, focused),
-        Pane::Prs => prs(frame, area, app, clock, focused),
+        Pane::Changes => super::changes::draw(frame, area, app, clock, focused, zoomed),
         Pane::Transcript | Pane::Children | Pane::AgentPrs => {}
     }
 }
@@ -453,87 +454,6 @@ pub fn pr_line(
 /// The PRS BRANCH column's width with its spacing; only wide panes show it.
 fn branch_width(width: usize) -> usize {
     if width >= 140 { 29 } else { 0 }
-}
-
-fn prs(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
-    let rows = app.view.sorted_prs(&app.filter);
-    let open = rows.iter().filter(|pr| !pr.state.is_final()).count();
-    let failing = rows
-        .iter()
-        .filter(|pr| pr.ci == CiState::Failed && !pr.state.is_final())
-        .count();
-    let mut extra = vec![count_span(format!("{open} OPEN · {} ALL", rows.len()))];
-    if failing > 0 {
-        extra.push(Span::styled(
-            format!(" ✕ {failing} FAILING "),
-            theme::bold(Token::Alert),
-        ));
-    }
-    if let Some(health) = app
-        .view
-        .sources
-        .get(&agent_monitor::domain::model::SourceKind::Github)
-        && let Some(every) = health.poll_every
-    {
-        extra.push(Span::styled(
-            format!(" ◷ {}s ", every.as_secs()),
-            theme::ink(Token::InfoDim),
-        ));
-    }
-    let block = theme::pane("8 PRS", extra, focused);
-    let inner = block.inner(area);
-    let width = usize::from(inner.width);
-    let height = usize::from(inner.height).saturating_sub(1);
-    let cursor = app.cursors.pr.min(rows.len().saturating_sub(1));
-    let skip = scroll(cursor, height);
-    let with_agent = width >= 64;
-
-    let agent_header = if with_agent { "AGENT           " } else { "" };
-    let branches = branch_width(width);
-    let branch_header = if branches > 0 {
-        format!(" {}", format::cell("BRANCH", branches - 1))
-    } else {
-        String::new()
-    };
-    let title_width = width
-        .saturating_sub(2 + 7 + 11 + 5 + 2 + 5 + 7 + branches + if with_agent { 15 } else { 0 })
-        .max(8);
-    let mut lines = vec![Line::from(Span::styled(
-        format::cell(
-            &format!(
-                "  {}{}{}{branch_header}{}{agent_header}REV    AGE STATE",
-                format::cell("PR", 7),
-                format::cell("REPO", 11),
-                format::cell("TITLE", title_width),
-                if with_agent { " " } else { "" },
-            ),
-            width,
-        ),
-        theme::bold(Token::Rule),
-    ))];
-    lines.extend(
-        rows.iter()
-            .enumerate()
-            .skip(skip)
-            .take(height)
-            .map(|(index, pr)| {
-                pr_line(
-                    app,
-                    clock,
-                    pr,
-                    width,
-                    with_agent,
-                    focused && index == cursor,
-                )
-            }),
-    );
-    if rows.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  no pull requests yet: agents' gh pr create and managers' prs files show here",
-            theme::ink(Token::Rule),
-        )));
-    }
-    frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 /// A tape kind's short tag and colour.

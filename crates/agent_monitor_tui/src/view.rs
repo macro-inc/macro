@@ -1,6 +1,6 @@
-//! The viewer's mirror of the collector: agents, the tape, totals and source
-//! health, updated by [`ViewState::apply`] with a dirty flag, plus the open
-//! agent's transcript.
+//! The viewer's mirror of the collector: agents, the tape, totals, source
+//! health, pull requests and repository graphs, updated by
+//! [`ViewState::apply`] with a dirty flag, plus the open agent's transcript.
 
 #[cfg(test)]
 mod test;
@@ -10,8 +10,9 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use chrono::TimeDelta;
 
 use agent_monitor::domain::model::{
-    Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity, Snapshot, SourceHealth,
-    SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem, Update, UpdateKind,
+    Agent, AgentId, AgentKind, CiState, Cost, Lane, LaneBase, Mergeable, Oid, Pr, PrId, PrState,
+    RepoGraph, RepoId, ReviewState, Severity, Snapshot, SourceHealth, SourceKind, Status,
+    TapeEvent, TapeKind, Timestamp, Totals, TranscriptItem, Update, UpdateKind,
 };
 
 use crate::body::BodyPane;
@@ -27,6 +28,9 @@ pub const FAILURE_WINDOW: TimeDelta = TimeDelta::hours(24);
 
 /// Transcript items kept for the open agent.
 pub const TRANSCRIPT_CAPACITY: usize = 400;
+
+/// How long a commit that arrived in a delta counts as fresh.
+pub const FRESH_FOR: TimeDelta = TimeDelta::seconds(30);
 
 /// The state of the link to the collector.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +93,12 @@ pub struct ViewState {
     pub sources: BTreeMap<SourceKind, SourceHealth>,
     /// Every pull request by id.
     pub prs: BTreeMap<PrId, Pr>,
+    /// Every repository graph by id.
+    pub repos: BTreeMap<RepoId, RepoGraph>,
+    /// Commits that arrived in a delta after the first snapshot, with when
+    /// they arrived (by the view's own clock, [`ViewState::now`], or the
+    /// commit's time if later), so the CHANGES page can animate landings.
+    pub fresh: HashMap<Oid, Timestamp>,
     /// The sequence number of the last update applied.
     pub seq: u64,
     /// The collector link.
@@ -112,6 +122,8 @@ impl ViewState {
             totals: Totals::default(),
             sources: BTreeMap::new(),
             prs: BTreeMap::new(),
+            repos: BTreeMap::new(),
+            fresh: HashMap::new(),
             seq: 0,
             link: Link::Connecting,
             heartbeat: None,
@@ -164,6 +176,10 @@ impl ViewState {
             UpdateKind::PrRemoved(id) => {
                 self.prs.remove(&id);
             }
+            UpdateKind::RepoUpsert(graph) => self.upsert_repo(graph),
+            UpdateKind::RepoRemoved(id) => {
+                self.repos.remove(&id);
+            }
             UpdateKind::Heartbeat(at) => {
                 self.heartbeat = Some(at);
                 return;
@@ -196,6 +212,31 @@ impl ViewState {
             .into_iter()
             .map(|pr| (pr.id.clone(), pr))
             .collect();
+        self.repos = snapshot
+            .repos
+            .into_iter()
+            .map(|graph| (graph.id.clone(), graph))
+            .collect();
+        // A (re)snapshot animates nothing.
+        self.fresh.clear();
+    }
+
+    /// Replaces a graph and marks the commits it gained as fresh.
+    fn upsert_repo(&mut self, graph: RepoGraph) {
+        if let Some(previous) = self.repos.get(&graph.id) {
+            let known: HashSet<&Oid> = graph_commits(previous).map(|commit| &commit.oid).collect();
+            let now = self.now();
+            for commit in graph_commits(&graph) {
+                if !known.contains(&commit.oid) {
+                    let arrived = now.map_or(commit.at, |now| now.max(commit.at));
+                    self.fresh.insert(commit.oid.clone(), arrived);
+                }
+            }
+            if let Some(newest) = self.fresh.values().max().copied() {
+                self.fresh.retain(|_, at| *at > newest - FRESH_FOR);
+            }
+        }
+        self.repos.insert(graph.id.clone(), graph);
     }
 
     fn push_tape(&mut self, event: TapeEvent) {
@@ -483,6 +524,226 @@ impl ViewState {
     }
 }
 
+/// Every commit a graph carries: the trunk's and each lane's.
+fn graph_commits(graph: &RepoGraph) -> impl Iterator<Item = &agent_monitor::domain::model::Commit> {
+    graph
+        .trunk
+        .commits
+        .iter()
+        .chain(graph.lanes.iter().flat_map(|lane| lane.commits.iter()))
+}
+
+/// How the CHANGES page orders lanes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LaneSort {
+    /// By fork, newest fork nearest the trunk, stacks kept together, so no
+    /// fork line crosses a lane.
+    #[default]
+    Fork,
+    /// Lanes needing attention first (failing CI, conflicts, changes
+    /// requested), then by fork; lines may cross.
+    Attention,
+}
+
+/// Why a lane wants a look, worst first; `None` when it does not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Attention {
+    /// Its pull request's CI failed.
+    Failing,
+    /// Its pull request conflicts with the base.
+    Conflicts,
+    /// A review asked for changes.
+    ChangesRequested,
+}
+
+impl ViewState {
+    /// The repositories in tab order: the most working agents, then the
+    /// newest commit.
+    pub fn repo_tabs(&self) -> Vec<&RepoGraph> {
+        let mut repos: Vec<&RepoGraph> = self.repos.values().collect();
+        repos.sort_by_key(|graph| {
+            let working = self
+                .repo_agents(graph)
+                .filter(|agent| agent.status == Status::Working)
+                .count();
+            let newest = graph
+                .lanes
+                .iter()
+                .filter_map(|lane| lane.tip().map(|tip| tip.at))
+                .max();
+            (
+                std::cmp::Reverse(working),
+                std::cmp::Reverse(newest),
+                graph.name.clone(),
+            )
+        });
+        repos
+    }
+
+    /// Every agent drawn in a repository: on the trunk or on a lane.
+    pub fn repo_agents<'a>(&'a self, graph: &'a RepoGraph) -> impl Iterator<Item = &'a Agent> + 'a {
+        graph
+            .trunk_agents
+            .iter()
+            .chain(graph.lanes.iter().flat_map(|lane| lane.agents.iter()))
+            .filter_map(|id| self.agents.get(id))
+    }
+
+    /// A lane's pull request, when the view holds it.
+    pub fn lane_pr(&self, lane: &Lane) -> Option<&Pr> {
+        lane.pr.as_ref().and_then(|id| self.prs.get(id))
+    }
+
+    /// The agent a lane opens: its first agent (the PR's author first).
+    pub fn lane_agent(&self, lane: &Lane) -> Option<&Agent> {
+        lane.agents.iter().find_map(|id| self.agents.get(id))
+    }
+
+    /// Whether any of a lane's agents is working now.
+    pub fn lane_working(&self, lane: &Lane) -> bool {
+        lane.agents
+            .iter()
+            .filter_map(|id| self.agents.get(id))
+            .any(|agent| agent.status == Status::Working)
+    }
+
+    /// Why a lane wants a look, if it does. A merged or closed pull
+    /// request wants nothing.
+    pub fn attention(&self, lane: &Lane) -> Option<Attention> {
+        let pr = self.lane_pr(lane).filter(|pr| !pr.state.is_final())?;
+        if pr.ci == CiState::Failed {
+            Some(Attention::Failing)
+        } else if pr.mergeable == Mergeable::Conflicting {
+            Some(Attention::Conflicts)
+        } else if pr.review == ReviewState::ChangesRequested {
+            Some(Attention::ChangesRequested)
+        } else {
+            None
+        }
+    }
+
+    /// The lanes of `graph` the page draws below the trunk, in `sort`
+    /// order. Landed lanes are left out: they arc above the trunk. The
+    /// filter matches branch, alias, agent name, PR number, title and state.
+    pub fn sorted_lanes<'a>(
+        &self,
+        graph: &'a RepoGraph,
+        filter: &Filter,
+        sort: LaneSort,
+    ) -> Vec<&'a Lane> {
+        let lanes: Vec<&Lane> = graph
+            .lanes
+            .iter()
+            .filter(|lane| lane.landed.is_none())
+            .filter(|lane| filter.matches_lane(lane, self.lane_pr(lane), |id| self.name_of(id)))
+            .collect();
+        let mut ordered = fork_order(&lanes);
+        if sort == LaneSort::Attention {
+            // A stable sort keeps fork order inside each class.
+            ordered.sort_by_key(|lane| self.attention(lane).map_or(3, |why| why as u8));
+        }
+        ordered
+    }
+
+    /// Pull requests of `graph`'s repository with no lane drawn for them:
+    /// opened elsewhere, or their branch is gone. Open ones first, newest first.
+    pub fn orphan_prs(&self, graph: &RepoGraph, filter: &Filter) -> Vec<&Pr> {
+        let Some(remote) = &graph.remote else {
+            return Vec::new();
+        };
+        let tied: HashSet<&PrId> = graph
+            .lanes
+            .iter()
+            .filter_map(|lane| lane.pr.as_ref())
+            .collect();
+        let mut prs: Vec<&Pr> = self
+            .prs
+            .values()
+            .filter(|pr| &pr.repo == remote && !tied.contains(&pr.id))
+            .filter(|pr| filter.matches_pr(pr, |id| self.name_of(id)))
+            .collect();
+        prs.sort_by(|a, b| {
+            a.state.is_final().cmp(&b.state.is_final()).then_with(|| {
+                b.updated_at
+                    .or(b.opened_at)
+                    .cmp(&a.updated_at.or(a.opened_at))
+            })
+        });
+        prs
+    }
+
+    /// Pull requests that belong to no repository the view maps, so the
+    /// CHANGES page still lists them.
+    pub fn unmapped_prs(&self, filter: &Filter) -> Vec<&Pr> {
+        let remotes: HashSet<_> = self
+            .repos
+            .values()
+            .filter_map(|graph| graph.remote.as_ref())
+            .collect();
+        self.sorted_prs(filter)
+            .into_iter()
+            .filter(|pr| !remotes.contains(&pr.repo))
+            .collect()
+    }
+}
+
+/// When a lane forked: its base commit's time, or for a stacked lane its
+/// oldest own commit's (or its tip's) time.
+pub fn fork_time(lane: &Lane) -> Option<Timestamp> {
+    match &lane.base {
+        LaneBase::Trunk { at, .. } => Some(*at),
+        LaneBase::Lane { .. } => lane.commits.last().map(|commit| commit.at),
+    }
+}
+
+/// Lanes in fork order: each stack is kept together (a lane right under
+/// the lane it is stacked on, siblings newest fork first), and stacks are
+/// ordered newest fork first, so the newest fork sits nearest the trunk and
+/// no fork line crosses a lane.
+pub fn fork_order<'a>(lanes: &[&'a Lane]) -> Vec<&'a Lane> {
+    let names: HashSet<&str> = lanes.iter().map(|lane| lane.branch.as_str()).collect();
+    let parent = |lane: &Lane| match &lane.base {
+        LaneBase::Lane { branch, .. } if names.contains(branch.as_str()) => Some(branch.clone()),
+        _ => None,
+    };
+    let newest_first = |a: &&Lane, b: &&Lane| {
+        fork_time(b)
+            .cmp(&fork_time(a))
+            .then_with(|| a.branch.cmp(&b.branch))
+    };
+    let mut roots: Vec<&Lane> = lanes
+        .iter()
+        .copied()
+        .filter(|lane| parent(lane).is_none())
+        .collect();
+    roots.sort_by(newest_first);
+    let mut ordered = Vec::with_capacity(lanes.len());
+    let mut stack: Vec<&Lane> = roots.into_iter().rev().collect();
+    while let Some(lane) = stack.pop() {
+        if ordered
+            .iter()
+            .any(|seen: &&Lane| seen.branch == lane.branch)
+        {
+            continue;
+        }
+        ordered.push(lane);
+        let mut children: Vec<&Lane> = lanes
+            .iter()
+            .copied()
+            .filter(|child| parent(child).as_deref() == Some(lane.branch.as_str()))
+            .collect();
+        children.sort_by(newest_first);
+        stack.extend(children.into_iter().rev());
+    }
+    // A cycle of stacks (never from git) still lists every lane.
+    for lane in lanes {
+        if !ordered.iter().any(|seen| seen.branch == lane.branch) {
+            ordered.push(lane);
+        }
+    }
+    ordered
+}
+
 /// Row filtering: command-line words (each must match the kind, the status,
 /// or part of the name, task or program) and a find query (part of the
 /// name, task, doing or tape text).
@@ -556,6 +817,31 @@ impl Filter {
         .chain(pr.agents.iter().map(&name_of))
         .map(|text| text.to_lowercase())
         .collect::<Vec<_>>();
+        let has = |needle: &str| haystack.iter().any(|text| text.contains(needle));
+        self.words.iter().all(|word| has(word)) && (self.find.is_empty() || has(&self.find))
+    }
+
+    /// Whether a lane shows: every word and the find query must match its
+    /// branch, an alias, an agent's name, or its pull request's number,
+    /// title or state.
+    pub fn matches_lane(
+        &self,
+        lane: &Lane,
+        pr: Option<&Pr>,
+        name_of: impl Fn(&AgentId) -> String,
+    ) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+        let mut haystack: Vec<String> = vec![lane.branch.clone()];
+        haystack.extend(lane.aliases.iter().cloned());
+        haystack.extend(lane.agents.iter().map(&name_of));
+        if let Some(pr) = pr {
+            haystack.push(format!("#{}", pr.number));
+            haystack.push(pr.title.clone().unwrap_or_default());
+            haystack.push(pr_state_word(pr.state).to_owned());
+        }
+        let haystack: Vec<String> = haystack.iter().map(|text| text.to_lowercase()).collect();
         let has = |needle: &str| haystack.iter().any(|text| text.contains(needle));
         self.words.iter().all(|word| has(word)) && (self.find.is_empty() || has(&self.find))
     }

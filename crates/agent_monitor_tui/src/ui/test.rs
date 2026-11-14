@@ -131,18 +131,55 @@ fn tree_200x56() {
 }
 
 #[test]
-fn prs_page_200x56_and_enter_drills_into_the_author() {
+fn changes_240x45() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    insta::assert_snapshot!(render(&mut app, 240, 45));
+}
+
+#[test]
+fn changes_200x56() {
     let mut app = app();
     app.key(Key::Char('8'));
     insta::assert_snapshot!(render(&mut app, 200, 56));
+}
 
-    // Failing CI sorts first: the demo's ui-pages PR at this step.
-    let first = app.view.sorted_prs(&app.filter)[0].clone();
-    assert_eq!(first.ci, agent_monitor::domain::model::CiState::Failed);
+#[test]
+fn changes_narrow_100x30() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    insta::assert_snapshot!(render(&mut app, 100, 30));
+}
+
+#[test]
+fn changes_compact_80x24() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    insta::assert_snapshot!(render(&mut app, 80, 24));
+}
+
+#[test]
+fn changes_failing_lane_selected_and_enter_drills_into_the_author() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    // `n` jumps to the lane whose CI fails: the demo's ui-pages at this step.
+    app.key(Key::Char('n'));
+    insta::assert_snapshot!(render(&mut app, 240, 45));
     app.key(Key::Enter);
-    let author = first.author_agent.expect("the demo PR has an author");
-    assert_eq!(*app.page(), Page::Agent(author.clone()));
+    let Page::Agent(author) = app.page().clone() else {
+        panic!("Enter opens the lane's agent");
+    };
     assert_eq!(app.view.name_of(&author), "ui-pages");
+}
+
+#[test]
+fn lane_detail_200x56() {
+    let mut app = app();
+    app.key(Key::Char('8'));
+    app.key(Key::Char('n'));
+    app.key(Key::Char('p'));
+    assert!(matches!(app.page(), Page::Lane(..)));
+    insta::assert_snapshot!(render(&mut app, 200, 56));
 }
 
 #[test]

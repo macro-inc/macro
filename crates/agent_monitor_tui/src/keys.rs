@@ -8,7 +8,7 @@ mod test;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tui_input::{Input, InputRequest};
 
-use agent_monitor::domain::model::AgentId;
+use agent_monitor::domain::model::{AgentId, RepoId};
 
 /// A key the viewer reacts to, decoded from a terminal event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,6 +89,8 @@ pub enum Page {
     Wall,
     /// One agent's drill-in.
     Agent(AgentId),
+    /// One lane of the CHANGES page: its commits, pull request and agents.
+    Lane(RepoId, String),
 }
 
 impl Page {
@@ -101,11 +103,11 @@ impl Page {
                 Pane::Spend,
                 Pane::Sources,
                 Pane::Tape,
-                Pane::Prs,
+                Pane::Changes,
                 Pane::Failures,
             ],
             Page::Agent(_) => &[Pane::Transcript, Pane::Children, Pane::AgentPrs],
-            Page::Zoom(_) | Page::Tree | Page::Wall => &[],
+            Page::Zoom(_) | Page::Tree | Page::Wall | Page::Lane(..) => &[],
         }
     }
 
@@ -115,7 +117,7 @@ impl Page {
             Page::Monitor => Some(Pane::Agents),
             Page::Zoom(pane) => Some(*pane),
             Page::Agent(_) => Some(Pane::Transcript),
-            Page::Tree | Page::Wall => None,
+            Page::Tree | Page::Wall | Page::Lane(..) => None,
         }
     }
 
@@ -130,7 +132,7 @@ impl Page {
             '5' => Page::Tree,
             '6' => Page::Zoom(Pane::Sources),
             '7' => Page::Zoom(Pane::Body),
-            '8' => Page::Zoom(Pane::Prs),
+            '8' => Page::Zoom(Pane::Changes),
             _ => return None,
         };
         Some(page)
@@ -152,8 +154,8 @@ pub enum Pane {
     Sources,
     /// 7 BODY.
     Body,
-    /// 8 PRS.
-    Prs,
+    /// 8 CHANGES: the git graph agents commit to, with pull requests on it.
+    Changes,
     /// The drill-in's transcript tail.
     Transcript,
     /// The drill-in's children list.
@@ -208,7 +210,7 @@ impl Command {
             "SRC" => Page::Zoom(Pane::Sources),
             "BODY" => Page::Zoom(Pane::Body),
             "WALL" => Page::Wall,
-            "PRS" | "PR" => Page::Zoom(Pane::Prs),
+            "CHG" | "CHANGES" | "PRS" | "PR" => Page::Zoom(Pane::Changes),
             _ => return None,
         };
         let filter = words.map(str::to_lowercase).collect();
@@ -318,6 +320,59 @@ pub enum Action {
     ToggleAll,
     /// Switch to the next colour theme.
     CycleTheme,
+    /// A CHANGES page key.
+    Changes(ChangeKey),
+}
+
+/// What a key does on the CHANGES page, beyond moving and opening.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChangeKey {
+    /// `+`: finer time buckets.
+    ZoomIn,
+    /// `-`: coarser time buckets.
+    ZoomOut,
+    /// `<`: look earlier.
+    Earlier,
+    /// `>`: look later.
+    Later,
+    /// `Home`: back to now.
+    Now,
+    /// `[`: the previous repository.
+    PrevRepo,
+    /// `]`: the next repository.
+    NextRepo,
+    /// `n`: the next lane needing attention.
+    NextAttention,
+    /// `N`: the previous lane needing attention.
+    PrevAttention,
+    /// `m`: show or hide landed lanes.
+    ToggleLanded,
+    /// `s`: fork order or attention first.
+    Sort,
+    /// `p`: the lane's detail page.
+    OpenLane,
+}
+
+impl ChangeKey {
+    /// The CHANGES key `key` is, if any.
+    fn of(key: Key) -> Option<ChangeKey> {
+        let change = match key {
+            Key::Char('+' | '=') => ChangeKey::ZoomIn,
+            Key::Char('-' | '_') => ChangeKey::ZoomOut,
+            Key::Char('<' | ',') => ChangeKey::Earlier,
+            Key::Char('>' | '.') => ChangeKey::Later,
+            Key::Home => ChangeKey::Now,
+            Key::Char('[') => ChangeKey::PrevRepo,
+            Key::Char(']') => ChangeKey::NextRepo,
+            Key::Char('n') => ChangeKey::NextAttention,
+            Key::Char('N') => ChangeKey::PrevAttention,
+            Key::Char('m') => ChangeKey::ToggleLanded,
+            Key::Char('s') => ChangeKey::Sort,
+            Key::Char('p') => ChangeKey::OpenLane,
+            _ => return None,
+        };
+        Some(change)
+    }
 }
 
 /// The next state and action for `key` in `mode` on `page`.
@@ -344,6 +399,13 @@ fn step_base(base: Base, key: Key, page: &Page) -> (Mode, Action) {
         Base::Idle => page.default_pane(),
     };
     let stay = Mode::Base(base);
+
+    // The CHANGES page claims a few keys that elsewhere start a command.
+    if *page == Page::Zoom(Pane::Changes)
+        && let Some(change) = ChangeKey::of(key)
+    {
+        return (stay, Action::Changes(change));
+    }
 
     match key {
         Key::Esc => match base {
