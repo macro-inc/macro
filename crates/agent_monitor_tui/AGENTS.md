@@ -23,8 +23,17 @@ times a second, and ticks at `fps` only while something animates.
   spend, PRs: failing CI first). Spend by kind is the collector's split of
   today (`Totals::spend_by_kind`), never a sum of rows' lifetime costs, so it adds up to the day total.
 - `src/ui.rs`: layout and its width breakpoints; panes and pages live in `src/ui/`.
-  8 PRS (`ui/panes.rs` `prs`/`pr_line`) shares the lower right with
-  FAILURES; agent rows carry a PR badge and the drill-in lists the agent's PRs.
+  8 CHANGES (`ui/changes.rs`) shares the lower right with FAILURES; agent
+  rows carry a PR badge and the drill-in lists the agent's PRs (`pr_line`).
+- `src/ui/changes/`: the CHANGES page. `layout.rs` is pure (time buckets to
+  columns, lanes to rows in fork order, fork lines, arcs packed above the
+  trunk) and returns a `Scene` the unit tests check; `draw.rs` paints it
+  with tokens (map, board, inspector); `compact.rs` is the list for the
+  monitor grid and widths under 100; `lane.rs` is a lane's page (`p`). Lane
+  order, attention and orphan PRs are `view.rs` (`sorted_lanes`,
+  `fork_order`, `attention`, `orphan_prs`); its cursor (`ChangesCursor`,
+  kept by branch and commit id) and keys (`Action::Changes`) are in
+  `app.rs`.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
 - `src/theme.rs`: the design tokens (`Token`, a colour role such as `Alert`
   or `Rule`), the `Theme` that colours them, and the HUD dressing: bracket
@@ -64,7 +73,16 @@ times a second, and ticks at `fps` only while something animates.
 ## Gotchas
 
 - Snapshot tests use `agent_monitor::outbound::demo::snapshot` at a fixed clock
-  and UTC offset; never render with the system clock in a test.
+  and UTC offset; never render with the system clock in a test. CHANGES has
+  `changes_240x45`, `changes_200x56`, `changes_narrow_100x30`,
+  `changes_compact_80x24`, a failing lane selected and `lane_detail_200x56`.
+- CHANGES colours lanes by state (working `Ok`, failing CI `Alert`, CI
+  running `Highlight`, idle `TextDim`), never by agent; identity is the
+  board's tag. The map's now is quantised to its bucket, so it moves one
+  column when a bucket ends, and commits glitch only when a delta brings
+  them (`ViewState::fresh`), never after a snapshot.
+- On the CHANGES page `+ - < > [ ] n N m s p` and Home are page keys
+  (`keys::ChangeKey`); elsewhere letters still start the command line.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
 - Keep the key machine pure: no I/O or view state in `keys.rs`; page-specific
