@@ -27,6 +27,12 @@
 //! window held every thread left in the inboxes (a list's last page);
 //! otherwise the superset stream reads it.
 //!
+//! The address tree must be the filter's only top-level term with a message
+//! literal. Another one (a subject, or an address under `NOT`) can drop most
+//! of the inbox window in the pick, so the window comes up short and the
+//! superset stream reads the page again, slower than the general builder,
+//! which reads those requests.
+//!
 //! The general builder lists a thread only when it matches through the queried
 //! inboxes' own contacts (`matching_threads`), while its preview pick matches a
 //! domain or partial address on any inbox's contact. A message lists only its
@@ -45,7 +51,8 @@ use uuid::Uuid;
 use super::super::SqlFragment;
 use super::super::filters::{
     AddressSuperset, ContactScope, build_address_superset, build_contact_scope,
-    build_thread_conjunct_filter, get_sort_timestamp_field, top_level_owners,
+    build_thread_conjunct_filter, get_sort_timestamp_field, only_address_message_terms,
+    top_level_owners,
 };
 use super::{
     QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select_with,
@@ -144,7 +151,10 @@ impl<'a> OwnedRead<'a> {
         tuning: OwnedReadTuning,
     ) -> Result<Self, Box<QueryParams>> {
         // A top-level subject term has its own ordered subscan in the
-        // general builder.
+        // general builder. Any other message term beside the addresses can
+        // drop most of the inbox window in the preview pick, which the probe
+        // can't foresee: the read would walk the window and then read the
+        // superset, slower than the general builder's one statement.
         let covered = matches!(
             view,
             PreviewView::StandardLabel(PreviewViewStandardLabel::All)
@@ -152,7 +162,8 @@ impl<'a> OwnedRead<'a> {
             && !uses_view_history(email_filter, &params.sort_method_str)
             && matches!(params.shared, SharedEmailFilter::Exclude)
             && params.project_scope.is_none()
-            && !uses_subject_subscans(view, email_filter);
+            && !uses_subject_subscans(view, email_filter)
+            && only_address_message_terms(email_filter);
         if !covered {
             return Err(Box::new(params));
         }

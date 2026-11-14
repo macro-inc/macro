@@ -505,7 +505,8 @@ async fn facets_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Negated facets, and a term that mixes a message term with a thread term.
+/// Negated facets read in page order; a message term beside the addresses,
+/// alone or mixed with a thread term, goes to the general builder.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_owned_address_read"))
@@ -532,7 +533,16 @@ async fn negated_and_mixed_terms_match(pool: Pool<Postgres>) -> anyhow::Result<(
             Expr::Literal(EmailLiteral::Importance(true)),
         ),
     );
-    let rows = assert_parity(&pool, &both, &subject_or_signal, 9).await?;
+    // A message term beside the addresses goes to the general builder.
+    let rows = assert_general(&pool, &both, &subject_or_signal, 9).await?;
+    assert!(rows > 50, "{rows}");
+    let not_subject = Expr::and(
+        dense.clone(),
+        Expr::is_not(Expr::Literal(EmailLiteral::Subject(
+            SubjectQuery::try_from("Subject 1".to_owned())?,
+        ))),
+    );
+    let rows = assert_general(&pool, &both, &not_subject, 9).await?;
     assert!(rows > 50, "{rows}");
     Ok(())
 }

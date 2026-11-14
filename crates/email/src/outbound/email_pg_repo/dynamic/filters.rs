@@ -1083,6 +1083,17 @@ fn own_contacts(links: &[Uuid]) -> SqlFragment {
     f
 }
 
+/// True when the tree's only top-level term with a message literal is its
+/// address conjunct, so the preview pick drops a streamed thread only when
+/// none of its messages the view shows involve the addresses.
+pub(super) fn only_address_message_terms(ast: &Expr<EmailLiteral>) -> bool {
+    top_level_conjuncts(ast)
+        .into_iter()
+        .filter(|term| has_message_literals(term))
+        .count()
+        == 1
+}
+
 /// The inboxes named by top-level `Owner` conjuncts: a thread outside any
 /// of them can't match the tree.
 pub(super) fn top_level_owners(ast: &Expr<EmailLiteral>) -> Vec<Uuid> {
