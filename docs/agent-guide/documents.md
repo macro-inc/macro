@@ -90,12 +90,13 @@ focus waits for native completion and rechecks disposal/editability before
 browser focus. These checks do not establish slash-menu or full document-app acceptance.
 
 For native body `@` mentions, compare the People, Documents, Agents, & Tasks,
-and Channels sections with Off using the same account and search. Check section
-order, row order, View all and paging. Pick a document, task and channel by both
-keyboard and pointer; the literal search must disappear and the referenced
-mention must render at the current caret after tracking completes. The native
-document/channel provider activation does not qualify group, booking, contact or
-agent-session insertion kinds. For native dates, pick the same date-provider row
+Channels and Recent agent sessions sections with Off using the same account and
+search. Check section order, row order, View all and paging. Pick a document,
+task, channel and agent session by both keyboard and pointer; the literal search
+must disappear and the referenced mention must render at the current caret after
+tracking completes. Native does not yet offer booking link, contact or company,
+email or calendar-event mentions. Groups such as `@here` appear only in channel
+composers, in both engines. For native dates, pick the same date-provider row
 by keyboard and pointer in both engines. Check that search removal precedes
 insertion, that the displayed date matches the selected row, and that subsequent
 typing uses the current caret. Compare the raw date and display-format fields,
