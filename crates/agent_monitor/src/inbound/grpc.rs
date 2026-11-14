@@ -1,7 +1,8 @@
 //! The gRPC server over a user-only Unix socket.
 
+use std::fs::File;
 use std::io;
-use std::os::unix::fs::{DirBuilderExt as _, PermissionsExt as _};
+use std::os::unix::fs::{DirBuilderExt as _, FileTypeExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -9,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use futures::{Stream, StreamExt as _};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::UnixListener;
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::{ReceiverStream, UnixListenerStream};
 use tokio_util::sync::CancellationToken;
@@ -31,9 +32,15 @@ const DEFAULT_TAIL: usize = 200;
 /// Why the socket could not be bound.
 #[derive(Debug, thiserror::Error)]
 pub enum BindError {
-    /// Another collector already answers on the socket.
+    /// Another collector already holds the socket.
     #[error("another collector already serves {0}")]
     AlreadyServed(PathBuf),
+    /// The socket's directory is readable or writable by other users.
+    #[error("{0} must be private to its owner (mode 0700)")]
+    SharedDirectory(PathBuf),
+    /// Something other than a socket is at the socket's path.
+    #[error("{0} exists and is not a socket")]
+    NotASocket(PathBuf),
     /// The socket or its directory could not be created.
     #[error("cannot bind the monitor socket: {0}")]
     Io(#[from] io::Error),
@@ -47,38 +54,71 @@ pub enum ServeError {
     Transport(#[from] tonic::transport::Error),
 }
 
-/// Binds the monitor socket: its directory is created user-only (0700) when
-/// missing and the socket is user-only (0600). A socket file nobody answers on
-/// is stale and replaced; a live one means another collector serves the
-/// machine.
-pub async fn bind(path: &Path) -> Result<UnixListener, BindError> {
-    if let Some(directory) = path.parent()
-        && !directory.as_os_str().is_empty()
-    {
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(directory)?;
+/// A bound monitor socket and the lock that makes this process its only
+/// server. The lock is released when this is dropped.
+#[derive(Debug)]
+pub struct BoundSocket {
+    listener: UnixListener,
+    _lock: File,
+}
+
+/// Binds the monitor socket. Its directory is created user-only (0700) when
+/// missing and must not be open to other users when present. An exclusive
+/// lock on `<socket>.lock` makes one collector per socket: a second one gets
+/// [`BindError::AlreadyServed`], and a socket file left by a collector that
+/// died is replaced.
+pub fn bind(path: &Path) -> Result<BoundSocket, BindError> {
+    let directory = match path.parent() {
+        Some(directory) if !directory.as_os_str().is_empty() => directory,
+        _ => Path::new("."),
+    };
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(directory)?;
+    let mode = std::fs::metadata(directory)?.permissions().mode();
+    if mode & 0o077 != 0 {
+        return Err(BindError::SharedDirectory(directory.to_owned()));
     }
 
-    if path.exists() {
-        if UnixStream::connect(path).await.is_ok() {
+    let mut lock_path = path.as_os_str().to_owned();
+    lock_path.push(".lock");
+    let lock = File::options()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(PathBuf::from(lock_path))?;
+    match lock.try_lock() {
+        Ok(()) => {}
+        Err(std::fs::TryLockError::WouldBlock) => {
             return Err(BindError::AlreadyServed(path.to_owned()));
         }
-        std::fs::remove_file(path)?;
+        Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
+    }
+
+    // Holding the lock, anything left at the path is a dead collector's socket.
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_socket() => std::fs::remove_file(path)?,
+        Ok(_) => return Err(BindError::NotASocket(path.to_owned())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
 
     let listener = UnixListener::bind(path)?;
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    Ok(listener)
+    Ok(BoundSocket {
+        listener,
+        _lock: lock,
+    })
 }
 
-/// Serves the monitor on `listener` until `cancel` fires.
+/// Serves the monitor on `socket` until `cancel` fires.
 pub async fn serve(
-    listener: UnixListener,
+    socket: BoundSocket,
     service: MonitorService,
     cancel: CancellationToken,
 ) -> Result<(), ServeError> {
+    let BoundSocket { listener, _lock } = socket;
     tonic::transport::Server::builder()
         .add_service(wire::agent_monitor_server::AgentMonitorServer::new(service))
         .serve_with_incoming_shutdown(UnixListenerStream::new(listener), cancel.cancelled_owned())
@@ -216,7 +256,7 @@ impl wire::agent_monitor_server::AgentMonitor for MonitorService {
                         item = items.next() => item,
                     };
                     let Some(item) = item else { break };
-                    if sender.send(Ok((&item).into())).await.is_err() {
+                    if !send_or_cancel(&sender, Ok((&item).into()), &cancel).await {
                         break;
                     }
                     sent += 1;
@@ -257,11 +297,7 @@ async fn forward_updates(
     if let crate::domain::model::UpdateKind::Snapshot(snapshot) = &subscription.snapshot.kind {
         tracing::Span::current().record("agents", snapshot.agents.len());
     }
-    if sender
-        .send(Ok(subscription.snapshot.as_ref().into()))
-        .await
-        .is_err()
-    {
+    if !send_or_cancel(&sender, Ok(subscription.snapshot.as_ref().into()), &cancel).await {
         return lagged;
     }
 
@@ -273,15 +309,33 @@ async fn forward_updates(
         };
         let update = match received {
             Ok(update) => update,
-            Err(broadcast::error::RecvError::Lagged(_)) => {
+            Err(broadcast::error::RecvError::Lagged(missed)) => {
                 lagged += 1;
+                tracing::warn!(
+                    missed,
+                    "monitor subscriber fell behind; sending a fresh snapshot"
+                );
                 subscription = store.subscribe();
                 subscription.snapshot.clone()
             }
             Err(broadcast::error::RecvError::Closed) => return lagged,
         };
-        if sender.send(Ok(update.as_ref().into())).await.is_err() {
+        if !send_or_cancel(&sender, Ok(update.as_ref().into()), &cancel).await {
             return lagged;
         }
+    }
+}
+
+/// Sends one item, giving up when the viewer is gone or the collector stops,
+/// so a viewer that stopped reading never holds up shutdown. Returns whether
+/// the item was sent.
+async fn send_or_cancel<T>(
+    sender: &mpsc::Sender<Result<T, tonic::Status>>,
+    item: Result<T, tonic::Status>,
+    cancel: &CancellationToken,
+) -> bool {
+    tokio::select! {
+        () = cancel.cancelled() => false,
+        sent = sender.send(item) => sent.is_ok(),
     }
 }

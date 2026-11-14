@@ -45,7 +45,8 @@ pub struct StoreConfig {
     /// How often time-driven state (activity minutes, recency, totals,
     /// source health) is recomputed.
     pub tick: Duration,
-    /// How often an idle store publishes a heartbeat.
+    /// How often the store publishes a heartbeat, so viewers can tell a
+    /// quiet collector from a stalled one.
     pub heartbeat: Duration,
     /// Transcript records older than this do not become tape lines, so a
     /// startup index does not flood the tape.
@@ -294,8 +295,9 @@ struct Reducer {
     health: BTreeMap<SourceKind, SourceHealth>,
     last_event: BTreeMap<SourceKind, Timestamp>,
     published_health: BTreeMap<SourceKind, SourceHealth>,
-    /// Open tool calls' names by id, so a failure line can name its tool.
-    tool_names: HashMap<String, String>,
+    /// Recent open tool calls' names by transcript and call id, so a failure
+    /// line can name its tool.
+    tool_names: HashMap<(FactKey, String), String>,
 }
 
 impl Reducer {
@@ -384,13 +386,33 @@ impl Reducer {
             return;
         }
 
+        let is_reset = matches!(observation.change, Change::Reset(_));
+        if let Change::Remove(key) = &observation.change {
+            self.tool_names.retain(|(owner, _), _| owner != key);
+        }
+        if is_reset {
+            self.tool_names.clear();
+        }
+
         let events = self.facts.apply(observation, now);
-        self.pending_events.extend(events);
+        // A reset re-sends what a source already reported (a restart re-reads
+        // its files), so its records are counted but not written to the tape again.
+        if !is_reset {
+            self.pending_events.extend(events);
+        }
     }
 
     /// Rebuilds every agent, diffs against the published rows, and publishes
     /// the changed rows and the tape lines they imply.
     fn reduce(&mut self) {
+        let span = tracing::debug_span!(
+            "macrod.monitor.store.reduce",
+            agents = tracing::field::Empty,
+            upserts = tracing::field::Empty,
+            removed = tracing::field::Empty,
+            tape = tracing::field::Empty,
+        );
+        let _entered = span.enter();
         let now = self.clock.now();
         let built = build_agents(&self.facts, now);
         let recent = now - self.shared.config.tape_recent;
@@ -439,6 +461,15 @@ impl Reducer {
             tape.extend(tape_line);
         }
 
+        let upserts = updates
+            .iter()
+            .filter(|update| matches!(update, UpdateKind::Upsert(_)))
+            .count();
+        span.record("agents", built.agents.len());
+        span.record("upserts", upserts);
+        span.record("removed", updates.len() - upserts);
+        span.record("tape", tape.len());
+
         updates.extend(tape.into_iter().map(UpdateKind::Event));
         self.shared.publish(updates);
         self.published = built.agents;
@@ -450,6 +481,11 @@ impl Reducer {
         event: FactEvent,
         recent: Timestamp,
     ) -> Option<TapeEvent> {
+        // Older records (a startup index) are counted but write no tape line.
+        if event.at < recent {
+            return None;
+        }
+
         let (kind, text, severity) = match event.kind {
             TranscriptEventKind::TurnStart => (
                 TapeKind::TurnStart,
@@ -464,11 +500,11 @@ impl Reducer {
                     Some(gist) => format!("{name} {gist}"),
                     None => name.clone(),
                 };
-                self.tool_names.insert(id, name);
+                self.tool_names.insert((event.key.clone(), id), name);
                 (TapeKind::ToolStart, text, Severity::Info)
             }
             TranscriptEventKind::ToolEnd { id, is_error } => {
-                let name = self.tool_names.remove(&id);
+                let name = self.tool_names.remove(&(event.key.clone(), id));
                 if !is_error {
                     return None;
                 }
@@ -481,9 +517,6 @@ impl Reducer {
             TranscriptEventKind::Usage(_) | TranscriptEventKind::Cost(_) => return None,
         };
 
-        if event.at < recent {
-            return None;
-        }
         let agent = owners.get(&event.key)?;
         Some(line(event.at, agent, kind, text, severity))
     }

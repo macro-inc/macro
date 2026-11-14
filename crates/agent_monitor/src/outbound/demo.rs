@@ -21,6 +21,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use crate::domain::clock::Clock;
 use crate::domain::model::{
@@ -120,10 +121,20 @@ impl AgentSource for DemoSource {
                 _ = ticker.tick() => {}
             }
             let step = fleet.step(self.clock.now());
+            let span = tracing::debug_span!(
+                "macrod.monitor.source.batch",
+                source = SourceKind::Demo.name(),
+                observations = step.changes.len(),
+            );
             self.transcripts.append(step.items);
-            for change in step.changes {
-                send(&out, change).await?;
+            async {
+                for change in step.changes {
+                    send(&out, change).await?;
+                }
+                Ok::<(), SourceError>(())
             }
+            .instrument(span)
+            .await?;
         }
     }
 }
@@ -1032,11 +1043,23 @@ impl DemoFleet {
                     Phase::Blocked
                 } else {
                     let started = self.tool_start(now);
-                    if started.name == "Task" {
+                    if started.name == "Task" && self.agents[index].program == Program::Claude {
+                        // One subagent per agent at a time: a new one replaces the last.
+                        let agent = &mut self.agents[index];
+                        for previous in std::mem::take(&mut agent.subagents) {
+                            if let Some(key) = agent.transcript_key() {
+                                step.changes.push(Change::Remove(FactKey::Transcript(
+                                    TranscriptKey {
+                                        subagent: Some(previous),
+                                        ..key
+                                    },
+                                )));
+                            }
+                        }
                         let subagent = format!("agent-{}", started.id);
-                        let delta = self.agents[index].subagent_delta(&subagent, now);
+                        let delta = agent.subagent_delta(&subagent, now);
                         step.changes.push(Change::Upsert(Fact::Transcript(delta)));
-                        self.agents[index].subagents.push(subagent);
+                        agent.subagents.push(subagent);
                     }
                     events.push(started.event);
                     step.items.push((path, started.item));

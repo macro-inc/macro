@@ -50,6 +50,8 @@ subscriber gets a fresh snapshot.
 - `Change::Reset` replaces every fact filed under its `SourceKind`, so each
   adapter needs its own kind.
 - Socket paths must fit `SUN_LEN` (about 100 bytes); deep temp dirs fail to bind.
+- One collector per socket is enforced by a lock on `<socket>.lock` held for the
+  server's life (`inbound::grpc::BoundSocket`), not by probing the socket.
 - Store tests use `#[tokio::test(start_paused = true)]`; the coalescing window
   and tick then advance without sleeping.
 - Sources never build `Agent`s and never decode another source's facts; label

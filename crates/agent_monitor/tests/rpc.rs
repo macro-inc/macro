@@ -59,7 +59,7 @@ impl Collector {
             );
         }
 
-        let listener = bind(&socket).await.expect("the socket binds");
+        let listener = bind(&socket).expect("the socket binds");
         let service = MonitorService::new(
             store.clone(),
             Arc::new(transcripts),
@@ -328,4 +328,31 @@ async fn the_viewers_trace_context_parents_the_subscribe_span() {
         .find(|span| span.name == "macrod.monitor.rpc.subscribe")
         .expect("the subscribe span was exported");
     assert_eq!(subscribe.span_context.trace_id(), trace_id);
+}
+
+#[tokio::test]
+async fn one_collector_binds_a_socket_and_a_dead_ones_socket_is_replaced() {
+    use agent_monitor::inbound::grpc::BindError;
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let run = directory.path().join("run");
+    let socket = run.join("monitor.sock");
+
+    let first = bind(&socket).expect("the first collector binds");
+    assert!(matches!(bind(&socket), Err(BindError::AlreadyServed(_))));
+
+    // A collector that dies leaves its socket file behind.
+    drop(first);
+    assert!(socket.exists());
+    let second = bind(&socket).expect("a dead collector's socket is replaced");
+    drop(second);
+
+    std::fs::remove_file(&socket).expect("the socket file is removable");
+    std::fs::write(&socket, "not a socket").expect("a plain file");
+    assert!(matches!(bind(&socket), Err(BindError::NotASocket(_))));
+
+    std::fs::set_permissions(&run, std::fs::Permissions::from_mode(0o755))
+        .expect("the directory mode changes");
+    assert!(matches!(bind(&socket), Err(BindError::SharedDirectory(_))));
 }

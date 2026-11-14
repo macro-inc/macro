@@ -104,7 +104,7 @@ mod unix {
             );
         }
 
-        let listener = bind(&socket).await?;
+        let listener = bind(&socket)?;
         let service = MonitorService::new(
             store,
             Arc::new(transcripts),

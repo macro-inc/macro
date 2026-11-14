@@ -30,30 +30,32 @@ where
             let started = tokio::time::Instant::now();
             let source = make();
             let kind = source.kind();
-            let span =
-                tracing::info_span!("macrod.monitor.source.run", source = kind.name(), restarts);
-            let result = source
-                .run(observations.clone(), cancel.child_token())
-                .instrument(span)
-                .await;
+            // No span around the run: it lasts the source's whole life. Adapters
+            // open `macrod.monitor.source.batch` per batch; a restart gets its own span.
+            let result = source.run(observations.clone(), cancel.child_token()).await;
 
-            if cancel.is_cancelled() {
+            if cancel.is_cancelled() || matches!(result, Err(SourceError::StoreClosed)) {
                 return;
             }
-            let detail = match result {
-                Err(SourceError::StoreClosed) => return,
-                Ok(()) => String::from("stopped"),
-                Err(SourceError::Internal(report)) => {
-                    tracing::warn!(source = kind.name(), error = ?report, "monitor source failed");
-                    String::from("failed; restarting")
-                }
-            };
-
             restarts += 1;
             // A source that ran for a while before failing starts its backoff over.
             if started.elapsed() > MAX_BACKOFF {
                 backoff = FIRST_BACKOFF;
             }
+            let span = tracing::info_span!(
+                "macrod.monitor.source.restart",
+                source = kind.name(),
+                restarts,
+                backoff_ms = u64::try_from(backoff.as_millis()).unwrap_or(u64::MAX),
+            );
+            let detail = match result {
+                Err(SourceError::Internal(report)) => {
+                    tracing::warn!(parent: &span, source = kind.name(), error = ?report, "monitor source failed");
+                    String::from("failed; restarting")
+                }
+                Ok(()) | Err(SourceError::StoreClosed) => String::from("stopped"),
+            };
+
             let health = SourceHealth {
                 state: SourceState::Unhealthy,
                 detail: Some(detail),
@@ -65,6 +67,7 @@ where
                     source: kind,
                     change: Change::Health(health),
                 })
+                .instrument(span)
                 .await;
             if reported.is_err() {
                 return;
