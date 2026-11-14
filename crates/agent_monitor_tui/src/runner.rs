@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::Instrument as _;
 
 use agent_monitor::client::ClientEvent;
 use agent_monitor::domain::model::{AgentId, TranscriptItem};
@@ -190,7 +191,13 @@ fn sync_follow(
 
     let transcripts = transcripts.clone();
     let sender = sender.clone();
-    tracker.spawn(async move {
+    // One span per follow, so the collector's FollowTranscript handler (which
+    // adopts the client's trace context) joins the viewer's trace.
+    let span = tracing::info_span!(
+        "macrod.monitor.viewer.follow_transcript",
+        agent_id = %agent_id,
+    );
+    let task = async move {
         let opened = tokio::select! {
             () = stop.cancelled() => return,
             opened = transcripts.follow(&agent, TRANSCRIPT_TAIL) => opened,
@@ -218,5 +225,6 @@ fn sync_follow(
                 return;
             }
         }
-    });
+    };
+    tracker.spawn(task.instrument(span));
 }

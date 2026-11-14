@@ -942,6 +942,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tonic",
+ "tracing",
  "tui-input",
  "tui-tree-widget",
  "workspace-hack",

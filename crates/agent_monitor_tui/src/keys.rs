@@ -392,7 +392,7 @@ fn cycle(base: Base, forward: bool, page: &Page) -> Base {
         (Some(0), false) => last,
         (Some(index), false) => index - 1,
     };
-    Base::Pane(panes[next])
+    panes.get(next).copied().map_or(base, Base::Pane)
 }
 
 /// Applies an editing key to a line input; returns whether the key edited it.
