@@ -1513,6 +1513,59 @@ async fn outlook_thread_without_a_sender_still_reads() -> Result<(), Report> {
     thread_without_a_sender_still_reads(Provider::Outlook).await
 }
 
+/// What the agent harness asks before it suggests routines: the newest
+/// mail of the user's inboxes, read from the provider itself, with who it
+/// is from and the start of its text. When this fails the suggestions are
+/// made from no mail at all, or from another inbox's.
+async fn newest_mail_is_read_from_the_provider(provider: Provider) -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(provider, ada.email()).await?;
+
+    inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Quarterly numbers",
+        "Revenue is up nine percent.",
+    ))?;
+    inbox.wait_for_preview("inbox", "Quarterly numbers").await?;
+
+    let recent = inbox
+        .get(&format!(
+            "/internal/recent_messages/{}?limit=5&snippet_chars=200",
+            urlencoding::encode(ada.macro_id())
+        ))
+        .await?
+        .ok()?;
+    let messages = recent["messages"].as_array().cloned().unwrap_or_default();
+    let newest = messages
+        .iter()
+        .find(|message| message["subject"] == "Quarterly numbers")
+        .ok_or_else(|| {
+            rootcause::report!("the delivered mail is not among the newest: {recent}")
+        })?;
+    assert_eq!(newest["inbox"], ada.email(), "{recent}");
+    assert_eq!(newest["from"]["email"], "grace@example.com", "{recent}");
+    assert!(
+        newest["snippet"]
+            .as_str()
+            .is_some_and(|snippet| snippet.contains("nine percent")),
+        "{recent}"
+    );
+    assert!(messages.len() <= 5, "{recent}");
+
+    stack.finish().await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_newest_mail_is_read_from_the_provider() -> Result<(), Report> {
+    newest_mail_is_read_from_the_provider(Provider::Gmail).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_newest_mail_is_read_from_the_provider() -> Result<(), Report> {
+    newest_mail_is_read_from_the_provider(Provider::Outlook).await
+}
+
 /// An Outlook draft that has no sender and carries a file is imported, its
 /// file is stored as a document, and the search service's lookups answer
 /// for it. When this fails the file is claimed for upload and never

@@ -70,6 +70,33 @@ async fn read_state_travels_both_ways(provider: Provider) -> Result<(), Report> 
         .await?;
     assert_eq!(budget_now["isRead"], true);
 
+    // Opening a thread tells Macro it was seen, which reads it at the
+    // provider too.
+    let minutes = inbox.deliver(&Mail::new(
+        "Joan <joan@example.com>",
+        "Minutes",
+        "As agreed.",
+    ))?;
+    let minutes_preview = inbox.wait_for_preview("inbox", "Minutes").await?;
+    assert_eq!(minutes_preview["isRead"], false);
+    let minutes_thread = minutes_preview["id"].as_str().unwrap_or_default();
+    inbox
+        .post(&format!("/email/threads/{minutes_thread}/seen"), None)
+        .await?
+        .ok()?;
+    inbox
+        .wait_for_provider_message("the opened thread to be read at the provider", |message| {
+            message.id == minutes.id && message.read
+        })
+        .await?;
+    inbox
+        .wait_for_preview_where(
+            "inbox",
+            "the opened thread to be read in Macro",
+            |preview| preview["id"] == minutes_preview["id"] && preview["isRead"] == true,
+        )
+        .await?;
+
     stack.finish().await
 }
 

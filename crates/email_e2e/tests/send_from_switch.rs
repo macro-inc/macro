@@ -30,9 +30,21 @@ async fn transfer(
     generation: i64,
     destination: &Inbox,
 ) -> Result<Value, Report> {
+    transfer_as(Uuid::now_v7(), source, draft_id, generation, destination).await
+}
+
+/// [`transfer`] under an operation id the scenario chose, to ask about the
+/// move again afterwards.
+async fn transfer_as(
+    operation_id: Uuid,
+    source: &Inbox,
+    draft_id: &str,
+    generation: i64,
+    destination: &Inbox,
+) -> Result<Value, Report> {
     let request = json!({
         "draft_generation": generation,
-        "operation_id": Uuid::now_v7().to_string(),
+        "operation_id": operation_id.to_string(),
         "destination_link_id": destination.link_id().to_string(),
     });
     eventually(
@@ -171,13 +183,39 @@ async fn draft_moves_to_the_inbox_chosen_in_from(
     let id = id_of(&draft);
     wait_until_in_mailbox(&old, &id, "Offsite").await?;
 
-    let moved = transfer(&old, &id, generation_of(&draft), &new).await?;
+    let operation_id = Uuid::now_v7();
+    let moved = transfer_as(operation_id, &old, &id, generation_of(&draft), &new).await?;
     let new_id = moved["message_id"].as_str().unwrap_or_default().to_owned();
     let new_thread = moved["thread_id"].as_str().unwrap_or_default().to_owned();
     assert_eq!(moved["source_id"], id.as_str());
     assert_ne!(
         new_id, id,
         "the moved draft kept the id delayed writes still name"
+    );
+
+    // A composer that lost the answer asks what became of the move, and is
+    // told the same draft.
+    let recovered = old
+        .post(
+            &format!("/email/draft-transfers/{operation_id}/recover"),
+            None,
+        )
+        .await?
+        .ok()?;
+    assert_eq!(
+        recovered["committed"]["message_id"],
+        new_id.as_str(),
+        "{recovered}"
+    );
+    assert_eq!(
+        recovered["committed"]["thread_id"],
+        new_thread.as_str(),
+        "{recovered}"
+    );
+    assert_eq!(
+        recovered["committed"]["source_id"],
+        id.as_str(),
+        "{recovered}"
     );
 
     assert_draft_lives_in(&stack, &old, &draft, &new, &new_thread, &new_id, &recipient).await?;

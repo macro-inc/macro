@@ -219,8 +219,10 @@ fn deliver_with_inline_logo(stack: &Stack, inbox: &Inbox, subject: &str) -> Resu
 
 /// A message forwarded from another of the user's inboxes than the one that
 /// received it still carries the original's attachment and its inline
-/// image. When this fails, the recipient gets a forward with no PDF, or a
-/// body whose `cid:` image points at a part that was never sent.
+/// image, and not a file that was added to the forward and taken off again.
+/// When this fails, the recipient gets a forward with no PDF, a body whose
+/// `cid:` image points at a part that was never sent, or a file the sender
+/// removed.
 async fn forward_from_another_inbox_keeps_attachments(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
@@ -233,6 +235,10 @@ async fn forward_from_another_inbox_keeps_attachments(provider: Provider) -> Res
     let originals = received_attachments(&received_in, "Blueprints", 2).await?;
     let report = named(&originals, "report.pdf")?;
     let logo = named(&originals, "logo.png")?;
+    // A file of another message, added to the forward and then taken off.
+    deliver_with_inline_logo(&stack, &received_in, "Sketches")?;
+    let others = received_attachments(&received_in, "Sketches", 2).await?;
+    let unwanted = named(&others, "report.pdf")?;
 
     let message = json!({
         "subject": "Fwd: Blueprints",
@@ -245,7 +251,7 @@ async fn forward_from_another_inbox_keeps_attachments(provider: Provider) -> Res
     });
     let draft = sent_from.save_draft(&message).await?;
     let draft_id = id_of(&draft, "db_id")?;
-    for original in [report, logo] {
+    for original in [report, logo, unwanted] {
         let added = sent_from
             .post(
                 &format!(
@@ -259,11 +265,30 @@ async fn forward_from_another_inbox_keeps_attachments(provider: Provider) -> Res
             .context("the other inbox's attachment could not be added to the forward")?;
         assert_eq!(added["attachment_id"], original["db_id"]);
     }
+    let removed = sent_from
+        .delete(
+            &format!(
+                "/email/drafts/{draft_id}/forwarded-attachments/{}?draft_generation={}",
+                id_of(unwanted, "db_id")?,
+                draft["draft_generation"]
+            ),
+            None,
+        )
+        .await?;
+    assert_eq!(removed.status, 204, "{}", removed.text);
     let listed = read_draft(&sent_from, &draft).await?;
     assert_eq!(
         listed["attachments_forwarded"].as_array().map(Vec::len),
         Some(2),
         "the draft does not list both forwarded files: {listed}"
+    );
+    assert!(
+        listed["attachments_forwarded"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .all(|file| file["attachment_id"] != unwanted["db_id"]),
+        "the file taken off the forward is still on it: {listed}"
     );
 
     sent_from.send(&as_saved(&message, &draft)).await?;
@@ -504,6 +529,70 @@ async fn outlook_draft_holding_an_attachment_is_edited_and_sent() -> Result<(), 
     );
     assert_eq!(provider_copies(&to, "Plans attached")?.len(), 1);
     assert_eq!(provider_copies(&from, "Plans attached")?.len(), 1);
+
+    stack.finish().await
+}
+
+/// A file too large for one request to Outlook is put on the draft there in
+/// an upload session, range by range, and the message goes out with the
+/// whole file. When this fails, a draft with a file of three megabytes or
+/// more never reaches Outlook, or the recipient gets the file cut short.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_large_attachment_is_uploaded_in_ranges_and_sent() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let grace = stack.user("grace").await?;
+    let from = ada.link_outlook().await?;
+    let to = grace.link_outlook().await?;
+    // Past the size sent in one request, and past one range of a session.
+    let survey = file(3_300_000);
+
+    let message = json!({
+        "subject": "Survey attached",
+        "to": [{ "email": grace.email() }],
+        "body_text": "The whole survey.",
+        "body_html": html("<html><body><div>The whole survey.</div></body></html>"),
+    });
+    let draft = from.save_draft(&message).await?;
+    let draft_id = id_of(&draft, "db_id")?;
+    let generation = draft["draft_generation"].as_i64().unwrap_or_default();
+    from.attach_to_draft(&draft_id, generation, "survey.pdf", &survey)
+        .await?;
+    eventually(
+        "the Outlook draft to hold the large attachment",
+        DEFAULT_TIMEOUT,
+        async || {
+            Ok(stack
+                .outlook()
+                .messages(from.email())?
+                .into_iter()
+                .find(|message| {
+                    message.is_draft
+                        && message.subject == "Survey attached"
+                        && message.attachments == ["survey.pdf"]
+                }))
+        },
+    )
+    .await?;
+
+    from.send(&as_saved(&message, &draft)).await?;
+
+    let (_, received) = wait_for_wire(&stack, &to, "Survey attached").await?;
+    assert_eq!(
+        received
+            .attachments
+            .iter()
+            .map(|attachment| (attachment.filename.as_str(), attachment.bytes.len()))
+            .collect::<Vec<_>>(),
+        [("survey.pdf", survey.len())],
+        "the large attachment was lost, cut short or sent twice"
+    );
+    assert!(
+        received.attachments[0].bytes == survey,
+        "the attachment arrived with other bytes than were attached"
+    );
+    assert_eq!(provider_copies(&to, "Survey attached")?.len(), 1);
+    assert_eq!(provider_copies(&from, "Survey attached")?.len(), 1);
 
     stack.finish().await
 }

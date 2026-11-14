@@ -134,6 +134,19 @@ async fn undo_restores_the_draft_as_written(provider: Provider) -> Result<(), Re
         .await?;
     assert_eq!(accepted["status"], "ACCEPTED", "{accepted}");
 
+    // Within the window the Send is among the pending ones, under its inbox:
+    // what the app reads after a reload to offer Undo again.
+    let pending = from.pending_sends().await?;
+    let listed: Vec<&Value> = pending["attempts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|send| send["attempt"]["attemptId"] == attempt_id.to_string())
+        .collect();
+    assert_eq!(listed.len(), 1, "{pending}");
+    assert_eq!(listed[0]["linkId"], json!(from.link_id()), "{pending}");
+    assert_eq!(listed[0]["attempt"]["status"], "ACCEPTED", "{pending}");
+
     let undone = from.cancel_send(attempt_id).await?;
     assert_eq!(undone["status"], "CANCELLED", "{undone}");
     let restored = &undone["message"];

@@ -409,3 +409,74 @@ async fn gmail_address_book_names_the_people_the_user_writes_to() -> Result<(), 
 async fn outlook_address_book_names_the_people_the_user_writes_to() -> Result<(), Report> {
     address_book_names_the_people_the_user_writes_to(Provider::Outlook).await
 }
+
+/// The smallest PNG there is: one transparent pixel.
+const PIXEL_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+/// The pushes that told the user's open app the inbox has its photo.
+fn photo_pushes(stack: &Stack, inbox: &Inbox) -> usize {
+    let link_id = inbox.link_id().to_string();
+    stack
+        .service_requests()
+        .into_iter()
+        .filter(|request| request.service == "connection-gateway")
+        .filter_map(|request| request.body)
+        .filter(|body| {
+            body["message_type"] == "refresh_email"
+                && body["message"]["event"] == "photo_synced"
+                && body["message"]["link_id"] == link_id.as_str()
+        })
+        .count()
+}
+
+/// The photo the owner has at Outlook becomes the inbox's photo in Macro:
+/// it is read from Outlook, kept with Macro's static files, shown on the
+/// inbox, and the open app is told to read it.
+///
+/// When it fails: an Outlook inbox never gets its owner's picture, or gets
+/// it only after the app is reloaded.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_the_owners_photo_becomes_the_inboxs() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    stack
+        .outlook()
+        .add_mailbox(&email_e2e::outlook_emulator::SeedMailbox {
+            email: ada.email().to_owned(),
+            photo: Some(email_e2e::outlook_emulator::SeedPhoto {
+                mime_type: Some("image/png".to_owned()),
+                base64: PIXEL_PNG_BASE64.to_owned(),
+            }),
+            ..Default::default()
+        })?;
+    let inbox = ada.link_outlook().await?;
+
+    let photo_url = email_e2e::eventually(
+        "the inbox to show its owner's photo",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            let link = inbox.link().await?;
+            Ok(link["photo_url"].as_str().map(str::to_owned))
+        },
+    )
+    .await?;
+    assert!(
+        provider_calls(&stack, Provider::Outlook, ada.email(), "me.photo") > 0,
+        "the photo was not read from Outlook"
+    );
+    let stored = stack
+        .service_requests()
+        .into_iter()
+        .filter(|request| request.service == "static-files" && request.method == "PUT")
+        .count();
+    assert_eq!(stored, 1, "the photo was kept {stored} times");
+    assert!(photo_url.contains("static-files"), "{photo_url}");
+    email_e2e::eventually(
+        "the open app to be told of the photo",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || Ok((photo_pushes(&stack, &inbox) > 0).then_some(())),
+    )
+    .await?;
+
+    stack.finish().await
+}

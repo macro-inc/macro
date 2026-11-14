@@ -16,7 +16,10 @@ use uuid::Uuid;
 
 /// What the app reads of a thread after each step.
 const THREAD: &str = "query($threadId: ID!) { user { id emailThread(input: { threadId: $threadId }) { \
-    id isRead inboxVisible \
+    id isRead inboxVisible linkId hasReceivedMail reminderReturnedAt \
+    latestInboundMessageTs latestOutboundMessageTs latestNonSpamMessageTs \
+    mailAllPreview { id subject isDraft } mailDraftPreview { id isDraft } mailSentPreview { id } \
+    mailDraftState { drafts { id macroDraft } } \
     messages(offset: 0, limit: 50) { id threadId isRead isDraft isSent draftGeneration subject \
       bodyText bodyHtmlSanitized from { email } to { email } cc { email } bcc { email } } } } }";
 
@@ -146,6 +149,24 @@ async fn reply_from_the_composer_round_trip(provider: Provider) -> Result<(), Re
     let thread_id = preview["id"].as_str().unwrap_or_default().to_owned();
     let opened = thread(&inbox, &thread_id).await?;
     assert_eq!(opened["isRead"], false, "{opened}");
+    // What the mail views sort and file the thread by: received mail, in this
+    // inbox, never sent from, never returned by a reminder.
+    assert_eq!(opened["hasReceivedMail"], true, "{opened}");
+    assert_eq!(opened["linkId"], inbox.link_id().to_string(), "{opened}");
+    assert!(opened["latestInboundMessageTs"].is_string(), "{opened}");
+    assert_eq!(
+        opened["latestNonSpamMessageTs"], opened["latestInboundMessageTs"],
+        "{opened}"
+    );
+    assert!(opened["latestOutboundMessageTs"].is_null(), "{opened}");
+    assert!(opened["reminderReturnedAt"].is_null(), "{opened}");
+    assert_eq!(
+        opened["mailAllPreview"]["subject"], "Venue for the offsite",
+        "{opened}"
+    );
+    assert_eq!(opened["mailAllPreview"]["isDraft"], false, "{opened}");
+    assert!(opened["mailDraftPreview"].is_null(), "{opened}");
+    assert!(opened["mailSentPreview"].is_null(), "{opened}");
     let received_id = messages(&opened)
         .first()
         .and_then(|message| message["id"].as_str().map(str::to_owned))
@@ -197,12 +218,30 @@ async fn reply_from_the_composer_round_trip(provider: Provider) -> Result<(), Re
     let generation = edited["draft"]["draftGeneration"]
         .as_i64()
         .unwrap_or_default();
-    let drafts: Vec<Value> = messages(&thread(&inbox, &thread_id).await?)
+    let with_draft = thread(&inbox, &thread_id).await?;
+    let drafts: Vec<Value> = messages(&with_draft)
         .into_iter()
         .filter(|message| message["isDraft"] == true)
         .collect();
     assert_eq!(drafts.len(), 1, "one draft in the thread: {drafts:?}");
     assert_eq!(drafts[0]["bodyText"], edited_text, "{drafts:?}");
+    // The Drafts view shows the thread by its draft, and the app has what it
+    // needs to take the draft back out of the views.
+    assert_eq!(
+        with_draft["mailDraftPreview"]["id"], drafts[0]["id"],
+        "{with_draft}"
+    );
+    assert_eq!(
+        with_draft["mailDraftPreview"]["isDraft"], true,
+        "{with_draft}"
+    );
+    let draft_entries = with_draft["mailDraftState"]["drafts"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(draft_entries.len(), 1, "{with_draft}");
+    assert_eq!(draft_entries[0]["id"], drafts[0]["id"], "{with_draft}");
+    assert_eq!(draft_entries[0]["macroDraft"], true, "{with_draft}");
     if provider == Provider::Outlook {
         // Outlook keeps Macro's drafts in its Drafts folder.
         inbox
@@ -238,8 +277,8 @@ async fn reply_from_the_composer_round_trip(provider: Provider) -> Result<(), Re
         "the reply left its conversation"
     );
 
-    let after_send = thread(&inbox, &thread_id).await?;
-    let after_send = messages(&after_send);
+    let sent_thread = thread(&inbox, &thread_id).await?;
+    let after_send = messages(&sent_thread);
     assert_eq!(
         after_send.len(),
         2,
@@ -256,6 +295,22 @@ async fn reply_from_the_composer_round_trip(provider: Provider) -> Result<(), Re
             .count(),
         1
     );
+    // The Sent view files the thread by the reply; no draft is left to show.
+    let reply_id = after_send
+        .iter()
+        .find(|message| message["isSent"] == true)
+        .map(|message| message["id"].clone());
+    assert_eq!(
+        Some(&sent_thread["mailSentPreview"]["id"]),
+        reply_id.as_ref(),
+        "{sent_thread}"
+    );
+    assert!(
+        sent_thread["latestOutboundMessageTs"].is_string(),
+        "{sent_thread}"
+    );
+    assert!(sent_thread["mailDraftPreview"].is_null(), "{sent_thread}");
+    assert_eq!(sent_thread["hasReceivedMail"], true, "{sent_thread}");
 
     // Mark unread, then Done.
     let unread = thread_mutation(
@@ -424,6 +479,18 @@ async fn new_message_to_several_people_carries_the_signature(
     let to = grace.link(provider, grace.email()).await?;
     let cc = alan.link(provider, alan.email()).await?;
     let bcc = joan.link(provider, joan.email()).await?;
+
+    // The composer's From offers the inbox's own address first. Outlook has
+    // no aliases: it is that address alone, under no name of its own.
+    let offered = send_as(&inbox).await?;
+    assert_eq!(
+        offered.first().map(|(email, _)| email.as_str()),
+        Some(ada.email()),
+        "{offered:?}"
+    );
+    if provider == Provider::Outlook {
+        assert_eq!(offered, [(ada.email().to_owned(), String::new())]);
+    }
 
     let attempt_id = Uuid::now_v7();
     let text = "The plan for next quarter is attached below.";

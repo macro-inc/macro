@@ -199,6 +199,19 @@ async fn a_star_set_in_macro_reaches_the_provider(provider: Provider) -> Result<
         })
         .await?;
     inbox.wait_for_preview("starred", "Star in Macro").await?;
+    if provider == Provider::Gmail {
+        // What the open thread asks while a change is on its way: the star
+        // went through, so nothing is reported as failed.
+        let operations = inbox
+            .get(&format!("/email/threads/{second_id}/operations"))
+            .await?
+            .ok()?;
+        assert!(
+            !operations.to_string().contains("\"failed\""),
+            "{operations}"
+        );
+        assert!(operations.is_array(), "{operations}");
+    }
     set_star(false).await?;
     inbox
         .wait_for_provider_message("the star to leave the provider", |message| {
@@ -385,6 +398,29 @@ async fn gmail_a_label_is_not_applied_across_inboxes() -> Result<(), Report> {
                     .labels
                     .iter()
                     .any(|label| label.starts_with("Label_"))
+        })
+        .await?;
+    // So does a second label of that inbox put on the one message, the way
+    // an agent files a single message.
+    let other_label = create_label(&first, "clients").await?;
+    let filed = first
+        .patch(
+            "/email/messages/labels",
+            Some(&json!({ "message_ids": [message_id], "label_id": other_label, "value": true })),
+        )
+        .await?
+        .ok()?;
+    assert_eq!(filed["successful_ids"], json!([message_id]), "{filed}");
+    assert_eq!(filed["failed_ids"], json!([]), "{filed}");
+    first
+        .wait_for_provider_message("both labels on the message at Gmail", |message| {
+            message.id == delivered.id
+                && message
+                    .labels
+                    .iter()
+                    .filter(|label| label.starts_with("Label_"))
+                    .count()
+                    == 2
         })
         .await?;
     let others = second.provider_messages()?;

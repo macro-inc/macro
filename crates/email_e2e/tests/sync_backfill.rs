@@ -1361,3 +1361,57 @@ async fn gmail_a_cancelled_import_stops_reading_the_mailbox() -> Result<(), Repo
 
     stack.finish().await
 }
+
+/// The pushes that told the user's open app how the inbox's import ended.
+fn import_pushes(stack: &Stack, inbox: &Inbox) -> Vec<Value> {
+    let link_id = inbox.link_id().to_string();
+    stack
+        .service_requests()
+        .into_iter()
+        .filter(|request| request.service == "connection-gateway")
+        .filter_map(|request| request.body)
+        .filter(|body| {
+            body["message_type"] == "refresh_email"
+                && body["message"]["event"] == "backfill"
+                && body["message"]["link_id"] == link_id.as_str()
+        })
+        .collect()
+}
+
+/// When Gmail refuses to list the mailbox for a reason that waiting will not
+/// cure, the first import ends as failed, and the open app is told so
+/// instead of being left waiting for it.
+///
+/// When it fails: an import Gmail refused is retried forever or dropped
+/// silently, and the app shows the inbox as connecting without end.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_import_gmail_refuses_is_reported_as_failed() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    // Mail to import: an empty mailbox is done before it is listed.
+    let letters: Vec<Letter> = (1..=3)
+        .map(|number| Letter::received(&format!("Note {number:02}"), false))
+        .collect();
+    seed_mailbox(&stack, Provider::Gmail, ada.email(), &letters)?;
+    stack.gmail().inject_fault(gmail_emulator::Fault {
+        mailbox: Some(ada.email().to_owned()),
+        route: Some(gmail_emulator::Route::ThreadsList),
+        error: Some(gmail_emulator::FaultError::Forbidden),
+        ..Default::default()
+    });
+    let inbox = ada.start_link(Provider::Gmail, ada.email()).await?;
+
+    let push = eventually(
+        "the app to be told the import failed",
+        DEFAULT_TIMEOUT,
+        async || Ok(import_pushes(&stack, &inbox).into_iter().next()),
+    )
+    .await?;
+    assert_eq!(push["message"]["status"], "failed", "{push}");
+    let jobs = backfill_jobs(&inbox).await?;
+    assert_eq!(jobs.len(), 1, "{jobs:?}");
+    assert_eq!(jobs[0]["status"], "Failed", "{jobs:?}");
+    assert_eq!(stack.dead_letters("backfill").await?, 0);
+
+    stack.finish().await
+}

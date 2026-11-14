@@ -541,6 +541,18 @@ impl Inbox {
         Ok(data["user"]["emailSendAttempt"].clone())
     }
 
+    /// The Sends of every inbox of the user that are not settled yet, as the
+    /// app reads them after a reconnect: `{ attempts: [{ linkId, attempt }],
+    /// nextCursor }`, newest first.
+    pub async fn pending_sends(&self) -> Result<Value, Report> {
+        let query = format!(
+            "query {{ user {{ id pendingEmailSends {{ \
+             attempts {{ linkId attempt {{ {SEND_ATTEMPT_FIELDS} }} }} nextCursor }} }} }}"
+        );
+        let data = self.user.graphql(&query, &json!({})).await?;
+        Ok(data["user"]["pendingEmailSends"].clone())
+    }
+
     /// Waits until a Send's attempt reports `status` (`SENT`, `FAILED`, …)
     /// and returns the attempt.
     pub async fn wait_for_send_attempt(

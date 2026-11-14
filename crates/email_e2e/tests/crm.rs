@@ -471,3 +471,123 @@ async fn gmail_a_correspondent_leaves_the_crm_with_their_mail() -> Result<(), Re
 async fn outlook_a_correspondent_leaves_the_crm_with_their_mail() -> Result<(), Report> {
     a_correspondent_leaves_the_crm_with_their_mail(Provider::Outlook).await
 }
+
+/// The team the user is a member of.
+async fn team_of(stack: &Stack, user: &User) -> Result<Uuid, Report> {
+    Ok(
+        sqlx::query_scalar("SELECT team_id FROM team_user WHERE user_id = $1")
+            .bind(user.macro_id())
+            .fetch_one(stack.db())
+            .await?,
+    )
+}
+
+/// Someone who joins a team brings the people they already correspond with
+/// at the team's companies into its CRM: the authentication service asks
+/// for it when the member is added, and the scenario stands in for it.
+/// When this fails a new member's existing correspondents never show in
+/// the team's CRM until they write again.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_new_member_brings_their_correspondents_into_the_crm() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    let ada_primary = ada.link_gmail().await?;
+    let bob_primary = bob.link_gmail().await?;
+    let carol = format!("carol@{COMPANY}");
+
+    // The mail is there before there is a team to learn from it.
+    ada_primary.deliver(&Mail::new(
+        &format!("Carol <{carol}>"),
+        "Renewal",
+        "Shall we renew?",
+    ))?;
+    ada_primary.wait_for_preview("inbox", "Renewal").await?;
+    seed_team(&stack, &[(&ada, &ada_primary), (&bob, &bob_primary)]).await?;
+    assert_eq!(contact(&ada, &carol).await?, Value::Null);
+
+    stack
+        .send_to_queue(
+            "backfill",
+            &json!({ "backfillOperation": {
+                "populate_crm_for_user": { "macro_id": ada.macro_id() },
+            } }),
+        )
+        .await?;
+    let added = wait_for_contact(&ada, &carol).await?;
+    assert_eq!(added["email"], carol.as_str(), "{added}");
+    assert_eq!(added["name"], "Carol", "{added}");
+    assert_eq!(contact(&bob, &carol).await?["id"], added["id"]);
+    assert_eq!(sources(&stack, &ada_primary, &carol).await?, 1);
+    assert_eq!(stack.dead_letters("backfill").await?, 0);
+
+    stack.finish().await
+}
+
+/// Someone who leaves a team takes the contacts the CRM learned from their
+/// mail alone with them, and leaves those of the other members: the
+/// authentication service asks for it when the member is removed, and the
+/// scenario stands in for it. When this fails a team keeps reading who a
+/// former member corresponds with.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_member_who_leaves_takes_their_correspondents_out_of_the_crm() -> Result<(), Report>
+{
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    let ada_primary = ada.link_gmail().await?;
+    let bob_primary = bob.link_gmail().await?;
+    seed_team(&stack, &[(&ada, &ada_primary), (&bob, &bob_primary)]).await?;
+    let carol = format!("carol@{COMPANY}");
+    let dave = format!("dave@{COMPANY}");
+
+    bob_primary.deliver(&Mail::new(
+        &format!("Carol <{carol}>"),
+        "Renewal",
+        "Shall we renew?",
+    ))?;
+    ada_primary.deliver(&Mail::new(
+        &format!("Dave <{dave}>"),
+        "Invoice",
+        "Attached.",
+    ))?;
+    wait_for_contact(&ada, &carol).await?;
+    wait_for_contact(&ada, &dave).await?;
+    assert_eq!(sources(&stack, &bob_primary, &carol).await?, 1);
+
+    // Bob is taken off the team.
+    let team = team_of(&stack, &bob).await?;
+    sqlx::query("DELETE FROM team_user WHERE user_id = $1 AND team_id = $2")
+        .bind(bob.macro_id())
+        .bind(team)
+        .execute(stack.db())
+        .await?;
+    stack
+        .send_to_queue(
+            "backfill",
+            &json!({ "backfillOperation": {
+                "depopulate_crm_for_user": { "macro_id": bob.macro_id(), "team_id": team },
+            } }),
+        )
+        .await?;
+    eventually(
+        "the former member's correspondent to leave the CRM",
+        DEFAULT_TIMEOUT,
+        async || Ok(contact(&ada, &carol).await?.is_null().then_some(())),
+    )
+    .await?;
+    assert_eq!(sources(&stack, &bob_primary, &carol).await?, 0);
+    assert_eq!(sources(&stack, &ada_primary, &dave).await?, 1);
+    assert!(!contact(&ada, &dave).await?.is_null());
+    assert_eq!(stack.dead_letters("backfill").await?, 0);
+
+    stack.finish().await
+}

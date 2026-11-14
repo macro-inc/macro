@@ -1,6 +1,6 @@
 //! Archiving a thread ("done") and bringing it back.
 
-use email_e2e::{Inbox, Mail, Provider, Report, Stack};
+use email_e2e::{Inbox, Mail, Provider, Report, Stack, StackOptions};
 use serde_json::{Value, json};
 
 /// Archives or restores one thread and returns the HTTP status and body.
@@ -289,4 +289,119 @@ async fn gmail_a_trashed_or_junk_thread_opens_by_id() -> Result<(), Report> {
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_a_trashed_or_junk_thread_opens_by_id() -> Result<(), Report> {
     a_trashed_or_junk_thread_opens_by_id(Provider::Outlook).await
+}
+
+/// Archiving in an Outlook mailbox that has no Archive folder makes a folder
+/// for Macro's archive there and moves the mail into it.
+///
+/// When it fails: "done" does nothing for a user whose Outlook mailbox
+/// never archived, or the mail is moved somewhere they cannot find it.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_archiving_without_an_archive_folder_makes_one() -> Result<(), Report> {
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    stack
+        .outlook()
+        .add_mailbox(&email_e2e::outlook_emulator::SeedMailbox {
+            email: ada.email().to_owned(),
+            without_archive_folder: true,
+            ..Default::default()
+        })?;
+    let inbox = ada.link_outlook().await?;
+
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "Contract draft",
+        "Please review.",
+    ))?;
+    let thread_id = id_of(&inbox.wait_for_preview("inbox", "Contract draft").await?);
+
+    assert_eq!(set_archived(&inbox, &thread_id, true).await?.0, 200);
+    wait_for_inbox_state(&inbox, &thread_id, false).await?;
+    let archived = inbox
+        .wait_for_provider_message("the mail to leave the inbox at Outlook", |message| {
+            message.id == delivered.id && !message.in_inbox
+        })
+        .await?;
+    assert!(
+        archived
+            .labels
+            .first()
+            .is_some_and(|folder| folder.starts_with("Macro Archive")),
+        "the mail is not in a folder made for Macro's archive: {archived:?}"
+    );
+
+    stack.finish().await
+}
+
+/// The fewest messages Gmail label writes go out for as one batch.
+const BATCH_OF_MESSAGES: usize = 10;
+
+/// With batched label writes on, "done" for ten threads at once reaches
+/// Gmail: every one of them leaves the inbox there and in Macro.
+///
+/// When it fails: marking a large selection done is answered as done but
+/// some or all of the mail stays in the Gmail inbox.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_many_threads_are_archived_in_one_batch() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        env: vec![(
+            "GMAIL_LABEL_WRITE_BATCHES_ENABLED".to_owned(),
+            "true".to_owned(),
+        )],
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+
+    let mut delivered = Vec::new();
+    for number in 1..=BATCH_OF_MESSAGES {
+        delivered.push(inbox.deliver(&Mail::new(
+            "Grace <grace@example.com>",
+            &format!("Report {number}"),
+            "Attached.",
+        ))?);
+    }
+    let mut thread_ids = Vec::new();
+    for number in 1..=BATCH_OF_MESSAGES {
+        let preview = inbox
+            .wait_for_preview("inbox", &format!("Report {number}"))
+            .await?;
+        thread_ids.push(id_of(&preview));
+    }
+
+    let batch = inbox
+        .patch(
+            "/email/threads/archived",
+            Some(&json!({ "thread_ids": thread_ids, "value": true })),
+        )
+        .await?
+        .ok()?;
+    assert_eq!(
+        batch["updated_thread_ids"].as_array().map(Vec::len),
+        Some(BATCH_OF_MESSAGES),
+        "{batch}"
+    );
+    assert_eq!(batch["failed_thread_ids"], json!([]), "{batch}");
+
+    email_e2e::eventually(
+        "all ten to leave the inbox at Gmail",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            let at_gmail = inbox.provider_messages()?;
+            let left = delivered.iter().all(|mail| {
+                at_gmail
+                    .iter()
+                    .any(|message| message.id == mail.id && !message.in_inbox)
+            });
+            Ok(left.then_some(()))
+        },
+    )
+    .await?;
+    for thread_id in &thread_ids {
+        wait_for_inbox_state(&inbox, thread_id, false).await?;
+    }
+
+    stack.finish().await
 }
