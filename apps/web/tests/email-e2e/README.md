@@ -79,7 +79,9 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
 - Say in a comment above the test what goes wrong when it fails.
 - A test for a bug that is not fixed yet asserts the right behaviour and is
   tagged `{ tag: '@known-bug' }`. The suite leaves it out;
-  `EMAIL_E2E_KNOWN_BUGS=1` runs only those (a non-gating CI step).
+  `EMAIL_E2E_KNOWN_BUGS=1` runs only those (a non-gating CI step, on each
+  stack). Once it passes, the coverage step fails until the tag and the
+  bug's line in `ledger/waivers.tsv` are removed.
 - A new test must fail with its bug put back: build a bundle with the fix
   reverted into another directory and run with `EMAIL_E2E_DIST` pointing at it.
 - A failing test prints its service log directory and keeps a Playwright trace
@@ -146,10 +148,14 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   `full-stack-assistant.spec.ts` drafts an email for review and reads mail
   through scripted tool calls this way.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
-  report counts it together with the per-test run's.
+  report counts it together with the per-test run's. What only the tier
+  covers is listed in `ledger/full-stack-only.tsv` (`ledger/README.md`):
+  after moving a test between the stacks, run both and
+  `just apps/web/email-e2e-ledger --record`.
 
 CI: `Email end-to-end (full stack)` (`email_e2e_full_stack.rs`) runs the tier
-on pushes to `main` and nightly, not in `PR CI`.
+on pushes to `main` and nightly, not in `PR CI`, then its `@known-bug`
+tests (non-gating) and the coverage check.
 
 CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
 `email_e2e_browser.rs`) runs on pushes to `main` that change the web app or
@@ -165,7 +171,9 @@ a report: first the functions of email (draft, send, mark done, star...)
 covered on Gmail and on Outlook, then the actions, states and network
 operations under them, by provider and layout, what no test covers, and
 where the manifest differs from the code. CI appends it to the job summary and uploads it as the
-`email-e2e-browser-coverage` artifact. See `ledger/README.md`.
+`email-e2e-browser-coverage` artifact, and fails the job when a function or
+a row has neither a passing test nor a line in `ledger/waivers.tsv`. See
+`ledger/README.md`.
 
 ## What is here
 

@@ -8,12 +8,14 @@ it runs.
 ```sh
 just apps/web/test-email-e2e-browser        # the run records the evidence
 just apps/web/email-e2e-ledger              # the report, from the last run
-just apps/web/email-e2e-ledger --enforce    # ... and fail on what is not covered
+just apps/web/email-e2e-ledger --enforce    # ... and fail on what lost its test (CI)
+just apps/web/email-e2e-ledger --record     # rewrite full-stack-only.tsv from a run of both stacks
 ```
 
 The report is written to `../ledger-results/report/`: `index.html`,
 `summary.md` (the CI job summary) and `ledger.json`. In CI it is the
-`email-e2e-browser-coverage` artifact of the `Email end-to-end (browser)` job.
+`email-e2e-browser-coverage` artifact of the `Email end-to-end (browser)` job
+and the `email-e2e-full-stack-coverage` artifact of the tier's.
 
 ## Functions
 
@@ -41,7 +43,8 @@ no action row, and is covered by 2 and 3 alone.
 Evidence comes from two gating runs: the suite on per-test stacks
 (`ledger-results/gating/`) and its full-stack tier
 (`ledger-results/full-stack/`, written when `EMAIL_E2E_STACK_PROXY_URL` is
-set). The report reads whichever of the two exist and counts them together.
+set). The report reads whichever of the two exist, counts them together and
+says which it had. A test that runs on both stacks is counted once.
 
 A covered function is **proved** when `proofs.tsv` names the break that was
 put into the product for it and made its tests fail (see Proving a test). The
@@ -50,6 +53,11 @@ proof passes, and nothing shows it would catch a regression.
 
 It is **in part** when tests show some of that, **deferred** or **waived**
 when every way to do it is, and **open** otherwise.
+
+`limits.tsv` says, for a covered function, what its tests do not prove (a
+stand-in that lacks the behaviour, say). The report prints it beside the
+function; write a line whenever a test covers less than the function's name
+promises.
 
 ## Rows
 
@@ -76,14 +84,42 @@ A row's status:
 - **covered**: seen on every provider and on every layout it applies to (each
   provider once and each layout once, not every pairing);
 - **partial**: seen, but not on all of them; the report says what is missing;
-- **open**: never seen, and the suite could drive it;
-- **deferred**: never seen, and it has `needs`: a service or a clock the
-  per-test stack does not have. These wait for the full-stack tier;
-- **waived**: never seen, and it has a `waiver` with a reason.
+- **open**: never seen, and the suite could drive it (its waiver is of the
+  kind `backlog`, or it has none and fails the job);
+- **deferred**: never seen, and its waiver is of the kind `needs`: a service
+  or a clock no stack gives a test yet;
+- **waived**: never seen, and its waiver is of another kind.
 
-The report only reports. `--enforce` (or `EMAIL_E2E_LEDGER_ENFORCE=1`) makes
-it fail when a function or a row is open or partial, an email network
-operation is not covered, or the manifest differs from the source.
+## What fails the job
+
+Both CI jobs run the report with `--enforce`. It fails when
+
+- a function on a provider, or a row, has no passing test on its stack and
+  no line in `waivers.tsv`: a covered function that lost its test on Gmail
+  or on Outlook, and a new row or function that came without a test;
+- a passing test covers what `waivers.tsv` waives: remove the line;
+- a function with tests on every provider has no line in `proofs.tsv`;
+- a test tagged `@known-bug` passes: remove the tag, and the waiver that
+  stood for the bug;
+- `waivers.tsv` or `full-stack-only.tsv` names what the manifest lacks, or
+  the manifest differs from the source.
+
+Network operations are reported and never fail it. A row seen on one of its
+providers or layouts counts as tested; the report shows it as partial.
+
+`waivers.tsv` is the one list of what is not tested, a line each: `id`
+(`F-020` or a row's id), `on` (`gmail`, `outlook` or `both` for a
+function, `-` for a row), `kind` and `reason`. The kinds: `bug` (the app
+is wrong; a `@known-bug` test waits for the fix), `needs` (a service or a
+clock no stack gives a test), `native-only`, `no-user-path`, and `backlog`
+(could be tested and is not yet; shown as open). A new line is a decision a
+reviewer reads: say why, not that.
+
+`full-stack-only.tsv` lists what only the full-stack tier's tests cover.
+Each job is held to its own part: the tier's job to that list, the browser
+job to everything else that is not waived. Do not edit it by hand: run both
+stacks, then `--record`. A test moved from one stack to the other changes
+it, and the job says which line to remove.
 
 ## Marking a test
 
