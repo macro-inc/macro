@@ -1,0 +1,272 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e.rs
+name: Email end-to-end
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'
+'on':
+  push:
+    branches:
+    - main
+    paths:
+    - services/**
+    - crates/**
+    - Cargo.toml
+    - Cargo.lock
+    - rust-toolchain.toml
+    - flake.nix
+    - flake.lock
+    - '.config/nextest.toml'
+    - '.github/workflows/email_e2e.yml'
+  workflow_call: {}
+  workflow_dispatch: {}
+jobs:
+  email-e2e:
+    name: Email end-to-end
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
+      SQLX_OFFLINE: 'true'
+      SCCACHE_IDLE_TIMEOUT: '0'
+      EMAIL_E2E_DATABASE_URL: postgres://user:password@127.0.0.1:5432/macrodb
+      EMAIL_E2E_REDIS_URL: redis://127.0.0.1:6379
+      EMAIL_E2E_SQS_URL: http://127.0.0.1:9324
+      EMAIL_E2E_KAFKA_BROKERS: '127.0.0.1:9092'
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb
+        ports:
+        - '5432:5432'
+        options: '--health-cmd pg_isready --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5 --shm-size 1g -v /dev/shm/pgdata:/var/lib/postgresql/data'
+      redis:
+        image: redis:7
+        ports:
+        - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 1s --health-start-period 30s --health-timeout 5s --health-retries 5'
+      sqs:
+        image: softwaremill/elasticmq-native:1.7.1
+        ports:
+        - '9324:9324'
+      kafka:
+        image: apache/kafka:3.9.1
+        env:
+          KAFKA_NODE_ID: '1'
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093'
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+        ports:
+        - '9092:9092'
+        options: '--health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1" --health-interval 2s --health-start-period 60s --health-timeout 10s --health-retries 20'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+      timeout-minutes: 15
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        # Installing node_modules is most of a build and changes far less often than the SDK,
+        # so it has its own entry.
+        modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+        modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+        save_modules=false
+
+        if ! nix-store --check-validity "$modules" 2>/dev/null; then
+          # No retries: a retry would restart the stream into the same pipe, and past the limit
+          # a rebuild is faster.
+          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+            echo "node_modules restored from the remote cache"
+          else
+            save_modules=true
+          fi
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        if [ "$save_modules" = true ] \
+          && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+          echo "::warning::Could not save node_modules to the remote cache"
+        fi
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: raise the postgres connection limit
+      run: |
+        set -euo pipefail
+
+        # Every scenario runs two services with their own connection pools, and
+        # several scenarios run at once. The setting takes effect when the next step
+        # restarts the server.
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        docker exec "$postgres_container" psql -U user -d macrodb -c "ALTER SYSTEM SET max_connections = 600;"
+    - name: configure postgres for concurrent tests
+      run: |
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
+        if [ -z "$postgres_container" ]; then
+          echo "pgvector/pgvector:pg14 service container not found" >&2
+          docker ps
+          exit 1
+        fi
+
+        docker exec -i "$postgres_container" psql -U user -d macrodb <<'SQL'
+        ALTER SYSTEM SET fsync = off;
+        ALTER SYSTEM SET synchronous_commit = off;
+        ALTER SYSTEM SET full_page_writes = off;
+        ALTER SYSTEM SET max_wal_size = '4GB';
+        ALTER SYSTEM SET checkpoint_timeout = '30min';
+        ALTER SYSTEM SET max_locks_per_transaction = 8192;
+        SQL
+        docker restart "$postgres_container"
+        until docker exec "$postgres_container" pg_isready -U user -d macrodb; do
+          sleep 1
+        done
+        docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
+    - name: run the email end-to-end suite
+      run: |
+        set -euo pipefail
+
+        # Nothing in this build carries debug info, as in the Rust test job, so both
+        # share sccache entries.
+        flags=(--locked --config 'profile.dev.package."*".debug=false')
+
+        # The services the suite starts. `service_binary_builds` is the test target
+        # that makes cargo build email_service's real binaries with the features a
+        # test build resolves; default features, because `local_auth` changes how the
+        # API authenticates.
+        cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
+        # calendar_service, which the calendar scenarios start, has no such test
+        # target: its binary is built directly.
+        cargo build "${flags[@]}" -p calendar_service --bin calendar_service
+        # The scheduled-send sweep, which scenarios run as the cron does.
+        cargo build "${flags[@]}" -p email_scheduled_handler
+
+        started=$(date +%s)
+        cargo nextest run -P email-e2e -p email_e2e "${flags[@]}"
+        echo "Email end-to-end suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+    - name: report scenarios for known bugs
+      run: crates/email_e2e/scripts/known_bugs.sh
+      continue-on-error: true
+    - name: Upload email-e2e-logs artifact
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-logs
+        path: target/debug/email-e2e
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+concurrency:
+  group: email-e2e-${{ github.event_name == 'pull_request' && github.run_id || github.sha }}
+  cancel-in-progress: true
