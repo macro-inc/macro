@@ -91,16 +91,59 @@ fn local_search_fields_preserve_ordinary_json_and_track_moved_duplicate_owners()
         let (_, changes) = projection
             .remote(&doc, editor.state(), &bytes)
             .expect("actual peer import");
-        assert!(
-            changes.changes.is_empty(),
-            "masked own-field event imports no editor state"
-        );
+        // Source's collab reconcile (reconcile.ts :48-62, :130-148) imports every block whose
+        // stored own JSON, `$` included, differs from the live model, on any Loro-driven
+        // update: here each top-level block's stored searchText. The peer's masked `local`
+        // field is never imported (local_state_keys).
+        let imported: Vec<(NodeKey, serde_json::Value)> = changes
+            .changes
+            .iter()
+            .map(|change| match change {
+                NodeChange::Update {
+                    node: NodeTarget::Key(key),
+                    json,
+                } => (*key, json["$"].clone()),
+                other => panic!("only own-field updates: {other:?}"),
+            })
+            .collect();
+        if enabled {
+            assert_eq!(
+                imported,
+                vec![
+                    (top[0], json!({"id": "duplicate", "searchText": "updated"})),
+                    (top[1], json!({"id": "duplicate", "searchText": "updated"})),
+                    (top[2], json!({"id": "container", "searchText": "quote"})),
+                    (
+                        top[3],
+                        json!({"id": "untouched", "searchText": "untouched"})
+                    ),
+                ],
+                "each block's stored searchText, and no masked local field"
+            );
+        } else {
+            assert!(imported.is_empty(), "nothing stored differs");
+        }
+        // Apply them as a session does before binding.
+        editor
+            .update(|tx| {
+                for change in &changes.changes {
+                    if let NodeChange::Update {
+                        node: NodeTarget::Key(key),
+                        json,
+                    } = change
+                    {
+                        tx.apply_remote_fields(*key, json)?;
+                    }
+                }
+                Ok(())
+            })
+            .expect("apply the import");
         projection
             .bind_created(changes, &[])
-            .expect("accept without an own import");
+            .expect("accept the import");
         projection
             .check(&doc, editor.state())
-            .expect("no-import comparison stays exact");
+            .expect("the imported model matches storage");
         let (_, commit) = editor
             .update(|tx| tx.append(top[2], &[top[1]]))
             .expect("move source out of top level");
@@ -115,11 +158,20 @@ fn local_search_fields_preserve_ordinary_json_and_track_moved_duplicate_owners()
             stored["children"][0]["$"]["searchText"],
             if enabled { "first" } else { "stale" }
         );
-        assert!(
-            stored["children"][1]["children"][1]["$"]
-                .get("searchText")
-                .is_none()
-        );
+        // The moved block keeps the searchText its model now holds; Source's export carries
+        // the imported NodeState, and only top-level blocks are re-derived.
+        if enabled {
+            assert_eq!(
+                stored["children"][1]["children"][1]["$"]["searchText"],
+                "updated"
+            );
+        } else {
+            assert!(
+                stored["children"][1]["children"][1]["$"]
+                    .get("searchText")
+                    .is_none()
+            );
+        }
         if enabled {
             assert_eq!(stored["children"][1]["$"]["searchText"], "quoteupdated");
         }
@@ -133,9 +185,10 @@ fn local_search_fields_preserve_ordinary_json_and_track_moved_duplicate_owners()
             .check(&doc, editor.state())
             .expect("strict after rebind");
         let rebound = raw(&doc);
+        // The rebound container is written from the model, which holds the imported value.
         assert_eq!(
             rebound["children"][0]["children"][2]["$"]["searchText"],
-            "stale"
+            if enabled { "updated" } else { "stale" }
         );
         if enabled {
             assert_eq!(rebound["children"][0]["$"]["searchText"], "quoteupdated");
