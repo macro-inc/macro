@@ -345,6 +345,7 @@ impl Store {
         GitInterest {
             wanted: self.git_wanted(),
             subscribers: Arc::new(move || updates.receiver_count()),
+            arrivals: self.shared.arrivals.subscribe(),
         }
     }
 

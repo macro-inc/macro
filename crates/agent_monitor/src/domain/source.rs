@@ -110,6 +110,9 @@ pub struct GitInterest {
     pub wanted: watch::Receiver<Arc<GitWanted>>,
     /// How many viewers are subscribed now.
     pub subscribers: Arc<dyn Fn() -> usize + Send + Sync>,
+    /// Counts subscriptions as they arrive, so a regather held back while
+    /// nobody watched moves up when someone starts to.
+    pub arrivals: watch::Receiver<u64>,
 }
 
 impl std::fmt::Debug for GitInterest {

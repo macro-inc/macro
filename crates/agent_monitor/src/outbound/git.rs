@@ -288,6 +288,9 @@ impl<B: GitBackend> Mapper<B> {
         self.send(Change::Reset(Vec::new())).await?;
         self.health().await?;
         let mut wanted = self.interest.wanted.clone();
+        let mut arrivals = self.interest.arrivals.clone();
+        arrivals.borrow_and_update();
+        let mut arrivals_open = true;
         let current = wanted.borrow_and_update().clone();
         self.sync(current).await?;
 
@@ -306,6 +309,12 @@ impl<B: GitBackend> Mapper<B> {
                     }
                     let current = wanted.borrow_and_update().clone();
                     self.sync(current).await?;
+                }
+                // A viewer arrived: a regather held back by the idle gap
+                // is due on the watched schedule, which `next` recomputes.
+                arrived = arrivals.changed(), if arrivals_open => {
+                    // With no store behind it, mapping goes on unwoken.
+                    arrivals_open = arrived.is_ok();
                 }
                 changes = self.watch.next() => {
                     let Some(changes) = changes else {
