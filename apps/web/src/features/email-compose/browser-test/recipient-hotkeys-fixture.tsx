@@ -51,6 +51,30 @@ const readDirectory: typeof readContactDirectory = async (
   request
 ) => {
   setDirectoryReads((count) => count + 1);
+  // Two contacts that both match a typed `ann@example.com`, the similar one
+  // ranked first: what Enter adds must be the address typed.
+  if (request.query.startsWith('ann')) {
+    setDirectoryRows(2);
+    return {
+      source: 'cache',
+      sync: 'partial',
+      offline: false,
+      query: request.query,
+      users: [
+        {
+          id: 'macro|ann+news@example.com',
+          email: 'ann+news@example.com',
+          name: 'ann',
+        },
+        {
+          id: 'macro|ann@example.com',
+          email: 'ann@example.com',
+          name: 'Ann Rivera',
+        },
+      ],
+      nextCursor: null,
+    };
+  }
   const offset =
     request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
   const ids =
