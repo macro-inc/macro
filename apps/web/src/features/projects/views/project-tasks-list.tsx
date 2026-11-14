@@ -5,6 +5,7 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
+import { isMobile } from '@core/mobile/isMobile';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
@@ -89,9 +90,14 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
-              <PlusIcon class="size-4" />
-              New task
+            <Button
+              variant="secondary"
+              size={isMobile() ? 'icon-md' : 'md'}
+              aria-label={isMobile() ? 'New task' : undefined}
+              onClick={() => props.onCreateTask?.()}
+            >
+              <PlusIcon class={isMobile() ? 'size-6' : 'size-4'} />
+              {isMobile() ? null : 'New task'}
             </Button>
           </Show>
         </div>
