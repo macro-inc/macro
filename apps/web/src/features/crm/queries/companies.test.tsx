@@ -111,3 +111,25 @@ it("refreshes the details of the renamed company's contacts only", async () => {
   expect(client.getQueryState(own)?.isInvalidated).toBe(true);
   expect(client.getQueryState(other)?.isInvalidated).toBe(false);
 });
+
+it('refreshes a contact detail still loading when a company is renamed', async () => {
+  storage.setCompanyName.mockResolvedValue(ok({}));
+  const loading = crmKeys.contact('contact-3').queryKey;
+  let release!: (value: unknown) => void;
+  const read = client
+    .fetchQuery({
+      queryKey: loading,
+      queryFn: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    })
+    .catch(() => undefined);
+  const mutations = mount();
+
+  await mutations.rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
+
+  expect(client.getQueryState(loading)?.isInvalidated).toBe(true);
+  release({ id: 'contact-3', companyId: 'company-1' });
+  await read;
+});

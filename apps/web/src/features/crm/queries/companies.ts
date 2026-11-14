@@ -309,7 +309,9 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
   );
 }
 
+/** A detail still loading may be of the company, so it is refreshed too. */
 function contactOfCompany(data: unknown, companyId: string): boolean {
+  if (data === undefined) return true;
   return (
     !!data &&
     typeof data === 'object' &&
