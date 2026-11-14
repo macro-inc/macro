@@ -16,7 +16,21 @@ for (const provider of PROVIDERS) {
     tag: '@full-stack',
   }, () => {
     test.use({ provider });
-    test.beforeEach(({ page }) => loadAppSteadily(page));
+    test.beforeEach(async ({ page }) => {
+      await loadAppSteadily(page);
+      // The upload is tens of megabytes sent to the storage of the stack, and
+      // a change of the machine's network (another container starting)
+      // makes Chrome drop it mid-way. The test process carries it instead;
+      // no such change reaches it.
+      await page.route(
+        (url) => url.pathname.startsWith('/local-storage/'),
+        async (route) => {
+          if (route.request().method() !== 'PUT') return route.fallback();
+          const response = await route.fetch();
+          await route.fulfill({ response });
+        }
+      );
+    });
 
     // When this fails, a file over the provider's limit cannot be sent at
     // all: the upload to Macro fails, the link is not put into the message,
@@ -44,10 +58,14 @@ for (const provider of PROVIDERS) {
       saw('STC-021');
       await offer.getByRole('button', { name: 'Share link' }).click();
       did('AC-071');
-      await expect(offer).toBeHidden({ timeout: 60_000 });
-      await expect(
-        notice(page, 'Recipients can now view this file')
-      ).toBeVisible({ timeout: 60_000 });
+      // The notice shows for a few seconds: watch for it while the dialog
+      // closes, not after.
+      await Promise.all([
+        expect(offer).toBeHidden({ timeout: 60_000 }),
+        expect(notice(page, 'Recipients can now view this file')).toBeVisible({
+          timeout: 60_000,
+        }),
+      ]);
       saw('STC-019', 'F-125');
       await expect(
         page
