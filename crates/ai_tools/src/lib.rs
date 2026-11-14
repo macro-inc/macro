@@ -26,7 +26,6 @@ mod search_tools;
 mod self_knowledge;
 pub mod serde_utils;
 mod tool_context;
-pub mod user_tool_review;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
@@ -203,29 +202,23 @@ pub(crate) fn base_toolset() -> AiToolSet {
         )
 }
 
-/// The host a toolset is assembled for.
+/// A direct-tool host a toolset is assembled for. Agent sessions run code
+/// mode and get [`tools_for_agent_code_mode`] instead.
 ///
 /// Hosts differ on two axes. First, whether something finishes a deferred
-/// user tool for them: [`AiHost::Chat`] has the composer card after the
-/// turn and [`AiHost::AgentSession`] the review elicitation in it, so those
-/// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
-/// other host those registrations would return `PendingUserExecution`
-/// forever while reading to the model as success. Second, whether the host
-/// supports tool discovery and can render tool-call views. Channel bots keep
-/// discovery, but only chat and agent-session transcripts render rich views.
+/// user tool for them: only [`AiHost::Chat`] has a composer card after the
+/// turn, so only it registers `SendEmail` and the deferring
+/// `CreateCalendarEvent` — on any other host those registrations would
+/// return `PendingUserExecution` forever while reading to the model as
+/// success. Second, whether the host supports tool discovery and can render
+/// tool-call views. Channel bots keep discovery, but only chat transcripts
+/// render rich views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiHost {
     /// The AI chat, and any host whose conversation is stored as a chat the
     /// frontend can render (scheduled agents, memory generation): composer
     /// cards finish deferred user tools there, after the turn.
     Chat,
-    /// Macro's in-process agent serving an agent session: the same toolset
-    /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
-    /// agent loop's finisher puts the call to the user over ACP and the tool
-    /// returns the outcome - so the prompt describes a review card the agent
-    /// waits on, never a pending composer. It presents views with the
-    /// harness's `execution.views.present` instead of `DisplayResults`.
-    AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
     /// executes directly in the agent loop and `SendEmail` is omitted. Replies
     /// contain text only, so this host also omits `DisplayResults`.
@@ -245,7 +238,6 @@ pub const EAGER_TOOLS: &[&str] = &[
     "ContentSearch",
     "CreateDocument",
     "DisplayResults",
-    "DiscoverConnectors",
     "EditDocument",
     "GetThread",
     "ListEntities",
@@ -272,22 +264,6 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
-    tools_for_inner(host, false)
-}
-
-/// Direct tools retained when an agent can use the full Macro SDK through code.
-/// Filtering happens before discovery and prompt construction, so lazy loading
-/// cannot reintroduce the hidden SDK methods as direct tools.
-pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
-    tools_for_inner(AiHost::AgentSession, true)
-}
-
-/// Existing agent-session tools exposed through the code-mode capability policy.
-pub fn code_mode_tools() -> Arc<AiToolSet> {
-    tools_for(AiHost::AgentSession).toolset
-}
-
-fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = base_toolset()
         .add_subtoolset::<memory::ToolMemoryContext>(::memory::inbound::toolset::memory_toolset())
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
@@ -298,40 +274,35 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolTeamCalendarToolContext>(team_calendar_toolset())
         .add_subtoolset::<RoutineToolContext>(routines::inbound::routine_toolset());
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession => toolset
+        AiHost::Chat => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
-            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset())
-            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset()),
         AiHost::ChannelBot | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
-            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset())
-            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset()),
     };
     let toolset = toolset
+        .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>()
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset());
     // Only Macro's own agents connect servers for the user.
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession => {
-            toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
-                mcp_client::outbound::NativeServerStore,
-            >())
-        }
+        AiHost::Chat => toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
+            mcp_client::outbound::NativeServerStore,
+        >()),
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
+        AiHost::Chat | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()
             .add_tool::<LoadTools, ToolServiceContext>(),
         AiHost::Mcp => toolset,
     };
-    // Agent sessions present views with the harness's `execution.views.present`,
-    // which checks a view before it is drawn and posts it with a DM reply.
     let toolset = match host {
         AiHost::Chat => toolset.add_tool::<DisplayResults, ToolServiceContext>(),
-        AiHost::AgentSession | AiHost::ChannelBot | AiHost::Mcp => toolset,
+        AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     // A direct upload needs a client that can PUT the bytes itself; in-app
     // hosts have no network-capable shell, so only MCP clients get it.
@@ -340,81 +311,88 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             channels::inbound::toolset::CreateChannelMediaUpload,
             ToolChannelMediaUploadToolContext,
         >(),
-        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset,
+        AiHost::Chat | AiHost::ChannelBot => toolset,
     };
-    // Connector discovery belongs to agent sessions. Their runtime refreshes
-    // the permitted connector list before the next turn after authorization.
-    let toolset = match host {
-        AiHost::AgentSession => toolset.add_tool::<
-            pipedream_mcp::inbound::toolset::DiscoverConnectors,
-            ToolConnectorToolContext,
-        >(),
-        AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
-    };
-    let mut toolset = toolset;
-    if code_mode_direct {
-        // Review submission still needs these user-tool implementations internally,
-        // but advertising their blocking agent calls would reintroduce elicitation.
-        toolset.tools.retain(|name, _| {
-            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
-                && !agent_code_mode::domain::covered_by_code_sdk(
-                    name,
-                    toolset.user_tools.contains_key(name),
-                )
-        });
-    }
     // External MCP clients have no `LoadTools`, so they get every schema.
     let deferred = match host {
-        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
-            deferred_tools(&toolset, EAGER_TOOLS)
-        }
+        AiHost::Chat | AiHost::ChannelBot => deferred_tools(&toolset, EAGER_TOOLS),
         AiHost::Mcp => Arc::from([]),
     };
-    use agent_code_mode::domain::{GuideHost, inline_guides};
-    // Code mode starts agent sessions through the SDK, whose guidance says
-    // how; direct hosts keep the dispatch tools' own guidance.
-    let (tools_prompt, guides): (String, &str) = match host {
-        AiHost::Chat => (
-            prompt::TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
-                .to_string(),
-            inline_guides(GuideHost::Direct),
-        ),
-        AiHost::AgentSession if code_mode_direct => (
-            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
-            inline_guides(GuideHost::Code),
-        ),
-        AiHost::AgentSession => (
-            prompt::SESSION_TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
-                .to_string(),
-            inline_guides(GuideHost::Direct),
-        ),
-        AiHost::ChannelBot | AiHost::Mcp => (
-            prompt::DIRECT_TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
-                .to_string(),
-            inline_guides(GuideHost::Direct),
-        ),
+    let tools_prompt = match host {
+        AiHost::Chat => prompt::TOOL_USE_PROMPT
+            .compose(&prompt::coding_agents::PROMPT)
+            .to_string(),
+        AiHost::ChannelBot | AiHost::Mcp => prompt::DIRECT_TOOL_USE_PROMPT
+            .compose(&prompt::coding_agents::PROMPT)
+            .to_string(),
     };
+    let guides = agent_code_mode::domain::inline_guides(agent_code_mode::domain::GuideHost::Direct);
+    let deferred_section = deferred_section(&deferred);
+    let prompt = format!("{tools_prompt}{guides}{deferred_section}");
+    ToolSetWithPrompt {
+        toolset: Arc::new(toolset),
+        routed_prompt: Box::new(prompt.clone()),
+        prompt: Box::new(prompt),
+        deferred,
+    }
+}
+
+/// The native tools an agent session's code-mode turn gets beside
+/// `ExecuteCode`: only what a program cannot do through the Macro SDK.
+///
+/// - `RenderCanvas`: an `ExecuteCode` result cannot carry the image it renders.
+/// - `IssueBotCredential`: its card mints the secret without the model
+///   reading it.
+/// - `ListCompanies`: `macro.crm.searchCompanies()` has no stage or owner
+///   filter.
+/// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
+///   plan an import review presents.
+/// - `SelfKnowledge`, the Anthropic code-execution tools, and `SearchTools`
+///   / `LoadTools`, which also load the session's connected MCP tools.
+pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
+    let toolset = AsyncToolCollection::new()
+        .add_tool::<SelfKnowledge, ToolServiceContext>()
+        .add_tool::<documents::inbound::toolset::RenderCanvas, ToolDocumentToolContext>()
+        .add_tool::<bots::inbound::toolset::IssueBotCredential, ToolBotToolContext>()
+        .add_tool::<crm::inbound::toolset::ListCompanies, ToolCrmToolContext>()
+        .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
+        .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
+        .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()
+        .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>();
+    let deferred = deferred_tools(&toolset, EAGER_TOOLS);
+    use agent_code_mode::domain::{GuideHost, inline_guides};
+    let tools_prompt = prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+    let guides = inline_guides(GuideHost::Code);
+    let deferred_section = deferred_section(&deferred);
+    // Turns that route SDK entities bring their selected entities' guidance
+    // in themselves.
+    ToolSetWithPrompt {
+        toolset: Arc::new(toolset),
+        prompt: Box::new(format!("{tools_prompt}{guides}{deferred_section}")),
+        routed_prompt: Box::new(format!("{tools_prompt}{deferred_section}")),
+        deferred,
+    }
+}
+
+/// The user tools a code-mode review runs by name once the user approves
+/// it. No host advertises this toolset to a model.
+pub fn code_mode_tools() -> Arc<AiToolSet> {
+    Arc::new(
+        AsyncToolCollection::new()
+            .add_user_tool::<email::inbound::toolset::SendEmail, ToolEmailToolContext>()
+            .add_user_tool::<calendar_events::inbound::toolset::CreateCalendarEvent, ToolCalendarToolContext>(),
+    )
+}
+
+/// The prompt section listing deferred tools by name and summary.
+fn deferred_section(deferred: &[ai_toolset::SearchableTool]) -> String {
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
         .collect();
-    let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
-    let prompt = format!("{tools_prompt}{guides}{deferred_section}");
-    // Only code-mode sessions route SDK entities per turn.
-    let routed_prompt = if code_mode_direct {
-        format!("{tools_prompt}{deferred_section}")
-    } else {
-        prompt.clone()
-    };
-    ToolSetWithPrompt {
-        toolset: Arc::new(toolset),
-        prompt: Box::new(prompt),
-        routed_prompt: Box::new(routed_prompt),
-        deferred,
-    }
+    prompt::deferred_tools::render(&catalog).unwrap_or_default()
 }
 
 /// Frontend typegen schemas with shared, deduplicated `$defs`.
@@ -422,8 +400,13 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
 /// These feed `gen_tool_schemas` / `generate-dcs-tools.ts` and are never
 /// sent to AI providers.
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
+    // Chat's tools cover every native tool agent sessions get. Its
+    // DisplayResults renders from the fold's decoded view, not a schema.
+    let mut chat = Arc::into_inner(tools_for(AiHost::Chat).toolset)
+        .expect("tools_for returns a fresh, uniquely owned collection");
+    chat.tools.remove("DisplayResults");
     frontend_schemas_builder()
-        .merge(&tools_for(AiHost::AgentSession))
+        .merge(&chat)
         .merge(&agent_code_mode::inbound::toolset::toolset())
         // Persisted legacy calls still render, but are never executable or advertised.
         .merge(&chat::inbound::toolset::chat_toolset::<
@@ -433,6 +416,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         .merge(&read::read_thread())
         .merge(&schemas::subagent::subagent())
         .merge(&schemas::read_activity::read_activity())
+        .merge(&schemas::discover_connectors::discover_connectors())
         .merge(&frontend_compat::LegacyConversationSchemas)
         .build()
 }

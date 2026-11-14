@@ -320,7 +320,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `x-macro-code-execution`, which
   `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
   public MCP clients' included. Code-mode agents never see the calendar tools
-  (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
+  (`ai_tools::tools_for_agent_code_mode`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not
   checked.
 - The create route refuses an agent run (403 `confirmation_required`): a

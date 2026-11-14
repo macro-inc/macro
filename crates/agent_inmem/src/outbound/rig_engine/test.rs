@@ -50,7 +50,7 @@ const TOOLS: &str = "TOOLS";
 mod code_tools;
 
 #[test]
-fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
+fn cached_definitions_keep_client_capabilities() {
     let tools = NativeTools::new();
     let supported = tools.for_turn(true);
     let unsupported = tools.for_turn(false);
@@ -67,23 +67,19 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
             .collect::<Vec<_>>(),
         unsupported.tools.keys().collect::<Vec<_>>()
     );
+    // Saved reviews replace user tools' review cards in code mode.
     for tools in [supported, unsupported] {
-        for name in ["SendEmail", "CreateCalendarEvent"] {
-            assert!(tools.user_tools.contains_key(name));
-        }
+        assert!(tools.user_tools.is_empty());
     }
 }
 
 #[test]
-fn reduced_definitions_keep_user_input_and_user_tool_review() {
+fn reduced_definitions_keep_user_input() {
     let tools = NativeTools::new();
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
     for supports_input in [true, false] {
         let selected = tools.for_turn(supports_input);
-        for name in ["SendEmail", "CreateCalendarEvent"] {
-            assert!(selected.user_tools.contains_key(name));
-        }
         // macro.search, macro.workspace and macro.chats replace these.
         for name in ["ContentSearch", "NameSearch", "ListEntities", "ReadChat"] {
             assert!(!selected.tools.contains_key(name));
@@ -163,7 +159,6 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
             gate: gate.clone(),
             session,
             awaiting: Arc::default(),
-            reviewed_tools: Vec::new(),
         };
         let result = tools
             .dispatch_tool_call(
@@ -214,8 +209,8 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
         "\n<session_instructions>\nbe terse\n</session_instructions>\n<agent_session>\nThis \
          conversation is agent session {session}. Once it grows long, its earlier part is \
          summarized to keep it within your context. To find the exact words of anything said \
-         earlier, summarized or not, run ContentSearch with agentSessionIds \
-         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+         earlier, summarized or not, search it with macro.search.page(query, {{ \
+         agentSessions: [macro.agentSessions.byId(\"{session}\")] }}).\n</agent_session>"
     )));
 }
 
@@ -309,8 +304,8 @@ fn sessions_share_everything_before_their_identity() {
     let agent_session = format!(
         "\n<agent_session>\nThis conversation is agent session {session}. Once it grows long, \
          its earlier part is summarized to keep it within your context. To find the exact words \
-         of anything said earlier, summarized or not, run ContentSearch with agentSessionIds \
-         [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+         of anything said earlier, summarized or not, search it with macro.search.page(query, \
+         {{ agentSessions: [macro.agentSessions.byId(\"{session}\")] }}).\n</agent_session>"
     );
     assert_eq!(
         first.rest(),
@@ -482,7 +477,6 @@ async fn native_dispatch_uses_the_resolved_account_and_strips_routing_arguments(
         gate: Arc::new(SelectedActor(requester.clone())),
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
-        reviewed_tools: Vec::new(),
     };
     let result = tools
         .dispatch_tool_call(
@@ -537,7 +531,6 @@ async fn cancelling_the_turn_ends_a_call_held_for_the_owner_and_a_later_approval
         gate: gate.clone(),
         session: AgentSessionId::new(),
         awaiting: Arc::default(),
-        reviewed_tools: Vec::new(),
     });
     let request = RequestContext::new(MacroUserIdStr::try_from_email("owner@example.com").unwrap());
     let cancel = request.cancel.clone();

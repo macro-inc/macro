@@ -16,6 +16,8 @@ mod spreadsheet;
 mod upload_file;
 mod word_document;
 
+pub use canvas::RenderCanvas;
+
 #[cfg(test)]
 mod comment_test;
 #[cfg(test)]
@@ -34,7 +36,7 @@ use crate::{
     domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
     domain::word_document::WordDocumentFiles,
     inbound::toolset::{
-        canvas::{ApplyCanvasEdits, EditCanvas, ReadCanvas, RenderCanvas},
+        canvas::{ApplyCanvasEdits, EditCanvas, ReadCanvas},
         comment_on_text::CommentOnText,
         create_document::CreateDocument,
         create_skill::CreateSkill,

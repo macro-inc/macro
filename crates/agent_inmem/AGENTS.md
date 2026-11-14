@@ -65,15 +65,11 @@ milliseconds instead of waiting on container provisioning.
 - Add a new tool gate or admission check: `src/domain/tool_gate.rs` /
   `src/domain/admission.rs` → `src/outbound/approval_gate.rs`.
 
-Native user tools bypass the ordinary gate only when the final-draft review
-finisher is installed; otherwise dispatch must resolve their actor normally.
-
 Session tool schemas require `acting_as: requester | owner` for tools using
 account access, including deferred tools. The gate resolves the selected account
 through `TurnPrompter::acting_user()` and requests owner approval only when that
 account differs from the turn's requester. System invocations have no requester.
-Reviewed user tools retain the selection through confirmation and execute with
-that account. Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
+Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
 retains notification ACP inputs and their replies; the transcript fold separately
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools.
@@ -110,8 +106,8 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   user message that loaded them in the model's copy only, and remembered per
   session in `SessionSkills` (memory; lost on restart). Eval:
   `route_evaluation` (ignored; needs `TYPESAFE_API_KEY`).
-- Keep session-aware `NameSearch`, `ContentSearch`, and `ListEntities` native in
-  code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
+- Sessions search their own history with `macro.search` (`agentSessions`);
+  legacy `ReadChat` must not appear in the runtime tool catalog.
 - Every turn cuts tool results over `agent::ToolResultLimit`'s limit (about
   25k tokens) for the model and offers `ReadToolResult` to page through them.
   The stream, log and history keep the whole result; replay cuts it again, so

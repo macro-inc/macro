@@ -83,13 +83,19 @@ fn chat_advertises_the_complete_contract() {
 #[test]
 fn display_results_is_chat_only() {
     // Agent sessions present views with the harness's execution.views.present instead.
-    for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
+    for host in [AiHost::ChannelBot, AiHost::Mcp] {
         let toolset = tools_for(host);
         assert!(
             !toolset.toolset.tools.contains_key("DisplayResults"),
             "{host:?}"
         );
     }
+    assert!(
+        !crate::tools_for_agent_code_mode()
+            .toolset
+            .tools
+            .contains_key("DisplayResults")
+    );
 
     let channel_tools = tools_for(AiHost::ChannelBot);
     assert!(channel_tools.toolset.tools.contains_key("SearchTools"));

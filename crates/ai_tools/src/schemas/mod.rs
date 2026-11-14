@@ -3,6 +3,7 @@
 //! These are just schemas _not_ tools and aren't sent to AI. The
 //! schemas are kept here so that typegen and frontend rendering works.
 
+pub mod discover_connectors;
 pub mod read;
 pub mod read_activity;
 pub mod subagent;
