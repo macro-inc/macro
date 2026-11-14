@@ -196,8 +196,11 @@ impl SyncPolicy for MacroSyncPolicy {
             &[]
         }
     }
-    fn keep_local_on_remote(&self, ty: &str) -> &'static [&'static str] {
-        if ty == "listitem" { &["indent"] } else { &[] }
+    fn indent_is_tree_depth(&self, ty: &str) -> bool {
+        ty == "listitem"
+    }
+    fn keep_local_on_remote(&self, _: &str) -> &'static [&'static str] {
+        &[]
     }
 }
 /// Serialize only the synced view, retaining co-ownership and arbitrary shared state.

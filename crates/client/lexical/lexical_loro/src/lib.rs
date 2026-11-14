@@ -62,6 +62,9 @@ pub struct ProjectionStats {
     pub containers_written: usize,
     /// Text insertion/deletion operations.
     pub text_splices: usize,
+    /// Incoming numeric derived indents unequal to the final stored tree depth.
+    /// Counts only nodes visited in this projection batch; no cross-batch accumulation.
+    pub derived_indent_mismatches: usize,
 }
 /// Result of one explicit local commit.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

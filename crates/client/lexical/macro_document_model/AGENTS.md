@@ -168,3 +168,5 @@ Keep checklist facts explicit/versioned and stage key-addressed plan deltas unti
 
 Keep reader checklist settings as producer metadata and derive with the same
 planner; never persist an override on access upgrade or mask canonical state.
+
+- Classify listitem exported indent as tree depth through SyncPolicy.indent_is_tree_depth; do not duplicate that rule in keep_local_on_remote or write exported depth into raw padding.

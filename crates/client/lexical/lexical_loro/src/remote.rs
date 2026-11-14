@@ -61,6 +61,37 @@ fn path(doc: &LoroDoc, id: &ContainerID) -> Vec<(u8, String, usize)> {
         })
         .collect()
 }
+// Compare against FINAL remote topology: the model still has the old topology here.
+// C-LIST-INDENT-RESTRUCTURE-ON-MISMATCH-01 remains open: counting is not a
+// claim to implement Source's restructuring when stored depth is inconsistent.
+fn derived_indent_mismatch(
+    doc: &LoroDoc,
+    map: &LoroMap,
+    incoming: &SerializedNode,
+    policy: &dyn SyncPolicy,
+) -> Result<bool> {
+    let Some(Value::Number(stored)) = incoming.get("indent") else {
+        return Ok(false);
+    };
+    let path = doc
+        .get_path_to_container(&map.id())
+        .ok_or_else(|| diverged("derived indent node has no stored path"))?;
+    let mut depth = 0_u64;
+    for (id, _) in path {
+        if id == map.id() {
+            continue;
+        }
+        if let Some(Container::Map(ancestor)) = doc.get_container(id)
+            && let Some(value) = ancestor.get("type")
+            && let Value::String(kind) = schema::read_value(&value)?
+            && policy.indent_is_tree_depth(&kind)
+        {
+            depth += 1;
+        }
+    }
+    Ok(stored.as_u64() != Some(depth))
+}
+
 impl LoroProjection {
     /// Import a transport update with an explicit origin, then project all buffered batches.
     pub fn remote(
@@ -287,6 +318,10 @@ impl LoroProjection {
             if current.get("type") != incoming.get("type") {
                 return Err(diverged(format!("remote type changed at {key}")));
             }
+            let derived_indent = self.policy.indent_is_tree_depth(&kind);
+            if derived_indent && derived_indent_mismatch(doc, &map, &incoming, self.policy)? {
+                building.stats.derived_indent_mismatches += 1;
+            }
             let mut compare = comparison::loro_own(&map, parent.as_ref(), self.policy)?;
             self.tolerate_model_drift(key, &mut current, &compare);
             for field in self.policy.ignore_in_remote_compare(&kind, &incoming) {
@@ -332,6 +367,25 @@ impl LoroProjection {
                         }
                         None => {
                             incoming.remove(*field);
+                        }
+                    }
+                }
+                if derived_indent {
+                    // Preserve the prior slot's absence/null exactly as keep-local did.
+                    // A number carries RAW padding, never the exported depth getter.
+                    let local = state.view().export_json(key)?;
+                    match local.get("indent") {
+                        Some(Value::Number(_)) => {
+                            incoming.insert(
+                                "indent".into(),
+                                state.view().element_data(key)?.indent.into(),
+                            );
+                        }
+                        Some(value) => {
+                            incoming.insert("indent".into(), value.clone());
+                        }
+                        None => {
+                            incoming.remove("indent");
                         }
                     }
                 }
@@ -522,6 +576,23 @@ impl LoroProjection {
         if schema::children(map)?.is_some() {
             incoming.insert("children".into(), Value::Array(vec![]));
         }
+        if incoming
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|kind| self.policy.indent_is_tree_depth(kind))
+        {
+            if derived_indent_mismatch(b.doc, map, &incoming, self.policy)? {
+                b.stats.derived_indent_mismatches += 1;
+            }
+            if incoming.get("indent").is_some_and(Value::is_number) {
+                // Element constructors start with the framework's raw default.
+                // Tree attachment supplies virtual depth; missing/null stay untouched.
+                incoming.insert(
+                    "indent".into(),
+                    lexical_model::ElementData::default().indent.into(),
+                );
+            }
+        }
         b.creates.push(NodeChange::Create {
             local,
             json: incoming,
@@ -665,3 +736,6 @@ fn minimal_splice(
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod indent_test;

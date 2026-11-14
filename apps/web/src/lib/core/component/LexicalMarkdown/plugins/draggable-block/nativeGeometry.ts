@@ -1,5 +1,6 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
+import { nativeListDepth } from '../../editing/native-list-depth';
 
 export function nativeList(node: ViewNode | null): boolean {
   return node?.type === 'list' || node?.type === 'task-list';
@@ -70,6 +71,8 @@ export function nativeDragGroup(
   if (node.type !== 'listitem') return [key];
   const parent = node.parent === null ? null : view.node(node.parent);
   if (nativeList(parent) && parent?.children.at(0) === key) return [parent.key];
+  const depth = nativeListDepth(view, key);
+  if (depth === null) return [];
   const group = [key];
   const siblings = parent?.children ?? [];
   const index = siblings.indexOf(key);
@@ -77,8 +80,9 @@ export function nativeDragGroup(
   for (const siblingKey of siblings.slice(index + 1)) {
     const sibling = view.node(siblingKey);
     if (sibling?.type !== 'listitem') break;
-    const nested =
-      (sibling.elementProps?.indent ?? 0) > (node.elementProps?.indent ?? 0);
+    const siblingDepth = nativeListDepth(view, siblingKey);
+    if (siblingDepth === null) break;
+    const nested = siblingDepth > depth;
     const wrapper =
       sibling.children.length > 0 &&
       sibling.children.every((child) => nativeList(view.node(child)));

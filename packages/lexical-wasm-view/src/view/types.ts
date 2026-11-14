@@ -33,6 +33,7 @@ export interface TextProps {
 }
 export interface ElementProps {
   readonly format: number;
+  /** Raw element padding indent; list nesting comes from parent/child topology. */
   readonly indent: number;
   readonly direction: number;
   readonly textFormat: number;

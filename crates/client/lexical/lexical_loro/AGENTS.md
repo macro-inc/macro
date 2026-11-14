@@ -80,3 +80,5 @@ Keep `dev-probes` default-off and restricted to preview/test inspection; product
 Keep `test-faults` default-off and simulation-only: it fails a projection after a set number of own-field writes, so callers can test recovery from partial writes. Only document_session's `test-faults` enables it; never ship it.
 
 Use feature-gated `stored_comparison` only for the exact projection comparison policy; it forwards `comparison::model` and is neither ordinary public export nor raw Loro JSON.
+
+- Classify derived remote indentation once through SyncPolicy; retain raw local values on Update, use constructor raw defaults for numeric Create values, preserve absent/null slots, and count final-tree depth mismatches per batch without claiming restructuring parity.

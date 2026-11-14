@@ -52,7 +52,9 @@ internal class EditorSpans {
                 "code", "custom-code" -> span(TypefaceSpan("monospace"), range)
             }
             node.elementProps?.let { props ->
-                if (props.indent > 0u) span(LeadingMarginSpan.Standard(props.indent.toInt() * 24), range)
+                // Source getIndent for an attached LI is its ancestor-LI depth.
+                val indent = if (type == "listitem") layout.listDepths.getValue(range.key) else props.indent
+                if (indent > 0u) span(LeadingMarginSpan.Standard(indent.toInt() * 24), range)
                 when (props.format) {
                     ElementFormat.CENTER -> span(AlignmentSpan.Standard(android.text.Layout.Alignment.ALIGN_CENTER), range)
                     ElementFormat.RIGHT, ElementFormat.END -> span(AlignmentSpan.Standard(android.text.Layout.Alignment.ALIGN_OPPOSITE), range)

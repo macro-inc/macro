@@ -67,6 +67,11 @@ pub trait SyncPolicy: Send + Sync + 'static {
         node_type: &str,
         json: &SerializedNode,
     ) -> &'static [&'static str];
+    /// Whether numeric exported indent represents ancestor nesting, rather than raw padding.
+    /// Remote projection retains raw local padding and leaves missing/null slots unchanged.
+    fn indent_is_tree_depth(&self, _node_type: &str) -> bool {
+        false
+    }
     /// Fields preserved from the editor when a remote update is applied.
     fn keep_local_on_remote(&self, node_type: &str) -> &'static [&'static str];
 }

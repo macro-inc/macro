@@ -103,10 +103,16 @@ fn synced_view_keeps_coowners_and_content_but_drops_local_status_and_completion(
             )
             .is_empty()
     );
-    assert_eq!(
-        MACRO_SYNC_POLICY.keep_local_on_remote("listitem"),
-        &["indent"]
+    // Source @lexical/list 0.45 ListItemNode.getIndent/setIndent (877-911):
+    // attached list nesting is derived; ordinary element padding is raw.
+    assert!(
+        MACRO_SYNC_POLICY
+            .keep_local_on_remote("listitem")
+            .is_empty()
     );
+    assert!(MACRO_SYNC_POLICY.indent_is_tree_depth("listitem"));
+    assert!(!MACRO_SYNC_POLICY.indent_is_tree_depth("paragraph"));
+    assert!(!MACRO_SYNC_POLICY.indent_is_tree_depth("heading"));
     Ok(())
 }
 

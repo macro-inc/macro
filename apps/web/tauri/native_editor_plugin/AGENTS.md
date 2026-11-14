@@ -53,3 +53,5 @@ Android registration exposes bridge commands; it does not select native editing 
 Consume full-width decorator revision operations exhaustively and refresh cached model facts on native sidecar invalidation keys; a native diff alone does not acknowledge signature consumption.
 
 Reuse the Source `component/accessory/svg-preview.ts` preparation and sizing helpers for SVG presentation; keep sanitizer changes separate from host integration and preserve actual Source preview controls before and after extraction.
+
+- Derive list-item margins from EditorProjection.Layout.listDepths on each topology rebuild; use ElementProps.indent only for raw indentation of other elements.

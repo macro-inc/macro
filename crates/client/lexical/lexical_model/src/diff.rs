@@ -69,7 +69,7 @@ impl From<&TextData> for TextProps {
 pub struct ElementProps {
     /// Block alignment.
     pub format: ElementFormat,
-    /// Virtual indentation.
+    /// Raw element padding indentation; list nesting is represented by child topology.
     pub indent: u32,
     /// Explicit direction.
     pub direction: Option<TextDirection>,
@@ -84,16 +84,8 @@ fn element_props(view: StateRef<'_>, key: NodeKey) -> Result<ElementProps, Error
     let data = view.element_data(key)?;
     Ok(ElementProps {
         format: data.format,
-        indent: {
-            #[cfg(feature = "foreign-nodes")]
-            if view.state.foreign_instances.has_hooks() {
-                data.indent
-            } else {
-                view.indent(key)
-            }
-            #[cfg(not(feature = "foreign-nodes"))]
-            view.indent(key)
-        },
+        // Source reconciles raw __indent, not a subclass's virtual list depth.
+        indent: data.indent,
         direction: data.direction,
         text_format: data.text_format,
         style: data.style.clone(),

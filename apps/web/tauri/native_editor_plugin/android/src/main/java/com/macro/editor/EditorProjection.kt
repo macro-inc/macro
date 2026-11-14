@@ -25,6 +25,7 @@ internal class EditorProjection {
         val elements: List<Range>,
         val boundaries: Map<NodeKey, List<Int>>,
         val decorators: List<Range>,
+        val listDepths: Map<NodeKey, UInt>,
     ) {
         fun point(offset: Int): Point {
             require(offset in 0..text.length)
@@ -149,9 +150,13 @@ internal class EditorProjection {
         val elements = mutableListOf<Range>()
         val boundaries = linkedMapOf<NodeKey, List<Int>>()
         val decorators = mutableListOf<Range>()
-        fun append(key: NodeKey) {
+        val listDepths = linkedMapOf<NodeKey, UInt>()
+        fun append(key: NodeKey, listAncestors: UInt) {
             val node = requireNotNull(nodes[key])
             val start = text.length
+            val listItem = typeName(node) == "listitem"
+            if (listItem) listDepths[key] = listAncestors
+            val descendantDepth = if (listItem) listAncestors + 1u else listAncestors
             when (node.kind) {
                 NodeKind.TEXT -> {
                     text.append(node.text)
@@ -173,7 +178,7 @@ internal class EditorProjection {
                             }
                         }
                         childOffsets += text.length
-                        append(child)
+                        append(child, descendantDepth)
                     }
                     childOffsets += text.length
                     boundaries[key] = childOffsets
@@ -181,7 +186,7 @@ internal class EditorProjection {
                 }
             }
         }
-        if (root in nodes) append(root)
-        return Layout(text.toString(), ranges, elements, boundaries, decorators)
+        if (root in nodes) append(root, 0u)
+        return Layout(text.toString(), ranges, elements, boundaries, decorators, listDepths)
     }
 }
