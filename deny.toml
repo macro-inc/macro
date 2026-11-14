@@ -143,6 +143,9 @@ exceptions = [
   # Signal's libsignal, used by whatsmeow_signal; AGPL like this repository.
   { allow = ["AGPL-3.0-only"], crate = "libsignal-core" },
   { allow = ["AGPL-3.0-only"], crate = "libsignal-debug" },
+  # File-system notifications for the agent monitor's sources; public domain
+  # dedication.
+  { allow = ["CC0-1.0"], crate = "notify" },
   # Each entry is the crate and version constraint, and its specific allow
   # list
   #{ allow = ["Zlib"], crate = "adler32" },
