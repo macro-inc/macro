@@ -1,7 +1,7 @@
 //! Everything one emulator holds: mailboxes, access tokens, subscriptions,
 //! upload sessions, faults, the clock and the logs.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -119,6 +119,10 @@ pub(crate) struct State {
     /// The mailbox of each grant the authentication-service stand-in
     /// described, by grant id: one per principal who signed in to it.
     pub(crate) grants: HashMap<uuid::Uuid, String>,
+    /// The grants each link was described with. A link whose grants were
+    /// all released gets no access token; one never described with a grant
+    /// is answered for as long as its mailbox is not revoked.
+    pub(crate) link_grants: HashMap<String, HashSet<uuid::Uuid>>,
     /// The access token last handed out for each link.
     link_tokens: HashMap<String, String>,
     /// Authorization codes not yet redeemed.
@@ -210,6 +214,18 @@ impl State {
         Ok(token)
     }
 
+    /// Binds a link to a mailbox. The grants a link was described with are
+    /// for one mailbox, so they go when the link moves to another.
+    pub(crate) fn bind_link(&mut self, link_id: String, email: String) {
+        let moved = self
+            .links
+            .insert(link_id.clone(), email.clone())
+            .is_some_and(|before| before != email);
+        if moved {
+            self.link_grants.remove(&link_id);
+        }
+    }
+
     /// The access token for a Macro email link, as the authentication
     /// service hands it out: the cached one while it has two minutes left,
     /// unless a fresh one is forced. Answers whether it was cached.
@@ -224,6 +240,12 @@ impl State {
             .get(&link_id)
             .cloned()
             .ok_or_else(|| EmulatorError::UnknownMailbox(link_id.clone()))?;
+        let released = self.link_grants.get(&link_id).is_some_and(|grants| {
+            !grants.is_empty() && !grants.iter().any(|grant| self.grants.contains_key(grant))
+        });
+        if released {
+            return Err(EmulatorError::GrantRevoked(email));
+        }
         let fresh_until = self.now() + Duration::seconds(120);
         let cached = self.link_tokens.get(&link_id).filter(|token| {
             self.tokens

@@ -382,3 +382,84 @@ async fn each_principal_holds_their_own_grant_for_a_mailbox() {
     revoke(&second).await;
     assert_eq!(token_status().await, 401);
 }
+
+#[tokio::test]
+async fn a_link_whose_grant_was_released_gets_no_access_token() {
+    let (emulator, _) = start("mailboxes:\n  - email: ada@example.com\n").await;
+    let http = reqwest::Client::new();
+    let service = format!("{}/internal", emulator.authentication_service_url());
+    // Two principals connect the same mailbox, each through an attempt and
+    // a link of their own.
+    let attempts = [
+        "0195a000-0000-7000-8000-0000000a77e1",
+        "0195a000-0000-7000-8000-0000000a77e2",
+    ];
+    let links = [
+        "0195a000-0000-7000-8000-00000000a1c1",
+        "0195a000-0000-7000-8000-00000000a1c2",
+    ];
+    let mut grants = Vec::new();
+    for (index, (attempt, link)) in attempts.iter().zip(links).enumerate() {
+        emulator.link_mailbox(attempt, ADA).unwrap();
+        let url = format!("{service}/microsoft_grant?attempt_id={attempt}&owner=owner-{index}");
+        grants.push(body(http.get(url).send().await.unwrap()).await["grant_id"].clone());
+        emulator.link_attempt(link, attempt).unwrap();
+    }
+    let token_status = async |link: &str| {
+        let url = format!("{service}/microsoft_access_token?link_id={link}&force_refresh=true");
+        http.get(url).send().await.unwrap().status()
+    };
+    assert_eq!(token_status(links[0]).await, 200);
+
+    http.post(format!("{service}/revoke_microsoft_grant"))
+        .json(&json!({ "grant_id": grants[0] }))
+        .send()
+        .await
+        .unwrap();
+
+    // The released grant's link is refused; the other principal's is not.
+    assert_eq!(token_status(links[0]).await, 401);
+    assert_eq!(token_status(links[1]).await, 200);
+
+    // Signing in again gives the principal a grant for the link again.
+    let url = format!(
+        "{service}/microsoft_grant?attempt_id={}&owner=owner-0",
+        links[0]
+    );
+    assert_eq!(http.get(url).send().await.unwrap().status(), 200);
+    assert_eq!(token_status(links[0]).await, 200);
+}
+
+#[tokio::test]
+async fn a_link_moved_to_another_mailbox_leaves_its_grants_behind() {
+    let (emulator, _) =
+        start("mailboxes:\n  - email: ada@example.com\n  - email: bob@example.com\n").await;
+    let http = reqwest::Client::new();
+    let service = format!("{}/internal", emulator.authentication_service_url());
+    let link = "0195a000-0000-7000-8000-00000000a11c";
+    emulator.link_mailbox(link, ADA).unwrap();
+    let url = format!("{service}/microsoft_grant?attempt_id={link}&owner=first");
+    let grant = body(http.get(url).send().await.unwrap()).await["grant_id"].clone();
+    // A second grant keeps the first mailbox itself from being revoked.
+    let url = format!("{service}/microsoft_grant?attempt_id={link}&owner=second");
+    http.get(url).send().await.unwrap();
+
+    emulator.link_mailbox(link, BOB).unwrap();
+    http.post(format!("{service}/revoke_microsoft_grant"))
+        .json(&json!({ "grant_id": grant }))
+        .send()
+        .await
+        .unwrap();
+
+    // A grant for the first mailbox says nothing about the second.
+    let url = format!("{service}/microsoft_access_token?link_id={link}&force_refresh=true");
+    assert_eq!(http.get(url).send().await.unwrap().status(), 200);
+
+    // A link made from an attempt no grant was described for is answered.
+    let attempt = "0195a000-0000-7000-8000-0000000a77e3";
+    let made = "0195a000-0000-7000-8000-00000000a1c3";
+    emulator.link_mailbox(attempt, BOB).unwrap();
+    emulator.link_attempt(made, attempt).unwrap();
+    let url = format!("{service}/microsoft_access_token?link_id={made}");
+    assert_eq!(http.get(url).send().await.unwrap().status(), 200);
+}
