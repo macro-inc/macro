@@ -20,6 +20,7 @@ use crate::domain::{
     stages::TeamSettingsStore,
 };
 use chrono::{DateTime, Utc};
+use company_contacts::VisibleCompany;
 use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -2494,28 +2495,14 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // member-role default) also treats hidden companies as not
         // found; `include_hidden = true` (admin/owner) makes hidden
         // companies reachable so admins can manage their contacts.
-        let visible = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM crm_companies
-                WHERE id = $1
-                  AND team_id = $2
-                  AND ($3 OR hidden = FALSE)
-            ) AS "exists!"
-            "#,
-            company_id,
-            team_id,
-            include_hidden,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        if !visible {
+        let Some(company) = self
+            .visible_company(team_id, company_id, include_hidden)
+            .await?
+        else {
             return Err(CrmError::CompanyNotFoundForTeam);
-        }
+        };
 
-        self.read_company_contacts(company_id, include_hidden).await
+        self.read_company_contacts(&company).await
     }
 
     #[tracing::instrument(
@@ -2790,12 +2777,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             }
         }
 
-        // The read above proved the company visible, so the contacts need
-        // no second check. Issued only after the company resolves so
-        // cross-team or hidden 404s short-circuit before a second round trip.
+        // The read above checked the company's team and visibility, so the
+        // contacts need no second check. Issued only after the company
+        // resolves so cross-team or hidden 404s short-circuit before a
+        // second round trip.
         let contacts = if include_contacts {
-            self.read_company_contacts(company_id, include_hidden)
-                .await?
+            let Some(visible) = VisibleCompany::from_read(&company, team_id, include_hidden) else {
+                return Ok(None);
+            };
+            self.read_company_contacts(&visible).await?
         } else {
             Vec::new()
         };

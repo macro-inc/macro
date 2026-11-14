@@ -4,19 +4,78 @@ use uuid::Uuid;
 
 use super::CompaniesRepositoryImpl;
 use crate::domain::model::{
-    CrmCompanyContactsCursor, CrmCompanyContactsPage, CrmCompanyContactsQuery, CrmContact, CrmError,
+    CrmCompany, CrmCompanyContactsCursor, CrmCompanyContactsPage, CrmCompanyContactsQuery,
+    CrmContact, CrmError,
 };
 
+/// Proof that a company is visible to a caller: its team's, and not hidden
+/// unless the caller may see hidden records. Only this module builds one,
+/// and only from a read that checked both, so
+/// [`CompaniesRepositoryImpl::read_company_contacts`] can't run unchecked.
+pub(super) struct VisibleCompany {
+    id: Uuid,
+    include_hidden: bool,
+}
+
+impl VisibleCompany {
+    /// The proof for a company row read for `team_id`, or `None` when the
+    /// row is another team's or hidden from a caller without
+    /// `include_hidden`.
+    pub(super) fn from_read(
+        company: &CrmCompany,
+        team_id: &Uuid,
+        include_hidden: bool,
+    ) -> Option<Self> {
+        (company.team_id == *team_id && (include_hidden || !company.hidden)).then_some(Self {
+            id: company.id,
+            include_hidden,
+        })
+    }
+}
+
 impl CompaniesRepositoryImpl {
-    /// Every contact of `company_id`, alphabetically by lowercased name (the
-    /// email when unnamed), ties on `id DESC`. Hidden contacts only with
-    /// `include_hidden`. Checks nothing about the company: callers prove it
-    /// visible first.
-    pub(super) async fn read_company_contacts(
+    /// The proof for `company_id` when it is `team_id`'s and visible to the
+    /// caller; `None` otherwise.
+    pub(super) async fn visible_company(
         &self,
+        team_id: &Uuid,
         company_id: &Uuid,
         include_hidden: bool,
+    ) -> Result<Option<VisibleCompany>, CrmError> {
+        let visible = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM crm_companies
+                WHERE id = $1
+                  AND team_id = $2
+                  AND ($3 OR hidden = FALSE)
+            ) AS "exists!"
+            "#,
+            company_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(visible.then_some(VisibleCompany {
+            id: *company_id,
+            include_hidden,
+        }))
+    }
+
+    /// Every contact of the company, alphabetically by lowercased name (the
+    /// email when unnamed), ties on `id DESC`. Hidden contacts only when the
+    /// proof allows hidden records.
+    pub(super) async fn read_company_contacts(
+        &self,
+        company: &VisibleCompany,
     ) -> Result<Vec<CrmContact>, CrmError> {
+        let VisibleCompany {
+            id: company_id,
+            include_hidden,
+        } = company;
         sqlx::query_as!(
             CrmContact,
             r#"
@@ -141,9 +200,13 @@ impl CompaniesRepositoryImpl {
         }
 
         contacts.truncate(page_size);
-        let next_cursor = contacts.last().map(|last| CrmCompanyContactsCursor {
-            sort_name: sort_names.swap_remove(page_size - 1),
-            id: last.id,
+        let next_cursor = contacts.last().map(|last| {
+            CrmCompanyContactsCursor::after(
+                *company_id,
+                query,
+                sort_names.swap_remove(page_size - 1),
+                last.id,
+            )
         });
         Ok(CrmCompanyContactsPage {
             contacts,

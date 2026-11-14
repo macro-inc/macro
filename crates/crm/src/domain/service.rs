@@ -1218,6 +1218,15 @@ where
         let company_id = access.company_id()?;
         query.search = query.search.trim().to_owned();
         query.limit = query.limit.clamp(1, MAX_COMPANY_CONTACTS_PAGE);
+        if query
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| !cursor.continues(company_id, &query))
+        {
+            return Err(CrmError::InvalidRequest(
+                "contacts cursor belongs to another list".into(),
+            ));
+        }
         self.companies_repository
             .list_company_contacts_page(&team_id, &company_id, access.include_hidden(), &query)
             .await

@@ -216,13 +216,60 @@ pub struct CrmCompanyContactsQuery {
 }
 
 /// The last contact of a Team list page, in the list's order: by
-/// lowercased name (the email when unnamed), then by id descending.
+/// lowercased name (the email when unnamed), then by id descending. It is
+/// bound to the list it came from: a cursor replayed on another company,
+/// archive state or search is refused instead of starting mid-list.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CrmCompanyContactsCursor {
     /// The contact's lowercased name, or email when it has no name.
     pub sort_name: Option<String>,
     /// The contact's id.
     pub id: uuid::Uuid,
+    /// The company whose list the cursor continues.
+    pub company_id: uuid::Uuid,
+    /// The archive state of that list.
+    pub archived: bool,
+    /// [`CrmCompanyContactsCursor::search_fingerprint`] of that list's
+    /// trimmed search.
+    pub search: String,
+}
+
+impl CrmCompanyContactsCursor {
+    /// A cursor after the contact `(sort_name, id)` of `company_id`'s list
+    /// for `query`, whose search is already trimmed.
+    pub fn after(
+        company_id: uuid::Uuid,
+        query: &CrmCompanyContactsQuery,
+        sort_name: Option<String>,
+        id: uuid::Uuid,
+    ) -> Self {
+        Self {
+            sort_name,
+            id,
+            company_id,
+            archived: query.archived,
+            search: Self::search_fingerprint(&query.search),
+        }
+    }
+
+    /// Whether the cursor continues `company_id`'s list for `query`, whose
+    /// search is already trimmed.
+    pub fn continues(&self, company_id: uuid::Uuid, query: &CrmCompanyContactsQuery) -> bool {
+        self.company_id == company_id
+            && self.archived == query.archived
+            && self.search == Self::search_fingerprint(&query.search)
+    }
+
+    /// A stable digest of the search text (the first 16 bytes of its
+    /// SHA-256, in hex), so the cursor doesn't carry the search itself.
+    fn search_fingerprint(search: &str) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(search.as_bytes())
+            .iter()
+            .take(16)
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
 }
 
 /// One page of a company's Team list.

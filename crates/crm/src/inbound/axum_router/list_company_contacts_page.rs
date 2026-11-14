@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::{
     domain::{
         model::{CrmCompanyContactsCursor, CrmCompanyContactsQuery, CrmError},
-        service::{CrmService, MAX_COMPANY_CONTACTS_PAGE},
+        service::CrmService,
     },
     inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
 };
@@ -99,10 +99,8 @@ pub async fn handler<
         archived: params.archived.unwrap_or(false),
         search: params.query.unwrap_or_default(),
         cursor,
-        limit: params
-            .limit
-            .unwrap_or(DEFAULT_COMPANY_CONTACTS_PAGE)
-            .clamp(1, MAX_COMPANY_CONTACTS_PAGE),
+        // The service clamps it into range.
+        limit: params.limit.unwrap_or(DEFAULT_COMPANY_CONTACTS_PAGE),
     };
 
     let page = state
