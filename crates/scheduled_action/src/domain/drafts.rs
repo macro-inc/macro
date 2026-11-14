@@ -1156,7 +1156,7 @@ pub(super) fn fast_brief(
 
 You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}.
 
-Everything you need is here: the items the request names, already looked up, and the SDK reference for the routines area and the areas this routine uses. Don't read documentation and don't search for items. Write ONE ExecuteCode program that builds the whole routine and ends with `return await macro.routines.check(routine, {{ created: [] }});`.
+Everything you need is here: the items the request names, already looked up, and the SDK reference for the routines area and the areas this routine uses. Don't read documentation and don't search for items. Write ONE ExecuteCode program that builds the whole routine and ends with `return {{ data: await macro.routines.check(routine, {{ created: [] }}) }};`.
 
 ## Items the request names
 
@@ -1178,7 +1178,7 @@ Before you, the drafter looked up by name each item the request names, as the ow
 
 2. Don't create the routine itself, run it or test it: you hand it back for them to review.
 
-3. Write the routine as `macro.routines.check` takes it, following the routines reference above exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
+3. Write the routine as `macro.routines.check` takes it, following the routines reference above exactly, since the check type-checks code steps but not your options. Write it as `{{name, trigger, steps: [...]}}` (`StepsRoutineOptions`), never with `task`: an Ask AI step is a step too. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
 
 Write it to do exactly what was asked, each time it runs, and nothing now: \"every Monday make a task\" makes no task today. Write step code that type-checks the first time: call only the methods the SDK reference shows, with the arguments it shows, and leave out an option you aren't sure of. Keep it short: no comments, no logging, no checks the types don't need.
 
