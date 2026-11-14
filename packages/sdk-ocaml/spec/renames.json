@@ -1,0 +1,6 @@
+{
+  "cognition": {
+    "GET /import/state": "get_import_state",
+    "GET /onboarding": "get_onboarding_state"
+  }
+}

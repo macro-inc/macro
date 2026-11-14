@@ -1,0 +1,3654 @@
+{
+  "agent-harness.get_agent_auto_archive_preferences": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.put_agent_auto_archive_preferences": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.get_agent_coding_preferences": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.put_agent_coding_preferences": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.list_agent_conversations": {
+    "group": "channels",
+    "action": "read"
+  },
+  "agent-harness.start_fresh_agent_conversation": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.retry_agent_conversation_turn": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.choose_agent_mode": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.list_agent_repositories": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.list_agent_repository_branches": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.get_agent_sandbox_size": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.put_agent_sandbox_size": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.create_agent_session": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.agent_sessions_for_pull_request": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.list_agent_session_updates": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.delete_agent_session": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.get_agent_session_activity": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.set_agent_session_archived": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.get_agent_session_auto_archive": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.put_agent_session_auto_archive": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.get_agent_session_changes": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.get_agent_session_changes_patch": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.refresh_agent_session_changes": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.list_execution_connected_apps": {
+    "group": "connected-apps",
+    "action": "read"
+  },
+  "agent-harness.discover_connected_apps": {
+    "group": "connected-apps",
+    "action": "read"
+  },
+  "agent-harness.add_connected_mcp_server": {
+    "group": "connected-apps",
+    "action": "create"
+  },
+  "agent-harness.search_connected_app_tools": {
+    "group": "connected-apps",
+    "action": "read"
+  },
+  "agent-harness.call_connected_app_tool": {
+    "group": "connected-apps",
+    "action": "destroy"
+  },
+  "agent-harness.list_connected_app_tools": {
+    "group": "connected-apps",
+    "action": "read"
+  },
+  "agent-harness.control_agent_session": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.get_agent_session_log": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.get_agent_session_folded_log": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.rename_agent_session": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.get_agent_session_permissions": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.update_agent_session_permissions": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.list_agent_session_pull_requests": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.link_agent_session_pull_request": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.unlink_agent_session_pull_request": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.get_agent_session_queue": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.edit_queued_action": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.remove_queued_action": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.steer_queued_action": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.decide_session_review": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.put_agent_session_sandbox_size": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.link_agent_session_task": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.answer_agent_session_tool_approval": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.register_agent_session_work": {
+    "group": "agent-sessions",
+    "action": "update"
+  },
+  "agent-harness.unregister_agent_session_work": {
+    "group": "agent-sessions",
+    "action": "destroy"
+  },
+  "agent-harness.list_agent_work_registrations": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.list_coding_agents": {
+    "group": "agents",
+    "action": "read"
+  },
+  "auth.macro_api_token": {
+    "group": "api-keys",
+    "action": "read"
+  },
+  "auth.email_connection_providers": {
+    "group": "email",
+    "action": "read"
+  },
+  "auth.get_referral_code": {
+    "group": "referrals",
+    "action": "read"
+  },
+  "auth.send_referral_code": {
+    "group": "referrals",
+    "action": "send"
+  },
+  "auth.get_team": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.invite_to_team": {
+    "group": "teams",
+    "action": "send"
+  },
+  "auth.delete_team_invite_handler": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.get_team_invites": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.get_user_teams": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.get_user_info": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.put_user_name": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.put_profile_picture_file": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.create_profile_picture_upload": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.post_profile_pictures": {
+    "group": "users",
+    "action": "read"
+  },
+  "calendar.get_availability_calendars": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.set_availability_calendar": {
+    "group": "calendar",
+    "action": "update"
+  },
+  "calendar.list_calendars": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.create_calendar_event": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.delete_calendar_event": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.update_calendar_event": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.copy_calendar_event": {
+    "group": "calendar",
+    "action": "create"
+  },
+  "calendar.invite_calendar_event_guests": {
+    "group": "calendar",
+    "action": "send"
+  },
+  "calendar.calendar_event_provider_url": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.prepare_calendar_replacement": {
+    "group": "calendar",
+    "action": "create"
+  },
+  "calendar.rsvp_calendar_event": {
+    "group": "calendar",
+    "action": "send"
+  },
+  "calendar.calendar_replacement_status": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.discard_calendar_replacement": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.confirm_calendar_replacement": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.list_bookings": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.change_booking": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.list_booking_reschedule_slots": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.get_booking_insights": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.list_booking_links": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.create_booking_link": {
+    "group": "calendar",
+    "action": "create"
+  },
+  "calendar.edit_booking_link": {
+    "group": "calendar",
+    "action": "update"
+  },
+  "calendar.get_booking_settings": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.save_booking_settings": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "calendar.get_team_sharing": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.set_team_sharing": {
+    "group": "calendar",
+    "action": "update"
+  },
+  "cognition.read_my_activity": {
+    "group": "activity",
+    "action": "read"
+  },
+  "cognition.get_usage_handler": {
+    "group": "ai",
+    "action": "read"
+  },
+  "cognition.create_confirmed_calendar_event": {
+    "group": "calendar",
+    "action": "destroy"
+  },
+  "cognition.delete_chat": {
+    "group": "chats",
+    "action": "destroy"
+  },
+  "cognition.patch_chat": {
+    "group": "chats",
+    "action": "update"
+  },
+  "cognition.permanently_delete_chat": {
+    "group": "chats",
+    "action": "destroy"
+  },
+  "cognition.create_chat": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_chat_history_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.copy_chat": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_chat_permissions": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.revert_delete_chat": {
+    "group": "chats",
+    "action": "update"
+  },
+  "cognition.decisions": {
+    "group": "ai",
+    "action": "read"
+  },
+  "cognition.send_confirmed_email": {
+    "group": "email",
+    "action": "send"
+  },
+  "cognition.generate_image": {
+    "group": "images",
+    "action": "create"
+  },
+  "cognition.list_import_entities": {
+    "group": "imports",
+    "action": "read"
+  },
+  "cognition.track_import_entity": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.decline_import_entity": {
+    "group": "imports",
+    "action": "destroy"
+  },
+  "cognition.import_notion_page": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.get_user_activity": {
+    "group": "users",
+    "action": "read"
+  },
+  "cognition.read_explicit_memory": {
+    "group": "memory",
+    "action": "read"
+  },
+  "cognition.edit_explicit_memory": {
+    "group": "memory",
+    "action": "destroy"
+  },
+  "cognition.list_skills": {
+    "group": "documents",
+    "action": "read"
+  },
+  "cognition.read_skill": {
+    "group": "documents",
+    "action": "read"
+  },
+  "cognition.send_chat_message": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.stop_chat_stream": {
+    "group": "chats",
+    "action": "destroy"
+  },
+  "cognition.structured_completion": {
+    "group": "ai",
+    "action": "create"
+  },
+  "cognition.fetch_web_page": {
+    "group": "web",
+    "action": "create"
+  },
+  "cognition.search_web": {
+    "group": "web",
+    "action": "create"
+  },
+  "contacts.search_people": {
+    "group": "users",
+    "action": "read"
+  },
+  "email.get_attachment_document_id": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.list_contacts": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.block_sender": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.list_blocked_senders": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.unblock_sender": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.recover_draft_transfer": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.create_draft": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.get_scheduled_messages": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.upsert_scheduled_message": {
+    "group": "email",
+    "action": "send"
+  },
+  "email.delete_scheduled_draft": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.delete_draft": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.add_draft_attachment": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.remove_draft_attachment": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.complete_draft_attachment": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.add_forwarded_attachment": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.remove_forwarded_attachment": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.message_operation_status": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.resolve_message_operation": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.transfer_draft": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.list_email_filters": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.upsert_email_filter": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.delete_email_filter": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.list_labels": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.create_label": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.delete_label": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.list_links": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.send_message": {
+    "group": "email",
+    "action": "send"
+  },
+  "email.add_remove_label": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.get_message_eml": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.mailbox_settings_operations": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.archive_threads": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.previews_inbox_cursor": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.archive_thread": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.add_remove_thread_label": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.get_thread_messages_handler": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.thread_operations": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.thread_seen": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.update_thread_state": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.get_thread": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.get_thread_calendar_invitations": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.copy_thread_calendar_invitation": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.update_thread_project": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.get_thread_read_receipts": {
+    "group": "email",
+    "action": "read"
+  },
+  "notification.unsubscribe_item": {
+    "group": "notifications",
+    "action": "create"
+  },
+  "notification.remove_unsubscribe_item": {
+    "group": "notifications",
+    "action": "destroy"
+  },
+  "notification.list_typed_notifications": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.bulk_delete_user_notifications_v2": {
+    "group": "notifications",
+    "action": "destroy"
+  },
+  "notification.bulk_mark_notifications_done": {
+    "group": "notifications",
+    "action": "update"
+  },
+  "notification.bulk_mark_notifications_seen": {
+    "group": "notifications",
+    "action": "update"
+  },
+  "notification.bulk_mark_notifications_undone": {
+    "group": "notifications",
+    "action": "update"
+  },
+  "notification.get_notification_type_preferences": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.disable_notification_type": {
+    "group": "notifications",
+    "action": "update"
+  },
+  "notification.enable_notification_type": {
+    "group": "notifications",
+    "action": "update"
+  },
+  "notification.delete_user_notification_v2": {
+    "group": "notifications",
+    "action": "destroy"
+  },
+  "properties.list_properties": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.create_property_definition": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.get_property_definition": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.delete_property_definition": {
+    "group": "properties",
+    "action": "destroy"
+  },
+  "properties.get_property_options": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.add_property_option": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.delete_property_option": {
+    "group": "properties",
+    "action": "destroy"
+  },
+  "properties.update_property_option": {
+    "group": "properties",
+    "action": "update"
+  },
+  "properties.get_bulk_entity_properties": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.get_entity_properties": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.bulk_update_entity_property_options": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.set_entity_property": {
+    "group": "properties",
+    "action": "update"
+  },
+  "properties.add_entity_property_option": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.remove_entity_property_option": {
+    "group": "properties",
+    "action": "destroy"
+  },
+  "properties.delete_entity_property": {
+    "group": "properties",
+    "action": "destroy"
+  },
+  "properties.bulk_update_entities_property_options": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.list_tags": {
+    "group": "properties",
+    "action": "read"
+  },
+  "properties.ensure_tag_set": {
+    "group": "properties",
+    "action": "create"
+  },
+  "scheduled-action.list_scheduled_actions": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.create_scheduled_action": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.check_scheduled_action": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.suggest_routine": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.update_scheduled_action": {
+    "group": "routines",
+    "action": "update"
+  },
+  "scheduled-action.delete_scheduled_action": {
+    "group": "routines",
+    "action": "destroy"
+  },
+  "scheduled-action.set_scheduled_action_appearance": {
+    "group": "routines",
+    "action": "update"
+  },
+  "scheduled-action.detach_scheduled_action": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.set_scheduled_action_enabled": {
+    "group": "routines",
+    "action": "update"
+  },
+  "scheduled-action.execute_scheduled_action_now": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.list_scheduled_action_history": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.get_scheduled_action_template": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.share_scheduled_action_template": {
+    "group": "routines",
+    "action": "update"
+  },
+  "scheduled-action.unshare_scheduled_action_template": {
+    "group": "routines",
+    "action": "destroy"
+  },
+  "scheduled-action.activate_scheduled_action_template": {
+    "group": "routines",
+    "action": "create"
+  },
+  "search.unified_search": {
+    "group": "search",
+    "action": "read"
+  },
+  "storage.list_account_managers": {
+    "group": "account-managers",
+    "action": "read"
+  },
+  "storage.request_account_manager": {
+    "group": "account-managers",
+    "action": "create"
+  },
+  "storage.revoke_account_manager_grant": {
+    "group": "account-managers",
+    "action": "destroy"
+  },
+  "storage.respond_to_account_manager_request": {
+    "group": "account-managers",
+    "action": "destroy"
+  },
+  "storage.claim_account_manager_token": {
+    "group": "account-managers",
+    "action": "destroy"
+  },
+  "storage.list_agents": {
+    "group": "agents",
+    "action": "read"
+  },
+  "storage.create_agent": {
+    "group": "agents",
+    "action": "create"
+  },
+  "storage.update_agent": {
+    "group": "agents",
+    "action": "destroy"
+  },
+  "storage.patch_agent": {
+    "group": "agents",
+    "action": "update"
+  },
+  "storage.delete_anchor": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.edit_anchor": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.get_document_anchors": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.create_anchor": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.list_bots": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.create_bot": {
+    "group": "bots",
+    "action": "create"
+  },
+  "storage.get_self_bot": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.delete_bot": {
+    "group": "bots",
+    "action": "destroy"
+  },
+  "storage.patch_bot": {
+    "group": "bots",
+    "action": "update"
+  },
+  "storage.list_bot_channels": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.remove_bot_from_channel_by_bot": {
+    "group": "bots",
+    "action": "destroy"
+  },
+  "storage.list_bot_tokens": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.create_bot_token": {
+    "group": "bots",
+    "action": "create"
+  },
+  "storage.revoke_bot_token": {
+    "group": "bots",
+    "action": "destroy"
+  },
+  "storage.list_occurrences": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.list_team_calendar": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.list_team_out_of_office": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.get_team_availability": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.event_ics": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.get_live_calls": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.meeting_lookup": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_guest_join": {
+    "group": "meetings",
+    "action": "create"
+  },
+  "storage.meeting_list": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_create": {
+    "group": "meetings",
+    "action": "create"
+  },
+  "storage.meeting_list_active": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_invite_permissions": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_invite": {
+    "group": "meetings",
+    "action": "send"
+  },
+  "storage.meeting_invite_users": {
+    "group": "meetings",
+    "action": "send"
+  },
+  "storage.meeting_join": {
+    "group": "meetings",
+    "action": "create"
+  },
+  "storage.meeting_cancel": {
+    "group": "meetings",
+    "action": "destroy"
+  },
+  "storage.meeting_update": {
+    "group": "meetings",
+    "action": "update"
+  },
+  "storage.get_batch_call_record_preview": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.delete_call_record": {
+    "group": "calls",
+    "action": "destroy"
+  },
+  "storage.edit_call_record": {
+    "group": "calls",
+    "action": "update"
+  },
+  "storage.decline_call": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.join_call": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.leave_call": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.meeting_share": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.get_call_participants": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.get_call_ring_state": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.toggle_share_with_team": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.edit_call_transcript": {
+    "group": "calls",
+    "action": "update"
+  },
+  "storage.start_call": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.check_active_call": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.list_channel_labels": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.create_channel_label": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.set_channel_label": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.preview_smart_tag": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.delete_channel_label": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.rename_channel_label": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.create_channel": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_activity": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.post_activity": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_or_create_dm": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_or_create_private": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.create_entity_mention": {
+    "group": "entity-mentions",
+    "action": "create"
+  },
+  "storage.delete_entity_mention": {
+    "group": "entity-mentions",
+    "action": "destroy"
+  },
+  "storage.delete_channel": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.patch_channel": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.get_my_channel_access_request": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.request_channel_access": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.cancel_channel_access_request": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.resolve_channel_access_request": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.get_channel_attachments": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.list_channel_bots": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.add_channel_bot": {
+    "group": "bots",
+    "action": "create"
+  },
+  "storage.join_channel": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_channel_join_link": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.leave_channel": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.get_channel_participants": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.add_participants": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.remove_participants": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.set_channel_picture": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.share_with_channel": {
+    "group": "channels",
+    "action": "send"
+  },
+  "storage.post_channel_bot_webhook": {
+    "group": "channels",
+    "action": "send"
+  },
+  "storage.get_channels": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.list_crm_blocked_domains": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.block_crm_domain": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.unblock_crm_domain": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.create_crm_company": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.import_crm_companies_csv": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.list_company_contacts": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.create_crm_contact": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.set_email_sync": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.set_company_hidden": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.set_crm_company_name": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.search_contacts": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.create_crm_team_contact": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.get_contact_by_email": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.set_crm_contact_company": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.unlink_crm_contact_company": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.set_crm_contact_email": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.add_crm_contact_email": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.remove_crm_contact_email": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.set_contact_hidden": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.set_crm_contact_name": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.list_crm_pipelines": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.create_crm_pipeline_with_fields": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.list_crm_pipeline_details": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.search_crm_pipeline_entries": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.list_crm_record_pipeline_entries": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.get_crm_pipeline_csv": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.edit_crm_pipeline": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.add_crm_pipeline_entries": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.update_crm_pipeline_entries": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.find_crm_pipeline_entries": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.remove_crm_pipeline_entries": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.export_crm_pipeline_csv": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.import_crm_pipeline_csv": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.rename_crm_pipeline": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.apply_crm_pipeline_ops": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.get_crm_pipeline_permissions": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.update_crm_pipeline_permissions": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.get_crm_pipeline_rows": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.query_crm_pipeline_rows": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.share_crm_pipeline": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.get_crm_pipeline_stage_requirements": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.set_crm_pipeline_stage_requirement": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.trash_crm_pipeline": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.get_crm_pipeline_view_positions": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.get_crm_team_settings": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.put_crm_team_settings": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.put_crm_team_stages": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.reset_crm_team_stages": {
+    "group": "crm",
+    "action": "destroy"
+  },
+  "storage.list_databases": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.create_database": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.save_database_query": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.get_database_query": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.query_databases": {
+    "group": "databases",
+    "action": "destroy"
+  },
+  "storage.set_database_appearance": {
+    "group": "databases",
+    "action": "update"
+  },
+  "storage.duplicate_database": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.import_database_table": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.apply_database_ops": {
+    "group": "databases",
+    "action": "destroy"
+  },
+  "storage.get_database_permissions": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.update_database_permissions": {
+    "group": "databases",
+    "action": "update"
+  },
+  "storage.list_database_column_casts": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.convert_database_column": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.infer_database_column_type": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.get_database_row_history": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.get_database_view_positions": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.list_database_webhooks": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.create_database_webhook": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.delete_database_webhook": {
+    "group": "databases",
+    "action": "destroy"
+  },
+  "storage.get_user_documents_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.create_document": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_canvas_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_markdown_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_skill_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_snippet_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_spreadsheet": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.create_task_handler": {
+    "group": "tasks",
+    "action": "create"
+  },
+  "storage.get_github_pull_request_tasks": {
+    "group": "tasks",
+    "action": "read"
+  },
+  "storage.validate_document_permissions_token": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_permissions_token": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.presave_document_handler": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.get_batch_preview_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.task_similarity_search_handler": {
+    "group": "tasks",
+    "action": "read"
+  },
+  "storage.get_document_by_team_slug": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_system_skills_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.upload_file": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.save_document_handler": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.delete_document": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.edit_document": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.edit_document_with_ai": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.set_document_appearance": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.get_document_branch_name": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.edit_canvas_with_ai": {
+    "group": "canvases",
+    "action": "create"
+  },
+  "storage.apply_canvas_edits": {
+    "group": "canvases",
+    "action": "create"
+  },
+  "storage.render_canvas": {
+    "group": "canvases",
+    "action": "create"
+  },
+  "storage.read_canvas_scene": {
+    "group": "canvases",
+    "action": "read"
+  },
+  "storage.comment_on_document_text": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.copy_document": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.read_design": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.export_document": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_github_pull_requests": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.read_illustrator_document": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_markdown": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.write_document_markdown": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.permanently_delete_document": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.read_photoshop_document": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.read_presentation": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.copy_presentation": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.edit_presentation": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.revert_delete_document": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.get_document_short_id": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.simple_save": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.get_skill_description": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.set_skill_description": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.edit_spreadsheet_with_ai": {
+    "group": "spreadsheets",
+    "action": "create"
+  },
+  "storage.calculate_spreadsheet": {
+    "group": "spreadsheets",
+    "action": "read"
+  },
+  "storage.edit_spreadsheet": {
+    "group": "spreadsheets",
+    "action": "create"
+  },
+  "storage.read_spreadsheet": {
+    "group": "spreadsheets",
+    "action": "read"
+  },
+  "storage.get_document_team_share": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.set_document_team_share": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.get_document_text_content": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.read_word_document": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.edit_word_document": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.get_document_version": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.access_requests_state": {
+    "group": "sharing",
+    "action": "read"
+  },
+  "storage.access_requests_submit": {
+    "group": "sharing",
+    "action": "update"
+  },
+  "storage.access_requests_cancel": {
+    "group": "sharing",
+    "action": "destroy"
+  },
+  "storage.access_requests_resolve": {
+    "group": "sharing",
+    "action": "destroy"
+  },
+  "storage.access_requests_direct": {
+    "group": "sharing",
+    "action": "read"
+  },
+  "storage.access_requests_set_direct": {
+    "group": "sharing",
+    "action": "destroy"
+  },
+  "storage.access_requests_remove_direct": {
+    "group": "sharing",
+    "action": "destroy"
+  },
+  "storage.get_entity_permission": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.external_chats": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_add": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "storage.external_chat_remove": {
+    "group": "external-chat",
+    "action": "destroy"
+  },
+  "storage.external_chat_upload": {
+    "group": "external-chat",
+    "action": "create"
+  },
+  "storage.external_chat_delivery": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_messages": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_message_attachments": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_permissions": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_update_permissions": {
+    "group": "external-chat",
+    "action": "update"
+  },
+  "storage.external_chat_read": {
+    "group": "external-chat",
+    "action": "create"
+  },
+  "storage.external_chat_sends": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_send": {
+    "group": "external-chat",
+    "action": "send"
+  },
+  "storage.list_favorites": {
+    "group": "favorites",
+    "action": "read"
+  },
+  "storage.add_favorite": {
+    "group": "favorites",
+    "action": "create"
+  },
+  "storage.reorder_favorites": {
+    "group": "favorites",
+    "action": "update"
+  },
+  "storage.remove_favorite_by_entity": {
+    "group": "favorites",
+    "action": "destroy"
+  },
+  "storage.get_foreign_entity_by_source": {
+    "group": "foreign",
+    "action": "read"
+  },
+  "storage.list_forms": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.create_form": {
+    "group": "forms",
+    "action": "create"
+  },
+  "storage.list_accessible_forms": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.update_form": {
+    "group": "forms",
+    "action": "update"
+  },
+  "storage.set_form_appearance": {
+    "group": "forms",
+    "action": "update"
+  },
+  "storage.put_form_layout": {
+    "group": "forms",
+    "action": "destroy"
+  },
+  "storage.get_form_permissions": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.update_form_permissions": {
+    "group": "forms",
+    "action": "update"
+  },
+  "storage.submit_form_response": {
+    "group": "forms",
+    "action": "create"
+  },
+  "storage.get_my_form_response": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.edit_my_form_response": {
+    "group": "forms",
+    "action": "destroy"
+  },
+  "storage.get_form_response_summary": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.get_form_tally": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.get_github_pull_request_facets": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "storage.get_github_pull_request_changes": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "storage.get_github_pull_request_changes_patch": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "storage.create_harness_pairing": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "storage.approve_harness_pairing": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "storage.claim_harness_pairing": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "storage.list_harnesses": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.list_harness_directory": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.get_self_harness": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.delete_self_harness": {
+    "group": "harnesses",
+    "action": "destroy"
+  },
+  "storage.list_harness_agents": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.list_harness_sessions": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.delete_harness": {
+    "group": "harnesses",
+    "action": "destroy"
+  },
+  "storage.patch_harness": {
+    "group": "harnesses",
+    "action": "update"
+  },
+  "storage.list_harness_residents": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.list_initiatives": {
+    "group": "initiatives",
+    "action": "read"
+  },
+  "storage.create_initiative": {
+    "group": "initiatives",
+    "action": "create"
+  },
+  "storage.page_initiatives": {
+    "group": "initiatives",
+    "action": "read"
+  },
+  "storage.delete_initiative": {
+    "group": "initiatives",
+    "action": "destroy"
+  },
+  "storage.update_initiative": {
+    "group": "initiatives",
+    "action": "update"
+  },
+  "storage.get_initiative_activity": {
+    "group": "initiatives",
+    "action": "read"
+  },
+  "storage.set_initiative_appearance": {
+    "group": "initiatives",
+    "action": "update"
+  },
+  "storage.get_initiative_description": {
+    "group": "initiatives",
+    "action": "read"
+  },
+  "storage.post_items_soup_ast": {
+    "group": "workspace",
+    "action": "read"
+  },
+  "storage.message_timeline": {
+    "group": "messages",
+    "action": "read"
+  },
+  "storage.entity_message_create": {
+    "group": "messages",
+    "action": "send"
+  },
+  "storage.entity_message_delete_message": {
+    "group": "messages",
+    "action": "destroy"
+  },
+  "storage.entity_message_edit": {
+    "group": "messages",
+    "action": "destroy"
+  },
+  "storage.entity_message_react": {
+    "group": "messages",
+    "action": "create"
+  },
+  "storage.entity_message_get_thread": {
+    "group": "messages",
+    "action": "read"
+  },
+  "storage.entity_message_delete_thread": {
+    "group": "messages",
+    "action": "destroy"
+  },
+  "storage.entity_message_patch_thread": {
+    "group": "messages",
+    "action": "update"
+  },
+  "storage.message_timeline_entries": {
+    "group": "messages",
+    "action": "read"
+  },
+  "storage.entity_message_typing": {
+    "group": "messages",
+    "action": "create"
+  },
+  "storage.get_pins_handler": {
+    "group": "pins",
+    "action": "read"
+  },
+  "storage.reorder_pins_handler": {
+    "group": "pins",
+    "action": "update"
+  },
+  "storage.add_pin_handler": {
+    "group": "pins",
+    "action": "create"
+  },
+  "storage.remove_pin_handler": {
+    "group": "pins",
+    "action": "destroy"
+  },
+  "storage.create_project_handler": {
+    "group": "projects",
+    "action": "create"
+  },
+  "storage.delete_project_handler": {
+    "group": "projects",
+    "action": "destroy"
+  },
+  "storage.get_project_user_access_level": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.get_project_content_handler": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.permanently_delete_project": {
+    "group": "projects",
+    "action": "destroy"
+  },
+  "storage.get_project_permissions_v2": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.revert_delete_project": {
+    "group": "projects",
+    "action": "update"
+  },
+  "storage.recently_deleted": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.list_email_reminders": {
+    "group": "email",
+    "action": "read"
+  },
+  "storage.get_email_followup": {
+    "group": "email",
+    "action": "read"
+  },
+  "storage.set_email_followup": {
+    "group": "email",
+    "action": "update"
+  },
+  "storage.list_saved_view_definitions": {
+    "group": "saved-views",
+    "action": "read"
+  },
+  "storage.create_saved_view_definition": {
+    "group": "saved-views",
+    "action": "create"
+  },
+  "storage.reorder_saved_view_definitions": {
+    "group": "saved-views",
+    "action": "update"
+  },
+  "storage.get_saved_view_definition": {
+    "group": "saved-views",
+    "action": "read"
+  },
+  "storage.delete_saved_view_definition": {
+    "group": "saved-views",
+    "action": "destroy"
+  },
+  "storage.update_saved_view_definition": {
+    "group": "saved-views",
+    "action": "update"
+  },
+  "storage.edit_thread_v2": {
+    "group": "email",
+    "action": "update"
+  },
+  "storage.list_user_api_keys": {
+    "group": "api-keys",
+    "action": "read"
+  },
+  "storage.create_user_api_key": {
+    "group": "api-keys",
+    "action": "create"
+  },
+  "storage.delete_user_api_key": {
+    "group": "api-keys",
+    "action": "destroy"
+  },
+  "storage.get_document_permissions_v2": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.edit_project_v2": {
+    "group": "projects",
+    "action": "update"
+  },
+  "storage.list_webhooks": {
+    "group": "webhooks",
+    "action": "read"
+  },
+  "storage.create_webhook": {
+    "group": "webhooks",
+    "action": "create"
+  },
+  "storage.delete_webhook": {
+    "group": "webhooks",
+    "action": "destroy"
+  },
+  "storage.patch_webhook": {
+    "group": "webhooks",
+    "action": "update"
+  },
+  "storage.validate_webhook": {
+    "group": "webhooks",
+    "action": "create"
+  },
+  "storage.whatsapp_account": {
+    "group": "whatsapp",
+    "action": "read"
+  },
+  "storage.whatsapp_chats": {
+    "group": "whatsapp",
+    "action": "read"
+  },
+  "unfurl.get_unfurl": {
+    "group": "unfurls",
+    "action": "read"
+  },
+  "unfurl.get_unfurl_bulk": {
+    "group": "unfurls",
+    "action": "read"
+  },
+  "agent-harness.discover_agent_capabilities_handler": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.load_agent_models_handler": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.agent_sessions_for_pull_requests": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.preview_agent_sessions": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.warm_agent_session_handler": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.get_agent_session": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.report_agent_session_app_connected": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.get_code_execution": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.list_execution_reviews": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.create_session_review": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.get_session_review": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.open_in_app": {
+    "group": "ui",
+    "action": "create"
+  },
+  "agent-harness.present_session_view": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.get_claude_mode": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "agent-harness.start_claude_sign_in": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "agent-harness.complete_claude_sign_in": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "agent-harness.claude_sign_out": {
+    "group": "harnesses",
+    "action": "create"
+  },
+  "agent-harness.classify": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.extract": {
+    "group": "agent-sessions",
+    "action": "create"
+  },
+  "agent-harness.get_agent_voices": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "agent-harness.get_agent_voice_sample": {
+    "group": "agent-sessions",
+    "action": "read"
+  },
+  "auth.get_agent_api_key": {
+    "group": "agents",
+    "action": "read"
+  },
+  "auth.put_agent_api_key": {
+    "group": "agents",
+    "action": "update"
+  },
+  "auth.delete_agent_api_key": {
+    "group": "agents",
+    "action": "destroy"
+  },
+  "auth.update_ai_billing_auto_reload": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.create_ai_credit_checkout": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.purchase_ai_credits": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.update_ai_billing_overage": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.get_ai_billing_plans": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_ai_billing_summary": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_codex_connection": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.disconnect_codex": {
+    "group": "me",
+    "action": "destroy"
+  },
+  "auth.configure_codex": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.list_codex_environments": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.start_codex_login": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.poll_codex_login": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.cancel_codex_login": {
+    "group": "me",
+    "action": "destroy"
+  },
+  "auth.get_cursor_api_key": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.put_cursor_api_key": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.delete_cursor_api_key": {
+    "group": "me",
+    "action": "destroy"
+  },
+  "auth.put_cursor_default_model": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.list_cursor_models": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.verify_fusionauth_user_email": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.resend_fusionauth_verify_user_email": {
+    "group": "me",
+    "action": "send"
+  },
+  "auth.generate_email_link": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.verify_email_link": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.set_github_pull_request_draft": {
+    "group": "github-pull-requests",
+    "action": "update"
+  },
+  "auth.enrich_github_pull_requests": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "auth.merge_github_pull_request": {
+    "group": "github-pull-requests",
+    "action": "update"
+  },
+  "auth.get_github_pull_request_mergeability": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "auth.set_github_pull_request_state": {
+    "group": "github-pull-requests",
+    "action": "update"
+  },
+  "auth.list_gtm_invite_links": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.create_gtm_invite_link": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.revoke_gtm_invite_link": {
+    "group": "me",
+    "action": "destroy"
+  },
+  "auth.get_gtm_invite_offer": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.resolve_gtm_invite_link": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.redeem_gtm_invite_link": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.health_handler": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.refresh": {
+    "group": "api-keys",
+    "action": "create"
+  },
+  "auth.create_in_progress_link": {
+    "group": "email",
+    "action": "create"
+  },
+  "auth.init_github_link": {
+    "group": "email",
+    "action": "create"
+  },
+  "auth.delete_github_link": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "auth.check_github_link_status": {
+    "group": "email",
+    "action": "read"
+  },
+  "auth.init_gmail_link": {
+    "group": "email",
+    "action": "create"
+  },
+  "auth.check_gmail_link_status": {
+    "group": "email",
+    "action": "read"
+  },
+  "auth.init_outlook_link": {
+    "group": "email",
+    "action": "create"
+  },
+  "auth.apple_login": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.password_login": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.passwordless_login": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.sso_login": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.logout": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.create_merge_request": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.verify_merge_request": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.send_mobile_welcome_email": {
+    "group": "me",
+    "action": "send"
+  },
+  "auth.passwordless_callback": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.oauth_redirect": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.oauth2_callback": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_permissions": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_user_permissions": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.session_creation": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.session_login": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_system_status": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.set_system_status": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.list_system_status_history": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.create_team": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.delete_team": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.patch_team": {
+    "group": "teams",
+    "action": "update"
+  },
+  "auth.toggle_team_auto_join_domain": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.list_team_computers": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.purchase_team_computer": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.list_team_computer_offers": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.cancel_team_computer": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.undo_cancel_team_computer": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.set_team_computer_power": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.release_team_computer": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.restore_team_computer": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.retry_team_computer": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.complete_team_computer_setup": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.patch_team_crm_settings": {
+    "group": "teams",
+    "action": "update"
+  },
+  "auth.send_team_domain_notice": {
+    "group": "teams",
+    "action": "send"
+  },
+  "auth.get_team_invite_link": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.create_team_invite_link": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.delete_team_invite_link": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.join_team_by_invite_link": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.get_team_by_invite_link": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.join_team": {
+    "group": "teams",
+    "action": "update"
+  },
+  "auth.reject_invitation": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.patch_team_member_plan": {
+    "group": "teams",
+    "action": "update"
+  },
+  "auth.toggle_team_non_admin_invites": {
+    "group": "teams",
+    "action": "create"
+  },
+  "auth.remove_user_from_team": {
+    "group": "teams",
+    "action": "destroy"
+  },
+  "auth.get_user_invites": {
+    "group": "teams",
+    "action": "read"
+  },
+  "auth.list_team_agents": {
+    "group": "agents",
+    "action": "read"
+  },
+  "auth.create_team_agent": {
+    "group": "agents",
+    "action": "create"
+  },
+  "auth.delete_team_agent": {
+    "group": "agents",
+    "action": "destroy"
+  },
+  "auth.get_team_agent_voice": {
+    "group": "agents",
+    "action": "read"
+  },
+  "auth.set_team_agent_voice": {
+    "group": "agents",
+    "action": "update"
+  },
+  "auth.agent_setup": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.get_user_names": {
+    "group": "users",
+    "action": "read"
+  },
+  "auth.get_user_names_with_email": {
+    "group": "users",
+    "action": "read"
+  },
+  "auth.patch_user_group": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.get_user_language": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.put_user_language": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.get_legacy_user_permissions": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.get_user_link_exists": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.delete_user": {
+    "group": "me",
+    "action": "destroy"
+  },
+  "auth.get_user_name": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.patch_user_onboarding": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.get_user_organization": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.put_profile_picture": {
+    "group": "me",
+    "action": "update"
+  },
+  "auth.get_user_quota": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.create_checkout_session_v2": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.get_subscription_status": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.change_plan": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.create_portal_session": {
+    "group": "me",
+    "action": "create"
+  },
+  "auth.get_trial_eligibility": {
+    "group": "me",
+    "action": "read"
+  },
+  "auth.patch_user_tutorial": {
+    "group": "me",
+    "action": "update"
+  },
+  "calendar.health_handler": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "calendar.respond_to_join_request": {
+    "group": "calendar",
+    "action": "update"
+  },
+  "calendar.get_managed_booking": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "cognition.set_pricing_handler": {
+    "group": "ai",
+    "action": "create"
+  },
+  "cognition.upsert_ai_projection": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_chats_for_attachment_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.get_chat_history_batch_messages_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.get_chat": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.call_tool": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.reject_tool_call": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.update_tool_response": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.update_tool_call": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_citation_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.generate_database_query": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.health_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.notion_report_handler": {
+    "group": "imports",
+    "action": "read"
+  },
+  "cognition.cancel_notion_handler": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.run_import_handler": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.discover_handler": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.get_import_state": {
+    "group": "imports",
+    "action": "read"
+  },
+  "cognition.workspace_report_handler": {
+    "group": "imports",
+    "action": "read"
+  },
+  "cognition.cancel_workspace_handler": {
+    "group": "imports",
+    "action": "create"
+  },
+  "cognition.list_mcp_servers": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.update_mcp_server": {
+    "group": "chats",
+    "action": "update"
+  },
+  "cognition.add_mcp_server": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.delete_mcp_server": {
+    "group": "chats",
+    "action": "destroy"
+  },
+  "cognition.mcp_auth_callback": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.mcp_oauth_client_metadata": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.start_mcp_auth": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_memory_handler": {
+    "group": "memory",
+    "action": "read"
+  },
+  "cognition.get_onboarding_state": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.complete_handler": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.dismissed_prompts_handler": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.dismiss_prompt_handler": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.browse_pipedream_mcp_catalog": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.complete_pipedream_mcp_connection": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.complete_pipedream_mcp_connect": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.list_pipedream_mcp_connections": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.update_pipedream_mcp_connection": {
+    "group": "chats",
+    "action": "update"
+  },
+  "cognition.delete_pipedream_mcp_connection": {
+    "group": "chats",
+    "action": "destroy"
+  },
+  "cognition.list_pipedream_mcp_overlays": {
+    "group": "chats",
+    "action": "read"
+  },
+  "cognition.recover_pipedream_mcp_connection": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.create_pipedream_mcp_token": {
+    "group": "chats",
+    "action": "create"
+  },
+  "cognition.get_batch_preview": {
+    "group": "chats",
+    "action": "read"
+  },
+  "connection.batch_send_message_handler": {
+    "group": "connection",
+    "action": "send"
+  },
+  "connection.broadcast_message_handler": {
+    "group": "connection",
+    "action": "send"
+  },
+  "connection.send_message_handler": {
+    "group": "connection",
+    "action": "send"
+  },
+  "connection.get_entity_handler": {
+    "group": "connection",
+    "action": "read"
+  },
+  "contacts.get_contacts": {
+    "group": "users",
+    "action": "read"
+  },
+  "contacts.add_contact": {
+    "group": "users",
+    "action": "create"
+  },
+  "email.get_attachment": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.list_backfill_gmail": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.cancel_backfill_gmail": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.get_backfill_gmail_active": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.get_backfill_gmail": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.forward_calendar_event": {
+    "group": "email",
+    "action": "send"
+  },
+  "email.init_user": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.health_check_links": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.delete_link": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.disable_link_calendar": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.resync_link": {
+    "group": "email",
+    "action": "create"
+  },
+  "email.get_messages_batch": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.get_message": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.patch_settings": {
+    "group": "email",
+    "action": "update"
+  },
+  "email.disable_sync": {
+    "group": "email",
+    "action": "destroy"
+  },
+  "email.health_handler": {
+    "group": "email",
+    "action": "read"
+  },
+  "email.get_read_receipt_pixel": {
+    "group": "email",
+    "action": "read"
+  },
+  "notification.health_handler": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.get_unsubscribes": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.unsubscribe_email": {
+    "group": "notifications",
+    "action": "create"
+  },
+  "notification.unsubscribe_items": {
+    "group": "notifications",
+    "action": "create"
+  },
+  "notification.remove_unsubscribe_items": {
+    "group": "notifications",
+    "action": "destroy"
+  },
+  "notification.unsubscribe_all": {
+    "group": "notifications",
+    "action": "create"
+  },
+  "notification.remove_unsubscribe_all": {
+    "group": "notifications",
+    "action": "destroy"
+  },
+  "notification.bulk_get_typed_notifications_by_event_item_ids": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.get_typed_notifications_by_event_item_id": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "notification.get_typed_notification_by_id": {
+    "group": "notifications",
+    "action": "read"
+  },
+  "properties.merge_tag": {
+    "group": "properties",
+    "action": "create"
+  },
+  "properties.promote_tag": {
+    "group": "properties",
+    "action": "create"
+  },
+  "scheduled-action.scheduled_action_health": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.routine_catalog": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.list_routine_draft_jobs": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.start_routine_draft_job": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.get_routine_draft_job": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.discard_routine_draft_job": {
+    "group": "routines",
+    "action": "destroy"
+  },
+  "scheduled-action.draft_routine": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.list_routine_suggestions": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.review_routine_suggestions": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.dismiss_routine_suggestion": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.retire_routine_suggestion": {
+    "group": "routines",
+    "action": "create"
+  },
+  "scheduled-action.get_scheduled_action": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.list_scheduled_action_code_upgrades": {
+    "group": "routines",
+    "action": "read"
+  },
+  "scheduled-action.list_suggestions": {
+    "group": "suggestions",
+    "action": "read"
+  },
+  "scheduled-action.add_suggestion": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.start_suggestion_generation": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.get_suggestion_generation": {
+    "group": "suggestions",
+    "action": "read"
+  },
+  "scheduled-action.regenerate_suggestions": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.review_suggestions": {
+    "group": "suggestions",
+    "action": "read"
+  },
+  "scheduled-action.record_suggestions_seen": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.record_suggestions_viewed": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.rewrite_suggestion": {
+    "group": "suggestions",
+    "action": "update"
+  },
+  "scheduled-action.accept_suggestion": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.dismiss_suggestion": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.attach_suggestion_draft": {
+    "group": "suggestions",
+    "action": "update"
+  },
+  "scheduled-action.restore_suggestion": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "scheduled-action.retire_suggestion": {
+    "group": "suggestions",
+    "action": "create"
+  },
+  "search.simple_unified_search": {
+    "group": "search",
+    "action": "read"
+  },
+  "static-files.put_presigned_url": {
+    "group": "images",
+    "action": "update"
+  },
+  "static-files.handle_bulk_delete_file": {
+    "group": "images",
+    "action": "destroy"
+  },
+  "static-files.handle_get_metadata": {
+    "group": "images",
+    "action": "read"
+  },
+  "static-files.handle_delete_file": {
+    "group": "images",
+    "action": "destroy"
+  },
+  "static-files.get_file_documentation": {
+    "group": "images",
+    "action": "read"
+  },
+  "storage.get_account_manager_grant": {
+    "group": "account-managers",
+    "action": "read"
+  },
+  "storage.get_bot_owner_profiles": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.get_bot": {
+    "group": "bots",
+    "action": "read"
+  },
+  "storage.mention_previews": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.list_join_requests": {
+    "group": "calendar",
+    "action": "read"
+  },
+  "storage.request_to_join": {
+    "group": "calendar",
+    "action": "create"
+  },
+  "storage.get_active_calls": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.guest_call_chat_read": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.guest_call_chat_post": {
+    "group": "calls",
+    "action": "send"
+  },
+  "storage.guest_call_chat_post_message": {
+    "group": "calls",
+    "action": "send"
+  },
+  "storage.guest_call_chat_delete_message": {
+    "group": "calls",
+    "action": "destroy"
+  },
+  "storage.guest_call_chat_patch_message": {
+    "group": "calls",
+    "action": "update"
+  },
+  "storage.guest_call_chat_react_message": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.guest_call_chat_read_thread": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.meeting_leave": {
+    "group": "meetings",
+    "action": "create"
+  },
+  "storage.meeting_guest_participants": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_participants": {
+    "group": "meetings",
+    "action": "read"
+  },
+  "storage.meeting_prepare": {
+    "group": "meetings",
+    "action": "create"
+  },
+  "storage.meeting_cancel_preparation": {
+    "group": "meetings",
+    "action": "destroy"
+  },
+  "storage.get_call_record": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.get_call_recording": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.get_ring_status": {
+    "group": "calls",
+    "action": "read"
+  },
+  "storage.decline_ring": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.call_webhook": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.get_or_create_call": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.leave_or_end_call": {
+    "group": "calls",
+    "action": "destroy"
+  },
+  "storage.ingest_transcript": {
+    "group": "calls",
+    "action": "create"
+  },
+  "storage.list_channel_sections": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.create_channel_section": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.set_channel_section": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.preview_channel_section": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.delete_channel_section": {
+    "group": "channels",
+    "action": "destroy"
+  },
+  "storage.update_channel_section": {
+    "group": "channels",
+    "action": "update"
+  },
+  "storage.get_attachment_references": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.join_channel_by_code": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_batch_channel_preview": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.get_channel": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.get_channel_access_request": {
+    "group": "channels",
+    "action": "read"
+  },
+  "storage.create_channel_scoped_bot": {
+    "group": "channels",
+    "action": "create"
+  },
+  "storage.get_collab_surface": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.ensure_collab_surface": {
+    "group": "documents",
+    "action": "update"
+  },
+  "storage.delete_collab_surface": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.create_collab_surface_token": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.get_company": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.get_contact": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.get_crm_email_privacy": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.update_crm_email_privacy": {
+    "group": "crm",
+    "action": "update"
+  },
+  "storage.create_crm_pipeline": {
+    "group": "crm",
+    "action": "create"
+  },
+  "storage.get_crm_pipeline": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.get_crm_pipeline_table": {
+    "group": "crm",
+    "action": "read"
+  },
+  "storage.ensure_starter_handler": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.deliver_database_webhook": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.get_database": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.share_database_awareness": {
+    "group": "databases",
+    "action": "update"
+  },
+  "storage.undo_database_change": {
+    "group": "databases",
+    "action": "create"
+  },
+  "storage.get_database_table_changes": {
+    "group": "databases",
+    "action": "read"
+  },
+  "storage.transcribe_dictation": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.initialize_user_documents": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.get_document_list_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_location_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_location_v3": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_processing_result": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.job_processing_result_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_document_views_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.external_chat": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.external_chat_message": {
+    "group": "external-chat",
+    "action": "read"
+  },
+  "storage.get_foreign_entity": {
+    "group": "foreign",
+    "action": "read"
+  },
+  "storage.get_form": {
+    "group": "forms",
+    "action": "read"
+  },
+  "storage.collaborate_form": {
+    "group": "forms",
+    "action": "create"
+  },
+  "storage.install_sync": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_github_pull_request": {
+    "group": "github-pull-requests",
+    "action": "read"
+  },
+  "storage.get_harness_pairing": {
+    "group": "harnesses",
+    "action": "read"
+  },
+  "storage.set_harness_team_access": {
+    "group": "harnesses",
+    "action": "update"
+  },
+  "storage.health_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.get_history_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.upsert_history_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.delete_history_handler": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.get_initiative": {
+    "group": "initiatives",
+    "action": "read"
+  },
+  "storage.get_instructions_handler": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.create_instructions_handler": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.get_items_soup": {
+    "group": "workspace",
+    "action": "read"
+  },
+  "storage.post_items_soup": {
+    "group": "workspace",
+    "action": "read"
+  },
+  "storage.post_items_soup_ast_grouped": {
+    "group": "workspace",
+    "action": "read"
+  },
+  "storage.entity_message_get_message": {
+    "group": "messages",
+    "action": "read"
+  },
+  "storage.entity_message_legacy": {
+    "group": "messages",
+    "action": "read"
+  },
+  "storage.passwords_teams": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_folders": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_create_folder": {
+    "group": "passwords",
+    "action": "create"
+  },
+  "storage.passwords_rename_folder": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_remove_folder": {
+    "group": "passwords",
+    "action": "destroy"
+  },
+  "storage.passwords_move_folder": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_list": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_create": {
+    "group": "passwords",
+    "action": "create"
+  },
+  "storage.passwords_detail": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_update": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_remove": {
+    "group": "passwords",
+    "action": "destroy"
+  },
+  "storage.passwords_patch": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_activity": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_copy": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_history": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_reveal": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_grants": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_share": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_set_totp": {
+    "group": "passwords",
+    "action": "update"
+  },
+  "storage.passwords_remove_totp": {
+    "group": "passwords",
+    "action": "destroy"
+  },
+  "storage.passwords_totp": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_username": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.passwords_copy_username": {
+    "group": "passwords",
+    "action": "read"
+  },
+  "storage.get_projects_handler": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.get_pending_projects_handler": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.get_batch_project_preview": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.upload_folder_handler": {
+    "group": "projects",
+    "action": "create"
+  },
+  "storage.upload_extract_folder_handler": {
+    "group": "projects",
+    "action": "create"
+  },
+  "storage.get_upload_extract_status_handler": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.get_project_handler": {
+    "group": "projects",
+    "action": "read"
+  },
+  "storage.get_views_handler": {
+    "group": "saved-views",
+    "action": "read"
+  },
+  "storage.create_view_handler": {
+    "group": "saved-views",
+    "action": "create"
+  },
+  "storage.exclude_default_view_handler": {
+    "group": "saved-views",
+    "action": "create"
+  },
+  "storage.delete_view_handler": {
+    "group": "saved-views",
+    "action": "destroy"
+  },
+  "storage.patch_view_handler": {
+    "group": "saved-views",
+    "action": "update"
+  },
+  "storage.list_slack_imports": {
+    "group": "imports",
+    "action": "read"
+  },
+  "storage.create_slack_import": {
+    "group": "imports",
+    "action": "create"
+  },
+  "storage.get_slack_import": {
+    "group": "imports",
+    "action": "read"
+  },
+  "storage.cancel_slack_import": {
+    "group": "imports",
+    "action": "create"
+  },
+  "storage.finalize_slack_import": {
+    "group": "imports",
+    "action": "create"
+  },
+  "storage.register_slack_import_uploads": {
+    "group": "imports",
+    "action": "create"
+  },
+  "storage.complete_slack_import_uploads": {
+    "group": "imports",
+    "action": "create"
+  },
+  "storage.bulk_wakeup_sync_service_documents": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.get_user_document_view_location": {
+    "group": "documents",
+    "action": "read"
+  },
+  "storage.upsert_user_document_view_location": {
+    "group": "documents",
+    "action": "create"
+  },
+  "storage.delete_user_document_view_location": {
+    "group": "documents",
+    "action": "destroy"
+  },
+  "storage.stream_events": {
+    "group": "webhooks",
+    "action": "read"
+  },
+  "storage.get_webhook": {
+    "group": "webhooks",
+    "action": "read"
+  },
+  "storage.whatsapp_connect": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "storage.whatsapp_disconnect": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "storage.whatsapp_import_history": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "storage.whatsapp_start_lookup": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "storage.whatsapp_lookup": {
+    "group": "whatsapp",
+    "action": "read"
+  },
+  "storage.whatsapp_pairing": {
+    "group": "whatsapp",
+    "action": "read"
+  },
+  "storage.whatsapp_cancel_pairing": {
+    "group": "whatsapp",
+    "action": "destroy"
+  },
+  "storage.whatsapp_passkey": {
+    "group": "whatsapp",
+    "action": "create"
+  },
+  "unfurl.proxy_request_handler": {
+    "group": "unfurls",
+    "action": "read"
+  }
+}
