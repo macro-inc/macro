@@ -1,0 +1,21 @@
+crates/mesh_man/AGENTS.md
+  s_7a07194ea723e2::t_b13497f418ca00 1-43
+crates/mesh_man/CLAUDE.md
+  s_7a07194ea723e2::t_899e3ee813f972 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "595366ba8ebc4823e16a9109c19da92a09811dac",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
