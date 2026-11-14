@@ -1,0 +1,19 @@
+packages/sdk-ocaml/README.md
+  s_f9f0485c5813a5::t_97e44b05c06a78 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d1444d1850f8168065c172b6d9dbed2b3f3b5484",
+  "prompts": {},
+  "sessions": {
+    "s_f9f0485c5813a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "395b6f63-90c2-4033-aefc-825333176341",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
