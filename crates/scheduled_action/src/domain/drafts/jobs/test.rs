@@ -528,6 +528,28 @@ async fn a_ready_draft_is_readable_until_its_owner_discards_it() {
     assert!(replica.jobs.discard(owner(), job.id).await.is_err());
 }
 
+/// A finished draft whose session won't stop deletes the session, so it
+/// works on no further, and is still ready.
+#[tokio::test(start_paused = true)]
+async fn a_finished_draft_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let ready = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(ready.state, DraftJobState::Ready { .. }),
+        "{ready:?}"
+    );
+}
+
 /// A start whose request is dropped once its row is written, before it
 /// hears so, still drafts its job: the row never waits for a drafter that
 /// will never come.
@@ -828,6 +850,34 @@ async fn a_drafter_that_never_ends_is_failed_at_its_limit() {
     let session = AgentSessionId::new_from_uuid(job.id);
     assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
     assert!(sessions.deleted.lock().unwrap().is_empty());
+}
+
+/// A drafter cut off at [`JOB_LIMIT`] whose session won't stop deletes the
+/// session, so it works on no further, and its job still fails as timed out.
+#[tokio::test(start_paused = true)]
+async fn a_drafter_cut_off_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows {
+        stalls: true.into(),
+        ..Rows::default()
+    });
+    let mut sessions = hangs(&rows);
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    // The cut-off drafter cleans up on a task of its own.
+    tokio::time::timeout(POLL, sessions.deletes.notified())
+        .await
+        .expect("the session that won't stop was never deleted");
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let timed_out = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(&timed_out.state, DraftJobState::Failed { message, .. } if message == TIMED_OUT),
+        "{timed_out:?}"
+    );
 }
 
 /// A host that stops ends its drafts within the shutdown's time, failed as

@@ -129,6 +129,49 @@ async fn one_deadline_bounds_stalled_background_work() {
     assert!(task.await.unwrap_err().is_cancelled());
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_stalled_sweep_holds_up_no_other() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    spawn_sweep(&lifecycle, interval, std::future::pending::<()>);
+    let runs = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&runs);
+    spawn_sweep(&lifecycle, interval, move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(())
+    });
+    tokio::time::sleep(interval * 2 + Duration::from_secs(1)).await;
+    // At once, then each minute.
+    assert_eq!(runs.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_slow_sweep_is_followed_by_a_full_interval() {
+    let lifecycle = ServiceLifecycle::default();
+    let interval = Duration::from_secs(60);
+    let slow = interval * 5 / 2;
+    let started = tokio::time::Instant::now();
+    let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&starts);
+    spawn_sweep(&lifecycle, interval, move || {
+        let mut starts = recorded.lock().unwrap();
+        starts.push(started.elapsed());
+        // Only the first sweep runs past its next two ticks.
+        let length = if starts.len() == 1 {
+            slow
+        } else {
+            Duration::ZERO
+        };
+        tokio::time::sleep(length)
+    });
+    tokio::time::sleep(interval * 4).await;
+    // The missed ticks make one late sweep, not a burst of them.
+    assert_eq!(
+        *starts.lock().unwrap(),
+        [Duration::ZERO, slow, slow + interval]
+    );
+}
+
 fn docs_router() -> Router {
     mount_router(Router::new().route(
         "/health",

@@ -727,21 +727,21 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.stop_workers.clone(),
     ));
     // Drafts a stopped process left behind lose their session and row, and
-    // background drafts whose drafter stopped fail.
+    // background drafts whose drafter stopped fail. Each sweep has a worker
+    // of its own, so one that stalls holds up no other. Logged by the sweeps'
+    // spans.
     {
         let drafts = Arc::clone(&drafts);
-        let draft_jobs = Arc::clone(&draft_jobs);
-        let stop = lifecycle.stop_workers.clone();
-        lifecycle.workers.spawn(async move {
-            let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
-            loop {
-                tokio::select! {
-                    biased;
-                    _ = stop.cancelled() => return,
-                    _ = every.tick() => {}
-                }
-                // Logged by the sweeps' spans.
+        spawn_sweep(&lifecycle, DRAFT_SWEEP_INTERVAL, move || {
+            let drafts = Arc::clone(&drafts);
+            async move {
                 let _ = drafts.sweep().await;
+            }
+        });
+        let draft_jobs = Arc::clone(&draft_jobs);
+        spawn_sweep(&lifecycle, DRAFT_SWEEP_INTERVAL, move || {
+            let draft_jobs = Arc::clone(&draft_jobs);
+            async move {
                 let _ = draft_jobs.sweep().await;
             }
         });
@@ -1184,6 +1184,29 @@ fn start_event_tasks<C, F>(
         CONSUMER_RESTART_DELAY,
     ));
     lifecycle.workers.spawn(worker);
+}
+
+/// Run `sweep` at once and then every `interval` on a worker of its own
+/// until workers stop; a sweep under way finishes first. One that overran
+/// its ticks is followed by one late sweep, then a full interval.
+fn spawn_sweep<S, F>(lifecycle: &ServiceLifecycle, interval: Duration, mut sweep: S)
+where
+    S: FnMut() -> F + Send + 'static,
+    F: Future<Output = ()> + Send + 'static,
+{
+    let stop = lifecycle.stop_workers.clone();
+    lifecycle.workers.spawn(async move {
+        let mut every = tokio::time::interval(interval);
+        every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                _ = every.tick() => {}
+            }
+            sweep().await;
+        }
+    });
 }
 
 async fn supervise_consumer<F: Future<Output = Result<(), rootcause::Report>>>(
