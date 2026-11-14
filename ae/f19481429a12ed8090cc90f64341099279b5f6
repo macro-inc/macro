@@ -1,0 +1,27 @@
+crates/agent_monitor_tui/src/ui/changes/layout.rs
+  s_9accbcd761184e::t_96c952b342d298 73-74,92-93,221,268,275
+crates/agent_monitor_tui/src/ui/changes/draw.rs
+  s_9accbcd761184e::t_96c952b342d298 611-612,785-788
+crates/agent_monitor_tui/src/ui.rs
+  s_9accbcd761184e::t_b30def776eeae7 529-532
+crates/agent_monitor_tui/src/ui/changes/test.rs
+  s_9accbcd761184e::t_a31c971c894ccf 180-181,216-220
+crates/agent_monitor_tui/src/ui/test.rs
+  s_9accbcd761184e::t_b8a4c935aa29fc 353-356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aef19481429a12ed8090cc90f64341099279b5f6",
+  "prompts": {},
+  "sessions": {
+    "s_9accbcd761184e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2f6b3b32-0017-4fb1-872f-a56ce4ce858e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
