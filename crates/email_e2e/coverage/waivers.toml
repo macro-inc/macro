@@ -1,0 +1,13 @@
+# What the email end-to-end suite leaves uncovered on purpose. Every waiver
+# says why. A waiver for something a scenario does cover is reported as
+# stale.
+#
+# [[function]]
+# id = "F-000"            # from apps/web/tests/email-e2e/ledger/functions.tsv
+# provider = "outlook"    # optional: gmail or outlook; both when absent
+# reason = "..."
+#
+# [[entry_point]]
+# entry = "http GET /health"   # `kind key`, as in entrypoints.tsv
+# provider = "gmail"           # optional
+# reason = "..."

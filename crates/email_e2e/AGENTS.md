@@ -90,6 +90,10 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   is marked `#[ignore = "known bug: <class id>"]`. The suite skips it; `just
   email-e2e-known-bugs` (in CI a job that never fails for a scenario) runs only those and reports
   which still fail and which now pass. Remove the attribute with the fix.
+- A scenario that fails is tried once more (`retries = 1` in the nextest
+  profile); one that passes only then is reported as needing a retry, in
+  `target/nextest/email-e2e/junit.xml` and the coverage report. Treat it as
+  a defect of the scenario or the product, not as passing.
 - Sending the way the web composer does (a stack with `document_storage`):
   `inbox.send_attempt(attempt_id, &message, &extra)` with the GraphQL draft
   input (`draftId`, `subject`, `to`, `bodyText`, …), then `cancel_send`,
@@ -180,6 +184,49 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
   (guest permissions), `identity` (which inbox acts), `shares` (channel
   shares, copies, requests to join, booking), `team` (out-of-office overlay).
 
+## Coverage
+
+What the suite covers is measured, in functions of email first (star a
+thread, refresh a token: `apps/web/tests/email-e2e/ledger/functions.tsv`,
+shared with the web app's suite) and backend entry points second.
+
+- Every scenario that ends with `stack.finish()` and healthy services
+  leaves `evidence.json` in its log directory (`stack.evidence_path()`):
+  the routes the API served with the shape of each request, the GraphQL
+  queries document storage answered, the queue messages workers handled,
+  the lambda and agent tool runs, the provider methods called, the events
+  published and what was sent to other services. Shapes, not content: keys,
+  enum-like words and booleans stay, other strings and numbers do not
+  (`src/evidence.rs`). It records what happened until the scenario ended,
+  after the Outlook work that was due.
+- `coverage/entrypoints.tsv` lists every backend entry point and is
+  generated from the code: `cargo x email-coverage list`. CI fails when it
+  is out of date.
+- `coverage/functions.toml` says how the backend carries each function out:
+  the request that performs it (`by`), what must reach each provider
+  (`gmail`, `outlook`), and the entry points that take part (`also`). A
+  function the browser does alone says so (`ui`); one another service
+  carries out where no stack records it says which (`outside`) and is left
+  out of the count. Routes of document storage that scenarios do record
+  (lists, search, reminders, tags) are listed by hand in `sources.toml`
+  (`[[elsewhere]]`). Every
+  entry point belongs to a function or to `[plumbing]`; every function in
+  the list has an entry. The report fails otherwise, so a new route or a new
+  function cannot go unmapped.
+- `coverage/checks.tsv` names the scenarios that check a function's result.
+  A function is **covered** on a provider when such a scenario passed there
+  and its record shows the function performed; **performed** when scenarios
+  did it and none is listed. When you write a scenario that asserts a
+  function's result at the provider and in what the service returns, add
+  its row.
+- `coverage/waivers.toml` holds what is left uncovered on purpose, with the
+  reason.
+- `just email-e2e-coverage` after `just email-e2e` writes the report to
+  `target/email-e2e-coverage/` (`index.html`, `coverage.md`,
+  `coverage.json`). In CI the `Email end-to-end (coverage)` job puts it in
+  the job summary and the `email-e2e-coverage` artifact. It reports only;
+  `--enforce` makes gaps fail.
+
 ## Start here
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
@@ -188,6 +235,7 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
   each for Gmail and Outlook where the product has both.
 - `src/stack.rs`: `Stack`, what it starts and what a scenario can ask it.
 - `src/inbox.rs`, `src/user.rs`: the scenario's vocabulary.
+- `tests/evidence.rs`: what a scenario's record holds.
 
 ## Scope
 
@@ -224,7 +272,7 @@ calendar.patch(&format!("/events/{}", item["event"]["id"].as_str().unwrap()), &c
   `PR CI`, on pull requests that touch email, the emulators or the schema.
   Its jobs run side by side: the scenarios without search in three parts
   (nextest `--partition`), the search scenarios with OpenSearch, and the
-  scenarios for known bugs. A scenario outside `tests/search.rs` that sets
+  scenarios for known bugs. A last job reports the coverage. A scenario outside `tests/search.rs` that sets
   `StackOptions::search` has no cluster in CI: keep search scenarios in that
   file.
 

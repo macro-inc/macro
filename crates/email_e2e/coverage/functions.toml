@@ -1,0 +1,1228 @@
+# Which backend entry points perform each email function.
+#
+# One table per function of the shared function list (F-001 .. F-192), in id
+# order. An atom is "<kind> <key>" exactly as in columns 1 and 2 of
+# entrypoints.tsv, optionally followed by " where <cond>, <cond>".
+#
+#   by      the function is performed when ONE of these is seen in a scenario
+#   gmail   and, on a Gmail inbox, ALL of these are seen in the same scenario
+#   outlook the same for an Outlook inbox
+#   also    other entry points that take part; they map entry points to
+#           functions and are not needed for "performed"
+#   ui      the function happens in the browser; the value says why no
+#           backend takes part
+#   outside another service carries the function out and no scenario's stack
+#           records it; the value names the service. Not measured here.
+#
+# Conditions:
+#   /json/pointer=value, /json/pointer   on the request body shape (http,
+#                                        webhook, queue) or the GraphQL
+#                                        variables shape; a bare pointer means
+#                                        present and not null
+#   name=value                           a path parameter of an http template
+#   ?key, ?key=value                     an http query key
+#   ~text                                the GraphQL query text contains text
+#
+# In a shape a list keeps its first item only, booleans stay, numbers are 0
+# and a string stays only when it is a short word (letters, "_", ".", "-").
+#
+# Loops are never seen in a scenario, so they appear under `also` only.
+
+# ---------------------------------------------------------------- connect
+
+[F-001]  # Connect a Gmail inbox
+by = ["http POST /email/init where ?link_id"]
+gmail = ["provider gmail:getProfile", "provider gmail:watch"]
+also = [
+  "kafka macro.email:LinkConnected",
+  "provider gmail:oauth.authorize",
+  "provider gmail:oauth.userinfo",
+  "provider gmail:oauth.tokeninfo",
+  "provider gmail:labels.list",
+]
+
+[F-002]  # Connect an Outlook inbox
+by = ["http POST /email/init where ?link_id"]
+outlook = ["provider outlook:me.get", "provider outlook:subscriptions.create", "webhook outlook:validation"]
+also = [
+  "http POST /outlook/webhook/{attempt}",
+  "kafka macro.email:LinkConnected",
+  "provider outlook:oauth.authorize",
+  "provider outlook:oauth.token",
+  "provider outlook:oauth.userinfo",
+  "provider outlook:oauth.discovery",
+  "provider outlook:oauth.keys",
+  "provider outlook:subscriptions.list",
+  "provider outlook:folders.list",
+  "provider outlook:folders.get",
+  "provider outlook:categories.list",
+]
+
+[F-003]  # Connect an Outlook inbox that needs administrator approval
+by = ["http POST /email/init where ?link_id"]
+outlook = ["provider outlook:oauth.adminconsent", "provider outlook:subscriptions.create"]
+
+[F-004]  # Connect a second inbox to the same account
+by = ["http POST /email/init where ?link_id"]
+gmail = ["provider gmail:getProfile", "provider gmail:watch"]
+outlook = ["provider outlook:me.get", "provider outlook:subscriptions.create"]
+also = ["kafka macro.email:LinkConnected"]
+
+[F-005]  # Share an inbox another user already connected
+by = ["http POST /email/init where ?force_share=true"]
+also = ["kafka macro.email:LinkConnected"]
+
+[F-006]  # Cancel or fail the provider consent and return to the app
+# Nothing reaches the email service when consent is abandoned; the attempt it
+# left behind is removed by this daily sweep.
+by = ["lambda user_link_cleanup_handler"]
+
+[F-007]  # Reconnect an inbox whose access expired or was revoked
+by = ["http POST /email/init where ?link_id"]
+gmail = ["provider gmail:oauth.authorize", "provider gmail:watch"]
+outlook = ["provider outlook:oauth.authorize", "provider outlook:subscriptions.create"]
+also = ["kafka macro.email:LinkReauthRequired"]
+
+[F-008]  # Enable a disabled inbox
+by = ["http POST /email/init"]
+gmail = ["provider gmail:watch"]
+outlook = ["provider outlook:subscriptions.create"]
+
+[F-009]  # Remove an inbox (own: clears its mail; shared: removes access)
+# The provider lists hold for an inbox the user owns; removing a shared inbox
+# only drops the user's access and calls no provider.
+by = ["http DELETE /email/links/{link_id}", "http DELETE /email/sync"]
+gmail = ["provider gmail:stop"]
+outlook = ["provider outlook:subscriptions.delete"]
+also = [
+  "queue link-manager:DeleteLink",
+  "kafka macro.email:LinkDisconnected",
+  "gateway refresh_email:LinkRemoved",
+  "loop mailbox_sync_worker::run_lifecycle",
+]
+
+[F-010]  # Connect an inbox during onboarding
+ui = "the backend sees the same connect request as F-001 and F-002; nothing in it says onboarding"
+
+[F-011]  # Link Gmail automatically on Google sign-in
+# The same request without `link_id`, which no condition can say.
+by = ["http POST /email/init"]
+gmail = ["provider gmail:getProfile", "provider gmail:watch"]
+
+[F-012]  # Refresh provider access tokens
+by = ["queue link-manager:HealthCheck", "queue link-manager:Refresh"]
+gmail = ["provider gmail:oauth.token"]
+outlook = ["provider outlook:oauth.token"]
+
+[F-013]  # Renew the provider's change notifications (Gmail watch, Outlook subscriptions)
+by = [
+  "queue link-manager:Refresh",
+  "webhook outlook:lifecycle:reauthorizationRequired",
+  "webhook outlook:lifecycle:subscriptionRemoved",
+]
+gmail = ["provider gmail:watch"]
+outlook = ["provider outlook:subscriptions.update"]
+also = ["lambda email_refresh_handler", "loop mailbox_sync_worker::run_watches"]
+
+[F-014]  # Show inbox health and prompt to reconnect
+by = ["http POST /email/links/health-check"]
+also = [
+  "queue link-manager:HealthCheck",
+  "queue link-manager:NotifyReauthRequired",
+  "kafka macro.email:LinkReauthRequired",
+  "loop mailbox_sync_worker::run_health",
+]
+
+[F-015]  # Send-as aliases: list them and keep them in sync
+by = ["graphql GraphqlEmailLink.sendAs"]
+gmail = ["provider gmail:settings.sendAs.list"]
+also = ["loop mailbox_sync_worker::run_settings"]
+
+# ------------------------------------------------------------------- sync
+
+[F-016]  # Import existing mail when an inbox is connected (backfill)
+by = ["http POST /email/init"]
+gmail = ["queue backfill:ListThreads", "provider gmail:threads.list"]
+outlook = ["provider outlook:messages.delta"]
+also = [
+  "queue backfill:Init",
+  "queue backfill:BackfillThread",
+  "queue backfill:BackfillMessage",
+  "queue backfill:BackfillAttachment",
+  "queue backfill:UpdateThreadMetadata",
+  "queue backfill:FinalizeBackfill",
+  "kafka macro.email:ThreadBackfilled",
+  "gateway refresh_email:Backfill",
+  "gateway refresh_email:BackfillProgress",
+  "http GET /email/backfill/gmail",
+  "http GET /email/backfill/gmail/active",
+  "http GET /email/backfill/gmail/{id}",
+  "http POST /internal/backfill/provider/gmail",
+  "http GET /internal/backfill/provider/gmail/{id}",
+  "provider gmail:threads.get",
+  "provider gmail:messages.list",
+  "provider outlook:messages.list",
+  "provider outlook:batch",
+  "loop backfill_outbox::run",
+  "loop mailbox_sync_worker::run",
+]
+
+[F-017]  # Receive a new message from the provider
+by = ["http POST /gmail/webhook", "webhook outlook:change where /value/0/changeType=created"]
+gmail = [
+  "queue gmail-inbox-sync:GmailMessage",
+  "queue gmail-inbox-sync:UpsertMessage",
+  "provider gmail:history.list",
+  "provider gmail:messages.get",
+]
+outlook = ["provider outlook:messages.delta"]
+also = [
+  "http POST /outlook/webhook/{attempt}",
+  "kafka macro.email:MessageReceived",
+  "provider outlook:messages.get",
+  "provider outlook:attachments.list",
+  "loop mailbox_sync_worker::run",
+]
+
+[F-018]  # Show a new message in the open list without reloading
+by = ["gateway refresh_email:UpsertMessage"]
+
+[F-019]  # Pick up a change made in the provider's own client (read, archive, star, trash, label)
+by = ["queue gmail-inbox-sync:UpdateLabels", "webhook outlook:change where /value/0/changeType=updated"]
+gmail = ["provider gmail:history.list"]
+outlook = ["provider outlook:messages.delta"]
+also = ["gateway refresh_email:UpdateLabels", "provider gmail:labels.get"]
+
+[F-020]  # Pick up a message deleted at the provider
+by = ["queue gmail-inbox-sync:DeleteMessage", "webhook outlook:change where /value/0/changeType=deleted"]
+gmail = ["provider gmail:history.list"]
+outlook = ["provider outlook:messages.delta"]
+also = ["kafka macro.email:MessageDeleted", "gateway refresh_email:DeleteMessage"]
+
+[F-021]  # Pick up a draft created or changed at the provider
+by = ["kafka macro.email:MessageDraftSynced"]
+gmail = ["queue gmail-inbox-sync:UpsertMessage"]
+outlook = ["webhook outlook:change"]
+also = [
+  "provider gmail:drafts.list",
+  "provider gmail:drafts.get",
+  "loop mailbox_sync_worker::run_drafts",
+]
+
+[F-022]  # Pick up mail sent from the provider's own client
+by = ["kafka macro.email:MessageSent"]
+gmail = ["queue gmail-inbox-sync:UpsertMessage"]
+outlook = ["webhook outlook:change"]
+
+[F-023]  # Force a sync of an inbox
+by = ["http POST /email/links/{link_id}/resync"]
+gmail = ["queue backfill:ListThreads", "provider gmail:threads.list"]
+outlook = ["provider outlook:messages.delta"]
+
+[F-024]  # Recover after missed or failed provider notifications
+# Gmail recovers inside the ordinary sync message (its retry queue is an
+# alias of the same entry point), so only the queue message can be named.
+by = ["webhook outlook:lifecycle:missed", "queue gmail-inbox-sync:GmailMessage"]
+gmail = ["provider gmail:history.list"]
+outlook = ["provider outlook:messages.delta"]
+
+[F-025]  # Thread messages into conversations
+by = [
+  "queue gmail-inbox-sync:UpsertMessage",
+  "queue backfill:BackfillThread",
+  "webhook outlook:change where /value/0/changeType=created",
+]
+gmail = ["provider gmail:threads.get"]
+outlook = ["provider outlook:messages.delta"]
+
+[F-026]  # Sync the provider address book into contacts
+by = ["http POST /email/init", "queue link-manager:Refresh"]
+gmail = ["provider gmail:people.connections.list", "provider gmail:otherContacts.list"]
+outlook = ["provider outlook:contactFolders.list", "provider outlook:contacts.list"]
+also = [
+  "queue sfs-uploader:SFSUploaderMessage",
+  "queue backfill:SeedSentContact",
+  "gateway refresh_email:PhotoSynced",
+  "provider gmail:people.get",
+  "provider outlook:contacts.delta",
+  "provider outlook:contacts.photo",
+  "provider outlook:me.photo",
+  "loop mailbox_sync_worker::run_contacts",
+]
+
+[F-027]  # Classify mail as Focus, Signal or Noise
+by = ["gateway refresh_email:FocusUpdated"]
+also = ["graphql GraphqlSoupEmailThread.focus"]
+
+[F-028]  # Index mail for search
+by = [
+  "kafka macro.email:ThreadsReindexRequested",
+  "kafka macro.email:MessageReceived",
+  "kafka macro.email:ThreadBackfilled",
+]
+also = [
+  "http POST /internal/threads/histories",
+  "http POST /internal/messages/senders",
+  "http GET /internal/threads/{id}/messages",
+  "loop mailbox_sync_worker::run_projections",
+]
+
+# ------------------------------------------------------------------- list
+
+[F-029]  # Open the Inbox and switch between Focus, Signal and Noise
+by = [
+  "http GET /email/threads/previews/cursor/{view} where view=inbox",
+  "graphql GraphqlUser.emailFocus",
+  "graphql GraphqlSoupEmailThread.mailAllPreview",
+]
+
+[F-030]  # Open a mailbox tab: Drafts, Sent, Scheduled, All mail, Archived, Starred
+by = [
+  "http GET /email/threads/previews/cursor/{view} where view=drafts",
+  "http GET /email/threads/previews/cursor/{view} where view=sent",
+  "http GET /email/threads/previews/cursor/{view} where view=all",
+  "http GET /email/threads/previews/cursor/{view} where view=starred",
+  "http GET /email/drafts/scheduled",
+  "graphql GraphqlSoupEmailThread.mailDraftPreview",
+  "graphql GraphqlSoupEmailThread.mailSentPreview",
+]
+also = [
+  "graphql GraphqlSoupEmailThread.latestOutboundMessageTs",
+  "graphql GraphqlSoupEmailThread.latestNonSpamMessageTs",
+]
+
+[F-031]  # Open Spam and Trash
+by = [
+  "http GET /email/threads/previews/cursor/{view} where view=spam",
+  "http GET /email/threads/previews/cursor/{view} where view=trash",
+]
+
+[F-032]  # Open Shared with me
+outside = "document storage: POST /items/soup/ast with the shared filter"
+
+[F-033]  # Choose which inboxes or alias the list shows
+# The REST list always shows every inbox of the user; the web app narrows
+# the list by an owner literal in the filter tree of the soup request, which
+# no scenario sends and the shape of which is not pinned down here.
+by = ["elsewhere document_storage_service POST /items/soup/ast where /ef/l/Owner"]
+also = ["graphql GraphqlSoupEmailThread.linkId"]
+
+[F-034]  # Filter the list by read state, done state, star, attachments, people, tags, importance, activity
+by = ["elsewhere document_storage_service POST /items/soup/ast where /ef"]
+
+[F-035]  # Sort the list
+by = ["http GET /email/threads/previews/cursor/{view} where ?sort_method"]
+
+[F-036]  # Page through a long list (load more)
+by = ["http GET /email/threads/previews/cursor/{view} where ?cursor"]
+
+[F-037]  # Refresh the list
+by = ["http GET /email/threads/previews/cursor/{view}"]
+
+[F-038]  # Move through the list with the keyboard
+ui = "no request leaves the browser"
+
+[F-039]  # Select threads (one, range, all) and clear the selection
+ui = "selection is browser state"
+
+[F-040]  # Use the reading pane (toggle, resize, open beside the list)
+ui = "layout is browser state"
+
+[F-041]  # See a thread's row: sender, subject, snippet, time, unread, star, attachment, draft and count marks
+by = [
+  "http GET /email/threads/previews/cursor/{view}",
+  "graphql GraphqlSoupEmailThread.latestContentMessage",
+]
+also = [
+  "graphql GraphqlSoupEmailThread.mailDraftState",
+  "graphql GraphqlSoupEmailThread.hasReceivedMail",
+  "graphql GraphqlSoupEmailThread.latestInboundMessageTs",
+]
+
+[F-042]  # See the unread count badge on Mail
+outside = "nothing in the email service returns an unread count; the badge comes from the notification service"
+
+[F-043]  # See empty, loading and failed list states and retry
+ui = "states the browser draws around the list request of F-029"
+
+[F-044]  # Undo the last list action
+# Undo sends the opposite of the action it undoes.
+by = [
+  "http PATCH /email/threads/{id}/archived",
+  "http PATCH /email/threads/archived",
+  "http PATCH /email/threads/{id}/state",
+  "graphql CompleteMutationRoot.setEmailThreadArchived",
+  "graphql CompleteMutationRoot.setEmailThreadsArchived",
+  "graphql CompleteMutationRoot.setEmailThreadState",
+]
+
+# ------------------------------------------------------------------ views
+
+[F-045]  # Create a saved view from filters
+outside = "saved views are stored outside the email service"
+
+[F-046]  # Open a saved view
+# A saved view's filters arrive as the same filter tree; the view itself
+# is stored outside the email service.
+by = ["elsewhere document_storage_service POST /items/soup/ast where /ef"]
+
+[F-047]  # Edit, rename or duplicate a saved view
+outside = "saved views are stored outside the email service"
+
+[F-048]  # Delete a saved view
+outside = "saved views are stored outside the email service"
+
+[F-049]  # Reorder saved views
+outside = "saved views are stored outside the email service"
+
+# ----------------------------------------------------------------- search
+
+[F-050]  # Search mail by text from the list
+by = ["elsewhere document_storage_service POST /search"]
+
+[F-051]  # Search mail from global search and Cmd+K and open a result
+by = ["elsewhere document_storage_service POST /search"]
+
+[F-052]  # Open a thread at the message a search hit names
+by = ["http GET /email/threads/{thread_id}", "graphql GraphqlUser.emailThread"]
+
+# ------------------------------------------------------------------- read
+
+[F-053]  # Open a thread
+by = [
+  "http GET /email/threads/{thread_id}",
+  "http GET /email/threads/{id}/messages",
+  "graphql GraphqlUser.emailThread",
+  "graphql GraphqlSoupEmailThread.messages",
+]
+
+[F-054]  # Open a thread in a new split or tab
+ui = "the backend sees the same thread read as F-053; the split or tab is browser state"
+
+[F-055]  # Open a thread from a link, mention or notification
+by = ["http GET /email/threads/{thread_id}", "graphql GraphqlUser.emailThread"]
+
+[F-056]  # Read a message: sanitized HTML body, plain text, inline images
+by = [
+  "http GET /email/messages/{id}",
+  "http POST /email/messages/batch",
+  "http GET /email/threads/{thread_id}",
+  "graphql GraphqlSoupEmailThread.messages",
+]
+
+[F-057]  # Load remote images through the image proxy
+outside = "the image proxy is not an email entry point"
+
+[F-058]  # Expand and collapse messages and their header details
+ui = "no request leaves the browser"
+
+[F-059]  # Show quoted text and trimmed signatures
+ui = "the browser folds text it already has"
+
+[F-060]  # Read a long thread (hidden middle messages, expand all)
+by = [
+  "http GET /email/threads/{thread_id} where ?offset",
+  "http GET /email/threads/{id}/messages where ?offset",
+  "graphql GraphqlSoupEmailThread.messages",
+]
+
+[F-061]  # Go to the next or previous thread
+ui = "the backend sees the same thread read as F-053; which thread is next is browser state"
+
+[F-062]  # Move between messages with the keyboard
+ui = "no request leaves the browser"
+
+[F-063]  # See who a message is from and to (participants, hover card)
+ui = "participants come with the thread already loaded"
+
+[F-064]  # Download a message as .eml
+by = ["http GET /email/messages/{id}/eml"]
+gmail = ["provider gmail:messages.get"]
+outlook = ["provider outlook:messages.value"]
+
+[F-065]  # Copy a link to a thread
+ui = "no request leaves the browser"
+
+[F-066]  # See read receipts for sent mail
+by = ["http GET /email/threads/{thread_id}/read-receipts"]
+also = ["http GET /opens/{token}"]
+
+[F-067]  # Turn read receipts on or off for an inbox
+by = ["http PATCH /email/settings where /settings/read_receipts_enabled"]
+
+# --------------------------------------------------------------- organise
+
+[F-068]  # Mark a thread read
+by = [
+  "http PATCH /email/threads/{id}/state where /field=read, /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=READ, /input/value=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadRead"]
+
+[F-069]  # Mark a thread unread
+by = [
+  "http PATCH /email/threads/{id}/state where /field=read, /value=false",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=READ, /input/value=false",
+  "graphql CompleteMutationRoot.markEmailThreadUnread",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadRead"]
+
+[F-070]  # Mark a thread read automatically when it is opened
+by = ["http POST /email/threads/{id}/seen", "graphql CompleteMutationRoot.markEmailThreadSeen"]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadRead"]
+
+[F-071]  # Mark a thread done (archive)
+by = [
+  "http PATCH /email/threads/{id}/archived where /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadArchived where /input/archived=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadArchived"]
+
+[F-072]  # Mark a thread not done (back to the inbox)
+by = [
+  "http PATCH /email/threads/{id}/archived where /value=false",
+  "graphql CompleteMutationRoot.setEmailThreadArchived where /input/archived=false",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadArchived"]
+
+[F-073]  # Star a thread
+by = [
+  "http PATCH /email/threads/{id}/state where /field=starred, /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=STARRED, /input/value=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadStarred"]
+
+[F-074]  # Unstar a thread
+by = [
+  "http PATCH /email/threads/{id}/state where /field=starred, /value=false",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=STARRED, /input/value=false",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadStarred"]
+
+[F-075]  # Move a thread to Trash
+by = [
+  "http PATCH /email/threads/{id}/state where /field=trashed, /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=TRASHED, /input/value=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = [
+  "queue gmail-ops:ModifyMessageLabels",
+  "kafka macro.email:ThreadTrashed",
+  "provider gmail:messages.trash",
+]
+
+[F-076]  # Restore a thread from Trash
+by = [
+  "http PATCH /email/threads/{id}/state where /field=trashed, /value=false",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=TRASHED, /input/value=false",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = [
+  "queue gmail-ops:ModifyMessageLabels",
+  "kafka macro.email:ThreadTrashed",
+  "provider gmail:messages.untrash",
+]
+
+[F-077]  # Delete a thread permanently
+ui = "no backend entry point deletes a thread at the provider; Trash is the only removal"
+
+[F-078]  # Report a thread as not spam
+by = [
+  "http PATCH /email/threads/{id}/state where /field=junk, /value=false",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=JUNK, /input/value=false",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadSpamChanged"]
+
+[F-079]  # Mute and unmute a thread's notifications
+outside = "notification preferences are kept outside the email service"
+
+[F-080]  # Block a sender
+by = ["http POST /email/contacts/block"]
+gmail = ["provider gmail:settings.filters.create"]
+outlook = ["provider outlook:rules.create"]
+also = [
+  "http GET /email/contacts/blocked",
+  "queue gmail-ops:BlockSender",
+  "provider gmail:settings.filters.list",
+  "provider gmail:settings.filters.get",
+  "provider outlook:rules.list",
+]
+
+[F-081]  # Set a sender to Signal or Noise
+by = ["http PUT /email/filters where /is_important"]
+also = ["http GET /email/filters", "http DELETE /email/filters/{id}"]
+
+[F-082]  # Act on several selected threads at once (done, read, star, trash, tag)
+by = [
+  "http PATCH /email/threads/archived",
+  "graphql CompleteMutationRoot.setEmailThreadsArchived",
+  "http PATCH /email/messages/labels",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = [
+  "queue gmail-ops:ModifyMessageLabelsBatch",
+  "provider gmail:messages.batchModify",
+  "kafka macro.email:ThreadArchived",
+]
+
+[F-083]  # Undo an action from its toast
+# Undo sends the opposite of the action it undoes.
+by = [
+  "http PATCH /email/threads/{id}/archived",
+  "http PATCH /email/threads/archived",
+  "http PATCH /email/threads/{id}/state",
+  "graphql CompleteMutationRoot.setEmailThreadArchived",
+  "graphql CompleteMutationRoot.setEmailThreadsArchived",
+  "graphql CompleteMutationRoot.setEmailThreadState",
+]
+
+# ----------------------------------------------------------------- labels
+
+[F-084]  # Add and remove a tag on a thread
+by = [
+  "elsewhere document_storage_service POST /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id} where entity_type=THREAD",
+  "elsewhere document_storage_service DELETE /properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id} where entity_type=THREAD",
+]
+also = ["elsewhere document_storage_service POST /properties/tags"]
+
+[F-085]  # Filter by a tag from a row's chip
+ui = "sets a list filter; the list read is F-034"
+
+[F-086]  # Change a thread's provider labels or folder
+by = [
+  "http PATCH /email/threads/{id}/labels",
+  "graphql CompleteMutationRoot.updateEmailThreadLabel",
+  "http PATCH /email/messages/labels",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.update"]
+also = ["queue gmail-ops:ModifyMessageLabels", "kafka macro.email:ThreadLabelsUpdated"]
+
+[F-087]  # Move a thread to a folder or project in Macro
+by = ["http PATCH /email/threads/{thread_id}/project"]
+also = ["kafka macro.email:ThreadProjectChanged"]
+
+[F-088]  # Edit a thread's properties in the side panel
+by = ["elsewhere document_storage_service PUT /properties/entities/{entity_type}/{entity_id}/{property_id} where entity_type=THREAD"]
+
+[F-089]  # List the provider's labels and folders
+by = ["http GET /email/labels", "graphql GraphqlUser.emailLabels"]
+gmail = ["provider gmail:labels.list"]
+outlook = ["provider outlook:categories.list", "provider outlook:folders.list"]
+
+# -------------------------------------------------------------- reminders
+
+[F-090]  # Set a reminder on a thread (preset, typed time, if no reply or regardless)
+by = ["elsewhere document_storage_service PUT /reminders/email/{thread_id} where /type=set"]
+
+[F-091]  # Change or remove a reminder
+# An edit names the revision it replaces; removing is the other type.
+by = [
+  "elsewhere document_storage_service PUT /reminders/email/{thread_id} where /type=set, /expectedRevision",
+  "elsewhere document_storage_service PUT /reminders/email/{thread_id} where /type=remove",
+]
+
+[F-092]  # See reminders in the Reminders tab
+by = ["elsewhere document_storage_service GET /reminders/email/collection"]
+also = ["elsewhere document_storage_service GET /reminders/email/{thread_id}"]
+
+[F-093]  # A due reminder brings the thread back and notifies
+by = ["queue reminder-dispatch:Deliver"]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+also = [
+  "queue reminder-dispatch:Sweep",
+  "graphql GraphqlSoupEmailThread.reminderReturnedAt",
+  "queue gmail-ops:ModifyMessageLabels",
+]
+
+[F-094]  # A reply cancels an if-no-reply reminder
+# The reply is an ordinary received message; the cancelling itself happens in
+# the reminders code and leaves no entry point of its own.
+by = ["kafka macro.email:MessageReceived"]
+
+# ---------------------------------------------------------------- compose
+
+[F-095]  # Start a new message
+ui = "nothing is sent until the first save (F-115)"
+
+[F-096]  # Start a new message from a mailto link or prefilled parameters
+ui = "nothing is sent until the first save (F-115)"
+
+[F-097]  # Add recipients by typing, pasting or picking a suggestion
+by = [
+  "http POST /email/messages where /message/to",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/to",
+  "graphql CompleteMutationRoot.sendEmailMessage",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+also = ["http GET /email/contacts"]
+
+[F-098]  # Remove a recipient and move one between To, Cc and Bcc
+by = [
+  "http POST /email/messages where /message/to",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/to",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-099]  # Add Cc and Bcc recipients
+by = [
+  "http POST /email/messages where /message/cc, /message/bcc",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/cc, /input/message/bcc",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-100]  # Choose the sending inbox or alias
+by = [
+  "http POST /email/drafts/{id}/transfer",
+  "http POST /email/messages where /message/from",
+  "http POST /email/drafts where /draft/from",
+  "graphql CompleteMutationRoot.saveEmailDraft where /input/senderEmail",
+]
+also = [
+  "http POST /email/draft-transfers/{id}/recover",
+  "loop mailbox_sync_worker::run_transfers",
+]
+
+[F-101]  # Write the subject
+by = [
+  "http POST /email/messages where /message/subject",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/subject",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-102]  # Write the body
+by = [
+  "http POST /email/messages where /message/body_text",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/bodyText",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-103]  # Format the body (bold, italic, lists, quote, code, highlight)
+by = [
+  "http POST /email/messages where /message/body_html",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/bodyHtml",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-104]  # Insert and edit a link
+by = [
+  "http POST /email/messages where /message/body_html",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/bodyHtml",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-105]  # Insert an inline image
+by = [
+  "http POST /email/messages where /message/body_html",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/bodyHtml",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-106]  # Mention a person or a document in the body
+outside = "a mention is recorded by the service that owns the mentioned person or document"
+
+[F-107]  # Send with the signature, or without it
+by = [
+  "http POST /email/messages where /message/include_signature",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/includeSignature",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/signatureHtml",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-108]  # Reply to a message
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.createReply", "provider outlook:messages.send"]
+also = ["provider outlook:messages.reply"]
+
+[F-109]  # Reply to all
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.createReply", "provider outlook:messages.send"]
+
+[F-110]  # Forward a message
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+also = ["provider outlook:messages.createForward", "provider outlook:messages.forward"]
+
+[F-111]  # Include or leave out the quoted original
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-112]  # Switch an open reply between reply, reply all and forward
+ui = "changes the open composer; the next save is F-117"
+
+[F-113]  # Compose on a phone (full-screen composer)
+ui = "the backend sees the same send as F-131; the full-screen composer is layout"
+
+[F-114]  # Create a calendar event from a draft or thread
+outside = "the event is created by the calendar service"
+
+# ----------------------------------------------------------------- drafts
+
+[F-115]  # Save a draft automatically while typing
+# A Gmail draft stays in Macro; an Outlook draft is copied to the mailbox.
+by = ["http POST /email/drafts", "graphql CompleteMutationRoot.saveEmailDraft"]
+outlook = ["provider outlook:messages.create"]
+also = [
+  "provider outlook:messages.update",
+  "provider gmail:drafts.create",
+  "provider gmail:drafts.update",
+  "loop mailbox_sync_worker::run_drafts",
+]
+
+[F-116]  # Reopen a draft from Drafts and keep editing
+by = [
+  "http POST /email/drafts where /draft/db_id",
+  "graphql CompleteMutationRoot.saveEmailDraft where /input/draftGeneration",
+]
+outlook = ["provider outlook:messages.update"]
+also = ["graphql GraphqlSoupEmailThread.mailDraftState"]
+
+[F-117]  # Keep a reply draft with its thread and reopen it there
+by = [
+  "http POST /email/drafts where /draft/replying_to_id",
+  "graphql CompleteMutationRoot.saveEmailDraft where /input/replyingToId",
+]
+outlook = ["provider outlook:messages.createReply"]
+
+[F-118]  # Restore an unsent draft after reload or offline
+ui = "the draft is restored from browser storage"
+
+[F-119]  # Discard a draft
+by = ["http DELETE /email/drafts/{id}", "graphql CompleteMutationRoot.deleteEmailDraft"]
+outlook = ["provider outlook:messages.delete"]
+also = ["provider gmail:drafts.delete"]
+
+[F-120]  # See and resolve a draft that failed to save or conflicts with the mailbox
+# Reading the operation is how a client waits for any draft write; only the
+# resolution performs the function.
+by = [
+  "http POST /email/drafts/{id}/resolve",
+  "graphql CompleteMutationRoot.resolveEmailMessageOperation where /input/action=KEEP_LOCAL",
+  "graphql CompleteMutationRoot.resolveEmailMessageOperation where /input/action=USE_PROVIDER",
+  "graphql CompleteMutationRoot.resolveEmailMessageOperation where /input/action=RECHECK",
+]
+also = ["http GET /email/drafts/{id}/operation"]
+
+[F-121]  # Keep local drafts across sign-out confirmation
+ui = "local drafts live in browser storage"
+
+# ------------------------------------------------------------ attachments
+
+[F-122]  # Attach a file to a message (picker, drop, paste)
+by = ["http POST /email/drafts/{id}/attachments/{attachment_id}/complete"]
+outlook = ["provider outlook:attachments.create"]
+also = [
+  "http POST /email/drafts/{id}/attachments",
+  "provider outlook:uploads.create",
+  "provider outlook:uploads.put",
+  "provider outlook:uploads.get",
+  "provider outlook:uploads.delete",
+]
+
+[F-123]  # Remove an attachment from a draft
+by = ["http DELETE /email/drafts/{id}/attachments/{attachment_id}"]
+also = ["provider outlook:attachments.delete"]
+
+[F-124]  # Forward a message with its attachments
+by = ["http POST /email/drafts/{id}/forwarded-attachments"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+also = [
+  "http DELETE /email/drafts/{id}/forwarded-attachments/{attachment_id}",
+  "provider gmail:messages.attachments.get",
+  "provider outlook:attachments.value",
+]
+
+[F-125]  # Share a file too large to attach as a link
+outside = "the file is uploaded to document storage and linked in the body"
+
+[F-126]  # Open and preview a received attachment
+by = ["http GET /email/attachments/{id}"]
+gmail = ["provider gmail:messages.attachments.get"]
+outlook = ["provider outlook:attachments.value"]
+also = ["provider outlook:attachments.get"]
+
+[F-127]  # Download a received attachment
+by = ["http GET /email/attachments/{id}"]
+gmail = ["provider gmail:messages.attachments.get"]
+outlook = ["provider outlook:attachments.value"]
+
+[F-128]  # Save a received attachment to Drive
+by = ["http GET /email/attachments/{id}/document_id"]
+gmail = ["provider gmail:messages.attachments.get"]
+outlook = ["provider outlook:attachments.value"]
+
+[F-129]  # Open cloud attachments of an Outlook message
+ui = "a cloud attachment is a link the browser opens"
+
+[F-130]  # Clean up stored files of discarded drafts
+by = ["lambda email_sfs_delete_handler", "queue sfs-delete:SFSDeleteMessage"]
+also = ["loop mailbox_sync_worker::run_attachment_cleanup"]
+
+# ------------------------------------------------------------------- send
+
+[F-131]  # Send a new message
+by = [
+  "http POST /email/messages",
+  "graphql CompleteMutationRoot.sendEmailAttempt",
+  "graphql CompleteMutationRoot.sendEmailMessage",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.create", "provider outlook:messages.send"]
+also = [
+  "kafka macro.email:MessageSendQueued",
+  "kafka macro.email:MessageSent",
+  "provider gmail:drafts.send",
+  "provider outlook:messages.sendMail",
+  "loop mailbox_sync_worker::run_commands",
+]
+
+[F-132]  # Send a reply in its thread with the right headers
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.createReply", "provider outlook:messages.send"]
+
+[F-133]  # Send and mark done
+# Needs a send and an archive in the same scenario; `by` can only name one.
+by = ["http POST /email/messages", "graphql CompleteMutationRoot.sendEmailAttempt"]
+gmail = ["provider gmail:messages.send", "provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.send", "provider outlook:messages.move"]
+
+[F-134]  # Undo send
+by = ["graphql CompleteMutationRoot.cancelEmailSend", "http DELETE /email/drafts/scheduled/{message_id}"]
+also = ["kafka macro.email:MessageSendCancelled"]
+
+[F-135]  # See that a message is sending, sent or failed
+by = ["graphql GraphqlUser.emailSendAttempt", "graphql GraphqlUser.pendingEmailSends"]
+
+[F-136]  # Retry or cancel a failed or queued send and get the draft back
+by = [
+  "graphql CompleteMutationRoot.resolveEmailMessageOperation where /input/action=RETRY_SEND",
+  "graphql CompleteMutationRoot.cancelEmailSend",
+]
+
+[F-137]  # Send exactly once across retries, reloads and two tabs
+by = ["graphql CompleteMutationRoot.sendEmailAttempt where /input/attempt/attemptId"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+also = ["provider gmail:messages.list", "provider outlook:messages.list"]
+
+[F-138]  # Send from an alias
+by = [
+  "http POST /email/messages where /message/from",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/senderEmail",
+]
+gmail = ["provider gmail:messages.send"]
+
+[F-139]  # Send while offline and deliver on reconnect
+ui = "the browser queues the send; what leaves on reconnect is the send of F-137"
+
+[F-140]  # Handle a bounce or a provider rejection
+# A bounce is a received message; a rejection is the provider refusing the
+# send. Neither has an entry point of its own.
+by = ["kafka macro.email:MessageReceived", "queue scheduled:ScheduledPubsubMessage"]
+
+[F-141]  # Reply on a thread shared by a teammate
+by = [
+  "http POST /email/messages where /message/replying_to_id",
+  "graphql CompleteMutationRoot.sendEmailAttempt where /input/message/replyingToId",
+]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+# -------------------------------------------------------------- scheduled
+
+[F-142]  # Schedule a message for later (preset, typed, custom time)
+by = [
+  "http PUT /email/drafts/scheduled/{message_id} where /send_time",
+  "http POST /email/drafts where /send_time",
+  "graphql CompleteMutationRoot.saveEmailDraft where /input/sendTime",
+]
+
+[F-143]  # Change the time of a scheduled message
+by = ["http PUT /email/drafts/scheduled/{message_id} where /send_time"]
+
+[F-144]  # Cancel a scheduled message back to a draft
+by = ["http DELETE /email/drafts/scheduled/{message_id}"]
+also = ["kafka macro.email:MessageSendCancelled"]
+
+[F-145]  # See scheduled messages in the Scheduled tab
+by = ["http GET /email/drafts/scheduled"]
+
+[F-146]  # Deliver a scheduled message when it is due
+by = ["queue scheduled:ScheduledPubsubMessage"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+also = ["kafka macro.email:MessageSent"]
+
+[F-147]  # Report and recover a scheduled send that failed
+by = ["lambda email_scheduled_handler"]
+
+# -------------------------------------------------------------- signature
+
+[F-148]  # Write and save a signature
+by = ["http PATCH /email/settings where /settings/signature"]
+
+[F-149]  # Edit a signature as rich text or HTML and preview it
+by = ["http PATCH /email/settings where /settings/signature"]
+
+[F-150]  # Clear a signature
+by = ["http PATCH /email/settings where /settings/signature"]
+
+[F-151]  # Import the signature from Gmail
+by = ["http POST /email/settings/import-signature"]
+gmail = ["provider gmail:settings.sendAs.list"]
+
+[F-152]  # Choose whether replies and forwards get the signature
+by = ["http PATCH /email/settings where /settings/signature_on_replies_forwards"]
+
+# --------------------------------------------------------------- calendar
+
+[F-153]  # See an invitation card in a thread
+by = ["http GET /email/threads/{thread_id}/calendar-invitations"]
+
+[F-154]  # RSVP to an invitation from the thread
+outside = "the answer is sent by the calendar service"
+
+[F-155]  # Open the event or join the meeting from the invitation
+ui = "the browser opens a link the invitation card already holds"
+
+[F-156]  # Add a forwarded invitation to the calendar
+by = ["http POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy"]
+gmail = ["provider gmail:events.import"]
+
+[F-157]  # Turn calendar access on or off for an inbox
+by = ["http DELETE /email/links/{link_id}/calendar"]
+gmail = ["provider gmail:channels.stop"]
+
+# ---------------------------------------------------------------- sharing
+
+[F-158]  # Share a thread with people or channels and set their access
+outside = "sharing is stored by the entity access routes of document storage"
+
+[F-159]  # Open a thread shared by someone else
+by = ["http GET /email/threads/{thread_id}", "graphql GraphqlUser.emailThread"]
+also = ["http GET /internal/threads/{id}/owner"]
+
+[F-160]  # Request and grant access to a thread
+outside = "access requests are stored by the entity access routes of document storage"
+
+# ---------------------------------------------------------- notifications
+
+[F-161]  # Notify about a new email (push, in-app, Mail badge)
+outside = "the notification leaves on the notification-ingress queue"
+
+[F-162]  # Turn new-email notifications and the digest on or off
+outside = "notification preferences are kept by the notification service"
+
+[F-163]  # Open the thread from a notification
+by = ["http GET /email/threads/{thread_id}", "graphql GraphqlUser.emailThread"]
+
+# -------------------------------------------------------------- elsewhere
+
+[F-164]  # See and act on mail from Home (open, mark done)
+by = [
+  "graphql GraphqlUser.emailFocus",
+  "http PATCH /email/threads/{id}/archived where /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadArchived where /input/archived=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+
+[F-165]  # Compose an email to a CRM contact and see their mail
+by = ["http POST /email/messages", "graphql CompleteMutationRoot.sendEmailAttempt"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-166]  # Draft or send an email from the universal input
+by = ["tool SendEmail"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-167]  # Create a task or ask the assistant about a thread
+by = ["tool GetThread"]
+
+[F-168]  # Assistant drafts an email the user edits and sends from a card
+by = ["tool SendEmail", "tool SendConfirmedEmail"]
+gmail = ["provider gmail:messages.send"]
+outlook = ["provider outlook:messages.send"]
+
+[F-169]  # Assistant reads threads and attachments
+by = ["tool GetThread"]
+also = ["http GET /internal/messages/{id}", "http POST /internal/messages/batch"]
+
+[F-170]  # Assistant lists inboxes and labels and changes a thread's labels
+by = ["tool ListInboxes", "tool ListLabels", "tool UpdateThreadLabels"]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+
+[F-171]  # Assistant sets a sender policy
+by = ["tool SetSenderPolicy"]
+gmail = ["provider gmail:settings.filters.create"]
+outlook = ["provider outlook:rules.create"]
+
+# ------------------------------------------------------------ maintenance
+
+[F-172]  # Remove a user's mail and links when the account is deleted
+by = ["http DELETE /internal/delete_user/{id}", "queue link-manager:DeleteUser"]
+also = ["queue link-manager:DeleteLink", "kafka macro.email:LinkDisconnected"]
+
+[F-173]  # Stop sending to addresses that bounced or complained
+by = ["lambda email_suppression_handler"]
+
+[F-174]  # Enforce the plan's inbox entitlement
+# The refusal is the status of this request, which no condition can say.
+by = ["http POST /email/init"]
+
+[F-175]  # Feed mail events to activity, routines and suggestions
+by = ["kafka macro.email:MessageReceived", "kafka macro.email:MessageSent"]
+also = ["http GET /internal/recent_messages/{user_id}"]
+
+[F-176]  # Enrich CRM contacts from mail and clean up after removal
+by = [
+  "queue backfill:PopulateCrmContact",
+  "queue backfill:PopulateCrmForUser",
+  "queue crm-cleanup:StartJob",
+]
+also = [
+  "queue backfill:DepopulateCrmContact",
+  "queue backfill:DepopulateCrmForUser",
+  "queue crm-cleanup:ListCandidates",
+  "queue crm-cleanup:ProcessCandidate",
+  "loop crm_enrichment_worker::run",
+]
+
+# ------------------------------------------------- added after the first pass
+
+[F-177]  # Close a thread and return to the list
+ui = "no request leaves the browser"
+
+[F-178]  # Copy a thread's subject
+ui = "no request leaves the browser"
+
+[F-179]  # Open the action menu of a thread or row (command menu, context menu, title menu)
+ui = "no request leaves the browser"
+
+[F-180]  # See that a change is waiting for, or was refused by, the mailbox
+by = ["http GET /email/threads/{id}/operations", "http GET /email/settings/operations"]
+
+[F-181]  # Show or hide the Email sidebar
+ui = "layout is browser state"
+
+[F-182]  # Open the folder or project a thread is filed in
+ui = "navigates to the project; no email request"
+
+[F-183]  # Learn Mail: tutorial video and view tour
+ui = "no request leaves the browser"
+
+[F-184]  # See the keyboard shortcuts for Mail
+ui = "no request leaves the browser"
+
+[F-185]  # Open and preview an attachment on a draft
+by = ["http GET /email/attachments/{id}"]
+
+[F-186]  # See the Macro watermark without a paid plan and open the upgrade prompt
+ui = "the watermark is drawn by the composer; no email request"
+
+[F-187]  # Copy a thread's ID
+ui = "no request leaves the browser"
+
+[F-188]  # See a thread's details in the side panel (activity, references, dates)
+outside = "activity and references are read from document storage"
+
+[F-189]  # See the connected inboxes in Settings (provider, primary or shared, loading and failed states)
+by = ["http GET /email/links", "graphql GraphqlUser.emailLinks"]
+
+[F-190]  # See what the assistant read, listed or changed in mail (tool cards)
+ui = "the cards draw tool calls the chat already holds"
+
+[F-191]  # Mention an email thread in a document, message or chat
+outside = "the mention is stored by the document, channel or chat that holds it"
+
+[F-192]  # Exclude domains from the mail shared with CRM
+outside = "the excluded domains are stored by the CRM service"
+
+[F-193]  # Create and delete a provider label
+by = ["http POST /email/labels", "http DELETE /email/labels/{id}"]
+gmail = ["provider gmail:labels.create"]
+outlook = ["provider outlook:categories.create"]
+also = [
+  "queue gmail-ops:DeleteLabel",
+  "provider gmail:labels.delete",
+  "provider gmail:labels.update",
+  "provider outlook:categories.delete",
+  "provider outlook:folders.create",
+]
+
+[F-194]  # Forward a calendar event by email
+by = ["http POST /email/calendar-events/{event_id}/forward"]
+
+[F-195]  # Cancel a running mail import
+by = ["http DELETE /email/backfill/gmail", "http DELETE /internal/backfill/provider/gmail"]
+
+[F-196]  # Unblock a sender
+by = ["http POST /email/contacts/unblock"]
+gmail = ["provider gmail:settings.filters.delete"]
+outlook = ["provider outlook:rules.delete"]
+also = ["queue gmail-ops:UnblockSender"]
+
+[F-197]  # Report a thread as spam
+by = [
+  "http PATCH /email/threads/{id}/state where /field=junk, /value=true",
+  "graphql CompleteMutationRoot.setEmailThreadState where /input/field=JUNK, /input/value=true",
+]
+gmail = ["provider gmail:messages.modify"]
+outlook = ["provider outlook:messages.move"]
+
+# --------------------------------------------------------------- plumbing
+
+[plumbing]
+"http GET /health" = "liveness probe"
