@@ -59,6 +59,7 @@ impl Clock {
 
 /// Draws one frame.
 pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
+    theme::set_active(app.theme);
     let area = frame.area();
     frame.render_widget(Block::default().style(theme::base()), area);
 
@@ -140,7 +141,11 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     left.extend(field("WAIT"));
     left.push(Span::styled(
         totals.waiting.to_string(),
-        theme::bold(Token::Highlight),
+        theme::bold(if totals.waiting > 0 {
+            Token::Attention
+        } else {
+            Token::Text
+        }),
     ));
     left.extend(field("BLOCK"));
     left.push(Span::styled(
@@ -422,6 +427,15 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
         Mode::Base(_) | Mode::Help { .. } => {
             let mut spans = theme::strip_title(">_");
             spans.push(Span::raw(" "));
+            if app.theme_notice {
+                spans.push(Span::styled("THEME ", theme::ink(Token::TextDim)));
+                spans.push(Span::styled(
+                    app.theme.to_string().to_uppercase(),
+                    theme::bold(Token::Highlight),
+                ));
+                spans.push(Span::styled("  t NEXT", theme::ink(Token::Rule)));
+                spans.push(Span::raw("  "));
+            }
             if let Some(message) = &app.message {
                 spans.push(Span::styled(message.clone(), theme::bold(Token::Alert)));
                 spans.push(Span::raw("  "));
@@ -473,7 +487,7 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     spans
 }
 
-const HELP: [(&str, &str); 17] = [
+const HELP: [(&str, &str); 18] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
@@ -490,6 +504,7 @@ const HELP: [(&str, &str); 17] = [
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
+    ("t", "next colour theme"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),

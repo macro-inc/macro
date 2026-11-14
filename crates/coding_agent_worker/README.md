@@ -234,6 +234,9 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   logging to `~/.macrod/monitor/collector.log`), which exits after ten minutes
   without a viewer. The viewer reconnects by itself when its collector goes
   away, and a collector started by a later `macrod monitor` takes over.
+  Its colours come from `[monitor] theme` (`classic`, the default, `ember`,
+  `phosphor` or `dusk`; `--theme` overrides it), and `t` in the viewer
+  cycles through them.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
   or the `--config` / `--profile` it is given (resolved as for
@@ -272,7 +275,7 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
 - The Config tab toggles hosting (`Agent monitor`), which writes a
   `[monitor]` table; new configs leave it out (hosting is on by default),
   because a macrod older than the monitor rejects a file that has one.
-  `history_hours`, `fps`, `run_record_dirs` and `pr_poll_secs` take effect
+  `history_hours`, `fps`, `run_record_dirs`, `pr_poll_secs` and `theme` take effect
   on the next start.
 - **History is bounded**: transcripts are indexed back `history_hours`
   (24 by default), and an agent that ended or last wrote longer ago is

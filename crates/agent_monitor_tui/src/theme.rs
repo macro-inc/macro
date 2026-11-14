@@ -5,6 +5,12 @@
 //! role its colour. The HUD dressing lives here too: bracket-cornered frames,
 //! orange title chips, segmented meters and the glitch on fresh values.
 
+#[cfg(test)]
+mod test;
+mod themes;
+
+use std::cell::Cell;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -13,6 +19,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders};
 
 use agent_monitor::domain::model::{Severity, Status};
+
+pub use themes::{CLASSIC, DUSK, EMBER, PHOSPHOR, ThemeName};
 
 /// A colour role. Tokens run from quiet structure to loud signals; a theme
 /// keeps routine roles calm so the loud ones ([`Token::Alert`],
@@ -42,9 +50,13 @@ pub enum Token {
     Highlight,
     /// Waiting on a person: a waiting agent, a PR that needs review.
     Attention,
-    /// Healthy and routine: working agents, the live link, activity
-    /// sparklines, CI passed, approvals, merges, a tool that succeeded.
+    /// Healthy and routine: working agents, the live link, CI passed,
+    /// approvals, merges, a tool that succeeded.
     Ok,
+    /// Routine chart fills, which cover far more cells than text and so sit
+    /// quieter than [`Token::Ok`]: activity sparklines on agent rows and
+    /// cards, and the token-rate sparkline.
+    Trace,
     /// Tools and what an agent is doing now: tool names and counts, the
     /// DOING column, BIOSCAN labels.
     Info,
@@ -60,8 +72,8 @@ pub enum Token {
 /// A colour for every [`Token`], and the BODY figure's palette.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {
-    /// The theme's name, as config and the header spell it.
-    pub name: &'static str,
+    /// The theme's name.
+    pub name: ThemeName,
     /// [`Token::Bg`].
     pub bg: Color,
     /// [`Token::Ghost`].
@@ -84,6 +96,8 @@ pub struct Theme {
     pub attention: Color,
     /// [`Token::Ok`].
     pub ok: Color,
+    /// [`Token::Trace`].
+    pub trace: Color,
     /// [`Token::Info`].
     pub info: Color,
     /// [`Token::InfoDim`].
@@ -112,6 +126,7 @@ impl Theme {
             Token::Highlight => self.highlight,
             Token::Attention => self.attention,
             Token::Ok => self.ok,
+            Token::Trace => self.trace,
             Token::Info => self.info,
             Token::InfoDim => self.info_dim,
             Token::InfoFaint => self.info_faint,
@@ -120,32 +135,22 @@ impl Theme {
     }
 }
 
-/// Black, amber ink, macrod's orange chips, yellow highlights, cyan tools,
-/// green for ok and red for errors.
-pub const CLASSIC: Theme = Theme {
-    name: "classic",
-    bg: Color::Rgb(0, 0, 0),
-    ghost: Color::Rgb(58, 38, 10),
-    frame: Color::Rgb(92, 60, 16),
-    rule: Color::Rgb(122, 80, 22),
-    selection: Color::Rgb(70, 40, 0),
-    text_dim: Color::Rgb(194, 123, 28),
-    text: Color::Rgb(255, 165, 43),
-    accent: Color::Rgb(249, 115, 22),
-    highlight: Color::Rgb(255, 225, 77),
-    attention: Color::Rgb(255, 225, 77),
-    ok: Color::Rgb(34, 229, 92),
-    info: Color::Rgb(79, 211, 255),
-    info_dim: Color::Rgb(28, 98, 122),
-    info_faint: Color::Rgb(16, 56, 70),
-    alert: Color::Rgb(255, 59, 59),
-    #[cfg(feature = "mesh-man")]
-    figure: mesh_man::Palette::DEFAULT,
-};
+thread_local! {
+    /// The theme this thread draws in. Thread-local rather than threaded
+    /// through every draw call: [`crate::ui::draw`] sets it from the app at
+    /// the top of each frame, and parallel tests on other threads keep their
+    /// own.
+    static ACTIVE: Cell<ThemeName> = const { Cell::new(ThemeName::Classic) };
+}
+
+/// Draws this thread's next frames in `name`.
+pub fn set_active(name: ThemeName) {
+    ACTIVE.set(name);
+}
 
 /// The theme frames are drawn in.
 pub fn active() -> &'static Theme {
-    &CLASSIC
+    ACTIVE.get().theme()
 }
 
 impl Token {

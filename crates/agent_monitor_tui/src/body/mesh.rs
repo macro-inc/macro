@@ -12,6 +12,7 @@ use ratatui::widgets::Widget as _;
 use agent_monitor::domain::model::{TapeEvent, TapeKind, Totals};
 
 use crate::body::BodyPane;
+use crate::theme::Theme;
 
 /// Tokens per minute at which the heart reaches its peak rate.
 const PEAK_TOKENS_PER_MIN: f32 = 5_000_000.0;
@@ -85,5 +86,9 @@ impl BodyPane for MeshBody {
 
     fn render(&self, area: Rect, buffer: &mut Buffer) {
         (&self.body).render(area, buffer);
+    }
+
+    fn set_theme(&mut self, theme: &Theme) {
+        self.body.set_palette(theme.figure);
     }
 }

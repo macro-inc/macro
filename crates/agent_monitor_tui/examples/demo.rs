@@ -3,6 +3,7 @@
 //! ```sh
 //! cargo run -p agent_monitor_tui --example demo
 //! cargo run -p agent_monitor_tui --example demo -- --socket /tmp/monitor.sock
+//! cargo run -p agent_monitor_tui --example demo -- --theme ember
 //! ```
 
 #[cfg(not(unix))]
@@ -15,7 +16,7 @@ fn main() {
 async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
     use std::path::PathBuf;
 
-    use agent_monitor_tui::{FeedChoice, Options, run};
+    use agent_monitor_tui::{FeedChoice, Options, ThemeName, run};
     use clap::Parser;
 
     #[derive(Parser)]
@@ -29,6 +30,9 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         /// Frames per second while something animates.
         #[arg(long, default_value_t = 12)]
         fps: u8,
+        /// The colour theme: classic, ember, phosphor or dusk.
+        #[arg(long, default_value_t = ThemeName::default())]
+        theme: ThemeName,
     }
 
     let cli = Cli::parse();
@@ -36,5 +40,10 @@ async fn main() -> Result<(), agent_monitor_tui::ViewerError> {
         Some(socket) => FeedChoice::Socket(socket),
         None => FeedChoice::Demo { seed: cli.seed },
     };
-    run(Options { feed, fps: cli.fps }).await
+    run(Options {
+        feed,
+        fps: cli.fps,
+        theme: cli.theme,
+    })
+    .await
 }

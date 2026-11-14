@@ -84,6 +84,7 @@ fn monitor_settings_default_when_the_table_or_file_is_missing() {
             run_id_labels: Vec::new(),
             pr_poll_secs: 60,
             changes: true,
+            theme: agent_monitor_tui::ThemeName::Classic,
         }
     );
 
@@ -101,7 +102,7 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
     let path = directory.path().join("macrod.toml");
     std::fs::write(
         &path,
-        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\nrun_id_labels = [\"run.id\"]\npr_poll_secs = 0\nchanges = false\n",
+        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\nrun_id_labels = [\"run.id\"]\npr_poll_secs = 0\nchanges = false\ntheme = \"ember\"\n",
     )
     .unwrap();
 
@@ -115,8 +116,17 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
             run_id_labels: vec![String::from("run.id")],
             pr_poll_secs: 0,
             changes: false,
+            theme: agent_monitor_tui::ThemeName::Ember,
         }
     );
+}
+
+#[test]
+fn an_unknown_theme_fails_to_parse() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("macrod.toml");
+    std::fs::write(&path, "[monitor]\ntheme = \"neon\"\n").unwrap();
+    assert!(MonitorSettings::read(&path).is_err());
 }
 
 #[test]

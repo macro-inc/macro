@@ -203,7 +203,7 @@ fn agent_row(
         let color = if agent.status.is_final() {
             Token::Rule
         } else {
-            Token::Ok
+            Token::Trace
         };
         cells.push(Cell::from(Line::from(format::activity(
             &agent.activity,

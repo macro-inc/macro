@@ -16,6 +16,8 @@ macro_env_var = { path = "../macro_env_var", optional = true }
 mesh_man = { path = "../mesh_man", optional = true }
 ratatui = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }

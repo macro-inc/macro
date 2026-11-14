@@ -11,6 +11,7 @@ use tui_tree_widget::TreeState;
 use agent_monitor::domain::model::AgentId;
 
 use crate::keys::{self, Action, Key, Mode, Motion, Page, Pane};
+use crate::theme::ThemeName;
 use crate::view::{Filter, ViewState};
 
 /// Rows a page-up or page-down moves.
@@ -65,6 +66,11 @@ pub struct App {
     pub message: Option<String>,
     /// A label for the header, such as `DEMO`.
     pub label: Option<String>,
+    /// The colour theme frames are drawn in.
+    pub theme: ThemeName,
+    /// Whether the command line names the theme, after `t` switched it,
+    /// until the next key.
+    pub theme_notice: bool,
     /// Set when the user quits.
     pub quit: bool,
 }
@@ -80,8 +86,17 @@ impl App {
             cursors: Cursors::default(),
             message: None,
             label,
+            theme: ThemeName::default(),
+            theme_notice: false,
             quit: false,
         }
+    }
+
+    /// Draws in `theme`, the BODY figure too.
+    pub fn set_theme(&mut self, theme: ThemeName) {
+        self.theme = theme;
+        self.view.body.set_theme(theme.theme());
+        self.view.dirty = true;
     }
 
     /// The current page.
@@ -110,6 +125,7 @@ impl App {
         let (mode, action) = keys::step(mode, key, &page);
         self.mode = mode;
         self.message = None;
+        self.theme_notice = false;
         self.act(action);
         self.view.dirty = true;
     }
@@ -135,6 +151,10 @@ impl App {
                 self.open(command.page);
             }
             Action::ToggleAll => self.filter.all = !self.filter.all,
+            Action::CycleTheme => {
+                self.set_theme(self.theme.next());
+                self.theme_notice = true;
+            }
             Action::Unknown(line) => {
                 self.message = Some(format!("UNKNOWN COMMAND: {line}"));
             }

@@ -68,7 +68,11 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "WAITING",
             value: totals.waiting.to_string(),
-            color: Token::Highlight,
+            color: if totals.waiting > 0 {
+                Token::Attention
+            } else {
+                Token::Text
+            },
             sub: sub(String::from("on a person")),
             share: Some(of_live(totals.waiting)),
         },
@@ -112,7 +116,7 @@ fn quotes(app: &App) -> [Quote; 8] {
                 let mut spans = format::spark(
                     totals.tokens_per_min.iter().map(|value| u64::from(*value)),
                     14,
-                    Token::Ok,
+                    Token::Trace,
                 );
                 spans.push(Span::styled(
                     format!(" {}/h", format::compact(tokens_hour)),
