@@ -116,6 +116,7 @@ impl NameLookups for Names {
             .iter()
             .map(|asked| NameAnswer {
                 name: asked.name.clone(),
+                unavailable: Vec::new(),
                 matches: self
                     .items
                     .iter()
@@ -689,6 +690,7 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
             answers: vec![
                 NameAnswer {
                     name: "Finance".into(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Project, "Finance", "folder", true),
                         item(ItemKind::Label, "Finance", "label", true),
@@ -697,6 +699,7 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
                 },
                 NameAnswer {
                     name: "Design".into(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Channel, "design", "one", true),
                         item(ItemKind::Channel, "Design", "two", true),
@@ -704,6 +707,7 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
                 },
                 NameAnswer {
                     name: "Ops".into(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Channel, "ops", "channel", true),
                         item(ItemKind::Channel, "ops", "channel", true),
@@ -711,10 +715,12 @@ fn a_name_settles_on_the_one_item_of_its_likeliest_kind_that_has_it_exactly() {
                 },
                 NameAnswer {
                     name: "Nobody".into(),
+                    unavailable: Vec::new(),
                     matches: vec![item(ItemKind::Person, "Nobody Else", "person", false)],
                 },
                 NameAnswer {
                     name: "Planning".into(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Channel, "planning", "channel-2", true),
                         item(ItemKind::Project, "Planning", "folder-2", true),
@@ -783,22 +789,27 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
             answers: vec![
                 NameAnswer {
                     name: "Finance".into(),
+                    unavailable: Vec::new(),
                     matches: vec![item(ItemKind::Project, "Finance", "folder")],
                 },
                 NameAnswer {
                     name: "design".into(),
+                    unavailable: Vec::new(),
                     matches: vec![item(ItemKind::Channel, "design", "channel")],
                 },
                 NameAnswer {
                     name: "Ops".into(),
+                    unavailable: Vec::new(),
                     matches: Vec::new(),
                 },
                 NameAnswer {
                     name: "Billing".into(),
+                    unavailable: Vec::new(),
                     matches: vec![item(ItemKind::Channel, "Billing", "billing")],
                 },
                 NameAnswer {
                     name: "Nobody".into(),
+                    unavailable: Vec::new(),
                     matches: Vec::new(),
                 },
             ],
@@ -827,5 +838,57 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
             kind: Some(ItemKind::Person),
             matches: 0,
         }]
+    );
+}
+
+#[test]
+fn a_kind_one_name_couldnt_be_read_for_leaves_only_that_name_unknown() {
+    let item = |kind, name: &str, id: &str| NameMatch {
+        name: name.into(),
+        exact: true,
+        kind,
+        id: id.into(),
+        definition_id: None,
+    };
+    let asked = |name: &str| NameAsked {
+        name: name.into(),
+        kinds: vec![ItemKind::Document],
+    };
+    let lookup = settle(
+        &[asked("Roadmap"), asked("Weekly metrics")],
+        NameAnswers {
+            answers: vec![
+                // Its search read only a page: an older "Roadmap" may exist.
+                NameAnswer {
+                    name: "Roadmap".into(),
+                    unavailable: vec![ItemKind::Document],
+                    matches: vec![item(ItemKind::Document, "Roadmap", "roadmap")],
+                },
+                NameAnswer {
+                    name: "Weekly metrics".into(),
+                    unavailable: Vec::new(),
+                    matches: vec![item(ItemKind::Document, "Weekly metrics", "metrics")],
+                },
+            ],
+            unavailable: Vec::new(),
+        },
+    );
+
+    assert_eq!(
+        lookup
+            .found
+            .iter()
+            .map(|(item, _)| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["metrics"]
+    );
+    assert!(lookup.left.is_empty());
+    assert_eq!(
+        lookup
+            .unsearched
+            .iter()
+            .map(|asked| asked.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Roadmap"]
     );
 }

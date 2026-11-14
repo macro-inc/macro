@@ -79,11 +79,16 @@ impl DraftModel for RouterDraftModels {
 /// the owner, compared with each name exactly here.
 pub(super) struct SearchNames {
     client: SearchServiceClient,
+    /// How long one lookup may take: [`LOOKUP_TIMEOUT`].
+    timeout: Duration,
 }
 
 impl SearchNames {
     pub(super) fn new(client: SearchServiceClient) -> Self {
-        Self { client }
+        Self {
+            client,
+            timeout: LOOKUP_TIMEOUT,
+        }
     }
 
     /// The items of the kinds `asked` wants whose names hold its words.
@@ -111,7 +116,7 @@ impl SearchNames {
                     .search_channel_names(owner, request, None, ITEMS_PER_NAME)
                     .await
                     .map(|response| {
-                        response
+                        let items = response
                             .results
                             .into_iter()
                             .filter_map(|hit| {
@@ -121,7 +126,8 @@ impl SearchNames {
                                 }
                                 Some((ItemKind::Channel, hit.channel_id.to_string(), name))
                             })
-                            .collect::<Vec<_>>()
+                            .collect::<Vec<_>>();
+                        (items, response.next_cursor.is_some())
                     }),
             )
         };
@@ -145,11 +151,12 @@ impl SearchNames {
                     .search_unified(owner, request, None, ITEMS_PER_NAME)
                     .await
                     .map(|response| {
-                        response
+                        let items = response
                             .results
                             .into_iter()
                             .filter_map(indexed_item)
-                            .collect::<Vec<_>>()
+                            .collect::<Vec<_>>();
+                        (items, response.next_cursor.is_some())
                     }),
             )
         };
@@ -157,9 +164,9 @@ impl SearchNames {
         let mut searched = Searched {
             answer: NameAnswer {
                 name: asked.name.clone(),
+                unavailable: Vec::new(),
                 matches: Vec::new(),
             },
-            failed: Vec::new(),
             answered: false,
             error: None,
         };
@@ -170,26 +177,38 @@ impl SearchNames {
                 indexed,
             ),
         ] {
+            let wanted = kinds.iter().copied().filter(|kind| wants(*kind));
             match result {
                 None => {}
-                Some(Ok(items)) => {
+                Some(Ok((items, more))) => {
                     searched.answered = true;
-                    searched.answer.matches.extend(
-                        items.into_iter().filter(|(kind, _, _)| wants(*kind)).map(
-                            |(kind, id, name)| NameMatch {
-                                exact: same_name(&asked.name, &name),
-                                name,
-                                kind,
-                                id,
-                                definition_id: None,
-                            },
-                        ),
-                    );
+                    let matches: Vec<NameMatch> = items
+                        .into_iter()
+                        .filter(|(kind, _, _)| wants(*kind))
+                        .map(|(kind, id, name)| NameMatch {
+                            exact: same_name(&asked.name, &name),
+                            name,
+                            kind,
+                            id,
+                            definition_id: None,
+                        })
+                        .collect();
+                    // Newest first, not best match first: past the page, an
+                    // item with exactly the name may be missing, unless two
+                    // already have it.
+                    if more {
+                        searched.answer.unavailable.extend(wanted.filter(|kind| {
+                            matches
+                                .iter()
+                                .filter(|item| item.exact && item.kind == *kind)
+                                .count()
+                                < 2
+                        }));
+                    }
+                    searched.answer.matches.extend(matches);
                 }
                 Some(Err(error)) => {
-                    searched
-                        .failed
-                        .extend(kinds.iter().copied().filter(|kind| wants(*kind)));
+                    searched.answer.unavailable.extend(wanted);
                     searched.error = Some(error);
                 }
             }
@@ -203,11 +222,28 @@ impl SearchNames {
 /// One name's search.
 struct Searched {
     answer: NameAnswer,
-    /// The kinds whose search failed.
-    failed: Vec<ItemKind>,
     /// Whether any search answered.
     answered: bool,
     error: Option<anyhow::Error>,
+}
+
+impl Searched {
+    /// A name whose search ran out of time: none of its kinds were read.
+    fn timed_out(asked: &NameAsked) -> Self {
+        Self {
+            answer: NameAnswer {
+                name: asked.name.clone(),
+                unavailable: SEARCHED
+                    .iter()
+                    .copied()
+                    .filter(|kind| asked.kinds.is_empty() || asked.kinds.contains(kind))
+                    .collect(),
+                matches: Vec::new(),
+            },
+            answered: false,
+            error: Some(anyhow::anyhow!("the name search took too long")),
+        }
+    }
 }
 
 /// A document, task or folder hit, unless it is gone or an initiative's
@@ -255,31 +291,33 @@ impl NameLookups for SearchNames {
         owner: &MacroUserIdStr<'static>,
         names: &[NameAsked],
     ) -> Result<NameAnswers, NameLookupError> {
-        // Futures built up front: a stream `map` closure that borrows the
-        // names isn't `Send` enough for `async_trait`.
+        // One deadline for every name, so a name answered in time is kept
+        // when a later one runs out of it. Futures built up front: a stream
+        // `map` closure that borrows the names isn't `Send` enough for
+        // `async_trait`.
+        let deadline = tokio::time::Instant::now() + self.timeout;
         let searches: Vec<_> = names
             .iter()
-            .map(|asked| self.search(owner.as_ref(), asked))
+            .map(|asked| async move {
+                tokio::time::timeout_at(deadline, self.search(owner.as_ref(), asked))
+                    .await
+                    .unwrap_or_else(|_| Searched::timed_out(asked))
+            })
             .collect();
-        let searched: Vec<Searched> = tokio::time::timeout(
-            LOOKUP_TIMEOUT,
-            futures::stream::iter(searches)
-                .buffered(NAMES_AT_ONCE)
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .map_err(|_| NameLookupError(rootcause::report!("the name search took too long")))?;
+        let searched: Vec<Searched> = futures::stream::iter(searches)
+            .buffered(NAMES_AT_ONCE)
+            .collect()
+            .await;
         let mut answers = NameAnswers::default();
         let mut answered = false;
         let mut error = None;
+        let mut unanswered = 0;
         for name in searched {
             answered |= name.answered;
-            error = error.or(name.error);
-            for kind in name.failed {
-                if !answers.unavailable.contains(&kind) {
-                    answers.unavailable.push(kind);
-                }
+            if !name.answer.unavailable.is_empty() {
+                unanswered += 1;
             }
+            error = error.or(name.error);
             answers.answers.push(name.answer);
         }
         match error {
@@ -287,8 +325,8 @@ impl NameLookups for SearchNames {
             Some(error) => {
                 tracing::warn!(
                     error = %error,
-                    unavailable = ?answers.unavailable,
-                    "some kinds of item couldn't be searched by name"
+                    names = unanswered,
+                    "some names couldn't be searched for every kind"
                 );
                 Ok(answers)
             }

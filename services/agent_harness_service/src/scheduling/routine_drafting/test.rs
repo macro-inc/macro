@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike as _;
 use models_search::SearchHighlight;
@@ -113,6 +115,16 @@ async fn channels_answer(
     query: &str,
     results: Vec<ChannelNameSearchResponseItem>,
 ) {
+    channels_page(server, query, results, false).await;
+}
+
+/// A page of channel hits; `more` when the search has another.
+async fn channels_page(
+    server: &MockServer,
+    query: &str,
+    results: Vec<ChannelNameSearchResponseItem>,
+    more: bool,
+) {
     Mock::given(method("POST"))
         .and(path("/internal/search/channel/name"))
         .and(header(KEY_HEADER, "key"))
@@ -123,7 +135,7 @@ async fn channels_answer(
         .respond_with(
             ResponseTemplate::new(200).set_body_json(ChannelNameSearchResponse {
                 results,
-                next_cursor: None,
+                next_cursor: more.then(|| "next".to_owned()),
             }),
         )
         .expect(1)
@@ -132,6 +144,17 @@ async fn channels_answer(
 }
 
 async fn index_answers(server: &MockServer, query: &str, results: Vec<UnifiedSearchResponseItem>) {
+    index_page(server, query, results, false, Duration::ZERO).await;
+}
+
+/// A page of indexed hits after `delay`; `more` when the search has another.
+async fn index_page(
+    server: &MockServer,
+    query: &str,
+    results: Vec<UnifiedSearchResponseItem>,
+    more: bool,
+    delay: Duration,
+) {
     Mock::given(method("POST"))
         .and(path("/internal/search"))
         .and(header(KEY_HEADER, "key"))
@@ -142,10 +165,12 @@ async fn index_answers(server: &MockServer, query: &str, results: Vec<UnifiedSea
             "search_on": "name",
         })))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(UnifiedSearchResponse {
-                results,
-                next_cursor: None,
-            }),
+            ResponseTemplate::new(200)
+                .set_body_json(UnifiedSearchResponse {
+                    results,
+                    next_cursor: more.then(|| "next".to_owned()),
+                })
+                .set_delay(delay),
         )
         .expect(1)
         .mount(server)
@@ -212,6 +237,7 @@ async fn names_are_searched_as_the_owner_and_compared_exactly() {
             answers: vec![
                 NameAnswer {
                     name: "#design".to_owned(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Channel, 2, "Design", true),
                         item(ItemKind::Channel, 1, "design-feedback", false),
@@ -219,6 +245,7 @@ async fn names_are_searched_as_the_owner_and_compared_exactly() {
                 },
                 NameAnswer {
                     name: "Weekly metrics".to_owned(),
+                    unavailable: Vec::new(),
                     matches: vec![
                         item(ItemKind::Task, 4, "weekly  metrics", true),
                         item(ItemKind::Document, 3, "Weekly metrics Q3", false),
@@ -226,6 +253,7 @@ async fn names_are_searched_as_the_owner_and_compared_exactly() {
                 },
                 NameAnswer {
                     name: "Launch".to_owned(),
+                    unavailable: Vec::new(),
                     matches: vec![item(ItemKind::Project, 7, "Launch", true)],
                 },
             ],
@@ -257,9 +285,10 @@ async fn a_kind_whose_search_fails_is_unavailable() {
         NameAnswers {
             answers: vec![NameAnswer {
                 name: "Launch".to_owned(),
+                unavailable: vec![ItemKind::Channel],
                 matches: vec![item(ItemKind::Project, 7, "Launch", true)],
             }],
-            unavailable: vec![ItemKind::Channel],
+            unavailable: Vec::new(),
         }
     );
 }
@@ -294,5 +323,111 @@ fn it_looks_up_channels_folders_documents_and_tasks() {
             ItemKind::Document,
             ItemKind::Task
         ]
+    );
+}
+
+#[tokio::test]
+async fn a_name_with_more_hits_than_a_page_is_unavailable_unless_two_have_it() {
+    let server = MockServer::start().await;
+    // Newest first: an older "Standup" folder may be past the page.
+    index_page(
+        &server,
+        "Standup",
+        vec![document(1, "Standup notes 11/12", None, false)],
+        true,
+        Duration::ZERO,
+    )
+    .await;
+    channels_page(
+        &server,
+        "ops",
+        vec![
+            channel(2, "<macro_em>ops</macro_em>"),
+            channel(3, "<macro_em>Ops</macro_em>"),
+        ],
+        true,
+    )
+    .await;
+
+    let answers = names(&server)
+        .look_up(
+            &owner(),
+            &[
+                asked("Standup", &[ItemKind::Project, ItemKind::Document]),
+                asked("ops", &[ItemKind::Channel]),
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        answers,
+        NameAnswers {
+            answers: vec![
+                NameAnswer {
+                    name: "Standup".to_owned(),
+                    unavailable: vec![ItemKind::Document, ItemKind::Project],
+                    matches: vec![item(ItemKind::Document, 1, "Standup notes 11/12", false)],
+                },
+                // Two already have it: the page is enough to leave it.
+                NameAnswer {
+                    name: "ops".to_owned(),
+                    unavailable: Vec::new(),
+                    matches: vec![
+                        item(ItemKind::Channel, 2, "ops", true),
+                        item(ItemKind::Channel, 3, "Ops", true),
+                    ],
+                },
+            ],
+            unavailable: Vec::new(),
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_name_out_of_time_is_unavailable_and_the_others_are_kept() {
+    let server = MockServer::start().await;
+    index_answers(&server, "Launch", vec![folder(7, "Launch")]).await;
+    index_page(
+        &server,
+        "Roadmap",
+        Vec::new(),
+        false,
+        Duration::from_secs(5),
+    )
+    .await;
+    let names = SearchNames {
+        timeout: Duration::from_millis(500),
+        ..names(&server)
+    };
+
+    let answers = names
+        .look_up(
+            &owner(),
+            &[
+                asked("Launch", &[ItemKind::Project]),
+                asked("Roadmap", &[ItemKind::Document, ItemKind::Person]),
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        answers,
+        NameAnswers {
+            answers: vec![
+                NameAnswer {
+                    name: "Launch".to_owned(),
+                    unavailable: Vec::new(),
+                    matches: vec![item(ItemKind::Project, 7, "Launch", true)],
+                },
+                NameAnswer {
+                    name: "Roadmap".to_owned(),
+                    unavailable: vec![ItemKind::Document],
+                    matches: Vec::new(),
+                },
+            ],
+            unavailable: Vec::new(),
+        }
     );
 }

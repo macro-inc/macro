@@ -59,7 +59,8 @@ each run.
   reported or left: the prompt lists it under "Not looked up" and the
   session looks it up with its own tools (`Lookup::unsearched`), so a kind
   the port learns is looked up first with no change here. So is a name a
-  likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
+  likelier kind the lookup couldn't read in full (`NameAnswers::unavailable`,
+  or `NameAnswer::unavailable` for that name alone)
   might have (for a name of no likely kind, any kind it couldn't search,
   unless two items already have it), and every name when the lookup
   fails. Names the lookup would refuse (empty past a leading `#`/`@`, over

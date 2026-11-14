@@ -114,6 +114,10 @@ pub struct NameAnswers {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameAnswer {
     pub name: String,
+    /// Kinds whose items with this name couldn't all be read this time:
+    /// their search failed, ran out of time or matched more items than it
+    /// read, so an item of one of them with the name may be missing.
+    pub unavailable: Vec<ItemKind>,
     /// Exact matches first.
     pub matches: Vec<NameMatch>,
 }
@@ -382,6 +386,8 @@ pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
     } = answers;
     let mut lookup = Lookup::default();
     for (asked, answer) in asked.iter().zip(answers) {
+        let mut unavailable = unavailable.clone();
+        unavailable.extend(answer.unavailable);
         let exact: Vec<NameMatch> = answer.matches.into_iter().filter(|m| m.exact).collect();
         let mut chosen: Option<Vec<NameMatch>> = None;
         let mut unknown = false;
@@ -651,12 +657,14 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
                     answers,
                     unavailable,
                 }) => {
-                    // One answer per name, in order; a name not asked matched
-                    // nothing, and its kind couldn't be searched.
+                    // One answer per name, in order; a name not asked, or one
+                    // the lookup left unanswered, matched nothing it could
+                    // read.
                     let mut all: Vec<NameAnswer> = asked
                         .iter()
                         .map(|name| NameAnswer {
                             name: name.name.clone(),
+                            unavailable: searched.to_vec(),
                             matches: Vec::new(),
                         })
                         .collect();
