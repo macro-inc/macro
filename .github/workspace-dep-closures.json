@@ -1372,6 +1372,7 @@
     "agent_monitor_tui": [
       "crates/agent_monitor",
       "crates/agent_monitor_tui",
+      "crates/macro_env_var",
       "crates/mesh_man",
       "crates/workspace-hack"
     ],
@@ -4356,6 +4357,7 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
+      "crates/mesh_man",
       "crates/messages",
       "crates/model",
       "crates/model-entity",
