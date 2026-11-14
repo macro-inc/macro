@@ -64,8 +64,8 @@ impl QueueStep {
 struct Seen {
     /// What was served to how often.
     http: BTreeMap<Request, u64>,
-    /// (service, query text, answered data without errors) to how often.
-    graphql: BTreeMap<(String, String, bool), u64>,
+    /// What was asked to how often.
+    graphql: BTreeMap<Asked, u64>,
     /// (queue URL, step, body shape) to how often.
     queue: BTreeMap<(String, QueueStep, String), u64>,
     /// Receipt handle to the queue URL and body shape of the message it is
@@ -89,6 +89,17 @@ struct Request {
     /// The body's [`shape`], as JSON text.
     body: String,
     status: u16,
+}
+
+/// A GraphQL request as the record keeps it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Asked {
+    service: String,
+    query: String,
+    /// The [`shape`] of the variables, as JSON text.
+    variables: String,
+    /// Whether the answer had data and no errors.
+    answered: bool,
 }
 
 /// The record of one stack. Clones share it.
@@ -123,7 +134,7 @@ impl Recorder {
             .entry(Request {
                 service: service.clone(),
                 method: served.method.to_owned(),
-                path: served.path.to_owned(),
+                path: path_shape(served.path),
                 query: query_shape(served.query.unwrap_or_default()),
                 // A GraphQL request is kept by its query below.
                 body: if graphql {
@@ -143,7 +154,12 @@ impl Recorder {
                 .is_ok_and(|answer| answer["data"].is_object() && answer.get("errors").is_none());
             *seen
                 .graphql
-                .entry((service, query.to_owned(), answered))
+                .entry(Asked {
+                    service,
+                    query: query.to_owned(),
+                    variables: shape(&request["variables"]).to_string(),
+                    answered,
+                })
                 .or_default() += 1;
         }
     }
@@ -257,8 +273,10 @@ impl Recorder {
                 "query": request.query, "body": parsed(&request.body),
                 "status": request.status, "count": count,
             })).collect::<Vec<_>>(),
-            "graphql": seen.graphql.iter().map(|((service, query, answered), count)| json!({
-                "service": service, "query": query, "answered": answered, "count": count,
+            "graphql": seen.graphql.iter().map(|(asked, count)| json!({
+                "service": asked.service, "query": asked.query,
+                "variables": parsed(&asked.variables),
+                "answered": asked.answered, "count": count,
             })).collect::<Vec<_>>(),
             "queue": seen.queue.iter().map(|((queue, step, body), count)| json!({
                 "queue": name(queue), "step": step.name(), "body": parsed(body), "count": count,
@@ -342,11 +360,13 @@ pub(crate) fn path_shape(path: &str) -> String {
 /// The shape of a JSON value: its keys, with every value that could be
 /// content replaced. A string stays only when it reads as a tag (a short
 /// word such as an enum variant's name), which is what tells one kind of
-/// message from another; a list keeps the shape of its first item.
+/// message from another; a list keeps the shape of its first item, and a
+/// boolean stays as it is.
 pub(crate) fn shape(value: &Value) -> Value {
     match value {
         Value::Null => Value::Null,
-        Value::Bool(_) => json!("<bool>"),
+        // Not content, and often what tells one action from its opposite.
+        Value::Bool(flag) => json!(flag),
         Value::Number(_) => json!(0),
         Value::String(text) if is_tag(text) => json!(text),
         Value::String(_) => json!(TEXT),

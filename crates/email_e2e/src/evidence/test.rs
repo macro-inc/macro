@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{QueueStep, Recorder, Served, counted, path_shape, shape};
+use super::{Asked, QueueStep, Recorder, Served, counted, path_shape, shape};
 
 #[test]
 fn a_shape_keeps_tags_and_drops_content() {
@@ -17,7 +17,7 @@ fn a_shape_keeps_tags_and_drops_content() {
             "operation": { "upsert_message": { "provider_message_id": "<str>", "attempt": 0 } },
             "link_id": "<str>",
             "to": ["<str>"],
-            "urgent": "<bool>",
+            "urgent": true,
             "note": null,
         })
     );
@@ -96,12 +96,11 @@ fn a_graphql_request_is_kept_by_its_query() {
     }
 
     let seen = recorder.seen();
-    let key = |answered| {
-        (
-            "document_storage_service".to_owned(),
-            "{ emailThreads { id } }".to_owned(),
-            answered,
-        )
+    let key = |answered| Asked {
+        service: "document_storage_service".to_owned(),
+        query: "{ emailThreads { id } }".to_owned(),
+        variables: json!({ "to": "<str>" }).to_string(),
+        answered,
     };
     assert_eq!(seen.graphql.get(&key(true)), Some(&1));
     assert_eq!(seen.graphql.get(&key(false)), Some(&1));
@@ -115,7 +114,7 @@ fn a_request_is_kept_with_the_shape_of_its_query_and_body() {
     recorder.served(&Served {
         service: "email_service",
         method: "POST",
-        path: "/outlook/webhook/4f1c",
+        path: "/outlook/webhook/4f1c22",
         query: Some("validationToken=abc%20def&view=inbox"),
         body: body.as_bytes(),
         status: 202,
@@ -124,6 +123,7 @@ fn a_request_is_kept_with_the_shape_of_its_query_and_body() {
 
     let seen = recorder.seen();
     let request = seen.http.keys().next().unwrap();
+    assert_eq!(request.path, "/outlook/webhook/{}");
     assert_eq!(request.query, "validationToken&view=inbox");
     assert_eq!(
         request.body,

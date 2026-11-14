@@ -64,6 +64,13 @@ const DEAD_LETTER_SUFFIX: &str = "-dlq";
 /// linked and the ones unlinked since.
 const LINKS_QUERY: &str = "SELECT lower(provider::text), id::text FROM email_links \
      UNION SELECT lower(provider::text), link_id::text FROM email_links_history";
+/// The Outlook work that is due and not yet carried out: its effects
+/// (events, pushes to the gateway) follow the sync.
+const DUE_PROJECTIONS_QUERY: &str =
+    "SELECT count(*) FROM email_projection_outbox WHERE available_at <= now()";
+/// How long the record waits for that work, so that two runs of a scenario
+/// record the same events.
+const PROJECTIONS_SETTLE: Duration = Duration::from_secs(5);
 /// How long a service gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 /// How often a service is started again on another port when the one picked
@@ -840,12 +847,32 @@ impl Stack {
         health
     }
 
+    /// Where [`Stack::finish`] writes what the scenario made the services
+    /// do, when they ended healthy: the routes served, queue messages
+    /// handled, provider methods called and events published, without
+    /// their content. The coverage report (`cargo x email-coverage report`)
+    /// reads these files.
+    pub fn evidence_path(&self) -> PathBuf {
+        self.log_dir.join(crate::evidence::FILE_NAME)
+    }
+
     pub(crate) fn recorder(&self) -> &Recorder {
         &self.recorder
     }
 
     /// Writes what the scenario made the services do to its log directory.
     async fn write_evidence(&self) -> Result<(), Report> {
+        // Work that stays due (a scenario that leaves a provider failing) is
+        // not waited out: the record is then of what happened until now.
+        let _settled = eventually("the due Outlook work", PROJECTIONS_SETTLE, async || {
+            let due: i64 = sqlx::query_scalar(DUE_PROJECTIONS_QUERY)
+                .fetch_one(self.db())
+                .await
+                .context("could not count the due Outlook work")?;
+            Ok((due == 0).then_some(()))
+        })
+        .await;
+
         let links: Vec<(String, String)> = sqlx::query_as(LINKS_QUERY)
             .fetch_all(self.db())
             .await
