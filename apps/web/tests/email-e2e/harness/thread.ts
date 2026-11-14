@@ -61,3 +61,36 @@ export async function threadMessages(
 export function messageCard(page: Page, text: string): Locator {
   return page.locator('[data-message-body-id]').filter({ hasText: text });
 }
+
+/**
+ * The bytes the email service answers for a received attachment of a thread,
+ * by file name; undefined while the service does not answer them.
+ */
+export async function storedAttachment(
+  mailbox: Mailbox,
+  threadId: string,
+  filename: string
+): Promise<Buffer | undefined> {
+  const thread = await mailbox.api(
+    `/email/email/threads/${threadId}?limit=100`
+  );
+  if (!thread.ok) return undefined;
+  const { thread: held } = (await thread.json()) as {
+    thread?: {
+      messages?: { attachments?: { db_id: string; filename: string }[] }[];
+    };
+  };
+  const stored = (held?.messages ?? [])
+    .flatMap((message) => message.attachments ?? [])
+    .find((attachment) => attachment.filename === filename);
+  if (!stored) return undefined;
+  const answer = await mailbox.api(`/email/email/attachments/${stored.db_id}`);
+  if (!answer.ok) return undefined;
+  const { attachment } = (await answer.json()) as {
+    attachment: { data_url?: string };
+  };
+  if (!attachment.data_url) return undefined;
+  const file = await fetch(attachment.data_url);
+  if (!file.ok) return undefined;
+  return Buffer.from(await file.arrayBuffer());
+}

@@ -80,6 +80,10 @@ for (const provider of PROVIDERS) {
       did('AC-091');
       await expect(notice(page, 'Email sent')).toBeVisible();
       saw('STC-025');
+      await expect(page.locator('[data-message-body-id]').last()).toContainText(
+        'Works for me.'
+      );
+      saw('STC-957');
       await expect
         .poll(async () =>
           (await readMailbox(mailbox, grace)).map((message) => message.subject)

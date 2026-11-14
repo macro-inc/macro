@@ -97,6 +97,16 @@ for (const provider of PROVIDERS) {
       did('AX-024');
       await expect(notice(page, 'Signature saved')).toBeVisible();
       saw('STX-015', 'F-148');
+      // The Preview tab renders what the HTML tab holds.
+      await page
+        .getByRole('tablist', { name: `Signature views for ${own}` })
+        .getByRole('tab', { name: 'Preview' })
+        .click();
+      did('AX-020');
+      await expect(
+        page.getByRole('region', { name: `Signature preview for ${own}` })
+      ).toContainText('Ada at Analytical Engines');
+      saw('STX-207');
 
       // Read receipts off: the next message is signed and carries no pixel.
       await setSwitch(page, `Read receipts for ${own}`, false);

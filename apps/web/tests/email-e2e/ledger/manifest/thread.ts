@@ -1497,5 +1497,14 @@ export const thread = {
       trigger: 'after the action succeeds',
       source: ['src/features/email-message/components/message-actions.tsx'],
     },
+    {
+      id: 'STL-913',
+      surface: 'SL-39',
+      fn: ['F-127'],
+      state:
+        'result: the browser saves the file under its name, with the bytes that were sent',
+      trigger: 'after the action succeeds',
+      source: [ATTACHMENTS],
+    },
   ],
 } as const satisfies Group;

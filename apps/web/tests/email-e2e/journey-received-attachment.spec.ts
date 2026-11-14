@@ -6,7 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import type { Provider } from './harness/stack';
-import { did, saw } from './ledger/record';
+import { storedAttachment } from './harness/thread';
+import { confirmed, did, saw } from './ledger/record';
 
 const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
 
@@ -92,6 +93,17 @@ for (const provider of PROVIDERS) {
       expect(download.suggestedFilename()).toBe('figures.bin');
       const saved = await readFile(await download.path());
       expect(saved.equals(REPORT)).toBe(true);
+      saw('STL-913');
+
+      // The email service answers the same bytes for the file.
+      await expect
+        .poll(async () =>
+          (await storedAttachment(mailbox, thread.id, 'figures.bin'))?.equals(
+            REPORT
+          )
+        )
+        .toBe(true);
+      confirmed('F-127');
     });
   });
 }

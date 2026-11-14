@@ -165,6 +165,18 @@ for (const provider of PROVIDERS) {
       ).toEqual(['Quarterly numbers']);
       confirmed('F-146');
       await expect.poll(scheduled).toEqual([]);
+
+      // On screen it has left Scheduled, and Sent lists it.
+      await tabs.getByRole('button', { name: 'Scheduled' }).click();
+      await expect(page.getByText('No scheduled email')).toBeVisible();
+      await tabs.getByRole('button', { name: 'Sent' }).click();
+      await expect(
+        page
+          .getByRole('grid', { name: 'Email' })
+          .getByRole('row')
+          .filter({ hasText: 'Quarterly numbers' })
+      ).toHaveCount(1, { timeout: 30_000 });
+      saw('STC-915');
     });
   });
 }

@@ -427,6 +427,14 @@ export const send = {
       trigger: 'Send; reload or repeat the send',
       source: ['src/features/email-compose/primitives/email-composer.ts'],
     },
+    {
+      id: 'AC-912',
+      surface: 'SC-19',
+      fn: ['F-118'],
+      action: 'reload the app with an unsent draft open',
+      trigger: 'browser reload on a composer whose draft is saved',
+      source: ['src/features/email-compose/views/email-compose.tsx'],
+    },
   ],
   states: [
     {
@@ -1630,6 +1638,24 @@ export const send = {
         'result: the composer reopens with the recipients, subject and text of the draft',
       trigger: 'after the action succeeds',
       source: ['src/features/email-compose/views/email-compose.tsx'],
+    },
+    {
+      id: 'STC-914',
+      surface: 'SC-17',
+      fn: ['F-136'],
+      state:
+        'result: the status row is gone and the message is back in its composer as written',
+      trigger: 'after Cancel on a send that failed',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+    },
+    {
+      id: 'STC-915',
+      surface: 'SC-09',
+      fn: ['F-146'],
+      state:
+        'result: the delivered message has left Scheduled and Sent lists it',
+      trigger: 'after the scheduled time passes',
+      source: ['src/features/email-compose/primitives/email-composer.ts'],
     },
   ],
 } as const satisfies Group;

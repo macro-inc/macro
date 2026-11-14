@@ -7,8 +7,11 @@ import {
   routeDraftId,
   watchDraftSaves,
 } from './harness/drafts';
-import { expect, test } from './harness/fixtures';
-import { onlySentRaw } from './harness/send';
+import { expect, type Mailbox, test } from './harness/fixtures';
+import { addMailbox, readMailbox } from './harness/journeys';
+import { onlySentRaw, replyEditor } from './harness/send';
+import type { Provider } from './harness/stack';
+import { storedAttachment } from './harness/thread';
 import { confirmed, did, saw } from './ledger/record';
 
 const NOTES = {
@@ -40,6 +43,54 @@ const PUBLISHED_EVENT = [
   'END:VCALENDAR',
   '',
 ].join('\r\n');
+
+const PROVIDERS: Provider[] = ['GMAIL', 'OUTLOOK'];
+
+/**
+ * Delivers the published event with its `.ics` file the way each provider
+ * carries one: Gmail as the attachment alone, Outlook as an event message
+ * that holds the calendar and the file.
+ */
+async function deliverEvent(mailbox: Mailbox): Promise<void> {
+  const mail = {
+    from: 'Grace <grace@example.com>',
+    subject: 'Harbour walk',
+    text: 'The event is attached.',
+  };
+  const base64 = Buffer.from(PUBLISHED_EVENT).toString('base64');
+  if (mailbox.inbox.provider === 'GMAIL') {
+    await mailbox.deliver({
+      ...mail,
+      attachments: [
+        {
+          filename: 'walk.ics',
+          mimeType: 'text/calendar; method=PUBLISH; charset=UTF-8',
+          base64,
+        },
+      ],
+    });
+    return;
+  }
+  const response = await fetch(
+    `${mailbox.stack.info.outlookUrl}/_emulator/mailboxes/${encodeURIComponent(mailbox.inbox.email)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ...mail,
+        calendar: PUBLISHED_EVENT,
+        attachments: [
+          { filename: 'walk.ics', mime_type: 'text/calendar', base64 },
+        ],
+      }),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Outlook refused the event: ${response.status} ${await response.text()}`
+    );
+  }
+}
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -150,46 +201,102 @@ test.describe('attachments in the composer', () => {
   });
 });
 
-test.describe('a calendar file attached to a message', () => {
-  // Class attachment-ics-opened-as-file: when this fails, clicking a calendar
-  // attachment files it into the user's documents (and opens a viewer that
-  // cannot show it) instead of opening the event it describes.
-  test('opens as its event and saves no document', async ({
-    page,
-    mailbox,
-  }) => {
-    await mailbox.deliver({
-      from: 'Grace <grace@example.com>',
-      subject: 'Harbour walk',
-      text: 'The event is attached.',
-      attachments: [
-        {
-          filename: 'walk.ics',
-          mimeType: 'text/calendar; method=PUBLISH; charset=UTF-8',
-          base64: Buffer.from(PUBLISHED_EVENT).toString('base64'),
-        },
-      ],
-    });
-    const thread = await mailbox.synced('Harbour walk');
-    const documentRequests: string[] = [];
-    page.on('request', (request) => {
-      if (/\/attachments\/[^/]+\/document_id/.test(request.url()))
-        documentRequests.push(request.url());
-    });
+for (const provider of PROVIDERS) {
+  test.describe(`a calendar file attached to a message in ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+    test.use({ provider });
 
-    await mailbox.open(`/app/mail/${thread.id}`);
-    did('AL-910');
-    await page.getByText('walk.ics').click();
-    did('AL-509');
+    // Class attachment-ics-opened-as-file: when this fails, clicking a calendar
+    // attachment files it into the user's documents (and opens a viewer that
+    // cannot show it) instead of opening the event it describes.
+    test('opens as its event and saves no document', async ({
+      page,
+      mailbox,
+    }) => {
+      await deliverEvent(mailbox);
+      const thread = await mailbox.synced('Harbour walk');
+      const documentRequests: string[] = [];
+      page.on('request', (request) => {
+        if (/\/attachments\/[^/]+\/document_id/.test(request.url()))
+          documentRequests.push(request.url());
+      });
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('walk.ics');
-    await expect(dialog).toContainText('Harbour walk');
-    saw('STL-513');
-    await dialog.getByRole('button', { name: 'Close' }).click();
-    did('AL-511');
-    await expect(dialog).toBeHidden();
-    expect(documentRequests).toEqual([]);
+      await mailbox.open(`/app/mail/${thread.id}`);
+      did('AL-910');
+      await page.getByText('walk.ics').click();
+      did('AL-509');
+
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText('walk.ics');
+      await expect(dialog).toContainText('Harbour walk');
+      saw('STL-513');
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      did('AL-511');
+      await expect(dialog).toBeHidden();
+      expect(documentRequests).toEqual([]);
+
+      // The email service holds the file the event was read from.
+      await expect
+        .poll(async () =>
+          (await storedAttachment(mailbox, thread.id, 'walk.ics'))?.toString()
+        )
+        .toBe(PUBLISHED_EVENT);
+      confirmed('F-126');
+    });
   });
-});
+
+  test.describe(`a received file forwarded from ${provider === 'GMAIL' ? 'a Gmail' : 'an Outlook'} inbox`, () => {
+    test.use({ provider });
+
+    // When this fails, a forward loses the files of the message it forwards:
+    // the composer shows no pill for them, or the recipient gets none.
+    test('goes out with the file of the message', async ({ page, mailbox }) => {
+      const zed = 'zed@example.com';
+      await addMailbox(mailbox, zed);
+      await mailbox.deliver({
+        from: 'Grace <grace@example.com>',
+        subject: 'Lunch?',
+        text: 'Noon at the usual place?',
+        attachments: [
+          {
+            filename: 'menu.txt',
+            mimeType: 'text/plain',
+            base64: Buffer.from('soup of the day').toString('base64'),
+          },
+        ],
+      });
+      const thread = await mailbox.synced('Lunch?');
+
+      await mailbox.open(`/app/mail/${thread.id}`);
+      did('AL-910');
+      await page.getByText('Noon at the usual place?').first().hover();
+      await page.getByRole('button', { name: 'Forward', exact: true }).click();
+      did('AL-170');
+      did('AL-900');
+      await expect(
+        page.getByRole('button', { name: 'Remove menu.txt' })
+      ).toBeVisible();
+      saw('STL-971');
+      await page.getByRole('combobox').fill(zed);
+      await page.keyboard.press('Enter');
+      did('AC-003');
+      await replyEditor(page).click();
+      await replyEditor(page).pressSequentially('FYI');
+      did('AC-081');
+      await page.getByRole('button', { name: 'Send email' }).click();
+      did('AC-091');
+
+      await expect
+        .poll(
+          async () =>
+            (await readMailbox(mailbox, zed)).map((message) => ({
+              subject: message.subject,
+              attachments: message.attachments,
+            })),
+          { timeout: 30_000 }
+        )
+        .toEqual([{ subject: 'Fwd: Lunch?', attachments: ['menu.txt'] }]);
+      confirmed('F-124');
+    });
+  });
+}
