@@ -36,7 +36,7 @@ use crate::domain::observation::{
     BranchCandidate, Change, CheckoutFact, Fact, Observation, PrStatusFact, PrWanted,
 };
 use crate::domain::source::{AgentSource, PrInterest, SourceError};
-pub use query::{CI_GATE_CONTEXT, Lookup, PrQuery, parse_response, queries};
+pub use query::{CI_GATE_CONTEXT, Lookup, PrQuery, RepoLookups, parse_response, queries};
 
 /// With no viewer subscribed, GitHub is asked at most this often.
 pub const IDLE_POLL: Duration = Duration::from_secs(5 * 60);
@@ -107,8 +107,7 @@ impl GhCli {
                 PathBuf::from("/opt/homebrew/bin/gh"),
                 PathBuf::from("/usr/local/bin/gh"),
                 PathBuf::from("/usr/bin/gh"),
-            ]
-            .into_iter(),
+            ],
         );
         programs
     }

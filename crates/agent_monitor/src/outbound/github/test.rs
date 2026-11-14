@@ -47,20 +47,20 @@ fn one_query_asks_every_repository_for_its_numbers_and_branches() {
     assert_eq!(
         query.repos,
         vec![
-            (
-                String::from("r0"),
-                repo("example-org/gadgets"),
-                vec![(String::from("p0"), Lookup::Number(7))]
-            ),
-            (
-                String::from("r1"),
-                repo("example-org/widgets"),
-                vec![
+            RepoLookups {
+                alias: String::from("r0"),
+                repo: repo("example-org/gadgets"),
+                items: vec![(String::from("p0"), Lookup::Number(7))],
+            },
+            RepoLookups {
+                alias: String::from("r1"),
+                repo: repo("example-org/widgets"),
+                items: vec![
                     (String::from("p0"), Lookup::Number(41)),
                     (String::from("p1"), Lookup::Number(42)),
                     (String::from("b2"), Lookup::Branch(String::from("feat/codex"))),
-                ]
-            ),
+                ],
+            },
         ]
     );
     assert!(
@@ -86,7 +86,7 @@ fn a_branch_with_quotes_is_escaped_and_big_sets_split_into_several_queries() {
     let asked: usize = split
         .iter()
         .flat_map(|query| &query.repos)
-        .map(|(_, _, items)| items.len())
+        .map(|repo| repo.items.len())
         .sum();
     assert_eq!(asked, 250);
     assert!(queries(&BTreeSet::new(), &BTreeSet::new()).is_empty());

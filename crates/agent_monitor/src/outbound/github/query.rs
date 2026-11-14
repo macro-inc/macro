@@ -25,8 +25,19 @@ pub const CI_GATE_CONTEXT: &str = "CI gate";
 pub struct PrQuery {
     /// The GraphQL text.
     pub text: String,
-    /// Each repository alias with its repository and its lookups by alias.
-    pub repos: Vec<(String, RepoName, Vec<(String, Lookup)>)>,
+    /// Each repository's lookups.
+    pub repos: Vec<RepoLookups>,
+}
+
+/// One repository field of a query.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepoLookups {
+    /// Its alias (`r<i>`).
+    pub alias: String,
+    /// The repository.
+    pub repo: RepoName,
+    /// Its lookups by alias (`p<j>`, `b<j>`).
+    pub items: Vec<(String, Lookup)>,
 }
 
 /// One lookup inside a repository.
@@ -112,7 +123,11 @@ fn build(repos: Vec<(RepoName, Vec<Lookup>)>) -> PrQuery {
             items.push((alias, lookup));
         }
         text.push_str("  }\n");
-        aliased.push((repo_alias, repo, items));
+        aliased.push(RepoLookups {
+            alias: repo_alias,
+            repo,
+            items,
+        });
     }
     text.push_str("}\n");
     text.push_str(&format!(
@@ -194,8 +209,8 @@ pub fn parse_response(query: &PrQuery, body: &[u8]) -> Result<Vec<PrStatusFact>,
         .ok_or_else(|| GithubError::Failed(String::from("answer has no data")))?;
 
     let mut statuses = Vec::new();
-    for (repo_alias, repo, items) in &query.repos {
-        let Some(Some(fields)) = data.get(repo_alias) else {
+    for RepoLookups { alias, repo, items } in &query.repos {
+        let Some(Some(fields)) = data.get(alias) else {
             continue;
         };
         for (alias, lookup) in items {
