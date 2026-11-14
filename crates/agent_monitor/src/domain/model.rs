@@ -2,6 +2,9 @@
 //! store publishes. Only the store's reducer builds an [`Agent`]; sources send
 //! [`Observation`](crate::domain::observation::Observation)s.
 
+#[cfg(test)]
+mod test;
+
 use std::fmt;
 use std::path::PathBuf;
 
@@ -795,13 +798,14 @@ impl fmt::Display for PrId {
 }
 
 /// A GitHub repository, `<owner>/<name>`, each part limited to the
-/// characters GitHub allows, so it can go into a query unescaped.
+/// characters GitHub allows, so it can go into a query unescaped. Kept in
+/// lowercase, as GitHub matches names without regard to case.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct RepoName(String);
 
 impl RepoName {
-    /// Checks `<owner>/<name>`; anything else is `None`.
+    /// Checks `<owner>/<name>` and lowercases it; anything else is `None`.
     pub fn parse(text: &str) -> Option<Self> {
         let (owner, name) = text.split_once('/')?;
         let valid = |part: &str| {
@@ -810,7 +814,7 @@ impl RepoName {
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
         };
-        (valid(owner) && valid(name)).then(|| Self(text.to_owned()))
+        (valid(owner) && valid(name)).then(|| Self(text.to_ascii_lowercase()))
     }
 
     /// The owner.
