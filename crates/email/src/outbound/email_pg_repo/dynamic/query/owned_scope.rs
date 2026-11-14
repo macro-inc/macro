@@ -1,0 +1,396 @@
+//! An All Mail page of the caller's own inboxes filtered to one OR-tree of
+//! addresses: the Sales Email view and a CRM record's emails under Me (a
+//! company's domains and its contacts' addresses), or a search on senders
+//! and recipients. Newest first.
+//!
+//! The general builder lists every thread of the inboxes that has a message
+//! from or to the addresses, probing each such message's mailbox facts,
+//! before its LIMIT, so a CRM that covers most of a mailbox read the whole
+//! mailbox for each page. [`OwnedRead`] reads the same page in page order
+//! and stops when it is full:
+//!
+//! - A *stream* lists threads in `(effective_ts, id)` order with only the
+//!   conditions an index serves: the inbox, the filter's thread-level terms
+//!   and the cursor. The *superset* stream sorts the threads the address
+//!   indexes list (`matching_threads`, without mailbox facts), which is cheap
+//!   when the addresses are rare in the mail. The *inbox* stream merges each
+//!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
+//!   to a window of `limit × window_per_row`, which is cheap when they are
+//!   common.
+//! - Each streamed thread then gets the general builder's preview pick, its
+//!   latest message the view and the filter accept, in order, until the page
+//!   fills; a thread with none drops out. The pick is the general builder's
+//!   message match, so the page holds its threads, order and previews.
+//!
+//! A probe counts the superset up to `superset_limit` to choose the stream.
+//! The inbox stream's page is final when its window filled the page;
+//! otherwise the superset stream reads it.
+//!
+//! The inbox stream never reads the domains' contacts: it relies on a message
+//! listing only its own inbox's contacts (`parse_and_upsert_message_contacts`),
+//! as the general builder's inbox-scoped `matching_threads` does.
+
+use std::time::Instant;
+
+use filter_ast::Expr;
+use item_filters::SharedEmailFilter;
+use item_filters::ast::email::EmailLiteral;
+use sqlx::{PgConnection, Postgres, QueryBuilder};
+use tracing::field::Empty;
+use uuid::Uuid;
+
+use super::super::SqlFragment;
+use super::super::filters::{
+    AddressSuperset, build_address_superset, build_thread_conjunct_filter,
+    get_sort_timestamp_field, top_level_owners,
+};
+use super::{
+    QueryParams, limit_statement_time, map_row, push_page_head, push_page_tail,
+    push_preview_message_select, uses_subject_subscans, uses_view_history,
+};
+use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
+use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
+
+/// Where [`OwnedRead`] switches streams.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct OwnedReadTuning {
+    /// The most superset rows the superset stream reads first. Past it the
+    /// inbox stream reads first.
+    pub(crate) superset_limit: i64,
+    /// The inbox stream's window, in threads per page row.
+    pub(crate) window_per_row: i64,
+}
+
+impl OwnedReadTuning {
+    /// Chosen on a production-size mailbox: the superset stream reads all its
+    /// rows before the first thread, and at 5,000 rows that stays well under
+    /// the inbox stream's cost for addresses that rare. Past it the
+    /// addresses usually fill a page within 100 threads per row of the
+    /// inboxes.
+    pub(crate) const DEFAULT: Self = Self {
+        superset_limit: 5_000,
+        window_per_row: 100,
+    };
+}
+
+/// The stream a page reads its threads from, in page order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stream {
+    /// The threads the address indexes list, sorted.
+    Superset,
+    /// Each inbox's newest threads, merged, up to a window.
+    Inboxes,
+}
+
+/// The streams that read an owned page, in the order they ran.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub(crate) enum OwnedStreams {
+    /// No inbox or no address can match, so no statement ran.
+    Empty,
+    /// The superset was small enough to read first.
+    Superset,
+    /// The inbox stream filled the page.
+    Inboxes,
+    /// The inbox stream came up short of a page, so the superset read it.
+    InboxesThenSuperset,
+}
+
+/// An owned All Mail page for one OR-tree of addresses. See the module docs.
+pub(super) struct OwnedRead<'a> {
+    view: &'a PreviewView,
+    email_filter: &'a Expr<EmailLiteral>,
+    params: QueryParams,
+    tuning: OwnedReadTuning,
+    /// The caller's inboxes the filter's top-level `Owner` terms allow.
+    inboxes: Vec<Uuid>,
+    superset: AddressSuperset,
+    /// The filter's top-level thread-level terms on `t`, which the streams
+    /// apply as they read.
+    thread_terms: SqlFragment,
+}
+
+impl<'a> OwnedRead<'a> {
+    /// A read for an owned All Mail request whose filter has one positive
+    /// OR-tree of addresses among its top-level terms; other requests get
+    /// their params back.
+    pub(super) fn new(
+        view: &'a PreviewView,
+        email_filter: &'a Expr<EmailLiteral>,
+        params: QueryParams,
+        tuning: OwnedReadTuning,
+    ) -> Result<Self, Box<QueryParams>> {
+        // A top-level subject term has its own ordered subscan in the
+        // general builder.
+        let covered = matches!(
+            view,
+            PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        ) && params.team_id.is_none()
+            && !uses_view_history(email_filter, &params.sort_method_str)
+            && matches!(params.shared, SharedEmailFilter::Exclude)
+            && params.project_scope.is_none()
+            && !uses_subject_subscans(view, email_filter);
+        if !covered {
+            return Err(Box::new(params));
+        }
+        let owners = top_level_owners(email_filter);
+        let inboxes: Vec<Uuid> = params
+            .link_ids
+            .iter()
+            .copied()
+            .filter(|inbox| owners.iter().all(|owner| owner == inbox))
+            .collect();
+        let Some(superset) = build_address_superset(email_filter, &params.resolved, &inboxes)
+        else {
+            return Err(Box::new(params));
+        };
+        Ok(Self {
+            view,
+            email_filter,
+            thread_terms: build_thread_conjunct_filter(
+                email_filter,
+                get_sort_timestamp_field(view),
+            ),
+            params,
+            tuning,
+            inboxes,
+            superset,
+        })
+    }
+
+    /// Reads the page, each statement bounded by what is left until
+    /// `deadline`.
+    #[tracing::instrument(
+        name = "email.owned_address_read",
+        skip_all,
+        fields(
+            inboxes = self.inboxes.len(),
+            superset_rows = Empty,
+            streams = Empty,
+            rows = Empty,
+        ),
+        err
+    )]
+    pub(super) async fn fetch(
+        self,
+        connection: &mut PgConnection,
+        deadline: Instant,
+    ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+        let span = tracing::Span::current();
+        let (streams, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
+            (OwnedStreams::Empty, Vec::new())
+        } else {
+            limit_statement_time(connection, deadline).await?;
+            let superset_rows: i64 = self
+                .probe()
+                .build_query_scalar()
+                .persistent(false)
+                .fetch_one(&mut *connection)
+                .await?;
+            span.record("superset_rows", superset_rows);
+            self.read(connection, deadline, superset_rows).await?
+        };
+        span.record("streams", <&str>::from(streams));
+        span.record("rows", rows.len());
+        Ok((streams, rows))
+    }
+
+    /// The page and the streams that read it.
+    async fn read(
+        &self,
+        connection: &mut PgConnection,
+        deadline: Instant,
+        superset_rows: i64,
+    ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+        if superset_rows <= self.tuning.superset_limit {
+            let rows = self.page(connection, deadline, Stream::Superset).await?;
+            return Ok((OwnedStreams::Superset, rows));
+        }
+        let rows = self.page(connection, deadline, Stream::Inboxes).await?;
+        if rows.len() as i64 >= self.params.query_limit {
+            return Ok((OwnedStreams::Inboxes, rows));
+        }
+        let rows = self.page(connection, deadline, Stream::Superset).await?;
+        Ok((OwnedStreams::InboxesThenSuperset, rows))
+    }
+
+    async fn page(
+        &self,
+        connection: &mut PgConnection,
+        deadline: Instant,
+        stream: Stream,
+    ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+        limit_statement_time(connection, deadline).await?;
+        let mut builder = self.build_page(stream);
+        builder
+            .build()
+            .persistent(false)
+            .try_map(map_row)
+            .fetch_all(&mut *connection)
+            .await
+    }
+
+    /// Counts the superset's rows (a thread once per message that lists
+    /// it), stopping one past `superset_limit`.
+    fn probe(&self) -> QueryBuilder<'static, Postgres> {
+        let mut builder = QueryBuilder::new("");
+        self.push_contact_ctes(&mut builder, "WITH ");
+        builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
+        self.push_branches(&mut builder, "UNION ALL");
+        builder.push("\n        ) AS superset LIMIT ");
+        builder.push_bind(self.tuning.superset_limit.saturating_add(1));
+        builder.push(") AS capped");
+        builder
+    }
+
+    /// The hoisted contact CTEs the branches read, the first after `lead`.
+    fn push_contact_ctes(&self, builder: &mut QueryBuilder<'static, Postgres>, lead: &str) {
+        let mut separator = lead;
+        for (name, body) in self.superset.contact_ctes.iter().cloned() {
+            builder.push(format!("{separator}{name} AS MATERIALIZED (\n            "));
+            body.push_into(builder, &self.params.user_id);
+            builder.push("\n        )");
+            separator = ",\n        ";
+        }
+    }
+
+    fn push_branches(&self, builder: &mut QueryBuilder<'static, Postgres>, operator: &str) {
+        for (index, branch) in self.superset.branches.iter().cloned().enumerate() {
+            if index > 0 {
+                builder.push(format!("\n            {operator}\n            "));
+            }
+            branch.push_into(builder, &self.params.user_id);
+        }
+    }
+
+    fn build_page(&self, stream: Stream) -> QueryBuilder<'static, Postgres> {
+        let sort_ts_field = get_sort_timestamp_field(self.view);
+        let mut builder = QueryBuilder::new("");
+        if stream == Stream::Superset {
+            self.push_contact_ctes(&mut builder, "\n        WITH ");
+            let separator = if self.superset.contact_ctes.is_empty() {
+                "\n        WITH "
+            } else {
+                ",\n        "
+            };
+            builder.push(format!(
+                "{separator}matching_threads AS MATERIALIZED (\n            "
+            ));
+            self.push_branches(&mut builder, "UNION");
+            builder.push("\n        )");
+        }
+        push_page_head(&mut builder, &self.params, true);
+        // The preview pick runs per streamed thread, in order: a LIMITed
+        // LATERAL can't become a join over the whole stream, and the ORDER
+        // BY, already the stream's, keeps the planner from sorting. It
+        // projects the preview as the general builder's candidates do, which
+        // the page tail reads when it doesn't pick again.
+        builder.push(
+            r#"
+            SELECT t.*, lmp.subject, lmp.snippet, lmp.from_contact_id, lmp.from_name, lmp.is_draft
+            FROM ("#,
+        );
+        self.push_stream(&mut builder, stream, sort_ts_field);
+        builder.push(
+            r#"
+            ) AS t
+            CROSS JOIN LATERAL ("#,
+        );
+        push_preview_message_select(&mut builder, self.view, self.email_filter, &self.params);
+        builder.push(
+            r#"
+            ) AS lmp
+            ORDER BY t.effective_ts DESC, t.id DESC
+            LIMIT "#,
+        );
+        builder.push_bind(self.params.query_limit);
+        push_page_tail(
+            &mut builder,
+            self.view,
+            self.email_filter,
+            &self.params,
+            true,
+        );
+        builder
+    }
+
+    fn push_stream(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        stream: Stream,
+        sort_ts_field: &str,
+    ) {
+        match stream {
+            Stream::Superset => {
+                self.push_stream_select(builder, sort_ts_field);
+                builder.push("t.link_id = ANY(");
+                builder.push_bind(self.inboxes.clone());
+                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                self.push_stream_filters(builder, sort_ts_field);
+                builder.push(
+                    r#"
+                    ORDER BY effective_ts DESC, id DESC
+                    OFFSET 0"#,
+                );
+            }
+            Stream::Inboxes => {
+                // One ordered, limited index walk per inbox: `link_id =
+                // ANY(…)` can't return index order, so it would read and sort
+                // every thread of every inbox.
+                let window = self
+                    .params
+                    .query_limit
+                    .saturating_mul(self.tuning.window_per_row);
+                builder.push("\n                    SELECT * FROM (");
+                for (index, inbox) in self.inboxes.iter().enumerate() {
+                    if index > 0 {
+                        builder.push("\n                        UNION ALL");
+                    }
+                    builder.push("\n                        (");
+                    self.push_stream_select(builder, sort_ts_field);
+                    builder.push("t.link_id = ");
+                    builder.push_bind(*inbox);
+                    self.push_stream_filters(builder, sort_ts_field);
+                    builder.push(" ORDER BY effective_ts DESC, id DESC LIMIT ");
+                    builder.push_bind(window);
+                    builder.push(")");
+                }
+                builder.push(
+                    r#"
+                    ) AS inbox_threads
+                    ORDER BY effective_ts DESC, id DESC
+                    LIMIT "#,
+                );
+                builder.push_bind(window);
+            }
+        }
+    }
+
+    /// A stream's columns, up to its `WHERE`. All Mail's `created_at` and
+    /// `updated_at` are its sort date, as in the general builder.
+    fn push_stream_select(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        builder.push(format!(
+            r#"
+                    SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
+                           t.is_signal, t.project_id,
+                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts
+                    FROM email_threads t
+                    WHERE "#
+        ));
+    }
+
+    /// The thread-level terms and, after the first page, the cursor: both
+    /// index conditions of the stream's walk.
+    fn push_stream_filters(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        self.thread_terms
+            .clone()
+            .push_into(builder, &self.params.user_id);
+        if let Some(cursor_timestamp) = self.params.cursor_timestamp {
+            builder.push(format!(" AND ({ts}, t.id) < ("));
+            builder.push_bind(cursor_timestamp);
+            builder.push("::timestamptz, ");
+            builder.push_bind(self.params.cursor_id_str.clone());
+            builder.push("::uuid)");
+        }
+    }
+}

@@ -1,3 +1,5 @@
+mod owned_scope;
+
 use super::filters::*;
 use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
@@ -9,9 +11,13 @@ use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
+use owned_scope::OwnedRead;
+pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
 use recursion::CollapsibleExt;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::postgres::PgRow;
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 struct QueryParams {
@@ -1196,7 +1202,7 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, query, user_id), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1206,6 +1212,38 @@ pub(crate) async fn dynamic_email_thread_cursor(
     user_id: &str,
     team_id: Option<Uuid>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    dynamic_email_thread_cursor_with(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Some(OwnedReadTuning::DEFAULT),
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+/// [`dynamic_email_thread_cursor`] with the owned address read's switch
+/// points given, or with `owned_read: None`, owned address filters read by
+/// the general builder, as the parity tests compare. Also returns the
+/// streams that read the page when the owned address read took it.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the entry point's arguments plus the owned read's tuning"
+)]
+pub(crate) async fn dynamic_email_thread_cursor_with(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    owned_read: Option<OwnedReadTuning>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = query.vals();
@@ -1249,61 +1287,44 @@ pub(crate) async fn dynamic_email_thread_cursor(
     // resulting contact_id / TRASH label_id sets cover all team mailboxes.
     let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
     if can_short_circuit(email_filter, &resolved) {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), None));
     }
     let subject_subscans =
         team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
-    let mut qb = build_query(
-        view,
-        email_filter,
-        QueryParams {
-            link_ids: link_ids.to_vec(),
-            sort_method_str,
-            query_limit,
-            cursor_timestamp: cursor_timestamp.copied(),
-            cursor_id_str,
-            is_important,
-            shared,
-            user_id: user_id.to_string(),
-            resolved,
-            team_id,
-            project_scope,
-        },
-    );
+    let params = QueryParams {
+        link_ids: link_ids.to_vec(),
+        sort_method_str,
+        query_limit,
+        cursor_timestamp: cursor_timestamp.copied(),
+        cursor_id_str,
+        is_important,
+        shared,
+        user_id: user_id.to_string(),
+        resolved,
+        team_id,
+        project_scope,
+    };
 
-    let query = qb
-        .build()
-        // Unnamed statement: the SQL text varies per filter shape (and per
-        // interpolated date literal), so cached prepared statements get
-        // little reuse but do flip to generic plans after five executions —
-        // and the generic plan's inflated cost estimate also triggers JIT
-        // compilation per execution. Planning with real bind values each
-        // time keeps the plan stable for ~1ms of planning.
-        .persistent(false)
-        .try_map(|row| {
-            Ok(ThreadPreviewCursorDbRow {
-                id: row.try_get("id")?,
-                provider_id: row.try_get("provider_id")?,
-                inbox_visible: row.try_get("inbox_visible")?,
-                is_read: row.try_get("is_read")?,
-                is_draft: row.try_get("is_draft")?,
-                is_important: row.try_get("is_important")?,
-                is_signal: row.try_get("is_signal")?,
-                sort_ts: row.try_get("sort_ts")?,
-                name: row.try_get("name")?,
-                snippet: row.try_get("snippet")?,
-                sender_email: row.try_get("sender_email")?,
-                sender_name: row.try_get("sender_name")?,
-                sender_photo_url: row.try_get("sender_photo_url")?,
-                viewed_at: row.try_get("viewed_at")?,
-                created_at: row.try_get("created_at")?,
-                updated_at: row.try_get("updated_at")?,
-                project_id: row.try_get("project_id")?,
-                owner_id: row.try_get("owner_id")?,
-                link_id: row.try_get("link_id")?,
-            })
-        });
+    let params = match owned_read {
+        Some(tuning) => match OwnedRead::new(view, email_filter, params, tuning) {
+            Ok(read) => {
+                let (streams, rows) = read_owned_page(pool, read).await?;
+                return Ok((rows, Some(streams)));
+            }
+            Err(params) => *params,
+        },
+        None => params,
+    };
+
+    let mut qb = build_query(view, email_filter, params);
+    // Unnamed statement: the SQL text varies per filter shape (and per
+    // interpolated date literal), so cached prepared statements get little
+    // reuse but do flip to generic plans after five executions — and the
+    // generic plan's inflated cost estimate also triggers JIT compilation per
+    // execution. Planning with real bind values each time keeps the plan
+    // stable for ~1ms of planning.
+    let query = qb.build().persistent(false).try_map(map_row);
 
     if subject_subscans {
         // Parallel workers on a subject subscan run ahead of its LIMIT: for
@@ -1316,11 +1337,11 @@ pub(crate) async fn dynamic_email_thread_cursor(
             .await?;
         let rows = query.fetch_all(&mut *transaction).await?;
         transaction.commit().await?;
-        return Ok(rows);
+        return Ok((rows, None));
     }
 
     if team_id.is_none() {
-        return query.fetch_all(pool).await;
+        return Ok((query.fetch_all(pool).await?, None));
     }
 
     // Team-scoped (CRM) queries check privacy on every candidate thread
@@ -1334,5 +1355,69 @@ pub(crate) async fn dynamic_email_thread_cursor(
         .await?;
     let rows = query.fetch_all(&mut *transaction).await?;
     transaction.commit().await?;
-    Ok(rows)
+    Ok((rows, None))
+}
+
+/// How long an owned address read may run in the database, across all its
+/// statements: under the web client's 12s Soup request timeout, after which
+/// nobody reads the page. The server never cancels a query its client
+/// dropped, so the database enforces the bound.
+const OWNED_READ_BUDGET: Duration = Duration::from_secs(10);
+
+/// Reads an owned address page with [`OwnedRead`] within
+/// [`OWNED_READ_BUDGET`].
+async fn read_owned_page(
+    pool: &PgPool,
+    read: OwnedRead<'_>,
+) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+    let deadline = Instant::now() + OWNED_READ_BUDGET;
+    let mut transaction = pool.begin().await?;
+    let page = read.fetch(&mut transaction, deadline).await?;
+    transaction.commit().await?;
+    Ok(page)
+}
+
+/// Bounds the transaction's next statement by what is left until `deadline`.
+async fn limit_statement_time(
+    connection: &mut PgConnection,
+    deadline: Instant,
+) -> Result<(), sqlx::Error> {
+    // A zero statement_timeout disables the bound, so a spent budget still
+    // allows one millisecond and fails the statement.
+    let remaining = deadline
+        .saturating_duration_since(Instant::now())
+        .as_millis()
+        .max(1);
+    sqlx::query_scalar!(
+        "SELECT set_config('statement_timeout', $1, true)",
+        format!("{remaining}ms")
+    )
+    .fetch_one(connection)
+    .await?;
+    Ok(())
+}
+
+/// Maps one page row, as [`push_page_head`] names its columns.
+fn map_row(row: PgRow) -> Result<ThreadPreviewCursorDbRow, sqlx::Error> {
+    Ok(ThreadPreviewCursorDbRow {
+        id: row.try_get("id")?,
+        provider_id: row.try_get("provider_id")?,
+        inbox_visible: row.try_get("inbox_visible")?,
+        is_read: row.try_get("is_read")?,
+        is_draft: row.try_get("is_draft")?,
+        is_important: row.try_get("is_important")?,
+        is_signal: row.try_get("is_signal")?,
+        sort_ts: row.try_get("sort_ts")?,
+        name: row.try_get("name")?,
+        snippet: row.try_get("snippet")?,
+        sender_email: row.try_get("sender_email")?,
+        sender_name: row.try_get("sender_name")?,
+        sender_photo_url: row.try_get("sender_photo_url")?,
+        viewed_at: row.try_get("viewed_at")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+        project_id: row.try_get("project_id")?,
+        owner_id: row.try_get("owner_id")?,
+        link_id: row.try_get("link_id")?,
+    })
 }
