@@ -87,7 +87,8 @@ vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false, isLoading: false }),
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 vi.mock('@app/lib/split-router', () => ({
   SplitRouter: {

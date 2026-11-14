@@ -52,7 +52,8 @@ vi.mock('@app/features/soup/search/context', () => ({
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
 vi.mock('@queries/soup/search', () => ({
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
   useSearchSoupQuery: searchQueryMock,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -589,8 +590,8 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['archived', 'active']);
   });
 
-  it('offers no inbox pages while the search text is too short for the service', async () => {
-    const { source, query } = mount('ss');
+  it('offers no inbox pages while the search text holds nothing the service can search for', async () => {
+    const { source, query } = mount('"');
     expect(source.items()).toEqual([]);
     expect(source.hasMore()).toBe(false);
     expect(source.isLoading()).toBe(false);

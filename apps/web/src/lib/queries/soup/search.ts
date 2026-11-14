@@ -32,9 +32,12 @@ interface SearchQueryOptions {
   staleTime?: number;
 }
 
-/** Search service won't accept text less than 3 characters */
+/**
+ * The search service accepts a query from one character. It strips double
+ * quotes, so text made only of quotes and spaces holds nothing to search for.
+ */
 export const validateSearchServiceText = (text: string) => {
-  return text.length >= 3;
+  return text.replaceAll('"', '').trim().length > 0;
 };
 
 // Only plain request values and channel metadata enter the cached callbacks.

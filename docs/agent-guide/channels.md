@@ -1714,9 +1714,8 @@ conversation still refreshes its unread notifications. The split's own title
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and
-transcripts in this channel; queries shorter than 3 characters are not sent.
+transcripts in this channel, from the first character.
 Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
-Shorter queries: `Keep typing to search`.
 
 Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC

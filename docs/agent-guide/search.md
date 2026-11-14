@@ -73,8 +73,11 @@ in full-text mode while editing or switching categories. Clearing the query,
 including whitespace-only input, returns to name search and retains the category.
 Projects is always name-only: selecting it returns to name results and omits the
 full-text action. People full-text search uses the existing channel-content scope.
-Name mode makes no full-text requests; explicit full-text mode retains the search
-service's validation for short queries.
+Name mode makes no full-text requests; explicit full-text mode sends any query
+that is not blank or only quote marks, a single character included. A term
+under three characters matches as a whole word in document, chat, call and
+email content (`pr` finds "PR", not "project"); names and channel messages
+still match it as a prefix.
 
 Contacts, agent sessions and commands list before the local cache answers a
 typed query. While it has not, Command-K and phone name search show

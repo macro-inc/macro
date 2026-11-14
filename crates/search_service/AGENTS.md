@@ -58,6 +58,11 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A query is valid from one character (`terms::trimmed_query` rejects only a
+  blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
+  term under three characters matches as a whole word in document, chat, call
+  and email content, and name, channel, project and calendar prefixes stop at
+  256 expansions. Measure a common one-letter word before loosening either.
 - Every whitespace-split term is ANDed, so a term the standard tokenizer
   analyzes to nothing (`-`, `@`) matches no document and empties the search.
   `terms::drop_wordless_terms` removes such terms for exact and partial

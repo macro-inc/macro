@@ -203,7 +203,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
   const emails = () => emailsQuery.data ?? [];
 
-  // Server-side email search (query internally disables when < 3 chars)
+  // Server-side email search (query internally disables on blank text)
   const emailSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 20 },
