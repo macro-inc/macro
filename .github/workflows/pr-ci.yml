@@ -26,6 +26,7 @@ jobs:
       sdk: ${{ steps.filter.outputs.sdk }}
       email_e2e: ${{ steps.filter.outputs.email_e2e }}
       email_e2e_browser: ${{ steps.filter.outputs.email_e2e_browser }}
+      email_e2e_full_stack: ${{ steps.filter.outputs.email_e2e_full_stack }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
     timeout-minutes: 5
@@ -560,6 +561,8 @@ jobs:
             - 'packages/email-renderer/**'
             - 'apps/web/justfile'
             - '.github/workflows/email_e2e_browser.yml'
+          email_e2e_full_stack:
+            - '.github/workflows/email_e2e_full_stack.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
             - 'infra/stacks/observability/flake.lock'
@@ -649,6 +652,13 @@ jobs:
     name: Email end-to-end (browser)
     uses: ./.github/workflows/email_e2e_browser.yml
     secrets: inherit
+  email-e2e-full-stack:
+    needs:
+    - start
+    if: needs.start.outputs.email_e2e_full_stack == 'true'
+    name: Email end-to-end (full stack)
+    uses: ./.github/workflows/email_e2e_full_stack.yml
+    secrets: inherit
   observability-image:
     needs:
     - start
@@ -678,6 +688,7 @@ jobs:
     - sdk
     - email-e2e
     - email-e2e-browser
+    - email-e2e-full-stack
     - observability-image
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''
