@@ -204,16 +204,23 @@ where
             .collect::<HashMap<_, _>>();
 
         // Mint a view receipt per entity; entities the caller cannot view are
-        // skipped and keep their empty property list.
+        // skipped and keep their empty property list. Database rows and
+        // documents share access lookups; the rest are checked one at a time.
         let receipts = async {
-            let (row_keys, other_keys): (Vec<_>, Vec<_>) = keys
-                .iter()
-                .cloned()
-                .partition(|key| key.entity_type == model_entity::EntityType::DatabaseRow);
-            let row_ids = row_keys
-                .iter()
-                .map(|key| key.entity_id.to_string())
-                .collect::<Vec<_>>();
+            let mut row_ids = Vec::new();
+            let mut document_ids = Vec::new();
+            let mut other_keys = Vec::new();
+            for key in keys {
+                match key.entity_type {
+                    model_entity::EntityType::DatabaseRow => {
+                        row_ids.push(key.entity_id.to_string());
+                    }
+                    model_entity::EntityType::Document => {
+                        document_ids.push(key.entity_id.to_string());
+                    }
+                    _ => other_keys.push(key.clone()),
+                }
+            }
             let mut receipts = self
                 .entity_access_service
                 .generate_database_row_view_access_receipts(user_id, &row_ids)
@@ -221,6 +228,20 @@ where
                 .into_values()
                 .filter_map(Result::ok)
                 .collect::<Vec<_>>();
+            match self
+                .entity_access_service
+                .generate_document_view_access_receipts(user_id, &document_ids)
+                .await
+            {
+                Ok(document_receipts) => receipts.extend(document_receipts.into_values()),
+                // As for a single entity whose check fails: its properties
+                // are left out rather than failing the field.
+                Err(error) => tracing::warn!(
+                    document_count = document_ids.len(),
+                    error = ?error,
+                    "document access lookup failed, skipping property edges"
+                ),
+            }
             receipts.extend(
                 load_view_receipts(&other_keys, |key| {
                     self.entity_access_service
