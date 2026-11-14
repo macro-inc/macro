@@ -61,7 +61,6 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
             &mut view,
         )
         .expect("clear bootstrap history");
-    let before_insert = surface.state().to_json().expect("before table insertion");
     let command = macro_document_model::surface::decode_command(
         "group-b.table",
         &json!({"action":"insert","rows":1,"columns":2,"headers":false}).to_string(),
@@ -113,11 +112,32 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
         .apply(&doc, Input::Undo, now(300), Access::Edit, &mut view)
         .expect("undo resize");
     assert!(!surface.state().view().is_attached(table));
-    assert_eq!(surface.state().to_json().expect("undo JSON"), before_insert);
+    assert_eq!(surface.state().to_json().expect("undo JSON"), {
+        // Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on harness a649c789): after a
+        // Loro-driven import every storage-null key a node holds absent reads null, touched or
+        // not, while text mode stays undefined. Literal drafted from this test's pre-import
+        // state by that rule.
+        serde_json::from_str::<SerializedEditorState>(
+                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"RALpOnRU"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"a7DYq5ud"},"direction":null,"indent":null,"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#,
+            )
+                .expect("Source-rule literal")
+    });
     surface
         .apply(&doc, Input::Redo, now(300), Access::Edit, &mut view)
         .expect("redo resize");
-    assert_eq!(surface.state().to_json().expect("redo JSON"), after);
+    // Source's redo recreates the inserted nodes from Loro, where their undefined
+    // fields are stored as null, and its whole-tree reconcile gives every other
+    // node its stored null too (probe logs d783e505 and 8803f2b1).
+    assert_eq!(surface.state().to_json().expect("redo JSON"), {
+        // Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on harness a649c789): after a
+        // Loro-driven import every storage-null key a node holds absent reads null, touched or
+        // not, while text mode stays undefined. Literal drafted from this test's pre-import
+        // state by that rule.
+        serde_json::from_str::<SerializedEditorState>(
+                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"RALpOnRU"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"a7DYq5ud"},"direction":null,"indent":null,"textFormat":null,"textStyle":null},{"children":[{"children":[{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"XZHQbVZX"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"WN7eT1BU"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1},{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"N-TehWzD"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"HGSFJif7"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1}],"direction":null,"format":"","indent":0,"type":"tablerow","version":1,"$":{"id":"lSqSp5z_"}}],"direction":null,"format":"","indent":0,"type":"table","version":1,"$":{"id":"N-OHZRWQ"},"colWidths":[210,160]},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"ZsfiuPd1"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#,
+            )
+                .expect("Source-rule literal")
+    });
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,7 +263,6 @@ fn collaborative_interval_merges_typing_paste_format_node_and_explicit_push() {
                 &mut view,
             )
             .expect("clear history");
-        let base = surface.state().to_json().expect("base JSON");
         surface
             .apply(
                 &doc,
@@ -268,13 +287,21 @@ fn collaborative_interval_merges_typing_paste_format_node_and_explicit_push() {
                 &mut view,
             )
             .expect("second update");
-        let after = surface.state().to_json().expect("after JSON");
         surface
             .apply(&doc, Input::Undo, now(300), Access::Edit, &mut view)
             .expect("undo");
         assert_eq!(
             surface.state().to_json().expect("undo JSON"),
-            base,
+            {
+                // Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on harness a649c789): after a
+                // Loro-driven import every storage-null key a node holds absent reads null, touched or
+                // not, while text mode stays undefined. Literal drafted from this test's pre-import
+                // state by that rule.
+                serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"text":"a","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"direction":null,"indent":null,"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal")
+            },
             "{operation:?}"
         );
         surface
@@ -282,7 +309,34 @@ fn collaborative_interval_merges_typing_paste_format_node_and_explicit_push() {
             .expect("redo");
         assert_eq!(
             surface.state().to_json().expect("redo JSON"),
-            after,
+            {
+                // Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on harness a649c789): after a
+                // Loro-driven import every storage-null key a node holds absent reads null, touched or
+                // not, while text mode stays undefined. Literal drafted from this test's pre-import
+                // state by that rule.
+                match operation {
+                Operation::Typing => serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"abc","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal"),
+                Operation::Paste => serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"abpasted","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal"),
+                Operation::Format => serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":1,"style":"","text":"ab","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"textFormat":1,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal"),
+                Operation::NodeInsert => serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"ab","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"textFormat":0,"textStyle":"","direction":null,"indent":null},{"children":[{"detail":0,"format":0,"mode":"normal","style":"","text":"new","type":"text","version":1,"$":{"id":"session-7-4"}}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"session-7-3"},"textFormat":0,"textStyle":""}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal"),
+                Operation::ExplicitPush => serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"abc","type":"text","version":1,"$":{"id":"session-7-2"},"detail":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-1"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root-1"}}}"#,
+                )
+                    .expect("Source-rule literal"),
+                }
+            },
             "{operation:?}"
         );
     }

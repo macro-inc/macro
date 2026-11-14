@@ -39,6 +39,10 @@ impl ImportPolicy for CommentNode {
     const IMPORT_ELEMENT_DATA: bool = true;
 }
 impl ElementNode for CommentNode {
+    // Source keeps a stored null indent raw: CommentNode.ts:220-231 updateFromJSON -> MarkNode -> ElementNode reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     fn adjust_export_json(
         &self,
         _: NodeView<'_>,

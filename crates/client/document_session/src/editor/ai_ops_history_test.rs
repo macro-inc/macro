@@ -63,12 +63,31 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
     (surface, doc, view)
 }
 
+// After any undo, Source's Loro-driven reconcile imports every node (probe log
+// 8803f2b1), so each storage-null key a node holds absent reads back as its
+// stored null (policy::storage_null_keys: paragraph direction, indent,
+// textFormat, textStyle; text detail, format, style) and text mode stays
+// absent. The root carries none of these keys. Derived from the surface()
+// fixture's pre-import state by that rule.
+
+/// `before` (the seeded fixture) as Source holds it after an undo restores it.
+fn before_source() -> SerializedEditorState {
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":null,"style":null,"text":"Alpha beta gamma","type":"text","version":1,"$":{"id":"a7DYq5ud"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":null,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#)
+        .expect("Source-rule literal")
+}
+
+/// `after_first` as Source holds it after an undo restores it: the first op's
+/// setText wrote text format 0 and paragraph textFormat 0, which stay values.
+fn after_first_source() -> SerializedEditorState {
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":0,"style":null,"text":"Omega beta gamma","type":"text","version":1,"$":{"id":"a7DYq5ud"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":0,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":10}}}}"#)
+        .expect("Source-rule literal")
+}
+
 #[test]
 fn ai_ops_group_by_the_400_ms_history_window_like_source() {
     let mut rows = Vec::new();
     for gap in [0, SOURCE_DELAY_MS - 1, SOURCE_DELAY_MS, 500] {
         let (mut surface, doc, mut view) = surface();
-        let before = surface.state().to_json().expect("before");
         op(
             &mut surface,
             &doc,
@@ -77,7 +96,6 @@ fn ai_ops_group_by_the_400_ms_history_window_like_source() {
             1,
             json!({"kind":"setText","node":"alphaId1","text":"Omega beta gamma"}),
         );
-        let after_first = surface.state().to_json().expect("after first");
         op(
             &mut surface,
             &doc,
@@ -94,10 +112,14 @@ fn ai_ops_group_by_the_400_ms_history_window_like_source() {
             .apply(&doc, Input::Undo, now(20_000), Access::Edit, &mut view)
             .expect("undo");
         let undo1 = surface.state().to_json().expect("undo");
-        let merged = if undo1 == before {
+        let merged = if undo1 == before_source() {
             true
         } else {
-            assert_eq!(undo1, after_first, "gap {gap}: one undo reverts one op");
+            assert_eq!(
+                undo1,
+                after_first_source(),
+                "gap {gap}: one undo reverts one op"
+            );
             false
         };
         rows.push((gap, merged));
@@ -157,7 +179,6 @@ fn refusals(view: &[ViewEffect]) -> Vec<serde_json::Value> {
 #[test]
 fn a_refused_op_mid_edit_changes_no_history() {
     let (mut surface, doc, mut view) = surface();
-    let before = surface.state().to_json().expect("before");
     op(
         &mut surface,
         &doc,
@@ -216,9 +237,15 @@ fn a_refused_op_mid_edit_changes_no_history() {
     surface
         .apply(&doc, Input::Undo, now(40_000), Access::Edit, &mut view)
         .expect("undo the last op");
-    assert_eq!(surface.state().to_json().expect("one undo"), after_first);
+    assert_eq!(
+        surface.state().to_json().expect("one undo"),
+        after_first_source()
+    );
     surface
         .apply(&doc, Input::Undo, now(41_000), Access::Edit, &mut view)
         .expect("undo the first op");
-    assert_eq!(surface.state().to_json().expect("two undos"), before);
+    assert_eq!(
+        surface.state().to_json().expect("two undos"),
+        before_source()
+    );
 }

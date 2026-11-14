@@ -161,6 +161,10 @@ impl NodeType for ListNode {
     }
 }
 impl ElementNode for ListNode {
+    // Source keeps a stored null indent raw: @lexical/list LexicalList.dev.mjs:1166-1167 updateFromJSON super reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn can_be_empty(&self, _: ElementView<'_>) -> bool {
         false

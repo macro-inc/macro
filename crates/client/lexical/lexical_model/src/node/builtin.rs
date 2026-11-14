@@ -232,15 +232,36 @@ impl ElementNode for Paragraph {
             .state
             .children(node.key)
             .find_map(|key| node.state.text(key));
-        let format = first.map_or(data.text_format, |text| text.format);
-        let style = first.map_or(data.text_style.as_ref(), |text| text.style.as_ref());
-        json.insert("textFormat".into(), serde_json::json!(format.bits()));
-        json.insert("textStyle".into(), serde_json::json!(style));
-        if first.is_some_and(|text| text.absent.contains(crate::node::AbsentKeys::FORMAT)) {
-            json.remove("textFormat");
+        // ParagraphNode.exportJSON backfills from the first text child's getters:
+        // a value, its raw null, or undefined (omitted).
+        let (format, style) = first.map_or(
+            (
+                JsonField::Value(data.text_format),
+                JsonField::Value(data.text_style.as_ref()),
+            ),
+            TextData::json_format_style,
+        );
+        match format {
+            JsonField::Value(format) => {
+                json.insert("textFormat".into(), serde_json::json!(format.bits()));
+            }
+            JsonField::Null => {
+                json.insert("textFormat".into(), serde_json::Value::Null);
+            }
+            JsonField::Absent => {
+                json.remove("textFormat");
+            }
         }
-        if first.is_some_and(|text| text.absent.contains(crate::node::AbsentKeys::STYLE)) {
-            json.remove("textStyle");
+        match style {
+            JsonField::Value(style) => {
+                json.insert("textStyle".into(), serde_json::json!(style));
+            }
+            JsonField::Null => {
+                json.insert("textStyle".into(), serde_json::Value::Null);
+            }
+            JsonField::Absent => {
+                json.remove("textStyle");
+            }
         }
         Ok(())
     }

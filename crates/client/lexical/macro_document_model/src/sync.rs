@@ -37,12 +37,10 @@ impl SyncPolicy for MacroSyncPolicy {
         // native exports. Code getters omit unset values; table imports may
         // retain explicit null. The persisted Loro values remain untouched.
         let fields: &[&str] = match node.get("type").and_then(serde_json::Value::as_str) {
-            Some("table") => &[
-                "colWidths",
-                "frozenColumnCount",
-                "frozenRowCount",
-                "rowStriping",
-            ],
+            // colWidths is not aliased: Source keeps a stored null raw
+            // (TableNode.updateFromJSON setColWidths, LexicalTable.dev.mjs :3775)
+            // and native ColumnWidths holds Null.
+            Some("table") => &["frozenColumnCount", "frozenRowCount", "rowStriping"],
             Some("tablecell") => &["width"],
             Some("code" | "custom-code") => &["language", "theme"],
             Some("code-highlight") => &["highlightType"],

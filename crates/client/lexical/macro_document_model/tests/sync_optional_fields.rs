@@ -137,10 +137,21 @@ fn nullable_await_text_projects_local_changes_without_coercing_null() -> Result<
         projection
             .check(&doc, editor.state())
             .expect("actual indexed projection");
+        // A fresh load sees the storage form: the shared writer stores the
+        // paragraph's absent direction/indent as null, as Source's writer does
+        // (probe 1d9a47d4). Compare the incremental writes against a full write
+        // of the same state through that writer.
+        let fresh = new_doc(97)?;
+        LoroProjection::initialize(&fresh, editor.state(), &MACRO_SYNC_POLICY, now)?;
         assert_eq!(
             reconstruct_state(&doc, &MACRO_SYNC_POLICY)?,
-            editor.state().to_json()?
+            reconstruct_state(&fresh, &MACRO_SYNC_POLICY)?
         );
+        // The model is not coerced: its ordinary export still omits them.
+        let ordinary = editor.state().to_json()?;
+        let paragraph = ordinary.root["children"][0].as_object().expect("paragraph");
+        assert!(!paragraph.contains_key("direction"));
+        assert!(!paragraph.contains_key("indent"));
     }
     Ok(())
 }

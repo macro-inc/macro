@@ -81,6 +81,8 @@ impl ElementData {
 /// s2: TX-01
 pub struct TextData {
     pub(crate) absent: AbsentKeys,
+    /// Fields Source holds as a raw null (from a stored null); never also absent.
+    pub(crate) null: NullKeys,
     /// Text and cached length.
     pub text: TextBuffer,
     /// Formatting bits.
@@ -100,12 +102,27 @@ impl TextData {
             ..Self::default()
         }
     }
-    /// Format and style emitted by the text base serializer, retaining imported undefined fields.
-    pub fn json_format_style(&self) -> (Option<TextFormat>, Option<&str>) {
+    /// Format and style emitted by the text base serializer: a value, Source's raw
+    /// null, or an imported undefined field.
+    pub fn json_format_style(&self) -> (JsonField<TextFormat>, JsonField<&str>) {
         (
-            (!self.absent.contains(AbsentKeys::FORMAT)).then_some(self.format),
-            (!self.absent.contains(AbsentKeys::STYLE)).then_some(self.style.as_ref()),
+            self.json_field(AbsentKeys::FORMAT, NullKeys::FORMAT, self.format),
+            self.json_field(AbsentKeys::STYLE, NullKeys::STYLE, self.style.as_ref()),
         )
+    }
+    fn json_field<T>(&self, absent: AbsentKeys, null: NullKeys, value: T) -> JsonField<T> {
+        if self.absent.contains(absent) {
+            JsonField::Absent
+        } else if self.null.contains(null) {
+            JsonField::Null
+        } else {
+            JsonField::Value(value)
+        }
+    }
+    /// An explicit write of these fields: they are no longer absent or null.
+    pub(crate) fn set_explicit(&mut self, absent: AbsentKeys) {
+        self.absent.remove(absent);
+        self.null.remove(NullKeys::from_absent(absent));
     }
     /// Whether this is an indivisible token.
     pub fn is_token(&self) -> bool {
@@ -235,10 +252,82 @@ bitflags::bitflags! {
         const INDENT=1;const DIRECTION=2;const FORMAT=4;const DETAIL=8;const MODE=16;const STYLE=32;const TEXT=64;
     }
 }
-impl AbsentKeys {
-    pub(crate) fn contains_field(self, field: &str) -> bool {
-        self.contains(Self::field(field))
+bitflags::bitflags! {
+    /// Text fields Source stores raw as null (setFormat/setDetail/setStyle keep a
+    /// non-string value, Lexical 0.45.0 :6831, :6848, :6862). Mode has no null
+    /// state: TEXT_MODE_TO_TYPE[null] is undefined, which is absent.
+    #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+    pub(crate) struct NullKeys:u8 {
+        const FORMAT=1;const DETAIL=2;const STYLE=4;
     }
+}
+impl NullKeys {
+    pub(crate) fn from_absent(absent: AbsentKeys) -> Self {
+        let mut null = Self::empty();
+        for (from, to) in [
+            (AbsentKeys::FORMAT, Self::FORMAT),
+            (AbsentKeys::DETAIL, Self::DETAIL),
+            (AbsentKeys::STYLE, Self::STYLE),
+        ] {
+            if absent.contains(from) {
+                null.insert(to);
+            }
+        }
+        null
+    }
+    /// The absent bits of the same fields.
+    pub(crate) fn to_absent(self) -> AbsentKeys {
+        let mut absent = AbsentKeys::empty();
+        for (from, to) in [
+            (Self::FORMAT, AbsentKeys::FORMAT),
+            (Self::DETAIL, AbsentKeys::DETAIL),
+            (Self::STYLE, AbsentKeys::STYLE),
+        ] {
+            if self.contains(from) {
+                absent.insert(to);
+            }
+        }
+        absent
+    }
+    /// Set every listed field that `json` holds as null.
+    pub(crate) fn from_json(json: &SerializedNode) -> Self {
+        let mut null = Self::empty();
+        for (name, flag) in [
+            ("format", Self::FORMAT),
+            ("detail", Self::DETAIL),
+            ("style", Self::STYLE),
+        ] {
+            if json.get(name).is_some_and(serde_json::Value::is_null) {
+                null.insert(flag);
+            }
+        }
+        null
+    }
+    /// Write each null field into an exported text node.
+    pub(crate) fn write(self, json: &mut SerializedNode) {
+        for (name, flag) in [
+            ("format", Self::FORMAT),
+            ("detail", Self::DETAIL),
+            ("style", Self::STYLE),
+        ] {
+            if self.contains(flag) {
+                json.insert(name.into(), serde_json::Value::Null);
+            }
+        }
+    }
+}
+/// One exported text field: a value, a raw null, or an undefined (absent) key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsonField<T> {
+    /// The field's value.
+    Value(T),
+    /// Source holds null and exports it.
+    Null,
+    /// Undefined in Source; JSON omits it.
+    Absent,
+}
+
+impl AbsentKeys {
     pub(crate) fn from_json(json: &SerializedNode, names: &[&str]) -> Self {
         let mut absent = Self::empty();
         for name in names {

@@ -91,38 +91,94 @@ fn local_search_fields_preserve_ordinary_json_and_track_moved_duplicate_owners()
         let (_, changes) = projection
             .remote(&doc, editor.state(), &bytes)
             .expect("actual peer import");
-        // Source's collab reconcile (reconcile.ts :48-62, :130-148) imports every block whose
+        // Source's collab reconcile (reconcile.ts :48-62, :130-148) imports every node whose
         // stored own JSON, `$` included, differs from the live model, on any Loro-driven
-        // update: here each top-level block's stored searchText. The peer's masked `local`
-        // field is never imported (local_state_keys).
-        let imported: Vec<(NodeKey, serde_json::Value)> = changes
+        // update. Here that is each top-level block's stored searchText (R003), and, for
+        // every node the field-omitting fixture left absent, the null Source's writer
+        // stored for it (slice B, C-HISTORY-RECONCILE-NULLS-ALL-01; Source undo/redo probe
+        // log 8803f2b1). Paragraphs carry direction/indent/textFormat/textStyle, texts
+        // detail/format/mode/style; the quote has no storage-null keys. The peer's masked
+        // `local` field is never imported (local_state_keys).
+        let mut imported: Vec<(NodeKey, Option<serde_json::Value>, Vec<String>)> = changes
             .changes
             .iter()
             .map(|change| match change {
                 NodeChange::Update {
                     node: NodeTarget::Key(key),
                     json,
-                } => (*key, json["$"].clone()),
+                } => {
+                    let mut nulls: Vec<String> = json
+                        .iter()
+                        .filter(|(_, value)| value.is_null())
+                        .map(|(name, _)| name.clone())
+                        .collect();
+                    nulls.sort();
+                    // Text ids are minted by the session, so only blocks compare `$`.
+                    let state = top.contains(key).then(|| json["$"].clone());
+                    (*key, state, nulls)
+                }
                 other => panic!("only own-field updates: {other:?}"),
             })
             .collect();
-        if enabled {
-            assert_eq!(
-                imported,
-                vec![
-                    (top[0], json!({"id": "duplicate", "searchText": "updated"})),
-                    (top[1], json!({"id": "duplicate", "searchText": "updated"})),
-                    (top[2], json!({"id": "container", "searchText": "quote"})),
-                    (
-                        top[3],
-                        json!({"id": "untouched", "searchText": "untouched"})
-                    ),
-                ],
-                "each block's stored searchText, and no masked local field"
-            );
+        imported.sort_by_key(|(key, _, _)| *key);
+        let view = editor.state().view();
+        let text = |block: NodeKey| view.first_child(block).expect("block text");
+        let paragraph_nulls = ["direction", "indent", "textFormat", "textStyle"]
+            .map(String::from)
+            .to_vec();
+        let text_nulls = ["detail", "format", "mode", "style"]
+            .map(String::from)
+            .to_vec();
+        let mut expected = if enabled {
+            vec![
+                (
+                    top[0],
+                    Some(json!({"id": "duplicate", "searchText": "updated"})),
+                    paragraph_nulls.clone(),
+                ),
+                (
+                    top[1],
+                    Some(json!({"id": "duplicate", "searchText": "updated"})),
+                    paragraph_nulls.clone(),
+                ),
+                (
+                    top[2],
+                    Some(json!({"id": "container", "searchText": "quote"})),
+                    Vec::new(),
+                ),
+                (
+                    top[3],
+                    Some(json!({"id": "untouched", "searchText": "untouched"})),
+                    paragraph_nulls.clone(),
+                ),
+            ]
         } else {
-            assert!(imported.is_empty(), "nothing stored differs");
+            vec![
+                (
+                    top[0],
+                    Some(json!({"id": "duplicate", "searchText": "stale"})),
+                    paragraph_nulls.clone(),
+                ),
+                (
+                    top[1],
+                    Some(json!({"id": "duplicate"})),
+                    paragraph_nulls.clone(),
+                ),
+                (
+                    top[3],
+                    Some(json!({"id": "untouched"})),
+                    paragraph_nulls.clone(),
+                ),
+            ]
+        };
+        for block in [top[0], top[1], top[2], top[3]] {
+            expected.push((text(block), None, text_nulls.clone()));
         }
+        expected.sort_by_key(|(key, _, _)| *key);
+        assert_eq!(
+            imported, expected,
+            "stored searchText and Source-rule nulls, and no masked local field"
+        );
         // Apply them as a session does before binding.
         editor
             .update(|tx| {
@@ -138,6 +194,17 @@ fn local_search_fields_preserve_ordinary_json_and_track_moved_duplicate_owners()
                 Ok(())
             })
             .expect("apply the import");
+        // The model after the import (Source undo/redo probe log 8803f2b1): each text's
+        // detail/format/style read null, and its mode stays undefined (slice A).
+        for block in [top[0], top[1], top[2], top[3]] {
+            let view = editor.state().view();
+            let key = view.first_child(block).expect("block text");
+            let own = view.export_json(key).expect("text export");
+            for name in ["detail", "format", "style"] {
+                assert_eq!(own.get(name), Some(&serde_json::Value::Null), "{name}");
+            }
+            assert!(!own.contains_key("mode"), "mode stays absent");
+        }
         projection
             .bind_created(changes, &[])
             .expect("accept the import");

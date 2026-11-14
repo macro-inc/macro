@@ -171,12 +171,48 @@ pub(crate) fn storage_fields(json: &mut SerializedNode, policy: &dyn SyncPolicy)
         }
     }
 }
+/// The one table of keys a Loro writer stores as null for this node when its
+/// value is undefined: the builtin text/Paragraph keys from lexical_model plus
+/// the application's own-undefined fields. Source's loroSyncState stores those
+/// undefined values as null on creation (probes be8649fb, 1d9a47d4, 8672bafb).
+pub(crate) fn storage_null_keys<'policy>(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &'policy dyn SyncPolicy,
+) -> Vec<&'policy str> {
+    let mut keys: Vec<&str> = view.storage_null_keys(key).to_vec();
+    if let Ok(ty) = view.type_name(key) {
+        for name in policy.own_undefined_fields(ty) {
+            if !keys.contains(&name.as_str()) {
+                keys.push(name.as_str());
+            }
+        }
+    }
+    keys
+}
+/// Store null for every storage-null key the export left absent; returns them.
+fn write_storage_nulls(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    json: &mut SerializedNode,
+) -> Vec<String> {
+    let mut inserted = Vec::new();
+    for name in storage_null_keys(view, key, policy) {
+        if !json.contains_key(name) {
+            json.insert(name.to_owned(), Value::Null);
+            inserted.push(name.to_owned());
+        }
+    }
+    inserted
+}
 pub(crate) fn storage_own(
     view: StateRef<'_>,
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
     let mut json = stored_own(view, key, policy)?;
+    write_storage_nulls(view, key, policy, &mut json);
     storage_fields(&mut json, policy);
     Ok(json)
 }
@@ -186,12 +222,13 @@ pub(crate) fn storage_own_reusing(
     key: NodeKey,
     policy: &dyn SyncPolicy,
     buffer: lexical_model::JsonExportBuffer,
-) -> Result<lexical_model::JsonExportBuffer> {
+) -> Result<(lexical_model::JsonExportBuffer, Vec<String>)> {
     let mut buffer = view.export_stored_json_reusing(key, buffer)?;
     let json = buffer.json_mut();
     prepare_own(json, policy);
+    let inserted = write_storage_nulls(view, key, policy, json);
     storage_fields(json, policy);
-    Ok(buffer)
+    Ok((buffer, inserted))
 }
 pub(crate) fn storage_tree(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     storage_fields(json, policy);

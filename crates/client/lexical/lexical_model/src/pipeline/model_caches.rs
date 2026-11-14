@@ -101,10 +101,22 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
         let first = tx
             .descendants(key)
             .find(|(child, _)| tx.kind(*child) == Some(NodeKind::Text));
+        // Source reconcileTextFormat/reconcileTextStyle (Lexical 0.45.0 :2429-2437)
+        // apply each only when the child's raw value is not null or undefined.
         let Some((format, style)) = first.and_then(|(child, _)| {
-            tx.view()
-                .text(child)
-                .map(|data| (data.format, data.style.clone()))
+            tx.view().text(child).map(|data| {
+                let (format, style) = data.json_format_style();
+                (
+                    match format {
+                        JsonField::Value(format) => Some(format),
+                        JsonField::Null | JsonField::Absent => None,
+                    },
+                    match style {
+                        JsonField::Value(_) => Some(data.style.clone()),
+                        JsonField::Null | JsonField::Absent => None,
+                    },
+                )
+            })
         }) else {
             continue;
         };
@@ -112,11 +124,12 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
         if ForeignReadOperation::check().is_err() {
             return Ok(());
         }
-        if tx
-            .view()
-            .element(key)
-            .is_some_and(|data| data.text_format != format || data.text_style != style)
-        {
+        if tx.view().element(key).is_some_and(|data| {
+            format.is_some_and(|format| data.text_format != format)
+                || style
+                    .as_ref()
+                    .is_some_and(|style| data.text_style != *style)
+        }) {
             #[cfg(feature = "foreign-nodes")]
             tx.clone_foreign_instance_for_write(key)?;
             let record = tx
@@ -127,8 +140,12 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
             let BaseData::Element(data) = &mut Arc::make_mut(record).base else {
                 return Err(Error::NotAnElement(key));
             };
-            data.text_format = format;
-            data.text_style = style;
+            if let Some(format) = format {
+                data.text_format = format;
+            }
+            if let Some(style) = style {
+                data.text_style = style;
+            }
             tx.dirty_elements.insert(key, DirtyIntent::Intentional);
         }
     }

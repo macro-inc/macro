@@ -1,6 +1,6 @@
 //! Install parsed fields without changing custom import or replacement dispatch.
 use super::{Child, FieldValue, ParsedNode};
-use crate::node::AbsentKeys;
+use crate::node::{AbsentKeys, NullKeys};
 use crate::*;
 use serde_json::Value;
 use std::{any::TypeId, sync::Arc};
@@ -118,6 +118,18 @@ impl ParsedNode<'_> {
             if mode_is_null {
                 absent.insert(AbsentKeys::MODE);
             }
+            // Source keeps a stored null format/detail/style raw (slice B).
+            let mut null = NullKeys::empty();
+            for (name, flag) in [
+                ("format", NullKeys::FORMAT),
+                ("detail", NullKeys::DETAIL),
+                ("style", NullKeys::STYLE),
+            ] {
+                if matches!(self.fields.get(name), Some(FieldValue::Other(Value::Null))) {
+                    null.insert(flag);
+                }
+            }
+            absent.remove(null.to_absent());
             tx.writable(key)?.base = BaseData::Text(TextData {
                 text: TextBuffer::new(self.take_string("text")),
                 format,
@@ -125,6 +137,7 @@ impl ParsedNode<'_> {
                 mode,
                 style: Arc::from(self.string("style").unwrap_or_default()),
                 absent,
+                null,
             });
         } else if root || paragraph {
             let direction = match self.fields.get("direction") {

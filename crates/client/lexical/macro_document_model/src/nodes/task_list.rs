@@ -28,6 +28,10 @@ impl ImportPolicy for TaskListNode {
     const IMPORT_ELEMENT_DATA: bool = true;
 }
 impl ElementNode for TaskListNode {
+    // Source keeps a stored null indent raw: TaskListNode.ts:70-74 importJSON -> updateFromJSON -> ListNode reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     type Parent = ListNode;
     fn as_parent(&self) -> &Self::Parent {
         &self.list

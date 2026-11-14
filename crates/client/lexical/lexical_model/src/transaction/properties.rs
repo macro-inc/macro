@@ -214,8 +214,7 @@ impl TextMut<'_, '_> {
         }
         if value.is_some() {
             self.data_mut()?
-                .absent
-                .remove(crate::node::AbsentKeys::field("format"));
+                .set_explicit(crate::node::AbsentKeys::FORMAT);
         }
         Ok(self)
     }
@@ -257,8 +256,7 @@ impl TextMut<'_, '_> {
         }
         if value.is_some() {
             self.data_mut()?
-                .absent
-                .remove(crate::node::AbsentKeys::field("detail"));
+                .set_explicit(crate::node::AbsentKeys::DETAIL);
         }
         Ok(self)
     }
@@ -314,11 +312,11 @@ impl TextMut<'_, '_> {
         self.tx.guard_write()?;
         if self.data().style.as_ref() != style
             || self.data().absent.contains(crate::node::AbsentKeys::STYLE)
+            || self.data().null.contains(crate::node::NullKeys::STYLE)
         {
             self.data_mut()?.style = Arc::from(style);
             self.data_mut()?
-                .absent
-                .remove(crate::node::AbsentKeys::STYLE);
+                .set_explicit(crate::node::AbsentKeys::STYLE);
         }
         Ok(self)
     }
@@ -327,7 +325,7 @@ impl TextMut<'_, '_> {
         self.tx.guard_write()?;
         let data = self.data_mut()?;
         data.detail ^= TextDetail::DIRECTIONLESS;
-        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        data.set_explicit(crate::node::AbsentKeys::DETAIL);
         Ok(self)
     }
     /// Toggle merge prevention.
@@ -335,7 +333,7 @@ impl TextMut<'_, '_> {
         self.tx.guard_write()?;
         let data = self.data_mut()?;
         data.detail ^= TextDetail::UNMERGEABLE;
-        data.absent.remove(crate::node::AbsentKeys::field("detail"));
+        data.set_explicit(crate::node::AbsentKeys::DETAIL);
         Ok(self)
     }
     /// Splice valid UTF-16 boundaries, optionally collapsing selection after inserted text.
@@ -499,6 +497,8 @@ impl TextMut<'_, '_> {
                         | crate::node::AbsentKeys::STYLE
                         | crate::node::AbsentKeys::DETAIL);
                 target.data_mut()?.absent.insert(carried);
+                // A raw null is copied the same way (slice B).
+                target.data_mut()?.null.insert(data.null);
                 self.tx.writable(part)?.state = state.clone();
                 part
             };

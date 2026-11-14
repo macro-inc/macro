@@ -1,6 +1,6 @@
 //! Node export preserves virtual hooks, with direct encoding for exact builtin payloads.
 use super::{fields, string, write_value};
-use crate::node::AbsentKeys;
+use crate::node::{AbsentKeys, NullKeys};
 use crate::*;
 use std::any::TypeId;
 
@@ -95,11 +95,18 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
     let paragraph_fields = if paragraph {
         let data = view.element(key).ok_or(Error::NotAnElement(key))?;
         let first = view.children(key).find_map(|child| view.text(child));
+        // ParagraphNode.exportJSON backfills from the first text child's getters:
+        // a value, its raw null, or undefined (omitted).
+        let (format, style) = first.map_or(
+            (
+                JsonField::Value(data.text_format),
+                JsonField::Value(data.text_style.as_ref()),
+            ),
+            TextData::json_format_style,
+        );
         Some((
-            first.map_or(data.text_format, |text| text.format),
-            first.map_or(data.text_style.as_ref(), |text| text.style.as_ref()),
-            first.is_some_and(|text| text.absent.contains(AbsentKeys::FORMAT)),
-            first.is_some_and(|text| text.absent.contains(AbsentKeys::STYLE)),
+            format,
+            style,
             first.is_none() && data.text_format.is_empty() && !data.text_style.is_empty(),
         ))
     } else {
@@ -132,9 +139,19 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
             comma = true;
         }
         BaseData::Text(data) => {
-            for (name, flag, value) in [
-                ("detail", AbsentKeys::DETAIL, data.detail.bits()),
-                ("format", AbsentKeys::FORMAT, data.format.bits()),
+            for (name, flag, null, value) in [
+                (
+                    "detail",
+                    AbsentKeys::DETAIL,
+                    NullKeys::DETAIL,
+                    data.detail.bits(),
+                ),
+                (
+                    "format",
+                    AbsentKeys::FORMAT,
+                    NullKeys::FORMAT,
+                    data.format.bits(),
+                ),
             ] {
                 if !data.absent.contains(flag) {
                     if comma {
@@ -142,7 +159,11 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
                     }
                     string(name, output);
                     output.push(':');
-                    number(value, output);
+                    if data.null.contains(null) {
+                        output.push_str("null");
+                    } else {
+                        number(value, output);
+                    }
                     comma = true;
                 }
             }
@@ -158,9 +179,19 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
                 });
                 comma = true;
             }
-            for (name, flag, value) in [
-                ("style", AbsentKeys::STYLE, data.style.as_ref()),
-                ("text", AbsentKeys::TEXT, data.text.as_str()),
+            for (name, flag, null, value) in [
+                (
+                    "style",
+                    AbsentKeys::STYLE,
+                    NullKeys::STYLE,
+                    data.style.as_ref(),
+                ),
+                (
+                    "text",
+                    AbsentKeys::TEXT,
+                    NullKeys::empty(),
+                    data.text.as_str(),
+                ),
             ] {
                 if !data.absent.contains(flag) {
                     if comma {
@@ -168,7 +199,11 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
                     }
                     string(name, output);
                     output.push(':');
-                    string(value, output);
+                    if !null.is_empty() && data.null.contains(null) {
+                        output.push_str("null");
+                    } else {
+                        string(value, output);
+                    }
                     comma = true;
                 }
             }
@@ -190,18 +225,28 @@ fn builtin(view: StateRef<'_>, key: NodeKey, output: &mut String) -> Result<bool
             write_value(value, output);
         }
     }
-    if let Some((format, style, omit_format, omit_style, style_first)) = paragraph_fields {
-        if style_first && !omit_style {
-            output.push_str(",\"textStyle\":");
-            string(style, output);
+    if let Some((format, style, style_first)) = paragraph_fields {
+        let write_style = |output: &mut String| match style {
+            JsonField::Value(style) => {
+                output.push_str(",\"textStyle\":");
+                string(style, output);
+            }
+            JsonField::Null => output.push_str(",\"textStyle\":null"),
+            JsonField::Absent => {}
+        };
+        if style_first {
+            write_style(output);
         }
-        if !omit_format {
-            output.push_str(",\"textFormat\":");
-            number(format.bits(), output);
+        match format {
+            JsonField::Value(format) => {
+                output.push_str(",\"textFormat\":");
+                number(format.bits(), output);
+            }
+            JsonField::Null => output.push_str(",\"textFormat\":null"),
+            JsonField::Absent => {}
         }
-        if !style_first && !omit_style {
-            output.push_str(",\"textStyle\":");
-            string(style, output);
+        if !style_first {
+            write_style(output);
         }
     }
     output.push('}');

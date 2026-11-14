@@ -1,5 +1,6 @@
 //! Source export semantics for comparison only; storage serialization never calls this module.
 use super::*;
+use lexical_model::JsonField;
 use serde_json::Value;
 
 /// Explicit application metadata for canonical projected comparisons, not construction authority.
@@ -54,8 +55,16 @@ fn first_model_text(
         } else if policy.comparison_kind(view.type_name(key)?) == ComparisonKind::Text {
             let (format, style) = view.text_data(key)?.json_format_style();
             return Ok(Some(TextFields {
-                format: format.map(|format| Value::from(format.bits())),
-                style: style.map(|style| Value::String(style.to_owned())),
+                format: match format {
+                    JsonField::Value(format) => Some(Value::from(format.bits())),
+                    JsonField::Null => Some(Value::Null),
+                    JsonField::Absent => None,
+                },
+                style: match style {
+                    JsonField::Value(style) => Some(Value::String(style.to_owned())),
+                    JsonField::Null => Some(Value::Null),
+                    JsonField::Absent => None,
+                },
             }));
         }
     }
@@ -157,6 +166,71 @@ fn tree(node: &mut SerializedNode, policy: &dyn SyncPolicy) {
     if is_paragraph {
         apply(node, first);
     }
+}
+/// Whether a stored node's own fields (and synced children) match the model's,
+/// for the attach and consistency checks only. One direction: a STORED null in
+/// one of the node's storage-null keys (policy::storage_null_keys, the table the
+/// writer uses; Source's loroSyncState stores those undefined fields as null,
+/// probes be8649fb, 1d9a47d4, 8672bafb) also matches a model key that is
+/// absent. A model null against a stored absent key, and every other
+/// difference, still diverges. Remote reconcile compares strictly instead.
+pub(crate) fn stored_matches(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    model: &SerializedNode,
+    stored: &SerializedNode,
+) -> bool {
+    stored_matches_collecting(view, key, policy, model, stored, &mut Vec::new())
+}
+/// stored_matches, also collecting every node whose model holds a storage-null
+/// key absent while the store holds null: the nodes a Loro-driven import must
+/// give that null (C-HISTORY-RECONCILE-NULLS-ALL-01).
+pub(crate) fn stored_matches_collecting(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    model: &SerializedNode,
+    stored: &SerializedNode,
+    pending: &mut Vec<NodeKey>,
+) -> bool {
+    let encoded = crate::policy::storage_null_keys(view, key, policy);
+    let children = synced_children(view, key, policy);
+    let own = model
+        .iter()
+        .all(|(name, value)| match (name.as_str(), stored.get(name)) {
+            ("children", Some(Value::Array(stored))) => match value {
+                Value::Array(model) => {
+                    model.len() == stored.len()
+                        && model.len() == children.len()
+                        && children.iter().zip(model.iter().zip(stored)).all(
+                            |(child, (model, stored))| match (model.as_object(), stored.as_object())
+                            {
+                                (Some(model), Some(stored)) => stored_matches_collecting(
+                                    view, *child, policy, model, stored, pending,
+                                ),
+                                _ => model == stored,
+                            },
+                        )
+                }
+                _ => false,
+            },
+            (_, Some(stored)) => value == stored,
+            (_, None) => false,
+        });
+    let mut absent_null = false;
+    let rest = stored.iter().all(|(name, value)| {
+        if model.contains_key(name) {
+            return true;
+        }
+        let encoded_null = value.is_null() && encoded.contains(&name.as_str());
+        absent_null |= encoded_null;
+        encoded_null
+    });
+    if absent_null {
+        pending.push(key);
+    }
+    own && rest
 }
 pub(crate) fn model(state: &EditorState, policy: &dyn SyncPolicy) -> Result<SerializedEditorState> {
     let mut value = SerializedEditorState {

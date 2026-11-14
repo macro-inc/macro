@@ -35,15 +35,15 @@ impl ForeignBaseField {
             }
             (BaseData::Text(data), ForeignBaseField::Format(value)) => {
                 data.format = TextFormat::from_bits_retain(value);
-                data.absent.remove(AbsentKeys::field("format"));
+                data.set_explicit(AbsentKeys::FORMAT);
             }
             (BaseData::Text(data), ForeignBaseField::Style(value)) => {
                 data.style = value;
-                data.absent.remove(AbsentKeys::field("style"));
+                data.set_explicit(AbsentKeys::STYLE);
             }
             (BaseData::Text(data), ForeignBaseField::Detail(value)) => {
                 data.detail = TextDetail::from_bits_retain(value);
-                data.absent.remove(AbsentKeys::field("detail"));
+                data.set_explicit(AbsentKeys::DETAIL);
             }
             (BaseData::Text(data), ForeignBaseField::Mode(value)) => {
                 data.mode = value;

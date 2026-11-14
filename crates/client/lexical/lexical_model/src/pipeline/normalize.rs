@@ -1,3 +1,4 @@
+use crate::node::{AbsentKeys, NullKeys};
 use crate::*;
 use std::sync::Arc;
 
@@ -16,12 +17,20 @@ fn can_merge(tx: &Transaction<'_>, left: NodeKey, right: NodeKey) -> bool {
     let (BaseData::Text(x), BaseData::Text(y)) = (&a.base, &b.base) else {
         return false;
     };
+    // Source $canSimpleTextNodesBeMerged (Lexical 0.45.0 :1900-1910): node1's raw
+    // null format or style matches anything; otherwise the raw values are strictly
+    // equal, so undefined (absent) matches only undefined. Detail is not compared,
+    // and native mode is never null. The merged node keeps node1's fields.
+    let same = |absent: AbsentKeys, null: NullKeys, equal: bool| {
+        x.null.contains(null)
+            || (!y.null.contains(null)
+                && x.absent.contains(absent) == y.absent.contains(absent)
+                && equal)
+    };
     x.mode == y.mode
-        && x.format == y.format
-        && x.style == y.style
-        && ["mode", "format", "style"]
-            .into_iter()
-            .all(|field| x.absent.contains_field(field) == y.absent.contains_field(field))
+        && x.absent.contains(AbsentKeys::MODE) == y.absent.contains(AbsentKeys::MODE)
+        && same(AbsentKeys::FORMAT, NullKeys::FORMAT, x.format == y.format)
+        && same(AbsentKeys::STYLE, NullKeys::STYLE, x.style == y.style)
         && (a
             .state
             .as_ref()

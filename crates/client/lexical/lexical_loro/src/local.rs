@@ -378,6 +378,18 @@ impl LoroProjection {
                             &self.new_storage_node(next, child, search_text.as_mut())?,
                             schema::MapSchema::Node,
                         )?;
+                        // Created with writer nulls over model absents: pending.
+                        for node in std::iter::once(child)
+                            .chain(next.descendants(child).map(|(descendant, _)| descendant))
+                        {
+                            let own = policy::stored_own(next, node, self.policy)?;
+                            if policy::storage_null_keys(next, node, self.policy)
+                                .iter()
+                                .any(|name| !own.contains_key(*name))
+                            {
+                                self.pending_nulls.insert(node);
+                            }
+                        }
                         self.index.bind_tree(next, child, &map, self.policy)?;
                         self.child_index
                             .insert_anchor(key, child, &list, position, map.id())?;
@@ -455,7 +467,8 @@ impl LoroProjection {
                     key,
                     self.policy,
                     std::mem::take(&mut exports.0),
-                )?;
+                )?
+                .0;
             } else {
                 exports.0 = JsonExportBuffer::default();
             }
@@ -467,12 +480,28 @@ impl LoroProjection {
                     .json_mut()
                     .insert("text".into(), schema::read_value(&text)?);
             }
-            exports.1 = policy::storage_own_reusing(
+            let inserted;
+            (exports.1, inserted) = policy::storage_own_reusing(
                 next,
                 key,
                 self.policy,
                 std::mem::take(&mut exports.1),
             )?;
+            // An existing node whose model field went from a value to absent is
+            // DELETED, not nulled, as Source's mirror diff does (probe 8672bafb,
+            // existing-node row). A stored null over a model absent stays (U, S,
+            // probe 7e0cea51): the previous export carried the same null, so
+            // nothing changes.
+            for name in &inserted {
+                if exports
+                    .0
+                    .json()
+                    .get(name)
+                    .is_some_and(|value| !value.is_null())
+                {
+                    exports.1.json_mut().shift_remove(name);
+                }
+            }
             if let Some(search) = &self.search_text {
                 search.apply_expected(key, &self.index, exports.0.json_mut());
                 let applied = match &mut search_text {
@@ -581,6 +610,19 @@ impl LoroProjection {
                 written.insert(key);
             }
             self.index.bind(key, &map, self.policy)?;
+            // Still pending while a writer-null key stays absent in the model and
+            // null in the store.
+            let stored_null = inserted.iter().any(|name| {
+                matches!(
+                    map.get(name),
+                    Some(loro::ValueOrContainer::Value(loro::LoroValue::Null))
+                )
+            });
+            if stored_null {
+                self.pending_nulls.insert(key);
+            } else {
+                self.pending_nulls.shift_remove(&key);
+            }
         }
         // Containerize only ancestors whose cached flag says a plain composite remains.
         let mut visited = OrderedSet::default();

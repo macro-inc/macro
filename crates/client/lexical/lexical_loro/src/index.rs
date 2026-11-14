@@ -263,7 +263,15 @@ impl LoroProjection {
         doc.set_record_timestamp(false);
         let expected = comparison::model(state, policy)?;
         let actual = comparison::loro(doc, policy)?;
-        if expected != actual {
+        let mut pending_nulls = Vec::new();
+        if !comparison::stored_matches_collecting(
+            state.view(),
+            NodeKey::ROOT,
+            policy,
+            &expected.root,
+            &actual.root,
+            &mut pending_nulls,
+        ) {
             return Err(diverged("attach synced JSON differs"));
         }
         let mut index = NodeIndex::default();
@@ -290,6 +298,7 @@ impl LoroProjection {
         Ok(Self {
             own_exports: Default::default(),
             search_text: policy.writes_root_search_text().then(Default::default),
+            pending_nulls: pending_nulls.into_iter().collect(),
             child_index,
             indexed_state: state.clone(),
             indexed_vv: doc.oplog_vv(),
@@ -476,7 +485,14 @@ impl LoroProjection {
         let editor = editor.map(serde_json::Value::Object);
         let actual = actual.map(serde_json::Value::Object);
         match (editor, actual) {
-            (Ok(editor), Ok(actual)) if editor == actual => {}
+            (Ok(serde_json::Value::Object(editor)), Ok(serde_json::Value::Object(actual)))
+                if comparison::stored_matches(
+                    state.view(),
+                    NodeKey::ROOT,
+                    self.policy,
+                    &editor,
+                    &actual,
+                ) => {}
             (editor, actual) => {
                 return Err(Inconsistency {
                     path: "root".into(),
@@ -553,8 +569,10 @@ impl LoroProjection {
                     }
                     (expected, _) => expected,
                 };
-                if expected.as_ref().ok() != actual.as_ref().ok()
-                    || expected.is_err()
+                if !matches!(
+                    (&expected, &actual),
+                    (Ok(expected), Ok(actual)) if comparison::stored_matches(view, key, self.policy, expected, actual)
+                ) || expected.is_err()
                     || actual.is_err()
                 {
                     return Err(Inconsistency {

@@ -924,6 +924,9 @@ impl<'editor> Transaction<'editor> {
                     if mode_is_null {
                         data.absent.insert(AbsentKeys::MODE);
                     }
+                    // Source keeps a stored null format/detail/style raw (slice B).
+                    data.null = NullKeys::from_json(json);
+                    data.absent.remove(data.null.to_absent());
                 }
                 Some(NodeKind::Element) => {
                     let format = json

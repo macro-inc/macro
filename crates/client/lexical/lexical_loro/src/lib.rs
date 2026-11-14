@@ -108,6 +108,10 @@ pub struct LoroProjection {
     child_index: child_index::ChildIndex,
     own_exports: (JsonExportBuffer, JsonExportBuffer),
     search_text: Option<search_text::SearchText>,
+    /// Nodes whose model holds a storage-null key absent while the store holds
+    /// null. Every Loro-driven import (remote or history) revisits them, as
+    /// Source's whole-tree reconcile does (C-HISTORY-RECONCILE-NULLS-ALL-01).
+    pending_nulls: OrderedSet<NodeKey>,
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,
     indexed_frontiers: loro::Frontiers,

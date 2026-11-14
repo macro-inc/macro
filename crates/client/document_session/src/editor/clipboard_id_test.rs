@@ -188,7 +188,16 @@ fn clipboard_cross_document_and_repeated_paste_refresh_ids_then_history_preserve
                     .unwrap()["$"]["id"],
                 caret_id
             );
-            assert_eq!(target.state().to_json().unwrap(), first);
+            assert_eq!(target.state().to_json().unwrap(), {
+                // Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on harness a649c789): after a
+                // Loro-driven import every storage-null key a node holds absent reads null, touched or
+                // not, while text mode stays undefined. Literal drafted from this test's pre-import
+                // state by that rule.
+                serde_json::from_str::<SerializedEditorState>(
+                    r#"{"root":{"children":[{"children":[{"format":1,"text":"copied","type":"text","version":1,"$":{"id":"session-8-2"},"detail":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-8-1"},"textFormat":1,"direction":null,"indent":null,"textStyle":null},{"children":[{"format":2,"text":"second","type":"text","version":1,"$":{"id":"session-8-4"},"detail":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-8-3"},"textFormat":2,"direction":null,"indent":null,"textStyle":null},{"children":[{"format":4,"text":"third","type":"text","version":1,"$":{"id":"session-8-6"},"detail":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"session-8-5"},"textFormat":4,"direction":null,"indent":null,"textStyle":null}],"direction":null,"format":"","indent":0,"type":"root","version":1,"$":{"id":"session-8-root"}}}"#,
+                )
+                    .expect("Source-rule literal")
+            });
             paste(&mut target, &target_doc, &copied, html);
             let twice = target.state().to_json().unwrap();
             let all = ids(&Value::Object(twice.root.clone()));

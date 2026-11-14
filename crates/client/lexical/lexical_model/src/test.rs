@@ -833,6 +833,8 @@ mod proptest;
 mod performance;
 
 mod child_list_work;
+
+mod null_fields;
 #[test]
 fn appending_sibling_leaves_unchanged_prefix_records_clean() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();

@@ -147,6 +147,10 @@ impl NodeType for TableNode {
     }
 }
 impl ElementNode for TableNode {
+    // Source keeps a stored null indent raw: @lexical/table LexicalTable.dev.mjs:85/:403/:3772 importJSON -> updateFromJSON (:87/:405/:3774, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn is_shadow_root(&self, _: ElementView<'_>) -> bool {
         true
@@ -204,6 +208,10 @@ impl NodeType for TableRowNode {
     }
 }
 impl ElementNode for TableRowNode {
+    // Source keeps a stored null indent raw: @lexical/table LexicalTable.dev.mjs:85/:403/:3772 importJSON -> updateFromJSON (:87/:405/:3774, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn is_shadow_root(&self, _: ElementView<'_>) -> bool {
         true
@@ -309,6 +317,10 @@ impl NodeType for TableCellNode {
     }
 }
 impl ElementNode for TableCellNode {
+    // Source keeps a stored null indent raw: @lexical/table LexicalTable.dev.mjs:85/:403/:3772 importJSON -> updateFromJSON (:87/:405/:3774, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn is_shadow_root(&self, _: ElementView<'_>) -> bool {
         true

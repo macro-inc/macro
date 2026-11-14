@@ -46,6 +46,10 @@ impl NodeType for LinkNode {
     impl_default_node!();
 }
 impl ElementNode for LinkNode {
+    // Source keeps a stored null indent raw: @lexical/link LexicalLink.dev.mjs:106/:383 importJSON -> updateFromJSON (:108/:385, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn is_inline(&self, _: ElementView<'_>) -> bool {
         true
@@ -99,6 +103,10 @@ impl NodeType for AutoLinkNode {
     impl_default_node!();
 }
 impl ElementNode for AutoLinkNode {
+    // Source keeps a stored null indent raw: @lexical/link LexicalLink.dev.mjs:106/:383 importJSON -> updateFromJSON (:108/:385, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     type Parent = LinkNode;
     fn as_parent(&self) -> &LinkNode {
         &self.link

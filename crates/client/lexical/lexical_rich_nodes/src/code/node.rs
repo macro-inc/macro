@@ -48,6 +48,10 @@ impl NodeType for CodeNode {
     impl_default_node!();
 }
 impl ElementNode for CodeNode {
+    // Source keeps a stored null indent raw: @lexical/code-core LexicalCodeCore.dev.mjs:458 importJSON -> updateFromJSON (:460, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn can_indent(&self, _node: ElementView<'_>) -> bool {
         false

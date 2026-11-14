@@ -55,7 +55,7 @@ fn supplied_id_state_survives_code_snapshot_and_fresh_reload() {
         ]}})).unwrap(),
         tags:TagSet::default(),
     },now,Access::Edit,&mut Vec::new()).unwrap();
-    let expected = writer.state().to_json().unwrap();
+    let mut expected = writer.state().to_json().unwrap();
     assert_eq!(expected.root["children"][0]["$"]["id"], "stored-code");
     assert_eq!(
         expected.root["children"][0]["children"][0]["$"]["id"],
@@ -70,6 +70,16 @@ fn supplied_id_state_survives_code_snapshot_and_fresh_reload() {
     reader
         .init(&restored, now, Access::Edit, &mut Vec::new())
         .unwrap();
+    // The writer stores the leaf's and the end paragraph's undefined fields as
+    // null and the reload reads them back raw, as Source does (slice B: probes
+    // be8649fb and ee140e14, Lexical 0.45.0 setFormat :6831, setDetail :6848,
+    // setStyle :6862; the paragraph's direction/indent, probe 1d9a47d4).
+    for name in ["detail", "format", "style"] {
+        expected.root["children"][0]["children"][0][name] = serde_json::Value::Null;
+    }
+    for name in ["direction", "indent"] {
+        expected.root["children"][1][name] = serde_json::Value::Null;
+    }
     assert_eq!(reader.state().to_json().unwrap(), expected);
 }
 
@@ -169,6 +179,16 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
     // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2).
     expected.root["$"]["documentMetadata"] =
         serde_json::json!({"version":10,"environmentTags":null});
+    // The writer stores the leaf's and the end paragraph's undefined fields as
+    // null and the reload reads them back raw, as Source does (slice B: probes
+    // be8649fb and ee140e14, Lexical 0.45.0 setFormat :6831, setDetail :6848,
+    // setStyle :6862; the paragraph's direction/indent, probe 1d9a47d4).
+    for name in ["detail", "format", "style"] {
+        expected.root["children"][0]["children"][0][name] = serde_json::Value::Null;
+    }
+    for name in ["direction", "indent"] {
+        expected.root["children"][1][name] = serde_json::Value::Null;
+    }
     assert_eq!(reader.state().to_json().unwrap(), expected);
     assert_eq!(
         lexical_loro::reconstruct_state(&restored, policy).unwrap(),

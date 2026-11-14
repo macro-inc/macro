@@ -42,6 +42,10 @@ impl NodeType for MarkNode {
     impl_default_node!();
 }
 impl ElementNode for MarkNode {
+    // Source keeps a stored null indent raw: @lexical/mark LexicalMark.dev.mjs:40 importJSON -> updateFromJSON (:42-43, super) reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     element_node_base!();
     fn is_inline(&self, _: ElementView<'_>) -> bool {
         true

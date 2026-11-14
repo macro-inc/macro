@@ -93,6 +93,31 @@ impl StateRef<'_> {
         (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
         Ok(JsonExportBuffer { node: json, state })
     }
+    /// The builtin keys a Loro writer stores as null for this node when undefined.
+    /// Source exportJSON always carries these keys and its Loro writer
+    /// (loroSyncState) stores an undefined value as null on creation: observed for
+    /// text detail/format/mode/style and a paragraph's direction/indent and
+    /// backfilled textFormat/textStyle (probes be8649fb, 1d9a47d4; the root
+    /// carries neither). Other elements are not covered. Persistence writers and
+    /// the stored-versus-model comparison add the application's own-undefined
+    /// fields to this; every export keeps omitting the absent key.
+    pub fn storage_null_keys(self, key: NodeKey) -> &'static [&'static str] {
+        let Some(slot) = self.slot(key) else {
+            return &[];
+        };
+        match &slot.base {
+            BaseData::Text(_) => &["detail", "format", "mode", "style"],
+            BaseData::Element(_) if self.is_root_or_shadow_root(key) => &[],
+            BaseData::Element(_)
+                if self.state.registry.registered(slot.type_index).type_name == Paragraph::TYPE =>
+            {
+                &["direction", "indent", "textFormat", "textStyle"]
+            }
+            // Other elements are unobserved; their null indent also reloads
+            // differently (only exact Paragraph/Heading/Quote keep a raw null).
+            _ => &[],
+        }
+    }
     pub(crate) fn export_framework_json(self, key: NodeKey) -> Result<SerializedNode, Error> {
         self.export_framework_reusing(key, JsonExportBuffer::default(), StateSerialization::Parsed)
             .map(JsonExportBuffer::into_json)
@@ -134,7 +159,10 @@ impl StateRef<'_> {
         }
         match &slot.base {
             BaseData::Element(data) => data.absent.omit(&mut json),
-            BaseData::Text(data) => data.absent.omit(&mut json),
+            BaseData::Text(data) => {
+                data.absent.omit(&mut json);
+                data.null.write(&mut json);
+            }
             _ => {}
         }
         json.insert("type".into(), serde_json::json!(registration.type_name));

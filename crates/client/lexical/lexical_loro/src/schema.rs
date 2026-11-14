@@ -406,6 +406,12 @@ pub(crate) fn diff_map(
         }
         let kind = declared(schema, key).or_else(|| inferred(value));
         if slot.is_none() {
+            // Source's mirror diffs against its cache: a field whose value did
+            // not change writes nothing, even where the stored map lacks it
+            // (C-STORAGE-SLOT-ABSENT-INSERT-01).
+            if before.get(key) == Some(value) {
+                continue;
+            }
             if let Some(kind) = kind {
                 insert_field(map, key, value, kind)?;
             } else {

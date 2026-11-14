@@ -944,3 +944,6 @@ mod runtime_id_test;
 
 #[cfg(all(test, feature = "application", feature = "compatibility"))]
 mod root_text_cache_test;
+
+#[cfg(all(test, feature = "application"))]
+mod null_fields_test;

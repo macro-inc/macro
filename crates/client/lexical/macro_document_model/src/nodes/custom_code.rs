@@ -49,6 +49,10 @@ impl ImportPolicy for CustomCodeNode {
     const IMPORT_ELEMENT_DATA: bool = true;
 }
 impl ElementNode for CustomCodeNode {
+    // Source keeps a stored null indent raw: CustomCodeNode.ts:105-108 updateFromJSON super -> CodeNode reaches
+    // ElementNode.updateFromJSON's setIndent (Lexical.dev.mjs :11444-11446), whose
+    // base setIndent stores it raw (:11257-11261); getIndent/exportJSON return it.
+    const PRESERVE_RAW_NULL_INDENT: bool = true;
     type Parent = CodeNode;
     fn as_parent(&self) -> &Self::Parent {
         &self.code

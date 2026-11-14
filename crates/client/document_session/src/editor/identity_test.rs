@@ -2,7 +2,15 @@ use super::*;
 
 #[test]
 fn default_code_subtree_redo_preserves_every_durable_id() {
-    code_subtree_redo(EditorConfig::default(), "code");
+    // Expected after each redo: Source undo/redo probe log 8803f2b1 (probe a5c2a8e1 on
+    // harness a649c789): a Loro-driven import gives every storage-null key a node holds
+    // absent its stored null, while text mode stays undefined. Drafted from this test's
+    // pre-import state by that rule.
+    code_subtree_redo(
+        EditorConfig::default(),
+        "code",
+        r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"const localValue = 1;x","type":"text","version":1,"$":{"id":"session-7-3"},"detail":null}],"format":"","type":"code","version":1,"$":{"id":"session-7-2"}},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-4"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root"}}}"#,
+    );
 }
 
 #[test]
@@ -23,6 +31,7 @@ fn application_code_subtree_redo_preserves_every_durable_id() {
             ..EditorConfig::default()
         },
         "custom-code",
+        r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"const localValue = 1;x","type":"text","version":1,"$":{"id":"yEJF70Mt6xa"},"detail":null}],"format":"","type":"custom-code","version":1,"$":{"id":"ACPMEdFNVMw"},"previewEnabled":false},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"nFM1OnqFYQj"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"7LlSDI2ungu"}}}"#,
     );
 }
 
@@ -56,7 +65,7 @@ impl Plugin for DuplicateLiveLeaf {
     }
 }
 
-fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
+fn code_subtree_redo(mut config: EditorConfig, code_type: &str, redone: &str) {
     let factory = config.builder.clone();
     config.builder = Arc::new(move |mode, peer| factory(mode, peer).plugin(DuplicateLiveLeaf));
     let now = Now {
@@ -146,6 +155,10 @@ fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
         "const localValue = 1;x"
     );
     assert_eq!(surface.undo.as_ref().unwrap().undo_count(), 1);
+    // Source's redo recreates the inserted nodes from Loro, where their undefined
+    // fields are stored as null, and its whole-tree reconcile gives every other
+    // node its stored null too (probe logs d783e505 and 8803f2b1).
+    let redone: SerializedEditorState = serde_json::from_str(redone).expect("Source-rule literal");
     for _ in 0..2 {
         surface
             .apply(
@@ -187,7 +200,7 @@ fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
                 &mut view,
             )
             .unwrap();
-        assert_eq!(surface.state().to_json().unwrap(), typed);
+        assert_eq!(surface.state().to_json().unwrap(), redone);
         let selection = surface.state().selection().unwrap().as_range().unwrap();
         assert_eq!(selection.anchor.offset(), 22);
         assert_eq!(selection.focus.offset(), 22);
@@ -311,5 +324,6 @@ fn metadata_code_subtree_redo_preserves_raw_state() {
             ..EditorConfig::default()
         },
         "code",
+        r#"{"root":{"children":[{"children":[{"format":0,"style":"","text":"const localValue = 1;x","type":"text","version":1,"$":{"id":"session-7-3"},"detail":null}],"format":"","type":"code","version":1,"$":{"id":"session-7-2"}},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"session-7-4"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"session-7-root","documentMetadata":{"version":10}}}}"#,
     );
 }
