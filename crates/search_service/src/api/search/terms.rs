@@ -13,6 +13,20 @@ use models_search_cursor::CursorTermMatching;
 use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_DYNAMIC_MATCHING};
 
 use crate::TermMatchingRollout;
+use crate::api::search::simple::SearchError;
+
+/// Trims a query and rejects one that holds no search term: only whitespace
+/// and the double quotes [`split_search_terms`] strips. One character is
+/// enough: the query builders match a term under three characters as a whole
+/// word in document, chat, call and email content and cap every prefix
+/// expansion, so a short query costs no more than a common longer word.
+pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchError> {
+    let query = query.trim();
+    if query.chars().all(|c| c.is_whitespace() || c == '"') {
+        return Err(SearchError::EmptyQuery);
+    }
+    Ok(query)
+}
 
 /// Splits search terms by whitespace, preserving double-quoted phrases.
 /// e.g. `["hello world"]` → `["hello", "world"]`

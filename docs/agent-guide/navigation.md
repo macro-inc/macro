@@ -255,7 +255,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/scheduling` | Scheduling workspace: booking links, availability, bookings, insights, and booking page |
 | `/app/external` | External: link a personal WhatsApp account and adopt independently shared WhatsApp groups (requires the `enable-whatsapp-linked` flag; see [External](external.md)) |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
-| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views (requires the Databases flag). Links and opens outside Drive stay at this URL; opened from Drive, it shows inline at `/app/drive/database/<uuid>`. `?tableId=…&viewId=…` opens that table and view |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/routines` | Routines list in the Agents workspace |
@@ -690,10 +690,12 @@ Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
-Each desktop sidebar puts its Search icon immediately left of the collapse
-control. Click it to reveal the view's search field between the title and New,
-at the same height as the New button; click again to hide it. The field focuses when opened. Existing list-toolbar
-search remains available and shares its query where the view filters a list.
+A desktop sidebar has a Search icon, immediately left of the collapse control,
+only where the sidebar is itself the list being searched: Home, Chat, and
+Agents. Click it to reveal the search field between the title and New, at the
+same height as the New button; click again to hide it. The field focuses when
+opened. Every other view searches from the expandable Search icon in its list
+header.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
@@ -814,7 +816,7 @@ Adding “about budget” searches for only “budget”.
 
 Editing **Search for** or changing the filter chips overrides subsequent
 predictions for those values. Sender-only message scopes and speaker-only call
-scopes keep their filters visible and request at least three search characters:
+scopes keep their filters visible and request search text:
 channel/call browsing cannot enforce those message-level filters. No unfiltered
 browse results appear while keywords are required. **Search Macro** or
 **Cmd/Ctrl+Enter** opens Global Search with the same query and complete filters,

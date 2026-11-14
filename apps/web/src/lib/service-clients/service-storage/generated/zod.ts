@@ -16875,11 +16875,17 @@ export const listDatabasesResponseItem = zod
 export const listDatabasesResponse = zod.array(listDatabasesResponseItem);
 
 /**
- * @summary Create a database owned by the caller; its first table, "Table 1", holds a
-"Name" text column.
+ * @summary Create a database owned by the caller; its first table, "Table 1" unless
+`firstTable` names it, holds a "Name" text column.
  */
 export const createDatabaseBody = zod
   .object({
+    firstTable: zod
+      .string()
+      .nullish()
+      .describe(
+        'The first table\'s display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\".'
+      ),
     name: zod.string().describe('Display name.'),
   })
   .describe('Request body for creating a database.');

@@ -11244,7 +11244,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -36547,6 +36547,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."

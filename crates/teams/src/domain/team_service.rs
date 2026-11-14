@@ -2512,6 +2512,14 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn team_subscription_id(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Option<stripe::SubscriptionId>, TeamError> {
+        self.team_repository.get_team_subscription_id(team_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn patch_team_subscription_id(
         &self,
         team_id: &uuid::Uuid,
