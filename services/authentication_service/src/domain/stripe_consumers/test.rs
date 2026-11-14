@@ -182,7 +182,13 @@ fn canceling_one_subscription_keeps_access_while_another_is_live() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(update.access, PersonalAccess::Revoke(RoleStatus::Canceled));
+    assert_eq!(
+        update.access,
+        PersonalAccess::Revoke {
+            status: RoleStatus::Canceled,
+            tier: ProductTier::Opus
+        }
+    );
     assert_eq!(update.plan_change, None);
 }
 
@@ -355,7 +361,13 @@ fn a_failed_payment_revokes_unless_another_personal_subscription_is_live() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(update.access, PersonalAccess::Revoke(RoleStatus::PastDue));
+    assert_eq!(
+        update.access,
+        PersonalAccess::Revoke {
+            status: RoleStatus::PastDue,
+            tier: ProductTier::Opus
+        }
+    );
 }
 
 #[test]
@@ -550,7 +562,7 @@ fn paid_invoice_of(price: &str) -> InvoiceFacts {
 }
 
 #[test]
-fn legacy_prices_keep_premium_through_grant_renewal_and_cancel() {
+fn legacy_prices_keep_premium_through_grant_renewal_and_cancel_and_revoke_only_premium() {
     for price in [MACRO_WEB_PRICE, PROFESSIONAL_PRICE] {
         let created = change(
             EventType::CustomerSubscriptionCreated,
@@ -617,12 +629,18 @@ fn legacy_prices_keep_premium_through_grant_renewal_and_cancel() {
         .unwrap() else {
             panic!("expected a revoke for {price}");
         };
-        assert_eq!(revoke.access, PersonalAccess::Revoke(RoleStatus::Canceled));
+        assert_eq!(
+            revoke.access,
+            PersonalAccess::Revoke {
+                status: RoleStatus::Canceled,
+                tier: ProductTier::Opus
+            }
+        );
     }
 }
 
 #[test]
-fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
+fn an_unknown_price_still_revokes_premium_on_cancel_and_failed_payment_as_before() {
     let canceled = change(
         EventType::CustomerSubscriptionDeleted,
         subscription("sub_Person", "canceled", 1_700_000_000, UNLISTED_PRICE),
@@ -638,7 +656,13 @@ fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(cancel.access, PersonalAccess::Revoke(RoleStatus::Canceled));
+    assert_eq!(
+        cancel.access,
+        PersonalAccess::Revoke {
+            status: RoleStatus::Canceled,
+            tier: ProductTier::Opus
+        }
+    );
 
     for status in ["past_due", "unpaid", "paused", "incomplete_expired"] {
         let lapsed = change(
@@ -655,7 +679,7 @@ fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
         )
         .unwrap();
         assert!(
-            matches!(&decision, PersonalDecision::Apply(update) if matches!(update.access, PersonalAccess::Revoke(_))),
+            matches!(&decision, PersonalDecision::Apply(update) if matches!(update.access, PersonalAccess::Revoke { tier: ProductTier::Opus, .. })),
             "{status}: {decision:?}"
         );
     }
@@ -677,7 +701,13 @@ fn an_unknown_price_still_revokes_on_cancel_and_failed_payment() {
     .unwrap() else {
         panic!("expected a revoke");
     };
-    assert_eq!(failed.access, PersonalAccess::Revoke(RoleStatus::PastDue));
+    assert_eq!(
+        failed.access,
+        PersonalAccess::Revoke {
+            status: RoleStatus::PastDue,
+            tier: ProductTier::Opus
+        }
+    );
 }
 
 #[test]
@@ -763,5 +793,33 @@ fn a_deleted_team_ignores_its_subscription_events() {
     assert_eq!(
         decide_team_binding(&update, TeamState::Bound(None)),
         TeamBinding::Apply { replaced: true }
+    );
+}
+
+#[test]
+fn canceling_a_personal_max_subscription_revokes_only_max() {
+    // A team seat grants the team subscriber role and its own tier role
+    // (Premium here); the personal Max revoke must leave that role alone.
+    let canceled = change(
+        EventType::CustomerSubscriptionDeleted,
+        subscription("sub_Person", "canceled", 1_700_000_000, "price_max"),
+        Value::Null,
+    );
+    let PersonalDecision::Apply(revoke) = decide_personal_subscription(
+        &event_id(),
+        event_at(),
+        &canceled,
+        std::slice::from_ref(&canceled.subscription),
+        &prices(),
+    )
+    .unwrap() else {
+        panic!("expected a revoke");
+    };
+    assert_eq!(
+        revoke.access,
+        PersonalAccess::Revoke {
+            status: RoleStatus::Canceled,
+            tier: ProductTier::Max
+        }
     );
 }

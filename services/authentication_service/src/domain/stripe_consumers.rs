@@ -20,7 +20,8 @@ mod test;
 
 /// A subscription granting access on a price that neither a sold seat price
 /// nor the legacy list matches: no tier is inferred from it, the event
-/// dead-letters and pages. Revokes never need a price, so they never fail.
+/// dead-letters and pages. Revokes never fail on a price: see
+/// [`revoked_tier`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("subscription {subscription_id} has no known seat price")]
 pub struct UnknownPrice {
@@ -40,6 +41,15 @@ fn seat_plan(
         .ok_or_else(|| UnknownPrice {
             subscription_id: subscription.id.to_string(),
         })
+}
+
+/// The tier role a revoke removes: the subscription's own plan, or Premium
+/// for a price no plan matches (as the old webhook's fallback did). Only
+/// that tier goes, so a team seat's tier role survives a personal revoke.
+fn revoked_tier(subscription: &SubscriptionFacts, prices: &SeatPrices) -> ProductTier {
+    seat_plan(subscription, prices)
+        .unwrap_or(SeatPlan::Premium)
+        .product_tier()
 }
 
 /// The roles status a subscription status grants; `None` for `incomplete`,
@@ -228,9 +238,14 @@ pub enum PersonalDecision {
 pub enum PersonalAccess {
     /// Grant the subscriber role and the tier the seat price grants.
     Grant(ProductTier),
-    /// Remove the subscriber role and every tier's role: no price is read,
-    /// so an unknown price never blocks a revoke.
-    Revoke(RoleStatus),
+    /// Remove the subscriber role and this tier's role. Never fails: an
+    /// unknown price revokes Premium.
+    Revoke {
+        /// Why access ends.
+        status: RoleStatus,
+        /// The subscription's tier.
+        tier: ProductTier,
+    },
 }
 
 /// The subscriber's new roles and billing state.
@@ -287,7 +302,10 @@ pub fn decide_personal_subscription(
         RoleStatus::Active => {
             PersonalAccess::Grant(seat_plan(subscription, prices)?.product_tier())
         }
-        revoked => PersonalAccess::Revoke(revoked),
+        revoked => PersonalAccess::Revoke {
+            status: revoked,
+            tier: revoked_tier(subscription, prices),
+        },
     };
     Ok(PersonalDecision::Apply(PersonalUpdate {
         access,
@@ -325,7 +343,10 @@ pub fn decide_personal_invoice(
     let access = if invoice.paid {
         PersonalAccess::Grant(seat_plan(subscription, prices)?.product_tier())
     } else {
-        PersonalAccess::Revoke(RoleStatus::PastDue)
+        PersonalAccess::Revoke {
+            status: RoleStatus::PastDue,
+            tier: revoked_tier(subscription, prices),
+        }
     };
     Ok(PersonalDecision::Apply(PersonalUpdate {
         access,

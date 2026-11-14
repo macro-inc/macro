@@ -108,8 +108,10 @@ access, webhook reconciliation and billing workers remain independent of attachm
   unmapped customer is read from Stripe once and matched by email.
 - A personal grant on a price that is neither a sold seat price nor in
   `teams::domain::model::LEGACY_PREMIUM_PRICE_IDS` (historical prices that
-  keep Premium) dead-letters instead of guessing a tier. Revokes read no
-  price: they remove every tier's role. Replay a cursor with
+  keep Premium) dead-letters instead of guessing a tier. Revokes never fail:
+  they remove the subscriber role and the subscription's own tier role
+  (Premium for an unknown price), never another tier a team seat grants.
+  Replay a cursor with
   `POST /internal/stripe_inbox/replay`, or every dead one with
   `POST /internal/stripe_inbox/replay_dead`; see
   `docs/runbooks/stripe-event-inbox.md`.

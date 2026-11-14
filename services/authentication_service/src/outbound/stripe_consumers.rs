@@ -15,7 +15,7 @@ use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use roles_and_permissions::domain::model::{ProductTier, SubscriptionStatus as RoleStatus};
+use roles_and_permissions::domain::model::SubscriptionStatus as RoleStatus;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::Serialize;
 use stripe::{CustomerId, EventId, SubscriptionStatus};
@@ -327,20 +327,11 @@ where
                 .update_user_roles_and_permissions_for_subscription(user, RoleStatus::Active, tier)
                 .await
                 .map_err(retry)?,
-            // Every tier's role goes, whatever the price: a revoke never
-            // depends on knowing the plan.
-            PersonalAccess::Revoke(status) => {
-                for tier in ProductTier::ALL {
-                    self.roles
-                        .update_user_roles_and_permissions_for_subscription(
-                            user,
-                            status.clone(),
-                            tier,
-                        )
-                        .await
-                        .map_err(retry)?;
-                }
-            }
+            PersonalAccess::Revoke { status, tier } => self
+                .roles
+                .update_user_roles_and_permissions_for_subscription(user, status, tier)
+                .await
+                .map_err(retry)?,
         }
         self.sync_periods(user, update.period, update.verified)
             .await?;

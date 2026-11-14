@@ -91,8 +91,10 @@ carry customer, subscription, team and event ids, never emails.
 - Seat prices: the sold Premium and Max prices, plus
   `LEGACY_PREMIUM_PRICE_IDS` (`crates/teams` `domain/model.rs`), historical
   prices that keep Premium entitlements, as the old webhook's fallback gave
-  them. Only a grant needs a tier; revokes (cancel, past due, unpaid, paused,
-  failed payment) remove every tier's role without reading the price. The
+  them. A grant on an unknown price dead-letters. Revokes (cancel, past due,
+  unpaid, paused, failed payment) never fail: they remove the subscriber role
+  and the subscription's own tier role, Premium for an unknown price (as
+  before), so a team seat's tier role survives a personal revoke. The
   analytics consumer skips an unknown price.
 - A subscription event of a deleted team is ignored with a warning.
 - A payload cleared by retention is skipped; the cursor moves past it.
