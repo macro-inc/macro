@@ -1,0 +1,21 @@
+packages/sdk-ocaml/proxy/src/backend.ts
+  s_e722a0e50d8d61::t_c32f04e1e37548 43-46
+packages/sdk-ocaml/proxy/src/permissions.ts
+  s_e722a0e50d8d61::t_f9bc7217243b05 30-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "929efcdbe99f4a4cc812adc006964e4154db102f",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
