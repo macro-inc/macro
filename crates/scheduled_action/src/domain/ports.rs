@@ -451,13 +451,18 @@ pub trait DraftModel: Send + Sync + 'static {
     ) -> Result<String, super::drafts::finding::DraftCallError>;
 }
 
-/// Finds the items a person can access by the names a request uses, of
-/// any kind, in one call. Object-safe (`async_trait`): the drafter holds it
-/// erased.
+/// Finds the items a person can access by the names a request uses, in one
+/// call. Object-safe (`async_trait`): the drafter holds it erased.
 #[async_trait::async_trait]
 pub trait NameLookups: Send + Sync + 'static {
+    /// The kinds of item it looks names up among. The drafter never asks it
+    /// for another kind: the session looks those names up itself, so a kind
+    /// this learns is looked up first with no change to the drafter.
+    fn kinds(&self) -> &[super::drafts::finding::ItemKind];
+
     /// What each of `names` matched, in the order asked, and the kinds that
-    /// couldn't be searched.
+    /// couldn't be searched. Each name asks only for kinds of [`Self::kinds`],
+    /// or for all of them when it names none.
     async fn look_up(
         &self,
         owner: &MacroUserIdStr<'static>,

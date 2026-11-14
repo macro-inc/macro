@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use strum::VariantArray as _;
+
 use crate::domain::ports::RoutineDraftService as _;
 use ai_billing::AiAdmissionError;
 use serde_json::{Value, json};
@@ -71,6 +73,8 @@ impl DraftModel for Model {
 #[derive(Default)]
 struct Names {
     items: Vec<(ItemKind, &'static str, String)>,
+    /// The kinds it searches; every kind when not set.
+    searched: Option<Vec<ItemKind>>,
     fails: bool,
     asked: Mutex<Vec<NameAsked>>,
 }
@@ -95,6 +99,10 @@ impl Names {
 
 #[async_trait::async_trait]
 impl NameLookups for Names {
+    fn kinds(&self) -> &[ItemKind] {
+        self.searched.as_deref().unwrap_or(ItemKind::VARIANTS)
+    }
+
     async fn look_up(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -502,7 +510,7 @@ async fn a_find_that_never_answers_is_given_up() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn names_that_cant_be_looked_up_are_left_to_the_person() {
+async fn names_that_couldnt_be_looked_up_go_to_the_session() {
     let model = Arc::new(Model::finding(named(&[("bug-reports", &["channel"])])));
     let names = Arc::new(Names {
         fails: true,
@@ -513,7 +521,70 @@ async fn names_that_cant_be_looked_up_are_left_to_the_person() {
     draft(&drafts, routine(BUG_REPORTS)).await;
 
     let (_, prompt) = briefs(&sessions);
-    assert!(prompt.contains("Left for the owner:\n- \"bug-reports\": couldn't be looked up"));
+    assert!(prompt.contains("Not looked up:\n- \"bug-reports\" (channel)"));
+    assert!(!prompt.contains("Left for the owner"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn names_of_kinds_the_lookup_doesnt_search_go_to_the_session_unreported() {
+    let channel = Uuid::now_v7();
+    let model = Arc::new(Model::finding(named(&[
+        ("bug-reports", &["channel"]),
+        ("Jordan", &["person"]),
+        ("Finance", &["label", "channel"]),
+        ("eng", &["channel", "person"]),
+    ])));
+    let names = Arc::new(Names {
+        searched: Some(vec![ItemKind::Channel]),
+        ..Names::of(vec![
+            (ItemKind::Channel, "bug-reports", channel.to_string()),
+            (ItemKind::Channel, "Finance", Uuid::now_v7().to_string()),
+            (
+                ItemKind::Person,
+                "Jordan",
+                "macro|jordan@example.com".into(),
+            ),
+        ])
+    });
+    let (drafts, sessions, _) = finding(&model, &names, checks_bug_tasks(channel));
+    let milestones = Milestones::default();
+    let request = routine(BUG_REPORTS);
+    let (program, context) = drafts.read_request(&request, context()).unwrap();
+
+    let brief = drafts
+        .briefed(&owner(), &request, &program, &context, &milestones)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // A name whose likeliest kind it doesn't search isn't asked; one that
+    // may also be of such a kind is asked only for the kinds it searches.
+    assert_eq!(names.asked(), ["bug-reports", "eng"]);
+    let asked = names.asked.lock().unwrap();
+    assert_eq!(asked[1].kinds, [ItemKind::Channel]);
+    drop(asked);
+    // The session looks them up; the person isn't told they're missing.
+    assert!(
+        brief
+            .prompt
+            .contains(&format!("the channel named \"bug-reports\", id {channel}"))
+    );
+    assert!(brief.prompt.contains(
+        "Not looked up:\n- \"Jordan\" (person)\n- \"Finance\" (email label or channel)\n- \"eng\" (channel or person)\n"
+    ));
+    assert!(!brief.prompt.contains("Left for the owner"));
+    let reported = milestones.0.lock().unwrap();
+    assert_eq!(
+        reported[1],
+        DraftMilestone::Found(FoundNames {
+            found: vec![FoundName {
+                name: "bug-reports".into(),
+                kind: ItemKind::Channel,
+            }],
+            left: Vec::new(),
+        })
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test(start_paused = true)]
@@ -737,7 +808,12 @@ fn a_name_a_kind_that_couldnt_be_searched_might_have_is_left_unknown() {
 
     // Not the folder: the label it more likely names couldn't be searched.
     // Nor the one channel named Billing: a label might be named so too.
-    assert_eq!(lookup.failed, ["Finance", "Ops", "Billing"]);
+    let unsearched: Vec<&str> = lookup
+        .unsearched
+        .iter()
+        .map(|name| name.name.as_str())
+        .collect();
+    assert_eq!(unsearched, ["Finance", "Ops", "Billing"]);
     let found: Vec<&str> = lookup
         .found
         .iter()

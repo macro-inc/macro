@@ -3,9 +3,11 @@
 //! areas the routine needs, and the name lookup finds those items, each by
 //! the exact name the words use. The session is then given what they found
 //! and the SDK reference it needs, so it reads no documentation, searches
-//! for nothing and writes one program that ends with the check. A name no
-//! item has, or several do, is left out for the person to pick. The drafter
-//! reports what it found by name as it goes.
+//! only for names the lookup didn't look up and writes one program that
+//! ends with the check. A name no item has, or several do, is left out for
+//! the person to pick. A name of a kind the lookup doesn't search is left
+//! for the session to look up with its tools. The drafter reports what it
+//! found by name as it goes.
 //!
 //! The session's instructions are the same for every draft on one model
 //! with the same mix of code and conditions, so the prompt cache reads them
@@ -21,6 +23,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{CODE_STEPS, STEP_CONTEXT, Step};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use strum::VariantArray as _;
 use tracing::Instrument as _;
 use utoipa::ToSchema;
 
@@ -53,7 +56,7 @@ const ROUTINES_AREA: &str = "routines";
 /// The areas the prompt carries when the fast call named none the SDK has.
 const FALLBACK_AREAS: &[&str] = &["channels", "tasks", "email"];
 
-/// A kind of item a request can name, as the name lookup knows them.
+/// A kind of item a request can name.
 #[derive(
     Debug,
     Clone,
@@ -67,6 +70,7 @@ const FALLBACK_AREAS: &[&str] = &["channels", "tasks", "email"];
     strum::Display,
     strum::EnumString,
     strum::IntoStaticStr,
+    strum::VariantArray,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -119,13 +123,28 @@ pub struct NameAnswer {
 pub struct NameMatch {
     /// Its name as stored.
     pub name: String,
-    /// Whether its name is the name asked, ignoring case and a leading `#`
-    /// or `@`; for a person, their full or first name.
+    /// Whether its name is the name asked, by [`same_name`].
     pub exact: bool,
     pub kind: ItemKind,
     pub id: String,
     /// A tag's tag set's property definition.
     pub definition_id: Option<String>,
+}
+
+/// Whether `stored`, an item's name, is the name `asked`: the same words,
+/// ignoring case, surrounding space, how they're spaced and one leading `#`
+/// or `@`.
+pub fn same_name(asked: &str, stored: &str) -> bool {
+    fn words(name: &str) -> String {
+        let name = name.trim();
+        let name = name.strip_prefix(['#', '@']).unwrap_or(name);
+        name.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    }
+    let asked = words(asked);
+    !asked.is_empty() && asked == words(stored)
 }
 
 /// Why the names couldn't be looked up.
@@ -257,11 +276,21 @@ struct NamedInRequest {
 pub(super) struct Lookup {
     found: Vec<(NameMatch, String)>,
     left: Vec<LeftName>,
-    /// The lookup failed: the names are left without knowing.
-    failed: Vec<String>,
+    /// Names not looked up, with the kinds they may be: of a kind the lookup
+    /// doesn't search, or it failed. The session looks them up itself.
+    unsearched: Vec<NameAsked>,
 }
 
 impl Lookup {
+    /// How many names were found, left and not looked up, on `span`.
+    fn record(&self, span: &tracing::Span) {
+        span.record("routine.draft.found", self.found.len());
+        span.record("routine.draft.left", self.left.len());
+        span.record("routine.draft.unsearched", self.unsearched.len());
+    }
+
+    /// What progress shows: the names found and left. One not looked up
+    /// isn't missing, so it isn't shown.
     fn names(&self) -> FoundNames {
         FoundNames {
             found: self
@@ -295,7 +324,7 @@ impl Lookup {
                 ));
             }
         }
-        if !self.left.is_empty() || !self.failed.is_empty() {
+        if !self.left.is_empty() {
             text.push_str("Left for the owner:\n");
             for left in &self.left {
                 let kind = left.kind.map(kind_words).unwrap_or("item");
@@ -305,8 +334,16 @@ impl Lookup {
                 };
                 text.push_str(&format!("- \"{}\" ({kind}): {why}\n", left.name));
             }
-            for name in &self.failed {
-                text.push_str(&format!("- \"{name}\": couldn't be looked up\n"));
+        }
+        if !self.unsearched.is_empty() {
+            text.push_str("Not looked up:\n");
+            for asked in &self.unsearched {
+                let kinds: Vec<&str> = asked.kinds.iter().map(|kind| kind_words(*kind)).collect();
+                if kinds.is_empty() {
+                    text.push_str(&format!("- \"{}\"\n", asked.name));
+                } else {
+                    text.push_str(&format!("- \"{}\" ({})\n", asked.name, kinds.join(" or ")));
+                }
             }
         }
         if text.is_empty() {
@@ -334,10 +371,10 @@ fn kind_words(kind: ItemKind) -> &'static str {
 
 /// Settle each name on the one item of its likeliest kind that has it
 /// exactly; a name no item has, or several items of that kind do, is left.
-/// A name a likelier kind that couldn't be searched might have is left
-/// unknown, as is a name of no likely kind that fewer than two items have
-/// while any kind couldn't be searched. With no likely kind, items of every
-/// kind compete.
+/// A name a likelier kind that couldn't be searched might have is left for
+/// the session to look up, as is a name of no likely kind that fewer than
+/// two items have while any kind couldn't be searched. With no likely kind,
+/// items of every kind compete.
 pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
     let NameAnswers {
         answers,
@@ -396,7 +433,7 @@ pub(super) fn settle(asked: &[NameAsked], answers: NameAnswers) -> Lookup {
                     .filter(|kind| items.iter().all(|item| item.kind == *kind)),
                 matches: u32::try_from(items.len()).unwrap_or(u32::MAX),
             }),
-            None if unknown => lookup.failed.push(asked.name.clone()),
+            None if unknown => lookup.unsearched.push(asked.clone()),
             None => lookup.left.push(LeftName {
                 name: asked.name.clone(),
                 kind: asked.kinds.first().copied(),
@@ -442,11 +479,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
             .find(&finding.drafting, &finding.prompts, owner, request)
             .await;
         let lookup = self.look_up(&finding.drafting, owner, &named).await;
-        span.record("routine.draft.found", lookup.found.len());
-        span.record(
-            "routine.draft.left",
-            lookup.left.len() + lookup.failed.len(),
-        );
+        lookup.record(&span);
         progress.report(DraftMilestone::Found(lookup.names()));
         let areas = if code {
             self.areas_reference(&named)
@@ -534,8 +567,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
         .await
     }
 
-    /// Look up the names the find call gave, skipping any the lookup
-    /// refuses, since it refuses the whole lookup for one.
+    /// Look up the names the find call gave, skipping any the lookup would
+    /// refuse. A name whose likeliest kind the lookup doesn't search isn't
+    /// asked: the session looks it up itself.
     async fn look_up(
         &self,
         finding: &DraftFinding,
@@ -565,29 +599,91 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
         if asked.is_empty() {
             return Lookup::default();
         }
+        let searched = finding.names.kinds();
+        let unsearched: Vec<ItemKind> = ItemKind::VARIANTS
+            .iter()
+            .copied()
+            .filter(|kind| !searched.contains(kind))
+            .collect();
+        // Each name asks only for the kinds the lookup searches; one whose
+        // likeliest kind it doesn't isn't asked at all.
+        let to_ask: Vec<(usize, NameAsked)> = asked
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| {
+                name.kinds
+                    .first()
+                    .is_none_or(|kind| searched.contains(kind))
+            })
+            .map(|(index, name)| {
+                let kinds = name
+                    .kinds
+                    .iter()
+                    .copied()
+                    .filter(|kind| searched.contains(kind))
+                    .collect();
+                (
+                    index,
+                    NameAsked {
+                        name: name.name.clone(),
+                        kinds,
+                    },
+                )
+            })
+            .collect();
         let span = tracing::info_span!(
             "routine.draft.lookup",
             routine.draft.names = asked.len(),
+            routine.draft.asked = to_ask.len(),
             routine.draft.found = tracing::field::Empty,
             routine.draft.left = tracing::field::Empty,
+            routine.draft.unsearched = tracing::field::Empty,
         );
         async {
-            let lookup = match finding.names.look_up(owner, &asked).await {
-                Ok(answers) => settle(&asked, answers),
+            let questions: Vec<NameAsked> = to_ask.iter().map(|(_, name)| name.clone()).collect();
+            let answered = if questions.is_empty() {
+                Ok(NameAnswers::default())
+            } else {
+                finding.names.look_up(owner, &questions).await
+            };
+            let lookup = match answered {
+                Ok(NameAnswers {
+                    answers,
+                    unavailable,
+                }) => {
+                    // One answer per name, in order; a name not asked matched
+                    // nothing, and its kind couldn't be searched.
+                    let mut all: Vec<NameAnswer> = asked
+                        .iter()
+                        .map(|name| NameAnswer {
+                            name: name.name.clone(),
+                            matches: Vec::new(),
+                        })
+                        .collect();
+                    for ((index, _), answer) in to_ask.iter().zip(answers) {
+                        if let Some(slot) = all.get_mut(*index) {
+                            *slot = answer;
+                        }
+                    }
+                    let mut unavailable = unavailable;
+                    unavailable.extend(unsearched.iter().copied());
+                    settle(
+                        &asked,
+                        NameAnswers {
+                            answers: all,
+                            unavailable,
+                        },
+                    )
+                }
                 Err(error) => {
                     tracing::warn!(error = %error, "could not look up a draft's names");
                     Lookup {
-                        failed: asked.iter().map(|name| name.name.clone()).collect(),
+                        unsearched: asked.clone(),
                         ..Lookup::default()
                     }
                 }
             };
-            let span = tracing::Span::current();
-            span.record("routine.draft.found", lookup.found.len());
-            span.record(
-                "routine.draft.left",
-                lookup.left.len() + lookup.failed.len(),
-            );
+            lookup.record(&tracing::Span::current());
             lookup
         }
         .instrument(span)

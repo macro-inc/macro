@@ -51,16 +51,22 @@ each run.
   a call on the fast model (`finding/find.md`, admitted and billed as the
   person's automation usage through `DraftModel`) names the items the words
   refer to and the SDK areas the routine needs (`RoutineCode::sdk_areas`),
-  given up after `FIND_TIMEOUT`. The `NameLookups` port (document storage's
-  `POST /search/names`, as the person) finds each name, and `settle` keeps
+  given up after `FIND_TIMEOUT`. The `NameLookups` port finds each name
+  among the kinds it searches (`NameLookups::kinds`), and `settle` keeps
   it only when exactly one item of its likeliest kind has it; a name none
-  or several have is left for the person to pick, never guessed. A name a
+  or several have is left for the person to pick, never guessed. A name
+  whose likeliest kind the port doesn't search is not asked; nor is it
+  reported or left: the prompt lists it under "Not looked up" and the
+  session looks it up with its own tools (`Lookup::unsearched`), so a kind
+  the port learns is looked up first with no change here. So is a name a
   likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
   might have (for a name of no likely kind, any kind it couldn't search,
-  unless two items already have it) is left as unknown, and names the
-  lookup would refuse (empty past a leading `#`/`@`, over 200 characters)
-  are never asked. A failed find or lookup still drafts, with nothing
-  found. The session is then given instructions (`finding/instructions.md`,
+  unless two items already have it), and every name when the lookup
+  fails. Names the lookup would refuse (empty past a leading `#`/`@`, over
+  200 characters) are never asked. A failed find still drafts, with
+  nothing found. A background draft cancelled while its items are found
+  stops before its session starts (`RoutineDrafts::cancelled`). The
+  session is then given instructions (`finding/instructions.md`,
   built by `FindingPrompts`): drafting's rules, how to use found and left
   items (`finding/items.md`: a trigger filter by id, a code step's text
   knob by exact name, Ask AI instructions or a condition by name and id;
@@ -108,8 +114,9 @@ each run.
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the drafter (`found` or
-  `session`), names found and left, the session id, checks, items created,
-  the session's tool calls and turns, status reads, whether a single
+  `session`), names found, left and not looked up, the session id,
+  checks, items created, the session's tool calls and turns, status
+  reads, whether a single
   agent task became steps (`routine.draft.agent_task`) and outcome
   (`timeout` included), never the words or the names; `routine.draft.find` records
   the answer's size and `routine.draft.lookup` what it found;

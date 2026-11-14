@@ -362,6 +362,7 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         agent.session.id = tracing::field::Empty,
         routine.draft.found = tracing::field::Empty,
         routine.draft.left = tracing::field::Empty,
+        routine.draft.unsearched = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
         routine.draft.created = tracing::field::Empty,
         routine.draft.created_unused = tracing::field::Empty,

@@ -15,9 +15,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-};
+use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_drafting;
@@ -476,6 +474,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
+    search: search_service_client::SearchServiceClient,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -732,9 +731,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     );
     // AI drafts routines in a hidden session of the in-process Macro agent.
     // Before it starts, a fast call names the items the request refers to and
-    // the SDK areas it needs, and document storage finds those items by
-    // name, so the session is given them and the reference it needs and
-    // writes one program that ends with the check. The fast call is admitted
+    // the SDK areas it needs, and the existing name search finds those of
+    // the kinds it covers, so the session is given them and the reference
+    // it needs and writes one program that ends with the check; it looks up
+    // names of other kinds itself. The fast call is admitted
     // and billed as the person's automation usage.
     let drafts = Arc::new(
         RoutineDrafts::new(
@@ -761,10 +761,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     config.settlement_route()?,
                 ),
             }),
-            names: Arc::new(routine_drafting::DocumentStorageNames::new(
-                DocumentStorageServiceUrl::new()?.as_ref(),
-                config.internal_api_key.to_string(),
-            )?),
+            names: Arc::new(routine_drafting::SearchNames::new(search)),
         }),
     );
     // Background drafts run here, on the replica they were started on, and

@@ -219,9 +219,11 @@ Pulumi stacks; they do not host extra agent processes.
   Before the session starts, a fast call on the router names what the
   words refer to (`src/scheduling/routine_drafting.rs`:
   `RouterDraftModels` admits and bills it as the person's automation
-  usage), and `DocumentStorageNames` looks the names up through document
-  storage's `POST /search/names` as the person (internal key, five-second
-  timeout). `routine_code.rs` gives the session each SDK area it needs
+  usage), and `SearchNames` looks channel, folder, document and task
+  names up with the existing name search (document storage's
+  `/internal/search` and `/internal/search/channel/name`, exact match, as
+  the person, five-second timeout), comparing names exactly itself; the
+  session looks up the other kinds. `routine_code.rs` gives the session each SDK area it needs
   (`area_reference`: the area's index, guidance and declarations, then
   the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
