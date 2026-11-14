@@ -2,15 +2,22 @@
 // EMAIL_E2E_STACKS_URL already names a running one.
 
 import { spawn } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { currentRun, runPaths } from './ledger/paths';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
 export default async function globalSetup(): Promise<
   (() => Promise<void>) | undefined
 > {
+  // What an earlier run recorded is not this run's evidence.
+  const recorded = runPaths(currentRun());
+  rmSync(recorded.evidence, { recursive: true, force: true });
+  rmSync(recorded.scripts, { recursive: true, force: true });
+
   if (process.env.EMAIL_E2E_STACKS_URL) return undefined;
 
   const binary =

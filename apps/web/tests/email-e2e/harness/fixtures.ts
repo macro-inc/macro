@@ -8,7 +8,8 @@ import {
   type Page,
   type WebSocketRoute,
 } from '@playwright/test';
-import { type Front, type SignedInUser, startFront } from './front';
+import { record } from '../ledger/record';
+import { FROM_TEST, type Front, type SignedInUser, startFront } from './front';
 import {
   type LinkedInbox,
   type Mail,
@@ -110,12 +111,30 @@ async function relayGateway(
   };
 }
 
-export const test = base.extend<Options & { mailbox: Mailbox }>({
+/** What the test did, for the coverage report (`ledger/README.md`). */
+type Evidence = Awaited<ReturnType<typeof record>>;
+
+export const test = base.extend<
+  Options & { mailbox: Mailbox; evidence: Evidence }
+>({
   provider: ['GMAIL', { option: true }],
   stackEnv: [{}, { option: true }],
   address: ['ada@example.com', { option: true }],
 
-  mailbox: async ({ page, provider, stackEnv, address }, use, testInfo) => {
+  evidence: [
+    async ({ page, provider, hasTouch }, use, testInfo) => {
+      const evidence = await record(page, testInfo, provider, hasTouch);
+      await use(evidence);
+      await evidence.finish();
+    },
+    { auto: true },
+  ],
+
+  mailbox: async (
+    { page, provider, stackEnv, address, evidence },
+    use,
+    testInfo
+  ) => {
     const stack = await Stack.start(stackEnv);
     let failed = true;
     try {
@@ -137,6 +156,7 @@ export const test = base.extend<Options & { mailbox: Mailbox }>({
         internalApiKey: stack.info.internalApiKey,
         user,
       });
+      evidence.requests(front.requests);
 
       try {
         await page.addInitScript(() => {
@@ -164,7 +184,11 @@ export const test = base.extend<Options & { mailbox: Mailbox }>({
         const api = (path: string, init?: RequestInit) =>
           fetch(`${front.origin}${path}`, {
             ...init,
-            headers: { 'x-email-link-id': inbox.linkId, ...init?.headers },
+            headers: {
+              'x-email-link-id': inbox.linkId,
+              [FROM_TEST]: '1',
+              ...init?.headers,
+            },
           });
 
         await use({

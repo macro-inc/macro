@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { currentRun, runPaths } from './ledger/paths';
 
 // The real web app (a built bundle) against the real email services and the
 // provider emulators. `just email-e2e-browser` builds what this needs.
@@ -18,7 +19,11 @@ export default defineConfig({
   grepInvert: process.env.EMAIL_E2E_KNOWN_BUGS ? undefined : /@known-bug/,
   workers: Number(process.env.EMAIL_E2E_BROWSER_WORKERS ?? 4),
   forbidOnly: !!process.env.CI,
-  reporter: 'list',
+  // The JSON report is what the coverage report reads test results from.
+  reporter: [
+    ['list'],
+    ['json', { outputFile: runPaths(currentRun()).playwright }],
+  ],
   globalSetup: './global-setup.ts',
   use: {
     headless: true,
