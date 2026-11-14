@@ -84,6 +84,45 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
 - A failing test prints its service log directory and keeps a Playwright trace
   in `test-results/`.
 
+## The full-stack tier
+
+A test's own stack runs three services. The tier runs the same suite against
+one instance of the local stack (`just run_local`), so a test also goes
+through the real gateway, sign-in and proxy, and can reach the services only
+that stack runs (search, notifications, channels, the image proxy).
+
+```sh
+nix develop -c just email-e2e-full-stack            # starts the instance `email-e2e`, builds the bundle, runs
+nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only the run, on a running instance
+```
+
+- A test runs there when it is tagged: `@any-stack` (on both backends) or
+  `@full-stack` (only there). Untagged tests need a stack of their own: they
+  break, watch or drive services, which a shared stack cannot give them.
+  Tag a test `@any-stack` once it passes on both.
+- `harness/local-stack.ts` is the `mailbox` fixture's second backend. Each
+  test signs up a user of its own through the authentication service, links
+  its mailboxes through the emulators' consent pages, and disconnects them
+  when it ends. `mailbox.stack.address('grace@example.com')` answers the
+  address a test should use: the emulators are shared, so each test's
+  mailboxes get a domain of its own. `addMailbox` answers it too.
+- What needs a stack of the test's own (service faults, the scheduled sweep,
+  outbound requests) throws on the local stack and says so.
+- The authentication service lets one address create 50 accounts an hour.
+  The whole tier signs up from one address, so `harness/sign-up-limit.ts`
+  clears that counter in the stack's own Redis before each sign-up, and only
+  in a Redis on this machine. The key is read from
+  `crates/macro_cache_client/src/create_user_rate_limit.rs`, and the run
+  stops before its first test if a sign-up leaves no such key: change the
+  harness with the service when the counter moves.
+- The emulators forget everything when the stack restarts, while the
+  database keeps the inboxes: inboxes left by an interrupted run keep failing
+  to sync and slow every new one. Disconnect them, or start from a new
+  instance.
+
+CI: `Email end-to-end (full stack)` (`email_e2e_full_stack.rs`) runs the tier
+on pushes to `main` and nightly, not in `PR CI`.
+
 CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
 `email_e2e_browser.rs`) runs on pushes to `main` that change the web app or
 backend code and, within `PR CI`, on pull requests that touch email or

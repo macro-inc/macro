@@ -139,7 +139,7 @@ Local authentication includes a working signing key pair for Macro API tokens,
 which settings actions such as enabling CRM require. New teams start with CRM
 disabled; enable it in Settings > CRM before creating pipelines.
 
-The stack supplies stubbed values for required configuration, including third-party integrations (GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Local auth, documents, and search work independently. Google is the exception: without a real Google OAuth client the stack runs the [Gmail emulator](#google-sign-in-and-gmail-without-a-google-account) in Google's place, so Google sign-in, Gmail linking and mail sync work with seeded users.
+The stack supplies stubbed values for required configuration, including third-party integrations (GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. Email attachments are the exception: they are signed with a key of the stack's own for its storage route, so drafts upload and received attachments download. Local auth, documents, and search work independently. Google is the exception: without a real Google OAuth client the stack runs the [Gmail emulator](#google-sign-in-and-gmail-without-a-google-account) in Google's place, so Google sign-in, Gmail linking and mail sync work with seeded users.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
 
@@ -269,9 +269,11 @@ The authentication service runs without a PostHog key there, so
 - The emulator keeps its state in memory: restarting its container returns it
   to the seed, while Macro's database keeps what it synced and the refresh
   tokens it holds stop working. Reconnect the mailbox after a restart.
-- Change notifications are not delivered: Graph subscriptions need an HTTPS
-  webhook, and the stack's services reach each other over HTTP. Mail that
-  arrives at the emulator later shows up with the next sync, not at once.
+- Change notifications are delivered through the stack's proxy: Graph
+  subscriptions need an HTTPS webhook, so the workers give the emulator
+  `https://proxy:<port>/email` and the emulator trusts the development
+  authority. Mail that arrives at the emulator shows up at once, once the
+  mailbox's subscription exists (`GET /_emulator/subscriptions`).
 - A connected mailbox's Outlook calendars sync from the emulator too: the
   seed gives Ada and Bob calendars with repeating events, and events created
   or changed in Macro are written to the emulator. The calendar service polls

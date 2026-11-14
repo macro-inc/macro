@@ -14,7 +14,10 @@
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email and calendar against the real email services and the Gmail and Outlook
   emulators, in a built bundle in Chromium: `just email-e2e-browser` from the
-  repository root (`tests/email-e2e/README.md`). Add a test there for an email
+  repository root (`tests/email-e2e/README.md`). `just email-e2e-full-stack`
+  runs its tests tagged `@any-stack` or `@full-stack` against a local stack
+  instance, through the real gateway and sign-in; it clears the sign-up
+  counter in that instance's Redis (README, "The full-stack tier"). Add a test there for an email
   bug only the whole path can decide; one component's logic stays in its
   feature's `browser-test/` suite.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
