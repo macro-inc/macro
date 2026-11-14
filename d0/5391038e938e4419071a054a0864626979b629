@@ -1,0 +1,71 @@
+crates/agent_monitor/src/domain/observation.rs
+  s_1b36fa5422acb7::t_360f678a4250da 1-47,49-332
+  s_1b36fa5422acb7::t_18756a5d0e5b15 48
+crates/agent_monitor/build.rs
+  s_1b36fa5422acb7::t_7f39c471457c39 11-12
+  s_1b36fa5422acb7::t_71df4c08cdc7e5 1-10,13-17
+crates/agent_monitor/proto/agent_monitor.proto
+  s_1b36fa5422acb7::t_8a2e1da29f598c 1-248
+Cargo.toml
+  s_1b36fa5422acb7::t_dd8b4f54d54029 21
+  s_1b36fa5422acb7::t_4c98dfc8c59f5a 491-493
+crates/agent_monitor_tui/Cargo.toml
+  s_1b36fa5422acb7::t_7f39c471457c39 2
+  s_1b36fa5422acb7::t_6b840ceaea642a 1,3-14
+crates/agent_monitor/src/proto.rs
+  s_1b36fa5422acb7::t_7f39c471457c39 11-13,71-72,259-263,566-568
+  s_1b36fa5422acb7::t_d596672c6e7b3d 25-26,181-183,191-193,560-565,582-588
+  s_1b36fa5422acb7::t_7d9f95d3c4b509 1-10,14-21,23-24,27-31,33-70,73-74,76-93,103-105,107-129,144-146,148-165,175-177,179-180,184-188,190,194-196,198-207,210-218,220-225,227,229-230,232-258,264-267,269-270,272-327,329-349,362-364,366-380,387-389,391-395,397,399-402,404-405,407-417,419-434,436-437,439-456,458-472,479-481,483-484,487-489,491-498,500-501,503-517,519-528,530-531,533-556,558-559,569-576,578-579,581,589-598,600-614,621-623,625-627,629-637,639-640,642-652
+  s_1b36fa5422acb7::t_42ce04668e4d27 22,32,75,94-102,106,130-143,147,166-174,178,189,197,208-209,219,226,228,231,268,271,328,350-361,365,381-386,390,396,398,403,406,418,435,438,457,473-478,482,485-486,490,499,502,518,529,532,557,577,580,599,615-620,624,628,638,641
+crates/agent_monitor/src/domain/model.rs
+  s_1b36fa5422acb7::t_22a39999363fcf 1-616
+crates/agent_monitor/Cargo.toml
+  s_1b36fa5422acb7::t_2e233a9bef219f 1,3-14,21-22,24-33
+  s_1b36fa5422acb7::t_7f39c471457c39 2,15-20,23
+crates/agent_monitor/src/domain/source.rs
+  s_1b36fa5422acb7::t_1444d8bed3c8e5 1-80
+.github/workspace-dep-closures.json
+  s_1b36fa5422acb7::t_bfbc32d6ac5d45 1368-1376
+Cargo.lock
+  s_1b36fa5422acb7::t_1390e6510c0b46 896-923,16525-16526,16631-16650,21279,21282,21291,21301-21312,21324-21339,23814,23916-23918,23971
+crates/agent_monitor/AGENTS.md
+  s_1b36fa5422acb7::t_5cf2c4419e296e 1-45
+crates/agent_monitor/CLAUDE.md
+  s_1b36fa5422acb7::t_cd4b395cb99ab2 1
+crates/agent_monitor/src/domain.rs
+  s_1b36fa5422acb7::t_c85e693114dd28 1-5
+crates/agent_monitor/src/lib.rs
+  s_1b36fa5422acb7::t_b047bcd4824a7d 1-12
+crates/agent_monitor_tui/AGENTS.md
+  s_1b36fa5422acb7::t_394ee95af34d4c 1-16
+crates/agent_monitor_tui/CLAUDE.md
+  s_1b36fa5422acb7::t_e8e4cbea74d31c 1
+crates/agent_monitor_tui/src/lib.rs
+  s_1b36fa5422acb7::t_0d8b322179b538 1-5
+crates/workspace-hack/Cargo.toml
+  s_c9372f02798ba7::t_85db3572a86107 37,89,121-122,164,166,204,259,292-295,343,345
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d05391038e938e4419071a054a0864626979b629",
+  "prompts": {},
+  "sessions": {
+    "s_1b36fa5422acb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cb59596-7b07-4ad3-a590-3ccda4aca3de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c9372f02798ba7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ebd54d2-e804-4b70-979e-858ee39d6725",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
