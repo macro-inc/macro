@@ -488,6 +488,15 @@ impl GmailEmulator {
         })
     }
 
+    /// Sets the HTML signature of a mailbox's primary address, as its owner
+    /// does in Gmail's settings. `settings.sendAs.list` answers it.
+    pub fn set_signature(&self, email: &str, signature: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| {
+            state.mailbox_mut(email)?.signature = signature.to_string();
+            Ok(())
+        })
+    }
+
     /// Adds or changes a contact of a mailbox.
     pub fn upsert_contact(
         &self,

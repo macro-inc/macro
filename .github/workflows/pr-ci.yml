@@ -24,6 +24,7 @@ jobs:
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      email_e2e: ${{ steps.filter.outputs.email_e2e }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
     timeout-minutes: 5
@@ -525,6 +526,15 @@ jobs:
             - 'packages/sdk/**'
             - 'bun.lock'
             - '.github/workflows/sdk-check.yml'
+          email_e2e:
+            - 'services/email_service/**'
+            - 'crates/email/**'
+            - 'crates/email_*/**'
+            - 'crates/gmail_*/**'
+            - 'crates/outlook_*/**'
+            - 'crates/macro_db_client/migrations/**'
+            - '.config/nextest.toml'
+            - '.github/workflows/email_e2e.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
             - 'infra/stacks/observability/flake.lock'
@@ -600,6 +610,13 @@ jobs:
     name: SDK
     uses: ./.github/workflows/sdk-check.yml
     secrets: inherit
+  email-e2e:
+    needs:
+    - start
+    if: needs.start.outputs.email_e2e == 'true'
+    name: Email end-to-end
+    uses: ./.github/workflows/email_e2e.yml
+    secrets: inherit
   observability-image:
     needs:
     - start
@@ -627,6 +644,7 @@ jobs:
     - node-modules-nix
     - tauri-lockfiles
     - sdk
+    - email-e2e
     - observability-image
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''
