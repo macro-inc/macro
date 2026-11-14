@@ -27,10 +27,14 @@ import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 type ChatLiveCall = LiveCallRow &
   ({ kind: 'channel'; channelId: string } | { kind: 'quick'; url: string });
 
-async function selectChannelCall(call: { channelId: string; joined: boolean }) {
+async function selectChannelCall(call: {
+  id: string;
+  channelId: string;
+  joined: boolean;
+}) {
   if (call.joined) return openChannelCallTab(call.channelId);
   try {
-    await joinChannelCall(call.channelId);
+    await joinChannelCall(call.channelId, { kind: 'join', callId: call.id });
   } catch (error) {
     console.error('Failed to join call', error);
     toast.failure('Failed to join call');

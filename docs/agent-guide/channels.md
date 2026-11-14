@@ -1343,6 +1343,11 @@ and funnel icons match desktop.
 Search uses the existing dock Search; Chat has no separate search button or
 in-list search field. Opening conversations retains latest-message navigation,
 top-level read marking, incoming-call actions, and pull-to-refresh.
+Already-resolved section members stay visible and openable while the remaining
+members load or refresh; the initial spinner appears only when no matching rows
+are available. A failed member lookup keeps available rows and offers Retry.
+For a large name-matched section, verify that selecting it, switching back to All,
+and refreshing membership keep the section pills and app navigation responsive.
 
 Long-press a custom section pill to open its settings without changing the selected
 section. A short tap selects it; scrolling cancels the hold. There is no separate
@@ -1709,9 +1714,8 @@ conversation still refreshes its unread notifications. The split's own title
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and
-transcripts in this channel; queries shorter than 3 characters are not sent.
+transcripts in this channel, from the first character.
 Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
-Shorter queries: `Keep typing to search`.
 
 Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC

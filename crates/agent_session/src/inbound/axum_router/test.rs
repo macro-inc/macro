@@ -320,6 +320,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -337,6 +338,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "macrod".to_owned(),
@@ -358,6 +360,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -379,6 +382,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -400,6 +404,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -418,6 +423,7 @@ impl OneBotDirectory {
                 owner_user_id: None,
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -892,6 +898,26 @@ async fn a_harness_may_not_open_sessions_for_an_unbound_agent() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn no_session_opens_on_an_agent_teammates_computer() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.on_team_agent_computer = true;
+    let request = as_harness(body(
+        Some(BotId::TEST_A.as_uuid()),
+        "/srv/agent",
+        Some(OWNER),
+    ));
+
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(opener.opened.lock().unwrap().is_empty());
 }
 

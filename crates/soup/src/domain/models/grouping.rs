@@ -137,7 +137,11 @@ pub fn build_grouped_response(
         let timestamp = get_cursor_val(&grouped_item.item).last_val;
         let cursor_val = models_pagination::CursorVal {
             sort_type: sort_method,
-            last_val: sort_method.position(grouped_item.sort_key, timestamp),
+            last_val: sort_method.position(
+                grouped_item.sort_key,
+                grouped_item.item.name(),
+                timestamp,
+            ),
         };
 
         let entry = group_stats.entry(key.clone()).or_insert_with(|| {

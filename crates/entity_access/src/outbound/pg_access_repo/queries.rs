@@ -35,6 +35,7 @@ pub mod crm_entity_users;
 pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
+pub mod entity_audiences;
 pub mod foreign_entity_access;
 pub mod form_access;
 pub mod initiative_access;
@@ -83,7 +84,7 @@ pub async fn get_user_source_ids(
 /// is opened only when the cache misses.
 #[tracing::instrument(
     name = "get_user_source_ids",
-    skip(pool),
+    skip(pool, user_id),
     err,
     fields(coalesced = tracing::field::Empty)
 )]
