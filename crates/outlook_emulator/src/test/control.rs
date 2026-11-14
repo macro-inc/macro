@@ -430,6 +430,34 @@ async fn a_link_whose_grant_was_released_gets_no_access_token() {
     assert_eq!(token_status(links[0]).await, 200);
 }
 
+/// Connecting again after the last grant was released is a new sign-in: the
+/// mailbox is no longer revoked and the link gets a token.
+#[tokio::test]
+async fn connecting_again_after_the_last_grant_was_released_gets_a_token() {
+    let (emulator, _) = start("mailboxes:\n  - email: ada@example.com\n").await;
+    let http = reqwest::Client::new();
+    let service = format!("{}/internal", emulator.authentication_service_url());
+    let attempt = "0195a000-0000-7000-8000-0000000a77e1";
+    let link = "0195a000-0000-7000-8000-00000000a1c1";
+    let grant_url = format!("{service}/microsoft_grant?attempt_id={attempt}&owner=owner");
+    let token_url = format!("{service}/microsoft_access_token?link_id={link}&force_refresh=true");
+
+    emulator.link_mailbox(attempt, ADA).unwrap();
+    let grant = body(http.get(&grant_url).send().await.unwrap()).await["grant_id"].clone();
+    emulator.link_attempt(link, attempt).unwrap();
+    assert_eq!(http.get(&token_url).send().await.unwrap().status(), 200);
+
+    http.post(format!("{service}/revoke_microsoft_grant"))
+        .json(&json!({ "grant_id": grant }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(http.get(&token_url).send().await.unwrap().status(), 401);
+
+    assert_eq!(http.get(&grant_url).send().await.unwrap().status(), 200);
+    assert_eq!(http.get(&token_url).send().await.unwrap().status(), 200);
+}
+
 #[tokio::test]
 async fn a_link_moved_to_another_mailbox_leaves_its_grants_behind() {
     let (emulator, _) =

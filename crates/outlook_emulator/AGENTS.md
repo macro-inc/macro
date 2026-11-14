@@ -226,7 +226,9 @@ local stack, without Microsoft accounts.
   for an unknown link, 401 for a revoked grant. A link is refused
   once every grant described for it (`microsoft_grant` with its id, or with
   the attempt `link_attempt` made it from) is released; a link no grant was
-  described for is answered for until its mailbox is revoked.
+  described for is answered for until its mailbox is revoked. Describing a
+  grant for a mailbox whose last one was released starts a new grant, as a
+  consent does.
 - ID tokens name Microsoft's issuer, not the emulator's address, because
   `fusionauth` only accepts Microsoft's. The discovery document says the same,
   as Microsoft's does for `common`. Tokens are dated by the real clock, the

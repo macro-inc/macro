@@ -318,16 +318,10 @@ impl State {
 
     // -- sign-in --
 
-    /// Records that the mailbox's owner signed in and consented, and
-    /// answers the authorization code for it. The scopes add to the ones
-    /// the grant already covers. A consent after a revocation starts a new
-    /// grant, whose refresh tokens are new: the revoked ones stay dead.
-    pub(crate) fn authorize(
-        &mut self,
-        email: &str,
-        consent: Consent,
-    ) -> Result<String, EmulatorError> {
-        let expires_at = self.now() + Duration::seconds(AUTHORIZATION_CODE_LIFETIME_SECONDS);
+    /// Starts a new grant for a mailbox whose grant was revoked: its refresh
+    /// tokens are new and the revoked ones stay dead. Nothing changes for a
+    /// mailbox that is not revoked.
+    pub(crate) fn reinstate(&mut self, email: &str) -> Result<(), EmulatorError> {
         let mailbox = self.mailbox(email)?;
         let email = mailbox.email.clone();
         if mailbox.revoked {
@@ -338,6 +332,21 @@ impl State {
             self.rotated_refresh_tokens
                 .retain(|_, owner| *owner != email);
         }
+        Ok(())
+    }
+
+    /// Records that the mailbox's owner signed in and consented, and
+    /// answers the authorization code for it. The scopes add to the ones
+    /// the grant already covers. A consent after a revocation starts a new
+    /// grant, whose refresh tokens are new: the revoked ones stay dead.
+    pub(crate) fn authorize(
+        &mut self,
+        email: &str,
+        consent: Consent,
+    ) -> Result<String, EmulatorError> {
+        let expires_at = self.now() + Duration::seconds(AUTHORIZATION_CODE_LIFETIME_SECONDS);
+        let email = self.mailbox(email)?.email.clone();
+        self.reinstate(&email)?;
         let mailbox = self.mailbox(&email)?;
         for scope in &consent.scopes {
             if !mailbox.scopes.contains(scope) {

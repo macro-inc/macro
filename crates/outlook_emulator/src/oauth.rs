@@ -328,8 +328,15 @@ async fn completed_grant(
     Query(request): Query<GrantRequest>,
 ) -> Response {
     let (mailbox, answered) = emulator.with_state(|state| {
-        let email = state.links.get(&request.attempt_id.to_lowercase());
-        let Some(mailbox) = email.and_then(|email| state.mailboxes.get(email)) else {
+        let email = state.links.get(&request.attempt_id.to_lowercase()).cloned();
+        // A grant described after the last one was released is a new sign-in:
+        // the mailbox gets tokens again, as after a consent.
+        if let Some(email) = &email
+            && state.reinstate(email).is_err()
+        {
+            return (None, StatusCode::NOT_FOUND.into_response());
+        }
+        let Some(mailbox) = email.and_then(|email| state.mailboxes.get(&email)) else {
             return (None, StatusCode::NOT_FOUND.into_response());
         };
         let id = grant_id(&request.owner, &mailbox.email);
