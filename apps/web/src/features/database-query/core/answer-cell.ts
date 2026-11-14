@@ -1,15 +1,18 @@
 import { type PluralKey, t } from '@app/lib/i18n';
 import type { AnswerColumn, AnswerOption } from '@core/database-sql/answer';
 import type { Cell, EntityKind } from '@core/database-sql/generated/types';
-import { formatTime } from '@core/util/date';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
-import { formatDate, formatTimeRange } from '@property/utils/formatting';
 import { match } from 'ts-pattern';
 import {
   timeRangeFromInstants,
   toCellRange,
 } from '../../database/core/cell-date-range';
 import type { DatabaseEntityType } from '../../database/core/column-inference';
+import {
+  formatAnswerDate,
+  formatAnswerTime,
+  formatAnswerTimeRange,
+} from './answer-format';
 import { formatQueryValue } from './query';
 
 /** What one result value shows, drawn with the database grid's own pieces. */
@@ -66,7 +69,7 @@ export function resultCell(
       const range = timeRangeFromInstants(value);
       return {
         kind: 'text',
-        text: range ? formatTimeRange(range) : toCellRange(value),
+        text: range ? formatAnswerTimeRange(range) : toCellRange(value),
       };
     })
     .with({ type: 'options' }, ({ value }) =>
@@ -135,8 +138,8 @@ function dateCell(value: string): ResultCell {
 /** A calendar day reads as the grid's date; a moment keeps its time. */
 function formatResultDate(date: Date, calendarDay: boolean): string {
   return calendarDay
-    ? formatDate(date)
-    : `${formatDate(date)}, ${formatTime(date)}`;
+    ? formatAnswerDate(date)
+    : `${formatAnswerDate(date)}, ${formatAnswerTime(date)}`;
 }
 
 /** A cell as plain text, for chart labels, titles and accessible names. */
