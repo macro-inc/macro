@@ -18,7 +18,7 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:40 TOOL Read store.rs          ││10:01:40 STAT working                ││10:01:37 TURN turn start             ││10:01:37 TOOL Task explore the reduce││10:01:36 STAT working (building)     │   │
 ││10:01:40 SPWN subagent explore the re││10:01:34 TEND turn end               ││10:01:37 STAT working                ││10:01:34 TURN turn start             ││10:01:31 STAT blocked (permission)   │   │
 ││                                     ││10:01:34 STAT idle                   ││10:01:37 TEND turn end               ││10:01:34 STAT working                ││10:01:27 TOOL Bash just check        │   │
-│┃                                     ┃┃10:01:33 TOOL Grep subscribe         ┃┃10:01:37 STAT idle                   ┃┃10:01:34 TEND turn end               ┃┃10:01:26 TURN turn start             ┃   │
+│┃  ·   ·   ·   ·   ·   ·   ·   ·   ·  ┃┃10:01:33 TOOL Grep subscribe         ┃┃10:01:37 STAT idle                   ┃┃10:01:34 TEND turn end               ┃┃10:01:26 TURN turn start             ┃   │
 │┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
 │┏◆◢ scratch-notes ◤ other ──── 0x7022 ┓┏◆◢ lint-sweep session ◤ other ────━━━┓┏◆◢ fix-18 ◤ builder ───────── 0x2D73 ┓┏◆◢ chat-desk ◤ chatter ────── 0x3958 ┓┏◆◢ q4-roadmap ◤ planner ───── 0x3E71 ┓   │
 │┃WORK   claude-sonnet-5-5             ┃┃WORK                                 ┃┃WORK   claude-sonnet-5-5             ┃┃WORK   claude-opus-5-5               ┃┃WORK   claude-fable-5-2              ┃   │
@@ -40,7 +40,7 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:38 STAT working                ││10:01:37 TOOL Read store.rs          ││10:01:36 STAT blocked (permission)   ││10:01:36 TOOL Read store.rs          ││10:01:35 TOOL Read store.rs          │   │
 ││10:01:37 TEND turn end               ││10:01:37 SPWN subagent explore the re││10:01:36 TOOL Edit store.rs          ││10:01:36 SPWN subagent explore the re││10:01:35 SPWN subagent explore the re│   │
 ││10:01:37 STAT idle                   ││                                     ││10:01:34 TOOL Bash just check        ││                                     ││                                     │   │
-│┃10:01:33 TOOL Bash just check        ┃┃                                     ┃┃10:01:32 TOOL Task explore the reduce┃┃                                     ┃┃                                     ┃   │
+│┃10:01:33 TOOL Bash just check        ┃┃   ·   ·   ·   ·   ·   ·   ·   ·   · ┃┃10:01:32 TOOL Task explore the reduce┃┃     ·   ·   ·   ·   ·   ·   ·   ·   ┃┃  ·   ·   ·   ·   ·   ·   ·   ·   ·  ┃   │
 │┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
 │┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓┏◆◢ explore the reducer ◤ subagent ━━━┓   │
 │┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃┃WORK   claude-haiku-5-5              ┃   │
@@ -50,11 +50,11 @@ expression: "render(&mut app, 200, 56)"
 ││10:01:33 TEND turn end               ││10:01:32 TEND turn end               ││10:01:31 TEND turn end               ││10:01:26 TEND turn end               ││10:01:24 TEND turn end               │   │
 ││10:01:33 TOOL Read store.rs          ││10:01:32 TOOL Read store.rs          ││10:01:31 TOOL Read store.rs          ││10:01:26 TOOL Read store.rs          ││10:01:24 TOOL Read store.rs          │   │
 ││10:01:33 SPWN subagent explore the re││10:01:32 SPWN subagent explore the re││10:01:31 SPWN subagent explore the re││10:01:26 SPWN subagent explore the re││10:01:24 SPWN subagent explore the re│   │
-││                                     ││                                     ││                                     ││                                     ││                                     │   │
+││  ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   · ││    ·   ·   ·   ·   ·   ·   ·   ·    ││     ·   ·   ·   ·   ·   ·   ·   ·   ││  ·   ·   ·   ·   ·   ·   ·   ·   ·  │   │
 │┃                                     ┃┃                                     ┃┃                                     ┃┃                                     ┃┃                                     ┃   │
 │┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛┗━━━───────────────────────────────━━━┛   │
 │                                                                                                                                                                                                      │
-│                                                                                                                                                                                                      │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 ┃                                                                                                                                                                                                      ┃
 ┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛
 ◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT

@@ -28,13 +28,13 @@ expression: "render(&mut app(), 200, 56)"
 │◆ subagent scratch-notes/explo WORK explore the reduce   6s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││TOOL       /MIN                     ─╴│┃  SOURCE            AGT  ITEMS LAST ┃
 │◆ subagent mesh-plan/explore t WORK explore the reduce   8s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Read    ▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮▮   56││◆ demo                34      —    —│
 │◆ subagent fix-19/explore the  WORK explore the reduce   9s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Task    ▮▮▮▮▮▮▮▮▮▮▮▮▮               29││                                    │
-│◆ subagent billing-revamp/expl WORK explore the reduce  13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││                                    │
+│◆ subagent billing-revamp/expl WORK explore the reduce  13s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Edit    ▮▮▮▮▮▮▮▮▮▮▮▮▮               28││     ·   ·   ·   ·   ·   ·   ·   ·  │
 │◆ subagent ui-pages/explore th WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Bash    ▮▮▮▮▮▮▮▮▮▮▮▮▮               27││                                    │
-│◆ subagent fix-18/explore the  WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                26││                                    │
+│◆ subagent fix-18/explore the  WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Write   ▮▮▮▮▮▮▮▮▮▮▮▮                26││     ·   ·   ·   ·   ·   ·   ·   ·  │
 │◆ subagent release-train/explo WORK explore the reduce  16s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││Grep    ▮▮▮▮▮▮▮▮▮▮                  22││                                    │
-│◆ subagent find-17/explore the WORK explore the reduce  34s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶                                    ╴││                                    │
+│◆ subagent find-17/explore the WORK explore the reduce  34s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█││╶                                    ╴││     ·   ·   ·   ·   ·   ·   ·   ·  │
 │◆ subagent review-rpc/explore  WORK explore the reduce  46s    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││╶─                                  ─╴││                                    │
-│◆ subagent store-reducer/explo WORK explore the reduce   1m    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││                                      ││                                    │
+│◆ subagent store-reducer/explo WORK explore the reduce   1m    1     1   0       0        — ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁││     ·   ·   ·   ·   ·   ·   ·   ·    ││     ·   ·   ·   ·   ·   ·   ·   ·  │
 ┃▲ manager  billing-revamp      BLCK permission          59m   22    65   8    2.1M   ~$2.34 ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▂┃┃└╴SUBJ 25 LIVE            TOK/M 5.0M╶┘┃┃                                    ┃
 ┗━━━──────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛┗━━━────────────────────────────────━━━┛┗━━━──────────────────────────────━━━┛
 ┏━◢ 02 // TAPE ◤ 500 LINES  ▼ FOLLOWING ────────────────────────────────────────────────────────────────────────━━━┓┏━◢ 04 // FAILURES ◤ 50 24H 48 TOOL · 2 AGENT ──────────────────────────────────━━━┓

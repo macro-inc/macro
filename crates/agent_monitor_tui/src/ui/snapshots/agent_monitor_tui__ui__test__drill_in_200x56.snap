@@ -14,7 +14,7 @@ expression: "render(&mut app, 200, 56)"
 ┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛
 ┏▸DURATION ───────━━━┓┏▸COST ───────────━━━┓┏▸TURNS ───────────━━━┓┏▸TOOLS ──────────━━━┓┏▸ERRORS ─────────━━━┓┏▸TOKENS ─────────━━━┓┏▸TOK IN ──────────━━━┓┏▸TOK OUT ────────━━━┓┏▸CACHE RD/WR ────━━━┓
 ┃22m40s              ┃┃~$1.43              ┃┃14                   ┃┃38                  ┃┃6                   ┃┃1.5M                ┃┃146.9k               ┃┃17.4k               ┃┃1.3M/47.3k          ┃
-┃                    ┃┃▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▃█▂┃┃▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃┃┃▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅┃┃▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▄▁█▁┃┃▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂┃┃                     ┃┃                    ┃┃                    ┃
+┃   ·   ·   ·   ·    ┃┃▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▃█▂┃┃▁▂▁▁▂▁▁▁▁▁▂▁▁▂▁▁▁▁▂█▃┃┃▁▁▂▁▁▁▁▂▂▁▁▁▁▁▁▁▂▁█▅┃┃▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▄▁█▁┃┃▂▁▁▁▁▁▁▁▁▂▁▁▃▁▁▁▁▂█▂┃┃  ·   ·   ·   ·   ·  ┃┃   ·   ·   ·   ·    ┃┃     ·   ·   ·   ·  ┃
 ┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━───────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛┗━━━───────────────━━━┛┗━━━──────────────━━━┛┗━━━──────────────━━━┛
 ┏━◢ TIMELINE ◤ 7 EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┓
 ┃▲·····▪·▮············································································✖···▮·│·········································································································▮┃
@@ -23,38 +23,38 @@ expression: "render(&mut app, 200, 56)"
 ┏━◢ TRANSCRIPT ◤ 7 ITEMS  ▼ FOLLOWING  ENTER EXPANDS A TOOL CALL ───────────────────────────────────────────────────────────━━━┓┏━◢ CHILDREN ◤ 9 · TAB HERE, ENTER DRILLS ──────────────────────────━━━┓
 ┃10:00:02 USER Run the store tests and fix what fails.                                                                         ┃┃◆ subagent explore the red… WORK        —                             ┃
 │10:00:05 TURN Running the tests first.                                                                                        ││· explorer find-15          DONE   ~$0.21                             │
-│10:00:06 TOOL Bash        cargo test -p store                                                                      34.0s ERROR││◆ builder  fix-18           WORK   ~$0.32                             │
+│10:00:06 TOOL Bash        cargo test -p store                                                                    34.0s ✕ ERR  ││◆ builder  fix-18           WORK   ~$0.32                             │
 │         ┌ ARGUMENTS                                                                                                          ││◆ builder  fix-19           WORK   ~$0.13                             │
 │         │ cargo test -p store                                                                                                ││◆ builder  rpc-server       WORK   ~$2.01 Task explore the reducer    │
 │         ├ RESULT                                                                                                             ││◆ builder  fix-20           WORK   ~$0.08                             │
 │         │ 1 failed: replay_orders                                                                                            ││◇ explorer find-21          IDLE        —                             │
 │         └                                                                                                                    ││· builder  store-reducer    DONE   ~$1.69                             │
 │10:00:40 ERR  1 failed: replay_orders                                                                                         ││◇ reviewer review-rpc       IDLE   ~$3.78                             │
-│10:00:42 TOOL Read        src/store.rs                                                                              0.3s OK   ││                                                                      │
-│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                           …      ││                                                                      │
+│10:00:42 TOOL Read        src/store.rs                                                                            0.3s ◆ OK   ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
+│10:01:30 TOOL Edit        src/store.rs: keep insertion order                                                         ◇ …      ││                                                                      │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              ││                                                                      │
-│                                                                                                                              ││                                                                      │
-│                                                                                                                              ││                                                                      │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                                                                              │┃                                                                      ┃
-│                                                                                                                              │┗━━━────────────────────────────────────────────────────────────────━━━┛
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┗━━━────────────────────────────────────────────────────────────────━━━┛
 │                                                                                                                              │┏━◢ TAPE ◤──────────────────────────────────────────────────────────━━━┓
-│                                                                                                                              │┃10:01:37 release-t… TOOL Grep Snapshot                                ┃
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │┃10:01:37 release-t… TOOL Grep Snapshot                                ┃
 │                                                                                                                              ││10:01:36 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:31 release-t… STAT blocked (permission)                         │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:31 release-t… STAT blocked (permission)                         │
 │                                                                                                                              ││10:01:27 release-t… TOOL Bash just check                              │
-│                                                                                                                              ││10:01:26 release-t… TURN turn start                                   │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TURN turn start                                   │
 │                                                                                                                              ││10:01:26 release-t… STAT working (building)                           │
-│                                                                                                                              ││10:01:26 release-t… TEND turn end                                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:26 release-t… TEND turn end                                     │
 │                                                                                                                              ││10:01:26 release-t… STAT idle (building)                              │
-│                                                                                                                              ││10:01:23 release-t… TOOL Task explore the reducer                     │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:23 release-t… TOOL Task explore the reducer                     │
 │                                                                                                                              ││10:01:19 release-t… TOOL Task explore the reducer                     │
-│                                                                                                                              ││10:01:18 release-t… TOOL Edit store.rs                                │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:18 release-t… TOOL Edit store.rs                                │
 │                                                                                                                              ││10:01:12 release-t… TOOL Edit pages.rs                                │
-│                                                                                                                              ││10:01:09 release-t… TOOL Edit client.rs                               │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:09 release-t… TOOL Edit client.rs                               │
 │                                                                                                                              ││10:01:07 release-t… TURN turn start                                   │
-│                                                                                                                              ││10:01:07 release-t… STAT working (building)                           │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:07 release-t… STAT working (building)                           │
 │                                                                                                                              ││10:01:04 release-t… TEND turn end                                     │
-│                                                                                                                              ││10:01:04 release-t… STAT idle (building)                              │
+│   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  ││10:01:04 release-t… STAT idle (building)                              │
 ┃                                                                                                                              ┃┃10:01:01 release-t… TOOL Bash git status                              ┃
 ┗━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────━━━┛┗━━━────────────────────────────────────────────────────────────────━━━┛
 ◢ >_ ◤ TYPE COMMAND  ENTER OPEN  TAB PANE  ↑↓ MOVE  0-7 PAGE  w WALL  q QUIT

@@ -2,9 +2,11 @@
 //!
 //! A braille cell holds one colour, and a later canvas layer replaces an
 //! earlier one's cell outright. Painting far to near is therefore the depth
-//! cue. The order is in the layer constants below: the turntable, far skin,
-//! far bones, near skin, resting nerves, near bones, firing nerves, the scan
-//! slice, the heart, then pulses and flashes on top.
+//! cue. Under every layer runs the scan line, a dashed sweep across the
+//! canvas at the scan plane's height. The order is in the layer constants
+//! below: the turntable, far skin, far bones, near skin, resting nerves,
+//! near bones, firing nerves, the scan slice, the heart, then pulses and
+//! flashes on top.
 
 use std::f32::consts::{PI, TAU};
 
@@ -432,6 +434,28 @@ impl Body {
     }
 }
 
+/// Dashes across the scan line, and the share of each dash that is drawn.
+const SCAN_DASHES: usize = 24;
+const SCAN_DASH_FILL: f64 = 0.55;
+
+impl Body {
+    /// The scan plane seen edge on: a faint dashed line across the whole
+    /// canvas at the height the scan has reached, like a scanner's sweep.
+    fn scan_line(&self, frame: &Frame, half_width: f64, half_height: f64) -> Vec<Line> {
+        let y = f64::from(frame.screen(Vec3::new(0.0, self.scan_height(), 0.0)).y)
+            .clamp(-half_height * 0.99, half_height * 0.99);
+        let left = -half_width * 0.99;
+        let step = half_width * 1.98 / SCAN_DASHES as f64;
+        let rgb = color(CYAN_DARK, frame.depth);
+        (0..SCAN_DASHES)
+            .map(|k| {
+                let from = left + step * k as f64;
+                Line::new(from, y, from + step * SCAN_DASH_FILL, y, rgb)
+            })
+            .collect()
+    }
+}
+
 /// Renders the body to fill `area`, keeping braille dots square: a dot is
 /// half a cell wide and a quarter of a cell high, and a cell is about twice
 /// as tall as it is wide.
@@ -460,12 +484,17 @@ impl Widget for &Body {
             .map_or(Color::Reset, |cell| cell.bg);
 
         let frame = self.frame();
+        let scan_line = self.scan_line(&frame, half_width, half_height);
         Canvas::default()
             .background_color(background)
             .marker(Marker::Braille)
             .x_bounds([-half_width, half_width])
             .y_bounds([-half_height, half_height])
             .paint(|context| {
+                // Under everything: the figure draws over its own scan line.
+                for dash in &scan_line {
+                    context.draw(dash);
+                }
                 for layer in &frame.layers {
                     for line in layer {
                         context.draw(line);

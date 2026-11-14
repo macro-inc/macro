@@ -167,6 +167,55 @@ pub fn brackets(buffer: &mut Buffer, area: Rect) {
     }
 }
 
+/// Columns and rows between grid dots.
+const GRID_COLUMNS: u16 = 4;
+const GRID_ROWS: u16 = 2;
+
+/// Lays a faint dot grid over empty space: every pane row in `area` that is
+/// blank from one frame edge to the next gets a dot every few columns, so
+/// empty space reads as a HUD's graticule. Rows with any content stay
+/// untouched, so the grid never sits between values.
+pub fn grid(buffer: &mut Buffer, area: Rect) {
+    let area = area.intersection(buffer.area);
+    for y in (area.top()..area.bottom()).filter(|y| y.is_multiple_of(GRID_ROWS)) {
+        let mut start = None;
+        for x in area.left()..area.right() {
+            let symbol = buffer.cell((x, y)).map_or("", |cell| cell.symbol());
+            match symbol {
+                "│" | "┃" => {
+                    if let Some(from) = start.take() {
+                        dots(buffer, y, from, x);
+                    }
+                    start = Some(x + 1);
+                }
+                " " => {}
+                _ => start = None,
+            }
+        }
+    }
+}
+
+/// Dots across `y` from `from` to before `to`, when the run is blank and
+/// has a plain background.
+fn dots(buffer: &mut Buffer, y: u16, from: u16, to: u16) {
+    if to.saturating_sub(from) < GRID_COLUMNS * 2 {
+        return;
+    }
+    let blank = (from..to).all(|x| {
+        buffer
+            .cell((x, y))
+            .is_some_and(|cell| cell.symbol() == " " && cell.bg == BG)
+    });
+    if !blank {
+        return;
+    }
+    for x in (from + 2..to.saturating_sub(1)).filter(|x| x.is_multiple_of(GRID_COLUMNS)) {
+        if let Some(cell) = buffer.cell_mut((x, y)) {
+            cell.set_symbol("·").set_fg(GHOST);
+        }
+    }
+}
+
 /// Edge cells a bracket's horizontal arm covers.
 const BRACKET_ARM: i32 = 3;
 

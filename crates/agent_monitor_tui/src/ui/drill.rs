@@ -481,14 +481,21 @@ fn item_lines(
         TranscriptItemKind::ToolResult => vec![Line::from(vec![
             time,
             Span::styled("ERR  ", theme::bold(theme::RED)),
-            Span::styled(one_line(&item.text), theme::ink(theme::RED)),
+            Span::styled(
+                theme::glitch(
+                    &one_line(&item.text),
+                    (clock.now - item.at).num_milliseconds(),
+                    clock.now.timestamp_millis(),
+                ),
+                theme::ink(theme::RED),
+            ),
         ])],
         TranscriptItemKind::ToolCall => {
             let result = item.tool_id.as_ref().and_then(|id| results.get(id));
             let (status, color) = match result {
-                Some(result) if result.is_error => ("ERROR", theme::RED),
-                Some(_) => ("OK", theme::GREEN),
-                None => ("…", theme::YELLOW),
+                Some(result) if result.is_error => ("✕ ERR", theme::RED),
+                Some(_) => ("◆ OK", theme::GREEN),
+                None => ("◇ …", theme::YELLOW),
             };
             let duration = result
                 .and_then(|result| result.duration_ms)

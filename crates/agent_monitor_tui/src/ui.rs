@@ -89,6 +89,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
     if let Mode::Help { .. } = app.mode {
         draw_help(frame, body);
     }
+    theme::grid(frame.buffer_mut(), body);
     theme::brackets(frame.buffer_mut(), area);
 }
 
