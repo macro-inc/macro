@@ -131,7 +131,10 @@ fn esc_returns_exactly_one_state() {
         step(focused.clone(), Key::Esc, &Page::Monitor),
         (idle(), Action::None)
     );
-    assert_eq!(step(idle(), Key::Esc, &Page::Monitor), (idle(), Action::Back));
+    assert_eq!(
+        step(idle(), Key::Esc, &Page::Monitor),
+        (idle(), Action::Back)
+    );
 
     let command = Mode::Command {
         input: typed("AG"),
@@ -154,12 +157,18 @@ fn esc_returns_exactly_one_state() {
     let help = Mode::Help {
         base: Base::Pane(Pane::Spend),
     };
-    assert_eq!(step(help, Key::Esc, &Page::Monitor), (focused, Action::None));
+    assert_eq!(
+        step(help, Key::Esc, &Page::Monitor),
+        (focused, Action::None)
+    );
 }
 
 #[test]
 fn quit_keys() {
-    assert_eq!(step(idle(), Key::Char('q'), &Page::Monitor), (idle(), Action::Quit));
+    assert_eq!(
+        step(idle(), Key::Char('q'), &Page::Monitor),
+        (idle(), Action::Quit)
+    );
 
     let command = Mode::Command {
         input: typed("AG"),
@@ -180,7 +189,11 @@ fn quit_keys() {
 #[test]
 fn w_opens_the_wall_and_question_mark_toggles_help() {
     assert_eq!(
-        step(Mode::Base(Base::Pane(Pane::Tape)), Key::Char('w'), &Page::Monitor),
+        step(
+            Mode::Base(Base::Pane(Pane::Tape)),
+            Key::Char('w'),
+            &Page::Monitor
+        ),
         (idle(), Action::Open(Page::Wall))
     );
 
@@ -188,7 +201,11 @@ fn w_opens_the_wall_and_question_mark_toggles_help() {
     assert_eq!(mode, Mode::Help { base: Base::Idle });
     assert_eq!(actions, vec![Action::None]);
 
-    let (mode, _) = run(idle(), &[Key::Char('?'), Key::Char('x'), Key::Char('?')], &Page::Monitor);
+    let (mode, _) = run(
+        idle(),
+        &[Key::Char('?'), Key::Char('x'), Key::Char('?')],
+        &Page::Monitor,
+    );
     assert_eq!(mode, idle());
 }
 
@@ -231,7 +248,14 @@ fn reserved_letters_do_not_start_the_command_line() {
 fn command_line_editing() {
     let (mode, _) = run(
         idle(),
-        &[Key::Char('T'), Key::Char('R'), Key::Char('X'), Key::Backspace, Key::Char('E'), Key::Char('E')],
+        &[
+            Key::Char('T'),
+            Key::Char('R'),
+            Key::Char('X'),
+            Key::Backspace,
+            Key::Char('E'),
+            Key::Char('E'),
+        ],
         &Page::Monitor,
     );
     assert_eq!(
@@ -246,7 +270,11 @@ fn command_line_editing() {
     );
 
     // Backspace on an empty line leaves the command line.
-    let (mode, _) = run(idle(), &[Key::Char('T'), Key::Backspace, Key::Backspace], &Page::Monitor);
+    let (mode, _) = run(
+        idle(),
+        &[Key::Char('T'), Key::Backspace, Key::Backspace],
+        &Page::Monitor,
+    );
     assert_eq!(mode, idle());
 }
 
@@ -289,7 +317,13 @@ fn every_mnemonic_parses_case_insensitively() {
 fn find_filters_live_and_enter_keeps_the_query() {
     let (mode, actions) = run(
         idle(),
-        &[Key::Char('/'), Key::Char('r'), Key::Char('p'), Key::Backspace, Key::Char('p')],
+        &[
+            Key::Char('/'),
+            Key::Char('r'),
+            Key::Char('p'),
+            Key::Backspace,
+            Key::Char('p'),
+        ],
         &Page::Monitor,
     );
     assert_eq!(

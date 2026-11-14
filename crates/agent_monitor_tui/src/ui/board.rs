@@ -40,7 +40,11 @@ fn quotes(app: &App) -> [Quote; 8] {
         f64::from(totals.errors_24h) * 100.0 / f64::from(totals.tools_24h)
     };
     let tokens_now = totals.tokens_per_min.last().copied().unwrap_or(0);
-    let tokens_hour: u64 = totals.tokens_per_min.iter().map(|value| u64::from(*value)).sum();
+    let tokens_hour: u64 = totals
+        .tokens_per_min
+        .iter()
+        .map(|value| u64::from(*value))
+        .sum();
     let sub = |text: String| Line::from(Span::styled(text, theme::ink(theme::DIM)));
     let red_if = |value: u32| if value > 0 { theme::RED } else { theme::GREEN };
 
@@ -60,7 +64,11 @@ fn quotes(app: &App) -> [Quote; 8] {
         Quote {
             label: "BLOCKED",
             value: totals.blocked.to_string(),
-            color: if totals.blocked > 0 { theme::RED } else { theme::AMBER },
+            color: if totals.blocked > 0 {
+                theme::RED
+            } else {
+                theme::AMBER
+            },
             sub: sub(String::from("permission / stuck")),
         },
         Quote {
@@ -91,7 +99,10 @@ fn quotes(app: &App) -> [Quote; 8] {
                     14,
                     theme::GREEN,
                 );
-                spans.push(Span::styled(format!(" {}/h", format::compact(tokens_hour)), theme::ink(theme::DIM)));
+                spans.push(Span::styled(
+                    format!(" {}/h", format::compact(tokens_hour)),
+                    theme::ink(theme::DIM),
+                ));
                 Line::from(spans)
             },
         },
@@ -118,7 +129,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
     if area.height < 4 {
         let mut spans = Vec::new();
         for quote in &quotes {
-            spans.push(Span::styled(format!(" {} ", quote.label), theme::ink(theme::DIM)));
+            spans.push(Span::styled(
+                format!(" {} ", quote.label),
+                theme::ink(theme::DIM),
+            ));
             spans.push(Span::styled(quote.value.clone(), theme::bold(quote.color)));
             spans.push(Span::styled(" │", theme::ink(theme::FAINT)));
         }
@@ -132,7 +146,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
             .border_style(theme::ink(theme::FAINT))
-            .title(Span::styled(format!(" {} ", quote.label), theme::bold(theme::STRIP)))
+            .title(Span::styled(
+                format!(" {} ", quote.label),
+                theme::bold(theme::STRIP),
+            ))
             .style(theme::base());
         let lines = vec![
             Line::from(Span::styled(quote.value, theme::bold(quote.color))),

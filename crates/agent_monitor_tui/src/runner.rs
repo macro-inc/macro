@@ -198,7 +198,9 @@ fn sync_follow(
         let mut items = match opened {
             Ok(items) => items,
             Err(error) => {
-                let _ = sender.send((agent_id, Followed::Failed(error.to_string()))).await;
+                let _ = sender
+                    .send((agent_id, Followed::Failed(error.to_string())))
+                    .await;
                 return;
             }
         };
@@ -208,7 +210,11 @@ fn sync_follow(
                 item = items.next() => item,
             };
             let Some(item) = item else { return };
-            if sender.send((agent_id.clone(), Followed::Item(item))).await.is_err() {
+            if sender
+                .send((agent_id.clone(), Followed::Item(item)))
+                .await
+                .is_err()
+            {
                 return;
             }
         }

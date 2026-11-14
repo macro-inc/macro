@@ -251,10 +251,7 @@ impl PartialEq for Mode {
         match (self, other) {
             (Mode::Base(a), Mode::Base(b)) => a == b,
             (Mode::Help { base: a }, Mode::Help { base: b }) => a == b,
-            (
-                Mode::Command { input: a, base: x },
-                Mode::Command { input: b, base: y },
-            )
+            (Mode::Command { input: a, base: x }, Mode::Command { input: b, base: y })
             | (Mode::Find { input: a, base: x }, Mode::Find { input: b, base: y }) => {
                 x == y && same_line(a, b)
             }

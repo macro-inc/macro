@@ -16,7 +16,14 @@ use crate::theme;
 use crate::ui::Clock;
 
 /// Draws `pane` into `area`; `zoomed` when it fills the page.
-pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, pane: Pane, zoomed: bool) {
+pub fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &mut App,
+    clock: Clock,
+    pane: Pane,
+    zoomed: bool,
+) {
     let focused = zoomed || app.mode.base() == Base::Pane(pane);
     match pane {
         Pane::Agents => agents(frame, area, app, clock, focused),
@@ -90,7 +97,9 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
     let doing = match (&agent.doing, agent.status) {
         (Some(doing), _) => Span::styled(doing.clone(), theme::ink(theme::CYAN)),
         (None, status) => match (&agent.status_detail, &agent.task) {
-            (Some(detail), _) => Span::styled(detail.clone(), theme::ink(theme::status_color(status))),
+            (Some(detail), _) => {
+                Span::styled(detail.clone(), theme::ink(theme::status_color(status)))
+            }
             (None, Some(task)) => Span::styled(task.clone(), theme::ink(theme::DIM)),
             (None, None) => Span::styled("—", theme::ink(theme::FAINT)),
         },
@@ -102,9 +111,15 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
     };
     let errors = agent.tool_errors + agent.failures;
 
-    let mut cells = vec![Cell::from(theme::status_square(agent.status, clock.blink()))];
+    let mut cells = vec![Cell::from(theme::status_square(
+        agent.status,
+        clock.blink(),
+    ))];
     if !columns.compact {
-        cells.push(Cell::from(Span::styled(agent.kind.label(), theme::ink(theme::DIM))));
+        cells.push(Cell::from(Span::styled(
+            agent.kind.label(),
+            theme::ink(theme::DIM),
+        )));
     }
     cells.push(Cell::from(Span::styled(name, theme::bold(theme::AMBER))));
     if !columns.compact {
@@ -123,7 +138,13 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
     cells.extend([
         Cell::from(Line::from(age_since(clock, agent.started)).right_aligned()),
         Cell::from(Line::from(agent.turns.to_string()).right_aligned()),
-        Cell::from(Line::from(Span::styled(agent.tool_calls.to_string(), theme::ink(theme::CYAN))).right_aligned()),
+        Cell::from(
+            Line::from(Span::styled(
+                agent.tool_calls.to_string(),
+                theme::ink(theme::CYAN),
+            ))
+            .right_aligned(),
+        ),
     ]);
     if !columns.compact {
         cells.push(Cell::from(
@@ -136,14 +157,26 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
     }
     if columns.tokens {
         cells.push(Cell::from(
-            Line::from(Span::styled(format::compact(agent.tokens.total()), theme::ink(theme::DIM))).right_aligned(),
+            Line::from(Span::styled(
+                format::compact(agent.tokens.total()),
+                theme::ink(theme::DIM),
+            ))
+            .right_aligned(),
         ));
     }
     cells.push(Cell::from(
-        Line::from(Span::styled(format::cost(agent.cost), theme::bold(cost_color))).right_aligned(),
+        Line::from(Span::styled(
+            format::cost(agent.cost),
+            theme::bold(cost_color),
+        ))
+        .right_aligned(),
     ));
     if columns.spark > 0 {
-        let color = if agent.status.is_final() { theme::FAINT } else { theme::GREEN };
+        let color = if agent.status.is_final() {
+            theme::FAINT
+        } else {
+            theme::GREEN
+        };
         cells.push(Cell::from(Line::from(format::activity(
             &agent.activity,
             usize::from(columns.spark),
@@ -156,7 +189,9 @@ fn agent_row(agent: &Agent, name: String, clock: Clock, columns: &AgentColumns) 
 /// A row's name: a subagent shows under its parent as `parent/name`.
 fn row_name(app: &App, agent: &Agent) -> String {
     match (&agent.parent, agent.kind) {
-        (Some(parent), AgentKind::Subagent) => format!("{}/{}", app.view.name_of(parent), agent.name),
+        (Some(parent), AgentKind::Subagent) => {
+            format!("{}/{}", app.view.name_of(parent), agent.name)
+        }
         _ => agent.name.clone(),
     }
 }
@@ -221,12 +256,20 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         .iter()
         .map(|agent| agent_row(agent, row_name(app, agent), clock, &columns))
         .collect();
-    let header_row = Row::new(header.into_iter().map(|title| Cell::from(Span::styled(title, theme::bold(theme::FAINT)))));
+    let header_row = Row::new(
+        header
+            .into_iter()
+            .map(|title| Cell::from(Span::styled(title, theme::bold(theme::FAINT)))),
+    );
     let table = Table::new(table_rows, widths)
         .header(header_row)
         .column_spacing(1)
         .block(block)
-        .row_highlight_style(if focused { theme::selected() } else { Style::new() });
+        .row_highlight_style(if focused {
+            theme::selected()
+        } else {
+            Style::new()
+        });
 
     let mut state = TableState::default().with_selected(Some(selected));
     frame.render_stateful_widget(table, area, &mut state);
@@ -249,7 +292,13 @@ pub fn tape_tag(kind: TapeKind) -> (&'static str, Color) {
 }
 
 /// One tape line: time, agent, tag, text.
-pub fn tape_line(app: &App, clock: Clock, event: &TapeEvent, name_width: usize, highlight: bool) -> Line<'static> {
+pub fn tape_line(
+    app: &App,
+    clock: Clock,
+    event: &TapeEvent,
+    name_width: usize,
+    highlight: bool,
+) -> Line<'static> {
     let (tag, tag_color) = tape_tag(event.kind);
     let text_color = match event.kind {
         TapeKind::ToolStart | TapeKind::ToolEnd => theme::CYAN,
@@ -259,7 +308,10 @@ pub fn tape_line(app: &App, clock: Clock, event: &TapeEvent, name_width: usize, 
     let line = Line::from(vec![
         Span::styled(clock.time_of(event.at), theme::ink(theme::DIM)),
         Span::raw(" "),
-        Span::styled(format::cell(&app.view.name_of(&event.agent), name_width), theme::ink(theme::AMBER)),
+        Span::styled(
+            format::cell(&app.view.name_of(&event.agent), name_width),
+            theme::ink(theme::AMBER),
+        ),
         Span::raw(" "),
         Span::styled(tag, theme::bold(tag_color)),
         Span::raw(" "),
@@ -282,7 +334,10 @@ fn tape(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused:
 
     let mut extra = vec![count_span(format!("{} LINES", events.len()))];
     if cursor > 0 {
-        extra.push(Span::styled(format!(" +{cursor} NEW "), theme::bold(theme::BG).bg(theme::YELLOW)));
+        extra.push(Span::styled(
+            format!(" +{cursor} NEW "),
+            theme::bold(theme::BG).bg(theme::YELLOW),
+        ));
     } else {
         extra.push(Span::styled(" ▼ FOLLOWING ", theme::ink(theme::GREEN)));
     }
@@ -305,7 +360,10 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
     let totals = &app.view.totals;
     let block = theme::pane(
         "3 SPEND TODAY",
-        vec![Span::styled(format!(" {} ", format::cost(totals.cost_today)), theme::bold(theme::YELLOW))],
+        vec![Span::styled(
+            format!(" {} ", format::cost(totals.cost_today)),
+            theme::bold(theme::YELLOW),
+        )],
         focused,
     );
     let inner = block.inner(area);
@@ -332,7 +390,11 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
             Bar::default()
                 .value(cents)
                 .text_value(String::new())
-                .style(theme::ink(if cents > 0 { theme::STRIP } else { theme::GHOST }))
+                .style(theme::ink(if cents > 0 {
+                    theme::STRIP
+                } else {
+                    theme::GHOST
+                }))
         })
         .collect();
     let chart = BarChart::default()
@@ -347,7 +409,10 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         let label = format!("{hour:02}");
         axis.push_str(&format::cell(&label, usize::from(bar_width) * 6));
     }
-    frame.render_widget(Paragraph::new(Span::styled(axis, theme::ink(theme::FAINT))), axis_area);
+    frame.render_widget(
+        Paragraph::new(Span::styled(axis, theme::ink(theme::FAINT))),
+        axis_area,
+    );
 
     let kinds = app.view.spend_by_kind();
     let total: f64 = kinds.iter().filter_map(|(_, cost)| cost.usd()).sum();
@@ -364,12 +429,22 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         let filled = ((share * bar_room as f64).round() as usize).min(bar_room);
         let line = Line::from(vec![
             Span::styled(format::cell(kind.label(), 8), theme::ink(theme::AMBER)),
-            Span::styled(format::right(&format::cost(*cost), 9), theme::bold(theme::YELLOW)),
-            Span::styled(format::right(&format!("{:.0}", share * 100.0), 4), theme::ink(theme::DIM)),
+            Span::styled(
+                format::right(&format::cost(*cost), 9),
+                theme::bold(theme::YELLOW),
+            ),
+            Span::styled(
+                format::right(&format!("{:.0}", share * 100.0), 4),
+                theme::ink(theme::DIM),
+            ),
             Span::raw(" "),
             Span::styled("▮".repeat(filled), theme::ink(theme::STRIP)),
         ]);
-        lines.push(if focused && index == app.cursors.spend { line.style(theme::selected()) } else { line });
+        lines.push(if focused && index == app.cursors.spend {
+            line.style(theme::selected())
+        } else {
+            line
+        });
     }
     frame.render_widget(Paragraph::new(lines), table_area);
 }
@@ -379,7 +454,11 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
     let totals = &app.view.totals;
     // The board's count, so the two always agree; rows give the detail.
     let count = totals.errors_24h + totals.failed_24h;
-    let color = if count == 0 && rows.is_empty() { theme::GREEN } else { theme::RED };
+    let color = if count == 0 && rows.is_empty() {
+        theme::GREEN
+    } else {
+        theme::RED
+    };
     let block = theme::pane(
         "4 FAILURES",
         vec![
@@ -408,19 +487,32 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
                 .get(&row.agent)
                 .map_or("", |agent| agent.kind.label());
             let line = Line::from(vec![
-                Span::styled(format::right(&format::age(clock.now - row.at), 4), theme::ink(theme::DIM)),
+                Span::styled(
+                    format::right(&format::age(clock.now - row.at), 4),
+                    theme::ink(theme::DIM),
+                ),
                 Span::raw(" "),
                 Span::styled(format::cell(row.what, 6), theme::bold(theme::RED)),
                 Span::styled(format::cell(kind, 9), theme::ink(theme::DIM)),
-                Span::styled(format::cell(&app.view.name_of(&row.agent), 14), theme::ink(theme::AMBER)),
+                Span::styled(
+                    format::cell(&app.view.name_of(&row.agent), 14),
+                    theme::ink(theme::AMBER),
+                ),
                 Span::raw(" "),
                 Span::styled(row.detail.clone(), theme::ink(theme::RED)),
             ]);
-            if focused && index == cursor { line.style(theme::selected()) } else { line }
+            if focused && index == cursor {
+                line.style(theme::selected())
+            } else {
+                line
+            }
         })
         .collect();
     if lines.is_empty() {
-        lines.push(Line::from(Span::styled("  ✓ no failures in the last 24 hours", theme::ink(theme::GREEN))));
+        lines.push(Line::from(Span::styled(
+            "  ✓ no failures in the last 24 hours",
+            theme::ink(theme::GREEN),
+        )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
@@ -429,19 +521,32 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
     let rows = app.view.source_rows();
     let healthy = rows
         .iter()
-        .filter(|row| row.health.is_none_or(|health| health.state == SourceState::Healthy))
+        .filter(|row| {
+            row.health
+                .is_none_or(|health| health.state == SourceState::Healthy)
+        })
         .count();
-    let color = if healthy == rows.len() { theme::GREEN } else { theme::RED };
+    let color = if healthy == rows.len() {
+        theme::GREEN
+    } else {
+        theme::RED
+    };
     let block = theme::pane(
         "6 SOURCES",
-        vec![Span::styled(format!(" {healthy}/{} OK ", rows.len()), theme::bold(color))],
+        vec![Span::styled(
+            format!(" {healthy}/{} OK ", rows.len()),
+            theme::bold(color),
+        )],
         focused,
     );
     let width = usize::from(block.inner(area).width);
     let name_width = width.saturating_sub(2 + 5 + 7 + 5).clamp(6, 18);
 
     let mut lines = vec![Line::from(Span::styled(
-        format!("  {}  AGT  ITEMS LAST", format::cell("SOURCE", name_width.saturating_sub(1))),
+        format!(
+            "  {}  AGT  ITEMS LAST",
+            format::cell("SOURCE", name_width.saturating_sub(1))
+        ),
         theme::bold(theme::FAINT),
     ))];
     for (index, row) in rows.iter().enumerate() {
@@ -452,52 +557,81 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
             Some(SourceState::Absent) => ("○", theme::FAINT),
             None => ("◆", theme::AMBER),
         };
-        let items = row
-            .health
-            .map_or_else(|| String::from("—"), |health| format::thousands(u64::from(health.items)));
+        let items = row.health.map_or_else(
+            || String::from("—"),
+            |health| format::thousands(u64::from(health.items)),
+        );
         let last = age_since(clock, row.health.and_then(|health| health.last_event));
         let mut spans = vec![
             Span::styled(format!("{dot} "), theme::bold(color)),
-            Span::styled(format::cell(row.source.name(), name_width), theme::ink(theme::AMBER)),
-            Span::styled(format::right(&row.agents.to_string(), 5), theme::bold(theme::YELLOW)),
+            Span::styled(
+                format::cell(row.source.name(), name_width),
+                theme::ink(theme::AMBER),
+            ),
+            Span::styled(
+                format::right(&row.agents.to_string(), 5),
+                theme::bold(theme::YELLOW),
+            ),
             Span::styled(format::right(&items, 7), theme::ink(theme::AMBER)),
             Span::styled(format::right(&last, 5), theme::ink(theme::DIM)),
         ];
         let restarts = row.health.map_or(0, |health| health.restarts);
         if restarts > 0 {
-            spans.push(Span::styled(format!(" ↻{restarts}"), theme::ink(theme::RED)));
+            spans.push(Span::styled(
+                format!(" ↻{restarts}"),
+                theme::ink(theme::RED),
+            ));
         }
         let line = Line::from(spans);
-        lines.push(if focused && index == app.cursors.source { line.style(theme::selected()) } else { line });
+        lines.push(if focused && index == app.cursors.source {
+            line.style(theme::selected())
+        } else {
+            line
+        });
 
         let Some(health) = row.health else { continue };
         if let Some(progress) = health.indexing {
             let total = progress.total.max(1);
             let room = width.saturating_sub(16);
             let done = u64::from(progress.done.min(total));
-            let filled = usize::try_from(done * u64::try_from(room).unwrap_or(0) / u64::from(total))
-                .unwrap_or(0)
-                .min(room);
+            let filled =
+                usize::try_from(done * u64::try_from(room).unwrap_or(0) / u64::from(total))
+                    .unwrap_or(0)
+                    .min(room);
             lines.push(Line::from(vec![
                 Span::styled("  idx ", theme::ink(theme::FAINT)),
                 Span::styled("█".repeat(filled), theme::ink(theme::YELLOW)),
                 Span::styled("░".repeat(room - filled), theme::ink(theme::GHOST)),
-                Span::styled(format!(" {}/{}", progress.done, progress.total), theme::ink(theme::DIM)),
+                Span::styled(
+                    format!(" {}/{}", progress.done, progress.total),
+                    theme::ink(theme::DIM),
+                ),
             ]));
         }
         if let Some(detail) = &health.detail
-            && health.state != SourceState::Healthy {
-                lines.push(Line::from(Span::styled(format!("  {detail}"), theme::ink(color))));
-            }
+            && health.state != SourceState::Healthy
+        {
+            lines.push(Line::from(Span::styled(
+                format!("  {detail}"),
+                theme::ink(color),
+            )));
+        }
     }
     if rows.is_empty() {
-        lines.push(Line::from(Span::styled("  waiting for the collector", theme::ink(theme::DIM))));
+        lines.push(Line::from(Span::styled(
+            "  waiting for the collector",
+            theme::ink(theme::DIM),
+        )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
-    let block = theme::pane("7 BODY", vec![count_span(app.view.body.title().to_owned())], focused);
+    let block = theme::pane(
+        "7 BODY",
+        vec![count_span(app.view.body.title().to_owned())],
+        focused,
+    );
     let inner = block.inner(area);
     frame.render_widget(block, area);
     app.view.body.render(inner, frame.buffer_mut());

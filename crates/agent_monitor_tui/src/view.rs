@@ -217,10 +217,11 @@ impl ViewState {
     /// Records why the open agent's transcript cannot be read.
     pub fn transcript_error(&mut self, agent: &AgentId, error: String) {
         if let Some(transcript) = self.transcript.as_mut()
-            && transcript.agent == *agent {
-                transcript.error = Some(error);
-                self.dirty = true;
-            }
+            && transcript.agent == *agent
+        {
+            transcript.error = Some(error);
+            self.dirty = true;
+        }
     }
 
     /// The agent's display name or, once it is gone, the last part of its id.
@@ -253,7 +254,10 @@ impl ViewState {
     }
 
     /// Tape lines newest first, filtered.
-    pub fn tape_newest_first<'a>(&'a self, filter: &'a Filter) -> impl Iterator<Item = &'a TapeEvent> + 'a {
+    pub fn tape_newest_first<'a>(
+        &'a self,
+        filter: &'a Filter,
+    ) -> impl Iterator<Item = &'a TapeEvent> + 'a {
         self.tape
             .iter()
             .rev()
@@ -301,7 +305,11 @@ impl ViewState {
             let on_tape = tool_lines.get(&agent.id).copied().unwrap_or(0);
             let earlier = agent.tool_errors.saturating_sub(on_tape);
             if earlier > 0 {
-                let noun = if earlier == 1 { "tool error" } else { "tool errors" };
+                let noun = if earlier == 1 {
+                    "tool error"
+                } else {
+                    "tool errors"
+                };
                 rows.push(Failure {
                     at: agent.started.unwrap_or(at),
                     agent: agent.id.clone(),

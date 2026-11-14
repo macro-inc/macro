@@ -40,7 +40,12 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     let block = theme::pane(
         "WALL",
         vec![Span::styled(
-            format!(" {} AGENTS · PAGE {}/{} · ←→↑↓ MOVE · ENTER OPEN ", agents.len(), page + 1, pages),
+            format!(
+                " {} AGENTS · PAGE {}/{} · ←→↑↓ MOVE · ENTER OPEN ",
+                agents.len(),
+                page + 1,
+                pages
+            ),
             theme::ink(theme::DIM),
         )],
         true,
@@ -49,7 +54,12 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
 
     let card_width = inner.width / columns;
     let card_height = (inner.height / rows).max(CARD_HEIGHT.min(inner.height));
-    for (slot, agent) in agents.iter().skip(page * per_page).take(per_page).enumerate() {
+    for (slot, agent) in agents
+        .iter()
+        .skip(page * per_page)
+        .take(per_page)
+        .enumerate()
+    {
         let slot = u16::try_from(slot).unwrap_or(0);
         let card = Rect {
             x: inner.x + (slot % columns) * card_width,
@@ -67,8 +77,19 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
 
 /// One agent card: name strip, status, open tool, sparkline, counts and its
 /// last tape lines.
-pub fn draw_card(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock, agent: &Agent, selected: bool) {
-    let border = if selected { theme::YELLOW } else { theme::FAINT };
+pub fn draw_card(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    app: &App,
+    clock: Clock,
+    agent: &Agent,
+    selected: bool,
+) {
+    let border = if selected {
+        theme::YELLOW
+    } else {
+        theme::FAINT
+    };
     let title = Line::from(vec![
         theme::status_square(agent.status, clock.blink()),
         Span::styled(format!(" {} ", agent.name), theme::strip()),
@@ -76,7 +97,11 @@ pub fn draw_card(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock, age
     ]);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(if selected { BorderType::Thick } else { BorderType::Plain })
+        .border_type(if selected {
+            BorderType::Thick
+        } else {
+            BorderType::Plain
+        })
         .border_style(theme::ink(border))
         .title(title)
         .style(theme::base());
@@ -92,8 +117,14 @@ pub fn draw_card(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock, age
             theme::ink(theme::DIM),
         ),
     };
-    let cost_color = if let Cost::Unpriced = agent.cost { theme::FAINT } else { theme::YELLOW };
-    let started = agent.started.map_or_else(|| String::from("—"), |at| format::duration(clock.now - at));
+    let cost_color = if let Cost::Unpriced = agent.cost {
+        theme::FAINT
+    } else {
+        theme::YELLOW
+    };
+    let started = agent
+        .started
+        .map_or_else(|| String::from("—"), |at| format::duration(clock.now - at));
 
     let mut lines = vec![
         Line::from(vec![
@@ -102,7 +133,10 @@ pub fn draw_card(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock, age
                 format!(" {}", agent.status_detail.clone().unwrap_or_default()),
                 theme::ink(status_color),
             ),
-            Span::styled(format!("  {}", format::clip(&model, 18)), theme::ink(theme::FAINT)),
+            Span::styled(
+                format!("  {}", format::clip(&model, 18)),
+                theme::ink(theme::FAINT),
+            ),
         ]),
         Line::from(doing),
         Line::from(format::activity(&agent.activity, width, theme::GREEN)),
@@ -114,7 +148,11 @@ pub fn draw_card(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock, age
             Span::styled(" ERR ", theme::ink(theme::FAINT)),
             Span::styled(
                 agent.tool_errors.to_string(),
-                theme::bold(if agent.tool_errors > 0 { theme::RED } else { theme::FAINT }),
+                theme::bold(if agent.tool_errors > 0 {
+                    theme::RED
+                } else {
+                    theme::FAINT
+                }),
             ),
             Span::styled(" ", theme::ink(theme::FAINT)),
             Span::styled(format::cost(agent.cost), theme::bold(cost_color)),

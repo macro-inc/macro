@@ -79,7 +79,10 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
 
     let title = Line::from(vec![
         Span::styled(format!(" {} ", agent.name), theme::strip()),
-        Span::styled(format!(" {} ", agent.kind.label()), theme::bold(theme::YELLOW)),
+        Span::styled(
+            format!(" {} ", agent.kind.label()),
+            theme::bold(theme::YELLOW),
+        ),
         theme::status_square(agent.status, clock.blink()),
         Span::styled(
             format!(" {} ", theme::status_word(agent.status)),
@@ -101,7 +104,10 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     let mut first = Vec::new();
     first.extend(field("PROGRAM", agent.program.clone()));
     first.extend(field("MODEL", agent.model.clone()));
-    first.extend(field("CWD", agent.cwd.as_ref().map(|cwd| cwd.display().to_string())));
+    first.extend(field(
+        "CWD",
+        agent.cwd.as_ref().map(|cwd| cwd.display().to_string()),
+    ));
     first.extend(field("BRANCH", agent.branch.clone()));
     first.extend(field("SPACE", agent.space.clone()));
 
@@ -110,9 +116,15 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     second.extend(field("SESSION", agent.session.clone()));
     second.extend(field("PID", agent.pid.map(|pid| pid.to_string())));
     second.extend(field("STARTED", agent.started.map(|at| clock.time_of(at))));
-    second.extend(field("PARENT", agent.parent.as_ref().map(ToString::to_string)));
+    second.extend(field(
+        "PARENT",
+        agent.parent.as_ref().map(ToString::to_string),
+    ));
     second.push(Span::styled("TASK ", theme::ink(theme::FAINT)));
-    second.push(Span::styled(agent.task.clone().unwrap_or_default(), theme::ink(theme::YELLOW)));
+    second.push(Span::styled(
+        agent.task.clone().unwrap_or_default(),
+        theme::ink(theme::YELLOW),
+    ));
 
     frame.render_widget(
         Paragraph::new(vec![Line::from(first), Line::from(second)]).block(block),
@@ -129,20 +141,47 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
     let cells: [(&str, String, Color); 9] = [
         ("DURATION", duration, theme::AMBER),
         ("COST", format::cost(agent.cost), theme::YELLOW),
-        ("TURNS", format::thousands(u64::from(agent.turns)), theme::AMBER),
-        ("TOOLS", format::thousands(u64::from(agent.tool_calls)), theme::CYAN),
-        ("ERRORS", errors.to_string(), if errors > 0 { theme::RED } else { theme::GREEN }),
+        (
+            "TURNS",
+            format::thousands(u64::from(agent.turns)),
+            theme::AMBER,
+        ),
+        (
+            "TOOLS",
+            format::thousands(u64::from(agent.tool_calls)),
+            theme::CYAN,
+        ),
+        (
+            "ERRORS",
+            errors.to_string(),
+            if errors > 0 { theme::RED } else { theme::GREEN },
+        ),
         ("TOK IN", format::compact(agent.tokens.input), theme::AMBER),
-        ("TOK OUT", format::compact(agent.tokens.output), theme::AMBER),
-        ("CACHE RD", format::compact(agent.tokens.cache_read), theme::DIM),
-        ("CACHE WR", format::compact(agent.tokens.cache_write), theme::DIM),
+        (
+            "TOK OUT",
+            format::compact(agent.tokens.output),
+            theme::AMBER,
+        ),
+        (
+            "CACHE RD",
+            format::compact(agent.tokens.cache_read),
+            theme::DIM,
+        ),
+        (
+            "CACHE WR",
+            format::compact(agent.tokens.cache_write),
+            theme::DIM,
+        ),
     ];
     let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
     for ((label, value, color), cell) in cells.into_iter().zip(areas.iter()) {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(theme::ink(theme::FAINT))
-            .title(Span::styled(format!(" {label} "), theme::bold(theme::STRIP)))
+            .title(Span::styled(
+                format!(" {label} "),
+                theme::bold(theme::STRIP),
+            ))
             .style(theme::base());
         frame.render_widget(
             Paragraph::new(vec![
@@ -187,7 +226,12 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
                     (TranscriptItemKind::ToolResult, true) => ('✖', theme::RED, 4),
                     (TranscriptItemKind::ToolResult, false) => ('│', theme::CYAN, 0),
                 };
-                Mark { at: item.at, glyph, color, rank }
+                Mark {
+                    at: item.at,
+                    glyph,
+                    color,
+                    rank,
+                }
             })
             .collect(),
         None => app
@@ -203,7 +247,12 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
                     TapeKind::ToolError | TapeKind::Failure => ('✖', theme::RED, 4),
                     _ => ('◆', theme::GREEN, 2),
                 };
-                Mark { at: event.at, glyph, color, rank }
+                Mark {
+                    at: event.at,
+                    glyph,
+                    color,
+                    rank,
+                }
             })
             .collect(),
     };
@@ -216,7 +265,10 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     let block = theme::pane(
         "TIMELINE",
         vec![Span::styled(
-            format!(" {} EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ", marks.len()),
+            format!(
+                " {} EVENTS · GAPS > 2M SQUEEZED ┊ · ▲ TURN ▮ TOOL ✖ ERROR ",
+                marks.len()
+            ),
             theme::ink(theme::DIM),
         )],
         false,
@@ -261,14 +313,20 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
     let mut cells: Vec<Option<Mark>> = vec![None; width];
     for gap in squeezed_at {
         if let Some(cell) = cells.get_mut(column(gap)) {
-            *cell = Some(Mark { at: first.at, glyph: '┊', color: theme::FAINT, rank: 0 });
+            *cell = Some(Mark {
+                at: first.at,
+                glyph: '┊',
+                color: theme::FAINT,
+                rank: 0,
+            });
         }
     }
     for (mark, offset) in marks.iter().zip(offsets) {
         if let Some(cell) = cells.get_mut(column(offset))
-            && cell.is_none_or(|existing| existing.rank <= mark.rank) {
-                *cell = Some(*mark);
-            }
+            && cell.is_none_or(|existing| existing.rank <= mark.rank)
+        {
+            *cell = Some(*mark);
+        }
     }
 
     let strip: Vec<Span<'static>> = cells
@@ -280,7 +338,10 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
         .collect();
     let start = clock.time_of(first.at);
     let end = clock.time_of(last.at);
-    let axis = format!("{start}{}{end}", " ".repeat(width.saturating_sub(start.len() + end.len())));
+    let axis = format!(
+        "{start}{}{end}",
+        " ".repeat(width.saturating_sub(start.len() + end.len()))
+    );
     frame.render_widget(
         Paragraph::new(vec![
             Line::from(strip),
@@ -320,9 +381,15 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     extra.push(if following {
         Span::styled(" ▼ FOLLOWING ", theme::ink(theme::GREEN))
     } else {
-        Span::styled(format!(" {} BELOW ", last - cursor), theme::bold(theme::BG).bg(theme::YELLOW))
+        Span::styled(
+            format!(" {} BELOW ", last - cursor),
+            theme::bold(theme::BG).bg(theme::YELLOW),
+        )
     });
-    extra.push(Span::styled(" ENTER EXPANDS A TOOL CALL ", theme::ink(theme::FAINT)));
+    extra.push(Span::styled(
+        " ENTER EXPANDS A TOOL CALL ",
+        theme::ink(theme::FAINT),
+    ));
     let block = theme::pane("TRANSCRIPT", extra, focused);
     let inner = block.inner(area);
     let width = usize::from(inner.width);
@@ -335,7 +402,11 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         }
         let selected = focused && index == cursor;
         for line in item_lines(item, &results, &app.cursors.expanded, clock, width) {
-            let line = if selected { line.style(theme::selected()) } else { line };
+            let line = if selected {
+                line.style(theme::selected())
+            } else {
+                line
+            };
             lines.push((index, line));
         }
     }
@@ -346,12 +417,22 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
         .unwrap_or(0);
     let skip = (cursor_line + 1).saturating_sub(height);
 
-    let mut shown: Vec<Line<'static>> =
-        lines.into_iter().skip(skip).take(height).map(|(_, line)| line).collect();
+    let mut shown: Vec<Line<'static>> = lines
+        .into_iter()
+        .skip(skip)
+        .take(height)
+        .map(|(_, line)| line)
+        .collect();
     if let Some(error) = &transcript.error {
-        shown.push(Line::from(Span::styled(format!("  {error}"), theme::ink(theme::RED))));
+        shown.push(Line::from(Span::styled(
+            format!("  {error}"),
+            theme::ink(theme::RED),
+        )));
     } else if shown.is_empty() {
-        shown.push(Line::from(Span::styled("  reading the transcript…", theme::ink(theme::FAINT))));
+        shown.push(Line::from(Span::styled(
+            "  reading the transcript…",
+            theme::ink(theme::FAINT),
+        )));
     }
     frame.render_widget(Paragraph::new(shown).block(block), area);
 }
@@ -363,7 +444,10 @@ fn item_lines(
     clock: Clock,
     width: usize,
 ) -> Vec<Line<'static>> {
-    let time = Span::styled(format!("{} ", clock.time_of(item.at)), theme::ink(theme::FAINT));
+    let time = Span::styled(
+        format!("{} ", clock.time_of(item.at)),
+        theme::ink(theme::FAINT),
+    );
     let one_line = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     match item.kind {
@@ -393,33 +477,57 @@ fn item_lines(
                 .and_then(|result| result.duration_ms)
                 .map(|ms| format!("{:.1}s", ms as f64 / 1000.0))
                 .unwrap_or_default();
-            let name = item.tool_name.clone().unwrap_or_else(|| String::from("tool"));
+            let name = item
+                .tool_name
+                .clone()
+                .unwrap_or_else(|| String::from("tool"));
             let tail = format!(" {duration:>6} {status:<5}");
             let gist_width = width.saturating_sub(9 + 5 + 12 + tail.len());
             let mut lines = vec![Line::from(vec![
                 time,
                 Span::styled("TOOL ", theme::bold(theme::CYAN)),
                 Span::styled(format::cell(&name, 12), theme::bold(theme::CYAN)),
-                Span::styled(format::cell(&one_line(&item.text), gist_width), theme::ink(theme::DIM)),
+                Span::styled(
+                    format::cell(&one_line(&item.text), gist_width),
+                    theme::ink(theme::DIM),
+                ),
                 Span::styled(format!(" {duration:>6} "), theme::ink(theme::DIM)),
                 Span::styled(format!("{status:<5}"), theme::bold(color)),
             ])];
 
-            let open = item.tool_id.as_ref().is_some_and(|id| expanded.contains(id));
+            let open = item
+                .tool_id
+                .as_ref()
+                .is_some_and(|id| expanded.contains(id));
             if open {
-                lines.push(Line::from(Span::styled("         ┌ ARGUMENTS", theme::ink(theme::FAINT))));
                 lines.push(Line::from(Span::styled(
-                    format!("         │ {}", format::clip(&one_line(&item.text), EXPANDED_CHARS)),
+                    "         ┌ ARGUMENTS",
+                    theme::ink(theme::FAINT),
+                )));
+                lines.push(Line::from(Span::styled(
+                    format!(
+                        "         │ {}",
+                        format::clip(&one_line(&item.text), EXPANDED_CHARS)
+                    ),
                     theme::ink(theme::AMBER),
                 )));
                 if let Some(result) = result {
-                    lines.push(Line::from(Span::styled("         ├ RESULT", theme::ink(theme::FAINT))));
                     lines.push(Line::from(Span::styled(
-                        format!("         │ {}", format::clip(&one_line(&result.text), EXPANDED_CHARS)),
+                        "         ├ RESULT",
+                        theme::ink(theme::FAINT),
+                    )));
+                    lines.push(Line::from(Span::styled(
+                        format!(
+                            "         │ {}",
+                            format::clip(&one_line(&result.text), EXPANDED_CHARS)
+                        ),
                         theme::ink(color),
                     )));
                 }
-                lines.push(Line::from(Span::styled("         └", theme::ink(theme::FAINT))));
+                lines.push(Line::from(Span::styled(
+                    "         └",
+                    theme::ink(theme::FAINT),
+                )));
             }
             lines
         }
@@ -449,16 +557,32 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
                     format!("{} ", theme::status_word(child.status)),
                     theme::ink(theme::status_color(child.status)),
                 ),
-                Span::styled(format::right(&format::cost(child.cost), 8), theme::bold(theme::YELLOW)),
+                Span::styled(
+                    format::right(&format::cost(child.cost), 8),
+                    theme::bold(theme::YELLOW),
+                ),
                 Span::raw(" "),
-                Span::styled(child.doing.clone().unwrap_or_default(), theme::ink(theme::CYAN)),
+                Span::styled(
+                    child.doing.clone().unwrap_or_default(),
+                    theme::ink(theme::CYAN),
+                ),
             ]),
-            None => Line::from(Span::styled(format!("· {child} (gone)"), theme::ink(theme::FAINT))),
+            None => Line::from(Span::styled(
+                format!("· {child} (gone)"),
+                theme::ink(theme::FAINT),
+            )),
         };
-        lines.push(if focused && index == app.cursors.child { line.style(theme::selected()) } else { line });
+        lines.push(if focused && index == app.cursors.child {
+            line.style(theme::selected())
+        } else {
+            line
+        });
     }
     if lines.is_empty() {
-        lines.push(Line::from(Span::styled("  no children", theme::ink(theme::FAINT))));
+        lines.push(Line::from(Span::styled(
+            "  no children",
+            theme::ink(theme::FAINT),
+        )));
     }
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }

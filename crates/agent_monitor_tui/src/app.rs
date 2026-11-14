@@ -164,7 +164,11 @@ impl App {
             (Some(Pane::Body), _) => {}
             (Some(Pane::Transcript), _) => self.move_transcript(motion),
             (Some(Pane::Children), Page::Agent(id)) => {
-                let len = self.view.agents.get(id).map_or(0, |agent| agent.children.len());
+                let len = self
+                    .view
+                    .agents
+                    .get(id)
+                    .map_or(0, |agent| agent.children.len());
                 self.cursors.child = moved(self.cursors.child, len, motion);
             }
             (Some(Pane::Children), _) => {}
