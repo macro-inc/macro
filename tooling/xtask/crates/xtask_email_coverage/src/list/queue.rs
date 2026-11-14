@@ -59,11 +59,11 @@ fn check_consumed_queues(
     queues: &[QueueSource],
 ) -> Result<(), Report> {
     let file = repo.parse(&workers.file)?;
-    let mut consumed = ConsumedQueues::default();
-    consumed.visit_file(&file);
+    let consumed = ConsumedQueues::of(&file);
     if let Some((variable, span)) = &consumed.ambiguous {
         bail!(
-            "{}: `{variable}` names two different queues in this file; give each its own name",
+            "{}: `{variable}` names two different things in this file, a queue among them; \
+             give each its own name",
             Loc::new(&workers.file, *span)
         );
     }
@@ -119,15 +119,48 @@ struct ConsumedQueues {
     ambiguous: Option<(String, proc_macro2::Span)>,
     /// Other names the worker type is imported under (`use .. as Worker`).
     worker_aliases: Vec<String>,
+    /// Variables bound to something that is not a queue type.
+    other_bindings: BTreeMap<String, proc_macro2::Span>,
+}
+
+impl ConsumedQueues {
+    /// What the file's workers consume. The imports are read first: one may
+    /// come after the function that uses it.
+    fn of(file: &syn::File) -> Self {
+        let mut aliases = WorkerAliases::default();
+        aliases.visit_file(file);
+        let mut consumed = Self {
+            worker_aliases: aliases.0,
+            ..Self::default()
+        };
+        consumed.visit_file(file);
+        // A worker's variable that is also bound to something else may not
+        // hold the queue when the worker reads it.
+        let shadowed = consumed.worker_queues.iter().find_map(|(variable, _)| {
+            consumed.queue_types.get(variable)?;
+            let span = consumed.other_bindings.get(variable)?;
+            Some((variable.clone(), *span))
+        });
+        if let Some(shadowed) = shadowed {
+            consumed.ambiguous.get_or_insert(shadowed);
+        }
+        consumed
+    }
+}
+
+/// The other names the worker type is imported under.
+#[derive(Default)]
+struct WorkerAliases(Vec<String>);
+
+impl<'ast> Visit<'ast> for WorkerAliases {
+    fn visit_use_rename(&mut self, rename: &'ast syn::UseRename) {
+        if rename.ident == WORKER_TYPE {
+            self.0.push(rename.rename.to_string());
+        }
+    }
 }
 
 impl<'ast> Visit<'ast> for ConsumedQueues {
-    fn visit_use_rename(&mut self, rename: &'ast syn::UseRename) {
-        if rename.ident == WORKER_TYPE {
-            self.worker_aliases.push(rename.rename.to_string());
-        }
-    }
-
     fn visit_local(&mut self, local: &'ast Local) {
         if let Pat::Ident(variable) = &local.pat
             && let Some(init) = &local.init
@@ -144,6 +177,9 @@ impl<'ast> Visit<'ast> for ConsumedQueues {
             {
                 self.ambiguous.get_or_insert((name, variable.ident.span()));
             }
+        } else if let Pat::Ident(variable) = &local.pat {
+            self.other_bindings
+                .insert(variable.ident.to_string(), variable.ident.span());
         }
         syn::visit::visit_local(self, local);
     }
