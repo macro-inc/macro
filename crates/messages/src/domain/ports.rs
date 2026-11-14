@@ -1,3 +1,4 @@
+use super::changes::ChannelChangeLog;
 use super::models::*;
 use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
@@ -24,10 +25,18 @@ pub enum MessageError {
     /// A client-supplied message id is already taken.
     #[error("message id already exists")]
     Conflict,
+    /// The parent is taking more writes than it can commit in time. Nothing
+    /// was written; the caller may retry.
+    #[error("too many writes to this conversation at once; retry shortly")]
+    Busy,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
 }
+
+/// Seconds a caller answered with [`MessageError::Busy`] waits before it
+/// sends the same request again, as the `Retry-After` header carries it.
+pub const BUSY_RETRY_AFTER_SECONDS: &str = "1";
 
 /// Cursor for a chronological parent timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +288,12 @@ pub struct MessageEvent {
     pub actor: String,
     /// Mutation nonce for optimistic reconciliation.
     pub nonce: Option<String>,
+    /// The sequence number this change took in its channel's change log. A
+    /// reader that has applied the number before it applies the change; any
+    /// other reader asks for the changes it missed. Absent for parents other
+    /// than channels and for changes that are not stored, such as typing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<i64>,
     /// Persisted change.
     pub change: MessageChange,
 }
@@ -409,6 +424,25 @@ pub struct ReactionResult {
     pub message: Message,
     /// False for an idempotent add or remove that changed no rows.
     pub changed: bool,
+    /// The sequence number the change took in its channel's change log.
+    pub seq: Option<i64>,
+}
+
+/// A committed write and the sequence number it took in its channel's change
+/// log. Parents other than channels keep no log.
+#[derive(Debug, Clone)]
+pub struct Sequenced<T> {
+    /// What the write returned.
+    pub value: T,
+    /// The write's channel sequence number.
+    pub seq: Option<i64>,
+}
+
+impl<T> Sequenced<T> {
+    /// A write that logged nothing.
+    pub fn unlogged(value: T) -> Self {
+        Self { value, seq: None }
+    }
 }
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
@@ -526,6 +560,71 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// [`Self::create`], also reporting the sequence number the write took in
+    /// its channel's change log. A store that keeps no log reports none.
+    fn create_sequenced(
+        &self,
+        command: CreateMessage,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async { self.create(command).await.map(Sequenced::unlogged) }
+    }
+    /// [`Self::edit`], also reporting the write's channel sequence number.
+    fn edit_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+        command: EditMessage,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async move {
+            self.edit(parent, id, command)
+                .await
+                .map(Sequenced::unlogged)
+        }
+    }
+    /// [`Self::delete`], also reporting the write's channel sequence number.
+    fn delete_sequenced(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Sequenced<Message>, MessageError>> + Send {
+        async move { self.delete(parent, id).await.map(Sequenced::unlogged) }
+    }
+    /// The channel's latest change sequence number; zero before its first
+    /// logged change.
+    fn channel_seq(
+        &self,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<i64, MessageError>> + Send {
+        async { Ok(0) }
+    }
+    /// Up to `limit` logged changes after `since` with the channel's counter
+    /// from the same snapshot; no changes when retention removed the one
+    /// right after `since`.
+    fn channel_change_log(
+        &self,
+        _channel_id: Uuid,
+        _since: i64,
+        _limit: usize,
+    ) -> impl Future<Output = Result<ChannelChangeLog, MessageError>> + Send {
+        async { Ok(ChannelChangeLog::default()) }
+    }
+    /// The roots among `ids` that `parent`'s timeline shows now, in no
+    /// particular order.
+    fn roots_by_ids(
+        &self,
+        _parent: &MessageParent,
+        _ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<MessageListItem>, MessageError>> + Send {
+        async { Ok(Vec::new()) }
+    }
+    /// The live replies among `ids` within `parent`, in no particular order.
+    fn live_replies(
+        &self,
+        _parent: &MessageParent,
+        _ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send {
+        async { Ok(Vec::new()) }
+    }
     /// The parent a live message belongs to; `None` once it is deleted. Grants
     /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
     fn parent_of(

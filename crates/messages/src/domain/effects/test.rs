@@ -22,6 +22,7 @@ fn event(change: MessageChange) -> MessageEvent {
         parent: MessageParent::parse("document", "doc").unwrap(),
         actor: "macro|author@example.com".into(),
         nonce: None,
+        seq: None,
         change,
     }
 }

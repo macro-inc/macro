@@ -6,6 +6,7 @@
  */
 import type { MessageChange } from './messageChange';
 import type { MessageEventNonce } from './messageEventNonce';
+import type { MessageEventSeq } from './messageEventSeq';
 import type { MessageParent } from './messageParent';
 
 /**
@@ -20,4 +21,9 @@ export interface MessageEvent {
   nonce?: MessageEventNonce;
   /** Changed parent, used for subscriptions and cache invalidation. */
   parent: MessageParent;
+  /** The sequence number this change took in its channel's change log. A
+reader that has applied the number before it applies the change; any
+other reader asks for the changes it missed. Absent for parents other
+than channels and for changes that are not stored, such as typing. */
+  seq?: MessageEventSeq;
 }

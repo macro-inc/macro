@@ -165,6 +165,15 @@ impl IntoResponse for MessageHttpError {
             MessageError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             MessageError::Invalid(message) => (StatusCode::BAD_REQUEST, message),
             MessageError::Conflict => (StatusCode::CONFLICT, "message id already exists"),
+            // Nothing was written, so the same request can be sent again.
+            MessageError::Busy => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(axum::http::header::RETRY_AFTER, BUSY_RETRY_AFTER_SECONDS)],
+                    Json(serde_json::json!({ "message": "too many writes at once; retry" })),
+                )
+                    .into_response();
+            }
             MessageError::Repository(error) => {
                 tracing::error!(error=?error, "message request failed");
                 (

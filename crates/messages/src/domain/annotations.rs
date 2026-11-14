@@ -182,6 +182,7 @@ impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
                 parent,
                 actor: user.as_ref().to_owned(),
                 nonce: None,
+                seq: None,
                 change: MessageChange::ThreadUpdated { state },
             };
             // The deletion has committed; delivery failure must not ask callers to repeat it.

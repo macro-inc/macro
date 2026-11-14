@@ -4,6 +4,7 @@ use sqlx::Acquire;
 
 use super::{PgMessageRepository, database_error};
 use crate::domain::{
+    changes::ChannelChangeOp,
     historical::{HistoricalBatch, HistoricalMessage},
     ports::{HistoricalMessageRepository, MessageError},
 };
@@ -65,7 +66,7 @@ impl PgMessageRepository {
             "slack_import_job": patch.job_id,
             "body_version": patch.importer_version,
         });
-        Ok(sqlx::query!(
+        let root_id = sqlx::query_scalar!(
             r#"UPDATE comms_messages SET content = $5
                WHERE id = $1
                  AND parent_entity_type = 'channel' AND parent_entity_id = $2::text
@@ -73,18 +74,32 @@ impl PgMessageRepository {
                  AND deleted_at IS NULL AND edited_at IS NULL AND updated_at = created_at
                  AND NOT EXISTS (SELECT 1 FROM comms_message_threads t
                      WHERE t.root_id = coalesce(comms_messages.thread_id, comms_messages.id)
-                       AND t.deleted_at IS NOT NULL)"#,
+                       AND t.deleted_at IS NOT NULL)
+               RETURNING coalesce(thread_id, id) AS "root_id!""#,
             patch.message_id,
             patch.channel_id.to_string(),
             patch.expected_body,
             guard,
             patch.body,
         )
-        .execute(&mut **tx)
+        .fetch_optional(&mut **tx)
         .await
-        .map_err(database_error)?
-        .rows_affected()
-            == 1)
+        .map_err(database_error)?;
+        let Some(root_id) = root_id else {
+            return Ok(false);
+        };
+        // No live event announces the patch; the log is how an open channel
+        // learns the body changed.
+        super::change_log::append_in_open_transaction(
+            tx,
+            patch.channel_id,
+            &[ChannelChangeOp::Message {
+                message_id: patch.message_id,
+                root_id,
+            }],
+        )
+        .await?;
+        Ok(true)
     }
 
     /// Persist historical channel messages in a caller-owned transaction without
@@ -101,7 +116,15 @@ impl PgMessageRepository {
     ) -> Result<(), MessageError> {
         batch.validate()?;
         let mut batch_tx = tx.begin().await.map_err(database_error)?;
-        let result = insert_batch(&mut batch_tx, batch).await;
+        let result = match insert_batch(&mut batch_tx, batch).await {
+            // Imported messages land anywhere in the channel's history and
+            // announce nothing, so one entry tells every reader to start over
+            // rather than one entry per message.
+            Ok(()) if !batch.messages.is_empty() => {
+                log_import(&mut batch_tx, batch.channel_id).await
+            }
+            result => result,
+        };
         match result {
             Ok(()) => batch_tx.commit().await.map_err(database_error),
             Err(error) => {
@@ -110,6 +133,24 @@ impl PgMessageRepository {
             }
         }
     }
+}
+
+/// Log one imported batch. The batch's replies are checked against their
+/// roots first, so the caller's commit takes no message lock while it holds
+/// the channel's counter; later batches of the transaction defer again.
+async fn log_import(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    channel_id: uuid::Uuid,
+) -> Result<(), MessageError> {
+    super::change_log::check_thread_references(tx).await?;
+    super::change_log::defer_thread_references(tx).await?;
+    super::change_log::append_in_open_transaction(
+        tx,
+        channel_id,
+        &[ChannelChangeOp::HistoryImported],
+    )
+    .await?;
+    Ok(())
 }
 
 async fn insert_batch(

@@ -211,6 +211,7 @@ fn event(change: MessageChange) -> MessageEvent {
         parent: MessageParent::Channel(CHANNEL),
         actor: SENDER.to_owned(),
         nonce: Some("n1".into()),
+        seq: None,
         change,
     }
 }

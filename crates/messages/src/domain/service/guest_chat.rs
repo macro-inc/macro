@@ -457,6 +457,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,
+                seq: None,
                 change: MessageChange::Posted {
                     notification_policy: PostMessageNotificationPolicy::default(),
                     message: message.clone(),
@@ -711,6 +712,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,
+                // A call's chat is not a channel: it has no change sequence.
+                seq: None,
                 change: MessageChange::Edited {
                     notification_policy: PatchMessageNotificationPolicy::default(),
                     message: message.clone(),
@@ -741,6 +744,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
             .publish_message(
                 actor,
                 None,
+                None,
                 &message,
                 MessageChange::MessageDeleted {
                     message: message.clone(),
@@ -767,7 +771,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let ReactionResult { message, changed } = self
+        let ReactionResult {
+            message,
+            changed,
+            seq,
+        } = self
             .messages
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
@@ -777,6 +785,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 .publish_message(
                     actor,
                     nonce,
+                    seq,
                     &message,
                     MessageChange::ReactionChanged {
                         message: message.clone(),

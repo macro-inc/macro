@@ -333,6 +333,7 @@ fn comment_error(description: &'static str) -> impl FnOnce(MessageError) -> Tool
             }
             MessageError::Invalid(reason) => format!("{description}: {reason}"),
             MessageError::Conflict => format!("{description}: message id already exists"),
+            MessageError::Busy => format!("{description}: {error}"),
             MessageError::Repository(_) => description.to_owned(),
         };
         ToolCallError {
