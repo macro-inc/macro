@@ -28,7 +28,9 @@ pub struct RemoveLinkQueryParams {
 /// address (e.g. a primary inbox plus delegated/secondary inboxes), so the link must be
 /// selected by the linked email rather than derived from the owner's macro_id.
 fn find_idp_link(links: Vec<Link>, linked_email: &str) -> Option<Link> {
-    links.into_iter().find(|l| l.display_name == linked_email)
+    links
+        .into_iter()
+        .find(|l| l.display_name.eq_ignore_ascii_case(linked_email))
 }
 
 /// Removes a link for a user by the idp name
