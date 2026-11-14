@@ -3,7 +3,7 @@
 
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { Mailbox } from './fixtures';
-import { gmailRawMessage } from './provider';
+import { rawMessage } from './provider';
 import type { LinkedInbox, ProviderMessage } from './stack';
 
 /** Makes the provider answer an error on a route (`messages.send`). */
@@ -77,7 +77,7 @@ export async function onlySentRaw(
     })
     .toBe(1);
   const [sent] = await sentMessages(mailbox, inbox);
-  return gmailRawMessage(mailbox.stack.info, inbox.email, sent.id);
+  return rawMessage(mailbox.stack.info, inbox.provider, inbox.email, sent.id);
 }
 
 function decodeQuotedPrintable(text: string): string {
