@@ -1,0 +1,62 @@
+packages/sdk-ocaml/analyzer/bin/main.ml
+  s_e722a0e50d8d61::t_ee72ca1a6147b0 1-18
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_e722a0e50d8d61::t_ee72ca1a6147b0 1-299,301-381
+  s_e722a0e50d8d61::t_10f0bcfb8cfe2c 300
+packages/sdk-ocaml/analyzer/test/mini_sdk/mini_transport.ml
+  s_e722a0e50d8d61::t_001402ef490583 1-25
+packages/sdk-ocaml/runner/http/dune
+  s_e722a0e50d8d61::t_90705bed3dbd3c 1-4
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_e722a0e50d8d61::t_ee72ca1a6147b0 1-17
+packages/sdk-ocaml/analyzer/lib/dune
+  s_e722a0e50d8d61::t_f0d4a820c2aacc 1-4
+packages/sdk-ocaml/analyzer/test/mini_sdk/macro.ml
+  s_e722a0e50d8d61::t_001402ef490583 1-34
+packages/sdk-ocaml/analyzer/test/mini_sdk/operations.json
+  s_e722a0e50d8d61::t_001402ef490583 1-8
+packages/sdk-ocaml/dune-project
+  s_e722a0e50d8d61::t_be950d820d7d0b 1-9
+packages/sdk-ocaml/shell.nix
+  s_e722a0e50d8d61::t_be950d820d7d0b 1-11
+packages/sdk-ocaml/runner/http/macro_sdk_http.mli
+  s_e722a0e50d8d61::t_90705bed3dbd3c 1-11
+packages/sdk-ocaml/analyzer/lib/sdk.mli
+  s_e722a0e50d8d61::t_883988f6f4cfa2 1-21
+packages/sdk-ocaml/analyzer/test/mini_sdk/mini_transport.mli
+  s_e722a0e50d8d61::t_7b65c85764a5de 4-6
+  s_e722a0e50d8d61::t_001402ef490583 1-3,7
+packages/sdk-ocaml/analyzer/test/mini_sdk/macro.mli
+  s_e722a0e50d8d61::t_001402ef490583 1-25
+packages/sdk-ocaml/dune
+  s_e722a0e50d8d61::t_be950d820d7d0b 1-2
+packages/sdk-ocaml/.gitignore
+  s_e722a0e50d8d61::t_be950d820d7d0b 1
+packages/sdk-ocaml/analyzer/lib/sdk.ml
+  s_e722a0e50d8d61::t_883988f6f4cfa2 1-99
+packages/sdk-ocaml/analyzer/bin/dune
+  s_e722a0e50d8d61::t_ee72ca1a6147b0 1-5
+packages/sdk-ocaml/analyzer/test/mini_sdk/dune
+  s_e722a0e50d8d61::t_001402ef490583 1-15
+packages/sdk-ocaml/analyzer/lib/policy.ml
+  s_e722a0e50d8d61::t_f0d4a820c2aacc 1-10,14-79,81-127
+  s_e722a0e50d8d61::t_527263a63dbd51 11-13,80
+packages/sdk-ocaml/runner/http/macro_sdk_http.ml
+  s_e722a0e50d8d61::t_90705bed3dbd3c 1-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0911594c27c6629c52d4d0d81ab4473eee56bb80",
+  "prompts": {},
+  "sessions": {
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
