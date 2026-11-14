@@ -3,7 +3,6 @@ import { createRecentAgentSelections } from '@app/features/block-agent/context/r
 import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
@@ -57,6 +56,7 @@ import {
 import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
+  createPersistedComposerAttachments,
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
@@ -325,17 +325,13 @@ export function NewChatPage(props: {
     }
   };
 
-  const attachmentTracker = createMemo(() => {
-    const identity = userId();
-    const key = props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY;
-    return createInputAttachmentTracker({
-      // Unknown identities never read shared storage. Parents may own the
-      // text draft without owning files; those still persist here.
-      persistenceKey: identity
-        ? `${key}:${encodeURIComponent(identity)}`
-        : undefined,
-    });
-  });
+  // Parents may own the text draft without owning files; those still persist here.
+  const attachmentTracker = createMemo(() =>
+    createPersistedComposerAttachments(
+      props.attachmentsKey ?? NEW_CONVERSATION_ATTACHMENTS_KEY,
+      userId()
+    )
+  );
   const attachFiles = (files: File[]) =>
     fireAndForget(
       uploadInputAttachments({

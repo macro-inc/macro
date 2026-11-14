@@ -1479,7 +1479,10 @@ where
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
-    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
+    #[tracing::instrument(
+        err,
+        skip(self, requesting_user, source_ids, query, github_pull_request_filter)
+    )]
     async fn handle_foreign_entity_request(
         &self,
         requesting_user: Option<String>,
@@ -1888,7 +1891,11 @@ where
                     .map(SoupCandidate::from_projection_hydration)
                     .paginate(limit.into(), |item: &SoupCandidate| CursorVal {
                         sort_type: sort,
-                        last_val: sort.position(item.sort_key, item.item.updated_at()),
+                        last_val: sort.position(
+                            item.sort_key,
+                            item.item.name(),
+                            item.item.updated_at(),
+                        ),
                     })
                     .filter_on(entity_filter)
                     .into_page();

@@ -130,6 +130,8 @@ pub struct Pipeline {
     /// Name, which names no column once someone deletes it.
     #[schema(value_type = Uuid)]
     pub primary_column_id: ColumnId,
+    /// Stable identities for Outcome and amount/currency fields.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Whether the pipeline has a team grant.
     pub sharing: PipelineSharing,
     /// Creation time.
@@ -184,6 +186,8 @@ pub struct PipelineBlueprint {
     pub team_id: Uuid,
     /// Primary reference kind, if it tracks a record.
     pub record_type: Option<PipelineRecordType>,
+    /// Outcome and amount/currency fields provisioned with a tracked pipeline's table.
+    pub commercial_fields: super::pipeline_commercial::CommercialFields,
     /// Initial grants.
     pub sharing: PipelineSharing,
     /// Schema owned by the database domain.
@@ -482,11 +486,17 @@ pub(crate) fn pipeline_blueprint(
 ) -> PipelineBlueprint {
     let id = macro_uuid::generate_uuid_v7();
     let primary_column_id = ColumnId::new();
-    let columns = match input.record_type {
-        Some(record_type) => tracked_columns(primary_column_id, record_type, labels),
-        None => generic_columns(primary_column_id),
+    // Only a pipeline that tracks a record holds deals; a generic one is a free-form table.
+    let (columns, commercial_fields) = match input.record_type {
+        Some(record_type) => {
+            let mut columns = tracked_columns(primary_column_id, record_type, labels);
+            let commercial_fields = super::pipeline_commercial::provision(&mut columns);
+            (columns, commercial_fields)
+        }
+        None => (generic_columns(primary_column_id), Default::default()),
     };
     PipelineBlueprint {
+        commercial_fields,
         id,
         team_id,
         record_type: input.record_type,
@@ -976,7 +986,15 @@ where
             .await
             .map_err(storage)?
             .ok_or(PipelineError::NotFound)?;
-        self.validate_stage_requirements(&pipeline, &mut batch)
+        // Insert defaults come first so they can satisfy a stage's required fields.
+        // The table read for them also serves the stage rules.
+        let mut table = None;
+        if pipeline.commercial_fields.has_system_fields() {
+            let loaded = self.pipeline_table(&pipeline).await?;
+            pipeline.commercial_fields.prepare(&loaded, &mut batch)?;
+            table = Some(loaded);
+        }
+        self.validate_stage_requirements(&pipeline, table, &mut batch)
             .await?;
         Ok(self
             .databases

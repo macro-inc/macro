@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createProjectedList,
   MAX_BROWSE_PAGES_PER_LOAD,
+  searchRowHost,
   UNANSWERED_SEARCH_LIMIT_MS,
 } from './projected-list';
 import { type Bucket, exclude } from './types';
@@ -57,6 +58,44 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('ranks the row reads of a typed search with it, and leaves browsing reads alone', async () => {
+    const readRecordsByKeys = vi.fn(async () => ({
+      revision: 0 as never,
+      records: [],
+    }));
+    const args = {
+      document: 'fragment Item on GraphqlSoupDocument { id }',
+      fragmentName: 'Item',
+      keys: ['GraphqlSoupDocument:one'],
+    };
+    const host = { readRecordsByKeys };
+
+    expect(searchRowHost(host, '')).toBe(host);
+    await searchRowHost(host, 'todo').readRecordsByKeys(args);
+    expect(readRecordsByKeys).toHaveBeenCalledExactlyOnceWith({
+      ...args,
+      priority: 'typed-search',
+    });
+  });
+
+  it('tells the row loader which typed query its documents answer', async () => {
+    const project = vi.fn(materialize);
+    const list = root(() =>
+      createProjectedList({
+        host: { search: async () => page(['first']) },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => ' fir ',
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(project).toHaveBeenCalledExactlyOnceWith(
+      [expect.objectContaining({ recordKey: 'GraphqlSoupDocument:first' })],
+      'fir'
+    );
+  });
+
   it('keeps the listed rows when a cache revision replays the same search result', async () => {
     const [revision, setRevision] = createSignal(0);
     const search = vi

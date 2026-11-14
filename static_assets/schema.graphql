@@ -3937,6 +3937,16 @@ type GraphqlComputerSetupMetadata {
 	"""
 	computerName: String!
 	"""
+	The Macro user id of the agent teammate the computer runs; absent for
+	a plain computer.
+	"""
+	agentUserId: String
+	"""
+	The name of the agent teammate the computer runs; absent for a plain
+	computer.
+	"""
+	agentName: String
+	"""
 	Whether setup finished or failed.
 	"""
 	outcome: GraphqlComputerSetupOutcome!
@@ -4257,6 +4267,14 @@ type GraphqlCrmPipelineColumn {
 	The column's identifier.
 	"""
 	id: ID!
+	"""
+	The row column that holds this amount's denomination, if monetary.
+	"""
+	currencyColumnId: ID
+	"""
+	Default for a CRM system select; its options and name are fixed.
+	"""
+	systemDefault: String
 	"""
 	The property definition the column binds.
 	"""
@@ -8154,6 +8172,12 @@ enum GraphqlSimpleSortMethod {
 	Email, channels, calls, companies, and agent sessions never appear.
 	"""
 	PROPERTY
+	"""
+	Sort by the item's own name, case-insensitively in ICU root collation
+	order, unnamed last, then newest update and ID. Database rows have no
+	name here and sort last. Omits the same sources `PROPERTY` does.
+	"""
+	NAME
 }
 
 """

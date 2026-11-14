@@ -776,7 +776,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
           width: ${STAGE_W}px;
         }
         .cpg-headvar-narrow { padding: 0 8px 0 16px; width: ${RAIL_W}px; }
-        .cpg-title { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .cpg-title { font-size: 10px; font-weight: 500; white-space: nowrap; }
         /* Inset tab row -- the same shell as the narrow dropdown, carrying
            three tabs instead of one value and a caret. */
         .cpg-tabrow {
@@ -893,7 +893,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
            place relative to it at every width. */
         .cpg-namegroup { align-items: center; display: flex; gap: 7px; width: 136px; }
         .cpg-dot { background: #ff8f00; border-radius: 999px; flex-shrink: 0; height: 4px; width: 4px; }
-        .cpg-name { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .cpg-name { font-size: 10px; font-weight: 500; white-space: nowrap; }
         .cpg-trail {
           align-items: center;
           display: flex;
@@ -1019,7 +1019,7 @@ export function ChannelPreviewGraphic(props: { still?: boolean } = {}) {
         .cpg-threadrow { padding-left: 38px; position: relative; width: 100%; }
         .cpg-msgbody { display: flex; flex: 1 0 0; flex-direction: column; gap: 4px; min-width: 0; }
         .cpg-msghead { display: flex; font-size: 10px; justify-content: space-between; padding-bottom: 2px; width: 100%; }
-        .cpg-who { font-weight: 600; }
+        .cpg-who { font-weight: 500; }
         .cpg-msgtext { color: #fff; font-size: 10px; line-height: 1.45; margin: 0; }
         .cpg-mention {
           background: rgb(255 143 0 / 0.2);

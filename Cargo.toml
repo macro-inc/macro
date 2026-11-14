@@ -8,6 +8,7 @@ members = [
   "crates/passwords",
   "crates/password_import",
   "crates/password_import_wasm",
+  "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",

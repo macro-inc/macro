@@ -266,8 +266,7 @@ mod authenticated_join_routes {
             jwt: &str,
         ) -> Result<UserContext, Report<MacroAuthorizationError>> {
             let user_id = match jwt {
-                "member" => "macro|member@example.com",
-                "program" => "macro|member@example.com",
+                "member" | "program" | "api-jwt" | "agent-session" => "macro|member@example.com",
                 "viewer" => "macro|viewer@example.com",
                 _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
             };
@@ -285,8 +284,13 @@ mod authenticated_join_routes {
         ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
             self.authorize(jwt).await.map(|context| {
                 let mut credential = ValidatedCredential::session(context);
-                if jwt == "program" {
-                    credential.origin = CredentialOrigin::UserApiKey;
+                match jwt {
+                    "program" => credential.origin = CredentialOrigin::UserApiKey,
+                    "api-jwt" => credential.origin = CredentialOrigin::MacroApiJwt,
+                    "agent-session" => {
+                        credential.identity.agent_id = Some(bot_id::MACRO_NEW_BOT_ID);
+                    }
+                    _ => {}
                 }
                 credential
             })
@@ -325,16 +329,68 @@ mod authenticated_join_routes {
     }
 
     #[tokio::test]
-    async fn join_route_is_absent_when_programmatic_calls_are_disabled() {
-        let call_id = Uuid::now_v7();
+    async fn join_route_keeps_programmatic_credentials_gated() {
+        for actor in ["program", "api-jwt"] {
+            let call_id = Uuid::now_v7();
+            let mut service = MockCallService::new();
+            service.expect_join_call().never();
+
+            let response = router_with_flag(service, false)
+                .oneshot(join(call_id, actor))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{actor}");
+        }
+    }
+
+    #[tokio::test]
+    async fn join_route_preserves_programmatic_access_when_enabled() {
+        for actor in ["program", "api-jwt", "agent-session"] {
+            let mut service = MockCallService::new();
+            let is_program = actor != "agent-session";
+            service
+                .expect_join_call()
+                .times(1)
+                .returning(move |_, _, _, credential_is_program| {
+                    assert_eq!(credential_is_program, is_program);
+                    Box::pin(async { Err(CallError::Ended) })
+                });
+
+            let response = router_with_flag(service, true)
+                .oneshot(join(Uuid::now_v7(), actor))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::GONE, "{actor}");
+        }
+    }
+
+    #[tokio::test]
+    async fn join_route_keeps_agent_attributed_sessions_gated() {
         let mut service = MockCallService::new();
         service.expect_join_call().never();
 
         let response = router_with_flag(service, false)
-            .oneshot(join(call_id, "member"))
+            .oneshot(join(Uuid::now_v7(), "agent-session"))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn join_route_refuses_code_execution_even_for_a_human_session() {
+        let mut service = MockCallService::new();
+        service.expect_join_call().never();
+
+        let mut request = join(Uuid::now_v7(), "member");
+        request.headers_mut().insert(
+            macro_authorization::CODE_EXECUTION_HEADER,
+            "1".parse().unwrap(),
+        );
+        let response = router_with_flag(service, false)
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -349,7 +405,7 @@ mod authenticated_join_routes {
             })
         });
 
-        let response = router(service)
+        let response = router_with_flag(service, false)
             .oneshot(join(call_id, "viewer"))
             .await
             .unwrap();
@@ -357,13 +413,17 @@ mod authenticated_join_routes {
     }
 
     #[tokio::test]
-    async fn join_route_returns_a_token_for_joinable_access() {
+    async fn join_route_returns_a_token_for_a_human_session_with_flag_disabled() {
         let call_id = Uuid::now_v7();
         let mut service = MockCallService::new();
         service
             .expect_join_call()
             .times(1)
-            .returning(move |_, _, _, _| {
+            .returning(move |id, user, request, is_program| {
+                assert_eq!(*id, call_id);
+                assert_eq!(user.as_ref(), "macro|member@example.com");
+                assert!(!request.replace);
+                assert!(!is_program);
                 Box::pin(async move {
                     Ok(CallTokenResponse {
                         started: false,
@@ -378,11 +438,27 @@ mod authenticated_join_routes {
                 })
             });
 
-        let response = router(service)
+        let response = router_with_flag(service, false)
             .oneshot(join(call_id, "member"))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn join_route_returns_gone_for_an_ended_call_with_flag_disabled() {
+        let mut service = MockCallService::new();
+        service
+            .expect_join_call()
+            .times(1)
+            .returning(|_, _, _, _| Box::pin(async { Err(CallError::Ended) }));
+        service.expect_start_call().never();
+
+        let response = router_with_flag(service, false)
+            .oneshot(join(Uuid::now_v7(), "member"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::GONE);
     }
 
     #[tokio::test]

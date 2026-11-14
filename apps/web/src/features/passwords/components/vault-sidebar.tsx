@@ -1,8 +1,4 @@
-import {
-  CollapsibleSection,
-  SearchBar,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { FolderTree } from '@app/features/drive-view/components/folder-tree';
 import { buildFolderTree } from '@app/features/drive-view/core/folder-tree';
 import type { DriveLocation } from '@app/features/drive-view/core/types';
@@ -511,8 +507,6 @@ export function VaultSidebarContent(props: {
 
 export function VaultSidebar(
   props: Parameters<typeof VaultSidebarContent>[0] & {
-    search: string;
-    onSearch: (value: string) => void;
     destination: string;
     onCreate: (kind: PasswordKind) => void;
     onImport: () => void;
@@ -520,17 +514,7 @@ export function VaultSidebar(
 ) {
   return (
     <ViewSidebar.Root aria-label={t('passwords.navigation')}>
-      <ViewSidebar.Header
-        searchLabel={t('passwords.search')}
-        search={() => (
-          <SearchBar
-            label={t('passwords.search')}
-            placeholder={t('passwords.search')}
-            value={props.search}
-            onValueChange={props.onSearch}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>{t('passwords.title')}</ViewSidebar.Title>

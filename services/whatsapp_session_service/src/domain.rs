@@ -4,5 +4,6 @@
 pub mod account;
 pub mod inbound;
 pub mod media;
+pub mod pictures;
 pub mod ports;
 pub mod supervisor;

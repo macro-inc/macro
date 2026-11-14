@@ -2102,8 +2102,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Create a database owned by the caller; its first table, "Table 1", holds a
-     * "Name" text column.
+     * Create a database owned by the caller; its first table, "Table 1" unless
+     * `firstTable` names it, holds a "Name" text column.
      */
     public createDatabase<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseData, ThrowOnError>): RequestResult<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateDatabaseResponses, CreateDatabaseErrors, ThrowOnError>({
