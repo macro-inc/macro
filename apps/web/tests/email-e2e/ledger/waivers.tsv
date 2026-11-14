@@ -1,0 +1,577 @@
+id	on	kind	reason
+F-020	outlook	bug	a message deleted at Outlook stays in the thread (outlook-deleted-message-stays-in-thread); its test is kept as a known bug
+F-057	both	needs	the image proxy refuses the private addresses of a stack, so what it fetched cannot be checked at the service; the UI half is tested
+F-078	gmail	bug	not spam on Gmail does not bring the thread back; its test is kept as a known bug
+F-100	outlook	bug	the From choice is dropped while the draft syncs (outlook-from-choice-dropped-while-draft-syncs); its test is kept as a known bug
+F-136	outlook	bug	retrying a rejected send conflicts (outlook-retry-send-after-rejection-conflicts); its test is kept as a known bug
+F-166	both	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
+AL-001	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-004	-	backlog	not exercised itself: another way into, or state of, F-029, F-030, F-031, F-032, covered through other rows
+AL-005	-	backlog	not exercised itself: another way into, or state of, F-029, F-030, covered through other rows
+AL-006	-	backlog	not exercised itself: another way into, or state of, F-029, F-030, covered through other rows
+AL-007	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-008	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-400	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is registered with it.
+AL-011	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
+AL-014	-	backlog	not exercised itself: another way into, or state of, F-050, covered through other rows
+AL-015	-	backlog	not exercised itself: another way into, or state of, F-050, covered through other rows
+AL-019	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-021	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-022	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-023	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-024	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-025	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-026	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-027	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-410	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-029	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-030	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-031	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-032	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-036	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
+AL-037	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
+AL-413	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
+AL-040	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
+AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
+AL-042	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
+AL-043	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
+AL-046	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
+AL-047	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-049	-	backlog	not exercised itself: another way into, or state of, F-038, covered through other rows
+AL-403	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-404	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-405	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-053	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-054	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-055	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-402	-	backlog	not exercised itself: another way into, or state of, F-038, covered through other rows
+AL-411	-	backlog	not exercised itself: another way into, or state of, F-038, covered through other rows
+AL-062	-	backlog	not exercised itself: another way into, or state of, F-071, covered through other rows
+AL-065	-	backlog	not exercised itself: another way into, or state of, F-072, covered through other rows
+AL-069	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+AL-074	-	backlog	not exercised itself: another way into, or state of, F-088, covered through other rows
+AL-075	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
+AL-077	-	backlog	not exercised itself: another way into, or state of, F-038, covered through other rows
+AL-097	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-104	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
+AL-107	-	backlog	not exercised itself: another way into, or state of, F-045, covered through other rows
+AL-108	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+AL-406	-	backlog	not exercised: of F-076, F-078, F-082, not all covered (see their waivers)
+AL-407	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+STL-001	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-002	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-401	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
+STL-004	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-005	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
+STL-009	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-010	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-011	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-012	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-015	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-016	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-404	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STL-017	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-018	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-019	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-021	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-022	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
+STL-024	-	backlog	not exercised itself: another way into, or state of, F-036, covered through other rows
+STL-028	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
+STL-029	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
+STL-030	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
+STL-031	-	backlog	not exercised itself: another way into, or state of, F-145, covered through other rows
+STL-033	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
+STL-034	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
+STL-035	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
+STL-038	-	backlog	not exercised: of F-076, F-078, not all covered (see their waivers)
+STL-040	-	backlog	not exercised itself: another way into, or state of, F-071, covered through other rows
+STL-041	-	backlog	not exercised itself: another way into, or state of, F-071, covered through other rows
+STL-409	-	backlog	not exercised itself: another way into, or state of, F-072, covered through other rows
+STL-046	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+STL-400	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+STL-053	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+STL-054	-	backlog	not exercised itself: another way into, or state of, F-044, covered through other rows
+STL-110	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+STL-405	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
+STL-402	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+STL-410	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+AL-122	-	backlog	not exercised itself: another way into, or state of, F-177, covered through other rows
+AL-134	-	backlog	not exercised itself: another way into, or state of, F-109, covered through other rows
+AL-135	-	backlog	not exercised itself: another way into, or state of, F-110, covered through other rows
+AL-138	-	backlog	not exercised itself: another way into, or state of, F-072, covered through other rows
+AL-139	-	backlog	not exercised itself: another way into, or state of, F-069, covered through other rows
+AL-140	-	backlog	not exercised itself: another way into, or state of, F-068, covered through other rows
+AL-143	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
+AL-144	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
+AL-500	-	backlog	not exercised itself: another way into, or state of, F-079, covered through other rows
+AL-145	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+AL-146	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-147	-	backlog	not exercised itself: another way into, or state of, F-080, F-081, covered through other rows
+AL-502	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
+AL-165	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
+AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
+AL-504	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
+AL-506	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
+AL-175	-	backlog	not exercised itself: another way into, or state of, F-117, covered through other rows
+AL-173	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+AL-174	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+AL-176	-	backlog	not exercised itself: another way into, or state of, F-126, covered through other rows
+AL-508	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
+AL-510	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
+AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
+AL-181	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+AL-182	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AL-184	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+AL-513	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+AL-514	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+AL-190	-	backlog	not exercised: of F-120, F-136, F-140, not all covered (see their waivers)
+AL-191	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
+AL-515	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
+AL-516	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
+STL-067	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
+STL-068	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
+STL-087	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
+STL-089	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
+STL-071	-	backlog	not exercised itself: another way into, or state of, F-117, covered through other rows
+STL-070	-	backlog	not exercised itself: another way into, or state of, F-116, covered through other rows
+STL-074	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
+STL-075	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+STL-076	-	backlog	not exercised itself: another way into, or state of, F-069, covered through other rows
+STL-077	-	backlog	not exercised itself: another way into, or state of, F-068, covered through other rows
+STL-079	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+STL-504	-	needs	needs live updates over the websocket, and no test on the full-stack tier does it yet
+STL-505	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STL-506	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STL-507	-	backlog	not exercised itself: another way into, or state of, F-123, covered through other rows
+STL-508	-	backlog	not exercised itself: another way into, or state of, F-124, covered through other rows
+STL-509	-	backlog	not exercised itself: another way into, or state of, F-123, F-124, covered through other rows
+STL-510	-	backlog	not exercised itself: another way into, or state of, F-109, F-110, covered through other rows
+STL-107	-	backlog	not exercised itself: another way into, or state of, F-109, F-110, covered through other rows
+STL-511	-	backlog	not exercised itself: another way into, or state of, F-061, F-072, covered through other rows
+STL-092	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
+STL-093	-	backlog	not exercised itself: another way into, or state of, F-126, covered through other rows
+STL-097	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-100	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-515	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-516	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-518	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
+STL-519	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-081	-	backlog	not exercised itself: another way into, or state of, F-180, covered through other rows
+STL-084	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STL-085	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STL-520	-	backlog	not exercised: of F-136, F-140, not all covered (see their waivers)
+STL-521	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
+AL-605	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
+AL-078	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+AL-079	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+AL-080	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
+AL-081	-	needs	needs the notification service, and no test on the full-stack tier does it yet
+AL-082	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-083	-	backlog	not exercised itself: another way into, or state of, F-084, covered through other rows
+AL-085	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
+AL-089	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+AL-602	-	native-only	The item only shows when the desktop app has tabs, which a browser never has.
+AL-091	-	backlog	not exercised itself: another way into, or state of, F-087, covered through other rows
+AL-607	-	no-user-path	The email.archive token is only declared; no hotkey, menu item or tooltip uses it.
+AL-601	-	backlog	not exercised itself: another way into, or state of, F-082, covered through other rows
+AL-608	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
+AL-610	-	needs	needs the notification service, and no test on the full-stack tier does it yet
+AL-611	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+AL-056	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
+AL-092	-	backlog	not exercised itself: another way into, or state of, F-082, covered through other rows
+AL-095	-	backlog	not exercised: of F-078, F-076, not all covered (see their waivers)
+AL-125	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+AL-126	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+AL-127	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+AL-612	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
+AL-196	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
+AL-149	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
+AL-150	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+AL-151	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+AL-152	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AL-153	-	backlog	not exercised itself: another way into, or state of, F-167, covered through other rows
+AL-154	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
+AL-155	-	backlog	not exercised itself: another way into, or state of, F-087, covered through other rows
+AL-157	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+AL-158	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
+AL-159	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
+AL-160	-	backlog	not exercised itself: another way into, or state of, F-080, covered through other rows
+AL-161	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-613	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
+AL-614	-	needs	needs the notification service, and no test on the full-stack tier does it yet
+AL-615	-	backlog	not exercised itself: another way into, or state of, F-084, covered through other rows
+AL-616	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
+AL-617	-	backlog	not exercised itself: another way into, or state of, F-187, covered through other rows
+AL-162	-	backlog	not exercised itself: another way into, or state of, F-178, covered through other rows
+AL-618	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
+AL-620	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
+AL-189	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-622	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+AL-903	-	backlog	not exercised itself: another way into, or state of, F-160, covered through other rows
+STL-600	-	backlog	not exercised itself: another way into, or state of, F-080, covered through other rows
+STL-601	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
+STL-605	-	needs	needs the notification service, and no test on the full-stack tier does it yet
+STL-607	-	backlog	not exercised: of F-076, F-078, not all covered (see their waivers)
+STL-072	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+STL-073	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
+STL-609	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+STL-610	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
+STL-611	-	backlog	not exercised itself: another way into, or state of, F-069, F-177, covered through other rows
+STL-612	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
+STL-613	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
+STL-614	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+STL-615	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
+STL-078	-	backlog	not exercised itself: another way into, or state of, F-075, F-083, covered through other rows
+STL-616	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
+STL-617	-	backlog	not exercised itself: another way into, or state of, F-075, F-177, covered through other rows
+STL-619	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
+STL-108	-	backlog	not exercised itself: another way into, or state of, F-178, covered through other rows
+STL-620	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
+STL-621	-	backlog	not exercised itself: another way into, or state of, F-084, F-088, covered through other rows
+STL-625	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+STL-626	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+STL-103	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+STL-627	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+STL-628	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
+STL-942	-	backlog	not exercised itself: another way into, or state of, F-160, covered through other rows
+AL-120	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AL-700	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AL-701	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AL-121	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AL-702	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AL-703	-	backlog	not exercised itself: another way into, or state of, F-045, covered through other rows
+AL-115	-	backlog	not exercised itself: another way into, or state of, F-049, covered through other rows
+AL-704	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+AL-705	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+AL-706	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+AL-116	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+AL-117	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+AL-118	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+AL-708	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+AL-119	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-055	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-056	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-057	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-059	-	backlog	not exercised itself: another way into, or state of, F-049, covered through other rows
+STL-703	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-704	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-706	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+STL-707	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+STL-708	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
+STL-060	-	backlog	not exercised itself: another way into, or state of, F-045, covered through other rows
+STL-709	-	backlog	not exercised itself: another way into, or state of, F-048, covered through other rows
+STL-711	-	backlog	not exercised itself: another way into, or state of, F-049, covered through other rows
+STL-061	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+STL-713	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+STL-062	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+STL-700	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
+STL-063	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+STL-064	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
+AC-002	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-004	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-006	-	backlog	not exercised itself: another way into, or state of, F-098, covered through other rows
+AC-008	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-009	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-317	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-302	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-303	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-013	-	backlog	not exercised: of F-099, F-100, not all covered (see their waivers)
+AC-014	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+AC-314	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+AC-316	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+AC-015	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-016	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
+AC-017	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
+AC-019	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
+AC-021	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+AC-023	-	backlog	not exercised itself: another way into, or state of, F-106, covered through other rows
+AC-304	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+AC-025	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+AC-027	-	backlog	not exercised itself: another way into, or state of, F-122, F-105, covered through other rows
+AC-030	-	backlog	not exercised itself: another way into, or state of, F-185, covered through other rows
+AC-320	-	backlog	not exercised itself: another way into, or state of, F-129, covered through other rows
+AC-041	-	backlog	not exercised itself: another way into, or state of, F-103, covered through other rows
+AC-043	-	backlog	not exercised itself: another way into, or state of, F-103, covered through other rows
+AC-307	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
+AC-306	-	backlog	not exercised itself: another way into, or state of, F-131, F-142, covered through other rows
+AC-058	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
+AC-305	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+AC-300	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
+AC-301	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
+AC-061	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
+AC-062	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+AC-315	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+AC-072	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+AC-073	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+AC-074	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-075	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-308	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-309	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-076	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
+AC-078	-	backlog	not exercised itself: another way into, or state of, F-098, covered through other rows
+AC-079	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+AC-080	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
+AC-319	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
+AC-083	-	backlog	not exercised itself: another way into, or state of, F-106, covered through other rows
+AC-084	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+AC-310	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+AC-085	-	backlog	not exercised itself: another way into, or state of, F-122, F-105, covered through other rows
+AC-086	-	backlog	not exercised itself: another way into, or state of, F-122, F-105, covered through other rows
+AC-312	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+AC-096	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+AC-097	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
+AC-100	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
+AC-103	-	backlog	not exercised itself: another way into, or state of, F-107, covered through other rows
+STC-004	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-005	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+STC-313	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+STC-314	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
+STC-006	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-306	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-007	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
+STC-008	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
+STC-009	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
+STC-010	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STC-315	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STC-011	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STC-012	-	backlog	not exercised itself: another way into, or state of, F-185, covered through other rows
+STC-013	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
+STC-014	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
+STC-015	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
+STC-016	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
+STC-316	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+STC-022	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
+STC-045	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-046	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-047	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-048	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-049	-	backlog	not exercised itself: another way into, or state of, F-131, F-142, F-143, covered through other rows
+STC-091	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-096	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+STC-097	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-098	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-308	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-309	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-312	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
+STC-938	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
+STC-960	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+AC-045	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+AC-047	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+AC-403	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+AC-048	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+AC-051	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+AC-054	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
+AC-055	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+AC-056	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
+AC-063	-	backlog	not exercised itself: another way into, or state of, F-116, F-118, covered through other rows
+AC-400	-	backlog	not exercised itself: another way into, or state of, F-119, F-120, covered through other rows
+AC-065	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AC-066	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AC-067	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AC-098	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
+AC-099	-	backlog	not exercised itself: another way into, or state of, F-144, F-147, covered through other rows
+AC-102	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
+AC-105	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+AC-106	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+AC-108	-	backlog	not exercised: of F-136, F-144, F-147, not all covered (see their waivers)
+AC-109	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+AC-110	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+AC-402	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AC-111	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
+AC-915	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
+STC-001	-	backlog	not exercised itself: another way into, or state of, F-116, F-117, F-118, covered through other rows
+STC-002	-	backlog	not exercised itself: another way into, or state of, F-116, covered through other rows
+STC-003	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
+STC-020	-	backlog	not exercised itself: another way into, or state of, F-106, F-125, covered through other rows
+STC-027	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-400	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-029	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-030	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
+STC-032	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-401	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-033	-	backlog	not exercised itself: another way into, or state of, F-139, covered through other rows
+STC-034	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-035	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-036	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-403	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-037	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-038	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
+STC-039	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
+STC-040	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
+STC-041	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
+STC-042	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
+STC-043	-	backlog	not exercised itself: another way into, or state of, F-133, covered through other rows
+STC-044	-	backlog	not exercised itself: another way into, or state of, F-134, F-144, covered through other rows
+STC-050	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-416	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-417	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-418	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-052	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-415	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-422	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-419	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-420	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-421	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-053	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-054	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-055	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-056	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
+STC-423	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
+STC-058	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-060	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-061	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-062	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-405	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-063	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
+STC-064	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-065	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-066	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-067	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-068	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-069	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
+STC-071	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
+STC-072	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
+STC-406	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
+STC-073	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
+STC-074	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-075	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
+STC-076	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
+STC-410	-	backlog	not exercised itself: another way into, or state of, F-120, F-146, covered through other rows
+STC-411	-	backlog	not exercised itself: another way into, or state of, F-120, F-137, covered through other rows
+STC-409	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-412	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-080	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-077	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-078	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-079	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-407	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-408	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+STC-081	-	backlog	not exercised itself: another way into, or state of, F-118, covered through other rows
+STC-434	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-083	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-084	-	backlog	not exercised itself: another way into, or state of, F-119, F-120, covered through other rows
+STC-085	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-086	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-435	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-087	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-088	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-089	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-413	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-090	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-099	-	backlog	not exercised itself: another way into, or state of, F-135, F-139, covered through other rows
+STC-100	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
+STC-424	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-425	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-101	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+STC-102	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+STC-103	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-428	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+STC-106	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-429	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
+STC-107	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+STC-108	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-427	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-430	-	backlog	not exercised: of F-136, not all covered (see their waivers)
+STC-431	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
+STC-432	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
+STC-433	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
+STC-111	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AX-002	-	needs	needs the authentication service for Outlook linking, and no test on the full-stack tier does it yet
+AX-015	-	backlog	not exercised itself: another way into, or state of, F-162, covered through other rows
+AX-016	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AX-200	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
+AX-012	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
+AX-008	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AX-017	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-018	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-019	-	needs	needs the static file service, and no test on the full-stack tier does it yet
+AX-201	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-202	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-022	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-203	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-204	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-023	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-205	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-206	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
+AX-207	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+AX-033	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+AX-035	-	backlog	not exercised itself: another way into, or state of, F-003, covered through other rows
+AX-040	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AX-209	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AX-041	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+AX-210	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+AX-211	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-212	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-044	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-213	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-214	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-045	-	native-only	MobileOnboarding is rendered only when isNativeMobilePlatform() is true.
+AX-215	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
+STX-001	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
+STX-003	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
+STX-004	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
+STX-005	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
+STX-006	-	backlog	not exercised itself: another way into, or state of, F-067, covered through other rows
+STX-008	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
+STX-200	-	backlog	not exercised itself: another way into, or state of, F-004, covered through other rows
+STX-201	-	backlog	not exercised itself: another way into, or state of, F-023, covered through other rows
+STX-010	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
+STX-012	-	backlog	not exercised itself: another way into, or state of, F-002, covered through other rows
+STX-013	-	backlog	not exercised itself: another way into, or state of, F-067, covered through other rows
+STX-202	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
+STX-203	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
+STX-204	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
+STX-205	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+STX-206	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
+STX-017	-	needs	needs the static file service, and no test on the full-stack tier does it yet
+STX-208	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
+STX-018	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+STX-025	-	backlog	not exercised itself: another way into, or state of, F-174, covered through other rows
+STX-210	-	native-only	Both toasts are raised only on the Tauri link paths (native auth session and system-browser open).
+STX-211	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
+STX-212	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+STX-029	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+STX-030	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+AX-048	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
+AX-304	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
+AX-305	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-306	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-049	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-050	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-051	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-307	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-053	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-055	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-308	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-309	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-311	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-312	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-313	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+AX-316	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
+AX-317	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
+AX-059	-	backlog	not exercised itself: another way into, or state of, F-055, covered through other rows
+AX-318	-	needs	needs the search service, and no test on the full-stack tier does it yet
+AX-061	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+AX-323	-	backlog	not exercised itself: another way into, or state of, F-096, covered through other rows
+AX-062	-	needs	needs the notification service, and no test on the full-stack tier does it yet
+AX-325	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+STX-033	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+STX-301	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+STX-302	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+STX-303	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+STX-034	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-304	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-305	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-306	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-307	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-308	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
+STX-311	-	backlog	not exercised itself: another way into, or state of, F-164, covered through other rows
+STX-314	-	backlog	not exercised itself: another way into, or state of, F-051, covered through other rows
+STX-316	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+STX-035	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
+STX-319	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows

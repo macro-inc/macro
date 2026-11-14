@@ -111,11 +111,6 @@ export const settings = {
       name: 'Mobile onboarding Connected Accounts',
       opened: 'Native mobile onboarding',
       viewports: [],
-      waiver: {
-        kind: 'native-only',
-        reason:
-          'MobileOnboarding is rendered only when isNativeMobilePlatform() is true.',
-      },
     },
     {
       id: 'SX-16',
@@ -1071,11 +1066,6 @@ export const settings = {
         'src/lib/core/email-link/index.ts#Failed to add inbox',
         'src/lib/core/email-link/index.ts#Failed to open the browser to connect your account. Please try again.',
       ],
-      waiver: {
-        kind: 'native-only',
-        reason:
-          'Both toasts are raised only on the Tauri link paths (native auth session and system-browser open).',
-      },
     },
     {
       id: 'STX-211',

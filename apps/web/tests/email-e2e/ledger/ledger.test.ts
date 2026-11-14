@@ -4,8 +4,14 @@ import {
   graphqlOperations,
   socketMessages,
 } from '../harness/front';
+import { type Enforced, fullStackOnly, violations } from './enforce';
 import { functionRows, functionTotals, restMatcher } from './ledger';
-import { parseFunctions, parseProofs } from './manifest/functions';
+import {
+  parseFullStackOnly,
+  parseFunctions,
+  parseProofs,
+  parseWaivers,
+} from './manifest/functions';
 
 /** A websocket frame as a browser sends it: masked. */
 function frame(payload: Buffer, opcode: number, final = true): Buffer {
@@ -239,5 +245,145 @@ describe('functionRows', () => {
     expect(sort.status).toBe('deferred');
     expect(sort.reason).toBe('a clock');
     expect(refresh.status).toBe('backend');
+  });
+});
+
+describe('parseWaivers', () => {
+  it('reads a function on a provider and a row', () => {
+    expect(
+      parseWaivers(
+        'id\ton\tkind\treason\nF-001\toutlook\tbug\tfails\nAL-001\t-\tbacklog\tlater\n'
+      )
+    ).toEqual([
+      { id: 'F-001', on: 'outlook', kind: 'bug', reason: 'fails' },
+      { id: 'AL-001', on: '-', kind: 'backlog', reason: 'later' },
+    ]);
+  });
+
+  it('refuses a waiver without a reason, of no kind, or given twice', () => {
+    const head = 'id\ton\tkind\treason\n';
+    expect(() => parseWaivers(`${head}AL-001\t-\tbacklog\t \n`)).toThrow(
+      'AL-001'
+    );
+    expect(() => parseWaivers(`${head}AL-001\t-\tlazy\twhy\n`)).toThrow(
+      'AL-001'
+    );
+    expect(() => parseWaivers(`${head}AL-001\tgmail\tbug\twhy\n`)).toThrow(
+      'AL-001'
+    );
+    expect(() =>
+      parseWaivers(`${head}AL-001\t-\tbug\twhy\nAL-001\t-\tbug\twhy\n`)
+    ).toThrow('twice');
+  });
+});
+
+describe('parseFullStackOnly', () => {
+  it('reads functions on a provider and rows', () => {
+    expect(parseFullStackOnly('id\ton\nAL-001\t-\nF-001\tgmail\n')).toEqual([
+      'AL-001',
+      'F-001 gmail',
+    ]);
+    expect(() => parseFullStackOnly('id\ton\nF-001\tboth\n')).toThrow('F-001');
+  });
+});
+
+describe('violations', () => {
+  const functions = parseFunctions(TABLE);
+  const input = (over: Partial<Enforced>): Enforced => ({
+    functions,
+    rows: ['AL-001', 'AL-002', 'STL-001'],
+    proofs: new Map([
+      ['F-001', 'a break'],
+      ['F-002', 'a break'],
+    ]),
+    waivers: [{ id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' }],
+    fullStackOnly: ['F-002 gmail', 'F-002 outlook', 'STL-001'],
+    covered: {
+      gating: new Set(['F-001 gmail', 'F-001 outlook', 'AL-001']),
+      'full-stack': new Set(['F-002 gmail', 'F-002 outlook', 'STL-001']),
+    },
+    knownBugsPassing: [],
+    ...over,
+  });
+
+  it('finds nothing when each stack covers its own and the rest is waived', () => {
+    expect(violations(input({}))).toEqual([]);
+    expect(
+      violations(input({ covered: { gating: input({}).covered.gating } }))
+    ).toEqual([]);
+  });
+
+  it('fails a function that lost its passing test on one provider', () => {
+    expect(
+      violations(
+        input({ covered: { gating: new Set(['F-001 gmail', 'AL-001']) } })
+      )
+    ).toEqual([
+      'F-001 outlook has no passing test on the per-test stack and no waiver',
+    ]);
+  });
+
+  it('holds what only the tier covers to the tier', () => {
+    expect(
+      violations(
+        input({
+          covered: { 'full-stack': new Set(['F-002 gmail', 'STL-001']) },
+        })
+      )
+    ).toEqual([
+      'F-002 outlook has no passing test on the full-stack tier and no waiver',
+    ]);
+  });
+
+  it('fails a row with neither a test nor a waiver', () => {
+    expect(violations(input({ waivers: [] }))).toEqual([
+      'AL-002 has no passing test on the per-test stack and no waiver',
+    ]);
+  });
+
+  it('fails a waiver that a passing test contradicts', () => {
+    const covered = new Set([...(input({}).covered.gating ?? []), 'AL-002']);
+    expect(violations(input({ covered: { gating: covered } }))).toEqual([
+      'AL-002 is waived and a test on the per-test stack covers it: remove it from waivers.tsv',
+    ]);
+  });
+
+  it('fails a known-bug test that passes', () => {
+    expect(
+      violations(input({ knownBugsPassing: ['a.spec.ts:3 sends'] }))
+    ).toEqual([
+      'a test kept for a known bug passes: remove its @known-bug tag and its waiver: a.spec.ts:3 sends',
+    ]);
+  });
+
+  it('fails a covered function without a proof, and lists that name nothing', () => {
+    expect(
+      violations(
+        input({
+          proofs: new Map([['F-001', 'a break']]),
+          waivers: [
+            { id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' },
+            { id: 'AL-009', on: '-', kind: 'backlog', reason: 'later' },
+          ],
+        })
+      )
+    ).toEqual([
+      'waivers.tsv: AL-009 is not a row, or not a function with a UI on that provider',
+      'F-002 is not proved: proofs.tsv names no break that makes its tests fail',
+    ]);
+  });
+});
+
+describe('fullStackOnly', () => {
+  it('lists what the tier covers and the per-test stack does not', () => {
+    expect(
+      fullStackOnly(
+        {
+          gating: new Set(['AL-001', 'F-001 gmail']),
+          'full-stack': new Set(['AL-001', 'STL-001', 'F-002 gmail', 'AL-002']),
+        },
+        [{ id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' }]
+      )
+    ).toBe('id\ton\nF-002\tgmail\nSTL-001\t-\n');
   });
 });

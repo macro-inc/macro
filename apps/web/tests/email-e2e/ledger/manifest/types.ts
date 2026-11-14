@@ -9,15 +9,6 @@ export type Viewport = 'desktop' | 'phone';
 export const BOTH_PROVIDERS: readonly Provider[] = ['gmail', 'outlook'];
 export const BOTH_VIEWPORTS: readonly Viewport[] = ['desktop', 'phone'];
 
-/** Why a row will not be covered by this suite. */
-export type Waiver = {
-  kind:
-    | 'native-only' // exists only in the desktop or mobile app, not a browser
-    | 'no-user-path' // code no user can reach
-    | 'other';
-  reason: string;
-};
-
 type Applies = {
   /**
    * The functions (`../functions.tsv`) it belongs to: an action is a way to do
@@ -31,11 +22,10 @@ type Applies = {
   /** The feature flags it needs. */
   flag?: string;
   /**
-   * What the per-test stack lacks to drive it (a service, a clock): the row
-   * waits for the full-stack tier and is reported apart from the open rows.
+   * What the per-test stack lacks to drive it (a service, a clock): its
+   * tests run on the full-stack tier.
    */
   needs?: string;
-  waiver?: Waiver;
   note?: string;
 };
 
@@ -45,8 +35,6 @@ export type Surface = {
   /** The route, or how a user gets to it. */
   opened: string;
   viewports: readonly Viewport[];
-  /** Applies to every row of the surface that has no waiver of its own. */
-  waiver?: Waiver;
   /** As `needs` of a row, for every row of the surface. */
   needs?: string;
 };
@@ -97,7 +85,8 @@ export type Operation = {
    * equals what the source defines, not counted.
    */
   scope: 'email' | 'shared' | 'other';
+  /** Where the app makes it; left out, with both providers. */
+  providers?: readonly Provider[];
   needs?: string;
-  waiver?: Waiver;
   note?: string;
 };

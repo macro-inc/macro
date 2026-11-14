@@ -1,13 +1,13 @@
 // The coverage report of the email browser suite:
 //
-//   bun tests/email-e2e/ledger/report.ts [--enforce]
+//   bun tests/email-e2e/ledger/report.ts [--enforce | --record]
 //
 // reads the last run (`ledger-results/`) and writes `ledger-results/report/`:
 // `ledger.json`, `summary.md` (appended to the CI job summary), `index.html`
-// and a copy of Playwright's JSON report of each run. It only
-// reports, unless `--enforce` or EMAIL_E2E_LEDGER_ENFORCE=1 is given: then a
-// function or a row without a test or a waiver, or a manifest that differs
-// from the source, fails it.
+// and a copy of Playwright's JSON report of each run. It only reports,
+// unless `--enforce` or EMAIL_E2E_LEDGER_ENFORCE=1 is given: then what
+// `enforce.ts` finds, or a manifest that differs from the source, fails it.
+// `--record` writes `full-stack-only.tsv` from a run of both stacks.
 
 import {
   appendFileSync,
@@ -16,7 +16,9 @@ import {
   mkdirSync,
   writeFileSync,
 } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { stripVTControlCharacters } from 'node:util';
+import { coveredItems, fullStackOnly, STACK, violations } from './enforce';
 import { readGatingRuns, readRun } from './evidence';
 import {
   buildLedger,
@@ -28,7 +30,14 @@ import {
   type Totals,
   totals,
 } from './ledger';
-import { REPORT, type Run, runPaths } from './paths';
+import {
+  FULL_STACK_ONLY,
+  FUNCTIONS,
+  PROOFS,
+  WAIVERS,
+  type Waiver,
+} from './manifest/functions';
+import { GATING_RUNS, REPORT, type Run, runPaths } from './paths';
 
 const percent = (part: number, whole: number) =>
   whole === 0 ? '–' : `${((100 * part) / whole).toFixed(1)}%`;
@@ -88,21 +97,36 @@ function totalsRow(name: string, of: Totals): (string | number)[] {
   ];
 }
 
-function operationTotals(operations: OperationRow[]): Totals {
+const OPERATIONS_HEAD = [
+  '',
+  'Total',
+  'Answered by a service',
+  '%',
+  'With every provider',
+  'Gmail',
+  'Outlook',
+  'Desktop',
+  'Phone',
+  'Deferred',
+];
+
+function operationsRow(
+  name: string,
+  operations: OperationRow[]
+): (string | number)[] {
   const real = operations.filter((each) => each.count > 0);
-  return {
-    total: operations.length,
-    waived: operations.filter((each) => each.status === 'waived').length,
-    deferred: operations.filter((each) => each.status === 'deferred').length,
-    covered: real.length,
-    complete: operations.filter((each) => each.status === 'covered').length,
-    bothProviders: operations.filter((each) => each.status === 'covered')
-      .length,
-    gmail: real.filter((each) => each.providers.includes('gmail')).length,
-    outlook: real.filter((each) => each.providers.includes('outlook')).length,
-    desktop: real.filter((each) => each.viewports.includes('desktop')).length,
-    phone: real.filter((each) => each.viewports.includes('phone')).length,
-  };
+  return [
+    name,
+    operations.length,
+    real.length,
+    percent(real.length, operations.length),
+    operations.filter((each) => each.status === 'covered').length,
+    real.filter((each) => each.providers.includes('gmail')).length,
+    real.filter((each) => each.providers.includes('outlook')).length,
+    real.filter((each) => each.viewports.includes('desktop')).length,
+    real.filter((each) => each.viewports.includes('phone')).length,
+    operations.filter((each) => each.status === 'deferred').length,
+  ];
 }
 
 const FUNCTION_HEAD = [
@@ -137,6 +161,44 @@ function functionTotalsRow(
     of.deferred,
     of.waived,
   ];
+}
+
+const FUNCTION_WAIVERS = new Map(
+  WAIVERS.filter((waiver) => waiver.on !== '-').map((waiver) => [
+    waiver.id,
+    waiver,
+  ])
+);
+
+function waiverText(id: string): string {
+  const waiver = FUNCTION_WAIVERS.get(id);
+  if (!waiver) return '';
+  const where = waiver.on === 'both' ? 'both providers' : waiver.on;
+  return `waived on ${where} (${waiver.kind}): ${waiver.reason}`;
+}
+
+const WAIVER_KINDS: Record<Waiver['kind'], string> = {
+  bug: 'A bug of the app that is not fixed; a test tagged @known-bug waits for it',
+  needs: 'Needs a service or a clock no test stack gives a test yet',
+  'native-only': 'Exists only in the native apps',
+  'no-user-path': 'No user can reach it in the web app',
+  backlog:
+    'Not tested itself, and reported as open; most are another way into a function that is covered',
+};
+
+const ENFORCED =
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test has no line in proofs.tsv; when a test tagged @known-bug passes; and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+
+function waiverTable(): Table {
+  return {
+    head: ['Kind', 'What it means', 'Functions', 'Rows'],
+    rows: Object.entries(WAIVER_KINDS).map(([kind, means]) => [
+      kind,
+      means,
+      WAIVERS.filter((each) => each.kind === kind && each.on !== '-').length,
+      WAIVERS.filter((each) => each.kind === kind && each.on === '-').length,
+    ]),
+  };
 }
 
 function functionTable(functions: FunctionRow[], rows: Row[]): Table {
@@ -174,7 +236,13 @@ function functionTable(functions: FunctionRow[], rows: Row[]): Table {
       on(fn, 'gmail'),
       on(fn, 'outlook'),
       `${fn.variants.filter((id) => seen.has(id)).length} of ${fn.variants.length} tested`,
-      fn.reason ?? fn.missing.join('; '),
+      [
+        fn.reason ?? fn.missing.join('; '),
+        waiverText(fn.id),
+        fn.limit ? `does not prove: ${fn.limit}` : '',
+      ]
+        .filter(Boolean)
+        .join('. '),
     ]),
   };
 }
@@ -195,7 +263,11 @@ function rowTable(rows: Row[]): Table {
   };
 }
 
-function render(ledger: Ledger): { summary: string; page: string } {
+function render(
+  ledger: Ledger,
+  failures: readonly string[],
+  runs: readonly string[]
+): { summary: string; page: string } {
   const actions = ledger.rows.filter((row) => row.kind === 'action');
   const states = ledger.rows.filter((row) => row.kind === 'state');
   const email = ledger.operations.filter((each) => each.scope === 'email');
@@ -217,15 +289,20 @@ function render(ledger: Ledger): { summary: string; page: string } {
     ),
   };
   const ft = functionTotals(ledger.functions);
-  const functionsLine = `${ft.total} functions a user can do in the web app: ${ft.proved} covered and proved, ${ft.covered - ft.proved} covered and not proved (${ft.gmail} pass on Gmail, ${ft.outlook} on Outlook), ${ft.partial} in part, ${ft.open} open, ${ft.deferred} wait for the full-stack tier, ${ft.waived} waived. ${ft.backend} more have no UI and are counted by the backend's coverage.`;
+  const functionsLine = `${ft.total} functions a user can do in the web app: ${ft.proved} covered and proved, ${ft.covered - ft.proved} covered and not proved (${ft.gmail} pass on Gmail, ${ft.outlook} on Outlook), ${ft.partial} in part, ${ft.open} open, ${ft.deferred} wait for a service no stack gives a test, ${ft.waived} waived. ${ft.backend} more have no UI and are counted by the backend's coverage.`;
 
   const headline: Table = {
     head: TOTALS_HEAD,
     rows: [
       totalsRow('Actions', totals(actions)),
       totalsRow('States', totals(states)),
-      totalsRow('Network operations (email)', operationTotals(email)),
-      totalsRow('Network operations (shared)', operationTotals(shared)),
+    ],
+  };
+  const operationsHeadline: Table = {
+    head: OPERATIONS_HEAD,
+    rows: [
+      operationsRow('Network operations (email)', email),
+      operationsRow('Network operations (shared)', shared),
     ],
   };
   const groups = [...new Set(ledger.rows.map((row) => row.group))];
@@ -314,11 +391,20 @@ function render(ledger: Ledger): { summary: string; page: string } {
     ]),
   };
   const tests = ledger.tests;
-  const testsLine = `${tests.total} tests: ${tests.passed} passed, ${tests.flaky.length} passed only on a retry, ${tests.failed} failed, ${tests.skipped} skipped; ${tests.seconds} s of test time. ${tests.knownBugs} tests for known bugs are run apart and do not count.`;
+  const testsLine = `${tests.total} tests (${tests.onBothStacks} of them run on both the per-test stack and the full-stack tier, and are counted once): ${tests.passed} passed, ${tests.flaky.length} passed only on a retry, ${tests.failed} failed, ${tests.skipped} skipped; ${tests.seconds} s of test time. ${tests.knownBugs} tests for known bugs are run apart and do not count.`;
+  const fromLine =
+    runs.length > 1
+      ? `Counted from the runs on ${runs.join(' and ')}.`
+      : `Counted from the run on ${runs[0]} alone: what only the other stack's tests cover shows here as not covered, and is held to that stack's own run.`;
   const driftCount = ledger.drift.reduce(
     (sum, each) => sum + each.items.length,
     0
   );
+  const limits = ledger.functions.filter((fn) => fn.limit);
+  const limitTable: Table = {
+    head: ['Id', 'Function', 'Its tests do not prove'],
+    rows: limits.map((fn) => [fn.id, fn.name, fn.limit ?? '']),
+  };
   const open = ledger.rows.filter((row) => row.status === 'open');
   const partial = ledger.rows.filter((row) => row.status === 'partial');
   const deferred = ledger.rows.filter((row) => row.status === 'deferred');
@@ -339,6 +425,8 @@ function render(ledger: Ledger): { summary: string; page: string } {
     '## Email UI coverage',
     '',
     testsLine,
+    '',
+    fromLine,
     '',
     '### Functions',
     '',
@@ -364,7 +452,28 @@ function render(ledger: Ledger): { summary: string; page: string } {
     '',
     markdown(headline),
     '',
-    `Covered: a passing, gating test did it at all. Complete: on every provider and every layout the row applies to. ${open.length} rows are open, ${partial.length} are covered in part, ${deferred.length} wait for the full-stack tier, ${waived.length} are waived.`,
+    `Covered: a passing, gating test did it at all. Complete: on every provider and every layout the row applies to. ${open.length} rows are open, ${partial.length} are covered in part, ${deferred.length} wait for a service no stack gives a test, ${waived.length} are waived.`,
+    '',
+    markdown(operationsHeadline),
+    '',
+    'Network operations are reported only: nothing here fails the job for one.',
+    '',
+    '### What fails the job',
+    '',
+    ENFORCED,
+    '',
+    failures.length
+      ? `**${failures.length} of them now:**\n\n${failures.map((each) => `- ${each}`).join('\n')}`
+      : 'Nothing does in this run.',
+    '',
+    details('Waivers by kind', markdown(waiverTable())),
+    '',
+    limits.length
+      ? details(
+          'What the tests of a covered function do not prove',
+          markdown(limitTable)
+        )
+      : '',
     '',
     tests.flaky.length
       ? `### Tests that passed only on a retry\n\n${markdown(flaky)}`
@@ -397,10 +506,12 @@ summary{cursor:pointer;margin:10px 0;color:var(--acc)}
 <h1>Email UI coverage</h1>
 <p class="mut">The email browser suite (<code>apps/web/tests/email-e2e</code>) against the list of what a user does with email, and the manifest of every way to do it in the web app. Evidence is what the tests recorded while they ran.</p>
 <p>${escapeHtml(testsLine)}</p>
+<p>${escapeHtml(fromLine)}</p>
 <h2>Functions</h2>
 <p>${escapeHtml(functionsLine)}</p>
 ${html(functionsHeadline)}
-<p>A function is <b>covered</b> when one passing, gating test does it through the UI and checks its result on the screen and at the provider (in the service where the provider sees nothing of it), on Gmail and on Outlook. <b>In part</b>: a test touches it, but not all of that. <b>Deferred</b>: every way to do it needs a service the per-test stack does not run.</p>
+<p>A function is <b>covered</b> when one passing, gating test does it through the UI and checks its result on the screen and at the provider (in the service where the provider sees nothing of it), on Gmail and on Outlook. <b>In part</b>: a test touches it, but not all of that. <b>Deferred</b>: every way to do it needs a service no stack gives a test.</p>
+${limits.length ? `<h3>What the tests of a covered function do not prove</h3>${html(limitTable)}` : ''}
 ${html(functionsByArea)}
 ${areas
   .map((area) =>
@@ -429,28 +540,82 @@ ${areas
 ${folded(`Functions without a UI (${backend.length})`, html({ head: ['Id', 'Area', 'Function'], rows: backend.map((fn) => [fn.id, fn.area, fn.name]) }))}
 <h2>Rows: the ways to do each function, and what the app shows</h2>
 ${html(headline)}
-<p><b>Covered</b>: a passing, gating test did it at all. <b>Both providers</b>: on Gmail and on Outlook. <b>Complete</b>: on every provider and every layout the row applies to. <b>Deferred</b>: needs a service the per-test stack does not run. Percentages leave out waived rows.</p>
+<p><b>Covered</b>: a passing, gating test did it at all. <b>Both providers</b>: on Gmail and on Outlook. <b>Complete</b>: on every provider and every layout the row applies to. <b>Deferred</b>: needs a service or a clock no stack gives a test. <b>Open</b>: no test does it; each has a line in <code>waivers.tsv</code> of the kind <code>backlog</code>, or fails the job. Percentages leave out waived rows.</p>
+${section('What fails the job', `<p>${escapeHtml(ENFORCED)}</p>${failures.length ? `<p><b>${failures.length} of them now:</b></p><ul>${failures.map((each) => `<li>${escapeHtml(each)}</li>`).join('')}</ul>` : '<p>Nothing does in this run.</p>'}${html(waiverTable())}`)}
 ${section('By group', html(byGroup))}
 ${section('By surface', html(bySurface))}
 ${section(`Open rows (${open.length})`, groups.map((group) => folded(`${group} (${open.filter((row) => row.group === group).length})`, html(rowTable(open.filter((row) => row.group === group))))).join(''))}
 ${section(`Covered in part (${partial.length})`, folded('Rows', html(rowTable(partial))))}
-${section(`Deferred to the full-stack tier (${deferred.length})`, folded('Rows', html(rowTable(deferred))))}
+${section(`Deferred: needs a service no stack gives a test (${deferred.length})`, folded('Rows', html(rowTable(deferred))))}
 ${section(`Waived (${waived.length})`, folded('Rows', html(rowTable(waived))))}
-${section('Network operations', `<p>Email and shared operations; the ${ledger.operations.filter((each) => each.scope === 'other').length} that no email code makes are left out. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors.</p>${html(operations)}${folded(`Requests the app made that the manifest does not list (${ledger.unlisted.length})`, html(unlisted))}`)}
+${section('Network operations', `<p>Email and shared operations; the ${ledger.operations.filter((each) => each.scope === 'other').length} that no email code makes are left out. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors. With every provider: with Gmail and with Outlook, or with the one provider the app makes it for. Network operations are reported only: nothing fails the job for one.</p>${html(operationsHeadline)}${html(operations)}${folded(`Requests the app made that the manifest does not list (${ledger.unlisted.length})`, html(unlisted))}`)}
 ${section(`Manifest against the source (${driftCount} differences)`, driftCount ? driftList(true) : '<p>None.</p>')}
 ${section('Tests that passed only on a retry', tests.flaky.length ? html(flaky) : '<p>None.</p>')}
 </main></body></html>`;
   return { summary, page };
 }
 
-function report(enforce: boolean): void {
+type Mode = 'report' | 'enforce' | 'record';
+
+/** Where `--record` writes. */
+const FULL_STACK_ONLY_FILE = fileURLToPath(
+  new URL('./full-stack-only.tsv', import.meta.url)
+);
+
+function report(mode: Mode): void {
   const gating = readGatingRuns();
   if (!gating.found) {
     console.error('no run to report: run the suite first');
-    process.exit(enforce ? 1 : 0);
+    process.exit(mode === 'report' ? 0 : 1);
   }
-  const ledger = buildLedger(gating, readRun('known-bugs'));
-  const { summary, page } = render(ledger);
+  const knownBugs = readRun('known-bugs');
+  const ledger = buildLedger(gating, knownBugs);
+
+  // Each stack's run by itself: what it covers is held against its own part.
+  const covered = Object.fromEntries(
+    GATING_RUNS.flatMap((run) => {
+      const result = readRun(run);
+      return result.found
+        ? [[run, coveredItems(buildLedger(result, knownBugs))] as const]
+        : [];
+    })
+  );
+  if (mode === 'record') {
+    if (!covered.gating || !covered['full-stack']) {
+      console.error('--record needs a run of both stacks');
+      process.exit(1);
+    }
+    writeFileSync(
+      FULL_STACK_ONLY_FILE,
+      fullStackOnly(
+        { gating: covered.gating, 'full-stack': covered['full-stack'] },
+        WAIVERS
+      )
+    );
+    console.log(`wrote ${FULL_STACK_ONLY_FILE}`);
+    return;
+  }
+  const failures = [
+    ...violations({
+      functions: FUNCTIONS,
+      rows: ledger.rows.map((row) => row.id),
+      proofs: PROOFS,
+      waivers: WAIVERS,
+      fullStackOnly: FULL_STACK_ONLY,
+      covered,
+      knownBugsPassing: knownBugs.tests
+        .filter((test) => test.status === 'expected')
+        .map((test) => `${test.file}:${test.line} ${test.title}`),
+    }),
+    ...ledger.drift.flatMap((each) =>
+      each.items.map((item) => `${each.check}: ${item}`)
+    ),
+  ];
+  const { summary, page } = render(
+    ledger,
+    failures,
+    GATING_RUNS.filter((run) => covered[run]).map((run) => STACK[run])
+  );
 
   mkdirSync(REPORT, { recursive: true });
   writeFileSync(
@@ -467,6 +632,7 @@ function report(enforce: boolean): void {
         unlisted: ledger.unlisted,
         drift: ledger.drift,
         droppedEvidence: gating.dropped,
+        failures,
       },
       null,
       1
@@ -485,39 +651,28 @@ function report(enforce: boolean): void {
   console.log(summary.split('\n').slice(0, 10).join('\n'));
   console.log(`\nreport: ${REPORT}/index.html`);
 
-  if (!enforce) return;
-  const open = ledger.rows.filter(
-    (row) => row.status === 'open' || row.status === 'partial'
+  if (mode !== 'enforce' || failures.length === 0) return;
+  console.error(
+    `\nthe coverage ledger fails (${failures.length}):\n${failures.map((each) => `  ${each}`).join('\n')}`
   );
-  const openFunctions = ledger.functions.filter(
-    (fn) => fn.status === 'open' || fn.status === 'partial'
-  );
-  const openOperations = ledger.operations.filter(
-    (each) =>
-      each.scope === 'email' &&
-      !['covered', 'waived', 'deferred'].includes(each.status)
-  );
-  const drift = ledger.drift.reduce((sum, each) => sum + each.items.length, 0);
-  if (openFunctions.length + open.length + openOperations.length + drift > 0) {
-    console.error(
-      `\nnot covered: ${openFunctions.length} functions, ${open.length} rows, ${openOperations.length} network operations; ${drift} differences between the manifest and the source`
-    );
-    process.exit(1);
-  }
+  process.exit(1);
 }
 
 /**
- * While the report only reports, nothing in it fails the job: a run cut
+ * When the report only reports, nothing in it fails the job: a run cut
  * short leaves evidence it cannot read, and that is the suite's failure.
  */
 function main(): void {
-  const enforce =
-    process.argv.includes('--enforce') ||
-    process.env.EMAIL_E2E_LEDGER_ENFORCE === '1';
+  const mode: Mode = process.argv.includes('--record')
+    ? 'record'
+    : process.argv.includes('--enforce') ||
+        process.env.EMAIL_E2E_LEDGER_ENFORCE === '1'
+      ? 'enforce'
+      : 'report';
   try {
-    report(enforce);
+    report(mode);
   } catch (error) {
-    if (enforce) throw error;
+    if (mode !== 'report') throw error;
     console.error('no coverage report:', error);
   }
 }

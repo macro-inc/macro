@@ -640,11 +640,6 @@ export const send = {
       state: 'toast: Too late to undo — The email was already sent',
       trigger: 'Undo of a send made without the send journal',
       source: ['src/features/email-compose/undo-send.ts'],
-      waiver: {
-        kind: 'no-user-path',
-        reason:
-          'Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.',
-      },
     },
     {
       id: 'STC-032',

@@ -305,11 +305,6 @@ export const list = {
       source: ['src/lib/core/hotkey/tokens.ts'],
       registered: ['split.go.email'],
       viewports: ['desktop'],
-      waiver: {
-        kind: 'no-user-path',
-        reason:
-          'The token is only declared in tokens.ts; no hotkey is registered with it.',
-      },
     },
     {
       id: 'AL-010',
@@ -670,11 +665,6 @@ export const list = {
       action: 'switch inbox from header "from <address>" picker',
       trigger: 'header ghost dropdown "Switch inbox:"',
       source: ['src/features/email-view/components/EmailInboxSelector.tsx'],
-      waiver: {
-        kind: 'no-user-path',
-        reason:
-          'EmailInboxFilter is exported but no component imports or renders it.',
-      },
     },
     {
       id: 'AL-042',

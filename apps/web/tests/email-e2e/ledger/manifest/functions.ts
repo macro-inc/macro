@@ -78,3 +78,102 @@ export function parseProofs(table: string): Map<string, string> {
 export const PROOFS: ReadonlyMap<string, string> = parseProofs(
   readFileSync(new URL('../proofs.tsv', import.meta.url), 'utf8')
 );
+
+/** Why something has no passing test and the job still passes. */
+export type Waiver = {
+  /** A function (`F-012`) or a row (`AL-012`). */
+  id: string;
+  /** The providers a function is waived on; `-` for a row. */
+  on: 'gmail' | 'outlook' | 'both' | '-';
+  kind:
+    | 'bug' // a product bug keeps it from working; a known-bug test waits
+    | 'needs' // needs something no stack of the suite has
+    | 'native-only' // exists only in the desktop or mobile app
+    | 'no-user-path' // code no user can reach
+    | 'backlog'; // could be tested here and is not yet
+  reason: string;
+};
+
+const WAIVER_HEAD = 'id\ton\tkind\treason';
+const WAIVER_KINDS = ['bug', 'needs', 'native-only', 'no-user-path', 'backlog'];
+
+/**
+ * `../waivers.tsv`: every function and row that has no passing test, each
+ * with the reason. The one place they are kept, so a review sees each.
+ */
+export function parseWaivers(table: string): Waiver[] {
+  const [head, ...lines] = table.split('\n').filter((line) => line !== '');
+  if (head !== WAIVER_HEAD)
+    throw new Error(`waivers.tsv: the head is not ${WAIVER_HEAD}`);
+  const seen = new Set<string>();
+  return lines.map((line) => {
+    const [id, on, kind, reason, ...more] = line.split('\t');
+    const isFunction = /^F-\d{3}$/.test(id);
+    const onFits = isFunction
+      ? on === 'gmail' || on === 'outlook' || on === 'both'
+      : on === '-';
+    if (!id || !onFits || !WAIVER_KINDS.includes(kind) || !reason?.trim())
+      throw new Error(`waivers.tsv: cannot read "${line}"`);
+    if (more.length > 0) throw new Error(`waivers.tsv: too much in "${line}"`);
+    if (seen.has(id)) throw new Error(`waivers.tsv: ${id} is listed twice`);
+    seen.add(id);
+    return { id, on, kind, reason } as Waiver;
+  });
+}
+
+export const WAIVERS: readonly Waiver[] = parseWaivers(
+  readFileSync(new URL('../waivers.tsv', import.meta.url), 'utf8')
+);
+
+const FULL_STACK_ONLY_HEAD = 'id\ton';
+
+/**
+ * `../full-stack-only.tsv`: what only the full-stack tier's tests cover, a
+ * function on a provider (`F-050 gmail`) or a row (`AL-012 -`). Everything
+ * else that is not waived is the per-test stack's. Written by
+ * `report.ts --record` from a run of both.
+ */
+export function parseFullStackOnly(table: string): string[] {
+  const [head, ...lines] = table.split('\n').filter((line) => line !== '');
+  if (head !== FULL_STACK_ONLY_HEAD)
+    throw new Error(
+      `full-stack-only.tsv: the head is not ${FULL_STACK_ONLY_HEAD}`
+    );
+  return lines.map((line) => {
+    const [id, on, ...more] = line.split('\t');
+    const fits = /^F-\d{3}$/.test(id)
+      ? on === 'gmail' || on === 'outlook'
+      : on === '-';
+    if (!id || !fits || more.length > 0)
+      throw new Error(`full-stack-only.tsv: cannot read "${line}"`);
+    return on === '-' ? id : `${id} ${on}`;
+  });
+}
+
+export const FULL_STACK_ONLY: readonly string[] = parseFullStackOnly(
+  readFileSync(new URL('../full-stack-only.tsv', import.meta.url), 'utf8')
+);
+
+const LIMIT_HEAD = 'id\tlimit';
+
+/**
+ * `../limits.tsv`: what the tests of a covered function do not prove, said
+ * in the report beside it.
+ */
+export function parseLimits(table: string): Map<string, string> {
+  const [head, ...lines] = table.split('\n').filter((line) => line !== '');
+  if (head !== LIMIT_HEAD)
+    throw new Error(`limits.tsv: the head is not ${LIMIT_HEAD}`);
+  const limits = new Map<string, string>();
+  for (const line of lines) {
+    const [id, limit, ...more] = line.split('\t');
+    if (!/^F-\d{3}$/.test(id) || !limit || more.length > 0)
+      throw new Error(`limits.tsv: cannot read "${line}"`);
+    limits.set(id, limit);
+  }
+  return limits;
+}
+
+export const LIMITS: ReadonlyMap<string, string> = parseLimits(
+  readFileSync(new URL('../limits.tsv', import.meta.url), 'utf8')
+);

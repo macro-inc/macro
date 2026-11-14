@@ -251,11 +251,6 @@ export const organise = {
       source: ['src/features/soup/createSoupEntityActions.ts'],
       viewports: ['desktop'],
       flag: 'enable-desktop-tabs',
-      waiver: {
-        kind: 'native-only',
-        reason:
-          'The item only shows when the desktop app has tabs, which a browser never has.',
-      },
     },
     {
       id: 'AL-091',
@@ -274,11 +269,6 @@ export const organise = {
       source: ['src/lib/core/hotkey/tokens.ts'],
       registered: ['email.archive'],
       viewports: ['desktop'],
-      waiver: {
-        kind: 'no-user-path',
-        reason:
-          'The email.archive token is only declared; no hotkey, menu item or tooltip uses it.',
-      },
     },
 
     // SL-140 command menu in entity-action mode

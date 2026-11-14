@@ -113,11 +113,6 @@ export const elsewhere = {
       name: 'Tauri-only paths: desktop system-browser consent, native mobile auth session, push-notification launch into a thread, native offline cache/filters, OTA update-required dialog for draft queue',
       opened: 'Tauri desktop / iOS / Android builds',
       viewports: [],
-      waiver: {
-        kind: 'native-only',
-        reason:
-          'These paths run only inside the Tauri desktop and mobile apps.',
-      },
     },
   ],
   actions: [

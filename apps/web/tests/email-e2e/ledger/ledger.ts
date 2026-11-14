@@ -5,7 +5,14 @@ import { existsSync } from 'node:fs';
 import { graphqlOperations, hotkeys, restCalls, toasts } from './derive';
 import type { RunResult, Test } from './evidence';
 import { GROUPS } from './manifest';
-import { type EmailFunction, FUNCTIONS, PROOFS } from './manifest/functions';
+import {
+  type EmailFunction,
+  FUNCTIONS,
+  LIMITS,
+  PROOFS,
+  WAIVERS,
+  type Waiver,
+} from './manifest/functions';
 import { GRAPHQL, OPERATIONS, REST } from './manifest/network';
 import {
   type Action,
@@ -78,6 +85,8 @@ export type FunctionRow = EmailFunction & {
    * shows they would catch a regression.
    */
   proof?: string;
+  /** What its tests do not prove (`limits.tsv`). */
+  limit?: string;
 };
 
 export type FunctionTotals = {
@@ -122,7 +131,8 @@ export function functionRows(
     'provider' | 'file' | 'title' | 'functions'
   >[],
   rows: readonly Pick<Row, 'id' | 'kind' | 'fn' | 'status' | 'reason'>[],
-  proofs: ReadonlyMap<string, string> = new Map()
+  proofs: ReadonlyMap<string, string> = new Map(),
+  limits: ReadonlyMap<string, string> = new Map()
 ): FunctionRow[] {
   return functions.map((fn): FunctionRow => {
     const mine = rows.filter((row) => row.fn.includes(fn.id));
@@ -198,6 +208,7 @@ export function functionRows(
       on: state,
       missing,
       proof: proofs.get(fn.id),
+      limit: limits.get(fn.id),
     };
   });
 }
@@ -262,7 +273,10 @@ export type Ledger = {
   unlisted: { request: string; answeredBy: string; count: number }[];
   drift: Drift[];
   tests: {
+    /** Tests, each once however many stacks it ran on. */
     total: number;
+    /** Of them, those that ran on the per-test stack and the full-stack tier. */
+    onBothStacks: number;
     passed: number;
     failed: number;
     skipped: number;
@@ -276,7 +290,8 @@ function rowsOf(
   group: Group,
   cells: Map<string, Set<string>>,
   tests: Map<string, Set<string>>,
-  knownBugRows: Set<string>
+  knownBugRows: Set<string>,
+  waivers: ReadonlyMap<string, Waiver>
 ): Row[] {
   const surfaces = new Map<string, Surface>(
     group.surfaces.map((surface) => [surface.id, surface])
@@ -304,18 +319,22 @@ function rowsOf(
         (viewport) => !seen.some((cell) => cell.endsWith(`/${viewport}`))
       ),
     ];
-    const waiver = row.waiver ?? surface?.waiver;
+    const waiver = waivers.get(row.id);
     const needs = row.needs ?? surface?.needs;
+    // Untested, a row is what its waiver says: put off (`backlog`), waiting
+    // for a service (`needs`), or not to be tested here at all.
+    const untested: Status =
+      waiver === undefined || waiver.kind === 'backlog'
+        ? 'open'
+        : waiver.kind === 'needs'
+          ? 'deferred'
+          : 'waived';
     const status: Status =
       seen.length > 0
         ? missing.length === 0
           ? 'covered'
           : 'partial'
-        : waiver
-          ? 'waived'
-          : needs
-            ? 'deferred'
-            : 'open';
+        : untested;
     return {
       id: row.id,
       kind,
@@ -329,11 +348,13 @@ function rowsOf(
       viewports,
       status,
       reason:
-        status === 'waived'
-          ? `${waiver?.kind}: ${waiver?.reason}`
-          : status === 'deferred'
-            ? needs
-            : undefined,
+        seen.length > 0
+          ? undefined
+          : waiver
+            ? `: `
+            : needs
+              ? `no waiver; needs `
+              : 'no waiver',
       cells: seen,
       missing: seen.length > 0 ? missing : [],
       tests: [...(tests.get(row.id) ?? [])].sort(),
@@ -524,7 +545,12 @@ function manifestDrift(): Drift[] {
   return drift;
 }
 
-export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
+export function buildLedger(
+  gating: RunResult,
+  knownBugs: RunResult,
+  waived: readonly Waiver[] = WAIVERS
+): Ledger {
+  const waivers = new Map(waived.map((waiver) => [waiver.id, waiver]));
   // Rows.
   const cells = new Map<string, Set<string>>();
   const tests = new Map<string, Set<string>>();
@@ -538,7 +564,7 @@ export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
   }
   const knownBugRows = new Set(knownBugs.evidence.flatMap((each) => each.rows));
   const rows = (GROUPS as readonly Group[]).flatMap((group) =>
-    rowsOf(group, cells, tests, knownBugRows)
+    rowsOf(group, cells, tests, knownBugRows, waivers)
   );
 
   const drift = manifestDrift();
@@ -610,18 +636,18 @@ export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
   const operations = OPERATIONS.map((operation): OperationRow => {
     const entry = seen.get(operation.id);
     const status: OperationRow['status'] = entry?.real
-      ? BOTH_PROVIDERS.every((provider) => entry.providers.has(provider))
+      ? (operation.providers ?? BOTH_PROVIDERS).every((provider) =>
+          entry.providers.has(provider)
+        )
         ? 'covered'
         : 'partial'
       : entry?.failed
         ? 'failed'
         : entry?.stubbed
           ? 'stubbed'
-          : operation.waiver
-            ? 'waived'
-            : operation.needs
-              ? 'deferred'
-              : 'open';
+          : operation.needs
+            ? 'deferred'
+            : 'open';
     return {
       ...operation,
       status,
@@ -631,9 +657,20 @@ export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
     };
   });
 
-  const counted = gating.tests.filter((test) => !test.knownBug);
+  // A test that runs on both stacks is in both runs: one test, the worse of
+  // its two verdicts.
+  const byId = new Map<string, Test[]>();
+  for (const test of gating.tests) {
+    if (test.knownBug) continue;
+    byId.set(test.id, [...(byId.get(test.id) ?? []), test]);
+  }
+  const runsOf = [...byId.values()];
+  const WORST = ['unexpected', 'flaky', 'expected', 'skipped'] as const;
+  const verdict = (runs: Test[]) =>
+    WORST.find((status) => runs.some((test) => test.status === status));
+  const counted = runsOf.flat();
   return {
-    functions: functionRows(FUNCTIONS, gating.evidence, rows, PROOFS),
+    functions: functionRows(FUNCTIONS, gating.evidence, rows, PROOFS, LIMITS),
     rows,
     operations,
     unlisted: [...unlisted.entries()]
@@ -641,10 +678,11 @@ export function buildLedger(gating: RunResult, knownBugs: RunResult): Ledger {
       .sort((a, b) => a.request.localeCompare(b.request)),
     drift,
     tests: {
-      total: counted.length,
-      passed: counted.filter((test) => test.status === 'expected').length,
-      failed: counted.filter((test) => test.status === 'unexpected').length,
-      skipped: counted.filter((test) => test.status === 'skipped').length,
+      total: runsOf.length,
+      onBothStacks: runsOf.filter((runs) => runs.length > 1).length,
+      passed: runsOf.filter((runs) => verdict(runs) === 'expected').length,
+      failed: runsOf.filter((runs) => verdict(runs) === 'unexpected').length,
+      skipped: runsOf.filter((runs) => verdict(runs) === 'skipped').length,
       flaky: counted.filter((test) => test.status === 'flaky'),
       knownBugs: knownBugs.tests.length,
       seconds: Math.round(
