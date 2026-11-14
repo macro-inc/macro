@@ -1,17 +1,20 @@
 //! The triggers that keep `document_email_participants` a superset of what
 //! the attachment chain proves.
 
+use anyhow::Context;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Connection, PgConnection, PgPool};
 use std::collections::BTreeSet;
+use std::time::Duration;
+use tokio::task::JoinHandle;
 use uuid::{Uuid, uuid};
 
 /// The mailbox these tests write into; inserted as a replica, its link and
 /// threads never exist.
 const MAILBOX: Uuid = uuid!("33333333-0000-0000-0000-00000000000a");
 
-/// Postgres' `lock_not_available`, raised when `lock_timeout` expires.
-const LOCK_NOT_AVAILABLE: &str = "55P03";
+/// Postgres' `foreign_key_violation`.
+const FOREIGN_KEY_VIOLATION: &str = "23503";
 
 async fn participants_of(
     conn: &mut PgConnection,
@@ -212,179 +215,449 @@ async fn participants_follow_every_write_that_proves_one(db: PgPool) -> anyhow::
     Ok(())
 }
 
-/// An unlinked attachment document's chain, with a contact and a message
-/// outside it that a participant write can bring in.
+/// The participants `document`'s chain proves now.
+async fn proven_participants(
+    conn: &mut PgConnection,
+    document: &str,
+) -> anyhow::Result<BTreeSet<String>> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT LOWER(c.email_address) AS "address!"
+           FROM document_email de
+           JOIN email_attachments ea ON ea.id = de.email_attachment_id
+           JOIN email_messages m ON m.id = ea.message_id
+           JOIN email_contacts c ON c.id = m.from_contact_id
+               OR c.id IN (SELECT r.contact_id FROM email_message_recipients r WHERE r.message_id = m.id)
+           WHERE de.document_id = $1"#,
+        document
+    )
+    .fetch_all(conn)
+    .await?
+    .into_iter()
+    .collect())
+}
+
+/// One of the chain's messages.
+#[derive(Clone, Copy, Debug)]
+enum On {
+    /// The message the attachment came in on.
+    Message,
+    /// The message a move takes the attachment to.
+    OtherMessage,
+}
+
+/// One of the chain's contacts.
+#[derive(Clone, Copy, Debug)]
+enum Contact {
+    Recipient,
+    OtherRecipient,
+    /// A contact on no message yet.
+    Newcomer,
+}
+
+/// An attachment document's chain: its attachment on a message from a sender
+/// to a recipient, a second message from another sender to another
+/// recipient, and a newcomer on neither.
+#[derive(Clone)]
 struct Chain {
     case: String,
     document: String,
     attachment: Uuid,
     message: Uuid,
     recipient: Uuid,
+    other_message: Uuid,
+    other_recipient: Uuid,
     newcomer: Uuid,
-    newcomer_message: Uuid,
 }
 
 impl Chain {
-    async fn seed(conn: &mut PgConnection, case: String) -> anyhow::Result<Self> {
+    async fn seed(conn: &mut PgConnection, case: String, linked: bool) -> anyhow::Result<Self> {
         set_replication_role(conn, "replica").await?;
-        let sender = insert_contact(conn, &format!("{case}-sender@acme.test")).await?;
-        let recipient = insert_contact(conn, &format!("{case}-recipient@acme.test")).await?;
-        let newcomer = insert_contact(conn, &format!("{case}-newcomer@acme.test")).await?;
+        let address = |who: &str| format!("{case}-{who}@acme.test");
+        let sender = insert_contact(conn, &address("sender")).await?;
+        let recipient = insert_contact(conn, &address("recipient")).await?;
+        let other_sender = insert_contact(conn, &address("other-sender")).await?;
+        let other_recipient = insert_contact(conn, &address("other-recipient")).await?;
+        let newcomer = insert_contact(conn, &address("newcomer")).await?;
         let message = insert_message(conn, sender).await?;
         insert_recipient(conn, message, recipient).await?;
-        let newcomer_message = insert_message(conn, newcomer).await?;
+        let other_message = insert_message(conn, other_sender).await?;
+        insert_recipient(conn, other_message, other_recipient).await?;
         let attachment = insert_attachment(conn, message).await?;
         let document = format!("{case}-doc");
         insert_document(conn, &document).await?;
         set_replication_role(conn, "origin").await?;
+        if linked {
+            link(conn, &document, attachment).await?;
+        }
         Ok(Self {
             case,
             document,
             attachment,
             message,
             recipient,
+            other_message,
+            other_recipient,
             newcomer,
-            newcomer_message,
         })
     }
 
-    fn renamed(&self) -> String {
-        format!("{}-renamed@acme.test", self.case)
+    fn message(&self, on: On) -> Uuid {
+        match on {
+            On::Message => self.message,
+            On::OtherMessage => self.other_message,
+        }
+    }
+
+    fn recipient_of(&self, on: On) -> Uuid {
+        match on {
+            On::Message => self.recipient,
+            On::OtherMessage => self.other_recipient,
+        }
+    }
+
+    fn contact(&self, contact: Contact) -> Uuid {
+        match contact {
+            Contact::Recipient => self.recipient,
+            Contact::OtherRecipient => self.other_recipient,
+            Contact::Newcomer => self.newcomer,
+        }
+    }
+
+    fn renamed(&self, contact: Contact) -> String {
+        format!("{}-{contact:?}-renamed@acme.test", self.case).to_lowercase()
     }
 }
 
-/// A write that makes someone a participant of an existing chain.
+/// A write that completes or changes the chain.
 #[derive(Clone, Copy, Debug)]
-enum ParticipantWrite {
-    NewRecipient,
-    ChangedRecipient,
-    ChangedSender,
-    ChangedAddress,
+enum Write {
+    /// Links the document to the attachment.
+    Link,
+    /// Adds the newcomer as a recipient.
+    NewRecipient(On),
+    /// Replaces the message's recipient with the newcomer.
+    ChangedRecipient(On),
+    /// Makes the newcomer the message's sender.
+    ChangedSender(On),
+    /// Changes the contact's address.
+    Renamed(Contact),
+    /// Moves the attachment to the other message.
     MovedAttachment,
 }
 
-impl ParticipantWrite {
-    const ALL: [Self; 5] = [
-        Self::NewRecipient,
-        Self::ChangedRecipient,
-        Self::ChangedSender,
-        Self::ChangedAddress,
-        Self::MovedAttachment,
-    ];
-
-    async fn apply(self, chain: &Chain, conn: &mut PgConnection) -> sqlx::Result<()> {
-        match self {
-            Self::NewRecipient => insert_recipient(conn, chain.message, chain.newcomer).await,
-            Self::ChangedRecipient => sqlx::query!(
+impl Write {
+    async fn apply(self, chain: &Chain, conn: &mut PgConnection) -> anyhow::Result<()> {
+        let changed = match self {
+            Self::Link => return Ok(link(conn, &chain.document, chain.attachment).await?),
+            Self::NewRecipient(on) => {
+                return Ok(insert_recipient(conn, chain.message(on), chain.newcomer).await?);
+            }
+            Self::ChangedRecipient(on) => sqlx::query!(
                 "UPDATE email_message_recipients SET contact_id = $3 WHERE message_id = $1 AND contact_id = $2",
-                chain.message,
-                chain.recipient,
+                chain.message(on),
+                chain.recipient_of(on),
                 chain.newcomer,
             )
             .execute(conn)
-            .await
-            .map(drop),
-            Self::ChangedSender => sqlx::query!(
+            .await?,
+            Self::ChangedSender(on) => sqlx::query!(
                 "UPDATE email_messages SET from_contact_id = $2 WHERE id = $1",
-                chain.message,
+                chain.message(on),
                 chain.newcomer,
             )
             .execute(conn)
-            .await
-            .map(drop),
-            Self::ChangedAddress => sqlx::query!(
+            .await?,
+            Self::Renamed(contact) => sqlx::query!(
                 "UPDATE email_contacts SET email_address = $2 WHERE id = $1",
-                chain.recipient,
-                chain.renamed(),
+                chain.contact(contact),
+                chain.renamed(contact),
             )
             .execute(conn)
-            .await
-            .map(drop),
+            .await?,
             Self::MovedAttachment => sqlx::query!(
                 "UPDATE email_attachments SET message_id = $2 WHERE id = $1",
                 chain.attachment,
-                chain.newcomer_message,
+                chain.other_message,
             )
             .execute(conn)
-            .await
-            .map(drop),
-        }
-    }
-
-    /// The address the write adds to the chain's participants.
-    fn joins(self, chain: &Chain) -> String {
-        match self {
-            Self::ChangedAddress => chain.renamed(),
-            _ => format!("{}-newcomer@acme.test", chain.case),
-        }
+            .await?,
+        };
+        anyhow::ensure!(changed.rows_affected() == 1, "{self:?} changed no row");
+        Ok(())
     }
 }
 
-/// Whether linking the chain's document, or applying `write`, waits on a row
-/// lock another transaction holds.
-async fn waits(
-    conn: &mut PgConnection,
-    chain: &Chain,
-    write: Option<ParticipantWrite>,
-) -> anyhow::Result<bool> {
-    let mut transaction = conn.begin().await?;
-    sqlx::query!("SET LOCAL lock_timeout = '100ms'")
-        .execute(&mut *transaction)
-        .await?;
-    let result = match write {
-        Some(write) => write.apply(chain, &mut transaction).await,
-        None => link(&mut transaction, &chain.document, chain.attachment).await,
-    };
-    transaction.rollback().await?;
-    match result {
-        Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some(LOCK_NOT_AVAILABLE) => {
-            Ok(true)
-        }
-        result => result.map(|()| false).map_err(Into::into),
-    }
+async fn backend_pid(conn: &mut PgConnection) -> anyhow::Result<i32> {
+    Ok(sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(conn)
+        .await?)
 }
 
-/// Neither trigger sees the other transaction's uncommitted row, so a link
-/// and a write that adds a participant to its chain must wait for each other:
-/// the one that waits records the participant once the other commits.
+/// Returns once `waiter` waits on a lock `holder` holds; fails if `waiting`
+/// finishes first or ten seconds pass. Postgres has no event to wait on for
+/// a lock wait, so this polls `pg_blocking_pids`.
+async fn blocked_by<T>(
+    db: &PgPool,
+    waiter: i32,
+    holder: i32,
+    waiting: &JoinHandle<T>,
+) -> anyhow::Result<()> {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let blocked = sqlx::query_scalar!(
+                r#"SELECT $2::int = ANY(pg_blocking_pids($1)) AS "blocked!""#,
+                waiter,
+                holder,
+            )
+            .fetch_one(db)
+            .await?;
+            if blocked {
+                return Ok(());
+            }
+            anyhow::ensure!(!waiting.is_finished(), "finished without waiting");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .context("never waited")?
+}
+
+/// Applies `then` while `first` is uncommitted and checks that it waits for
+/// `first`. Neither trigger sees the other transaction's uncommitted row, so
+/// only the trigger of `then`, running once `first` commits, can record what
+/// the two writes prove together: the document's participants must then
+/// hold everything its chain proves.
+async fn race(db: &PgPool, chain: &Chain, first: Write, then: Write) -> anyhow::Result<()> {
+    let proven_before = proven_participants(&mut *db.acquire().await?, &chain.document).await?;
+    let mut holder = db.acquire().await?;
+    let holder_pid = backend_pid(&mut holder).await?;
+    let mut holding = holder.begin().await?;
+    first.apply(chain, &mut holding).await?;
+    let mut waiter = db.acquire().await?;
+    let waiter_pid = backend_pid(&mut waiter).await?;
+    let waiting = tokio::spawn({
+        let chain = chain.clone();
+        async move {
+            let mut transaction = waiter.begin().await?;
+            then.apply(&chain, &mut transaction).await?;
+            transaction.commit().await?;
+            anyhow::Ok(())
+        }
+    });
+    blocked_by(db, waiter_pid, holder_pid, &waiting)
+        .await
+        .with_context(|| format!("{then:?} waits for {first:?}"))?;
+    holding.commit().await?;
+    waiting.await??;
+
+    let conn = &mut *db.acquire().await?;
+    let proven = proven_participants(conn, &chain.document).await?;
+    assert_ne!(
+        proven, proven_before,
+        "{first:?} then {then:?} change the chain"
+    );
+    let recorded = participants_of(conn, &chain.document).await?;
+    assert!(
+        recorded.is_superset(&proven),
+        "{first:?} then {then:?}: {recorded:?} misses some of {proven:?}"
+    );
+    Ok(())
+}
+
+/// A link and a write that adds a participant to its chain wait for each
+/// other, whichever comes first.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_link_and_a_participant_write_on_its_chain_wait_for_each_other(
     db: PgPool,
 ) -> anyhow::Result<()> {
-    let mut linker = db.acquire().await?;
-    let mut writer = db.acquire().await?;
-    for write in ParticipantWrite::ALL {
-        let chain = Chain::seed(&mut linker, format!("{write:?}-in-flight").to_lowercase()).await?;
-        let mut in_flight = writer.begin().await?;
-        write.apply(&chain, &mut in_flight).await?;
-        assert!(
-            waits(&mut linker, &chain, None).await?,
-            "a link waits for {write:?}"
-        );
-        in_flight.commit().await?;
-        link(&mut linker, &chain.document, chain.attachment).await?;
-        assert!(
-            participants_of(&mut linker, &chain.document)
-                .await?
-                .contains(&write.joins(&chain)),
-            "a link after {write:?} records it"
-        );
+    let conn = &mut *db.acquire().await?;
+    for (case, write) in [
+        Write::NewRecipient(On::Message),
+        Write::ChangedRecipient(On::Message),
+        Write::ChangedSender(On::Message),
+        Write::Renamed(Contact::Recipient),
+        Write::MovedAttachment,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let chain = Chain::seed(conn, format!("link-after-{case}"), false).await?;
+        race(&db, &chain, write, Write::Link).await?;
+        let chain = Chain::seed(conn, format!("link-first-{case}"), false).await?;
+        race(&db, &chain, Write::Link, write).await?;
+    }
+    Ok(())
+}
 
-        let chain = Chain::seed(&mut linker, format!("{write:?}-after").to_lowercase()).await?;
-        let mut in_flight = linker.begin().await?;
-        link(&mut in_flight, &chain.document, chain.attachment).await?;
-        assert!(
-            waits(&mut writer, &chain, Some(write)).await?,
-            "{write:?} waits for a link"
-        );
-        in_flight.commit().await?;
-        write.apply(&chain, &mut writer).await?;
-        assert!(
-            participants_of(&mut writer, &chain.document)
-                .await?
-                .contains(&write.joins(&chain)),
-            "{write:?} after a link records it"
+/// Two writes on a linked chain that bring in a participant between them (an
+/// attachment move and a write on the message it moves to, or a new
+/// participant and a change of their address) wait for each other too.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn participant_writes_on_one_chain_wait_for_each_other(db: PgPool) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    for (case, (a, b)) in [
+        (
+            Write::MovedAttachment,
+            Write::NewRecipient(On::OtherMessage),
+        ),
+        (
+            Write::MovedAttachment,
+            Write::ChangedRecipient(On::OtherMessage),
+        ),
+        (
+            Write::MovedAttachment,
+            Write::ChangedSender(On::OtherMessage),
+        ),
+        (
+            Write::MovedAttachment,
+            Write::Renamed(Contact::OtherRecipient),
+        ),
+        (
+            Write::NewRecipient(On::Message),
+            Write::Renamed(Contact::Newcomer),
+        ),
+        (
+            Write::ChangedRecipient(On::Message),
+            Write::Renamed(Contact::Newcomer),
+        ),
+        (
+            Write::ChangedSender(On::Message),
+            Write::Renamed(Contact::Newcomer),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let chain = Chain::seed(conn, format!("pair-{case}"), true).await?;
+        race(&db, &chain, a, b).await?;
+        let chain = Chain::seed(conn, format!("pair-{case}-reversed"), true).await?;
+        race(&db, &chain, b, a).await?;
+    }
+    Ok(())
+}
+
+/// A message delete takes the message before its cascade deletes the
+/// attachment, as a link does before its foreign key check: whichever comes
+/// second waits, and neither deadlocks. A link that waited for the delete
+/// fails its foreign key check, as document creation expects.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_delete_and_a_link_to_its_attachment_never_deadlock(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    let chain = Chain::seed(conn, "deleted-first".to_owned(), false).await?;
+    let mut holder = db.acquire().await?;
+    let holder_pid = backend_pid(&mut holder).await?;
+    let mut deleting = holder.begin().await?;
+    sqlx::query!("DELETE FROM email_messages WHERE id = $1", chain.message)
+        .execute(&mut *deleting)
+        .await?;
+    let mut linker = db.acquire().await?;
+    let linker_pid = backend_pid(&mut linker).await?;
+    let linking = tokio::spawn({
+        let chain = chain.clone();
+        async move { link(&mut linker, &chain.document, chain.attachment).await }
+    });
+    blocked_by(&db, linker_pid, holder_pid, &linking).await?;
+    deleting.commit().await?;
+    match linking.await? {
+        Err(sqlx::Error::Database(e)) => {
+            assert_eq!(e.code().as_deref(), Some(FOREIGN_KEY_VIOLATION), "{e}");
+            assert_eq!(
+                e.constraint(),
+                Some("document_email_email_attachment_id_fkey")
+            );
+        }
+        result => anyhow::bail!("the link outlived its attachment: {result:?}"),
+    }
+
+    let chain = Chain::seed(conn, "linked-first".to_owned(), false).await?;
+    let mut holder = db.acquire().await?;
+    let holder_pid = backend_pid(&mut holder).await?;
+    let mut linking = holder.begin().await?;
+    link(&mut linking, &chain.document, chain.attachment).await?;
+    let mut deleter = db.acquire().await?;
+    let deleter_pid = backend_pid(&mut deleter).await?;
+    let deleting = tokio::spawn(async move {
+        sqlx::query!("DELETE FROM email_messages WHERE id = $1", chain.message)
+            .execute(&mut *deleter)
+            .await
+    });
+    blocked_by(&db, deleter_pid, holder_pid, &deleting).await?;
+    linking.commit().await?;
+    deleting.await??;
+    Ok(())
+}
+
+/// One statement that deletes several documents deletes all their rows.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_documents_deletes_their_participants(db: PgPool) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    let mut chains = Vec::new();
+    for case in 0..4 {
+        chains.push(Chain::seed(conn, format!("deleted-{case}"), true).await?);
+    }
+    for deleted in [&chains[..1], &chains[1..3]] {
+        let ids: Vec<_> = deleted.iter().map(|chain| chain.document.clone()).collect();
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = ANY($1)"#, &ids)
+            .execute(&mut *conn)
+            .await?;
+    }
+    for chain in &chains[..3] {
+        assert!(participants_of(conn, &chain.document).await?.is_empty());
+    }
+    assert_eq!(participants_of(conn, &chains[3].document).await?.len(), 2);
+    Ok(())
+}
+
+/// The backfill commits each batch with the last attachment it covered, so a
+/// run stopped part way resumes after it, and drops its progress row at the
+/// end.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_backfill_resumes_after_its_last_committed_batch(db: PgPool) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    // Links written as a replica fire no trigger, as links did before it.
+    set_replication_role(conn, "replica").await?;
+    let mut chains = Vec::new();
+    for case in 0..3 {
+        let chain = Chain::seed(conn, format!("backfill-{case}"), false).await?;
+        set_replication_role(conn, "replica").await?;
+        link(conn, &chain.document, chain.attachment).await?;
+        chains.push(chain);
+    }
+    set_replication_role(conn, "origin").await?;
+    chains.sort_by_key(|chain| chain.attachment);
+    // Where a run that committed its first batch stopped. The table exists
+    // only while a run is unfinished, so the query macros cannot name it.
+    sqlx::raw_sql(&format!(
+        "CREATE TABLE document_email_participants_backfill (
+             single boolean PRIMARY KEY DEFAULT true CHECK (single),
+             last_attachment_id uuid NOT NULL
+         );
+         INSERT INTO document_email_participants_backfill (last_attachment_id) VALUES ('{}')",
+        chains[0].attachment
+    ))
+    .execute(&mut *conn)
+    .await?;
+
+    sqlx::raw_sql(include_str!(
+        "../../../../../../../../macro_db_client/migrations/20261114135612_document_email_participants_backfill.sql"
+    ))
+    .execute(&mut *conn)
+    .await?;
+
+    assert!(participants_of(conn, &chains[0].document).await?.is_empty());
+    for chain in &chains[1..] {
+        assert_eq!(
+            participants_of(conn, &chain.document).await?,
+            proven_participants(conn, &chain.document).await?
         );
     }
+    assert_eq!(
+        sqlx::query_scalar!("SELECT to_regclass('document_email_participants_backfill')::text")
+            .fetch_one(&mut *conn)
+            .await?,
+        None
+    );
     Ok(())
 }

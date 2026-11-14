@@ -7,8 +7,14 @@ SET LOCAL lock_timeout = '5s';
 -- email_attachments -> email_messages -> sender and recipients ->
 -- email_contacts); readers recheck the chain, so rows the chain no longer
 -- proves are harmless and are not deleted.
+--
+-- No foreign key to "Document": a hard delete racing a backfill batch or a
+-- sync trigger would fail that statement's check. Deleting documents deletes
+-- their rows (documents_deleted below); a row a racing insert writes for a
+-- document deleted meanwhile stays, and readers join "Document", so it only
+-- costs space.
 CREATE TABLE document_email_participants (
-    document_id TEXT NOT NULL REFERENCES "Document" (id) ON DELETE CASCADE,
+    document_id TEXT NOT NULL,
     address     TEXT NOT NULL,
     PRIMARY KEY (document_id, address)
 );
@@ -45,6 +51,17 @@ $$;
 --   * each participant contact: KEY SHARE below, and the foreign key checks
 --     of a new sender or recipient, conflict with changing its address, a key
 --     column (contacts_link_id_email_address_idx).
+--
+-- Every writer takes a message before its attachments: deleting a message
+-- (its cascade), adopting a sent message (the delivery's completion locks the
+-- local message, then sent_identity's imported_message the imported one), and
+-- a link (lock_linked_message, before the foreign key check takes the
+-- attachment). A link holding its attachment while it waited for the
+-- message would deadlock with a writer holding the message that then deletes
+-- or moves the attachment. Updating a link or moving an attachment locks that
+-- row before any trigger runs, so a writer doing either locks the messages
+-- first.
+--
 -- Locks a link or a moved attachment's chain from the attachment down, in
 -- id order, then records it.
 CREATE FUNCTION lock_and_record_document_email_participants(attachment_ids uuid[]) RETURNS void
@@ -66,6 +83,27 @@ BEGIN
     )
     ORDER BY id FOR KEY SHARE;
     PERFORM record_document_email_participants(attachment_ids);
+END $$;
+
+-- Locks a new link's message before its foreign key check locks the
+-- attachment. Reads the attachment again after each lock, until the message
+-- it locked is still the attachment's: a move that committed meanwhile left
+-- it on another message. A missing attachment fails the foreign key check.
+CREATE FUNCTION document_email_participants_lock_linked_message() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+    locked_message uuid;
+    attachment_message uuid;
+BEGIN
+    SELECT message_id INTO attachment_message
+    FROM email_attachments WHERE id = NEW.email_attachment_id;
+    WHILE attachment_message IS DISTINCT FROM locked_message LOOP
+        PERFORM 1 FROM email_messages WHERE id = attachment_message FOR UPDATE;
+        locked_message := attachment_message;
+        SELECT message_id INTO attachment_message
+        FROM email_attachments WHERE id = NEW.email_attachment_id;
+    END LOOP;
+    RETURN NEW;
 END $$;
 
 CREATE FUNCTION document_email_participants_linked() RETURNS trigger
@@ -105,6 +143,8 @@ END $$;
 -- New recipients lock their message and contact through the foreign key
 -- checks, which run before this statement trigger. Most messages have no
 -- attachment yet when sync writes their recipients, so skip the insert then.
+-- The messages are collected into an array, so the cached plan probes the
+-- attachments' message_id index whatever the size of the first statement.
 CREATE FUNCTION document_email_participants_recipients_added() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -112,7 +152,7 @@ DECLARE
 BEGIN
     attachment_ids := ARRAY(
         SELECT ea.id FROM email_attachments ea
-        WHERE ea.message_id IN (SELECT DISTINCT message_id FROM added)
+        WHERE ea.message_id = ANY(ARRAY(SELECT DISTINCT message_id FROM added))
     );
     IF cardinality(attachment_ids) > 0 THEN
         PERFORM record_document_email_participants(attachment_ids);
@@ -146,6 +186,20 @@ BEGIN
     ));
     RETURN NULL;
 END $$;
+
+-- Deletes the rows of deleted documents, probing the primary key per id
+-- (an array, like recipients_added, whatever the first statement's size).
+CREATE FUNCTION document_email_participants_documents_deleted() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM document_email_participants
+    WHERE document_id = ANY(ARRAY(SELECT id FROM deleted));
+    RETURN NULL;
+END $$;
+
+CREATE TRIGGER document_email_participants_lock_linked_message
+    BEFORE INSERT ON document_email
+    FOR EACH ROW EXECUTE FUNCTION document_email_participants_lock_linked_message();
 
 CREATE TRIGGER document_email_participants_linked
     AFTER INSERT ON document_email
@@ -182,3 +236,8 @@ CREATE TRIGGER document_email_participants_address_changed
     AFTER UPDATE OF email_address ON email_contacts
     FOR EACH ROW WHEN (LOWER(NEW.email_address) IS DISTINCT FROM LOWER(OLD.email_address))
     EXECUTE FUNCTION document_email_participants_address_changed();
+
+CREATE TRIGGER document_email_participants_documents_deleted
+    AFTER DELETE ON "Document"
+    REFERENCING OLD TABLE AS deleted
+    FOR EACH STATEMENT EXECUTE FUNCTION document_email_participants_documents_deleted();
