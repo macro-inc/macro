@@ -1,0 +1,40 @@
+crates/agent_monitor_tui/src/ui/drill.rs
+  s_cfe0e68707efd8::t_2ec771f7ee838c 141-148,154-157,162,168,174,177-178,180,189-192,195-200,202,206,215-223
+  s_cfe0e68707efd8::t_b0d476f08e4701 149-153,183-187
+  s_cfe0e68707efd8::t_848f3777600d06 188
+crates/agent_monitor_tui/src/ui/test.rs
+  s_cfe0e68707efd8::t_3f8e92740248ae 105-108
+  s_cfe0e68707efd8::t_7c1d1ac032524a 104
+crates/agent_monitor_tui/src/ui.rs
+  s_cfe0e68707efd8::t_2ec771f7ee838c 341-353,381
+crates/agent_monitor_tui/src/view.rs
+  s_cfe0e68707efd8::t_2ec771f7ee838c 382-383,385-389
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_wide_240x60_grows_the_body.snap
+  s_cfe0e68707efd8::t_e823484bbc3fef 1-64
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__drill_in_200x56.snap
+  s_e722a0e50d8d61::t_2e163f7963f420 16-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6423d8f66618fe08d5394c1207561b574b5125ba",
+  "prompts": {},
+  "sessions": {
+    "s_cfe0e68707efd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2811c85-c04f-4026-8996-c4529b03d7a6",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e722a0e50d8d61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5f3e0ec9-e513-43a8-85ef-274a27804419",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
