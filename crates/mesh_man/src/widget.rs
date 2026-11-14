@@ -19,15 +19,12 @@ use ratatui::widgets::Widget;
 use ratatui::widgets::canvas::{Canvas, Line};
 
 use crate::figure::{Core, Tissue};
+use crate::palette::Rgb;
 use crate::project::{CAMERA_DISTANCE, TILT, View, project};
 use crate::pulse::{FLASH_SECONDS, PulseKind};
 use crate::{Body, ColorDepth};
 
-type Rgb = (u8, u8, u8);
-
 const AMBER: Rgb = (255, 165, 43);
-const AMBER_DIM: Rgb = (194, 123, 28);
-const AMBER_FAINT: Rgb = (122, 80, 22);
 const AMBER_DARK: Rgb = (74, 48, 14);
 const YELLOW: Rgb = (255, 225, 77);
 const CYAN: Rgb = (79, 211, 255);
@@ -38,11 +35,6 @@ const RED: Rgb = (255, 59, 59);
 const RED_DARK: Rgb = (110, 22, 22);
 const GREEN: Rgb = (34, 229, 92);
 const WHITE: Rgb = (255, 255, 255);
-const BONE_IDLE: Rgb = (150, 150, 155);
-const BONE_FAR: Rgb = (70, 70, 76);
-const BONE_FAR_BUSY: Rgb = (125, 125, 130);
-const FLESH: Rgb = (196, 74, 60);
-const FLESH_FAR: Rgb = (92, 34, 28);
 
 /// Half the canvas height in figure units: the figure (2.0) plus the
 /// turntable under his feet and room for perspective.
@@ -58,6 +50,10 @@ const TURNTABLE_Y: f32 = -1.0;
 
 /// Distance between a pulse's head and each of its three tail marks.
 const TAIL_STEP: f32 = 0.05;
+
+/// Radius of the reactor's outer ring and how many pieces it has.
+const REACTOR_RADIUS: f32 = 0.06;
+const REACTOR_SEGMENTS: usize = 6;
 
 /// Points around the heart loop.
 const HEART_POINTS: usize = 20;
@@ -207,6 +203,9 @@ const INNER_DEPTH: f32 = -0.04;
 /// Half the width of a scan tick, in figure units.
 const SCAN_TICK: f32 = 0.012;
 
+/// How near the scan plane a skin line must lie for a slice look to light it.
+const SLICE_BAND: f32 = 0.018;
+
 /// Glow above which a nerve draws over the bones.
 const FIRING_GLOW: f32 = 0.12;
 
@@ -217,21 +216,36 @@ impl Body {
 
         self.draw_turntable(&mut frame);
 
-        let bone_near = mix(BONE_IDLE, WHITE, load);
-        let bone_far = mix(BONE_FAR, BONE_FAR_BUSY, load);
-        let skin_near = mix(AMBER_DIM, AMBER, load * 0.35);
+        let palette = self.figure().look.palette();
+        let bone_near = mix(palette.bone_idle, palette.bone_busy, load);
+        let bone_far = mix(palette.bone_far, palette.bone_far_busy, load);
+        let skin_near = mix(palette.skin_idle, palette.skin_busy, load * palette.skin_load);
         let scan = self.scan_height();
         for segment in &self.figure().segments {
             let depth = frame.view.depth((segment.a + segment.b) * 0.5);
             let (layer, rgb) = match segment.tissue {
                 Tissue::Skin if depth >= 0.0 => (SKIN_NEAR, skin_near),
-                Tissue::Skin => (SKIN_FAR, AMBER_FAINT),
+                Tissue::Skin => (SKIN_FAR, palette.skin_far),
                 Tissue::Bone if depth >= INNER_DEPTH => (BONE_NEAR, bone_near),
                 Tissue::Bone => (BONE_FAR_LAYER, bone_far),
-                Tissue::Extra if depth >= INNER_DEPTH => (EXTRA_NEAR, FLESH),
-                Tissue::Extra => (EXTRA_FAR, FLESH_FAR),
+                Tissue::Extra if depth >= INNER_DEPTH => (EXTRA_NEAR, palette.extra),
+                Tissue::Extra => (EXTRA_FAR, palette.extra_far),
             };
             frame.line(layer, segment.a, segment.b, rgb);
+
+            // A slice look lights the skin lines lying in the scan plane.
+            if palette.scan_slices
+                && segment.tissue == Tissue::Skin
+                && (segment.a.y - scan).abs() < SLICE_BAND
+                && (segment.b.y - scan).abs() < SLICE_BAND
+            {
+                let rgb = if depth >= 0.0 {
+                    palette.scan_near
+                } else {
+                    palette.scan_far
+                };
+                frame.line(SCAN, segment.a, segment.b, rgb);
+            }
 
             // Where a skin line crosses the scan plane, a bright tick: the
             // ticks together trace the body's outline at that height.
@@ -239,7 +253,11 @@ impl Body {
             let above = segment.b.y - scan;
             if segment.tissue == Tissue::Skin && below * above < 0.0 {
                 let crossing = segment.a.lerp(segment.b, below / (below - above));
-                let rgb = if depth >= 0.0 { YELLOW } else { AMBER_DIM };
+                let rgb = if depth >= 0.0 {
+                    palette.scan_near
+                } else {
+                    palette.scan_far
+                };
                 let centre = frame.screen(crossing);
                 frame.screen_line(
                     SCAN,
@@ -267,6 +285,7 @@ impl Body {
     /// A ring of ticks under the feet that turns with him, so the turn reads
     /// even when he faces square on.
     fn draw_turntable(&self, frame: &mut Frame) {
+        let palette = self.figure().look.palette();
         let centre = Vec3::new(0.0, TURNTABLE_Y, 0.0);
         let point = |angle: f32, radius: f32| {
             centre + Vec3::new(radius * angle.cos(), 0.0, radius * angle.sin())
@@ -277,7 +296,7 @@ impl Body {
             let a = k as f32 / sides as f32 * TAU;
             let b = (k + 1) as f32 / sides as f32 * TAU;
             let near = frame.view.depth(point((a + b) / 2.0, TURNTABLE_RADIUS)) >= 0.0;
-            let rgb = if near { AMBER_FAINT } else { AMBER_DARK };
+            let rgb = if near { palette.floor } else { palette.floor_dark };
             frame.line(
                 FLOOR,
                 point(a, TURNTABLE_RADIUS),
@@ -292,9 +311,9 @@ impl Body {
             let inner = if long { 0.36 } else { 0.41 };
             let near = frame.view.depth(point(angle, TURNTABLE_RADIUS)) >= 0.0;
             let rgb = match (long, near) {
-                (true, true) => AMBER,
-                (true, false) | (false, true) => AMBER_FAINT,
-                (false, false) => AMBER_DARK,
+                (true, true) => palette.floor_bright,
+                (true, false) | (false, true) => palette.floor,
+                (false, false) => palette.floor_dark,
             };
             frame.line(
                 FLOOR,
@@ -307,14 +326,20 @@ impl Body {
 
     fn draw_nerves(&self, frame: &mut Frame) {
         let load = self.load;
-        let near_base = mix(CYAN_DARK, CYAN, 0.2 + 0.5 * load);
-        let far_base = mix(CYAN_DARK, CYAN_DIM, load);
+        let palette = self.figure().look.palette();
+        let near_base = mix(palette.nerve_dark, palette.nerve, 0.2 + 0.5 * load);
+        let resting = if palette.nerves_on_top {
+            NERVES_FIRING
+        } else {
+            NERVES_RESTING
+        };
+        let far_base = mix(palette.nerve_dark, palette.nerve_dim, load);
         let heartbeat = beat(self.heart_phase);
 
         let hottest = self.glow.iter().copied().fold(0.0_f32, f32::max);
         let brain = mix(
-            mix(CYAN_DIM, CYAN, 0.4 + 0.6 * load),
-            CYAN_HOT,
+            mix(palette.nerve_dim, palette.nerve, 0.4 + 0.6 * load),
+            palette.nerve_hot,
             hottest * 0.6,
         );
         for (a, b) in &self.figure().brain {
@@ -323,8 +348,12 @@ impl Body {
 
         for (a, b) in &self.figure().nerve_lines {
             let near = frame.view.depth((*a + *b) * 0.5) >= INNER_DEPTH;
-            let base = if near { near_base } else { far_base };
-            frame.line(NERVES_RESTING, *a, *b, base);
+            let rgb = if near {
+                mix(palette.twig_far, palette.twig, 0.6 + 0.4 * load)
+            } else {
+                palette.twig_far
+            };
+            frame.line(resting, *a, *b, rgb);
         }
 
         for (index, nerve) in self.figure().nerves.iter().enumerate() {
@@ -335,13 +364,16 @@ impl Body {
 
             let layer = if glow > FIRING_GLOW {
                 NERVES_FIRING
+            } else if self.figure().quiet_paths {
+                // Its nerve lines already draw the path at rest.
+                continue;
             } else {
-                NERVES_RESTING
+                resting
             };
             for pair in nerve.points.windows(2) {
                 let near = frame.view.depth((pair[0] + pair[1]) * 0.5) >= INNER_DEPTH;
                 let base = if near { near_base } else { far_base };
-                frame.line(layer, pair[0], pair[1], mix(base, CYAN_HOT, glow));
+                frame.line(layer, pair[0], pair[1], mix(base, palette.nerve_hot, glow));
             }
         }
     }
@@ -382,14 +414,44 @@ impl Body {
         }
     }
 
-    /// A reactor core: two screen-space rings that brighten and swell on
-    /// each beat.
+    /// A reactor core: a segmented outer ring turning slowly, a steady
+    /// middle ring, counter-turning spokes and a white-hot centre, all
+    /// swelling and brightening on each beat.
     fn draw_reactor(&self, frame: &mut Frame, centre: Vec3) {
         let heartbeat = beat(self.heart_phase);
-        let rgb = mix(CYAN_DIM, CYAN_HOT, 0.3 + 0.7 * heartbeat);
         let centre = frame.screen(centre);
-        frame.ring(HEART, centre, 0.035 * (1.0 + 0.3 * heartbeat), 12, rgb);
-        frame.ring(HEART, centre, 0.015, 8, mix(CYAN, WHITE, heartbeat));
+        let turn = self.scan_phase * TAU;
+        let swell = 1.0 + 0.18 * heartbeat;
+
+        let outer = REACTOR_RADIUS * swell;
+        let outer_rgb = mix(CYAN_DIM, CYAN_HOT, 0.35 + 0.65 * heartbeat);
+        for k in 0..REACTOR_SEGMENTS {
+            let start = turn + k as f32 / REACTOR_SEGMENTS as f32 * TAU;
+            let end = start + TAU / REACTOR_SEGMENTS as f32 * 0.65;
+            let point = |angle: f32| centre + Vec2::new(angle.cos(), angle.sin()) * outer;
+            frame.screen_line(HEART, point(start), point((start + end) / 2.0), outer_rgb);
+            frame.screen_line(HEART, point((start + end) / 2.0), point(end), outer_rgb);
+        }
+
+        let middle = REACTOR_RADIUS * 0.62;
+        frame.ring(HEART, centre, middle, 12, mix(CYAN, CYAN_HOT, heartbeat));
+        for k in 0..3 {
+            let angle = -turn * 2.0 + k as f32 / 3.0 * TAU;
+            let direction = Vec2::new(angle.cos(), angle.sin());
+            frame.screen_line(
+                HEART,
+                centre + direction * REACTOR_RADIUS * 0.25,
+                centre + direction * middle,
+                mix(CYAN, WHITE, 0.5 * heartbeat),
+            );
+        }
+        frame.ring(
+            HEART,
+            centre,
+            REACTOR_RADIUS * 0.22 * swell,
+            8,
+            mix(CYAN_HOT, WHITE, heartbeat),
+        );
     }
 
     fn draw_pulses(&self, frame: &mut Frame) {

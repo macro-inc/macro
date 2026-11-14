@@ -10,6 +10,8 @@
 
 use glam::Vec3;
 
+use crate::palette::Look;
+
 /// Which tissue a static segment belongs to; it picks the segment's layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tissue {
@@ -99,6 +101,14 @@ pub struct Figure {
     pub(crate) nerve_lines: Vec<(Vec3, Vec3)>,
     /// What beats in the chest, if anything.
     pub(crate) core: Option<Core>,
+    /// Its colour scheme.
+    pub(crate) look: Look,
+    /// For each nerve, the nerves that fire with it (itself among them), so
+    /// a pulse forks where their paths part. Empty: each fires alone.
+    pub(crate) forks: Vec<Vec<usize>>,
+    /// Draw nerve paths only while they glow: the figure's nerve lines
+    /// already trace them at rest.
+    pub(crate) quiet_paths: bool,
 }
 
 /// What beats in a figure's chest.
@@ -137,6 +147,9 @@ impl Figure {
                 nerves: Vec::new(),
                 nerve_lines: Vec::new(),
                 core: None,
+                look: Look::Classic,
+                forks: Vec::new(),
+                quiet_paths: false,
             },
         }
     }
@@ -261,6 +274,34 @@ impl FigureBuilder {
         self
     }
 
+    /// Its colour scheme (the default is [`Look::Classic`]).
+    pub fn look(&mut self, look: Look) -> &mut Self {
+        self.figure.look = look;
+        self
+    }
+
+    /// Makes the nerves at `indexes` (in the order added) fire together, so
+    /// one pulse forks where their paths part. A nerve keeps the last group
+    /// it was put in.
+    pub fn fork_group(&mut self, indexes: &[usize]) -> &mut Self {
+        let count = self.figure.nerves.len();
+        self.figure.forks.resize(count, Vec::new());
+        let group: Vec<usize> = indexes.iter().copied().filter(|i| *i < count).collect();
+        for index in &group {
+            if let Some(slot) = self.figure.forks.get_mut(*index) {
+                slot.clone_from(&group);
+            }
+        }
+        self
+    }
+
+    /// Draws nerve paths only while they glow, for a figure whose nerve
+    /// lines already trace them.
+    pub fn quiet_paths(&mut self) -> &mut Self {
+        self.figure.quiet_paths = true;
+        self
+    }
+
     /// The figure as authored, already in figure units.
     pub fn build(&mut self) -> Figure {
         self.figure.clone()
@@ -289,8 +330,8 @@ impl FigureBuilder {
 
 /// Every built-in figure, in viewer order. The first is the default.
 pub fn catalog() -> Vec<Figure> {
-    #[cfg_attr(not(feature = "demo-assets"), expect(unused_mut, reason = "only assets append"))]
     let mut figures = vec![crate::model::mesh_man()];
+    figures.extend(crate::figures::procedural());
     #[cfg(feature = "demo-assets")]
     figures.extend(crate::assets::figures());
     figures

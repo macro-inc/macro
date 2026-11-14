@@ -26,11 +26,21 @@ the cell, so layer order is the depth cue.
 - `src/figure.rs`: `Figure`, its builder (`build_normalised` for figures in
   other units) and `catalog()`.
 - `src/model.rs`: the default figure's joints, skin rings, bones, nerve paths.
+- `src/figures.rs` and `src/figures/`: the procedural figures after it (XRAY,
+  CYBORG, NEURAL), drafted in `common.rs` helpers (joints, branching nerve
+  trees, a seeded random source) and turned into `Figure`s by `finish`.
+- `src/palette.rs`: each figure's `Look` and its colours.
 
 ## Recipes
 
 - Add a figure: build it with `Figure::builder` and add it to `catalog()`;
-  the catalog test checks every figure fits the unit cube.
+  the catalog test checks every figure fits the unit cube. Give it a `Look`
+  (or add one in `src/palette.rs`); `fork_group` makes nerves fire together
+  so pulses fork, and `quiet_paths` stops pulse paths drawing at rest when
+  nerve lines already trace them.
+- Preview a figure as frames: `cargo run --release -p mesh_man --example
+  frames -- XRAY 50 36 4 3750 > x.cast`, then `agg` (nixpkgs
+  `asciinema-agg`) to a GIF; it prints the worst render time.
 - Add a nerve: `side_nerves` (or `mesh_man`) in `src/model.rs`; it must
   start at `BRAIN` and stay inside the unit cube (tests check both). Update the
   name list in `Body::nerve_names`' doc. A new nerve moves every hashed key (`Body::nerve_for`).
