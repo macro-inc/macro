@@ -708,6 +708,7 @@ fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
             "TaskNamespace.search".to_owned(),
         ],
         "",
+        DRAFT_REFERENCE_BYTES,
     );
 
     // Their entities' indexes, so the writer sees what `UserNamespace`
@@ -723,20 +724,113 @@ fn a_draft_reads_the_symbols_it_names_then_the_types_they_name() {
 
     // A property value's union is two types away from the method that
     // returns it.
-    let properties = symbol_references(&["PropertiedEntity.properties".to_owned()], "");
+    let properties = symbol_references(
+        &["PropertiedEntity.properties".to_owned()],
+        "",
+        DRAFT_REFERENCE_BYTES,
+    );
     assert!(properties.contains("## `EntityPropertyWithDefinition`\n"));
     assert!(properties.contains("## `properties.PropertyValue`\n"));
     assert!(reference.ends_with(
         "Macro's SDK has none of these; use what the indexes and references name instead: `UserNamespace.list`\n"
     ));
     assert!(reference.len() <= DRAFT_REFERENCE_BYTES + 256);
-    assert_eq!(symbol_references(&[], ""), "");
+    assert_eq!(symbol_references(&[], "", DRAFT_REFERENCE_BYTES), "");
 }
 
 #[test]
 fn a_draft_is_not_shown_an_index_it_already_has() {
     let users = entity_index("UserNamespace").unwrap();
     let shown = format!("the guide\n{users}\n");
-    let reference = symbol_references(&["UserNamespace.search".to_owned()], &shown);
+    let reference = symbol_references(
+        &["UserNamespace.search".to_owned()],
+        &shown,
+        DRAFT_REFERENCE_BYTES,
+    );
     assert!(reference.starts_with("## `UserNamespace.search`\n"));
+}
+
+#[test]
+fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
+    let reference = area_reference(&["tasks".to_owned()]);
+
+    assert!(reference.starts_with("## tasks\n"));
+    let files: Vec<&str> = reference
+        .lines()
+        .filter_map(|line| line.strip_prefix("// @macro-inc/sdk/"))
+        .collect();
+    assert_eq!(
+        files,
+        [
+            "src/entities/tasks/namespace.d.ts",
+            "src/entities/tasks/task.d.ts"
+        ]
+    );
+    assert!(reference.contains("class TaskNamespace "));
+    assert!(!reference.lines().any(|line| line.starts_with("import ")));
+    assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
+}
+
+#[test]
+fn an_area_brings_the_generated_types_its_declarations_import() {
+    let reference = area_reference(&["ai".to_owned()]);
+
+    assert!(reference.contains("class AiNamespace "));
+    let (_, types) = reference
+        .split_once("The generated types those declarations import:\n\n")
+        .unwrap();
+    assert!(types.contains("## `DecisionRequest`\n"));
+}
+
+#[test]
+fn areas_are_found_by_directory_once_each_and_unknown_ones_skipped() {
+    // `agentSessions` lives in `agent-sessions`, `foreignEntities` in
+    // `foreign`.
+    let sessions = area_reference(&["agentSessions".to_owned()]);
+    assert!(sessions.contains("// @macro-inc/sdk/src/entities/agent-sessions/namespace.d.ts\n"));
+    let foreign = area_reference(&["foreignEntities".to_owned()]);
+    assert!(foreign.contains("// @macro-inc/sdk/src/entities/foreign/namespace.d.ts\n"));
+
+    let twice = area_reference(&[
+        "tasks".to_owned(),
+        " tasks ".to_owned(),
+        "notAnArea".to_owned(),
+    ]);
+    assert_eq!(twice, area_reference(&["tasks".to_owned()]));
+    assert_eq!(area_reference(&["notAnArea".to_owned()]), "");
+
+    let every: Vec<String> = AREAS.keys().map(|name| (*name).to_owned()).collect();
+    assert!(area_reference(&every).len() <= AREA_REFERENCE_BYTES + IMPORTED_TYPE_BYTES + 256);
+}
+
+#[test]
+fn the_area_list_names_each_area_and_when_to_use_it() {
+    let areas = sdk_areas();
+    assert!(areas.lines().any(|line| line.starts_with("- `tasks`: ")));
+    assert!(areas.lines().any(|line| line.starts_with("- `email`: ")));
+    assert_eq!(areas.lines().count(), AREAS.len());
+}
+
+#[test]
+fn an_import_line_gives_the_generated_names_it_takes() {
+    assert_eq!(
+        generated_imports(
+            "import type { DecisionRequest, type Choice as Picked } from '../../../generated/cognition/types.gen';"
+        ),
+        ["DecisionRequest"]
+    );
+    assert_eq!(
+        generated_imports("import { a,\tb, } from \"../generated/x\""),
+        ["a", "b"]
+    );
+    // An aliased name is one the SDK has its own class for.
+    assert!(
+        generated_imports(
+            "import type { CalendarEvent as CalendarEventRecord } from '../../generated/calendar/types.gen';"
+        )
+        .is_empty()
+    );
+    // Only the generated clients' types: the SDK's own come with its areas.
+    assert!(generated_imports("import type { Macro } from '../../macro';").is_empty());
+    assert!(generated_imports("import * as all from '../generated/x';").is_empty());
 }

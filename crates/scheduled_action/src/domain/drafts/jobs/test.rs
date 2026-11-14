@@ -6,6 +6,7 @@ use ai_billing::AiAdmissionError;
 use chrono::DateTime;
 use serde_json::json;
 
+use super::super::direct::test::never_answering;
 use super::super::test::{
     BUG_REPORTS, Gate, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
     drafts, message_posted, owner, plain, routine,
@@ -303,12 +304,30 @@ impl Replica {
         Self::publishing(rows, sessions, &Arc::new(Published::default()))
     }
 
+    /// A replica that drafts directly, whose model never answers.
+    fn direct(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> Self {
+        Self::drafting(
+            rows,
+            drafts(rows, sessions).with_direct(never_answering()),
+            &Arc::new(Published::default()),
+        )
+    }
+
     /// A replica whose updates reach `published`.
     fn publishing(rows: &Arc<Rows>, sessions: &Arc<Sessions>, published: &Arc<Published>) -> Self {
+        Self::drafting(rows, drafts(rows, sessions), published)
+    }
+
+    /// A replica drafting with `drafts`, whose updates reach `published`.
+    fn drafting(
+        rows: &Arc<Rows>,
+        drafts: RoutineDrafts<Checker, Sessions>,
+        published: &Arc<Published>,
+    ) -> Self {
         let (tasks, shutdown) = (TaskTracker::new(), CancellationToken::new());
         Self {
             jobs: DraftJobs::new(
-                Arc::new(drafts(rows, sessions)),
+                Arc::new(drafts),
                 Arc::clone(rows) as Arc<dyn DraftJobStore>,
                 Arc::clone(published),
                 tasks.clone(),
@@ -869,9 +888,25 @@ async fn shutdown_fails_running_drafts_as_interrupted() {
 /// up, and finished ones past it, go with their sessions.
 #[tokio::test(start_paused = true)]
 async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
+    sweeps(false).await;
+}
+
+/// Rows a replica on older code drafted in sessions have them stopped and
+/// deleted by a replica that drafts directly.
+#[tokio::test(start_paused = true)]
+async fn a_direct_replicas_sweep_still_ends_older_replicas_sessions() {
+    sweeps(true).await;
+}
+
+/// The sweep, on a replica that drafts `direct`ly or in sessions.
+async fn sweeps(direct: bool) {
     let rows = Arc::new(Rows::default());
     let sessions = hangs(&rows);
-    let replica = Replica::new(&rows, &sessions);
+    let replica = if direct {
+        Replica::direct(&rows, &sessions)
+    } else {
+        Replica::new(&rows, &sessions)
+    };
     let begin =
         |phase: DraftJobPhase, started: chrono::Duration, finished: Option<chrono::Duration>| {
             let session = macro_uuid::generate_uuid_v7();
@@ -957,6 +992,50 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     assert_eq!(Arc::new(drafts(&rows, &sessions)).sweep().await.unwrap(), 1);
     assert_eq!(rows.phase(unopened), Some(DraftJobPhase::Ready));
     assert_eq!(rows.phase(died), Some(DraftJobPhase::Failed));
+}
+
+/// A direct draft's start answers once its usage is admitted, before the
+/// model has named anything, and no session drafts it.
+#[tokio::test(start_paused = true)]
+async fn a_direct_draft_answers_its_start_once_admitted() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::direct(&rows, &sessions);
+
+    let started = tokio::time::Instant::now();
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+
+    assert!(started.elapsed() < POLL, "{:?}", started.elapsed());
+    assert_eq!(job.state, DraftJobState::Drafting);
+    assert_eq!(rows.phase(job.id), Some(DraftJobPhase::Drafting));
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    // Still waiting on its find call, it fails at its limit like any draft.
+    replica.settled().await;
+    assert!(matches!(
+        replica.jobs.job(owner(), job.id).await.unwrap().state,
+        DraftJobState::Failed { .. }
+    ));
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+/// A replica that drafts directly discards a draft a replica on older code
+/// drafted in a session with its session.
+#[tokio::test(start_paused = true)]
+async fn a_direct_replica_discards_an_older_replicas_draft_with_its_session() {
+    let rows = Arc::new(Rows::default());
+    let sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    let older = Replica::new(&rows, &sessions);
+    let job = older.start(routine(BUG_REPORTS)).await.unwrap();
+    older.settled().await;
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+
+    let newer = Replica::direct(&rows, &sessions);
+    newer.jobs.discard(owner(), job.id).await.unwrap();
+
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
+    assert!(newer.jobs.jobs(owner()).await.unwrap().is_empty());
 }
 
 /// A refused admission is the blocking route's error, and leaves nothing.

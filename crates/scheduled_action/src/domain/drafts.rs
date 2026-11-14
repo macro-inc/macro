@@ -43,8 +43,10 @@ use super::ports::{
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
+use self::direct::{DirectDrafting, DirectPrompts, DirectRun};
 use self::progress::{CheckSummary, DraftMilestone, DraftProgress, Unreported};
 
+pub mod direct;
 pub mod jobs;
 pub mod progress;
 #[cfg(test)]
@@ -245,6 +247,27 @@ pub struct RoutineDrafts<Code, Sessions> {
     agent: DraftAgent,
     /// Whether this host can answer trigger conditions.
     conditions_enabled: bool,
+    /// Drafts written directly, in a few model calls and no session.
+    direct: Option<Arc<Direct>>,
+}
+
+/// What a direct draft uses, and the prompts it builds once.
+struct Direct {
+    drafting: DirectDrafting,
+    prompts: DirectPrompts,
+}
+
+impl<Code: RoutineCode, Sessions> RoutineDrafts<Code, Sessions> {
+    /// Write every draft directly with `drafting` instead of in a session.
+    pub fn with_direct(mut self, drafting: DirectDrafting) -> Self {
+        let prompts = DirectPrompts::new(
+            self.code.as_ref(),
+            self.agent.guide,
+            drafting.tuning.item_knobs,
+        );
+        self.direct = Some(Arc::new(Direct { drafting, prompts }));
+        self
+    }
 }
 
 impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
@@ -263,6 +286,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
             creations: Arc::new(NoSessionCreations),
             agent,
             conditions_enabled: false,
+            direct: None,
         }
     }
 
@@ -330,8 +354,12 @@ fn draft_span(request: &DraftRequest) -> tracing::Span {
         routine.draft.kind = request.kind_name(),
         routine.draft.background = tracing::field::Empty,
         routine.draft.requested_step = tracing::field::Empty,
+        routine.draft.drafter = tracing::field::Empty,
         routine.draft.code_available = tracing::field::Empty,
         agent.session.id = tracing::field::Empty,
+        routine.draft.found = tracing::field::Empty,
+        routine.draft.left = tracing::field::Empty,
+        routine.draft.fixes = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
         routine.draft.created = tracing::field::Empty,
         routine.draft.created_unused = tracing::field::Empty,
@@ -359,6 +387,20 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         let span = draft_span(&request);
         async {
             let (program, context) = self.read_request(&request, context)?;
+            if let Some(direct) = &self.direct {
+                let run = DirectRun {
+                    id: macro_uuid::generate_uuid_v7(),
+                    progress: &Unreported,
+                    cancellable: false,
+                    interrupt: CancellationToken::new(),
+                };
+                let draft = self
+                    .direct_draft(direct, &owner, &request, &program, &context, run)
+                    .await?
+                    // Only a background draft can be cancelled.
+                    .unwrap_or_else(|| failed(request.failed()));
+                return Ok(finish(draft));
+            }
             let brief = match self.briefed(&owner, &request, &program, &context) {
                 Ok(brief) => brief,
                 Err(message) => return Ok(finish(failed(message))),
@@ -439,10 +481,44 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         program: &[Step],
         context: &DraftContext,
     ) -> Result<String, &'static str> {
-        let code = context.code && self.code.sdk().is_some()
-            || matches!(request, DraftRequest::ChangeStep { .. }) && self.code.sdk().is_some();
-        tracing::Span::current().record("routine.draft.code_available", code);
+        tracing::Span::current().record("routine.draft.drafter", "session");
+        let code = self.code_available(request, context);
         brief(request, program, context, code, owner, self.agent.guide)
+    }
+
+    /// Delete a draft's session, unless it was `stopped`, and its row. A
+    /// direct draft has no session, but a row a replica on older code drafted
+    /// has one, so a direct drafter tries it too, expecting none.
+    async fn forget_draft(&self, action: &RoutineSessionAction, stopped: bool) {
+        if self.direct.is_none() {
+            clean_up(
+                self.sessions.as_ref(),
+                self.hand_backs.as_ref(),
+                action,
+                stopped,
+            )
+            .await;
+            return;
+        }
+        if !stopped {
+            self.stop_draft(action).await;
+        }
+        if let Err(error) = self.sessions.delete(action.clone()).await {
+            tracing::debug!(error = ?error, "no routine draft session to delete");
+        }
+        if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
+            tracing::warn!(error = ?error, "could not forget a routine draft");
+        }
+    }
+
+    /// Stop a draft's session; a direct drafter tries it as
+    /// [`Self::forget_draft`] does.
+    async fn stop_draft(&self, action: &RoutineSessionAction) {
+        if self.direct.is_none() {
+            stop(self.sessions.as_ref(), action).await;
+        } else if let Err(error) = self.sessions.cancel(action.clone()).await {
+            tracing::debug!(error = ?error, "no routine draft session to stop");
+        }
     }
 
     /// Who a draft's session belongs to, for the session operations.
@@ -915,49 +991,7 @@ fn brief(
     owner: &MacroUserIdStr<'static>,
     guide: &str,
 ) -> Result<String, &'static str> {
-    let task = match request {
-        DraftRequest::Routine { description } => format!(
-            "Draft a routine that does what this person describes:\n<description>\n{}\n</description>",
-            description.trim()
-        ),
-        DraftRequest::AddStep {
-            description,
-            routine,
-            kind,
-        } => {
-            let has_agent = program.iter().any(|step| matches!(step, Step::Agent(_)));
-            let only = match (kind, has_agent, code) {
-                (Some(StepKind::Agent), true, _) | (None, true, false) => return Err(HAS_AGENT),
-                (Some(StepKind::Code), _, false) => return Err(NO_CODE),
-                (Some(StepKind::Code), _, true) | (None, true, true) => "It must be a code step.",
-                (Some(StepKind::Agent), false, _) | (None, false, false) => {
-                    "It must be an Ask AI step."
-                }
-                (None, false, true) => {
-                    "Make it code whenever code can do it; make it Ask AI only for open-ended work whose actions depend on what it finds."
-                }
-            };
-            format!(
-                "Add ONE step at the end of this routine that does what this person describes. {only} Keep its trigger and its other steps exactly as they are.\n<description>\n{}\n</description>\n{}",
-                description.trim(),
-                routine_data(routine),
-            )
-        }
-        DraftRequest::ChangeStep {
-            instruction,
-            routine,
-            index,
-        } => {
-            if !code {
-                return Err("Code steps can’t be changed here right now.");
-            }
-            format!(
-                "Change step {index} (counting from 0) of this routine as this person asks, and nothing else. Keep its id, its title unless the change makes it wrong, and its knobs unless the change is about them. Keep the trigger and the other steps exactly as they are.\n<instruction>\n{}\n</instruction>\n{}",
-                instruction.trim(),
-                routine_data(routine),
-            )
-        }
-    };
+    let task = task(request, program, code)?;
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let timezone = &context.timezone;
     let model = &context.agent_model;
@@ -999,6 +1033,54 @@ For this draft:
 
 4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
+}
+
+/// What `request` asks to draft, with the routine it changes, or why it
+/// can't be drafted at all, for the person.
+fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, &'static str> {
+    Ok(match request {
+        DraftRequest::Routine { description } => format!(
+            "Draft a routine that does what this person describes:\n<description>\n{}\n</description>",
+            description.trim()
+        ),
+        DraftRequest::AddStep {
+            description,
+            routine,
+            kind,
+        } => {
+            let has_agent = program.iter().any(|step| matches!(step, Step::Agent(_)));
+            let only = match (kind, has_agent, code) {
+                (Some(StepKind::Agent), true, _) | (None, true, false) => return Err(HAS_AGENT),
+                (Some(StepKind::Code), _, false) => return Err(NO_CODE),
+                (Some(StepKind::Code), _, true) | (None, true, true) => "It must be a code step.",
+                (Some(StepKind::Agent), false, _) | (None, false, false) => {
+                    "It must be an Ask AI step."
+                }
+                (None, false, true) => {
+                    "Make it code whenever code can do it; make it Ask AI only for open-ended work whose actions depend on what it finds."
+                }
+            };
+            format!(
+                "Add ONE step at the end of this routine that does what this person describes. {only} Keep its trigger and its other steps exactly as they are.\n<description>\n{}\n</description>\n{}",
+                description.trim(),
+                routine_data(routine),
+            )
+        }
+        DraftRequest::ChangeStep {
+            instruction,
+            routine,
+            index,
+        } => {
+            if !code {
+                return Err("Code steps can’t be changed here right now.");
+            }
+            format!(
+                "Change step {index} (counting from 0) of this routine as this person asks, and nothing else. Keep its id, its title unless the change makes it wrong, and its knobs unless the change is about them. Keep the trigger and the other steps exactly as they are.\n<instruction>\n{}\n</instruction>\n{}",
+                instruction.trim(),
+                routine_data(routine),
+            )
+        }
+    })
 }
 
 /// Macro's catalog routines that are code, as worked examples of whole

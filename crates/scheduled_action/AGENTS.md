@@ -39,8 +39,64 @@ each run.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
-  boxes in the web editor). It runs the draft in an ordinary hidden agent
-  session (`RoutineSessions`) of the in-process Macro agent: the person's own
+  boxes in the web editor). The harness drafts directly
+  (`drafts/direct.rs`, `RoutineDrafts::with_direct`), in two or three model
+  calls and no session. A call on the fast model (`direct/find.md`) names
+  the items the words refer to and the SDK areas the routine needs
+  (`RoutineCode::sdk_areas`). The `NameLookups` port (document storage's
+  `POST /search/names`, as the person) finds each name, and `settle` keeps
+  it only when exactly one item of its likeliest kind has it; a name none
+  or several have is left for the person to pick, never guessed (unless no
+  item has it and the request asks to make it, which `setup` may do). A name a
+  likelier kind the lookup couldn't search (`NameAnswers::unavailable`)
+  might have (for a name of no likely kind, any kind it couldn't search,
+  unless two items already have it) is left as unknown, and names the lookup would refuse (empty
+  past a leading `#`/`@`, over 200 characters) are never asked. One call
+  on the person's Ask AI model (`DraftContext::agent_model`) writes the
+  whole routine as JSON from its own system prompt (`direct/write.md`: the
+  routines guide, the code-step guide, the SDK's `ai` area and Macro's
+  catalog code routines as examples), built once per mix of code and
+  trigger conditions (`DirectPrompts`) so the provider caches it; its user
+  turn carries the request, the found items (name and id) and the
+  reference of the areas named, or of the commonest ones when the SDK has
+  none of them (`RoutineCode::area_reference`). A found item goes in a
+  trigger filter by id, in a code step's knob by its exact name, which the
+  step resolves when it runs, since the owner reads a text knob as written,
+  and in Ask AI instructions or a trigger condition by name and id
+  (`ItemKnobs::Names`, `direct/items_by_name.md`; `ItemKnobs::Ids` and
+  `direct/items_by_id.md` put the id alone in knobs and Ask AI
+  instructions). A `setup` module creating
+  what the routine uses runs once, as the person, and its ids replace each
+  `{{setup.<key>}}` (`Setup`): a run that failed runs again only once the
+  writer changed it and only if it changed nothing, and a placeholder left
+  unfilled goes back to the writer, never to the check. A draft that may
+  not write code (`code_available` is false: it needs the SDK, and
+  `DraftContext::code` or a request changing a code step) has no `setup`: the writer is
+  told never to write one instead of `direct/setup.md`, and it never runs
+  (`Setup::Unavailable`).
+  Saving's checks (`DraftChecks`, the service's `check_draft`) run on the result; only
+  their problems, with the SDK declarations they name, go back to the
+  model, at most `DirectTuning::max_fixes` times. A whole routine needs a
+  trigger of its own; only a step drafted for a routine without one, or
+  whose trigger isn't one yet, is checked on a passing stand-in. Cut off by `DRAFT_TIMEOUT` or shutdown, a
+  draft still hands back its last check and what setup made
+  (`DirectSoFar`); cut off while setup runs, it fails saying it may have
+  made something, as does a draft whose setup failed partway through and
+  that ends before a check passes. The calls are admitted and billed as the person's
+  automation usage (`DraftModel`, `AiFeature::Automation`). Progress
+  reports the admission (`DraftMilestone::Admitted`, which answers a
+  background start before anything is looked up), what was found and
+  left by name (`DraftMilestone::Found`), and fixing only once a check
+  ran. Spans: `routine.draft` records
+  drafter `direct`, names found and left, checks, fixes, items created and
+  `ended`, once each; `routine.draft.call` each call's purpose and answer
+  size; `routine.draft.lookup`; `routine.draft.setup` what it made and
+  whether a failed run wrote; never the words or the names. With it, a
+  job discarded, expired or swept still has its session stopped and
+  deleted, failures logged only at debug: a job a replica on older code
+  drafted has one. Without direct drafting (tests), the draft runs in an ordinary
+  hidden agent session (`RoutineSessions`) of the in-process Macro agent:
+  the person's own
   (source `user`, origin `requested`) but hidden, a background session
   (`AgentSession::is_background`) that notifies nobody and only the scheduler
   may delete, never counted as a routine's run. It runs as the person, with its usual
@@ -88,7 +144,8 @@ each run.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for
-  the session's prompt to be admitted (the blocking route's 400/402/503,
+  its usage to be admitted (a direct draft's admission, or a session's
+  prompt; the blocking route's 400/402/503,
   plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
   job. The body carries a client-made `clientId`; a start sent again with
   it (the client resends when its connection drops) answers with the live
@@ -100,7 +157,8 @@ each run.
   `INTERRUPTED_AFTER`, through the owner's jobs index. `GET` lists
   drafting and unopened finished ones, `GET .../{id}` reads one (its
   `Draft` when ready), `DELETE .../{id}` cancels or discards one (404 when
-  not the caller's). The job id is its hidden session's. Its
+  not the caller's). The job id is also its hidden session's, when it
+  drafts in one. Its
   state, request (kind and words), progress, result, `finished_at` and the
   starting `traceparent` live on its `scheduled_action_draft` row
   (`DraftJobStore`, `state` NULL for a blocking draft, which keeps its old
@@ -123,7 +181,8 @@ each run.
   writer in the job's task writes each to the row and sends the owner a
   `routine_draft_update` message (`RoutineDraftUpdates`) without blocking
   the drafter, coalescing bursts. Progress carries counts, the trigger and
-  step titles, never code or the words. Spans: `routine.draft.start`
+  step titles, and the names found (as stored) or left (as the person
+  wrote them), never code or the request's text. Spans: `routine.draft.start`
   (`routine.draft.repeated` on a start sent again; the job's
   `routine.draft` span is its child), `routine.draft.cancel`,
   `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id

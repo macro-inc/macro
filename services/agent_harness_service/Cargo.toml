@@ -33,6 +33,7 @@ universal_input = { path = "../../crates/universal_input" }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
+nom = { workspace = true }
 activity = { path = "../../crates/activity", default-features = false, features = ["axum", "outbound", "schema"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
@@ -231,6 +232,7 @@ macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }
 
 [features]
 local = []

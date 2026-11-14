@@ -7,6 +7,7 @@
  */
 import type { DraftJobProgressCheck } from './draftJobProgressCheck';
 import type { DraftJobProgressFound } from './draftJobProgressFound';
+import type { DraftJobProgressNames } from './draftJobProgressNames';
 import type { DraftStage } from './draftStage';
 
 /**
@@ -21,5 +22,6 @@ looked up.
    * @minimum 0
    */
   found?: DraftJobProgressFound;
+  names?: DraftJobProgressNames;
   stage: DraftStage;
 }

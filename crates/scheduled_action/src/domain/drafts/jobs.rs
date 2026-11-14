@@ -29,8 +29,7 @@ use utoipa::ToSchema;
 use super::progress::{DraftJobProgress, DraftMilestone, DraftProgress};
 use super::{
     DRAFT_TIMEOUT, Draft, DraftContext, DraftCreated, DraftRequest, Drafting, INTERRUPTED,
-    RoutineDrafts, SWEEP_BATCH, TIMED_OUT, clean_up, draft_span, failed, finish, stale_action,
-    stop,
+    RoutineDrafts, SWEEP_BATCH, TIMED_OUT, draft_span, failed, finish, stale_action,
 };
 use crate::domain::ports::{
     DraftJobStore, RoutineCode, RoutineDraftJobService, RoutineDraftUpdates, StaleDraft,
@@ -379,7 +378,7 @@ fn answer(answer: &Answer, admission: Admission) {
 }
 
 /// A job's progress: kept for its writer, which writes and pushes it, and the
-/// first time the model writes, the answer to its start.
+/// first time the draft is under way, the answer to its start.
 struct JobProgress {
     progress: watch::Sender<DraftJobProgress>,
     answer: Answer,
@@ -387,7 +386,12 @@ struct JobProgress {
 
 impl DraftProgress for JobProgress {
     fn report(&self, milestone: DraftMilestone) {
-        let writing = matches!(milestone, DraftMilestone::Writing);
+        // A direct draft says so once its usage is admitted; a session draft
+        // once its prompt is accepted. Either may skip ahead.
+        let writing = matches!(
+            milestone,
+            DraftMilestone::Admitted | DraftMilestone::Found(_) | DraftMilestone::Writing
+        );
         self.progress
             .send_modify(|progress| progress.reach(milestone));
         if writing {
@@ -438,6 +442,17 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let drafting = async {
             // Dropped once the draft is done, which ends the writer.
             let reporter = reporter;
+            if let Some(direct) = &drafts.direct {
+                let run = super::DirectRun {
+                    id,
+                    progress: &reporter,
+                    cancellable: true,
+                    interrupt,
+                };
+                return drafts
+                    .direct_draft(direct, &owner, &request, &program, &context, run)
+                    .await;
+            }
             let brief = match drafts.briefed(&owner, &request, &program, &context) {
                 Ok(brief) => brief,
                 Err(message) => return Ok(Some(failed(message))),
@@ -492,13 +507,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                 // Cancelled while it read its result: no one will.
                 Ok(Finished::Cancelled) => {
                     tracing::Span::current().record("routine.draft.outcome", "cancelled");
-                    clean_up(
-                        drafts.sessions.as_ref(),
-                        drafts.hand_backs.as_ref(),
-                        &action,
-                        true,
-                    )
-                    .await;
+                    drafts.forget_draft(&action, true).await;
                     // Its last word: progress it sent can land after the
                     // cancel's.
                     updates.publish_draft(&owner, removed(id, progress)).await;
@@ -520,13 +529,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             }
             // Its usage was refused: it never was.
             Err(error) => {
-                clean_up(
-                    drafts.sessions.as_ref(),
-                    drafts.hand_backs.as_ref(),
-                    &action,
-                    true,
-                )
-                .await;
+                drafts.forget_draft(&action, true).await;
                 // Its start still waits, unless it was admitted first.
                 let waiting = answered.lock().is_ok_and(|sender| sender.is_some());
                 if waiting {
@@ -668,17 +671,16 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         if cancelled.finished {
             span.record("routine.draft.state", "finished");
             span.record("routine.draft.outcome", "discarded");
-            clean_up(
-                self.drafts.sessions.as_ref(),
-                self.drafts.hand_backs.as_ref(),
-                &stale_action(&StaleDraft {
-                    session: id,
-                    owner: owner.clone(),
-                    agent: cancelled.agent,
-                }),
-                true,
-            )
-            .await;
+            self.drafts
+                .forget_draft(
+                    &stale_action(&StaleDraft {
+                        session: id,
+                        owner: owner.clone(),
+                        agent: cancelled.agent,
+                    }),
+                    true,
+                )
+                .await;
         } else {
             // Its drafter, on whichever replica, stops at its next read of
             // the row and deletes the session and the row; the sweep does
@@ -792,8 +794,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
     pub async fn sweep(&self) -> Result<usize> {
         let span = tracing::Span::current();
         let now = Utc::now();
-        let sessions = self.drafts.sessions.as_ref();
-        let hand_backs = self.drafts.hand_backs.as_ref();
         let interrupted = self
             .store
             .interrupt(
@@ -821,7 +821,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                     )
                     .await;
                 // Kept with its row, which its owner opens or discards.
-                stop(sessions, &stale_action(&job.draft)).await;
+                self.drafts.stop_draft(&stale_action(&job.draft)).await;
             }
             .instrument(interrupted)
             .await;
@@ -835,7 +835,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             .await?;
         span.record("routine.draft.abandoned", abandoned.len());
         for draft in &abandoned {
-            clean_up(sessions, hand_backs, &stale_action(draft), false).await;
+            self.drafts.forget_draft(&stale_action(draft), false).await;
         }
         let expired = self
             .store
@@ -846,7 +846,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             .await?;
         span.record("routine.draft.expired", expired.len());
         for draft in &expired {
-            clean_up(sessions, hand_backs, &stale_action(draft), true).await;
+            self.drafts.forget_draft(&stale_action(draft), true).await;
         }
         Ok(interrupted.len() + abandoned.len() + expired.len())
     }

@@ -766,6 +766,7 @@ dependencies = [
  "models_ai_projection",
  "models_dcs",
  "models_permissions",
+ "nom 8.0.0",
  "non_empty",
  "notification",
  "onboarding",
@@ -825,6 +826,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -18072,6 +18074,7 @@ dependencies = [
  "glob",
  "jev",
  "kafka_util",
+ "lazy-regex",
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
