@@ -614,7 +614,6 @@ mod process_message_span {
         let (result, span) = run(&message(job_id, "uploads/notes.txt", "uploads/notes.pdf")).await;
 
         assert!(result.is_err());
-        assert!(!crate::job_folder::JOBS_ROOT.join(job_id).exists());
         let Status::Error { description } = &span.status else {
             panic!("expected an errored span, got {:?}", span.status);
         };

@@ -44,8 +44,10 @@ synchronously via HTTP or asynchronously via SQS.
 - Every conversion runs in a `JobFolder` under `JOBS_ROOT`
   (`$TMPDIR/convert_service_jobs`), created by `convert_file` and removed when
   it drops, on success, error or panic. The conversion child's `TMPDIR`
-  points into it so LibreOffice's scratch files go with it; LibreOffice's
-  user profile in `$HOME` stays a fixed size. Startup empties `JOBS_ROOT`.
+  points into it so LibreOffice's scratch files go with it. LibreOffice's
+  user profile in `$HOME` is outside it; it does not grow across normal
+  conversions, but a child killed at its timeout can leave lock files there.
+  Startup empties `JOBS_ROOT`.
   Anything written elsewhere stays on the task's 20 GiB ephemeral disk until
   ECS replaces the task.
 - `/health` returns 503 below `MIN_FREE_BYTES` free on the temp filesystem,
