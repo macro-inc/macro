@@ -1,5 +1,5 @@
 // Searching mail from the list: the / key reaches the search field, a query
-// too short to search says so, a query with no match says so, and Escape
+// of any length is searched, a query with no match says so, and Escape
 // leaves the search. Each for a Gmail and an Outlook inbox.
 //
 // The stack runs no search service, so the page's search request is
@@ -20,10 +20,10 @@ for (const provider of PROVIDERS) {
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
     // When this fails, / does not reach the search field, a query of two
-    // characters is searched or is met with an empty list and no word, a
-    // query is not sent to the search, a search without a match looks like an
-    // empty inbox, or Escape leaves the list searching.
-    test('the list searches from three characters, says when nothing matches, and Escape leaves the search', async ({
+    // characters is not searched, a query is not sent to the search, a search
+    // without a match looks like an empty inbox, or Escape leaves the list
+    // searching.
+    test('the list searches what is typed, says when nothing matches, and Escape leaves the search', async ({
       page,
       mailbox,
     }) => {
@@ -43,10 +43,9 @@ for (const provider of PROVIDERS) {
       await expect(field).toBeFocused();
 
       await page.keyboard.type('ze');
-      await expect(page.getByText('Keep typing to search')).toBeVisible();
+      await expect(page.getByText('No results for "ze"')).toBeVisible();
       await expect.poll(() => rowIds(page)).toEqual([]);
-      saw('STL-006');
-      expect(asked).toEqual([]);
+      await expect.poll(() => asked.at(-1) ?? '').toContain('"ze"');
 
       // Not marked as AL-012: its row needs the search service, and the
       // search is answered here.

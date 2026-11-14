@@ -99,7 +99,7 @@ export const list = {
     },
     {
       id: 'SL-17',
-      name: 'Desktop Email sidebar (tabs, Library, New email, Accounts, Saved views, sidebar search)',
+      name: 'Desktop Email sidebar (tabs, Library, New email, Accounts, Saved views)',
       opened: 'Left aside of the view',
       viewports: ['desktop'],
     },
@@ -364,7 +364,7 @@ export const list = {
       id: 'AL-014',
       surface: 'SL-17',
       fn: ['F-050'],
-      action: 'open sidebar search field (expands a collapsed sidebar)',
+      action: 'return to the list and focus list search',
       trigger: 'hotkey / while a thread or new email replaced the list',
       source: [
         'src/features/email-view/use-email-search-hotkeys.ts',
@@ -384,15 +384,6 @@ export const list = {
         'src/features/email-view/use-email-search-hotkeys.ts',
         'src/components/view-shell/use-view-control-hotkeys.ts',
       ],
-    },
-    {
-      id: 'AL-016',
-      surface: 'SL-17',
-      fn: ['F-050'],
-      action: 'search from sidebar search field',
-      trigger: 'type in sidebar "Search email"',
-      source: ['src/features/email-view/components/EmailSidebar.tsx'],
-      needs: 'the search service',
     },
     {
       id: 'AL-017',
@@ -1348,14 +1339,6 @@ export const list = {
       fn: ['F-033'],
       state: 'No inboxes selected + button "Show all inboxes"',
       trigger: 'inbox filter excludes every inbox',
-      source: ['src/features/email-view/components/EmailEmptyState.tsx'],
-    },
-    {
-      id: 'STL-006',
-      surface: 'SL-53',
-      fn: ['F-050'],
-      state: 'Keep typing to search',
-      trigger: 'search query under 3 characters (not on Focus)',
       source: ['src/features/email-view/components/EmailEmptyState.tsx'],
     },
     {
