@@ -8,9 +8,7 @@ use std::collections::HashSet;
 
 use tui_tree_widget::TreeState;
 
-use agent_monitor::domain::model::{
-    AgentId, CiState, Mergeable, Oid, PrId, RepoGraph, RepoId,
-};
+use agent_monitor::domain::model::{AgentId, CiState, Mergeable, Oid, PrId, RepoGraph, RepoId};
 
 use crate::keys::{self, Action, ChangeKey, Key, Mode, Motion, Page, Pane};
 use crate::theme::ThemeName;

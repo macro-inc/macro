@@ -241,7 +241,8 @@ impl ViewState {
                     .filter(|lane| lanes.contains(lane.branch.as_str()))
                     .flat_map(|lane| lane.commits.iter()),
             );
-            let newer = graph_commits(&graph).filter(|commit| newest.is_none_or(|at| commit.at > at));
+            let newer =
+                graph_commits(&graph).filter(|commit| newest.is_none_or(|at| commit.at > at));
             let now = self.now();
             for commit in gained.chain(newer) {
                 if !known.contains(&commit.oid) {

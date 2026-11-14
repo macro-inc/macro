@@ -5,8 +5,8 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use agent_monitor::domain::model::{
-    PrId, RepoName, SourceHealth, SourceKind, SourceState, Timestamp, TranscriptItem, TranscriptItemKind, Update,
-    UpdateKind,
+    PrId, RepoName, SourceHealth, SourceKind, SourceState, Timestamp, TranscriptItem,
+    TranscriptItemKind, Update, UpdateKind,
 };
 use agent_monitor::outbound::demo;
 
