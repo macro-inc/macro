@@ -1,0 +1,19 @@
+deny.toml
+  s_1fae59996f8c16::t_e8a56e5c6dd850 227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "00548b266f7b09e47f8e67eb001102bf5e1ce3be",
+  "prompts": {},
+  "sessions": {
+    "s_1fae59996f8c16": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ea26b31-05d6-47eb-a27c-69e38afdb1f0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
