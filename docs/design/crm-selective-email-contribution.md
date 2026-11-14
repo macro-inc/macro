@@ -245,10 +245,10 @@ but removing the confirmation surface is not an acceptable shortcut.
 
 | Change | Immediate read effect | Historical work |
 | --- | --- | --- |
-| All-mail to selected | Only the new matching, non-denied contribution remains readable through CRM after commit. | No backfill is needed for a pure narrowing. |
+| All-mail to selected | Only the new matching, non-denied contribution remains readable through CRM after commit. | No new backfill is needed only when prior historical work is complete. Otherwise preserve unfinished work under current eligibility, or durably schedule its replacement. |
 | Off to selected; selected to all-mail | New grant is effective after explicit confirmation. | Enqueue backfill atomically with activation. |
 | Add/replace rules | Reads use the new revision atomically, with no intermediate union. | Enqueue if potentially expanding. Treat mixed replacements conservatively as expanding. |
-| Remove rules; select nothing; withdraw | No-longer-eligible contributions disappear on subsequent primary reads. | Stale work rechecks eligibility and no-ops; do not wait for publisher locks. |
+| Remove rules; select nothing; withdraw | No-longer-eligible contributions disappear on subsequent primary reads. | Continue unfinished work that is still eligible; no-op only work now denied. Do not wait for publisher locks. |
 | Add/remove private exception or domain block | Deny immediately on subsequent reads; restoring eligibility respects the active mode. | Reuse existing exclusion removal backfill scheduling. |
 
 Do not delete or hide sync-created companies/contacts, remove manual edits, or
@@ -265,8 +265,14 @@ workflow for coalescing/cancellation, but always authorize against current state
 Use the existing `(team, member)` outbox and retry/idempotency mechanism, not a
 second queue. Coalesce changes to the latest desired revision. Bound fan-out in
 keyset pages; recheck before metadata enrichment and in the write transaction.
-Old jobs may skip work or recompute under the latest revision, never restore a
-revoked rule. Ensure a newer outbox request is not erased by completion of an
+A stale revision alone must not discard unfinished historical work. After any
+narrowing, including all-mail to selected, an existing job finishes its remaining
+scope against current eligibility. If it must restart, durably transfer that
+unfinished scope to the latest generation before acknowledging/cancelling the
+old job. Only work no longer eligible may no-op without replacement, including
+after withdrawal or an empty selection; a job must never restore a revoked rule.
+Verify a mid-backfill narrowing where the remaining selected contact has not yet
+been populated. Ensure a newer outbox request is not erased by completion of an
 older job; compare the claimed generation when completing it. Withdrawal must
 remain independent of a publisher holding a network request's row lock.
 
