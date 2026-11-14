@@ -9,13 +9,16 @@
 --   I1  imported, the viewer's own (three attendees, no start time)
 --   S2  archived standalone, granted to the viewer
 --   U1  archived in OTHER, reached only through the viewer's own grant
---   T2  imported by the viewer, started and ended with T1 (ties sort by id)
+--   T2  imported by the viewer, started and ended with T1 (ties sort by id);
+--       imported after U1 started, so sorting imports by import time would
+--       move it above U1
 --   T1  archived standalone, the viewer's own
 -- Not visible:
 --   S1  archived standalone, owned by another user, granted to team T and
 --       channel MEMBER
 --   I2  imported standalone, owned by another user, granted to team T
---   X1  archived in OTHER, granted to another user only
+--   X1  archived in OTHER, granted to its owner and to channel OTHER, which
+--       the viewer is not in
 --   A3  archived in LEFT, granted to that channel only
 --   W1  archived in OTHER, the viewer's grant is on a document with its id
 --   W2  archived standalone, a team-typed grant carries the viewer's id
@@ -79,13 +82,13 @@ INSERT INTO calls (id, channel_id, room_name, created_by, created_at, share_perm
 UPDATE call_entities SET discussion = 'channel_thread'
 WHERE id = '00000000-0000-0000-0000-00000000ca03';
 
-INSERT INTO call_entities (id, user_id, title, created_via, started_at, ended_at, channel_id, share_permission_id, created_at) VALUES
+INSERT INTO call_entities (id, user_id, title, created_via, started_at, ended_at, duration_ms, channel_id, share_permission_id, created_at) VALUES
   ('00000000-0000-0000-0000-00000000ca06', 'macro|viewer@example.com', 'Imported review', 'import',
-   NULL, NULL, NULL, 'sp-i1', '2026-01-01 09:30:00+00'),
+   NULL, NULL, NULL, NULL, 'sp-i1', '2026-01-01 09:30:00+00'),
   ('00000000-0000-0000-0000-00000000ca07', 'macro|other@example.com', 'Imported other', 'import',
-   '2026-01-01 15:00:00+00', '2026-01-01 15:30:00+00', NULL, 'sp-i2', '2026-01-01 15:00:00+00'),
+   '2026-01-01 15:00:00+00', '2026-01-01 15:30:00+00', 1800000, NULL, 'sp-i2', '2026-01-01 15:00:00+00'),
   ('00000000-0000-0000-0000-00000000ca0e', 'macro|viewer@example.com', 'Imported tie', 'import',
-   '2026-01-01 06:00:00+00', '2026-01-01 06:10:00+00', NULL, 'sp-t2', '2026-01-01 06:20:00+00');
+   '2026-01-01 06:00:00+00', '2026-01-01 06:10:00+00', 600000, NULL, 'sp-t2', '2026-01-01 07:50:00+00');
 
 INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at) VALUES
   ('00000000-0000-0000-0000-00000000ca01', 'macro|viewer@example.com', '2026-01-01 10:01:00+00', '2026-01-01 10:20:00+00'),

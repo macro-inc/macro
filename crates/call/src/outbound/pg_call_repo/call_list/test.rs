@@ -76,6 +76,19 @@ fn channel(id: Uuid) -> LiteralTree<CallLiteral> {
     Some(Arc::new(Expr::val(CallLiteral::ChannelId(id))))
 }
 
+/// Both filters: the named calls in the channel.
+fn channel_and_calls(channel_id: Uuid, ids: &[Uuid]) -> LiteralTree<CallLiteral> {
+    let calls = ids
+        .iter()
+        .map(|id| Expr::val(CallLiteral::CallId(*id)))
+        .reduce(Expr::or)
+        .expect("at least one call id");
+    Some(Arc::new(Expr::and(
+        Expr::val(CallLiteral::ChannelId(channel_id)),
+        calls,
+    )))
+}
+
 async fn list(
     pool: &Pool<Postgres>,
     filter: &LiteralTree<CallLiteral>,
@@ -163,26 +176,10 @@ async fn channel_filter_lists_the_channels_visible_calls(
         Vec::<Uuid>::new()
     );
 
-    // Both filters: the named calls in the channel.
-    let both = Some(Arc::new(Expr::and(
-        Expr::val(CallLiteral::ChannelId(CH_MEMBER)),
-        Expr::or(
-            Expr::val(CallLiteral::CallId(A1)),
-            Expr::val(CallLiteral::CallId(A2)),
-        ),
-    )));
+    let both = channel_and_calls(CH_MEMBER, &[A1, A2]);
     assert_eq!(ids(&list(&pool, &both, 50, page(false)).await?), vec![A1]);
 
-    let own_grant_only = Some(Arc::new(Expr::and(
-        Expr::val(CallLiteral::ChannelId(CH_OTHER)),
-        Expr::or(
-            Expr::or(
-                Expr::val(CallLiteral::CallId(U1)),
-                Expr::val(CallLiteral::CallId(W1)),
-            ),
-            Expr::val(CallLiteral::CallId(X1)),
-        ),
-    )));
+    let own_grant_only = channel_and_calls(CH_OTHER, &[U1, W1, X1]);
     assert_eq!(
         ids(&list(&pool, &own_grant_only, 50, page(false)).await?),
         vec![U1]
@@ -195,18 +192,12 @@ async fn channel_filter_lists_the_channels_visible_calls(
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn hidden_calls_stay_hidden_under_every_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    // S1 and I2 carry their owner's grant and a grant from the viewer's team
-    // (S1 also one from the viewer's channel); W1's viewer grant is on a
-    // document, and W2's names the viewer as a team.
-    let in_member_and_named = Some(Arc::new(Expr::and(
-        Expr::val(CallLiteral::ChannelId(CH_MEMBER)),
-        HIDDEN
-            .iter()
-            .chain([&A1])
-            .map(|id| Expr::val(CallLiteral::CallId(*id)))
-            .reduce(Expr::or)
-            .unwrap(),
-    )));
+    // S1 and I2 carry their owner's grant and one from the viewer's team (S1
+    // also one from the viewer's channel). X1 is granted to its owner and to
+    // a channel the viewer isn't in, A3 to a channel the viewer left. W1's
+    // viewer grant is on a document, and W2's names the viewer as a team.
+    // The combined filters name calls in their own channel, so only the
+    // grants can keep them out.
     let filters = [
         None,
         call_ids(&HIDDEN),
@@ -214,7 +205,8 @@ async fn hidden_calls_stay_hidden_under_every_filter(pool: Pool<Postgres>) -> an
         channel(CH_MEMBER),
         channel(CH_OTHER),
         channel(CH_LEFT),
-        in_member_and_named.clone(),
+        channel_and_calls(CH_OTHER, &[X1, W1, A2]),
+        channel_and_calls(CH_LEFT, &[A3]),
     ];
     for filter in &filters {
         for by_start in [false, true] {
@@ -227,8 +219,14 @@ async fn hidden_calls_stay_hidden_under_every_filter(pool: Pool<Postgres>) -> an
         }
     }
     assert_eq!(
-        ids(&list(&pool, &in_member_and_named, 50, page(false)).await?),
-        vec![A1]
+        ids(&list(
+            &pool,
+            &channel_and_calls(CH_OTHER, &[X1, W1, A2]),
+            50,
+            page(false)
+        )
+        .await?),
+        vec![A2]
     );
     Ok(())
 }
@@ -272,9 +270,12 @@ async fn calls_that_tie_sort_by_id_and_the_cursor_crosses_them(
     fixtures(path = "../../../../fixtures", scripts("call_list")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn an_archived_call_is_listed_once(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    // Archiving moves L1 from `calls` to `call_records` in one transaction,
-    // so the list finds it in exactly one table.
+async fn archiving_leaves_one_listable_row_per_call_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // The list reads the first row it finds for a granted call id, so it
+    // relies on archiving moving L1 from `calls` to `call_records` rather
+    // than copying it. The native `call_entities` mirror keeps the id and
+    // is never listed, so the count leaves it out. The archived call keeps
+    // its place by start.
     PgCallRepo::new(pool.clone()).archive_call(&L1).await?;
     let tables = sqlx::query_scalar!(
         r#"
@@ -306,25 +307,27 @@ async fn pages_reach_every_live_archived_and_imported_call(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     for (by_start, expected) in [(false, BY_ACTIVITY), (true, BY_START)] {
-        for (filter, size) in [None, call_ids(&ALL_CALLS)]
-            .into_iter()
-            .flat_map(|filter| [1, 2, 3].map(|size| (filter.clone(), size)))
-        {
-            let mut seen = Vec::new();
-            let mut cursor = page(by_start);
-            loop {
-                let records = list(&pool, &filter, size, cursor).await?;
-                let Some(last) = records.last() else { break };
-                seen.extend(ids(&records));
-                let sort_at = if by_start {
-                    last.started_at
-                } else {
-                    last.ended_at.unwrap_or(last.started_at)
-                };
-                cursor.after = Some((sort_at, last.call_id));
-                assert!(seen.len() <= expected.len(), "a call repeated: {seen:?}");
+        for filter in [None, call_ids(&ALL_CALLS)] {
+            for size in [1, 2, 3] {
+                let mut seen = Vec::new();
+                let mut cursor = page(by_start);
+                loop {
+                    let records = list(&pool, &filter, size, cursor).await?;
+                    let Some(last) = records.last() else { break };
+                    seen.extend(ids(&records));
+                    let sort_at = if by_start {
+                        last.started_at
+                    } else {
+                        last.ended_at.unwrap_or(last.started_at)
+                    };
+                    cursor.after = Some((sort_at, last.call_id));
+                    assert!(seen.len() <= expected.len(), "a call repeated: {seen:?}");
+                }
+                assert_eq!(
+                    seen, expected,
+                    "by_start={by_start}, size={size}, filter={filter:?}"
+                );
             }
-            assert_eq!(seen, expected, "by_start={by_start}, filter={filter:?}");
         }
     }
     Ok(())
