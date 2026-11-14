@@ -1,8 +1,16 @@
 import type { CacheHost, SearchDocumentWire } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { GraphqlCrmCompanyQuickAccessFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { materializeCachedGraphqlCrmCompanies } from './graphql';
+
+const access = vi.hoisted(() => ({ allowed: true }));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => access.allowed,
+}));
+beforeEach(() => {
+  access.allowed = true;
+});
 
 const company: GraphqlCrmCompanyQuickAccessFieldsFragment = {
   __typename: 'GraphqlSoupCrmCompany',
@@ -104,4 +112,36 @@ describe('cached CRM company mentions', () => {
     ).toEqual([]);
     expect(cache.readRecordsByKeys).not.toHaveBeenCalled();
   });
+});
+
+it('does not resolve cached CRM mentions after permission loss', async () => {
+  const cache = host();
+  access.allowed = false;
+  expect(
+    await materializeCachedGraphqlCrmCompanies(cache, [
+      hit('GraphqlSoupCrmCompany:company-1'),
+    ])
+  ).toEqual([]);
+  expect(cache.readRecordsByKeys).not.toHaveBeenCalled();
+  access.allowed = true;
+  let resolve!: (
+    value: Awaited<ReturnType<CacheHost['readRecordsByKeys']>>
+  ) => void;
+  cache.readRecordsByKeys.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }) as ReturnType<CacheHost['readRecordsByKeys']>
+  );
+  const pending = materializeCachedGraphqlCrmCompanies(cache, [
+    hit('GraphqlSoupCrmCompany:company-1'),
+  ]);
+  access.allowed = false;
+  resolve({
+    revision: INITIAL_CACHE_REVISION,
+    records: [
+      { recordKey: 'GraphqlSoupCrmCompany:company-1', record: company },
+    ],
+  });
+  expect(await pending).toEqual([]);
 });

@@ -1,4 +1,8 @@
 import type { MutationInspection } from '../protocol';
+import {
+  markSourceAuthority,
+  sourceAuthorityGeneration,
+} from '../source-authority';
 
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
@@ -13,6 +17,18 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import {
+  type AuthorityTransition,
+  cacheAuthorityError,
+  createAuthorityObserver,
+  StaleCacheAuthorityError,
+} from '../authority';
+import {
+  isAuthoredSettlement,
+  isAuthorityLifecycle,
+  isAuthorityWrite,
+  requestNeedsCrmProof,
+} from '../authority-scope';
 import type {
   AffectedOperationsResult,
   CacheChangeHints,
@@ -75,11 +91,13 @@ const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
+  authorityGeneration?: string;
   fieldChanges?: RecordFieldChange[];
   opIds: string[];
 };
 
 type CacheChangedPayload = {
+  authorityGeneration?: string;
   revision: string;
   reset?: boolean;
 } & CacheChangeHints;
@@ -165,6 +183,8 @@ export class NativeCacheUpgradeRequiredError extends Error {
 }
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
+  const authorityObserver = createAuthorityObserver(options.scope);
+  let authorityReadGuard: (() => Promise<unknown>) | undefined;
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<AffectedOperationsListener>();
   const cacheChangeSubscribers = new Set<CacheChangeListener>();
@@ -230,6 +250,31 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     command: string,
     args: Record<string, unknown>
   ): Promise<T> {
+    const requireProof = requestNeedsCrmProof(command, args);
+    let captured: string | undefined;
+    if (!isAuthorityLifecycle(command)) {
+      if (
+        requireProof &&
+        !isAuthorityWrite(command) &&
+        !isAuthoredSettlement(command)
+      )
+        await authorityReadGuard?.();
+      const observed =
+        authorityObserver.snapshot() ?? (await currentAuthority());
+      captured =
+        typeof args.authorityGeneration === 'string'
+          ? args.authorityGeneration
+          : !isAuthorityWrite(command) || !requireProof
+            ? observed.generation
+            : undefined;
+      if (
+        requireProof &&
+        !authorityObserver.verified() &&
+        !isAuthoredSettlement(command)
+      )
+        throw new StaleCacheAuthorityError();
+      args = { ...args, authority: { generation: captured, requireProof } };
+    }
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
       sampling: 'perf',
@@ -263,8 +308,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       const value = await (deadline
         ? Promise.race([operation, deadline])
         : operation);
+      if (!isAuthorityLifecycle(command) && !isAuthoredSettlement(command)) {
+        const current = await currentAuthority();
+        if (current.generation !== captured)
+          throw new StaleCacheAuthorityError();
+      }
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
-      return value;
+      return markSourceAuthority(value, captured);
     } catch (error) {
       span.setAttr('graphql_cache.ipc.outcome', timedOut ? 'timeout' : 'error');
       span.error(
@@ -273,7 +323,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           : 'Native cache request failed'
       );
       // Native command errors cross the boundary as strings.
-      throw error instanceof Error ? error : new Error(String(error));
+      throw cacheAuthorityError(error);
     } finally {
       clearTimeout(timer);
       if (pageStallMs > 0)
@@ -284,6 +334,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       span.end();
     }
   }
+
+  async function currentAuthority() {
+    const version = authorityObserver.version();
+    const value = await request('graphql_cache_current_authority', {
+      identity: options.scope,
+    });
+    return authorityObserver.observe(value, version);
+  }
+
+  const unlistenAuthority = listen('graphql-cache://authority-changed', () => {
+    pendingReads.clear();
+    liveQueries.clear();
+    fireAndForget(currentAuthority(), 'graphql_cache.authority');
+  });
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
@@ -297,7 +361,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         .map((id) => Number(id.slice(prefix.length)))
         .filter((n) => Number.isFinite(n));
       if (opKeys.length === 0) return;
-      if (isRecordFieldChanges(event.payload.fieldChanges)) {
+      if (
+        event.payload.authorityGeneration !== undefined &&
+        event.payload.authorityGeneration ===
+          authorityObserver.snapshot()?.generation &&
+        isRecordFieldChanges(event.payload.fieldChanges)
+      ) {
         // Patches are ordered data, so deliver them immediately after earlier
         // invalidations. Only conservative reread notifications can coalesce.
         flushAffected();
@@ -328,12 +397,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       const revision = parseCacheRevision(event.payload.revision);
       observeRevision(revision);
       if (event.payload.reset) {
+        authorityObserver.reset();
         liveQueries.clear();
         for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
       }
       for (const cb of cacheChangeSubscribers) {
         if (
           event.payload.reset ||
+          event.payload.authorityGeneration !==
+            authorityObserver.snapshot()?.generation ||
           (event.payload.searchChangedBuckets === undefined &&
             event.payload.unchangedViews === undefined)
         )
@@ -354,15 +426,21 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return await listen<CacheChangedPayload>(
         CACHE_HYDRATED_EVENT,
         (event) => {
+          const currentAuthority =
+            event.payload.authorityGeneration !== undefined &&
+            event.payload.authorityGeneration ===
+              authorityObserver.snapshot()?.generation;
           pendingReads.clear();
           flushAffected();
           const revision = parseCacheRevision(event.payload.revision);
           observeRevision(revision);
           for (const cb of hydrationSubscribers) {
-            cb(revision, {
-              searchChangedBuckets: event.payload.searchChangedBuckets,
-              unchangedViews: event.payload.unchangedViews,
-            });
+            if (!currentAuthority) cb(revision);
+            else
+              cb(revision, {
+                searchChangedBuckets: event.payload.searchChangedBuckets,
+                unchangedViews: event.payload.unchangedViews,
+              });
           }
         }
       );
@@ -395,10 +473,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
-      await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
+      await currentAuthority();
     } catch (error) {
-      if (isMissingCommand(error, INSPECT_MUTATIONS_COMMAND)) {
-        throw new NativeCacheUpgradeRequiredError();
+      if (isMissingCommand(error, 'graphql_cache_current_authority')) {
+        throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
       }
       throw error;
     }
@@ -421,6 +499,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     revision: CacheRevision,
     advanced: boolean | undefined,
     searchChangedBuckets: string[] | undefined,
+    authorityGeneration: string | undefined,
     unchangedViews?: string[]
   ): Promise<void> {
     const newlyObserved = observeRevision(parseCacheRevision(revision));
@@ -428,6 +507,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     try {
       await emit(CACHE_HYDRATED_EVENT, {
         revision,
+        authorityGeneration,
         ...(unchangedViews !== undefined ? { unchangedViews } : {}),
         ...(searchChangedBuckets !== undefined ? { searchChangedBuckets } : {}),
       });
@@ -441,6 +521,37 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    authority: {
+      current: async () => {
+        await ready;
+        return currentAuthority();
+      },
+      snapshot: authorityObserver.snapshot,
+      setReadGuard: (guard) => {
+        authorityReadGuard = guard;
+      },
+      async verifyRead() {
+        await authorityReadGuard?.();
+        if (!authorityObserver.verified()) throw new StaleCacheAuthorityError();
+      },
+      onChanged: authorityObserver.onChanged,
+      async transition(expected, policy) {
+        const context = Telemetry.captureContext();
+        await ready;
+        const result = await context.run(() =>
+          request<AuthorityTransition>('graphql_cache_transition_authority', {
+            identity: options.scope,
+            expected,
+            policy,
+          })
+        );
+        pendingReads.clear();
+        liveQueries.clear();
+        context.run(() => authorityObserver.observe(result.authority));
+        authorityObserver.verify();
+        return result;
+      },
+    },
     liveQueries: true,
     people: createPeopleCache({
       async snapshot(args, traceparent) {
@@ -541,9 +652,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           peopleUnavailable = true;
           throw new Error(PEOPLE_UNSUPPORTED);
         }
-        await publishHydration(result.revision, result.revisionAdvanced, [
-          'person',
-        ]);
+        await publishHydration(
+          result.revision,
+          result.revisionAdvanced,
+          ['person'],
+          sourceAuthorityGeneration(result)
+        );
         return result.revision;
       },
     }),
@@ -571,7 +685,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         variables: args.variables,
         entityResolvers: args.entityResolvers,
       };
-      const key = JSON.stringify(wireArgs);
+      const key = JSON.stringify([
+        authorityObserver.snapshot()?.generation,
+        wireArgs,
+      ]);
       const pending = pendingReads.get(key);
       if (pending) return pending;
       const reading = request<ReadResult>('graphql_cache_read', wireArgs);
@@ -756,6 +873,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
+        authorityGeneration: args.authorityGeneration,
         identity: args.identity,
       });
     },
@@ -792,16 +910,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       };
       const result = args.hydrationScope
         ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
+            authorityGeneration: args.authorityGeneration,
             request: { ...payload, hydrationScope: args.hydrationScope },
           })
-        : await request<NativeHydrationResult>(
-            'graphql_cache_hydrate',
-            payload
-          );
+        : await request<NativeHydrationResult>('graphql_cache_hydrate', {
+            ...payload,
+            authorityGeneration: args.authorityGeneration,
+          });
       await publishHydration(
         result.revision,
         result.revisionAdvanced,
         result.searchChangedBuckets,
+        sourceAuthorityGeneration(result),
         result.unchangedViews
       );
       return result;
@@ -821,6 +941,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          authorityGeneration: args.authorityGeneration,
           linkPatches: args.linkPatches,
           revalidations: args.revalidations,
           identityBindings: args.identityBindings,
@@ -916,6 +1037,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           operationName: args.operationName,
           variables: args.variables,
           data: args.data,
+          authorityGeneration: args.authorityGeneration,
         }
       );
     },
@@ -1015,6 +1137,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         unlistenCacheChanges,
         unlistenHydration,
         unlistenSettlements,
+        unlistenAuthority,
       ]) {
         // UnlistenFn returns the unlisten IPC promise despite its void type.
         fireAndForget(

@@ -1,3 +1,4 @@
+import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
 import {
   type AnyVariables,
   type Client,
@@ -6,9 +7,11 @@ import {
   type OperationContext,
   type OperationResult,
   type OperationResultSource,
+  stringifyDocument,
 } from '@urql/core';
 import { onEnd, pipe, type Subscription, subscribe } from 'wonka';
 import { liveQueryData } from '../graphql-cache/exchange/live-query';
+import { queryAuthorization } from './authorization';
 import type { ObserverEndReason, UrqlObserver } from './observer';
 import {
   createReactiveSelection,
@@ -33,6 +36,8 @@ type QueryExecution<QueryData, Variables extends AnyVariables, Data> = {
   subscription?: Subscription;
   pending?: PendingRefetch<QueryData, Variables, Data>;
   lastError?: CombinedError;
+  networkOnly: boolean;
+  authorityRetryScheduled?: boolean;
 };
 
 type QueryObserverState<QueryData, Variables extends AnyVariables, Data> = {
@@ -251,8 +256,11 @@ export class QueryObserver<
         });
       }
 
+      context.cacheAuthorizationEpoch = queryAuthorization().epoch;
+
       const currentExecution: QueryExecution<QueryData, Variables, Data> = {
         options,
+        networkOnly: context.requestPolicy === 'network-only',
         source: client.executeQuery<QueryData, Variables>(request, context),
         pending,
       };
@@ -336,6 +344,40 @@ export class QueryObserver<
     nextResult: OperationResult<QueryData, Variables>
   ): void {
     if (this.execution !== execution) return;
+    const authorization = queryAuthorization();
+    if (
+      nextResult.data != null &&
+      queryNeedsCrmProof(
+        stringifyDocument(execution.options.query),
+        execution.options.variables as Record<string, unknown>
+      ) &&
+      (authorization.paused ||
+        nextResult.operation.context.cacheAuthorizationEpoch !==
+          authorization.epoch)
+    ) {
+      // urql can replay a retained result without entering any exchange. Never
+      // let a same-key imperative subscriber keep that older snapshot alive here.
+      this.clearSelection();
+      this.setState({ data: undefined, fetched: false });
+      this.result.notify();
+      if (
+        !authorization.paused &&
+        !execution.networkOnly &&
+        !execution.authorityRetryScheduled
+      ) {
+        execution.authorityRetryScheduled = true;
+        queueMicrotask(() => {
+          if (this.execution === execution && !this.destroyed)
+            this.execute(
+              execution.options,
+              this.client,
+              { requestPolicy: 'network-only' },
+              execution.pending
+            );
+        });
+      }
+      return;
+    }
 
     const stale = nextResult.stale === true;
     const hasNext = nextResult.hasNext === true;

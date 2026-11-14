@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import {
   type CacheRequest,
   INITIAL_CACHE_REVISION,
@@ -36,7 +37,13 @@ class RegistrationAdapter {
         data: {
           id: request.id,
           ok: true,
-          result: request.kind === 'init' ? null : INITIAL_CACHE_REVISION,
+          authorityGeneration: TEST_AUTHORITY_GENERATION,
+          result:
+            request.kind === 'current-authority'
+              ? testAuthority(request.identity)
+              : request.kind === 'init'
+                ? null
+                : INITIAL_CACHE_REVISION,
         },
       })
     );
@@ -121,6 +128,7 @@ describe('coordinator registration retry', () => {
     expect(adapters[0].requests).toEqual([]);
     expect(adapters[1].requests.map(({ kind }) => kind)).toEqual([
       'init',
+      'current-authority',
       'current-revision',
     ]);
     expect(adapters.every((adapter) => adapter.options.scope === scope)).toBe(

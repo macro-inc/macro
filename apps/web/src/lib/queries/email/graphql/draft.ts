@@ -66,6 +66,8 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   existingDraft?: OptimisticDraftEntity;
   /** Complete cached conversation, when available. */
   existingThread?: DraftThread;
+  authorizationEpoch?: number;
+  authorityGeneration?: string;
   /** Present only when this save creates a standalone local thread. */
   newThreadOwnerId?: string;
   /** Importance of this account's own draft sender. */
@@ -108,6 +110,7 @@ export type SaveEmailDraftFailureCode =
  * its eventual settlement arrives through the cache host, not this promise.
  */
 export type SaveEmailDraftOutcome =
+  | { kind: 'committed-without-content' }
   | { kind: 'committed'; draftId: string; threadId: string }
   | { kind: 'queued'; transactionId: string }
   | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError };
@@ -142,7 +145,8 @@ function settleDraftMutation<TData, TVariables extends AnyVariables, Payload>(
 ):
   | { kind: 'queued'; transactionId: string }
   | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError }
-  | { kind: 'resolved'; payload: Payload } {
+  | { kind: 'resolved'; payload: Payload }
+  | { kind: 'committed-without-content' } {
   const disposition = optimisticMutationDispositionOf(result);
   if (disposition?.kind === 'queued') {
     return { kind: 'queued', transactionId: disposition.transactionId };
@@ -156,6 +160,8 @@ function settleDraftMutation<TData, TVariables extends AnyVariables, Payload>(
       error: result.error,
     };
   }
+  if (!payload && disposition?.kind === 'committed')
+    return { kind: 'committed-without-content' };
   if (!payload) {
     return {
       kind: 'failed',
@@ -256,6 +262,8 @@ export async function executeGraphqlSaveEmailDraft(
     optimisticBodyHtml: _optimisticBodyHtml,
     existingDraft: _existingDraft,
     existingThread: _existingThread,
+    authorizationEpoch: _authorizationEpoch,
+    authorityGeneration: _authorityGeneration,
     newThreadOwnerId: _newThreadOwnerId,
     senderIsSignal: _senderIsSignal,
     mutationUuid: _mutationUuid,
@@ -309,6 +317,8 @@ export async function executeGraphqlSaveEmailDraft(
       // a discard supersedes any still-queued save.
       uuid: args.mutationUuid ?? String(args.draftId),
       clientMetadata: args.clientMetadata,
+      authorizationEpoch: args.authorizationEpoch,
+      authorityGeneration: args.authorityGeneration,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
@@ -391,6 +401,8 @@ export type GraphqlDeleteEmailDraftArgs = {
    * thread page's message list and the post-commit revalidation. */
   threadDbId: string;
   existingThread?: DraftThread;
+  authorizationEpoch?: number;
+  authorityGeneration?: string;
   mutationUuid?: string;
   clientMetadata?: DraftAttempt;
 };
@@ -401,6 +413,7 @@ export type GraphqlDeleteEmailDraftArgs = {
  * that is success, not an error.
  */
 export type DeleteEmailDraftOutcome =
+  | { kind: 'committed-without-content' }
   | { kind: 'committed'; deleted: boolean; threadDeleted: boolean }
   | { kind: 'queued'; transactionId: string }
   | { kind: 'failed'; code: SaveEmailDraftFailureCode; error: CombinedError };
@@ -453,6 +466,8 @@ export async function executeGraphqlDeleteEmailDraft(
       // and the delete itself is an idempotent no-op if nothing was created.
       uuid: args.mutationUuid ?? args.draftId,
       clientMetadata: args.clientMetadata,
+      authorizationEpoch: args.authorizationEpoch,
+      authorityGeneration: args.authorityGeneration,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,

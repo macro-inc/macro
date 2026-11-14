@@ -6500,8 +6500,14 @@ describe('normalizedCacheExchange', () => {
       await tick();
 
       expect(onCacheError.mock.calls).toEqual([
-        [writeFailure, op],
-        [deleteFailure, op],
+        [
+          writeFailure,
+          expect.objectContaining({ key: op.key, query: op.query }),
+        ],
+        [
+          deleteFailure,
+          expect.objectContaining({ key: op.key, query: op.query }),
+        ],
       ]);
       expect(host.writes).toHaveLength(1);
       expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-4']]);

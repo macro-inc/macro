@@ -3,6 +3,10 @@ import { stringifyDocument } from '@urql/core';
 import { type FragmentDefinitionNode, Kind } from 'graphql';
 import type { CacheHost } from '../host/types';
 import type { CacheRevision } from '../protocol';
+import {
+  markSourceAuthority,
+  sourceAuthorityGeneration,
+} from '../source-authority';
 
 const recordResultType: unique symbol = Symbol('recordResultType');
 
@@ -63,13 +67,16 @@ export async function readRecordsByKeys<TResult>(
     fragmentName: selection.fragmentName,
     keys,
   });
-  return {
-    revision: result.revision,
-    records: result.records.map(({ recordKey, record, identity }) => {
-      if (!recordKey || !isRecord(record)) {
-        throw new Error('invalid cache selected record by key');
-      }
-      return { recordKey, record: record as TResult, identity };
-    }),
-  };
+  return markSourceAuthority(
+    {
+      revision: result.revision,
+      records: result.records.map(({ recordKey, record, identity }) => {
+        if (!recordKey || !isRecord(record)) {
+          throw new Error('invalid cache selected record by key');
+        }
+        return { recordKey, record: record as TResult, identity };
+      }),
+    },
+    sourceAuthorityGeneration(result)
+  );
 }

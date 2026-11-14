@@ -3,6 +3,7 @@ import {
   sameAppearance,
 } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -11,6 +12,7 @@ import {
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -96,6 +98,13 @@ function itemPreviewQueryOptions(
   };
 }
 
+function crmPreviewDenied(item: ItemEntity): boolean {
+  return (
+    !crmAccessAllowed() &&
+    (item.type === 'crm_company' || item.type === 'crm_contact')
+  );
+}
+
 function noAccessPreview(item: ItemEntity): PreviewItem {
   return {
     id: item.id,
@@ -109,18 +118,25 @@ export async function getItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
+  if (crmPreviewDenied(item)) return noAccessPreview(item);
+  const epoch = queryAuthorization().epoch;
+  const stale = () =>
+    epoch !== queryAuthorization().epoch || crmPreviewDenied(item);
   if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);
+      if (stale()) return noAccessPreview(item);
       if (preview) return defaultNameTransform(preview);
     } catch {
       // Preserve the existing access/deletion result through the REST fallback.
     }
     const fallback = await fetchRestPreviewBatch([item]);
+    if (stale()) return noAccessPreview(item);
     return defaultNameTransform(fallback.get(item.id) ?? noAccessPreview(item));
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
+  if (stale()) return noAccessPreview(item);
   return defaultNameTransform(preview);
 }
 
@@ -153,6 +169,7 @@ function useItemPreviewQuery(
 
   return {
     data: () => {
+      if (crmPreviewDenied(item())) return noAccessPreview(item());
       if (usesGraphql()) return graphqlQuery.data();
       const rest = restQuery();
       return rest && queryReadyGate(rest) ? rest.data : undefined;

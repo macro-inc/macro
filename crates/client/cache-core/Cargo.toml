@@ -11,6 +11,10 @@ schema = ["dep:schemars", "database_sql/schema"]
 name = "people_schema"
 required-features = ["schema"]
 
+[[example]]
+name = "authority_schema"
+required-features = ["schema"]
+
 [dependencies]
 apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }

@@ -1,4 +1,5 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
@@ -125,6 +126,8 @@ export function createSoupLiveQuery(
   const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
   const firstPageInput = createMemo(() => {
+    queryAuthorization().epoch;
+    if (queryAuthorization().paused) return;
     const input = request();
     return input ? { initial: { ...input, expand: true } } : undefined;
   });
@@ -1008,6 +1011,7 @@ export function createSoupLiveQuery(
   // or fails. Preserve covered decisions and local additions, then append new
   // rows in server-page order until a successful reconciliation orders the union.
   const displayData = createMemo((): GraphqlSoupItem[] | undefined => {
+    if (queryAuthorization().paused) return;
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
       const fetched = query.data?.records();

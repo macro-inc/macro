@@ -47,6 +47,8 @@ export type QueryPersistence = {
   restoreQuery: (queryKey: QueryKey) => Promise<void>;
   /** Clear every durable scope and fence pending hydration on account changes. */
   clear: () => Promise<void>;
+  /** Retire selected server snapshots from memory and disk, fencing pending restores. */
+  retire: (matches: (key: QueryKey) => boolean) => Promise<void>;
   /** Await pending local writes before restarting the native app. */
   flush: () => Promise<void>;
   dispose: () => void;
@@ -125,10 +127,14 @@ async function handleRestore(
  * a query would restore its old initialData; removing it alone would strand
  * observers on the retired query instead of delivering the next account's data.
  */
-function clearQueryMemory(queryClient: QueryClient): void {
+function clearQueryMemory(
+  queryClient: QueryClient,
+  matches?: (key: QueryKey) => boolean
+): void {
   const queryCache = queryClient.getQueryCache();
   notifyManager.batch(() => {
     for (const query of queryCache.getAll()) {
+      if (matches && !matches(query.queryKey)) continue;
       const observers = query.observers.map((observer) => ({
         observer,
         options: {
@@ -174,7 +180,7 @@ function clearQueryMemory(queryClient: QueryClient): void {
       }
     }
   });
-  queryClient.getMutationCache().clear();
+  if (!matches) queryClient.getMutationCache().clear();
 }
 
 /**
@@ -211,16 +217,23 @@ export function setupQueryPersistence(
   params: Readonly<{
     queryClient: QueryClient;
     scopes: readonly PersistScope[];
+    /** Protected snapshots are never read or written to an unversioned store. */
+    exclude?: (key: QueryKey) => boolean;
   }>
 ): QueryPersistence {
-  const { queryClient, scopes } = params;
+  const { queryClient, scopes, exclude } = params;
   let restores = new WeakMap<Query, Promise<void>>();
   let generation = 0;
   let clearing = false;
   let disposed = false;
+  const retiring = new Set<(key: QueryKey) => boolean>();
+  const isRetiring = (key: QueryKey) =>
+    [...retiring].some((matches) => matches(key));
 
   const findScope = (queryKey: QueryKey) =>
-    scopes.find((s) => s.shouldPersist(queryKey));
+    exclude?.(queryKey)
+      ? undefined
+      : scopes.find((s) => s.shouldPersist(queryKey));
 
   async function restoreFromStore(query: Query, scope: PersistScope) {
     const capturedGeneration = generation;
@@ -232,6 +245,7 @@ export function setupQueryPersistence(
         () =>
           !disposed &&
           !clearing &&
+          !isRetiring(query.queryKey) &&
           capturedGeneration === generation &&
           queryClient.getQueryCache().get(query.queryHash) === query
       );
@@ -266,7 +280,7 @@ export function setupQueryPersistence(
     const scope = findScope(query.queryKey);
     if (!scope) return;
 
-    if (disposed || clearing) return;
+    if (disposed || clearing || isRetiring(query.queryKey)) return;
 
     if (type === 'added') {
       fireAndForget(restore(query, scope), 'query-persistence');
@@ -278,6 +292,11 @@ export function setupQueryPersistence(
   });
 
   for (const scope of scopes) {
+    if (exclude)
+      fireAndForget(
+        scope.store.prune((entry) => !exclude(entry.queryKey)),
+        'query-persistence'
+      );
     if (!scope.outlivesQuery) continue;
     const maxAgeMs = scope.maxAge
       ? parsedDurationToMilliseconds(scope.maxAge)
@@ -294,13 +313,28 @@ export function setupQueryPersistence(
   return {
     restoreQuery(queryKey) {
       const scope = findScope(queryKey);
-      if (disposed || clearing || !scope) return Promise.resolve();
+      if (disposed || clearing || isRetiring(queryKey) || !scope)
+        return Promise.resolve();
       // Building a missing query emits `added`, starting the same restore that
       // an observer would start, without issuing a request or needing a queryFn.
       const query = queryClient
         .getQueryCache()
         .build(queryClient, { queryKey });
       return restore(query, scope);
+    },
+    async retire(matches) {
+      restores = new WeakMap();
+      retiring.add(matches);
+      clearQueryMemory(queryClient, matches);
+      // Finish earlier puts before pruning, while matching new writes and restores
+      // stay fenced. This also removes entries that were never loaded this session.
+      await Promise.all(
+        scopes.map(async (scope) => {
+          await scope.store.flush({ throwOnError: true });
+          await scope.store.prune((entry) => !matches(entry.queryKey));
+        })
+      );
+      retiring.delete(matches);
     },
     async clear() {
       generation += 1;

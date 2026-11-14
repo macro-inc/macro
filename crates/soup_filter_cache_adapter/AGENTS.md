@@ -14,6 +14,7 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `src/lib.rs`: the GraphQL `Document`/`Selection` → `ValidatedIndexQuery`
   compile path (`compile_soup_flat_v4`) and crate-level docs.
 - `src/live_query.rs`: reactive query registration/re-evaluation.
+- `src/permissions.rs`: CRM snapshot retirement shared by native and browser owners. Track property ownership from each field's own arguments; keep independently owned properties and received notification history. Retire copied optimism without deleting authored commands, identity bindings, or legacy draft attachment recovery. The ignored full-retirement measurement covers large normalized/projection/property sets with pending commands.
 - `src/direct_patch.rs`, `src/notifications.rs`: optimistic local mutation
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:

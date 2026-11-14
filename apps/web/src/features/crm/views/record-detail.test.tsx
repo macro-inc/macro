@@ -26,6 +26,7 @@ import { CrmRecordDetail } from './record-detail';
 
 const taskContext = vi.hoisted(() => ({
   records: [] as (() => CrmTaskRecord)[],
+  canAccess: (): boolean => true,
   get record() {
     return this.records.at(-1);
   },
@@ -34,6 +35,7 @@ const taskContext = vi.hoisted(() => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    canAccess: () => taskContext.canAccess(),
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     pipelinesEnabled: () => () => false,
@@ -52,6 +54,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Tooltip: (props: ParentProps) => <>{props.children}</>,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -202,6 +205,7 @@ vi.mock('./record-associations', () => ({
 }));
 
 beforeEach(() => {
+  taskContext.canAccess = () => true;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -392,4 +396,29 @@ it('hands the Discussion each request for a linked message', () => {
   // Leaving the target, as another tab of the record does, forgets it.
   setCommentTarget(undefined);
   expect(linked()).toBe('-:2');
+});
+
+it('unmounts record content, breadcrumbs and task association on permission loss and restores on regrant', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  taskContext.canAccess = allowed;
+  renderDetail(
+    { type: 'company', id: 'record-1', name: 'Private record' },
+    'Companies'
+  );
+  expect(taskContext.record?.()).toMatchObject({
+    type: 'company',
+    id: 'record-1',
+  });
+  setAllowed(false);
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(
+    screen.queryByRole('navigation', { name: 'CRM record location' })
+  ).toBeNull();
+  expect(screen.queryByText('Private record')).toBeNull();
+  expect(taskContext.record).toBeUndefined();
+  setAllowed(true);
+  expect(taskContext.record?.()).toMatchObject({
+    type: 'company',
+    id: 'record-1',
+  });
 });

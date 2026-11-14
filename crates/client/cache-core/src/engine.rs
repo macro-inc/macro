@@ -2,6 +2,7 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
+pub mod authority;
 mod calendar;
 mod hydration;
 mod people;
@@ -122,6 +123,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// The background response belongs to an obsolete account or generation.
     #[error("cache hydration scope changed")]
     StaleHydrationScope,
+    /// The response or cache operation belongs to an obsolete permission scope.
+    #[error("cache authority changed; obtain a new permission proof")]
+    StaleAuthority,
     /// Contact observations predate another accepted contact write or engine.
     #[error("contact write fence changed")]
     StaleContactFence,
@@ -2507,6 +2511,30 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.settle_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    async fn settle_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let layer = self
             .optimistic
@@ -2525,15 +2553,7 @@ impl<S: Storage> Engine<S> {
             None
         };
         let write_result = match self
-            .commit_optimistic_write_with_projections(
-                transaction,
-                claim,
-                query,
-                operation_name,
-                variables,
-                data,
-                projections,
-            )
+            .commit_optimistic_response(transaction, claim, response, projections, publish_snapshot)
             .await
         {
             Ok(result) => result,
@@ -2565,6 +2585,40 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_response(
+            transaction,
+            claim,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity: None,
+            },
+            projections,
+            true,
+        )
+        .await
+    }
+
+    async fn commit_optimistic_response(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        response: NetworkWrite<'_>,
+        mut projections: Vec<ProjectionMutation>,
+        publish_snapshot: bool,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            ..
+        } = response;
+        if !publish_snapshot {
+            projections.clear();
+        }
         self.ensure_revision_can_advance()?;
         let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         live_projection_keys.extend(
@@ -2636,7 +2690,7 @@ impl<S: Storage> Engine<S> {
         }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
-        let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
+        let (mut recipes, mut revalidations) = if identity_errors.is_empty() && publish_snapshot {
             (
                 self.optimistic[index].link_patches.clone(),
                 self.optimistic[index].revalidations.clone(),
@@ -2672,6 +2726,21 @@ impl<S: Storage> Engine<S> {
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
         identity::apply_record_lifecycle(&mut updates, &bindings, &settled_identities);
+        if !publish_snapshot {
+            // The server already accepted this command. Preserve its canonical
+            // IDs and delete tombstones while refusing the obsolete response
+            // content; otherwise a lost response can strand the strict queue.
+            updates.retain(|key, record| {
+                record.fields.retain(|field, _| {
+                    field == identity::ALIAS_FIELD
+                        || field == identity::MUTATION_UUID_FIELD
+                        || field == identity::DELETED_FIELD
+                        || ((field == "id" || field == "__typename")
+                            && settled_identities.values().any(|target| target == key))
+                });
+                !record.fields.is_empty()
+            });
+        }
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self

@@ -91,6 +91,19 @@ export type CacheEngineHydrationResult = WriteResult &
   };
 
 export interface CacheEngine {
+  currentAuthority(
+    identity: string
+  ): Promise<import('../authority').CacheAuthority>;
+  checkAuthority(
+    generation: string | undefined,
+    requireProof: boolean
+  ): Promise<void>;
+  transitionAuthority(
+    identity: string,
+    expected: string,
+    policy: string
+  ): Promise<import('../authority').AuthorityTransition>;
+
   currentRevision(): Promise<CacheRevision>;
   currentStorageGeneration(): Promise<string>;
   boundIdentity(): Promise<string | null>;
@@ -173,8 +186,9 @@ export interface CacheEngine {
     leaseOwner: string,
     nowMs: number,
     leaseExpiresAtMs: number,
-    clientMetadata?: Record<string, unknown>,
-    uncertainCalendarEventKeys?: string[]
+    clientMetadata: Record<string, unknown> | undefined,
+    uncertainCalendarEventKeys: string[] | undefined,
+    authority: import('../authority').AuthorityAdmission | undefined
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
@@ -207,7 +221,8 @@ export interface CacheEngine {
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
-    data: unknown
+    data: unknown,
+    authority: import('../authority').AuthorityAdmission | undefined
   ): Promise<CommitOptimisticWriteResult>;
   rollbackOptimisticWrite(
     transactionId: string,

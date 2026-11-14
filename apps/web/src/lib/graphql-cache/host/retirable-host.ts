@@ -65,6 +65,9 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   const wrapper: CacheHost = {
     clientId: inner.clientId,
     people,
+    get authority() {
+      return current.authority;
+    },
     get liveQueries() {
       return current.liveQueries;
     },

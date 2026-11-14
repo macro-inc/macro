@@ -708,16 +708,19 @@ flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
 
-## Member access API
+## Member access
 
 Existing and new members start with CRM access. An admin or owner can patch a
 team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
 change this setting, and admins and owners cannot be denied. Mailbox contribution
 consent stays unchanged. Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
-`GET /crm/member-access` reports current access even
-when record routes return access denied. Settings controls and retirement of
-already-cached client content follow separately.
+In team settings, admins and owners see a CRM access switch for each member.
+Owner/admin switches stay enabled and cannot be changed. A failed save keeps
+the previous state and can be retried; members do not see these controls.
+`GET /crm/member-access` reports current access even when record routes return
+access denied. An open session retires protected cached results on its next
+request; unavailable proof keeps those results closed until a fresh proof succeeds.
 
 After denial, company/contact routes, CRM lists, search, CRM activity, references,
 and CRM-derived email thread grants require current access on each request.
@@ -729,4 +732,10 @@ copied into a pipeline cell remains visible as pipeline content.
 Delivered CRM discussion notifications retain their text, and a queued one can
 still arrive under the existing notification policy. Opening the record requires
 current access. Exercise denial and regrant through direct API and agent requests
-as well as the UI once the client follow-up is installed.
+as well as the UI. At desktop and phone widths, open records and an individually
+shared pipeline before denial, make another request in each view, then verify
+record access is denied while the pipeline's own values remain visible. Check
+Quick Access, email, references, and structured agent activity for stale results.
+Regrant and verify fresh results return. Offline authored drafts and unrelated
+documents must survive this transition. Native verification requires a binary
+containing the permission commands, not only an updated web bundle.

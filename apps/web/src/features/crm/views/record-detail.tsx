@@ -23,6 +23,7 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { CrmAccessDenied } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
@@ -68,7 +69,7 @@ function sectionOf<T extends CrmRecordSection>(
  * breadcrumb after the originating view; reopening one already in the trail
  * returns to it.
  */
-export function CrmRecordDetail(props: {
+type CrmRecordDetailProps = {
   /** Opened records, oldest first; the last one is shown. */
   records: readonly CrmRecordRef[];
   section: CrmRecordSection | undefined;
@@ -79,7 +80,18 @@ export function CrmRecordDetail(props: {
   onClose: () => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function CrmRecordDetail(props: CrmRecordDetailProps) {
+  const { canAccess } = useCrmContext();
+  return (
+    <Show when={canAccess()} fallback={<CrmAccessDenied />}>
+      <CrmRecordDetailContent {...props} />
+    </Show>
+  );
+}
+
+function CrmRecordDetailContent(props: CrmRecordDetailProps) {
   const trail = () => props.records;
   // Each navigation brings new record objects; only another record remounts.
   const current = createMemo(() => trail()[trail().length - 1]!, undefined, {

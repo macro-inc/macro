@@ -28,6 +28,16 @@
 
 ## Account-scoped source queries
 
+CRM-derived records, mail, search projections and mixed lists also require fresh
+member-access proof. `crm-access-authority.ts` orders primary proofs against the
+browser/native owner's durable generation; `crm-access-cache.ts` retires visible
+and persisted query snapshots. Preserve source generations through HTTP decoding,
+cache writes, queued settlement and subscription reconnects; a current generation
+must never be assigned to already-fetched content. Keep authored drafts and queue
+variables independent of optional copied optimism. Coordinator protocol 18 and
+the native permission commands must precede enabling member-access changes.
+`bun run gen-cache-authority-schema --check --rust` checks the shared contract.
+
 Shared display names and `useUserNames` participant labels use the same account/session-
 scoped QueryClient cache (`queries/auth/user-name-cache.ts`), never a second name map.
 Pin only tracked active readers; bound idle names by count/bytes and batch/pending IDs.

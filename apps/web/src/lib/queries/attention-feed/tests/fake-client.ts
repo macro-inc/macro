@@ -1,13 +1,18 @@
+import { TEST_AUTHORITY_GENERATION } from '@graphql-cache/authority-fixture';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { markSourceAuthority } from '@graphql-cache/source-authority';
 import {
   type AnyVariables,
   type Client,
   CombinedError,
+  createRequest,
   type GraphQLRequest,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import { makeSubject } from 'wonka';
 
 function operationName(query: unknown): string {
@@ -69,6 +74,7 @@ export function createFakeAttentionFeedClient(
       variables,
       context,
       resolve: (data) => {
+        markSourceAuthority(data, TEST_AUTHORITY_GENERATION);
         cached.set(variablesKey(variables), data);
         subject.next({ operation, data } as OperationResult<D, V>);
       },
@@ -78,7 +84,15 @@ export function createFakeAttentionFeedClient(
 
   const subscription = (query: unknown, variables: Record<string, unknown>) => {
     const subject = makeSubject<OperationResult>();
-    const operation = { kind: 'subscription' } as Operation;
+    const operation = makeOperation(
+      'subscription',
+      createRequest(query as DocumentNode, variables),
+      {
+        url: '/graphql',
+        requestPolicy: 'network-only',
+        cacheAuthorityGeneration: TEST_AUTHORITY_GENERATION,
+      }
+    );
     subscriptions.push({
       variables,
       next: (data) => subject.next({ operation, data } as OperationResult),
@@ -96,7 +110,12 @@ export function createFakeAttentionFeedClient(
     const name = operationName(query);
     mutations.push({ name, variables });
     return {
-      toPromise: async () => ({ data: await mutationData[name] }),
+      toPromise: async () => ({
+        data: markSourceAuthority(
+          await mutationData[name],
+          TEST_AUTHORITY_GENERATION
+        ),
+      }),
     };
   };
 
@@ -104,7 +123,10 @@ export function createFakeAttentionFeedClient(
     readQuery: async (args: { variables?: Record<string, unknown> }) => {
       const key = variablesKey(args.variables);
       return cached.has(key)
-        ? { kind: 'hit' as const, data: cached.get(key) }
+        ? markSourceAuthority(
+            { kind: 'hit' as const, data: cached.get(key) },
+            TEST_AUTHORITY_GENERATION
+          )
         : { kind: 'miss' as const };
     },
     writeQuery: async (args: {

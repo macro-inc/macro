@@ -888,6 +888,30 @@ deletion, metadata updates, and reconnect when the normalized cache is unavailab
 Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
+CRM member-access changes use a separate durable permission generation, not a
+storage reset. The application adapter retires CRM records, derived email and
+property content, mixed viewer lists, and projection-only orphans behind a closed
+marker. Browser and native entry points check the captured generation while
+holding their owner lock. Request data retains its source generation through
+HTTP decoding, subscription reconnects, writes and final observer delivery.
+Protected local reads require a fresh primary proof; proof failure keeps them
+closed. An unchanged ready policy is a metadata check, not another retirement.
+
+Retirement preserves unrelated data and the durable command queue: variables,
+UUIDs, leases, retry state, identity bindings and authored draft recovery survive.
+Only copied optimistic response content and its derived recipes are removed.
+A successful queued response may settle canonical identities after revocation,
+but cannot publish obsolete record content. Callers retain its committed
+acknowledgement independently of optional response data. Draft saves recover
+canonical IDs from their authored journal; calendar creates select only the
+settled identity before returning an event for navigation or later edits.
+If that identity is unavailable, creation remains acknowledged and the composer
+closes and refreshes without navigating or offering to create the event again.
+Permission support requires
+coordinator protocol 18 and the native permission commands; older binaries must
+update before this web bundle can use their cache. These mechanisms do not
+retroactively redact delivered notification history or authored transcripts.
+
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
 47 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local

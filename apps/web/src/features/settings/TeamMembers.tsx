@@ -163,6 +163,10 @@ function MemberRow(props: {
   showPlan: boolean;
   canEditPlan: boolean;
   planPending: boolean;
+  crmAccess: boolean;
+  canManageCrm: boolean;
+  crmPending: boolean;
+  onCrmAccessChange: (enabled: boolean) => void;
   pendingDowngrade: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
@@ -200,6 +204,21 @@ function MemberRow(props: {
           </div>
           <Show when={showEmail()}>
             <div class="text-xs text-ink-muted truncate">{email()}</div>
+          </Show>
+          <Show when={props.canManageCrm}>
+            <div class="mt-2">
+              <ToggleSwitch
+                size="md"
+                label={t('crm.memberAccess')}
+                labelClass="text-xs text-ink-muted"
+                checked={props.crmAccess}
+                disabled={
+                  props.crmPending || props.member.role !== TeamRole.member
+                }
+                onChange={props.onCrmAccessChange}
+                aria-label={t('crm.memberAccessFor', { name: displayName() })}
+              />
+            </div>
           </Show>
         </div>
       </div>
@@ -287,6 +306,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const resendInviteMutation = useResendTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
+  const crmAccessMutation = usePatchTeamMutation();
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
@@ -575,6 +595,24 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       showPlan={showSeatPlans()}
                       canEditPlan={isAdminOrOwner()}
                       planPending={planMovePending()}
+                      crmAccess={
+                        member.role !== TeamRole.member ||
+                        teamQuery.data?.crm_member_access?.[member.user_id] !==
+                          false
+                      }
+                      canManageCrm={isAdminOrOwner()}
+                      crmPending={crmAccessMutation.isPending}
+                      onCrmAccessChange={(enabled) => {
+                        crmAccessMutation.mutate({
+                          teamId: props.team.id,
+                          request: {
+                            member_crm_access: {
+                              user_id: member.user_id,
+                              enabled,
+                            },
+                          },
+                        });
+                      }}
                       pendingDowngrade={
                         teamQuery.data?.scheduled_seat_plans?.[member.user_id]
                           ?.plan === 'premium'

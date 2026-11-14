@@ -822,10 +822,21 @@ export type MutationSettlement = { mutationUuid?: string } & (
     }
 );
 
-export type CacheRequest = { id: number } & (
+export type CacheRequest = {
+  id: number;
+  authority?: import('./authority').AuthorityAdmission;
+} & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'current-authority'; identity: string; traceparent?: string }
+  | {
+      kind: 'transition-authority';
+      traceparent?: string;
+      identity: string;
+      expected: string;
+      policy: string;
+    }
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
@@ -1020,7 +1031,7 @@ export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
 export type CacheResponse =
-  | { id: number; ok: true; result: unknown }
+  | { id: number; ok: true; result: unknown; authorityGeneration?: string }
   | {
       id: number;
       ok: false;
@@ -1033,7 +1044,11 @@ export type CacheResponse =
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush =
+export type CachePush = { authorityGeneration?: string } & (
+  | {
+      kind: 'authority-changed';
+      authority: import('./authority').CacheAuthority;
+    }
   | {
       kind: 'ops-affected';
       opIds: string[];
@@ -1050,7 +1065,8 @@ export type CachePush =
       kind: 'cache-hydrated';
       revision: CacheRevision;
     } & CacheChangeHints)
-  | { kind: 'mutation-settled'; settlement: MutationSettlement };
+  | { kind: 'mutation-settled'; settlement: MutationSettlement }
+);
 
 export type WorkerMessage = CacheResponse | CachePush;
 
@@ -1119,7 +1135,10 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   }
   if (value.ok === true) {
     return (
-      hasOnlyWireKeys(value, ['id', 'ok', 'result']) &&
+      hasOnlyWireKeys(value, ['id', 'ok', 'result', 'authorityGeneration']) &&
+      (value.authorityGeneration === undefined ||
+        (typeof value.authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(value.authorityGeneration))) &&
       Object.hasOwn(value, 'result')
     );
   }
@@ -1160,7 +1179,27 @@ export function isRecordFieldChanges(
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
+  if (Object.hasOwn(value, 'authorityGeneration')) {
+    const { authorityGeneration, ...push } = value;
+    return (
+      (authorityGeneration === undefined ||
+        (typeof authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(authorityGeneration))) &&
+      isCachePush(push)
+    );
+  }
   switch (value.kind) {
+    case 'authority-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'authority']) &&
+        isWireRecord(value.authority) &&
+        typeof value.authority.identity === 'string' &&
+        typeof value.authority.generation === 'string' &&
+        /^[0-9a-f-]{36}$/.test(value.authority.generation) &&
+        (value.authority.policy === null ||
+          typeof value.authority.policy === 'string') &&
+        typeof value.authority.ready === 'boolean'
+      );
     case 'ops-affected':
       return (
         hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&

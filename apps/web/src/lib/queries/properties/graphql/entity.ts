@@ -1,7 +1,9 @@
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
@@ -36,7 +38,11 @@ import {
   getGraphqlSoupClient,
   mapGraphqlProperties,
 } from '@service-storage/graphql-soup';
-import { CombinedError, type OperationResult } from '@urql/core';
+import {
+  CombinedError,
+  type OperationResult,
+  stringifyDocument,
+} from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
@@ -344,7 +350,7 @@ function mutationDisposition(
   if (disposition?.kind === 'committed') {
     return {
       kind: 'committed',
-      property: disposition.data.setEntityProperty,
+      property: disposition.data?.setEntityProperty,
     };
   }
   if (result.error) {
@@ -392,6 +398,7 @@ async function executeGraphqlEntityPropertyMutation(
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates
 ) {
+  const authorizationEpoch = queryAuthorization().epoch;
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
@@ -410,6 +417,7 @@ async function executeGraphqlEntityPropertyMutation(
         { setEntityProperty: args.optimisticProperty },
         {
           ...args.optimisticCache,
+          authorizationEpoch,
           uuid: entityPropertyOptimisticMutationUuid(args),
           onEnqueued,
         }
@@ -419,7 +427,10 @@ async function executeGraphqlEntityPropertyMutation(
   if (
     disposition.kind === 'queued' &&
     mutationResult.data == null &&
-    args.optimisticProperty
+    args.optimisticProperty &&
+    !queryAuthorization().paused &&
+    queryAuthorization().epoch === authorizationEpoch &&
+    !queryNeedsCrmProof(stringifyDocument(mutation), variables)
   ) {
     return {
       ...mutationResult,

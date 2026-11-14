@@ -123,6 +123,7 @@ async function scriptAuthService(
     computerConnected?: boolean;
     /** Owners and admins own an agent computer's runtime; others don't see it. */
     viewerOwnsRuntimes?: boolean;
+    failedCrmSaves?: number;
   } = {}
 ) {
   const backend = {
@@ -145,6 +146,9 @@ async function scriptAuthService(
     },
     claudeCalls: [] as string[],
     claudeCodes: [] as string[],
+    crmAccess: { [OWNER]: true, [MEMBER]: true } as Record<string, boolean>,
+    crmSaves: [] as { user_id: string; enabled: boolean }[],
+    failedCrmSaves: options.failedCrmSaves ?? 0,
   };
   const viewerOwnsRuntimes = options.viewerOwnsRuntimes ?? true;
   const members = () => [
@@ -304,6 +308,17 @@ async function scriptAuthService(
       return json(200, computer(agent));
     }
 
+    if (path.endsWith('/team') && request.method() === 'PATCH') {
+      const change = request.postDataJSON().member_crm_access;
+      backend.crmSaves.push(change);
+      if (backend.failedCrmSaves > 0) {
+        backend.failedCrmSaves -= 1;
+        return json(503, { message: 'Try again.' });
+      }
+      backend.crmAccess[change.user_id] = change.enabled;
+      return json(200, null);
+    }
+
     if (path.endsWith('/team'))
       return json(200, {
         team: {
@@ -317,6 +332,7 @@ async function scriptAuthService(
         },
         members: members(),
         scheduled_seat_plans: {},
+        crm_member_access: backend.crmAccess,
       });
 
     // Nothing else is part of this flow.
@@ -752,4 +768,82 @@ test('a DM with an agent teammate that is not running says so', async ({
   await expect(dm).toBeVisible();
   await expect(banner).toHaveCount(0);
   await expect(dm.locator('[data-agent-dm-chip]')).toHaveCount(0);
+});
+
+test('CRM access can be revoked and restored while owners stay enabled', async ({
+  page,
+}, testInfo) => {
+  const backend = await scriptAuthService(page);
+  await page.goto('/');
+  const controls = page
+    .getByRole('group', { name: /^CRM access for/ })
+    .getByRole('switch');
+  await expect(controls).toHaveCount(2);
+  const owner = controls.nth(0);
+  const member = controls.nth(1);
+  await expect(owner).toBeChecked();
+  await expect(owner).toBeDisabled();
+  await expect(member).toBeChecked();
+  await page
+    .getByRole('group', { name: /^CRM access for/ })
+    .nth(1)
+    .locator('label')
+    .click();
+  await expect(member).not.toBeChecked();
+  expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
+  await screenshot(page, testInfo, 'crm-access-denied');
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth)
+  ).toBeLessThanOrEqual(testInfo.project.use.viewport!.width);
+  await page
+    .getByRole('group', { name: /^CRM access for/ })
+    .nth(1)
+    .locator('label')
+    .click();
+  await expect(member).toBeChecked();
+  expect(backend.crmSaves).toEqual([
+    { user_id: MEMBER, enabled: false },
+    { user_id: MEMBER, enabled: true },
+  ]);
+  await screenshot(page, testInfo, 'crm-access-restored');
+});
+
+test('CRM access controls are hidden from ordinary members', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page);
+  await page.goto(`/?viewer=${encodeURIComponent(MEMBER)}`);
+  await expect(
+    page.getByText('Members', { exact: true }).first()
+  ).toBeVisible();
+  await expect(
+    page.getByRole('group', { name: /^CRM access for/ }).getByRole('switch')
+  ).toHaveCount(0);
+  await screenshot(page, testInfo, 'crm-access-member-settings');
+});
+
+test('CRM access save failures keep the prior setting and allow retry', async ({
+  page,
+}) => {
+  const backend = await scriptAuthService(page, 2, { failedCrmSaves: 1 });
+  await page.goto('/');
+  const member = page
+    .getByRole('group', { name: /^CRM access for/ })
+    .getByRole('switch')
+    .nth(1);
+  await expect(member).toBeChecked();
+  await page
+    .getByRole('group', { name: /^CRM access for/ })
+    .nth(1)
+    .locator('label')
+    .click();
+  await expect.poll(() => backend.crmSaves.length).toBe(1);
+  await expect(member).toBeEnabled();
+  await expect(member).toBeChecked();
+  await page
+    .getByRole('group', { name: /^CRM access for/ })
+    .nth(1)
+    .locator('label')
+    .click();
+  await expect(member).not.toBeChecked();
 });

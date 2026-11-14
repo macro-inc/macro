@@ -398,7 +398,9 @@ describe('query reads across engine replacement', () => {
       await updated.promise;
       expect(ids).not.toContain('invalidated');
       expect(s.fetch).toHaveBeenCalledTimes(1);
-      expect(watch).toHaveBeenCalledTimes(4);
+      // Replacement retires the retained view, so fallback also registers a
+      // fresh cache reader before the network result arrives.
+      expect(watch).toHaveBeenCalledTimes(5);
     } finally {
       subscription.unsubscribe();
     }

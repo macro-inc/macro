@@ -885,3 +885,80 @@ describe('account persistence reset', () => {
     queryClient.clear();
   });
 });
+
+describe('permission snapshot retirement', () => {
+  it('fences pending matching restores and removes unseen disk entries while preserving other data', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const entry = (key: readonly string[]): PersistedQueryEntry => ({
+      queryKey: key,
+      queryHash: JSON.stringify(key),
+      data: { value: 'retained' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    });
+    const email = entry(['email', 'threadMessages', 'open']);
+    const unseen = entry(['email', 'threadMessages', 'closed']);
+    const channel = entry(['channel', 'a']);
+    for (const row of [email, unseen, channel])
+      store.entries.set(row.queryHash, row);
+    let deliver!: (value: PersistedQueryEntry) => void;
+    store.get.mockImplementation((hash: string) =>
+      hash === email.queryHash
+        ? new Promise<PersistedQueryEntry>((resolve) => {
+            deliver = resolve;
+          })
+        : Promise.resolve(store.entries.get(hash))
+    );
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope([], store)],
+    });
+    const restore = persistence.restoreQuery(email.queryKey);
+    const other = persistence.restoreQuery(channel.queryKey);
+    await persistence.retire((key) => key[0] === 'email');
+    deliver(email);
+    await Promise.all([restore, other]);
+    expect(queryClient.getQueryData(email.queryKey)).toBeUndefined();
+    expect(queryClient.getQueryData(channel.queryKey)).toEqual({
+      value: 'retained',
+    });
+    expect(store.entries.has(email.queryHash)).toBe(false);
+    expect(store.entries.has(unseen.queryHash)).toBe(false);
+    expect(store.entries.has(channel.queryHash)).toBe(true);
+    persistence.dispose();
+    queryClient.clear();
+  });
+});
+
+it('never restores or persists excluded content, even when another instance flushes it after pruning', async () => {
+  const store = createMockStore();
+  const olderClient = new QueryClient();
+  const currentClient = new QueryClient();
+  const older = setupQueryPersistence({
+    queryClient: olderClient,
+    scopes: [createScope([], store)],
+  });
+  const current = setupQueryPersistence({
+    queryClient: currentClient,
+    scopes: [createScope([], store)],
+    exclude: (key) => key[0] === 'email',
+  });
+  const protectedKey = ['email', 'threadMessages', 'thread'];
+  olderClient.setQueryData(protectedKey, { body: 'old response' });
+  await older.flush();
+  await current.restoreQuery(protectedKey);
+  expect(currentClient.getQueryData(protectedKey)).toBeUndefined();
+  store.set.mockClear();
+  currentClient.setQueryData(protectedKey, { body: 'fresh response' });
+  expect(store.set).not.toHaveBeenCalled();
+  currentClient.setQueryData(['document', 'ordinary'], {
+    body: 'offline document',
+  });
+  expect(store.set).toHaveBeenCalledTimes(1);
+  older.dispose();
+  current.dispose();
+  olderClient.clear();
+  currentClient.clear();
+});

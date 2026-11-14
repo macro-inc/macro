@@ -11,6 +11,7 @@ import {
 
 export function CrmMobileTabs(props: {
   active: string;
+  canAccess?: boolean;
   pipelines: readonly { id: string; name: string }[];
   lists: readonly { id: string; name: string }[];
   leading?: JSX.Element;
@@ -19,8 +20,10 @@ export function CrmMobileTabs(props: {
   const activityFlag = useFeatureFlag(enableCrmActivity);
   const items = (): PillTabItem[] => [
     ...[
-      ...CRM_RECORDS,
-      ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
+      ...(props.canAccess !== false ? CRM_RECORDS : []),
+      ...(props.canAccess !== false && activityFlag().enabled
+        ? CRM_ACTIVITY_TABS
+        : []),
     ].map((record) => ({
       value: record.id,
       label: record.label,
@@ -29,7 +32,7 @@ export function CrmMobileTabs(props: {
       value: pipelineTab(pipeline.id),
       label: pipeline.name,
     })),
-    ...props.lists.map((list) => ({
+    ...(props.canAccess !== false ? props.lists : []).map((list) => ({
       value: `list:${list.id}`,
       label: list.name,
     })),

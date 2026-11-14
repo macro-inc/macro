@@ -18,7 +18,8 @@ use crate::predicate::{
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
-    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
+    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, PersistedOptimisticLayer,
+    QueuedMutation,
 };
 use crate::search::{
     SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
@@ -62,6 +63,32 @@ pub struct QueueDiagnostics {
 /// issues one `get_batch` per denormalization round, never per record.
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
+
+    /// Atomically replace only cached optimistic layers and remove their derived
+    /// projections. Preserve mutation requests, UUIDs, leases and retry metadata.
+    fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Enumerate raw normalized keys of one type, including hidden, partial and
+    /// unprojected records. The exclusive cursor is the entity ID; at most 500
+    /// keys are returned. Mutation commands are separate and remain untouched.
+    fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
+
+    /// Enumerate authoritative predicate keys even when their normalized record
+    /// is absent. Uses the same exclusive ID cursor and 500-key page bound.
+    fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<EntityKey<'static>>, Self::Error>> + MaybeSend;
 
     /// Fetches records; result is aligned with `keys` (`None` = absent).
     fn get_batch(
@@ -448,6 +475,50 @@ impl InMemoryStorage {
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .projections
+            .keys()
+            .map(|key| EntityKey(key.as_str().to_owned().into()))
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        let mut keys: Vec<_> = self
+            .records
+            .keys()
+            .filter(|key| {
+                key.typename() == Some(typename)
+                    && key
+                        .id()
+                        .is_some_and(|id| after_id.is_none_or(|after| id > after))
+            })
+            .cloned()
+            .collect();
+        keys.sort();
+        keys.truncate(limit.min(500));
+        Ok(keys)
+    }
+
     async fn visit_name_search(
         &self,
         read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
@@ -712,6 +783,20 @@ impl Storage for InMemoryStorage {
             .iter()
             .map(|key| self.optimistic_projections.get(key).cloned())
             .collect())
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+    ) -> Result<(), Self::Error> {
+        for (id, layer) in layers {
+            if let Some(entry) = self.mutations.get_mut(id) {
+                entry.optimistic = layer.clone();
+            }
+        }
+        self.optimistic_projections
+            .retain(|_, projection| !layers.iter().any(|(id, _)| *id == projection.owner));
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

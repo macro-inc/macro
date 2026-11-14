@@ -148,6 +148,8 @@ describe('favorites GraphQL mutations', () => {
         { entity: { type: 'DOCUMENT', id: 'document-1' }, favorite },
         {
           normalizedCacheOptimistic: {
+            authorizationEpoch: expect.any(Number),
+            authorityGeneration: undefined,
             uuid: expect.any(String),
             optimisticResponse: {
               setFavorite: {
@@ -226,6 +228,8 @@ describe('favorites GraphQL mutations', () => {
       },
       {
         normalizedCacheOptimistic: {
+          authorizationEpoch: expect.any(Number),
+          authorityGeneration: undefined,
           uuid: '86cc4bfe-c45a-4e28-880a-6ba5ca921d35',
           optimisticResponse: reorderData,
           linkPatches: [],

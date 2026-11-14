@@ -29,6 +29,11 @@ fragment CalendarEventTimeFields on GraphqlEventTime {
 	}
 }
 
+fragment CalendarEventIdentity on GraphqlCalendarEvent {
+	__typename
+	id
+}
+
 fragment CalendarEventFields on GraphqlCalendarEvent {
 	__typename
 	id

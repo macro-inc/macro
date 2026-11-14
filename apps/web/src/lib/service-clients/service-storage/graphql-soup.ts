@@ -18,6 +18,7 @@ import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
 import { ThrownResultError } from '@core/util/result';
+import { cacheAuthorityExchange } from '@graphql-cache/exchange/authority-exchange';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -71,7 +72,6 @@ import {
   fetchExchange,
   type Operation,
   type RequestPolicy,
-  subscriptionExchange,
 } from '@urql/core';
 import {
   type DocumentNode,
@@ -91,6 +91,8 @@ import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createCacheErrorThrottle } from './cache-error-throttle';
 import { canRetryCacheFailure, createCacheRecovery } from './cache-recovery';
+import { installCrmCacheHost } from './crm-access-cache';
+import { graphqlSoupSubscriptionExchange } from './crm-subscription-exchange';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
 import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
@@ -425,6 +427,7 @@ async function sendDssGraphqlRequest(
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
   exchanges: [
+    cacheAuthorityExchange,
     captureTraceParentExchange,
     networkRevalidationExchange(),
     traceParentExchange,
@@ -511,25 +514,6 @@ function createGraphqlSoupWebSocketClient(
   return client;
 }
 
-function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
-  return subscriptionExchange({
-    forwardSubscription(payload, request) {
-      const graphqlWsPayload = {
-        query: print(stripGraphqlSoupClientDirectives(request.query)),
-        operationName: payload.operationName,
-        variables: payload.variables,
-        extensions: payload.extensions,
-      };
-      return {
-        subscribe(sink) {
-          const unsubscribe = websocketClient.subscribe(graphqlWsPayload, sink);
-          return { unsubscribe };
-        },
-      };
-    },
-  });
-}
-
 let uncachedRealtimeClient: Client | undefined;
 let uncachedRealtimeCleanup: (() => void) | undefined;
 
@@ -552,10 +536,14 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
+      cacheAuthorityExchange,
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
-      graphqlSoupSubscriptionExchange(websocketClient),
+      graphqlSoupSubscriptionExchange(
+        websocketClient,
+        stripGraphqlSoupClientDirectives
+      ),
       traceParentExchange,
       fetchExchange,
     ],
@@ -640,6 +628,7 @@ function disposeSessionClients(): void {
   const cleanup = cachedCacheCleanup;
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
+  installCrmCacheHost(undefined);
   cachedClient = undefined;
   browserCacheClientActivated = false;
   disposeUncachedRealtimeClient();
@@ -697,6 +686,7 @@ function fallbackAfterInitializationFailure(error: unknown): void {
   const cleanup = cachedCacheCleanup;
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
+  installCrmCacheHost(undefined);
   cacheInitializationFailed = true;
   cachedClient = isFeatureEnabled(enableGraphqlSoup)
     ? getUncachedRealtimeClient()
@@ -878,6 +868,7 @@ export function getGraphqlSoupClient(): Client {
               })
         );
       host = createHost(true);
+      installCrmCacheHost(host);
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
       const graphqlWsClient = createGraphqlSoupWebSocketClient(
         subscriptionsLifecycle.connected,
@@ -898,6 +889,7 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
+          cacheAuthorityExchange,
           captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
@@ -936,7 +928,10 @@ export function getGraphqlSoupClient(): Client {
             isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
-          graphqlSoupSubscriptionExchange(graphqlWsClient),
+          graphqlSoupSubscriptionExchange(
+            graphqlWsClient,
+            stripGraphqlSoupClientDirectives
+          ),
           traceParentExchange,
           fetchExchange,
         ],
@@ -957,6 +952,7 @@ export function getGraphqlSoupClient(): Client {
       reportCacheError(error, 'initialization');
       cleanup();
       cachedCacheHost = undefined;
+      installCrmCacheHost(undefined);
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
       cacheRecovery.failed(error);

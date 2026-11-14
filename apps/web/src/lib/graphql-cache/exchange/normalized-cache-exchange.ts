@@ -1,3 +1,19 @@
+import {
+  queryAuthorization,
+  runOptimisticCacheWrite,
+} from '@app/lib/urql-solid/authorization';
+import { StaleCacheAuthorityError } from '../authority';
+import { queryNeedsCrmProof } from '../authority-scope';
+import {
+  assertResponseAuthority,
+  captureOperationResponse,
+  operationResponse,
+  responseAuthorityGeneration,
+} from '../response-authority';
+import {
+  sourceAuthorityEpoch,
+  sourceAuthorityGeneration,
+} from '../source-authority';
 import { externalWriteVersion, predatesExternalWrite } from './external-writes';
 /**
  * urql exchange backed by the normalized wasm cache (via a `CacheHost`).
@@ -112,6 +128,7 @@ import {
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
+  withoutOptimisticSnapshot,
 } from './optimistic';
 import { queryShape } from './query-shape';
 import { runSubscriptionCacheEffects } from './subscription-cache-trace';
@@ -866,13 +883,16 @@ export function normalizedCacheExchange(
       const shared = pipe(ops$, share);
 
       // Async cache reads re-inject network-bound operations here.
-      const { source: forwardQueue$, next: enqueueForward } =
+      const { source: forwardQueue$, next: forwardNext } =
         makeSubject<Operation>();
+      const enqueueForward = (op: Operation) =>
+        forwardNext(captureOperationResponse(op));
       const hydrationRequests = new Set<number>();
 
       const atMutationVersion = (op: Operation): Operation =>
         makeOperation('query', op, {
           ...op.context,
+          cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
           [QUERY_MUTATION_VERSION_CONTEXT_KEY]: currentMutationVersion(),
           externalCacheWriteVersion: externalWriteVersion(host),
           externalCacheWriteTypes:
@@ -952,9 +972,19 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
-        forward: enqueueForward,
+        forward: (op) =>
+          enqueueForward(
+            makeOperation(op.kind, op, {
+              ...op.context,
+              cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
+            })
+          ),
         writeThrough,
         cacheDocument: (op) => ({
+          authorityGeneration:
+            typeof op.context.cacheAuthorityGeneration === 'string'
+              ? op.context.cacheAuthorityGeneration
+              : undefined,
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
@@ -1082,6 +1112,10 @@ export function normalizedCacheExchange(
         try {
           const pendingRead = documentReader.read({
             opKey: op.key,
+            authorityGeneration:
+              typeof op.context.cacheAuthorityGeneration === 'string'
+                ? op.context.cacheAuthorityGeneration
+                : undefined,
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
@@ -1169,13 +1203,33 @@ export function normalizedCacheExchange(
           enqueueForward(withQueueRequestTimeout(op));
           return undefined;
         }
-        const optimistic = optimisticContextOf(op);
+        let optimistic = optimisticContextOf(op);
         if (!optimistic) {
           enqueueForward(op);
           return undefined;
         }
+        const observed = host.authority?.snapshot();
+        const protectedSnapshot = queryNeedsCrmProof(
+          queryText(op),
+          op.variables as Record<string, unknown>,
+          operationName(op)
+        );
+        const visible = queryAuthorization();
+        if (
+          visible.paused ||
+          (optimistic.authorizationEpoch ?? visible.epoch) !== visible.epoch ||
+          (protectedSnapshot &&
+            host.authority &&
+            (!observed?.ready ||
+              !optimistic.authorityGeneration ||
+              optimistic.authorityGeneration !== observed.generation))
+        ) {
+          op = withoutOptimisticSnapshot(op);
+          optimistic = optimisticContextOf(op)!;
+        }
         const args = {
           uuid: optimistic.uuid,
+          authorityGeneration: optimistic.authorityGeneration,
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
@@ -1186,6 +1240,23 @@ export function normalizedCacheExchange(
           clientMetadata: optimistic.clientMetadata,
           uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
+        const enqueueWithAuthority = (write: typeof args) =>
+          runOptimisticCacheWrite(
+            optimistic.authorizationEpoch,
+            (acceptSnapshot) =>
+              host.enqueueOptimisticMutation(
+                acceptSnapshot
+                  ? write
+                  : {
+                      ...write,
+                      data: {},
+                      linkPatches: [],
+                      revalidations: [],
+                      uncertainCalendarEventKeys: [],
+                    },
+                claim
+              )
+          );
         const now = Date.now();
         const claim = {
           owner: queueOwner,
@@ -1199,7 +1270,7 @@ export function normalizedCacheExchange(
         let enqueue: EnqueueOptimisticMutationResult;
         let linkPatchesDegraded = false;
         try {
-          enqueue = await host.enqueueOptimisticMutation(args, claim);
+          enqueue = await enqueueWithAuthority(args);
         } catch (error) {
           if (!mutationQueue.isCurrent(epoch)) {
             enqueueTelemetry.failed('storage-changed');
@@ -1247,25 +1318,22 @@ export function normalizedCacheExchange(
           console.warn(`[graphql-cache] ${degraded.message}`, error);
           options.onCacheError?.(degraded, op);
           try {
-            enqueue = await host.enqueueOptimisticMutation(
-              {
-                ...args,
-                linkPatches: [],
-                revalidations: [
-                  ...args.revalidations,
-                  // Fragment recipes are not executable queries. Their callers
-                  // provide targeted recovery queries in args.revalidations.
-                  ...args.linkPatches
-                    .filter((patch) => !patch.recordRoot)
-                    .map((patch) => ({
-                      query: patch.query,
-                      operationName: patch.operationName,
-                      variablesJson: patch.variablesJson,
-                    })),
-                ],
-              },
-              claim
-            );
+            enqueue = await enqueueWithAuthority({
+              ...args,
+              linkPatches: [],
+              revalidations: [
+                ...args.revalidations,
+                // Fragment recipes are not executable queries. Their callers
+                // provide targeted recovery queries in args.revalidations.
+                ...args.linkPatches
+                  .filter((patch) => !patch.recordRoot)
+                  .map((patch) => ({
+                    query: patch.query,
+                    operationName: patch.operationName,
+                    variablesJson: patch.variablesJson,
+                  })),
+              ],
+            });
           } catch (fallbackError) {
             if (!mutationQueue.isCurrent(epoch)) {
               enqueueTelemetry.failed('storage-changed');
@@ -1321,6 +1389,10 @@ export function normalizedCacheExchange(
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
+                authorityGeneration:
+                  typeof op.context.cacheAuthorityGeneration === 'string'
+                    ? op.context.cacheAuthorityGeneration
+                    : undefined,
                 query: queryText(op),
                 operationName: operationName(op),
                 variables: op.variables as Record<string, unknown> | undefined,
@@ -1385,6 +1457,10 @@ export function normalizedCacheExchange(
             queryStates.get(op.key) === state && activeOps.has(op.key);
           const writeArgs = {
             opKey: op.key,
+            authorityGeneration:
+              typeof op.context.cacheAuthorityGeneration === 'string'
+                ? op.context.cacheAuthorityGeneration
+                : undefined,
             query: queryText(op),
             operationName: operationName(op),
             variables: op.variables as Record<string, unknown> | undefined,
@@ -1484,7 +1560,56 @@ export function normalizedCacheExchange(
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult | undefined> {
+        const responseGeneration =
+          responseAuthorityGeneration(operationResponse(result.operation)) ??
+          sourceAuthorityGeneration(result.data);
+        if (responseGeneration)
+          result = {
+            ...result,
+            operation: makeOperation(result.operation.kind, result.operation, {
+              ...result.operation.context,
+              cacheAuthorityGeneration: responseGeneration,
+              ...(result.operation.kind === 'subscription'
+                ? {
+                    cacheSourceAuthorizationEpoch: sourceAuthorityEpoch(
+                      result.data
+                    ),
+                  }
+                : {}),
+            }),
+          };
         const op = result.operation;
+        // Queue settlement consumes successful identities before discarding an
+        // obsolete response. Every other path fences before effects or UI data.
+        if (!queueAttemptOf(op)) {
+          try {
+            await assertResponseAuthority(operationResponse(result.operation));
+            if (
+              op.kind === 'subscription' &&
+              host.authority &&
+              queryNeedsCrmProof(
+                queryText(op),
+                op.variables as Record<string, unknown>,
+                operationName(op)
+              )
+            ) {
+              if (
+                (await host.authority.current()).generation !==
+                op.context.cacheAuthorityGeneration
+              )
+                throw new StaleCacheAuthorityError();
+            }
+          } catch (error) {
+            return {
+              ...result,
+              data: undefined,
+              error: new CombinedError({
+                networkError:
+                  error instanceof Error ? error : new Error(String(error)),
+              }),
+            };
+          }
+        }
         if (
           op.kind === 'mutation' &&
           result.data != null &&
@@ -1554,6 +1679,10 @@ export function normalizedCacheExchange(
           if (result.data == null) return result;
           try {
             const hydration = await host.hydrateQuery({
+              authorityGeneration:
+                typeof op.context.cacheAuthorityGeneration === 'string'
+                  ? op.context.cacheAuthorityGeneration
+                  : undefined,
               query: cacheQueryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
@@ -1699,6 +1828,12 @@ export function normalizedCacheExchange(
       const passthrough$ = pipe(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
+        map((op) =>
+          makeOperation(op.kind, op, {
+            ...op.context,
+            cacheAuthorityGeneration: host.authority?.snapshot()?.generation,
+          })
+        ),
         tap((op) => {
           if (op.kind === 'subscription') {
             subscriptionGenerations.set(op.key, {});
@@ -1716,15 +1851,62 @@ export function normalizedCacheExchange(
         })
       );
 
+      async function admitNetworkResult(result: OperationResult | undefined) {
+        if (!result || result.data == null) return result;
+        try {
+          await assertResponseAuthority(operationResponse(result.operation));
+          if (
+            host.authority &&
+            queryNeedsCrmProof(
+              queryText(result.operation),
+              result.operation.variables as Record<string, unknown>,
+              operationName(result.operation)
+            )
+          ) {
+            const current = await host.authority.current();
+            if (
+              current.generation !==
+              result.operation.context.cacheAuthorityGeneration
+            )
+              throw new StaleCacheAuthorityError();
+          }
+          return result;
+        } catch (error) {
+          return {
+            ...result,
+            data: undefined,
+            error: queueAttemptOf(result.operation)
+              ? result.error
+              : new CombinedError({
+                  networkError:
+                    error instanceof Error ? error : new Error(String(error)),
+                }),
+          };
+        }
+      }
+
       const forwarded$ = pipe(
         merge([forwardQueue$, passthrough$]),
         forward,
-        mergeMap((result) => fromPromise(writeThrough(result))),
+        mergeMap((result) =>
+          fromPromise(writeThrough(result).then(admitNetworkResult))
+        ),
         filter((result): result is OperationResult => result !== undefined)
       );
 
       if (!host.disabled) {
         mutationQueue.start();
+        host.authority?.onChanged(() => {
+          cacheGeneration += 1;
+          liveQueries.clear();
+          documentReader.clear();
+          for (const state of queryStates.values()) {
+            if (state.retainedReplacementFallback)
+              state.retainedReplacementFallback.invalidated = true;
+            state.retainedReplacementFallback = undefined;
+            state.cacheReadVersion += 1;
+          }
+        });
         // Includes BFCache restoration, even with no active query keys. The
         // host gates claims on initialization; durable leases still decide
         // which head is runnable after reconnecting.

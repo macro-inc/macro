@@ -1,4 +1,4 @@
-//! Paginated agent activity, authorized through session visibility alone.
+//! Paginated agent activity, requiring session visibility and per-row CRM access.
 use super::AgentSessionApiError;
 use crate::domain::activity::{AgentActivityCursor, AgentActivityPage};
 use activity::domain::ports::AgentActivityReads;
@@ -97,7 +97,7 @@ pub fn router<
         .with_state(state)
 }
 
-/// Read activity using the same visibility capability as the session transcript.
+/// Read session-visible activity after filtering CRM rows for the requester.
 #[utoipa::path(get, path = "/agent-sessions/{session_id}/activity", tag = "agent-sessions", operation_id = "get_agent_session_activity",
     params(("session_id" = Uuid, Path), AgentActivityQuery),
     responses((status = 200, body = AgentActivityPage), (status = 400), (status = 401), (status = 403)))]

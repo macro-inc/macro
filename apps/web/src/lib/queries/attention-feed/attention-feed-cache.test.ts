@@ -1,3 +1,5 @@
+import { TEST_AUTHORITY_GENERATION } from '@graphql-cache/authority-fixture';
+import { markSourceAuthority } from '@graphql-cache/source-authority';
 import { describe, expect, it } from 'vitest';
 import {
   compareAttentionFeedEntries,
@@ -203,7 +205,7 @@ describe('writeAttentionFeedPatches', () => {
       fake.host,
       cachedQuery,
       [firstPage, secondPage],
-      [upserted(at('new', 40))]
+      markSourceAuthority([upserted(at('new', 40))], TEST_AUTHORITY_GENERATION)
     );
 
     expect(placed).toBe(true);
@@ -225,7 +227,10 @@ describe('writeAttentionFeedPatches', () => {
         fake.host,
         cachedQuery,
         [firstPage],
-        [upserted(at('gap', 20))]
+        markSourceAuthority(
+          [upserted(at('gap', 20))],
+          TEST_AUTHORITY_GENERATION
+        )
       )
     ).toBe(true);
     expect(fake.writes[0].data).toEqual(

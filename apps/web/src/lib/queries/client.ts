@@ -7,6 +7,7 @@ import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
+import { crmProtectedQueryKey } from './crm-cache-scope';
 import { traceQueriesToFlows } from './flow-trace';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
@@ -51,6 +52,7 @@ const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 export const queryPersistence = setupQueryPersistence({
   queryClient,
   scopes: createQueryPersistenceScopes(buster),
+  exclude: crmProtectedQueryKey,
 });
 
 // Subscribe to query cache events for automatic normalization of soup entities

@@ -437,7 +437,11 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   reloadForNewerBuild: mocks.reloadForNewerBuild,
 }));
-vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isPlatform: () => false,
+  isTauri: () => mocks.tauri,
+}));
 // Recovery lifecycle is covered with its real store in local-drafts.test.ts.
 vi.mock('@queries/email/local-drafts', () => ({
   localDraftQueueLifecycle: () => ({}),
@@ -445,6 +449,8 @@ vi.mock('@queries/email/local-drafts', () => ({
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
 }));
+// Permission-owner binding and HTTP proofs use their real adapters in crm-access-cache.test.ts.
+vi.mock('./crm-access-cache', () => ({ installCrmCacheHost: vi.fn() }));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
     const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
@@ -474,22 +480,33 @@ vi.mock('@graphql-cache/scope', () => ({
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    error: mocks.telemetryError,
-    warn: mocks.telemetryWarn,
-    captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
-      work({
-        run: <T>(work: () => T) => work(),
-        event: vi.fn(),
-        setAttr: vi.fn(),
-        injectTraceHeaders: (headers: Record<string, string>) => {
-          headers.traceparent = mocks.traceparent;
-        },
-      }),
-  },
-}));
+vi.mock('@macro-inc/observability', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@macro-inc/observability')>();
+  const span = Object.assign(Object.create(actual.NOOP_SPAN), {
+    injectTraceHeaders: (headers: Record<string, string>) => {
+      headers.traceparent = mocks.traceparent;
+    },
+  });
+  return {
+    ...actual,
+    Telemetry: Object.assign(Object.create(actual.Telemetry), {
+      error: mocks.telemetryError,
+      warn: mocks.telemetryWarn,
+      span: (
+        _name: string,
+        optionsOrWork?: unknown,
+        work?: (span: typeof actual.NOOP_SPAN) => Promise<unknown>
+      ) => {
+        const operation =
+          typeof optionsOrWork === 'function'
+            ? (optionsOrWork as typeof work)
+            : work;
+        return operation ? operation(span) : span;
+      },
+    }),
+  };
+});
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),

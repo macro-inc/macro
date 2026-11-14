@@ -1,7 +1,15 @@
+import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreviewItem } from '../types';
 
+const policy = vi.hoisted(() => ({ allowed: true, graphql: true }));
+const getGraphqlPreviewMock = vi.hoisted(() => vi.fn());
+const fetchRestPreviewMock = vi.hoisted(() => vi.fn());
+const fetchQueryMock = vi.hoisted(() => vi.fn());
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => policy.allowed,
+}));
 const useQueryMock = vi.hoisted(() => vi.fn());
 const useQueryOptions = vi.hoisted(() => [] as Array<() => unknown>);
 const getQueryDataMock = vi.hoisted(() => vi.fn());
@@ -20,7 +28,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
+  isFeatureEnabled: () => policy.graphql,
   LOCAL_ONLY: false,
 }));
 
@@ -30,7 +38,7 @@ vi.mock('@tanstack/solid-query', () => ({
 
 vi.mock('../../client', () => ({
   queryClient: {
-    fetchQuery: vi.fn(),
+    fetchQuery: fetchQueryMock,
     getQueryData: getQueryDataMock,
     invalidateQueries: invalidateQueriesMock,
     setQueryData: setQueryDataMock,
@@ -44,13 +52,13 @@ vi.mock('../dataloader', () => ({
 vi.mock('../fetchers', () => ({
   defaultNameTransform: (value: unknown) => value,
   fetchMessageContext: vi.fn(),
-  fetchRestPreviewBatch: vi.fn(),
+  fetchRestPreviewBatch: fetchRestPreviewMock,
 }));
 
 vi.mock('../graphql', () => ({
   canWriteGraphqlPreviewCache: canWriteGraphqlPreviewCacheMock,
   createGraphqlItemPreviewQuery: createGraphqlItemPreviewQueryMock,
-  getGraphqlItemPreview: vi.fn(),
+  getGraphqlItemPreview: getGraphqlPreviewMock,
   isGraphqlPreviewItem: () => true,
   setGraphqlPreviewFileType: setGraphqlPreviewFileTypeMock,
   setGraphqlPreviewName: setGraphqlPreviewNameMock,
@@ -58,6 +66,7 @@ vi.mock('../graphql', () => ({
 }));
 
 const {
+  getItemPreview,
   invalidatePreview,
   setPreviewFileType,
   setPreviewName,
@@ -372,3 +381,42 @@ describe('preview transport facade', () => {
     expect(options.predicate({ isActive: () => true })).toBe(true);
   });
 });
+
+for (const transport of ['graphql', 'fallback', 'rest'] as const) {
+  it(`discards a late imperative CRM mention from ${transport} after authority changes`, async () => {
+    policy.allowed = true;
+    policy.graphql = transport !== 'rest';
+    let resolve!: (value: unknown) => void;
+    const delayed = new Promise((done) => {
+      resolve = done;
+    });
+    getGraphqlPreviewMock.mockReturnValue(
+      transport === 'fallback' ? undefined : delayed
+    );
+    fetchRestPreviewMock.mockReturnValue(delayed);
+    fetchQueryMock.mockReturnValue(delayed);
+    const pending = getItemPreview({
+      type: 'crm_contact',
+      id: 'private-contact',
+    });
+    await Promise.resolve();
+    const resume = beginQueryAuthorizationReset();
+    policy.allowed = false;
+    const record = {
+      ...preview,
+      id: 'private-contact',
+      type: 'crm_contact',
+      name: 'Private record',
+    };
+    resolve(
+      transport === 'fallback' ? new Map([['private-contact', record]]) : record
+    );
+    expect(await pending).toMatchObject({
+      id: 'private-contact',
+      access: 'no_access',
+    });
+    resume();
+    policy.allowed = true;
+    policy.graphql = true;
+  });
+}

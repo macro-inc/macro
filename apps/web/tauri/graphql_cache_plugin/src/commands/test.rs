@@ -27,3 +27,81 @@ fn hydration_results_preserve_the_native_advancement_bit() {
         }
     }
 }
+
+#[test]
+fn grouped_cache_context_preserves_top_level_ipc_arguments_and_errors() {
+    let app = tauri::test::mock_builder()
+        .manage(crate::CacheState::default())
+        .invoke_handler(tauri::generate_handler![
+            super::graphql_cache_read,
+            super::graphql_cache_rollback_optimistic_write,
+        ])
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+
+    for (command, body) in [
+        (
+            "graphql_cache_read",
+            serde_json::json!({"query": "{ user { id } }"}),
+        ),
+        (
+            "graphql_cache_rollback_optimistic_write",
+            serde_json::json!({
+                "transactionId": "queued-write",
+                "leaseOwner": "native-owner",
+                "leaseGeneration": "1",
+                "error": "Rejected",
+            }),
+        ),
+    ] {
+        for authority in [
+            None,
+            Some(serde_json::Value::Null),
+            Some(serde_json::json!({
+                "generation": "00000000-0000-0000-0000-000000000001",
+                "requireProof": true,
+            })),
+            Some(serde_json::json!({"generation": "invalid", "requireProof": true})),
+        ] {
+            let malformed = authority
+                .as_ref()
+                .is_some_and(|value| value["generation"] == "invalid");
+            let mut body = body.clone();
+            if let Some(authority) = authority {
+                body["authority"] = authority;
+            }
+            let response = tauri::test::get_ipc_response(
+                &webview,
+                tauri::webview::InvokeRequest {
+                    cmd: command.into(),
+                    callback: tauri::ipc::CallbackFn(0),
+                    error: tauri::ipc::CallbackFn(1),
+                    url: if cfg!(any(windows, target_os = "android")) {
+                        "http://tauri.localhost"
+                    } else {
+                        "tauri://localhost"
+                    }
+                    .parse()
+                    .unwrap(),
+                    body: tauri::ipc::InvokeBody::Json(body),
+                    headers: Default::default(),
+                    invoke_key: tauri::test::INVOKE_KEY.into(),
+                },
+            );
+            let error = response.expect_err("the cache was not initialized");
+            if malformed {
+                assert!(error.as_str().unwrap().starts_with(&format!(
+                    "invalid args `authority` for command `{command}`:"
+                )));
+            } else {
+                assert_eq!(
+                    error,
+                    "graphql cache not initialized (call graphql_cache_init first)"
+                );
+            }
+        }
+    }
+}

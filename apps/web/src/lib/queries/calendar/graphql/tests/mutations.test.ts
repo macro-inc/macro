@@ -1,15 +1,29 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheAuthorityExchange } from '@graphql-cache/exchange/authority-exchange';
+import {
+  notifyOptimisticMutationEnqueued,
+  withOptimisticMutationDisposition,
+} from '@graphql-cache/exchange/optimistic';
 import {
   type CalendarRangeCacheArgs,
+  type ReadRecordsByKeysResult,
   validateRecordSelectionKeys,
 } from '@graphql-cache/index';
+import { rememberResponseAuthority } from '@graphql-cache/response-authority';
 import type {
   CalendarEventFieldsFragment,
   CalendarMutationPayloadFieldsFragment,
   CalendarOccurrenceItemFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
-import { type Client, CombinedError } from '@urql/core';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  type Exchange,
+} from '@urql/core';
 import { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { filter, fromPromise, mergeMap, pipe } from 'wonka';
 import {
   CalendarMutationError,
   committedEvent,
@@ -24,6 +38,7 @@ import { attendee, graphqlEvent, graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
+  getGraphqlSoupCacheHost: vi.fn(),
 }));
 
 const DISPOSITION = 'normalizedCacheMutationDisposition';
@@ -72,20 +87,27 @@ function fakeHost(
       changed: [],
     })),
     // Bounded like the worker and native hosts.
-    readRecordsByKeys: vi.fn(async ({ keys }: { keys: string[] }) => ({
-      revision: '1' as never,
-      records: validateRecordSelectionKeys(keys).flatMap((recordKey) => {
-        const record = records.get(recordKey);
-        return record ? [{ recordKey, record }] : [];
-      }),
-    })),
+    readRecordsByKeys: vi.fn(
+      async ({
+        keys,
+      }: {
+        keys: string[];
+      }): Promise<ReadRecordsByKeysResult> => ({
+        revision: '1' as never,
+        records: validateRecordSelectionKeys(keys).flatMap((recordKey) => {
+          const record = records.get(recordKey);
+          return record ? [{ recordKey, record }] : [];
+        }),
+      })
+    ),
   };
 }
 
 function fakeClient(
   disposition: Disposition,
   payload?: Partial<CalendarMutationPayloadFieldsFragment>,
-  beforeResult?: () => void
+  beforeResult?: () => void,
+  retired = false
 ) {
   const calls: Array<{
     variables: { input: Record<string, unknown> };
@@ -108,7 +130,7 @@ function fakeClient(
         toPromise: async () => ({
           operation: { context },
           data:
-            disposition === 'failed'
+            disposition === 'failed' || retired
               ? undefined
               : {
                   [field]: {
@@ -602,6 +624,163 @@ describe('executeGraphqlDelete', () => {
 describe('executeGraphqlCreate', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it.each(['pending', 'missing', 'read-failed'] as const)(
+    'acknowledges creation without an event when identity is %s',
+    async (state) => {
+      const localId = '00000000-0000-4000-8000-000000000103';
+      const host = fakeHost(undefined, []);
+      host.readRecordsByKeys.mockResolvedValue({
+        revision: '1' as never,
+        records: [
+          {
+            recordKey: `GraphqlCalendarEvent:${localId}`,
+            record: { __typename: 'GraphqlCalendarEvent', id: localId },
+            identity: { mutationUuid: localId, pending: true },
+          },
+        ],
+      });
+      if (state === 'missing')
+        host.readRecordsByKeys.mockResolvedValue({
+          revision: '1' as never,
+          records: [],
+        });
+      if (state === 'read-failed')
+        host.readRecordsByKeys.mockRejectedValue(
+          new Error('cache unavailable')
+        );
+      const { client } = fakeClient('committed', undefined, undefined, true);
+      const created = executeGraphqlCreate(
+        {
+          idempotencyKey: localId,
+          title: 'Authored title',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-10-07',
+            endDate: '2026-10-08',
+          },
+        },
+        client,
+        host
+      );
+      await expect(created).resolves.toEqual({
+        outcome: { kind: 'committed' },
+      });
+    }
+  );
+
+  it('recovers the committed identity after response retirement and addresses the next edit to it', async () => {
+    const localId = '00000000-0000-4000-8000-000000000101';
+    const serverId = '00000000-0000-4000-8000-000000000102';
+    let generation = 'allowed';
+    const host = fakeHost(undefined, []);
+    const writes: Array<Record<string, unknown>> = [];
+    const terminal: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        filter((operation) => operation.kind !== 'teardown'),
+        mergeMap((operation) =>
+          fromPromise(
+            (async () => {
+              if (operation.kind === 'query')
+                return {
+                  operation,
+                  data: { user: { calendars: [] } },
+                  stale: false,
+                  hasNext: false,
+                };
+              const input = operation.variables?.input;
+              if (!input) throw new Error('calendar mutation requires input');
+              writes.push(input);
+              notifyOptimisticMutationEnqueued(operation);
+              if (writes.length === 1) {
+                await operation.context.fetch?.('/graphql');
+                // The durable settlement retained only its identity before the
+                // old response crosses the outermost admission check.
+                host.readRecordsByKeys.mockResolvedValueOnce({
+                  revision: '2' as never,
+                  records: [
+                    {
+                      recordKey: `GraphqlCalendarEvent:${localId}`,
+                      record: {
+                        __typename: 'GraphqlCalendarEvent',
+                        id: serverId,
+                      },
+                      identity: { mutationUuid: localId, pending: false },
+                    },
+                  ],
+                });
+                generation = 'denied';
+              }
+              return withOptimisticMutationDisposition(
+                {
+                  operation,
+                  data:
+                    writes.length === 1
+                      ? {
+                          createCalendarEvent: {
+                            event: graphqlEvent({
+                              id: serverId,
+                              title: 'retired server content',
+                            }),
+                            occurrences: [],
+                          },
+                        }
+                      : {
+                          updateCalendarEvent: { event: null, occurrences: [] },
+                        },
+                  stale: false,
+                  hasNext: false,
+                },
+                { kind: 'committed', transactionId: String(writes.length) }
+              );
+            })()
+          )
+        )
+      );
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [cacheAuthorityExchange, terminal],
+      fetch: async () => {
+        const response = new Response('{}');
+        rememberResponseAuthority(response, generation, async () => {
+          if (generation !== 'allowed') throw new StaleCacheAuthorityError();
+        });
+        return response;
+      },
+    });
+    const { event, outcome } = await executeGraphqlCreate(
+      {
+        idempotencyKey: localId,
+        title: 'Authored title',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-10-07',
+          endDate: '2026-10-08',
+        },
+      },
+      client,
+      host
+    );
+
+    expect(outcome).toEqual({ kind: 'committed' });
+    if (!event) throw new Error('expected a recovered calendar identity');
+    expect(event.id).toBe(serverId);
+    expect(event.title).toBe('Authored title');
+    expect(host.readRecordsByKeys).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fragmentName: 'CalendarEventIdentity',
+        keys: [`GraphqlCalendarEvent:${localId}`],
+      })
+    );
+    await executeGraphqlUpdate(
+      host,
+      { eventId: event.id, patch: { title: 'Later edit' } },
+      client
+    );
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toMatchObject({ eventId: serverId, title: 'Later edit' });
+  });
+
   it.each(['google_meet', 'microsoft_teams'] as const)(
     'shows a %s event at once under its idempotency key',
     async (conference) => {
@@ -650,7 +829,7 @@ describe('executeGraphqlCreate', () => {
           referenceFields: ['GraphqlCalendarOccurrence.eventId'],
         },
       ]);
-      expect(event.id).toBe('server-1');
+      expect(event?.id).toBe('server-1');
     }
   );
 
@@ -721,6 +900,7 @@ describe('executeGraphqlCreate', () => {
     const host = fakeHost(undefined, []);
 
     expect(outcome).toEqual({ kind: 'queued' });
+    if (!event) throw new Error('expected a queued calendar event');
     await expect(
       executeGraphqlUpdate(
         host,
@@ -766,6 +946,7 @@ describe('executeGraphqlCreate', () => {
       client
     );
 
+    if (!event) throw new Error('expected a queued calendar event');
     expect(event.id).toBe(clientId);
     await expect(
       executeGraphqlUpdate(

@@ -1,3 +1,9 @@
+import {
+  assertResponseAuthority,
+  hasResponseAuthority,
+  queuedSettlementRequest,
+  responseAuthorityGeneration,
+} from '../response-authority';
 /**
  * Strict runner for the durable optimistic mutation queue.
  *
@@ -181,12 +187,15 @@ export function withQueueRequestTimeout(op: Operation): Operation {
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
       const send = () =>
-        operationFetch(input, {
-          ...init,
-          signal: init?.signal
-            ? anyAbortSignal([init.signal, timeoutSignal])
-            : timeoutSignal,
-        });
+        operationFetch(
+          input,
+          queuedSettlementRequest({
+            ...init,
+            signal: init?.signal
+              ? anyAbortSignal([init.signal, timeoutSignal])
+              : timeoutSignal,
+          })
+        );
       const response = await (attempt?.telemetry?.run(send) ?? send());
       if (attempt) attempt.response = response;
       return response;
@@ -304,6 +313,7 @@ export type MutationQueueRunnerDeps = {
   ) => Promise<OperationResult | undefined>;
   /** Query text and variables the cache normalizes `op`'s data against. */
   cacheDocument: (op: Operation) => {
+    authorityGeneration?: string;
     query: string;
     operationName?: string;
     variables?: Record<string, unknown>;
@@ -913,8 +923,8 @@ export function createMutationQueueRunner(
       | 'permanently-failed' = 'queued';
     let outcome: MutationAttemptOutcome = 'detached';
     let details: MutationAttemptDetails = {};
+    const response = result.error?.response ?? attempt.response;
     try {
-      const response = result.error?.response ?? attempt.response;
       const httpServerFailure = (response?.status ?? 0) >= 500;
       // A valid GraphQL payload can arrive over HTTP 5xx without an
       // urql error. Never commit it or bypass the retry policy.
@@ -1021,10 +1031,21 @@ export function createMutationQueueRunner(
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
-          { ...deps.cacheDocument(op), data: result.data }
+          {
+            ...deps.cacheDocument(op),
+            authorityGeneration: hasResponseAuthority(response)
+              ? responseAuthorityGeneration(response)
+              : deps.cacheDocument(op).authorityGeneration,
+            data: result.data,
+          }
         );
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
+        try {
+          await assertResponseAuthority(response);
+        } catch {
+          result = { ...result, data: undefined };
+        }
         for (const error of committed.identityErrors ?? []) {
           try {
             options.onCacheError?.(new Error(error), op);
@@ -1097,6 +1118,11 @@ export function createMutationQueueRunner(
         );
       }
       attemptTelemetry.finish(outcome, details);
+    }
+    try {
+      await assertResponseAuthority(response);
+    } catch {
+      result = { ...result, data: undefined };
     }
     return withOptimisticMutationDisposition(
       result,

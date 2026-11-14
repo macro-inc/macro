@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testAuthority } from '../authority-fixture';
 
 const { invoke, listen } = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args: Record<string, unknown> = {}) => {
+    if (command === 'graphql_cache_current_authority')
+      return Promise.resolve(testAuthority(String(args.identity)));
+    const { authority: _, authorityGeneration: _generation, ...request } = args;
+    return invoke(command, request);
+  },
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit: vi.fn() }));
 
 import {
@@ -187,4 +195,15 @@ describe('native retained view transport', () => {
     ).toBe(false);
     host.dispose();
   });
+});
+
+vi.mock('../authority', async (original) => {
+  const actual = await original<typeof import('../authority')>();
+  return {
+    ...actual,
+    createAuthorityObserver: (identity: string) => ({
+      ...actual.createAuthorityObserver(identity),
+      verified: () => true,
+    }),
+  };
 });

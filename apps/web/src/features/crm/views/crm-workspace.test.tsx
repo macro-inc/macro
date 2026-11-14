@@ -12,6 +12,7 @@ import { CrmWorkspaceView } from './crm-workspace';
 
 const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
+  canAccess: (): boolean => true,
   pipelinesEnabled: true,
   listsEnabled: true,
   touch: true,
@@ -68,6 +69,7 @@ vi.mock('@entity', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Layer: (props: ParentProps) => props.children,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Tooltip: (props: ParentProps) => props.children,
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
@@ -236,6 +238,7 @@ vi.mock('../context/workspace-context', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    canAccess: () => fixture.canAccess(),
     pipelinesEnabled: () => () => fixture.pipelinesEnabled,
     listsEnabled: () => () => fixture.listsEnabled,
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
@@ -272,6 +275,7 @@ vi.mock('./apply-view', () => ({
 }));
 
 afterEach(() => {
+  fixture.canAccess = () => true;
   cleanup();
   fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
@@ -572,4 +576,25 @@ it('leaves CRM settings when the route moves elsewhere, as on Back', () => {
   expect(screen.getByText('Sales record company:acme')).toBeTruthy();
   record.close();
   expect(screen.getByText('Sales table')).toBeTruthy();
+});
+
+it('retains an individually shared pipeline while denying the records workspace', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  const workspace = setup('pipeline:sales');
+  expect(screen.getByText('Sales table')).toBeTruthy();
+  setAllowed(false);
+  expect(screen.getByText('Sales table')).toBeTruthy();
+  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+  expect(tabs.queryByRole('tab', { name: 'Companies' })).toBeNull();
+  expect(tabs.queryByText('Favorites')).toBeNull();
+  workspace.activeTab();
+  fixture.workspace &&
+    (fixture.workspace as { setActiveTab(tab: string): void }).setActiveTab(
+      'active'
+    );
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setAllowed(true);
+  expect(screen.getByText('Record list')).toBeTruthy();
 });

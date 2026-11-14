@@ -11,6 +11,7 @@ import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 export function prepareCrmVisibilityWrite() {
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
+  const authorityGeneration = host?.authority?.snapshot()?.generation;
   const isCurrent = () =>
     client === getGraphqlSoupClient() && host === getGraphqlSoupCacheHost();
   return {
@@ -47,6 +48,7 @@ export function prepareCrmVisibilityWrite() {
         });
       try {
         await host.writeQuery({
+          authorityGeneration,
           query: stringifyDocument(CrmVisibilityCacheWriteDocument),
           operationName: 'CrmVisibilityCacheWrite',
           data: {

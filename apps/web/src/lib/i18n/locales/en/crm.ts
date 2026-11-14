@@ -1,4 +1,8 @@
 export default {
+  accessDenied: "You don't have access to CRM",
+  accessDeniedHelp: 'Ask a team admin or owner to restore your access.',
+  memberAccess: 'CRM access',
+  memberAccessFor: 'CRM access for {{name}}',
   email: 'Email',
   addEmail: 'Add email',
   manageContactEmail: 'Email options for {{email}}',

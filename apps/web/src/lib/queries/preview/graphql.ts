@@ -6,6 +6,7 @@ import {
   selectRecords,
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
@@ -389,7 +390,10 @@ async function writeGraphqlPreviewCache(
 ): Promise<void> {
   const host = getGraphqlSoupCacheHost();
   if (!host || host.disabled) return;
-  await host.writeQuery(args);
+  await host.writeQuery({
+    ...args,
+    authorityGeneration: host.authority?.snapshot()?.generation,
+  });
 }
 
 /** Optimistically patches a display name in the normalized GraphQL cache. */
@@ -576,6 +580,7 @@ function startPreviewBatch(
     }));
     const [cached, setCached] = createSignal(new Map<string, PreviewItem>());
     const host = getGraphqlSoupCacheHost();
+    const epoch = queryAuthorization().epoch;
     let disposed = false;
     onCleanup(() => {
       disposed = true;
@@ -589,7 +594,12 @@ function startPreviewBatch(
         items.map((item) => normalizedRecordKey(item)!)
       )
         .then(({ records }) => {
-          if (disposed) return;
+          if (
+            disposed ||
+            queryAuthorization().epoch !== epoch ||
+            queryAuthorization().paused
+          )
+            return;
           const previews = new Map<string, PreviewItem>();
           for (const { recordKey, record } of records) {
             const preview = graphqlRecordToPreview(record);
@@ -621,18 +631,23 @@ function startPreviewBatch(
 type PreviewBatch = ReturnType<typeof startPreviewBatch>['value'];
 const previewBatchers = new WeakMap<
   Client,
-  Map<
-    boolean,
-    ReturnType<typeof createLivePreviewBatcher<ItemEntity, PreviewBatch>>
-  >
+  {
+    epoch: number;
+    selections: Map<
+      boolean,
+      ReturnType<typeof createLivePreviewBatcher<ItemEntity, PreviewBatch>>
+    >;
+  }
 >();
 
 function previewBatcher(client: Client, includeProperties: boolean) {
-  let selections = previewBatchers.get(client);
-  if (!selections) {
-    selections = new Map();
-    previewBatchers.set(client, selections);
+  const epoch = queryAuthorization().epoch;
+  let current = previewBatchers.get(client);
+  if (!current || current.epoch !== epoch) {
+    current = { epoch, selections: new Map() };
+    previewBatchers.set(client, current);
   }
+  const selections = current.selections;
   let batcher = selections.get(includeProperties);
   if (!batcher) {
     batcher = createLivePreviewBatcher<ItemEntity, PreviewBatch>({
@@ -671,8 +686,10 @@ export function createGraphqlItemPreviewQuery(
   );
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
-  const isEnabled = () => enabled() && isGraphqlPreviewItem(item());
+  const isEnabled = () =>
+    enabled() && !queryAuthorization().paused && isGraphqlPreviewItem(item());
   createComputed(() => {
+    queryAuthorization().epoch;
     const current = item();
     setGroup(undefined);
     ready = Promise.resolve(undefined);
@@ -692,6 +709,7 @@ export function createGraphqlItemPreviewQuery(
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
   const data = () => {
+    if (queryAuthorization().paused) return;
     const preview = livePreview() ?? cachedPreview();
     if (!preview || preview.loading || preview.access !== 'access')
       return preview;

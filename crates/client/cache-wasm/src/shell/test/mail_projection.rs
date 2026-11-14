@@ -16,7 +16,7 @@ fn mutation_data() -> serde_json::Value {
     }})
 }
 
-fn enqueue(engine: &CacheEngine) -> js_sys::Promise {
+fn enqueue(engine: &CacheEngine, admission: JsValue) -> js_sys::Promise {
     engine.enqueue_optimistic_mutation(
         None,
         "00000000-0000-4000-8000-000000000007".into(),
@@ -33,6 +33,7 @@ fn enqueue(engine: &CacheEngine) -> js_sys::Promise {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        admission,
     )
 }
 
@@ -67,8 +68,9 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
             Some("mail-viewer".into()),
         ))
         .await;
+        let admission = test_admission(&engine).await;
         let claim: Option<serde_json::Value> = if matches!(path, WritePath::Commit) {
-            Some(from_js(resolved(enqueue(&engine)).await))
+            Some(from_js(resolved(enqueue(&engine, admission.clone())).await))
         } else {
             None
         };
@@ -90,7 +92,7 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                 Some("mail-viewer".into()),
                 JsValue::UNDEFINED,
             ),
-            WritePath::Enqueue => enqueue(&engine),
+            WritePath::Enqueue => enqueue(&engine, admission.clone()),
             WritePath::Commit => {
                 let claim = claim.unwrap();
                 engine.commit_optimistic_write(
@@ -104,6 +106,7 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                     None,
                     js(serde_json::json!({"input":{"threadId":THREAD_ID}})),
                     js(mutation_data()),
+                    admission,
                 )
             }
         };

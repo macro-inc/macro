@@ -1,3 +1,4 @@
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
@@ -12,6 +13,7 @@ import {
   type AnyVariables,
   type Client,
   CombinedError,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
@@ -117,6 +119,10 @@ export type QueryRevalidation = {
 };
 
 export type OptimisticMutationOptions = {
+  /** Authority epoch in which cached source records were read. */
+  snapshotRejected?: boolean;
+  authorizationEpoch?: number;
+  authorityGeneration?: string;
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -148,6 +154,9 @@ export type OptimisticPatch<T> = T extends readonly (infer Item)[]
       : T;
 
 export type OptimisticMutationContext<TData = unknown> = {
+  snapshotRejected?: boolean;
+  authorizationEpoch?: number;
+  authorityGeneration?: string;
   uuid: string;
   optimisticResponse: TData;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -160,7 +169,7 @@ export type OptimisticMutationContext<TData = unknown> = {
 
 /** Caller-facing disposition of one durable optimistic mutation submission. */
 export type OptimisticMutationDisposition<TData> =
-  | { kind: 'committed'; data: TData }
+  | { kind: 'committed'; data: TData | undefined }
   | { kind: 'queued'; transactionId: string }
   | { kind: 'permanently-failed'; error: CombinedError };
 
@@ -175,20 +184,43 @@ export type OptimisticMutationDispositionMetadata =
     }
   | { kind: 'permanently-failed'; transactionId?: string };
 
+/** Preserve command/identity intent while refusing copied optimistic response data. */
+export function withoutOptimisticSnapshot(operation: Operation): Operation {
+  const context = optimisticContextOf(operation);
+  if (!context) return operation;
+  return makeOperation(operation.kind, operation, {
+    ...operation.context,
+    [OPTIMISTIC_MUTATION_CONTEXT_KEY]: {
+      ...context,
+      snapshotRejected: true,
+      optimisticResponse: undefined,
+      linkPatches: [],
+      revalidations: [],
+      uncertainCalendarEventKeys: [],
+    },
+  });
+}
+
 /** Returns a copy of an operation result carrying its queue disposition. */
 export function withOptimisticMutationDisposition(
   result: OperationResult,
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
+  const optimistic = optimisticContextOf(result.operation);
+  const authority = queryAuthorization();
+  const admitted =
+    !optimistic?.snapshotRejected &&
+    !authority.paused &&
+    (optimistic?.authorizationEpoch ?? authority.epoch) === authority.epoch;
   const queuedData =
-    disposition.kind === 'queued'
+    admitted && disposition.kind === 'queued'
       ? optimisticContextOf(result.operation)?.optimisticResponse
       : undefined;
   return {
     ...result,
     ...(disposition.kind === 'queued'
       ? {
-          data: queuedData ?? result.data,
+          data: admitted ? (queuedData ?? result.data) : undefined,
           // A durable queued mutation is an accepted local write. Preserve the
           // network failure in queue diagnostics, not as a caller-facing error
           // that would roll back UI state or block the next edit.
@@ -232,7 +264,7 @@ export function optimisticMutationDispositionOf<
       transactionId: metadata.replacementTransactionId,
     };
   }
-  if (metadata.kind === 'committed' && result.data != null) {
+  if (metadata.kind === 'committed') {
     return { kind: 'committed', data: result.data };
   }
   if (metadata.kind === 'permanently-failed') {
@@ -517,6 +549,9 @@ export function optimisticMutationContext<TData>(
     uuid,
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
+    authorizationEpoch:
+      options.authorizationEpoch ?? queryAuthorization().epoch,
+    authorityGeneration: options.authorityGeneration,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
       : undefined,
@@ -567,6 +602,8 @@ export function optimisticContextOf(
       uuid: context.uuid,
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
+      authorizationEpoch: context.authorizationEpoch,
+      authorityGeneration: context.authorityGeneration,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

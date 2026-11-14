@@ -1,5 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
+import {
+  markSourceAuthority,
+  sourceAuthorityGeneration,
+} from '@graphql-cache/source-authority';
 import type { Client } from '@urql/core';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
@@ -149,6 +153,12 @@ export function createLiveAttentionFeed<
 
   const applyPatches = (patches: readonly Patch[]) => {
     options.onPatches?.(patches);
+    const incoming = sourceAuthorityGeneration(patches);
+    if (pending.length && sourceAuthorityGeneration(pending) !== incoming) {
+      pending = [];
+      fireAndForget(refetch(), surface);
+    }
+    if (!pending.length) markSourceAuthority(pending, incoming);
     pending.push(...patches);
     fireAndForget(writePending(), surface);
   };

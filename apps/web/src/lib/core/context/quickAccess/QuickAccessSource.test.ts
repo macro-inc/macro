@@ -74,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
   crmEnabled: (): boolean => true,
+  crmAllowed: (): boolean => true,
   projectsEnabled: (): boolean => true,
   graphqlEnabled: (): boolean => true,
   cacheEnabled: true,
@@ -83,6 +84,9 @@ const mocks = vi.hoisted(() => ({
       () => UseQueryResult<unknown[]>
     >
   >,
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => mocks.crmAllowed(),
 }));
 vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
@@ -286,6 +290,7 @@ beforeEach(() => {
   mocks.databases = [];
   mocks.schedules = [];
   mocks.crmEnabled = () => true;
+  mocks.crmAllowed = () => true;
   mocks.projectsEnabled = () => true;
   mocks.graphqlEnabled = () => true;
   mocks.cacheEnabled = true;

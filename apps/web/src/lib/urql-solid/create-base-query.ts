@@ -1,5 +1,8 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
 import { Telemetry } from '@macro-inc/observability';
+import { stringifyDocument } from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import {
   type Accessor,
   batch,
@@ -10,6 +13,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { queryAuthorization } from './authorization';
 import { useOptionalUrqlClient } from './context';
 import type { ObserverClientOptions, UrqlObserverFactory } from './observer';
 import {
@@ -32,7 +36,23 @@ export function createBaseQuery<
   // traceParentExchange.
   const flow = useFlowTrace();
   const options = createMemo(() => {
-    const next = getOptions();
+    const input = getOptions();
+    const protectedQuery =
+      !('query' in input) ||
+      queryNeedsCrmProof(
+        typeof input.query === 'string'
+          ? input.query
+          : stringifyDocument(input.query as DocumentNode),
+        'variables' in input
+          ? (input.variables as Record<string, unknown>)
+          : undefined
+      );
+    const next = {
+      ...input,
+      ...(queryAuthorization().paused && protectedQuery
+        ? { enabled: false }
+        : {}),
+    };
     if (!flow) return next;
     return {
       ...next,
@@ -120,17 +140,20 @@ export function createBaseQuery<
 
   let firstOptionsRun = true;
   let currentClient = initialClient;
+  let currentEpoch = untrack(queryAuthorization).epoch;
 
   createComputed(() => {
     const nextOptions = options();
     const nextClient = client();
+    const nextEpoch = queryAuthorization().epoch;
     if (firstOptionsRun) {
       firstOptionsRun = false;
       return;
     }
 
     const current = untrack(observer);
-    if (nextClient !== currentClient) {
+    if (nextClient !== currentClient || nextEpoch !== currentEpoch) {
+      currentEpoch = nextEpoch;
       const replacement = untrack(() =>
         createObserver(nextClient, nextOptions)
       );

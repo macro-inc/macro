@@ -1,3 +1,4 @@
+import type { CacheAuthorityHost } from '../authority';
 import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
@@ -45,6 +46,8 @@ import type {
 } from '../protocol';
 
 export interface CacheReadArgs {
+  /** Capture before acquiring source content; never infer from a late write. */
+  authorityGeneration?: string;
   /** urql operation key; registers the op for re-execution when set. */
   opKey?: number;
   query: string;
@@ -135,6 +138,8 @@ export type AffectedOperationsListener = (
 ) => void;
 
 export interface CacheHost {
+  /** Shared permission ordering; required by the current browser/native runtime. */
+  readonly authority?: CacheAuthorityHost;
   /** The host understands engine-maintained fragment query requests. */
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */

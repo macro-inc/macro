@@ -56,6 +56,8 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Current session authority; individual pipeline grants are checked separately. */
+  canAccess: Accessor<boolean>;
   createEmailPrivacy(): {
     query: import('./crm-sources').CrmQuery<
       import('../core/email-privacy').EmailPrivacy

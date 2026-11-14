@@ -1,3 +1,7 @@
+import {
+  markSourceAuthority,
+  sourceAuthorityGeneration,
+} from '@graphql-cache/source-authority';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { Client } from '@urql/core';
 import { pipe, subscribe } from 'wonka';
@@ -45,7 +49,13 @@ export function subscribeToAttentionFeedUpdates<
       }
       const patches = result.data ? updates.patches(result.data) : undefined;
       if (!patches || patches.length === 0) return;
-      handlers.patches(patches);
+      handlers.patches(
+        markSourceAuthority(
+          patches,
+          sourceAuthorityGeneration(result.data) ??
+            result.operation.context.cacheAuthorityGeneration
+        )
+      );
     })
   );
   return () => {

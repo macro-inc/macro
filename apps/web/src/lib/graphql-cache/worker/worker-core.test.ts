@@ -1,9 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  TEST_AUTHORITY_GENERATION,
+  testAuthority,
+  withoutAuthorityEnvelope,
+} from '../authority-fixture';
 import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
-vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
+vi.mock('./wasm-module', () => ({
+  loadCacheWasm: async () => {
+    const module = await loadCacheWasmMock();
+    const wrap = (engine: object) => ({
+      currentAuthority: async (identity: string) => testAuthority(identity),
+      checkAuthority: async () => {},
+      ...engine,
+    });
+    const result = { ...module };
+    for (const name of [
+      'openCache',
+      'openCacheWithOutcome',
+      'openCacheForRecovery',
+      'openCacheForRecoveryWithOutcome',
+    ]) {
+      if (module[name])
+        result[name] = async (...args: unknown[]) => {
+          const opened = await module[name](...args);
+          return opened && 'engine' in opened
+            ? { ...opened, engine: wrap(opened.engine) }
+            : wrap(opened);
+        };
+    }
+    return result;
+  },
+}));
 
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
@@ -38,7 +68,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue(engine),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
 
@@ -135,7 +168,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -186,7 +220,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ currentStorageGeneration }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
     await core.handleRequest(port, {
@@ -218,7 +255,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -265,7 +305,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ search }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -333,7 +376,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -409,7 +453,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
     await core.handleRequest(port, {
@@ -716,7 +763,11 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const port = {
+      postMessage: vi.fn((message) =>
+        messages.push(withoutAuthorityEnvelope(message))
+      ),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
@@ -1339,7 +1390,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, {
       id: 1,
@@ -1636,7 +1690,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ inspectQueryVariants }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     const query =
       'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }';
@@ -1661,7 +1718,10 @@ describe('CacheWorkerCore', () => {
 
   it('fails a request kind from a newer page instead of answering it', async () => {
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     const fromNewerPage = JSON.parse('{"id":1,"kind":"future-request"}');
 
@@ -1683,7 +1743,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ writeQuery }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
 
@@ -1742,7 +1805,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -1775,7 +1839,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
 
@@ -1814,7 +1881,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -1895,7 +1963,7 @@ describe('CacheWorkerCore', () => {
     const messages: unknown[] = [];
     const port = {
       postMessage: (message: unknown) => {
-        messages.push(message);
+        messages.push(withoutAuthorityEnvelope(message));
         if ((message as { id?: number }).id === 2) order.push('response');
       },
     };
@@ -1958,7 +2026,10 @@ describe('CacheWorkerCore', () => {
       });
 
       await core.handleRequest(
-        { postMessage: (message: unknown) => messages.push(message) },
+        {
+          postMessage: (message: unknown) =>
+            messages.push(withoutAuthorityEnvelope(message)),
+        },
         { id: 1, kind: 'init', scope: 'scope-1' }
       );
 
@@ -1980,7 +2051,10 @@ describe('CacheWorkerCore', () => {
     });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
 
@@ -2001,7 +2075,10 @@ describe('CacheWorkerCore', () => {
   const initMessages = async (core: CacheWorkerCore): Promise<unknown[]> => {
     const messages: unknown[] = [];
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
     return messages;
@@ -2110,7 +2187,10 @@ describe('CacheWorkerCore', () => {
     const core = new CacheWorkerCore({ recoveryOpen: true });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1', hotCapacity: 17 }
     );
 
@@ -2123,7 +2203,10 @@ describe('CacheWorkerCore', () => {
     const openCache = vi.fn().mockResolvedValue({});
     loadCacheWasmMock.mockResolvedValue({ openCache });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -2380,6 +2463,7 @@ describe('CacheWorkerCore', () => {
     await read;
     expect(readQuery).toHaveBeenCalledOnce();
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       id: 3,
       ok: true,
       result: { kind: 'miss' },
@@ -2505,6 +2589,7 @@ describe('CacheWorkerCore', () => {
     await core.handleRequest(port, { id: 3, kind: 'people-update', update });
     expect(engine.peopleUpdate).toHaveBeenCalledWith(update);
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'cache-hydrated',
       revision: '9',
       searchChangedBuckets: ['person'],
@@ -2607,16 +2692,19 @@ describe('CacheWorkerCore', () => {
       })
     );
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'ops-affected',
       opIds: ['client:7'],
       keys: ['GraphqlUser:user-1'],
     });
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
       reset: true,
     });
     expect(port.postMessage).toHaveBeenLastCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       id: 2,
       ok: true,
       result: {
@@ -2729,7 +2817,10 @@ describe('CacheWorkerCore', () => {
     const onStorageResetRequired = vi.fn();
     const observations: Array<Record<string, unknown>> = [];
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore({
       onStorageResetRequired,
       telemetry: {
@@ -2784,7 +2875,10 @@ describe('CacheWorkerCore', () => {
     const core = new CacheWorkerCore({ onStorageBusy, onStorageResetRequired });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
 

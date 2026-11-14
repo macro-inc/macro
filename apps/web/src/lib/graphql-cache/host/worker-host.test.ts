@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import type {
   CacheRequest,
   CacheResponseErrorCode,
@@ -41,6 +42,15 @@ const EMPTY_WRITE: WriteResult = {
 
 function responseFor(request: CacheRequest): unknown {
   switch (request.kind) {
+    case 'current-authority':
+      return testAuthority(request.identity);
+    case 'transition-authority':
+      return {
+        authority: testAuthority(request.identity),
+        revision: '0',
+        changed: false,
+        affectedOps: [],
+      };
     case 'current-revision':
       return INITIAL_CACHE_REVISION;
     case 'current-storage-generation':
@@ -98,7 +108,11 @@ class FakePageAdapter {
   constructor(readonly options: CacheCoordinatorPageAdapterOptions) {}
 
   postMessage(request: CacheRequest): void {
-    this.requests.push(request);
+    if (
+      request.kind !== 'current-authority' &&
+      request.kind !== 'transition-authority'
+    )
+      this.requests.push(request);
     if (this.ignoredKinds.has(request.kind)) return;
     const error = this.errors.get(request.kind);
     queueMicrotask(() => {
@@ -108,7 +122,12 @@ class FakePageAdapter {
   }
 
   respond(id: number, result: unknown): void {
-    this.emit({ id, ok: true, result });
+    this.emit({
+      id,
+      ok: true,
+      result,
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
+    });
   }
 
   reject(id: number, error: string, errorCode?: CacheResponseErrorCode): void {
@@ -121,7 +140,10 @@ class FakePageAdapter {
   }
 
   push(message: WorkerMessage | unknown): void {
-    this.emit(message as WorkerMessage);
+    this.emit({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
+      ...(message as WorkerMessage),
+    });
   }
 
   replace(
@@ -513,21 +535,21 @@ describe('createWorkerCacheHost', () => {
     ).toMatchObject({ priority: 'typed-search' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
-      [2, 'read'],
-      [3, 'read-records-by-keys'],
-      [4, 'search'],
-      [5, 'write'],
-      [6, 'enqueue-optimistic-mutation'],
-      [7, 'inspect-query-variants'],
-      [8, 'inspect-query'],
-      [9, 'claim-next-mutation'],
-      [10, 'defer-optimistic-write'],
-      [11, 'commit-optimistic-write'],
-      [12, 'rollback-optimistic-write'],
-      [13, 'invalidate'],
-      [14, 'delete-records'],
-      [15, 'teardown'],
-      [16, 'clear'],
+      [3, 'read'],
+      [4, 'read-records-by-keys'],
+      [5, 'search'],
+      [6, 'write'],
+      [7, 'enqueue-optimistic-mutation'],
+      [8, 'inspect-query-variants'],
+      [9, 'inspect-query'],
+      [10, 'claim-next-mutation'],
+      [11, 'defer-optimistic-write'],
+      [12, 'commit-optimistic-write'],
+      [13, 'rollback-optimistic-write'],
+      [14, 'invalidate'],
+      [15, 'delete-records'],
+      [16, 'teardown'],
+      [17, 'clear'],
     ]);
     expect(requests[0]).toEqual({
       id: 1,
@@ -548,7 +570,8 @@ describe('createWorkerCacheHost', () => {
       })
     );
     expect(requests[3]).toEqual({
-      id: 4,
+      authority: { generation: TEST_AUTHORITY_GENERATION, requireProof: false },
+      id: 5,
       kind: 'search',
       request: {
         profile: 'quick-access-v1',
@@ -587,7 +610,7 @@ describe('createWorkerCacheHost', () => {
       })
     );
     expect(requests[14]).toEqual({
-      id: 15,
+      id: 16,
       kind: 'teardown',
       opId: `${CLIENT_ID}:7`,
     });
@@ -1132,7 +1155,7 @@ describe('createWorkerCacheHost', () => {
     expect(affected).toEqual([]);
     expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
-      [2, 'read'],
+      [3, 'read'],
     ]);
     host.dispose();
   });
@@ -2342,4 +2365,15 @@ describe('createWorkerCacheHost', () => {
     });
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
+});
+
+vi.mock('../authority', async (original) => {
+  const actual = await original<typeof import('../authority')>();
+  return {
+    ...actual,
+    createAuthorityObserver: (identity: string) => ({
+      ...actual.createAuthorityObserver(identity),
+      verified: () => true,
+    }),
+  };
 });

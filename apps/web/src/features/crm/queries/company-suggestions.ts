@@ -38,7 +38,7 @@ export function useQuickAccessCrmCompaniesQuery(
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>
-    query.isSuccess
+    enabled() && query.isSuccess
       ? (query.data?.filter(
           (entity): entity is CrmCompanyEntity =>
             isCrmCompanyEntity(entity) && !entity.hidden

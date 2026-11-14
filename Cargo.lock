@@ -3893,7 +3893,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.54"
+version = "0.6.55"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -19492,6 +19492,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soup-filter-projection",
+ "tempfile",
  "thiserror 2.0.18",
  "uuid",
 ]

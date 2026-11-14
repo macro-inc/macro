@@ -1,5 +1,7 @@
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
+import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { toast } from '@core/component/Toast/Toast';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
@@ -70,6 +72,7 @@ vi.mock('./thread', () => ({ fetchAndCacheThread: vi.fn() }));
 import {
   deleteEmailDraftQueued,
   draftQueueActive,
+  readCachedDraftAndThread,
   readEmailDraft,
   saveEmailDraftQueued,
   watchEmailDrafts,
@@ -109,7 +112,7 @@ beforeEach(() => {
   });
 });
 
-async function setup(committed = false) {
+async function setup(committed = false, retired = false) {
   const operations: Operation[] = [];
   const client = createClient({
     url: 'http://example.test/graphql',
@@ -123,7 +126,7 @@ async function setup(committed = false) {
               operation,
               stale: false,
               hasNext: false,
-              ...(committed
+              ...(committed && !retired
                 ? { data: optimisticContextOf(operation)?.optimisticResponse }
                 : {}),
               extensions: {
@@ -277,6 +280,19 @@ it('retries a draft and thread snapshot spanning identity settlement', async () 
   expect(
     response.saveEmailDraft.thread.mailDraftState?.drafts.map((d) => d.id)
   ).toEqual([serverId]);
+});
+
+it('queues an authored draft while its optional cached thread cannot be authorized', async () => {
+  const { operations } = await setup();
+  mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'queued',
+  });
+  expect(operations).toHaveLength(1);
+  expect(operations[0].variables?.input).toMatchObject({ subject: 'Draft' });
+  expect(
+    JSON.stringify(optimisticContextOf(operations[0])?.optimisticResponse)
+  ).not.toContain('Previously saved');
 });
 
 it('rejects a continually changing snapshot instead of enqueuing mixed identities', async () => {
@@ -615,4 +631,61 @@ it('queues nothing for a draft that is being discarded', async () => {
     'email_draft.save_yielded_to_discard',
     { 'email_draft.draft_id': handle }
   );
+});
+
+it('discards a copied thread when a cached draft read crosses revocation', async () => {
+  const { draftResult, threadResult } = await setup();
+  const releases: Array<() => void> = [];
+  mocks.readRecordsByKeys.mockImplementation(
+    ({ keys }: { keys: string[] }) =>
+      new Promise((resolve) => {
+        releases.push(() =>
+          resolve(
+            keys[0].startsWith('GraphqlSoupEmailMessage:')
+              ? draftResult()
+              : threadResult()
+          )
+        );
+      })
+  );
+  const read = readCachedDraftAndThread(handle, 'local-thread');
+  await vi.waitFor(() => expect(releases).toHaveLength(2));
+  const resume = beginQueryAuthorizationReset();
+  try {
+    releases.forEach((release) => release());
+    expect(await read).toMatchObject({
+      existingThread: undefined,
+      existingDraft: undefined,
+    });
+  } finally {
+    resume();
+  }
+});
+
+it('recovers a committed draft identity from its journal when permission retirement removed the response', async () => {
+  const { operations } = await setup(true, true);
+  const local = workingCopy('dirty');
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockRejectedValue(new StaleCacheAuthorityError());
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'committed',
+    draftId: local.serverDraftId,
+    threadId: local.serverThreadId,
+  });
+  await expect(
+    saveEmailDraftQueued({ args: { ...args, subject: 'Next authored edit' } })
+  ).resolves.toMatchObject({ kind: 'committed' });
+  expect(operations).toHaveLength(2);
+  expect(toast.failure).not.toHaveBeenCalled();
+});
+
+it('keeps legacy saves accepted and completes deletes when committed content is unavailable', async () => {
+  await setup(true, true);
+  await expect(saveEmailDraftQueued({ args })).resolves.toEqual({
+    kind: 'queued',
+  });
+  await expect(
+    deleteEmailDraftQueued({ draftId: handle, threadId: 'local-thread' })
+  ).resolves.toEqual({ kind: 'committed' });
+  expect(toast.failure).not.toHaveBeenCalled();
 });

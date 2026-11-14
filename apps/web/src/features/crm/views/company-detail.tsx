@@ -1,6 +1,7 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmAccessDenied } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -41,6 +42,7 @@ type CompanyProps = {
 };
 
 export function Company(props: CompanyProps) {
+  const context = useCrmContext();
   return (
     <TraceFlow
       name="crm.company"
@@ -50,7 +52,9 @@ export function Company(props: CompanyProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <CompanyContent {...props} />
+      <Show when={context.canAccess()} fallback={<CrmAccessDenied />}>
+        <CompanyContent {...props} />
+      </Show>
     </TraceFlow>
   );
 }

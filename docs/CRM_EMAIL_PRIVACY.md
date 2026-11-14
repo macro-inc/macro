@@ -2,7 +2,7 @@
 
 CRM access and email contribution are separate permissions. Existing and new
 members start with CRM access. Admins and owners can deny or restore a plain
-member through the team member-access API; admins and owners always retain access. A member
+member in team member settings or through the API; admins and owners always retain access. A member
 can use company and contact records without contributing a mailbox. Existing CRM
 feature flags still control optional product surfaces such as pipelines.
 Existing record hiding remains a separate admin action; blocking email never
@@ -40,9 +40,23 @@ pipeline cell remains pipeline content and may itself identify a record.
 `x-macro-crm-access` expose current authority to clients. The server rechecks
 membership on each request. An optional header lookup failure omits the proof and
 leaves unrelated handlers available; protected operations still fail closed.
-Settings controls and retirement of already-cached
-client content are a separate client change; this server API alone does not
-remove previously downloaded content from an older client.
+The client checks fresh authority before protected local reads and observes
+storage response proofs before publishing results. A changed permission retires
+normalized records, derived search/projection rows, protected properties,
+persisted query lists, and mounted observer snapshots. Browser and native owners
+serialize this work behind a durable closed marker. Late responses, optimistic
+snapshots, and subscription frames keep their original generation and cannot
+restore retired content. Legacy database-row snapshots and unowned property snapshots have no reliable
+access provenance, so they are also quarantined and unavailable offline until a
+fresh authorized read restores them. Independently accessible mail and pipelines reload
+through current server grants. Unrelated document/calendar data, authored draft
+content, queued command variables, UUIDs, leases, and identity bindings survive.
+
+Coordinator protocol 18 and the native permission commands must ship with this
+web bundle. Older native binaries require an app update; there is no unguarded
+cache fallback. Keep preference changes disabled until the client rollout is
+complete, including already-open older builds. The server API cannot erase
+content already downloaded by an older client.
 
 Notifications follow the existing snapshot policy: a revoked member keeps
 already-delivered CRM comment text and may still receive a previously queued

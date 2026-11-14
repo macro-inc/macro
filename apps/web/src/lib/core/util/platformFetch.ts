@@ -1,6 +1,7 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
+import { prepareResponseObservers } from './response-observers';
 
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
 let originalFetch: typeof fetch | undefined;
@@ -92,5 +93,7 @@ export function createPlatformFetch(
 }
 
 // Native startup installs the transport explicitly; all callers share it.
-export const platformFetch: typeof fetch = (input, init) =>
-  globalThis.fetch(input, init);
+export const platformFetch: typeof fetch = async (input, init) => {
+  const observe = await prepareResponseObservers(input, init);
+  return observe(await globalThis.fetch(input, init));
+};

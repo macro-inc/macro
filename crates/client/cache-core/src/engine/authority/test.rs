@@ -1,0 +1,562 @@
+use super::*;
+use crate::store::InMemoryStorage;
+use pollster::block_on;
+use serde_json::json;
+
+#[test]
+fn stale_success_settles_the_command_and_identity_without_restoring_its_response() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine.bind_identity("viewer").await.unwrap();
+        let initial = engine.current_authority("viewer").await.unwrap();
+        let allowed = engine
+            .transition_authority("viewer", initial.generation, "team:allowed".into(), &[])
+            .await
+            .unwrap();
+        let mutation = "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { __typename id name snippet messages { __typename id bodyText } } } }";
+        let variables = json!({"input":{"threadId":"local-thread","bodyText":"authored reply"}});
+        let response = json!({"saveEmailDraft":{"thread":{
+            "__typename":"GraphqlSoupEmailThread","id":"server-thread","name":"private subject","snippet":"private snippet",
+            "messages":[{"__typename":"GraphqlSoupEmailMessage","id":"message","bodyText":"private message"}]
+        }}});
+        let local = EntityKey("GraphqlSoupEmailThread:local-thread".into());
+        let target = EntityKey("GraphqlSoupEmailThread:server-thread".into());
+        let binding = IdentityBinding {
+            local_key: local.clone(),
+            delete_record: false,
+            response_path: vec!["saveEmailDraft".into(), "thread".into()],
+            reference_fields: vec![],
+            revalidation_variables: vec![],
+        };
+        let queued = engine
+            .enqueue_optimistic_mutation_in_authority(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    identity_bindings: &[binding],
+                    uuid: "00000000-0000-4000-8000-000000000001",
+                    query: mutation,
+                    operation_name: Some("Save"),
+                    variables: variables.as_object().unwrap(),
+                    data: &response,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+                MutationClaimRequest {
+                    owner: "client-a".into(),
+                    now_ms: 2,
+                    lease_expires_at_ms: 100,
+                },
+                OptimisticEffects::default(),
+                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+            )
+            .await
+            .unwrap();
+        let InitialClaimOutcome::Claimed(claimed) = queued.initial_claim else {
+            panic!("command must be claimed")
+        };
+        let original = engine.storage().load_mutation_queue().await.unwrap()[0]
+            .mutation
+            .clone();
+        let denied = engine
+            .transition_authority(
+                "viewer",
+                allowed.authority.generation,
+                "team:denied".into(),
+                &[
+                    "GraphqlSoupEmailThread".into(),
+                    "GraphqlSoupEmailMessage".into(),
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap()[0].mutation,
+            original
+        );
+        let result = engine
+            .commit_optimistic_write_in_authority(
+                queued.transaction_id,
+                MutationClaimToken {
+                    owner: "client-a".into(),
+                    generation: claimed.lease_generation,
+                },
+                NetworkWrite {
+                    query: mutation,
+                    operation_name: Some("Save"),
+                    variables: variables.as_object().unwrap(),
+                    data: &response,
+                    identity: Some("viewer"),
+                },
+                vec![],
+                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(result, CommitOptimisticWriteResult::Committed(_)));
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let rows = engine
+            .storage()
+            .get_batch(&[
+                local,
+                target.clone(),
+                EntityKey("GraphqlSoupEmailMessage:message".into()),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(
+            identity::alias_target(rows[0].as_ref().unwrap()),
+            Some(&target)
+        );
+        assert_eq!(
+            rows[1].as_ref().unwrap().fields.get("id"),
+            Some(&CacheValue::String("server-thread".into()))
+        );
+        assert!(!format!("{rows:?}").contains("private"));
+        assert!(rows[2].is_none());
+        engine
+            .check_authority(Some(denied.authority.generation))
+            .await
+            .unwrap();
+    });
+}
+
+#[test]
+fn an_old_windows_enqueue_keeps_authored_variables_but_no_copied_snapshot() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let initial = engine.current_authority("viewer").await.unwrap();
+        engine
+            .transition_authority("viewer", initial.generation, "team:denied".into(), &[])
+            .await
+            .unwrap();
+        let variables = json!({"input":{"threadId":"thread","bodyText":"authored reply"}});
+        engine.enqueue_optimistic_mutation_in_authority(
+            None,
+            BeginOptimisticWrite {
+                client_metadata: None, identity_bindings: &[],
+                uuid: "00000000-0000-4000-8000-000000000002",
+                query: "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { __typename id name } } }",
+                operation_name: Some("Save"), variables: variables.as_object().unwrap(),
+                data: &json!({"saveEmailDraft":{"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"private"}}}),
+                link_patches: &[], revalidations: &[], created_at_ms: 1,
+            },
+            MutationClaimRequest { owner: "client-a".into(), now_ms: 2, lease_expires_at_ms: 100 },
+            OptimisticEffects::default(), AuthorityAdmission::protected(Some(initial.generation)),
+        ).await.unwrap();
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queued.len(), 1);
+        assert!(
+            queued[0]
+                .mutation
+                .request
+                .variables_json
+                .contains("authored reply")
+        );
+        assert!(
+            !queued[0]
+                .optimistic
+                .optimistic_data_json
+                .contains("private")
+        );
+        assert!(queued[0].optimistic.normalized_updates.is_empty());
+    });
+}
+
+#[test]
+fn another_clients_older_proof_cannot_restore_revoked_authority() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let initial = engine.current_authority("viewer").await.unwrap();
+        assert!(
+            engine
+                .check_authority(Some(initial.generation))
+                .await
+                .is_err()
+        );
+        let allowed = engine
+            .transition_authority("viewer", initial.generation, "team:allowed".into(), &[])
+            .await
+            .unwrap();
+        let earlier_request = allowed.authority.generation;
+        let stable = engine
+            .transition_authority("viewer", earlier_request, "team:allowed".into(), &[])
+            .await
+            .unwrap();
+        assert!(!stable.changed);
+        assert_eq!(stable.authority.generation, earlier_request);
+        let denied = engine
+            .transition_authority("viewer", earlier_request, "team:denied".into(), &[])
+            .await
+            .unwrap();
+        assert!(engine.check_authority(Some(earlier_request)).await.is_err());
+        assert!(engine.check_authority(None).await.is_err());
+        assert!(matches!(
+            engine
+                .transition_authority("viewer", earlier_request, "team:allowed".into(), &[])
+                .await,
+            Err(EngineError::StaleAuthority)
+        ));
+        assert_eq!(
+            engine.current_authority("viewer").await.unwrap(),
+            denied.authority
+        );
+        let granted = engine
+            .transition_authority(
+                "viewer",
+                denied.authority.generation,
+                "team:allowed".into(),
+                &[],
+            )
+            .await
+            .unwrap();
+        engine
+            .check_authority(Some(granted.authority.generation))
+            .await
+            .unwrap();
+        assert!(engine.current_authority("another-viewer").await.is_err());
+    });
+}
+
+#[test]
+fn retirement_removes_raw_children_and_preserves_unrelated_offline_records() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let company = EntityKey("GraphqlSoupCrmCompany:company".into());
+        let thread = EntityKey("GraphqlSoupEmailThread:thread".into());
+        let message = EntityKey("GraphqlSoupEmailMessage:message".into());
+        let document = EntityKey("GraphqlSoupDocument:document".into());
+        let alias = EntityKey("GraphqlSoupEmailThread:local".into());
+        let content = Record {
+            fields: [("name".into(), CacheValue::String("content".into()))].into(),
+        };
+        storage
+            .put_batch(vec![
+                (company.clone(), content.clone()),
+                (thread.clone(), content.clone()),
+                (message.clone(), content.clone()),
+                (document.clone(), content.clone()),
+                (alias.clone(), identity::alias_record(&thread)),
+            ])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let storage_generation = engine.current_storage_generation().await.unwrap();
+        let initial = engine.current_authority("viewer").await.unwrap();
+        let result = engine
+            .transition_authority(
+                "viewer",
+                initial.generation,
+                "team:denied".into(),
+                &[
+                    "GraphqlSoupCrmCompany".into(),
+                    "GraphqlSoupEmailThread".into(),
+                    "GraphqlSoupEmailMessage".into(),
+                ],
+            )
+            .await
+            .unwrap();
+        let records = engine
+            .storage()
+            .get_batch(&[company, thread.clone(), message, document, alias])
+            .await
+            .unwrap();
+        assert_eq!(&records[..3], &[None, None, None]);
+        assert_eq!(records[3], Some(content));
+        assert_eq!(
+            identity::alias_target(records[4].as_ref().unwrap()),
+            Some(&thread)
+        );
+        assert_eq!(
+            engine.current_storage_generation().await.unwrap(),
+            storage_generation
+        );
+        engine
+            .check_authority(Some(result.authority.generation))
+            .await
+            .unwrap();
+    });
+}
+
+#[test]
+fn reopening_an_interrupted_retirement_stays_closed_until_it_is_retried() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let initial = engine.current_authority("viewer").await.unwrap();
+        let allowed = engine
+            .transition_authority("viewer", initial.generation, "team:allowed".into(), &[])
+            .await
+            .unwrap();
+        let query =
+            "query { user { id emailThread(id: \"thread\") { __typename id name snippet } } }";
+        engine.write_query(None, query, None, &Default::default(), &json!({
+            "user": { "id": "viewer", "emailThread": {
+                "__typename": "GraphqlSoupEmailThread", "id": "thread", "name": "private", "snippet": "private"
+            }}
+        }), None).await.unwrap();
+        // A process may stop immediately after persisting the transition's
+        // closed state, before deleting even the first protected record.
+        let pending = CacheAuthority {
+            identity: "viewer".into(),
+            account: None,
+            generation: Uuid::now_v7(),
+            policy: Some("team:denied".into()),
+            ready: false,
+        };
+        engine.store_authority(&pending).await.unwrap();
+        let mut reopened = Engine::new(engine.into_storage());
+        assert!(
+            reopened
+                .check_authority(Some(allowed.authority.generation))
+                .await
+                .is_err()
+        );
+        assert!(
+            reopened
+                .check_authority(Some(pending.generation))
+                .await
+                .is_err()
+        );
+        let observed = reopened.current_authority("viewer").await.unwrap();
+        assert_eq!(observed, pending);
+        let completed = reopened
+            .transition_authority(
+                "viewer",
+                observed.generation,
+                "team:denied".into(),
+                &["GraphqlSoupEmailThread".into()],
+            )
+            .await
+            .unwrap();
+        reopened
+            .check_authority(Some(completed.authority.generation))
+            .await
+            .unwrap();
+        assert!(matches!(
+            reopened
+                .read_query(None, query, None, &Default::default())
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+    });
+}
+
+#[test]
+fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let initial = engine.current_authority("anonymous-profile").await.unwrap();
+        let allowed = engine
+            .transition_authority(
+                "anonymous-profile",
+                initial.generation,
+                "team:allowed".into(),
+                &[],
+            )
+            .await
+            .unwrap()
+            .authority;
+        engine.bind_identity("first-account").await.unwrap();
+        assert!(
+            engine
+                .check_authority(Some(allowed.generation))
+                .await
+                .is_err()
+        );
+        let bound = engine.current_authority("anonymous-profile").await.unwrap();
+        assert_eq!(bound.account.as_deref(), Some("first-account"));
+        assert_ne!(bound.generation, allowed.generation);
+        assert!(!bound.ready);
+        assert!(bound.policy.is_none());
+        assert!(engine.current_authority("first-account").await.is_err());
+        let accepted = engine
+            .transition_authority(
+                "anonymous-profile",
+                bound.generation,
+                "team:allowed".into(),
+                &[],
+            )
+            .await
+            .unwrap()
+            .authority;
+        let mut reopened = Engine::new(engine.into_storage());
+        assert!(
+            reopened
+                .check_authority(Some(accepted.generation))
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            reopened
+                .current_authority("anonymous-profile")
+                .await
+                .unwrap(),
+            accepted
+        );
+        reopened
+            .check_authority(Some(accepted.generation))
+            .await
+            .unwrap();
+        reopened
+            .write_query(
+                None,
+                "query { user { id } }",
+                None,
+                &Default::default(),
+                &json!({"user":{"id":"second-account"}}),
+                Some("second-account"),
+            )
+            .await
+            .unwrap();
+        assert!(
+            reopened
+                .check_authority(Some(accepted.generation))
+                .await
+                .is_err()
+        );
+        let other = reopened
+            .current_authority("anonymous-profile")
+            .await
+            .unwrap();
+        assert_eq!(other.account.as_deref(), Some("second-account"));
+        assert_ne!(other.generation, accepted.generation);
+        assert!(!other.ready);
+    });
+}
+
+#[test]
+fn permission_transport_matches_the_generated_contract() {
+    let expected: serde_json::Value = serde_json::from_str(include_str!("schema.json")).unwrap();
+    assert_eq!(transport_schemas(), expected);
+}
+
+#[test]
+fn retired_calendar_create_can_select_its_committed_identity_without_response_content() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine.bind_identity("viewer").await.unwrap();
+        let initial = engine.current_authority("viewer").await.unwrap();
+        let allowed = engine
+            .transition_authority("viewer", initial.generation, "allowed".into(), &[])
+            .await
+            .unwrap();
+        let query = "mutation Create($input: CreateCalendarEventInput!) { createCalendarEvent(input: $input) { event { __typename id title } } }";
+        let uuid = "00000000-0000-4000-8000-000000000101";
+        let local = EntityKey::entity("GraphqlCalendarEvent", &[uuid]);
+        let canonical = "00000000-0000-4000-8000-000000000102";
+        let variables = json!({"input": {"idempotencyKey": uuid, "title": "Authored title"}});
+        let response = json!({"createCalendarEvent": {"event": {
+            "__typename": "GraphqlCalendarEvent", "id": canonical, "title": "Retired content"
+        }}});
+        let binding = IdentityBinding {
+            local_key: local.clone(),
+            delete_record: false,
+            response_path: vec!["createCalendarEvent".into(), "event".into()],
+            reference_fields: vec![],
+            revalidation_variables: vec![],
+        };
+        let queued = engine
+            .enqueue_optimistic_mutation_in_authority(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    identity_bindings: &[binding],
+                    uuid,
+                    query,
+                    operation_name: Some("Create"),
+                    variables: variables.as_object().unwrap(),
+                    data: &json!({"createCalendarEvent": {"event": {
+                        "__typename": "GraphqlCalendarEvent", "id": uuid, "title": "Authored title"
+                    }}}),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+                MutationClaimRequest {
+                    owner: "client".into(),
+                    now_ms: 2,
+                    lease_expires_at_ms: 100,
+                },
+                OptimisticEffects::default(),
+                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+            )
+            .await
+            .unwrap();
+        let InitialClaimOutcome::Claimed(claimed) = queued.initial_claim else {
+            panic!("create must be claimed")
+        };
+        engine
+            .transition_authority("viewer", allowed.authority.generation, "denied".into(), &[])
+            .await
+            .unwrap();
+        let result = engine
+            .commit_optimistic_write_in_authority(
+                queued.transaction_id,
+                MutationClaimToken {
+                    owner: "client".into(),
+                    generation: claimed.lease_generation,
+                },
+                NetworkWrite {
+                    query,
+                    operation_name: Some("Create"),
+                    variables: variables.as_object().unwrap(),
+                    data: &response,
+                    identity: Some("viewer"),
+                },
+                vec![],
+                AuthorityAdmission::protected(Some(allowed.authority.generation)),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(result, CommitOptimisticWriteResult::Committed(_)));
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let selection = RecordSelection::parse(
+            crate::meta::bundled_schema_ref(),
+            "fragment CalendarEventIdentity on GraphqlCalendarEvent { __typename id }",
+            "CalendarEventIdentity",
+        )
+        .unwrap();
+        let selected = engine
+            .read_records_by_keys(&selection, &[local])
+            .await
+            .unwrap();
+        assert_eq!(selected.value.len(), 1);
+        assert_eq!(
+            selected.value[0].record,
+            json!({"__typename": "GraphqlCalendarEvent", "id": canonical})
+        );
+        assert!(!selected.value[0].identity.pending);
+        assert_eq!(
+            selected.value[0].identity.mutation_uuid.as_deref(),
+            Some(uuid)
+        );
+        let canonical_record = engine
+            .storage()
+            .get_batch(&[EntityKey::entity("GraphqlCalendarEvent", &[canonical])])
+            .await
+            .unwrap();
+        assert!(
+            !canonical_record[0]
+                .as_ref()
+                .unwrap()
+                .fields
+                .contains_key("title")
+        );
+    });
+}

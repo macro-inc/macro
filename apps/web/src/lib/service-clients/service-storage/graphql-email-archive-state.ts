@@ -26,6 +26,7 @@ export async function setGraphqlEmailThreadArchived(
   if (disposition?.kind === 'queued') return 'queued';
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed') return 'committed';
   if (!result.data?.setEmailThreadArchived) {
     throw new Error('Email archive mutation returned no data');
   }
@@ -33,6 +34,7 @@ export async function setGraphqlEmailThreadArchived(
 }
 
 export type GraphqlEmailThreadsArchiveResult =
+  | { kind: 'committed-without-content' }
   | { kind: 'queued' }
   | { kind: 'committed'; failedThreadIds: ReadonlySet<string> };
 
@@ -54,6 +56,8 @@ export async function setGraphqlEmailThreadsArchived(
   if (disposition?.kind === 'queued') return { kind: 'queued' };
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed' && !disposition.data)
+    return { kind: 'committed-without-content' };
   if (!result.data?.setEmailThreadsArchived) {
     throw new Error('Email archive mutation returned no data');
   }

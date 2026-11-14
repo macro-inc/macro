@@ -62,6 +62,7 @@ import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -1090,7 +1091,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
         (bucket) =>
           ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-            crmFlag().enabled) &&
+            (crmFlag().enabled && crmAccessAllowed())) &&
           (bucket !== 'initiative' || projectsFlag().enabled)
       )
     );

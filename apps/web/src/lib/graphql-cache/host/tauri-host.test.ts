@@ -1,11 +1,20 @@
 import { Telemetry } from '@macro-inc/observability';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const authorityMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
 const emitMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args: Record<string, unknown> = {}) => {
+    if (command === 'graphql_cache_current_authority')
+      return authorityMock(String(args.identity));
+    const { authority: _, authorityGeneration: _generation, ...request } = args;
+    return invokeMock(command, request);
+  },
+}));
 vi.mock('@tauri-apps/api/event', () => ({
   listen: listenMock,
   emit: emitMock,
@@ -52,6 +61,9 @@ describe('createTauriCacheHost', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    authorityMock.mockImplementation(async (identity: string) =>
+      testAuthority(identity)
+    );
     eventCallbacks = new Map();
     invokeMock.mockResolvedValue(null);
     emitMock.mockResolvedValue(undefined);
@@ -65,8 +77,9 @@ describe('createTauriCacheHost', () => {
     const span = vi.spyOn(Telemetry, 'span');
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.readQuery({ query: '{ x }' });
-    // Initialization, queue probe, read.
+    // Initialization, permission probe, read, and permission recheck.
     expect(span.mock.calls).toEqual([
+      ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
@@ -75,7 +88,7 @@ describe('createTauriCacheHost', () => {
     for (let revision = 1; revision <= 100; revision++) {
       notify({ payload: { revision: String(revision) } });
     }
-    expect(span).toHaveBeenCalledTimes(3);
+    expect(span).toHaveBeenCalledTimes(4);
     host.dispose();
   });
 
@@ -204,6 +217,7 @@ describe('createTauriCacheHost', () => {
       traceparent: undefined,
     });
     expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       revision: '8',
       searchChangedBuckets: ['person'],
     });
@@ -305,7 +319,6 @@ describe('createTauriCacheHost', () => {
     await expect(host.currentStorageGeneration()).resolves.toBe(generation);
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
       'graphql_cache_init_with_schema',
-      'graphql_cache_inspect_mutations',
       'graphql_cache_current_storage_generation',
     ]);
     host.dispose();
@@ -384,11 +397,9 @@ describe('createTauriCacheHost', () => {
 
   it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
     const onInitializationError = vi.fn();
-    invokeMock.mockImplementation(async (command: string) => {
-      if (command === 'graphql_cache_inspect_mutations')
-        throw 'Command graphql_cache_inspect_mutations not found';
-      return null;
-    });
+    authorityMock.mockRejectedValue(
+      new Error('Command graphql_cache_current_authority not found')
+    );
     const host = createTauriCacheHost({
       scope: 'old-native',
       onInitializationError,
@@ -413,7 +424,6 @@ describe('createTauriCacheHost', () => {
     );
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
       'graphql_cache_init_with_schema',
-      'graphql_cache_inspect_mutations',
     ]);
     host.dispose();
   });
@@ -815,6 +825,7 @@ describe('createTauriCacheHost', () => {
       })
     ).resolves.toEqual(hydration);
     expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       revision: '1',
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
@@ -863,8 +874,20 @@ describe('createTauriCacheHost', () => {
     for (let i = 0; i < 4; i++)
       await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
     expect(emitMock.mock.calls).toEqual([
-      ['graphql-cache://cache-hydrated', { revision: '9007199254740993' }],
-      ['graphql-cache://cache-hydrated', { revision: '9007199254740994' }],
+      [
+        'graphql-cache://cache-hydrated',
+        {
+          revision: '9007199254740993',
+          authorityGeneration: TEST_AUTHORITY_GENERATION,
+        },
+      ],
+      [
+        'graphql-cache://cache-hydrated',
+        {
+          revision: '9007199254740994',
+          authorityGeneration: TEST_AUTHORITY_GENERATION,
+        },
+      ],
     ]);
     expect(invokeMock).not.toHaveBeenCalledWith(
       'graphql_cache_current_revision',
@@ -911,11 +934,16 @@ describe('createTauriCacheHost', () => {
       );
       await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
       expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
         revision: '7',
         searchChangedBuckets,
       });
       eventCallbacks.get('graphql-cache://cache-hydrated')?.({
-        payload: { revision: '7', searchChangedBuckets },
+        payload: {
+          revision: '7',
+          searchChangedBuckets,
+          authorityGeneration: TEST_AUTHORITY_GENERATION,
+        },
       });
       expect(listener).toHaveBeenCalledWith('7', { searchChangedBuckets });
       host.dispose();
@@ -1165,6 +1193,7 @@ describe('createTauriCacheHost', () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     const seen = vi.fn();
     host.onOpsAffected(seen);
+    await host.authority!.current();
     const notify = eventCallbacks.get('graphql-cache://ops-affected')!;
     for (let i = 0; i < 100; i++) {
       notify({ payload: { opIds: [`${host.clientId}:5`] } });
@@ -1176,7 +1205,11 @@ describe('createTauriCacheHost', () => {
     notify({ payload: { opIds: [`${host.clientId}:6`] } });
     const patches = [{ kind: 'invalidate', key: 'Entity:1' }];
     notify({
-      payload: { opIds: [`${host.clientId}:5`], fieldChanges: patches },
+      payload: {
+        opIds: [`${host.clientId}:5`],
+        fieldChanges: patches,
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
+      },
     });
     expect(seen.mock.calls).toEqual([[[6]], [[5], patches]]);
     notify({ payload: { opIds: [`${host.clientId}:7`] } });
@@ -1674,4 +1707,15 @@ describe('createTauriCacheHost', () => {
       }
     });
   });
+});
+
+vi.mock('../authority', async (original) => {
+  const actual = await original<typeof import('../authority')>();
+  return {
+    ...actual,
+    createAuthorityObserver: (identity: string) => ({
+      ...actual.createAuthorityObserver(identity),
+      verified: () => true,
+    }),
+  };
 });

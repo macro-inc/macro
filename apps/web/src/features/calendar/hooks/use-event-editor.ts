@@ -368,7 +368,8 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
         });
-        props.onCreated?.({ eventId: created.id, time: values.time });
+        if (created)
+          props.onCreated?.({ eventId: created.id, time: values.time });
         props.onSaved();
         return;
       }

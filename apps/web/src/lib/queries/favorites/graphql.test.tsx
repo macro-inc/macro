@@ -1,3 +1,4 @@
+import { queryAuthorization } from '@app/lib/urql-solid/authorization';
 import { type Client, CombinedError } from '@urql/core';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -49,6 +50,9 @@ function graphqlFavorite(entityId: string, sortOrder: number) {
 
 function favoritesResult(favorites: ReturnType<typeof graphqlFavorite>[]) {
   return {
+    operation: {
+      context: { cacheAuthorizationEpoch: queryAuthorization().epoch },
+    },
     data: {
       user: {
         id: 'macro|favorites@example.com',
@@ -332,7 +336,7 @@ describe('GraphQL favorites queries', () => {
     });
     expect(executeQuery).toHaveBeenCalledWith(
       expect.objectContaining({ variables: { filter: null } }),
-      { requestPolicy: 'cache-and-network' }
+      expect.objectContaining({ requestPolicy: 'cache-and-network' })
     );
   });
 
@@ -354,7 +358,7 @@ describe('GraphQL favorites queries', () => {
           },
         },
       }),
-      { requestPolicy: 'cache-and-network' }
+      expect.objectContaining({ requestPolicy: 'cache-and-network' })
     );
   });
 
@@ -482,7 +486,7 @@ describe('GraphQL favorites queries', () => {
       }
     );
     expect(executeQuery).toHaveBeenCalledTimes(2);
-    expect(executeQuery.mock.calls[1]?.[1]).toEqual({
+    expect(executeQuery.mock.calls[1]?.[1]).toMatchObject({
       requestPolicy: 'cache-and-network',
     });
     expect(onSuccess).toHaveBeenCalledWith(
