@@ -21,10 +21,9 @@ mod test;
 ///   rather than binds so the planner can match those indexes' predicates;
 ///   `test` pins them to `SystemPropertyKey`.
 /// - Database row cells: `idx_ep_database_row_references_gin`, which holds
-///   only database row cells with entity references. Only those can reference a
-///   record, so its predicate drops nothing the cell checks below would keep.
-///   Each matched cell is then checked against its definition (an entity
-///   column) and its row's table (which places that definition), by key.
+///   only database row cells whose value is an entity reference; no other cell
+///   can name a record. A matched cell counts when its definition is an entity
+///   definition placed as a column of its row's table, checked by key.
 pub(super) async fn property_edges(
     pool: &PgPool,
     company_ids: &[Uuid],
