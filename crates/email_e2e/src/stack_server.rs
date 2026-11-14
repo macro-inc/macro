@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
@@ -32,6 +32,10 @@ struct Running {
 }
 
 type Stacks = Arc<Mutex<HashMap<String, Arc<Mutex<Running>>>>>;
+
+/// The largest request: a message with attachments of some megabytes, in
+/// base64, and room for a seed of several.
+const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 
 /// A failed request: the report as text, for the test's output.
 struct Failed(StatusCode, String);
@@ -94,6 +98,8 @@ pub async fn serve_stacks(listener: TcpListener) -> Result<(), Report> {
         .route("/stacks/{id}/seed", post(seed_mailbox))
         .route("/stacks/{id}/sql", post(sql))
         .route("/stacks/{id}/scheduled-sweep", post(scheduled_sweep))
+        // Mail is delivered and seeded with its attachments in the JSON.
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(stacks.clone());
     axum::serve(listener, app)
         .with_graceful_shutdown(stopped())

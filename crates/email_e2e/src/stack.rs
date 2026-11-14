@@ -570,8 +570,10 @@ impl Stack {
     /// everything the stack created.
     pub async fn finish(mut self) -> Result<(), Report> {
         let health = self.check_services();
-        self.finished = health.is_ok();
+        // Only once everything is removed: a `finish` dropped half-way
+        // leaves the rest to `Drop`.
         self.tear_down().await;
+        self.finished = health.is_ok();
         health
     }
 
@@ -717,17 +719,27 @@ impl Drop for Stack {
 
         // `drop` cannot await, and the scenario's own runtime may be the one
         // unwinding, so the cleanup runs to its end on a thread of its own.
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                else {
-                    return;
-                };
-                runtime.block_on(self.tear_down());
+        let mut clean_up = || {
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        return;
+                    };
+                    runtime.block_on(self.tear_down());
+                });
             });
-        });
+        };
+        // The teardown waits for tasks of the scenario's runtime to end. On
+        // one of its workers, hand the worker's other tasks to another
+        // thread first: with every worker waiting here, none would run them.
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(clean_up);
+        } else {
+            clean_up();
+        }
     }
 }
 
