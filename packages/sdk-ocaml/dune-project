@@ -32,9 +32,16 @@
   macro_sdk
   (cohttp-eio
    (>= 6.0))
+  http
   eio
   (eio_main :with-test)
+  tls
   tls-eio
+  x509
   ca-certs
   mirage-crypto-rng
-  domain-name))
+  domain-name
+  ipaddr
+  uri
+  (mirage-crypto-pk :with-test)
+  (ptime :with-test)))

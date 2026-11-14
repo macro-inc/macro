@@ -10,10 +10,19 @@
 
 type t
 
-val create : ?config:Macro_sdk_runtime.Config.t -> _ Eio.Net.t -> t
+val create :
+  ?config:Macro_sdk_runtime.Config.t ->
+  ?authenticator:X509.Authenticator.t ->
+  _ Eio.Net.t ->
+  t
 (** A client for [config] (default [Macro_sdk.Config.create ()]: [MACRO_ENV],
     then [MACRO_API_KEY] or [MACRO_BOT_TOKEN]). HTTPS checks certificates
-    against the system trust store. *)
+    with [authenticator], by default the system trust store, against the
+    request's host name or IP address. *)
+
+exception Unverifiable_host of string
+(** Raised (as a [Transport] error) for an HTTPS host that is neither a DNS
+    name nor an IP address, whose certificate could not be checked. *)
 
 val config : t -> Macro_sdk_runtime.Config.t
 

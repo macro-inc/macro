@@ -44,6 +44,22 @@
   yojson
   uri))
 
+(test
+ (name test_tls)
+ (modules test_tls)
+ (libraries
+  kinds_sdk
+  macro_sdk.runtime
+  macro_sdk_eio
+  eio
+  eio_main
+  tls
+  tls-eio
+  x509
+  mirage-crypto-rng.unix
+  ptime
+  ptime.clock.os))
+
 ; Regenerates the SDK into a temporary directory and fails if it differs
 ; from the committed ./generated.
 

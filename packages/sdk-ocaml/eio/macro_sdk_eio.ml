@@ -4,30 +4,49 @@ module Request = Macro_sdk_runtime.Request
 
 type t = { http : Cohttp_eio.Client.t; config : Config.t }
 
-(* Built on first HTTPS use, so plain-HTTP clients never read the trust store. *)
-let tls_config =
-  lazy
-    (Mirage_crypto_rng_unix.use_default ();
-     let authenticator =
-       match Ca_certs.authenticator () with
-       | Ok a -> a
-       | Error (`Msg m) -> failwith ("trust store: " ^ m)
-     in
-     match Tls.Config.client ~authenticator () with
-     | Ok c -> c
-     | Error (`Msg m) -> failwith ("TLS: " ^ m))
+exception Unverifiable_host of string
 
-let https uri flow =
-  let host =
-    Option.bind (Uri.host uri) (fun name ->
-        Result.to_option
-          (Result.bind (Domain_name.of_string name) Domain_name.host))
-  in
-  Tls_eio.client_of_flow ?host (Lazy.force tls_config) flow
+let system_trust_store () =
+  match Ca_certs.authenticator () with
+  | Ok authenticator -> authenticator
+  | Error (`Msg m) -> failwith ("trust store: " ^ m)
 
-let create ?config net =
+let tls_client authenticator ?ip () =
+  match Tls.Config.client ~authenticator ?ip () with
+  | Ok config -> config
+  | Error (`Msg m) -> failwith ("TLS: " ^ m)
+
+(* Every TLS connection checks the certificate against the host it was asked
+   for: a DNS name through SNI and the certificate's names, an IP literal
+   against its IP addresses. A host that is neither cannot be checked, so the
+   connection is refused rather than trusting any valid chain. *)
+let https authenticator =
+  let by_name = lazy (tls_client (Lazy.force authenticator) ()) in
+  fun uri flow ->
+    let host = Option.value (Uri.host uri) ~default:"" in
+    match Ipaddr.of_string host with
+    | Ok ip ->
+        Tls_eio.client_of_flow
+          (tls_client (Lazy.force authenticator) ~ip ())
+          flow
+    | Error _ -> (
+        match Result.bind (Domain_name.of_string host) Domain_name.host with
+        | Ok name -> Tls_eio.client_of_flow ~host:name (Lazy.force by_name) flow
+        | Error _ -> raise (Unverifiable_host host))
+
+let create ?config ?authenticator net =
   let config = match config with Some c -> c | None -> Config.create () in
-  { http = Cohttp_eio.Client.make ~https:(Some https) net; config }
+  (* Read on first HTTPS use, so plain-HTTP clients never touch the trust
+     store or the random number generator. *)
+  let authenticator =
+    lazy
+      (Mirage_crypto_rng_unix.use_default ();
+       match authenticator with Some a -> a | None -> system_trust_store ())
+  in
+  {
+    http = Cohttp_eio.Client.make ~https:(Some (https authenticator)) net;
+    config;
+  }
 
 let config t = t.config
 
