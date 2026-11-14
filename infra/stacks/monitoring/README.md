@@ -129,6 +129,13 @@ The gate is that preview:
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
   telemetry`, which fires by design until the DSS consumer health
   instrumentation ships. Delete it then.
+- **Three retuned monitors update in place**, keeping their ids and routing:
+  `dss-errors-prod` counts server-side errors only (its `query` and
+  `message`); `sqs-email-backfill-backlog-anomaly` becomes "Email backfill
+  queue not draining", an oldest-message age threshold, so its `name`,
+  `query`, `message`, thresholds and threshold windows change; and
+  `macrodb-long-transactions` takes the lowest transaction age over 5 minutes
+  with critical 1500 and warning 600 (its `query` and thresholds).
 - **Any other update, a replace, or a delete** — the hand-written code in
   `monitors/*.ts` drifted from the live monitor. Reconcile against
   `imported.generated.ts` before deploying.
