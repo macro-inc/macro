@@ -21,11 +21,12 @@ import { queryClient } from '@queries/client';
 import { useEnsureTagSetMutation } from '@queries/properties/tags';
 import {
   getCreateScheduledActionUrl,
-  getGenerateRoutineSuggestionsUrl,
   getListRoutineSuggestionsUrl,
+  getStartSuggestionGenerationUrl,
 } from '@service-scheduled-action/generated/client';
 import type {
   ActionConfiguration,
+  GenerationStarted,
   RoutineSuggestion,
   RoutineSuggestions,
   ScheduledAction,
@@ -57,16 +58,18 @@ export function useRoutineSuggestionsEnabled(): () => boolean {
 }
 
 /**
- * Starts the person's one generation; later calls change nothing on the
- * server. Its answer seeds the step's list.
+ * Starts the person's onboarding generation (their suggestions and routine
+ * suggestions, as each is on for them); later calls change nothing on the
+ * server. The suggestions read right after seed the step's list.
  */
 export async function generateRoutineSuggestions(timezone: string) {
-  const answer = await throwOnErr(() =>
-    fetchWithToken<RoutineSuggestions>(
-      `${SCHEDULED_ACTION_HOST}${getGenerateRoutineSuggestionsUrl({ timezone })}`,
+  await throwOnErr(() =>
+    fetchWithToken<GenerationStarted>(
+      `${SCHEDULED_ACTION_HOST}${getStartSuggestionGenerationUrl({ timezone })}`,
       { method: 'POST' }
     )
   );
+  const answer = await fetchSuggestions();
   queryClient.setQueryData(onboardingRoutineKeys.suggestions.queryKey, answer);
   return answer;
 }

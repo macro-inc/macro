@@ -23,8 +23,10 @@ no I/O.
   step's file, with `steps` typed from the code steps before it).
 - `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
   code (text, number, boolean, choice, or a question for AI), which `main`
-  reads as `knobs.<name>`, typed from the knob but not its value; and
-  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`.
+  reads as `knobs.<name>`, typed from the knob but not its value;
+  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`
+  (parsed with nom); and `sentence_runs`, that sentence read with its knobs
+  as text and values, as a routine suggestion's card shows it.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
   routines: surface, title, trigger (cron without a zone), a code step and/or

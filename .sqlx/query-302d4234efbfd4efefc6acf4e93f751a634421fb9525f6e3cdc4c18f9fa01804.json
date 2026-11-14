@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE stripe_event_cursor cursor\n            SET state = 'dirty',\n                attempts = 0,\n                next_attempt_at = now(),\n                last_error = NULL,\n                applied_at = CASE WHEN $2 AND picked.dead_at IS NOT NULL THEN picked.dead_at ELSE cursor.applied_at END,\n                applied_event_id = CASE WHEN $2 AND picked.dead_at IS NOT NULL THEN picked.dead_id ELSE cursor.applied_event_id END,\n                dead_event_id = NULL,\n                dead_cause = NULL,\n                updated_at = now()\n            FROM (\n                SELECT dead_cursor.consumer, dead_cursor.ordering_key,\n                    dead.id AS dead_id, dead.created_at AS dead_at\n                FROM stripe_event_cursor dead_cursor\n                LEFT JOIN stripe_events dead ON dead.id = dead_cursor.dead_event_id\n                WHERE dead_cursor.state = 'dead'\n                  AND ($1::text IS NULL OR dead_cursor.consumer = $1::text::stripe_consumer)\n                LIMIT $3\n                FOR UPDATE OF dead_cursor SKIP LOCKED\n            ) picked\n            WHERE cursor.consumer = picked.consumer AND cursor.ordering_key = picked.ordering_key\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "302d4234efbfd4efefc6acf4e93f751a634421fb9525f6e3cdc4c18f9fa01804"
+}

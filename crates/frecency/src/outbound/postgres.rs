@@ -319,7 +319,7 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self, entities))]
+    #[tracing::instrument(err, skip(self, user_id, entities))]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn get_aggregate_for_user_entities<'a>(
         &self,

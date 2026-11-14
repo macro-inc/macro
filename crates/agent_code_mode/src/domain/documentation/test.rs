@@ -413,6 +413,16 @@ fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
     assert!(inline_guides(GuideHost::Code).contains(guide));
 }
 
+#[test]
+fn a_digest_keeps_only_the_named_methods_and_fields() {
+    let digest = index_digest(&["EmailThread.messages", "Nope.nothing"], &["EmailThread"]);
+    assert!(digest.starts_with("### EmailThread"), "{digest}");
+    assert!(digest.contains("\nFields: "), "{digest}");
+    assert!(digest.contains("- `EmailThread.messages`:"), "{digest}");
+    assert!(!digest.contains("EmailThread.archive"), "{digest}");
+    assert!(index_digest(&["Nope.nothing"], &["Nope"]).is_empty());
+}
+
 /// Ranks the `calendar` entity relevant only when the request it is shown
 /// mentions a booking link, as Jev would.
 struct BookingLinkClassifier;

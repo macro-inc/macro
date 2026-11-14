@@ -35,7 +35,7 @@ async fn create_block_volume_posts_an_empty_custom_block_volume() {
         },
     );
 
-    client
+    let creation = client
         .create_block_volume(
             &crate::StoragePoolName::try_new("default").unwrap(),
             &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
@@ -43,6 +43,8 @@ async fn create_block_volume_posts_an_empty_custom_block_volume() {
         )
         .await
         .unwrap();
+
+    assert_eq!(creation, VolumeCreation::Created);
 }
 
 #[tokio::test]
@@ -180,7 +182,7 @@ async fn rebuild_replaces_the_root_disk_from_the_alias_and_waits() {
 }
 
 #[tokio::test]
-async fn creating_an_existing_volume_is_a_conflict() {
+async fn creating_an_existing_volume_reports_that_it_exists() {
     let server = MockServer::start().await;
     // incusd's storagePoolVolumesPost answers a duplicate name this way.
     Mock::given(method("POST"))
@@ -209,17 +211,14 @@ async fn creating_an_existing_volume_is_a_conflict() {
         },
     );
 
-    let error = client
+    let creation = client
         .create_block_volume(
             &crate::StoragePoolName::try_new("default").unwrap(),
             &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
             "20GiB",
         )
         .await
-        .unwrap_err();
+        .unwrap();
 
-    assert!(
-        matches!(&error, IncusError::Rejected { status: 409, message } if message == "Volume by that name already exists"),
-        "{error:?}"
-    );
+    assert_eq!(creation, VolumeCreation::AlreadyExists);
 }

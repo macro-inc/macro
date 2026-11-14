@@ -33,11 +33,11 @@ pub trait AuthorizationPolicy: sealed::Sealed + Send + Sync + 'static {
     fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_>;
 }
 
-/// Like [`UserOrInternal`], but refuses an account manager's credential and
-/// any request from a channel-mention bot's program. For endpoints that create
-/// credentials, change who can sign in, delete the account, or change its
-/// managers: a manager must not be able to outlast its own revocation, and a
-/// mention's program must not shed its restrictions.
+/// Like [`UserOrInternal`], but refuses an account manager's credential, a
+/// scoped agent run's, and any request from a channel-mention bot's program.
+/// For endpoints that create credentials, change who can sign in, delete the
+/// account, or change its managers: a manager must not be able to outlast its
+/// own revocation, and a run must not leave its scope or shed its restrictions.
 pub struct AccountHolderOrInternal;
 
 /// Admits directly authenticated users and internal services acting for a user.
@@ -288,7 +288,10 @@ impl AuthorizationPolicy for AccountHolderOrInternal {
         authorization: MacroAuthorization,
     ) -> Result<Self::Output, MacroAuthorizationRejection> {
         if let MacroAuthorization::User(user) = &authorization
-            && matches!(user.origin, CredentialOrigin::AccountManager(_))
+            && matches!(
+                user.origin,
+                CredentialOrigin::AccountManager(_) | CredentialOrigin::ScopedMacroApiJwt
+            )
         {
             return Err(forbidden());
         }

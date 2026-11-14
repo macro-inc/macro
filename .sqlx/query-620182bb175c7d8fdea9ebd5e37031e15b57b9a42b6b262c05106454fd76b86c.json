@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT pg_try_advisory_xact_lock(hashtextextended($1, 4973987001)) AS \"acquired!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "acquired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "620182bb175c7d8fdea9ebd5e37031e15b57b9a42b6b262c05106454fd76b86c"
+}

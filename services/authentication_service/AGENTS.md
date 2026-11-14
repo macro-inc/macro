@@ -27,7 +27,9 @@ key issuance, and account merge/link flows.
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout, and Macro computer purchase and
   billing (the `hosted_runtimes` team and internal routers, mounted with a
-  `ComputerService` built here).
+  `ComputerService` built here), and agent teammates (`crates/team_agents`
+  at `/team_agents`, plus its internal enrollment route; computer-facing
+  addresses come from `outbound/agent_addresses.rs`).
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
@@ -79,12 +81,12 @@ access, webhook reconciliation and billing workers remain independent of attachm
   never sent); `charge_status` reads a key's receipt. Removing an item already
   gone, or from a deleted team, succeeds.
 - With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
-- Every team subscription webhook re-reads the complete subscription (all item
-  pages) and only reports a `SubscriptionObserved` (status, items with their
-  `computer_id`, period end, read time) to `ComputerBillingObserver`
-  (`ComputerService::observe_subscription`), which decides per computer by
-  computer id, never by price or count. A failed read or observer call fails
-  the webhook (after the subscription work), so Stripe redelivers it.
+- The Stripe inbox's `computers` consumer reports each team subscription
+  snapshot, in order, as a `SubscriptionObserved` (status, items with their
+  `computer_id`, period end, `observed_at` = the event's time) to
+  `ComputerBillingObserver` (`ComputerService::observe_subscription`), which
+  decides per computer by computer id, never by price or count. A snapshot
+  with more than ten items is completed by paging the items once.
 - Computer billing work (effects and purchase confirmation) runs on its own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through
@@ -93,6 +95,26 @@ access, webhook reconciliation and billing workers remain independent of attachm
 - `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` default to 14
   and 7 (`Config::computer_billing_policy`, zero refused); agent_harness_service
   reads the same keys with the same defaults.
+
+## Stripe webhook and inbox
+
+- `POST /webhooks/user/stripe` only verifies the signature and stores the
+  event (`crates/stripe_inbox`); it calls no Stripe API, so a 500 means only
+  that storing failed. Consumers in `src/outbound/stripe_consumers.rs` apply
+  events in the background on every replica; their decisions are pure
+  functions in `src/domain/stripe_consumers.rs`. See
+  `docs/architecture/stripe-event-inbox.md`.
+- A Stripe customer maps to an account by `User.stripeCustomerId`; only an
+  unmapped customer is read from Stripe once and matched by email.
+- A personal grant on a price that is neither a sold seat price nor in
+  `teams::domain::model::LEGACY_PREMIUM_PRICE_IDS` (historical prices that
+  keep Premium) dead-letters instead of guessing a tier. Revokes never fail:
+  they remove the subscriber role and the subscription's own tier role
+  (Premium for an unknown price), never another tier a team seat grants.
+  Replay a cursor with
+  `POST /internal/stripe_inbox/replay`, or every dead one with
+  `POST /internal/stripe_inbox/replay_dead`; see
+  `docs/runbooks/stripe-event-inbox.md`.
 
 ## Subscription billing status
 
@@ -168,7 +190,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   account manager, and an agent cannot be managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
-  outlast its own revocation or lock the account's owner out.
+  outlast its own revocation or lock the account's owner out, and a scoped
+  code-mode run can't leave its scope.
 - `User."isAgent"` is set in the FusionAuth `user.create` webhook, from
   `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
   pending agent `team_invite`. Those agents skip the seeded content, Loops, and
@@ -294,7 +317,6 @@ Computer billing accepts either all six
 Validate syntax and reject partial groups at startup and in the Doppler check.
 Keep configured and recorded prices when no fleet is attached; cleanup and
 subscription reconciliation still use them. Prices have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
-
 ## Team vault cleanup
 
 - Supply the Passwords metadata and team-computer release ports to the existing

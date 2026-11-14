@@ -40,6 +40,11 @@ pub struct MacroApiToken {
     /// runs carrying it never send email.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_mention_id: Option<Uuid>,
+    /// The narrower scope its code-mode session runs in (`SessionScope`'s
+    /// stored name in `agent_correlation`), signed by the harness beside
+    /// `agent_correlation_id` so services with no database can enforce it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_scope: Option<String>,
 }
 
 pub struct EncodeMacroApiTokenArgs {
@@ -70,6 +75,9 @@ pub struct EncodeMacroApiTokenArgs {
     /// harness; never supplied by an API caller. A restriction, not a grant:
     /// runs carrying it never send email.
     pub channel_mention_id: Option<Uuid>,
+    /// The correlated session's scope by its stored name; never supplied by
+    /// an API caller.
+    pub agent_scope: Option<String>,
 }
 
 #[tracing::instrument(skip(args))]
@@ -87,6 +95,7 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
         agent_session_id: args.agent_session_id,
         routine_id: args.routine_id,
         channel_mention_id: args.channel_mention_id,
+        agent_scope: args.agent_scope,
         iss: args.issuer.clone(),
         fusion_user_id: args.fusionauth_id.clone(),
         macro_user_id: args.macro_user_id.clone(),

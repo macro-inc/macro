@@ -123,7 +123,8 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
                 let mut emails: Vec<_> = contact
                     .email_addresses
                     .into_iter()
-                    .map(|address| address.address.trim().to_lowercase())
+                    .filter_map(|address| address.address)
+                    .map(|address| address.trim().to_lowercase())
                     .filter(|address| {
                         !address.is_empty()
                             && address.len() < 310
