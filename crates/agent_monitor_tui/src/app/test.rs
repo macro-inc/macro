@@ -49,21 +49,42 @@ fn a_toggles_and_esc_walks_back_one_page() {
 }
 
 #[test]
-fn t_cycles_every_theme_and_names_it_until_the_next_key() {
+fn ctrl_t_cycles_every_theme_and_names_it_until_the_next_key() {
     use strum::IntoEnumIterator as _;
 
     let mut app = app();
     assert_eq!(app.theme, ThemeName::Classic);
     let mut seen = vec![app.theme];
     for _ in 1..ThemeName::iter().count() {
-        app.key(Key::Char('t'));
+        app.key(Key::NextTheme);
         assert!(app.theme_notice);
         seen.push(app.theme);
     }
     assert_eq!(seen, ThemeName::iter().collect::<Vec<_>>());
 
-    app.key(Key::Char('t'));
+    app.key(Key::NextTheme);
     assert_eq!(app.theme, ThemeName::Classic, "wraps around");
     app.key(Key::Down);
     assert!(!app.theme_notice);
+}
+
+#[test]
+fn the_theme_command_switches_theme_or_reports_an_unknown_one() {
+    let mut app = app();
+    for key in "THEME phosphor".chars().map(Key::Char) {
+        app.key(key);
+    }
+    app.key(Key::Enter);
+    assert_eq!(app.theme, ThemeName::Phosphor);
+    assert!(app.theme_notice);
+
+    for key in "THEME neon".chars().map(Key::Char) {
+        app.key(key);
+    }
+    app.key(Key::Enter);
+    assert_eq!(app.theme, ThemeName::Phosphor);
+    assert_eq!(
+        app.message.as_deref(),
+        Some("UNKNOWN THEME: neon (classic, ember, phosphor, dusk)")
+    );
 }

@@ -239,7 +239,7 @@ fn a_letter_starts_the_command_line_and_enter_runs_it() {
 
 #[test]
 fn reserved_letters_do_not_start_the_command_line() {
-    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a', 't'] {
+    for letter in ['j', 'k', 'h', 'l', 'q', 'w', 'a'] {
         let (mode, _) = step(idle(), Key::Char(letter), &Page::Monitor);
         assert_eq!(mode, idle(), "{letter}");
     }
@@ -248,10 +248,57 @@ fn reserved_letters_do_not_start_the_command_line() {
 }
 
 #[test]
-fn t_cycles_the_theme() {
-    let (mode, action) = step(idle(), Key::Char('t'), &Page::Monitor);
+fn lowercase_tape_with_a_filter_opens_tape_filtered() {
+    let keys: Vec<Key> = "tape error".chars().map(Key::Char).collect();
+    let (mode, _) = run(idle(), &keys, &Page::Monitor);
+    assert_eq!(
+        step(mode, Key::Enter, &Page::Monitor),
+        (
+            idle(),
+            Action::Run(Command {
+                page: Page::Zoom(Pane::Tape),
+                filter: vec![String::from("error")],
+            })
+        )
+    );
+}
+
+#[test]
+fn ctrl_t_cycles_the_theme_in_any_mode() {
+    let (mode, action) = step(idle(), Key::NextTheme, &Page::Monitor);
     assert_eq!(mode, idle());
-    assert_eq!(action, Action::CycleTheme);
+    assert_eq!(action, Action::Theme(None));
+
+    let (typing, _) = step(idle(), Key::Char('T'), &Page::Monitor);
+    let (mode, action) = step(typing.clone(), Key::NextTheme, &Page::Monitor);
+    assert_eq!(mode, typing, "the command line keeps what was typed");
+    assert_eq!(action, Action::Theme(None));
+}
+
+#[test]
+fn ctrl_t_decodes_to_the_theme_key() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    let event = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL);
+    assert_eq!(Key::from_event(event), Some(Key::NextTheme));
+    let event = KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE);
+    assert_eq!(Key::from_event(event), Some(Key::Char('t')));
+}
+
+#[test]
+fn the_theme_command_picks_or_cycles() {
+    let enter = |line: &str| {
+        let keys: Vec<Key> = line.chars().map(Key::Char).collect();
+        let (mode, _) = run(idle(), &keys, &Page::Monitor);
+        step(mode, Key::Enter, &Page::Monitor).1
+    };
+    assert_eq!(enter("THEME"), Action::Theme(None));
+    assert_eq!(enter("theme dusk"), Action::Theme(Some(ThemeName::Dusk)));
+    assert_eq!(enter("THEME Ember"), Action::Theme(Some(ThemeName::Ember)));
+    assert_eq!(
+        enter("THEME neon"),
+        Action::UnknownTheme(String::from("neon"))
+    );
 }
 
 #[test]

@@ -433,7 +433,7 @@ fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
                     app.theme.to_string().to_uppercase(),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::styled("  t NEXT", theme::ink(Token::Rule)));
+                spans.push(Span::styled("  CTRL-T NEXT", theme::ink(Token::Rule)));
                 spans.push(Span::raw("  "));
             }
             if let Some(message) = &app.message {
@@ -487,7 +487,7 @@ fn prompt(label: &str, rest: Vec<Span<'static>>) -> Vec<Span<'static>> {
     spans
 }
 
-const HELP: [(&str, &str); 18] = [
+const HELP: [(&str, &str); 19] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = PRs)",
@@ -504,11 +504,11 @@ const HELP: [(&str, &str); 18] = [
     ("ESC", "back one step"),
     ("/", "find: filter rows as you type"),
     ("a", "list ended agents too, or only current ones"),
-    ("t", "next colour theme"),
+    ("CTRL-T", "next colour theme"),
     ("?", "this help"),
     ("q  CTRL-C", "quit"),
     ("", ""),
-    ("TYPE A LETTER", "command line, then ENTER:"),
+    ("TYPE A LETTER", "command line, in any case, then ENTER:"),
     ("MON AGT TAPE SPND", "monitor, agents, tape, spend"),
     (
         "FAIL TREE SRC BODY PRS WALL",
@@ -517,6 +517,10 @@ const HELP: [(&str, &str); 18] = [
     (
         "AGT builder working",
         "words after a mnemonic filter rows; all lists ended",
+    ),
+    (
+        "THEME [name]",
+        "colour theme: classic, ember, phosphor or dusk; no name = next",
     ),
 ];
 
