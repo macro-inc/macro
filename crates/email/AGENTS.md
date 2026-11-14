@@ -158,7 +158,8 @@ tools — hexagonal, heavily feature-gated.
   contacts. Keep the `OFFSET 0` fence and the stream's `ORDER BY`, or the
   planner joins the whole stream to its facts. The read runs in one
   repeatable-read, read-only transaction (a short page and its window count
-  see one snapshot) with a 10 s `statement_timeout` budget.
+  see one snapshot) and, like the general builder's owned requests, has no
+  `statement_timeout`.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox

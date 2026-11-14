@@ -31,8 +31,6 @@
 //! listing only its own inbox's contacts (`parse_and_upsert_message_contacts`),
 //! as the general builder's inbox-scoped `matching_threads` does.
 
-use std::time::Instant;
-
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
@@ -46,8 +44,8 @@ use super::super::filters::{
     get_sort_timestamp_field, top_level_owners,
 };
 use super::{
-    QueryParams, limit_statement_time, map_row, push_page_head, push_page_tail,
-    push_preview_message_select, uses_subject_subscans, uses_view_history,
+    QueryParams, map_row, push_page_head, push_page_tail, push_preview_message_select,
+    uses_subject_subscans, uses_view_history,
 };
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
@@ -168,8 +166,7 @@ impl<'a> OwnedRead<'a> {
         })
     }
 
-    /// Reads the page, each statement bounded by what is left until
-    /// `deadline`.
+    /// Reads the page.
     #[tracing::instrument(
         name = "email.owned_address_read",
         skip_all,
@@ -184,13 +181,11 @@ impl<'a> OwnedRead<'a> {
     pub(super) async fn fetch(
         self,
         connection: &mut PgConnection,
-        deadline: Instant,
     ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
         let span = tracing::Span::current();
         let (streams, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
             (OwnedStreams::Empty, Vec::new())
         } else {
-            limit_statement_time(connection, deadline).await?;
             let superset_rows: i64 = self
                 .probe()
                 .build_query_scalar()
@@ -198,7 +193,7 @@ impl<'a> OwnedRead<'a> {
                 .fetch_one(&mut *connection)
                 .await?;
             span.record("superset_rows", superset_rows);
-            self.read(connection, deadline, superset_rows).await?
+            self.read(connection, superset_rows).await?
         };
         span.record("streams", <&str>::from(streams));
         span.record("rows", rows.len());
@@ -209,20 +204,18 @@ impl<'a> OwnedRead<'a> {
     async fn read(
         &self,
         connection: &mut PgConnection,
-        deadline: Instant,
         superset_rows: i64,
     ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
         if superset_rows <= self.tuning.superset_limit {
-            let rows = self.page(connection, deadline, Stream::Superset).await?;
+            let rows = self.page(connection, Stream::Superset).await?;
             return Ok((OwnedStreams::Superset, rows));
         }
-        let rows = self.page(connection, deadline, Stream::Inboxes).await?;
+        let rows = self.page(connection, Stream::Inboxes).await?;
         if rows.len() as i64 >= self.params.query_limit {
             return Ok((OwnedStreams::Inboxes, rows));
         }
         // The superset costs a dense list's whole address set, so a short
         // page skips it when the window read every thread there is.
-        limit_statement_time(connection, deadline).await?;
         let window_threads: i64 = self
             .window_count()
             .build_query_scalar()
@@ -232,7 +225,7 @@ impl<'a> OwnedRead<'a> {
         if window_threads < self.window() {
             return Ok((OwnedStreams::InboxesToEnd, rows));
         }
-        let rows = self.page(connection, deadline, Stream::Superset).await?;
+        let rows = self.page(connection, Stream::Superset).await?;
         Ok((OwnedStreams::InboxesThenSuperset, rows))
     }
 
@@ -272,10 +265,8 @@ impl<'a> OwnedRead<'a> {
     async fn page(
         &self,
         connection: &mut PgConnection,
-        deadline: Instant,
         stream: Stream,
     ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-        limit_statement_time(connection, deadline).await?;
         let mut builder = self.build_page(stream);
         builder
             .build()

@@ -15,9 +15,8 @@ use owned_scope::OwnedRead;
 pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
-use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 struct QueryParams {
@@ -1358,46 +1357,26 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     Ok((rows, None))
 }
 
-/// How long an owned address read may run in the database, across all its
-/// statements: under the web client's 12s Soup request timeout, after which
-/// nobody reads the page. The server never cancels a query its client
-/// dropped, so the database enforces the bound.
-const OWNED_READ_BUDGET: Duration = Duration::from_secs(10);
-
-/// Reads an owned address page with [`OwnedRead`] within
-/// [`OWNED_READ_BUDGET`], all its statements on one snapshot: a short inbox
-/// page is final only if the window it read is the one the count sees.
+/// Reads an owned address page with [`OwnedRead`], all its statements on one
+/// snapshot: a short inbox page is final only if the window it read is the
+/// one the count sees. Like the general builder's owned requests, it has no
+/// statement timeout, so it never errors where the general builder answers.
 async fn read_owned_page(
     pool: &PgPool,
     read: OwnedRead<'_>,
 ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
-    let deadline = Instant::now() + OWNED_READ_BUDGET;
-    let mut transaction = pool
-        .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        .await?;
-    let page = read.fetch(&mut transaction, deadline).await?;
+    let mut transaction = begin_snapshot(pool).await?;
+    let page = read.fetch(&mut transaction).await?;
     transaction.commit().await?;
     Ok(page)
 }
 
-/// Bounds the transaction's next statement by what is left until `deadline`.
-async fn limit_statement_time(
-    connection: &mut PgConnection,
-    deadline: Instant,
-) -> Result<(), sqlx::Error> {
-    // A zero statement_timeout disables the bound, so a spent budget still
-    // allows one millisecond and fails the statement.
-    let remaining = deadline
-        .saturating_duration_since(Instant::now())
-        .as_millis()
-        .max(1);
-    sqlx::query_scalar!(
-        "SELECT set_config('statement_timeout', $1, true)",
-        format!("{remaining}ms")
-    )
-    .fetch_one(connection)
-    .await?;
-    Ok(())
+/// A read-only transaction whose statements all read one snapshot.
+pub(crate) async fn begin_snapshot(
+    pool: &PgPool,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    pool.begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .await
 }
 
 /// Maps one page row, as [`push_page_head`] names its columns.
