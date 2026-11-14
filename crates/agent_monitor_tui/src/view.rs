@@ -169,8 +169,9 @@ impl ViewState {
             .map(|agent| (agent.id.clone(), agent))
             .collect();
         self.tape.clear();
+        // Past lines: counted, never animated, so a (re)snapshot fires no burst.
+        self.body.history(&snapshot.tape);
         for event in snapshot.tape {
-            self.body.event(&event);
             self.push_tape(event);
         }
         self.body.totals(&snapshot.totals);

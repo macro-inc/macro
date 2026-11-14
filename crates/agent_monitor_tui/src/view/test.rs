@@ -288,3 +288,57 @@ fn failures_skip_agents_last_seen_before_the_window() {
 
     assert!(view.failures(&Filter::default()).is_empty());
 }
+
+/// Counts what the view hands the BODY pane.
+#[derive(Clone, Default)]
+struct Recorder {
+    calls: std::sync::Arc<std::sync::Mutex<(usize, usize)>>,
+}
+
+impl crate::body::BodyPane for Recorder {
+    fn title(&self) -> &str {
+        "RECORDER"
+    }
+
+    fn event(&mut self, _event: &TapeEvent) {
+        self.calls.lock().expect("lock").0 += 1;
+    }
+
+    fn history(&mut self, events: &[TapeEvent]) {
+        self.calls.lock().expect("lock").1 += events.len();
+    }
+
+    fn totals(&mut self, _totals: &agent_monitor::domain::model::Totals) {}
+
+    fn tick(&mut self, _elapsed: std::time::Duration) {}
+
+    fn animating(&self) -> bool {
+        false
+    }
+
+    fn render(&self, _area: ratatui::layout::Rect, _buffer: &mut ratatui::buffer::Buffer) {}
+}
+
+#[test]
+fn a_snapshots_tape_is_history_and_only_live_lines_are_events() {
+    let recorder = Recorder::default();
+    let mut view = ViewState::new(Box::new(recorder.clone()));
+
+    view.apply(Update {
+        seq: 10,
+        kind: UpdateKind::Snapshot(Snapshot {
+            tape: vec![
+                event(1, "hc:t1", TapeKind::ToolStart, Severity::Info),
+                event(2, "hc:t1", TapeKind::ToolEnd, Severity::Info),
+            ],
+            ..Snapshot::default()
+        }),
+    });
+    assert_eq!(*recorder.calls.lock().expect("lock"), (0, 2));
+
+    view.apply(Update {
+        seq: 11,
+        kind: UpdateKind::Event(event(11, "hc:t1", TapeKind::ToolStart, Severity::Info)),
+    });
+    assert_eq!(*recorder.calls.lock().expect("lock"), (1, 2));
+}

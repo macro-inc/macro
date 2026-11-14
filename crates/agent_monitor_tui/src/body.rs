@@ -27,8 +27,14 @@ pub trait BodyPane: Send {
     /// A short name for the pane's title, such as `VITALS`.
     fn title(&self) -> &str;
 
-    /// One new tape line.
+    /// One new tape line, as it happens.
     fn event(&mut self, event: &TapeEvent);
+
+    /// Tape lines a snapshot carried: already past, so they may fill counts
+    /// but must not animate. Ignored unless a pane keeps counts.
+    fn history(&mut self, events: &[TapeEvent]) {
+        let _ = events;
+    }
 
     /// New board numbers.
     fn totals(&mut self, totals: &Totals);
@@ -65,10 +71,13 @@ struct Channel {
 }
 
 impl Channel {
-    fn hit(&mut self, at: Timestamp) {
+    /// Counts one event; a live one also flashes the channel.
+    fn hit(&mut self, at: Timestamp, live: bool) {
         self.recent.push_back(at);
         self.shown += 1.0;
-        self.flash = FLASH;
+        if live {
+            self.flash = FLASH;
+        }
     }
 
     /// Drops events older than the window ending at `latest`.
@@ -190,34 +199,47 @@ impl Vitals {
     }
 }
 
-impl BodyPane for Vitals {
-    fn title(&self) -> &str {
-        "VITALS"
-    }
-
-    fn event(&mut self, event: &TapeEvent) {
+impl Vitals {
+    /// Counts a tape line into the rate channels; a `live` one flashes them.
+    fn count(&mut self, event: &TapeEvent, live: bool) {
         let latest = self.latest.map_or(event.at, |latest| latest.max(event.at));
         self.latest = Some(latest);
 
         if let Some(index) = Self::channel_index(event.kind)
             && let Some(channel) = self.channels.get_mut(index)
         {
-            channel.hit(event.at);
+            channel.hit(event.at, live);
         }
 
         let namespace = event.agent.as_str().split(':').next().unwrap_or_default();
         if let Some(index) = NAMESPACES.iter().position(|name| *name == namespace)
             && let Some(channel) = self.namespaces.get_mut(index)
         {
-            channel.hit(event.at);
+            channel.hit(event.at, live);
         }
         if event.kind == TapeKind::ToolStart {
             let name = event.text.split_whitespace().next().unwrap_or_default();
             if !name.is_empty() {
-                self.tools.entry(name.to_owned()).or_default().hit(event.at);
+                self.tools.entry(name.to_owned()).or_default().hit(event.at, live);
             }
         }
+    }
+}
+
+impl BodyPane for Vitals {
+    fn title(&self) -> &str {
+        "VITALS"
+    }
+
+    fn event(&mut self, event: &TapeEvent) {
+        self.count(event, true);
         self.pending = self.pending.saturating_add(1);
+    }
+
+    fn history(&mut self, events: &[TapeEvent]) {
+        for event in events {
+            self.count(event, false);
+        }
     }
 
     fn totals(&mut self, totals: &Totals) {

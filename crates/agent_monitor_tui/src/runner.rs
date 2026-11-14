@@ -95,6 +95,12 @@ where
         let now = Instant::now();
         let since_draw = last_draw.map_or(MIN_FRAME, |at| now - at);
         if app.view.dirty && since_draw >= MIN_FRAME {
+            // Animation follows the clock, however the loop was woken.
+            let elapsed = last_tick.elapsed();
+            last_tick = Instant::now();
+            if app.animating() {
+                app.view.body.tick(elapsed);
+            }
             terminal.draw(|frame| ui::draw(frame, app, local_clock()))?;
             app.view.dirty = false;
             last_draw = Some(now);
@@ -129,14 +135,7 @@ where
                 Followed::Item(item) => app.view.transcript_item(&agent, item),
                 Followed::Failed(error) => app.view.transcript_error(&agent, error),
             },
-            () = tokio::time::sleep(wait) => {
-                let elapsed = last_tick.elapsed();
-                last_tick = Instant::now();
-                if app.animating() {
-                    app.view.body.tick(elapsed);
-                }
-                app.view.dirty = true;
-            }
+            () = tokio::time::sleep(wait) => app.view.dirty = true,
         }
     }
 
