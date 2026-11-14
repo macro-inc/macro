@@ -2532,6 +2532,16 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_dynamic_cursor_soup_hydrated_with(db, args, |arm| arm).await
+}
+
+/// [`expanded_dynamic_cursor_soup_hydrated`], with the document arm the
+/// candidates chose passed through `pick_arm`, which tests use to force one.
+async fn expanded_dynamic_cursor_soup_hydrated_with(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+    pick_arm: impl FnOnce(Option<CandidateArm>) -> Option<CandidateArm>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
@@ -2551,9 +2561,10 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 
     let mut transaction = begin_dynamic_query(db).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
-    let document_candidates =
+    let document_candidates = pick_arm(
         document_candidate_arm(&mut transaction, cursor.filter().document_filter.as_deref())
-            .await?;
+            .await?,
+    );
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(

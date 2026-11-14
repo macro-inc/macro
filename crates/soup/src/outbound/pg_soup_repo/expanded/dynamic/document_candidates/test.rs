@@ -19,6 +19,7 @@ use std::sync::Arc;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::{Uuid, uuid};
 
+mod pages;
 mod participants;
 
 const DOC_A: Uuid = uuid!("22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -316,8 +317,22 @@ async fn the_arm_counts_ids_and_participant_rows_against_the_limit(
         (0, domain("arm.test"), true),
         (limit - 2, domain("arm.test"), true),
         (limit - 1, domain("arm.test"), false),
+        // Matched lowercased.
+        (limit - 1, domain("ARM.test"), false),
         // One row under the address.
         (limit - 1, address("pat@arm.test"), true),
+        (limit, address("PAT@Arm.TEST"), false),
+        // A domain's rows and an address's, each counted.
+        (
+            limit - 3,
+            Expr::or(domain("arm.test"), address("pat@arm.test")),
+            true,
+        ),
+        (
+            limit - 2,
+            Expr::or(domain("arm.test"), address("pat@arm.test")),
+            false,
+        ),
         // More ids than the limit: no count, whatever the participants.
         (limit + 500, domain("arm.test"), false),
     ];
