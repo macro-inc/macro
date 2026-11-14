@@ -8,9 +8,10 @@ use std::path::PathBuf;
 use chrono::DateTime;
 
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, AgentMinutes, Cost, HOURS_PER_DAY, Progress,
-    Severity, Snapshot, SourceHealth, SourceKind, SourceSet, SourceState, Status, TapeEvent,
-    TapeKind, Timestamp, Tokens, Totals, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, AgentMinutes, CiState, Cost, HOURS_PER_DAY,
+    Mergeable, Pr, PrId, PrState, Progress, RepoName, ReviewState, Severity, Snapshot,
+    SourceHealth, SourceKind, SourceSet, SourceState, Status, TapeEvent, TapeKind, Timestamp,
+    Tokens, Totals, TranscriptItem, TranscriptItemKind, Update, UpdateKind,
 };
 
 #[expect(
@@ -26,7 +27,7 @@ mod generated {
 pub use generated::r#macro::agent_monitor::v1 as wire;
 
 /// The wire protocol version. Bump it on any incompatible change to the proto.
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
 
 /// A wire message the domain cannot represent.
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -45,6 +46,9 @@ pub enum WireError {
     /// A timestamp out of range.
     #[error("timestamp out of range in `{0}`")]
     Timestamp(&'static str),
+    /// A repository name that is not `<owner>/<name>`.
+    #[error("invalid repository `{0}`")]
+    Repo(String),
     /// A fixed-length series had the wrong length.
     #[error("`{field}` has {len} values")]
     SeriesLength {
@@ -84,6 +88,7 @@ impl From<SourceKind> for wire::Source {
             SourceKind::RunRecord => Self::RunRecord,
             SourceKind::Demo => Self::Demo,
             SourceKind::Daemon => Self::Daemon,
+            SourceKind::Github => Self::Github,
         }
     }
 }
@@ -103,6 +108,7 @@ fn source_from_wire(value: i32) -> Result<SourceKind, WireError> {
         wire::Source::RunRecord => Ok(SourceKind::RunRecord),
         wire::Source::Demo => Ok(SourceKind::Demo),
         wire::Source::Daemon => Ok(SourceKind::Daemon),
+        wire::Source::Github => Ok(SourceKind::Github),
         wire::Source::Unspecified => Err(unknown),
     }
 }
@@ -268,6 +274,7 @@ impl From<&Agent> for wire::Agent {
                 .map(|count| u32::from(*count))
                 .collect(),
             minutes: (!agent.minutes.is_empty()).then(|| agent.minutes.as_ref().into()),
+            prs: agent.prs.iter().map(|id| id.as_str().to_owned()).collect(),
         }
     }
 }
@@ -363,6 +370,7 @@ impl TryFrom<wire::Agent> for Agent {
                 .transpose()?
                 .map(Box::new)
                 .unwrap_or_default(),
+            prs: agent.prs.into_iter().map(PrId::from_wire).collect(),
         })
     }
 }
@@ -387,6 +395,11 @@ impl From<TapeKind> for wire::TapeKind {
             TapeKind::Failure => Self::Failure,
             TapeKind::Finished => Self::Finished,
             TapeKind::Removed => Self::Removed,
+            TapeKind::PrOpened => Self::PrOpened,
+            TapeKind::PrCiPassed => Self::PrCiPassed,
+            TapeKind::PrCiFailed => Self::PrCiFailed,
+            TapeKind::PrMerged => Self::PrMerged,
+            TapeKind::PrClosed => Self::PrClosed,
         }
     }
 }
@@ -407,6 +420,11 @@ fn tape_kind_from_wire(value: i32) -> Result<TapeKind, WireError> {
         wire::TapeKind::Failure => Ok(TapeKind::Failure),
         wire::TapeKind::Finished => Ok(TapeKind::Finished),
         wire::TapeKind::Removed => Ok(TapeKind::Removed),
+        wire::TapeKind::PrOpened => Ok(TapeKind::PrOpened),
+        wire::TapeKind::PrCiPassed => Ok(TapeKind::PrCiPassed),
+        wire::TapeKind::PrCiFailed => Ok(TapeKind::PrCiFailed),
+        wire::TapeKind::PrMerged => Ok(TapeKind::PrMerged),
+        wire::TapeKind::PrClosed => Ok(TapeKind::PrClosed),
         wire::TapeKind::Unspecified => Err(unknown),
     }
 }
@@ -554,6 +572,9 @@ impl From<&SourceHealth> for wire::SourceHealth {
                 total: progress.total,
             }),
             restarts: health.restarts,
+            poll_secs: health
+                .poll_every
+                .map(|every| u32::try_from(every.as_secs()).unwrap_or(u32::MAX)),
         }
     }
 }
@@ -573,6 +594,9 @@ impl TryFrom<wire::SourceHealth> for SourceHealth {
                 total: progress.total,
             }),
             restarts: health.restarts,
+            poll_every: health
+                .poll_secs
+                .map(|secs| std::time::Duration::from_secs(u64::from(secs))),
         })
     }
 }
@@ -584,6 +608,7 @@ impl From<&Snapshot> for wire::Snapshot {
             tape: snapshot.tape.iter().map(Into::into).collect(),
             totals: Some((&snapshot.totals).into()),
             sources: snapshot.sources.iter().map(Into::into).collect(),
+            prs: snapshot.prs.iter().map(Into::into).collect(),
         }
     }
 }
@@ -612,6 +637,11 @@ impl TryFrom<wire::Snapshot> for Snapshot {
                 .into_iter()
                 .map(SourceHealth::try_from)
                 .collect::<Result<_, _>>()?,
+            prs: snapshot
+                .prs
+                .into_iter()
+                .map(Pr::try_from)
+                .collect::<Result<_, _>>()?,
         })
     }
 }
@@ -628,6 +658,8 @@ impl From<&Update> for wire::Update {
             UpdateKind::Heartbeat(at) => {
                 wire::update::Kind::Heartbeat(wire::Heartbeat { at_ms: to_ms(*at) })
             }
+            UpdateKind::PrUpsert(pr) => wire::update::Kind::PrUpsert(pr.into()),
+            UpdateKind::PrRemoved(id) => wire::update::Kind::PrRemoved(id.as_str().to_owned()),
         };
         Self {
             seq: update.seq,
@@ -650,6 +682,8 @@ impl TryFrom<wire::Update> for Update {
             wire::update::Kind::Heartbeat(heartbeat) => {
                 UpdateKind::Heartbeat(from_ms("heartbeat", heartbeat.at_ms)?)
             }
+            wire::update::Kind::PrUpsert(pr) => UpdateKind::PrUpsert(pr.try_into()?),
+            wire::update::Kind::PrRemoved(id) => UpdateKind::PrRemoved(PrId::from_wire(id)),
         };
         Ok(Self {
             seq: update.seq,
@@ -709,6 +743,154 @@ impl TryFrom<wire::TranscriptItem> for TranscriptItem {
             tool_name: item.tool_name,
             is_error: item.is_error,
             duration_ms: item.duration_ms,
+        })
+    }
+}
+
+impl From<PrState> for wire::PrState {
+    fn from(state: PrState) -> Self {
+        match state {
+            PrState::Unknown => Self::Unknown,
+            PrState::Open => Self::Open,
+            PrState::Draft => Self::Draft,
+            PrState::Merged => Self::Merged,
+            PrState::Closed => Self::Closed,
+        }
+    }
+}
+
+fn pr_state_from_wire(value: i32) -> Result<PrState, WireError> {
+    let unknown = WireError::UnknownEnum {
+        field: "pr state",
+        value,
+    };
+    match wire::PrState::try_from(value).map_err(|_| unknown.clone())? {
+        wire::PrState::Unknown => Ok(PrState::Unknown),
+        wire::PrState::Open => Ok(PrState::Open),
+        wire::PrState::Draft => Ok(PrState::Draft),
+        wire::PrState::Merged => Ok(PrState::Merged),
+        wire::PrState::Closed => Ok(PrState::Closed),
+        wire::PrState::Unspecified => Err(unknown),
+    }
+}
+
+impl From<CiState> for wire::CiState {
+    fn from(state: CiState) -> Self {
+        match state {
+            CiState::Unknown => Self::Unknown,
+            CiState::None => Self::None,
+            CiState::Running => Self::Running,
+            CiState::Passed => Self::Passed,
+            CiState::Failed => Self::Failed,
+        }
+    }
+}
+
+fn ci_state_from_wire(value: i32) -> Result<CiState, WireError> {
+    let unknown = WireError::UnknownEnum {
+        field: "ci state",
+        value,
+    };
+    match wire::CiState::try_from(value).map_err(|_| unknown.clone())? {
+        wire::CiState::Unknown => Ok(CiState::Unknown),
+        wire::CiState::None => Ok(CiState::None),
+        wire::CiState::Running => Ok(CiState::Running),
+        wire::CiState::Passed => Ok(CiState::Passed),
+        wire::CiState::Failed => Ok(CiState::Failed),
+        wire::CiState::Unspecified => Err(unknown),
+    }
+}
+
+impl From<ReviewState> for wire::ReviewState {
+    fn from(state: ReviewState) -> Self {
+        match state {
+            ReviewState::None => Self::None,
+            ReviewState::ReviewRequired => Self::ReviewRequired,
+            ReviewState::ChangesRequested => Self::ChangesRequested,
+            ReviewState::Approved => Self::Approved,
+        }
+    }
+}
+
+fn review_state_from_wire(value: i32) -> Result<ReviewState, WireError> {
+    let unknown = WireError::UnknownEnum {
+        field: "review state",
+        value,
+    };
+    match wire::ReviewState::try_from(value).map_err(|_| unknown.clone())? {
+        wire::ReviewState::None => Ok(ReviewState::None),
+        wire::ReviewState::ReviewRequired => Ok(ReviewState::ReviewRequired),
+        wire::ReviewState::ChangesRequested => Ok(ReviewState::ChangesRequested),
+        wire::ReviewState::Approved => Ok(ReviewState::Approved),
+        wire::ReviewState::Unspecified => Err(unknown),
+    }
+}
+
+impl From<Mergeable> for wire::Mergeable {
+    fn from(mergeable: Mergeable) -> Self {
+        match mergeable {
+            Mergeable::Unknown => Self::Unknown,
+            Mergeable::Mergeable => Self::Mergeable,
+            Mergeable::Conflicting => Self::Conflicting,
+        }
+    }
+}
+
+fn mergeable_from_wire(value: i32) -> Result<Mergeable, WireError> {
+    let unknown = WireError::UnknownEnum {
+        field: "mergeable",
+        value,
+    };
+    match wire::Mergeable::try_from(value).map_err(|_| unknown.clone())? {
+        wire::Mergeable::Unknown => Ok(Mergeable::Unknown),
+        wire::Mergeable::Mergeable => Ok(Mergeable::Mergeable),
+        wire::Mergeable::Conflicting => Ok(Mergeable::Conflicting),
+        wire::Mergeable::Unspecified => Err(unknown),
+    }
+}
+
+impl From<&Pr> for wire::PullRequest {
+    fn from(pr: &Pr) -> Self {
+        Self {
+            id: pr.id.as_str().to_owned(),
+            repo: pr.repo.as_str().to_owned(),
+            number: pr.number,
+            url: pr.url.clone(),
+            title: pr.title.clone(),
+            state: wire::PrState::from(pr.state) as i32,
+            ci: wire::CiState::from(pr.ci) as i32,
+            review: wire::ReviewState::from(pr.review) as i32,
+            mergeable: wire::Mergeable::from(pr.mergeable) as i32,
+            author_agent: pr.author_agent.as_ref().map(|id| id.as_str().to_owned()),
+            agents: pr.agents.iter().map(|id| id.as_str().to_owned()).collect(),
+            branch: pr.branch.clone(),
+            opened_at_ms: pr.opened_at.map(to_ms),
+            updated_at_ms: pr.updated_at.map(to_ms),
+            closed_at_ms: pr.closed_at.map(to_ms),
+        }
+    }
+}
+
+impl TryFrom<wire::PullRequest> for Pr {
+    type Error = WireError;
+
+    fn try_from(pr: wire::PullRequest) -> Result<Self, WireError> {
+        Ok(Self {
+            id: PrId::from_wire(pr.id),
+            repo: RepoName::parse(&pr.repo).ok_or_else(|| WireError::Repo(pr.repo.clone()))?,
+            number: pr.number,
+            url: pr.url,
+            title: pr.title,
+            state: pr_state_from_wire(pr.state)?,
+            ci: ci_state_from_wire(pr.ci)?,
+            review: review_state_from_wire(pr.review)?,
+            mergeable: mergeable_from_wire(pr.mergeable)?,
+            author_agent: pr.author_agent.map(AgentId::from_wire),
+            agents: pr.agents.into_iter().map(AgentId::from_wire).collect(),
+            branch: pr.branch,
+            opened_at: from_ms_opt("opened_at_ms", pr.opened_at_ms)?,
+            updated_at: from_ms_opt("updated_at_ms", pr.updated_at_ms)?,
+            closed_at: from_ms_opt("closed_at_ms", pr.closed_at_ms)?,
         })
     }
 }

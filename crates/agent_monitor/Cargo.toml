@@ -14,6 +14,7 @@ hyper-util = { workspace = true }
 notify = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 prost = { workspace = true }
+lazy-regex = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

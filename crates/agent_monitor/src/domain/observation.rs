@@ -12,10 +12,16 @@
 //! | manager ↔ terminal | [`ManagerFact::dir`] = [`TerminalFact::manager_dir`] |
 //! | work run ↔ terminal | [`RunRecordFact::id`] = [`TerminalFact::run_id`], or [`RunRecordFact::terminal`] |
 //! | Codex terminal ↔ rollout | `cwd` plus start time |
+//! | PR ↔ author | [`TranscriptEventKind::PrOpened`] in the agent's transcript |
+//! | PR ↔ manager | [`ManagerFact::prs`] |
+//! | PR ↔ branch | agent `cwd` → [`CheckoutFact::repo`], agent branch = [`PrStatusFact::branch`] |
 
 use std::path::PathBuf;
 
-use crate::domain::model::{AgentKind, Cost, SourceHealth, SourceKind, Timestamp, Tokens};
+use crate::domain::model::{
+    AgentKind, CiState, Cost, Mergeable, PrId, PrRef, PrState, RepoName, ReviewState,
+    SourceHealth, SourceKind, Timestamp, Tokens,
+};
 
 /// One message from a source to the store.
 #[derive(Clone, Debug, PartialEq)]
@@ -56,6 +62,10 @@ pub enum Fact {
     Manager(ManagerFact),
     /// A work-run record.
     RunRecord(RunRecordFact),
+    /// A pull request's status on GitHub.
+    PrStatus(Box<PrStatusFact>),
+    /// A working directory resolved to its GitHub repository.
+    Checkout(CheckoutFact),
 }
 
 impl Fact {
@@ -68,6 +78,8 @@ impl Fact {
             Fact::MacrodSession(session) => FactKey::MacrodSession(session.id.clone()),
             Fact::Manager(manager) => FactKey::Manager(manager.dir.clone()),
             Fact::RunRecord(record) => FactKey::RunRecord(record.id.clone()),
+            Fact::PrStatus(status) => FactKey::Pr(status.pr.id()),
+            Fact::Checkout(checkout) => FactKey::Checkout(checkout.cwd.clone()),
         }
     }
 }
@@ -87,6 +99,10 @@ pub enum FactKey {
     Manager(PathBuf),
     /// A work-run id.
     RunRecord(String),
+    /// A pull request.
+    Pr(PrId),
+    /// A working directory.
+    Checkout(PathBuf),
 }
 
 /// Whether an hc terminal's process is still running.
@@ -274,6 +290,9 @@ pub enum TranscriptEventKind {
     Usage(Tokens),
     /// The cost the program itself reported, replacing any estimate.
     Cost(Cost),
+    /// The session opened a pull request (`gh pr create` and the URL it
+    /// printed, or the program's own record of it).
+    PrOpened(PrRef),
 }
 
 /// A session macrod dispatched, from its session record.
@@ -308,6 +327,8 @@ pub struct ManagerFact {
     pub reviews: u32,
     /// The last verdict.
     pub last_verdict: Option<String>,
+    /// Pull requests the manager recorded (`herdr-manager pr`), in order.
+    pub prs: Vec<PrRef>,
 }
 
 /// A work-run record.
@@ -329,4 +350,61 @@ pub struct RunRecordFact {
     pub terminal: Option<String>,
     /// The run's cost file.
     pub cost: Option<Cost>,
+}
+
+/// A pull request as GitHub reports it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PrStatusFact {
+    /// Which pull request.
+    pub pr: PrRef,
+    /// Its page.
+    pub url: String,
+    /// Its title.
+    pub title: Option<String>,
+    /// Open, draft, merged or closed.
+    pub state: PrState,
+    /// CI on its head commit.
+    pub ci: CiState,
+    /// The review decision.
+    pub review: ReviewState,
+    /// Whether it merges cleanly.
+    pub mergeable: Mergeable,
+    /// Its head branch.
+    pub branch: Option<String>,
+    /// When it was opened.
+    pub created: Option<Timestamp>,
+    /// When it last changed.
+    pub updated: Option<Timestamp>,
+    /// When it was merged or closed.
+    pub closed: Option<Timestamp>,
+}
+
+/// A working directory inside a clone of a GitHub repository.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckoutFact {
+    /// The directory, as agents report it.
+    pub cwd: PathBuf,
+    /// Its `origin` repository.
+    pub repo: RepoName,
+}
+
+/// An agent's branch in a working directory, to look up as a pull request's
+/// head.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BranchCandidate {
+    /// The agent's working directory.
+    pub cwd: PathBuf,
+    /// Its branch.
+    pub branch: String,
+}
+
+/// What the GitHub source should look up: every pull request the facts
+/// name, and agent branches that may have one. The store publishes it after
+/// each reduce.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrWanted {
+    /// Pull requests named by transcripts, managers, or an earlier lookup.
+    pub refs: std::collections::BTreeSet<PrRef>,
+    /// Agent branches to resolve.
+    pub branches: std::collections::BTreeSet<BranchCandidate>,
 }

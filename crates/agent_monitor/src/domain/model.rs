@@ -91,11 +91,13 @@ pub enum SourceKind {
     /// The macrod process hosting the collector: its runtime connection,
     /// open prompts and harness. Reported as source health only.
     Daemon,
+    /// Pull request status from GitHub, polled through the `gh` CLI.
+    Github,
 }
 
 impl SourceKind {
     /// Every source, in display order.
-    pub const ALL: [SourceKind; 9] = [
+    pub const ALL: [SourceKind; 10] = [
         SourceKind::Hc,
         SourceKind::ClaudeRegistry,
         SourceKind::ClaudeTranscripts,
@@ -105,6 +107,7 @@ impl SourceKind {
         SourceKind::RunRecord,
         SourceKind::Demo,
         SourceKind::Daemon,
+        SourceKind::Github,
     ];
 
     /// A short lowercase name, used in span fields and the SOURCES pane.
@@ -119,6 +122,7 @@ impl SourceKind {
             SourceKind::RunRecord => "run_record",
             SourceKind::Demo => "demo",
             SourceKind::Daemon => "daemon",
+            SourceKind::Github => "github",
         }
     }
 
@@ -386,6 +390,8 @@ pub struct Agent {
     /// The last hour by minute, one series per drill-in cell. Boxed: it is
     /// most of a row's size.
     pub minutes: Box<AgentMinutes>,
+    /// Pull requests this agent opened or works on, newest first.
+    pub prs: Vec<PrId>,
 }
 
 /// An agent's last hour by minute, oldest first: what the drill-in's stat
@@ -488,6 +494,7 @@ impl Agent {
             failures: 0,
             activity: [0; ACTIVITY_MINUTES],
             minutes: Box::default(),
+            prs: Vec::new(),
         }
     }
 }
@@ -516,6 +523,16 @@ pub enum TapeKind {
     Finished,
     /// The agent was removed.
     Removed,
+    /// A pull request was opened.
+    PrOpened,
+    /// A pull request's CI passed.
+    PrCiPassed,
+    /// A pull request's CI failed.
+    PrCiFailed,
+    /// A pull request was merged.
+    PrMerged,
+    /// A pull request was closed without merging.
+    PrClosed,
 }
 
 /// How loudly a tape line should show.
@@ -636,6 +653,9 @@ pub struct SourceHealth {
     pub indexing: Option<Progress>,
     /// How often the supervisor restarted it.
     pub restarts: u32,
+    /// How often a polled source asks, while it polls; `None` for a
+    /// push-driven source.
+    pub poll_every: Option<std::time::Duration>,
 }
 
 impl SourceHealth {
@@ -649,6 +669,7 @@ impl SourceHealth {
             last_event: None,
             indexing: None,
             restarts: 0,
+            poll_every: None,
         }
     }
 }
@@ -664,6 +685,8 @@ pub struct Snapshot {
     pub totals: Totals,
     /// Every source's health.
     pub sources: Vec<SourceHealth>,
+    /// Every known pull request.
+    pub prs: Vec<Pr>,
 }
 
 /// One change the store publishes.
@@ -682,6 +705,10 @@ pub enum UpdateKind {
     Totals(Totals),
     /// One source's health changed.
     Source(SourceHealth),
+    /// A whole pull request row, replacing the row with the same id.
+    PrUpsert(Pr),
+    /// A pull request that is gone (pruned, or no source knows it).
+    PrRemoved(PrId),
     /// The collector is alive.
     Heartbeat(Timestamp),
 }
@@ -742,4 +769,207 @@ pub struct MonitorStatus {
     pub sources: Vec<SourceHealth>,
     /// Viewers subscribed now.
     pub subscribers: u32,
+}
+
+/// A pull request's identity: `<owner>/<repo>#<number>`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct PrId(String);
+
+impl PrId {
+    /// Wraps an id received over the wire. Ids are opaque to viewers.
+    pub fn from_wire(id: String) -> Self {
+        Self(id)
+    }
+
+    /// The id as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// A GitHub repository, `<owner>/<name>`, each part limited to the
+/// characters GitHub allows, so it can go into a query unescaped.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct RepoName(String);
+
+impl RepoName {
+    /// Checks `<owner>/<name>`; anything else is `None`.
+    pub fn parse(text: &str) -> Option<Self> {
+        let (owner, name) = text.split_once('/')?;
+        let valid = |part: &str| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        };
+        (valid(owner) && valid(name)).then(|| Self(text.to_owned()))
+    }
+
+    /// The owner.
+    pub fn owner(&self) -> &str {
+        self.0.split_once('/').map_or("", |(owner, _)| owner)
+    }
+
+    /// The repository's own name, without its owner.
+    pub fn name(&self) -> &str {
+        self.0.split_once('/').map_or(&self.0, |(_, name)| name)
+    }
+
+    /// The whole `<owner>/<name>`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for RepoName {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+/// A pull request by repository and number.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub struct PrRef {
+    /// The repository.
+    pub repo: RepoName,
+    /// The pull request's number.
+    pub number: u32,
+}
+
+impl PrRef {
+    /// The id rows are keyed by.
+    pub fn id(&self) -> PrId {
+        PrId(format!("{}#{}", self.repo, self.number))
+    }
+
+    /// The pull request's page.
+    pub fn url(&self) -> String {
+        format!("https://github.com/{}/pull/{}", self.repo, self.number)
+    }
+
+    /// The last pull request page URL in `text`
+    /// (`https://github.com/<owner>/<repo>/pull/<n>`); `gh pr create` prints
+    /// the new one last.
+    pub fn last_in(text: &str) -> Option<Self> {
+        lazy_regex::regex!(r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/pull/([0-9]+)")
+            .captures_iter(text)
+            .filter_map(|captures| {
+                Some(Self {
+                    repo: RepoName::parse(captures.get(1)?.as_str())?,
+                    number: captures.get(2)?.as_str().parse().ok()?,
+                })
+            })
+            .last()
+    }
+}
+
+/// Where a pull request stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrState {
+    /// Known from a transcript or manager, not yet looked up on GitHub.
+    Unknown,
+    /// Open and ready for review.
+    Open,
+    /// Open as a draft.
+    Draft,
+    /// Merged.
+    Merged,
+    /// Closed without merging.
+    Closed,
+}
+
+impl PrState {
+    /// Whether the pull request is finished with.
+    pub fn is_final(self) -> bool {
+        matches!(self, PrState::Merged | PrState::Closed)
+    }
+}
+
+/// A pull request's CI: the `CI gate` status when the head commit has one,
+/// else the rollup of every check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CiState {
+    /// Not looked up yet.
+    Unknown,
+    /// No checks ran.
+    None,
+    /// Checks are running.
+    Running,
+    /// Checks passed.
+    Passed,
+    /// A check failed.
+    Failed,
+}
+
+/// A pull request's review decision.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    /// No decision, or no review is required.
+    None,
+    /// A review is required and missing.
+    ReviewRequired,
+    /// Changes were requested.
+    ChangesRequested,
+    /// Approved.
+    Approved,
+}
+
+/// Whether a pull request merges cleanly into its base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mergeable {
+    /// Not computed yet.
+    Unknown,
+    /// Merges cleanly.
+    Mergeable,
+    /// Has conflicts.
+    Conflicting,
+}
+
+/// One pull request, built by the reducer from the agents that opened it or
+/// work on its branch and from its GitHub status.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Pr {
+    /// `<owner>/<repo>#<number>`.
+    pub id: PrId,
+    /// The repository.
+    pub repo: RepoName,
+    /// Its number.
+    pub number: u32,
+    /// Its page.
+    pub url: String,
+    /// Its title, once looked up.
+    pub title: Option<String>,
+    /// Open, draft, merged or closed.
+    pub state: PrState,
+    /// CI on its head commit.
+    pub ci: CiState,
+    /// The review decision.
+    pub review: ReviewState,
+    /// Whether it merges cleanly.
+    pub mergeable: Mergeable,
+    /// The agent that opened it, when a transcript recorded that.
+    pub author_agent: Option<AgentId>,
+    /// Every agent tied to it: its author, the manager that recorded it, and
+    /// agents working on its branch.
+    pub agents: Vec<AgentId>,
+    /// Its head branch.
+    pub branch: Option<String>,
+    /// When it was opened.
+    pub opened_at: Option<Timestamp>,
+    /// When it last changed on GitHub.
+    pub updated_at: Option<Timestamp>,
+    /// When it was merged or closed.
+    pub closed_at: Option<Timestamp>,
 }

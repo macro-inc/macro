@@ -21,15 +21,17 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::domain::clock::Clock;
+use crate::domain::source::PrInterest;
 use crate::domain::join::{
     FactEvent, Facts, MinuteCounts, build_agents, minute_counts, spend_since,
 };
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, Cost, Severity, Snapshot, SourceHealth,
-    SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, Update, UpdateKind,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Pr, PrId, PrState, Severity,
+    Snapshot, SourceHealth, SourceKind, Status, TapeEvent, TapeKind, Timestamp, Totals, Update,
+    UpdateKind,
 };
 use crate::domain::observation::{
-    Change, FactKey, Observation, TranscriptEventKind, TranscriptKey,
+    Change, FactKey, Observation, PrWanted, TranscriptEventKind, TranscriptKey,
 };
 
 /// Store sizes and timings.
@@ -99,6 +101,7 @@ struct State {
     tape: VecDeque<TapeEvent>,
     totals: Totals,
     sources: BTreeMap<SourceKind, SourceHealth>,
+    prs: BTreeMap<PrId, Pr>,
 }
 
 #[derive(Debug)]
@@ -107,6 +110,7 @@ struct Shared {
     state: Mutex<State>,
     updates: broadcast::Sender<Arc<Update>>,
     totals: watch::Sender<Arc<Totals>>,
+    wanted: watch::Sender<Arc<PrWanted>>,
 }
 
 impl Shared {
@@ -153,6 +157,7 @@ impl Shared {
                 tape: state.tape.iter().skip(skip).cloned().collect(),
                 totals: state.totals.clone(),
                 sources: state.sources.values().cloned().collect(),
+                prs: state.prs.values().cloned().collect(),
             }),
         })
     }
@@ -169,6 +174,12 @@ fn apply_to_state(state: &mut State, kind: &UpdateKind) {
         UpdateKind::Totals(totals) => state.totals = totals.clone(),
         UpdateKind::Source(health) => {
             state.sources.insert(health.source, health.clone());
+        }
+        UpdateKind::PrUpsert(pr) => {
+            state.prs.insert(pr.id.clone(), pr.clone());
+        }
+        UpdateKind::PrRemoved(id) => {
+            state.prs.remove(id);
         }
         UpdateKind::Snapshot(_) | UpdateKind::Event(_) | UpdateKind::Heartbeat(_) => {}
     }
@@ -193,11 +204,13 @@ pub fn replay(
 ) -> Snapshot {
     let (updates, _) = broadcast::channel(1);
     let (totals, _) = watch::channel(Arc::new(Totals::default()));
+    let (wanted, _) = watch::channel(Arc::new(PrWanted::default()));
     let shared = Arc::new(Shared {
         config,
         state: Mutex::new(State::default()),
         updates,
         totals,
+        wanted,
     });
     let clock = Arc::new(ReplayClock(Mutex::new(Timestamp::default())));
     let mut reducer = Reducer::new(shared.clone(), clock.clone());
@@ -240,11 +253,13 @@ impl Store {
         let (observations, receiver) = mpsc::channel(config.observation_capacity);
         let (updates, _) = broadcast::channel(config.update_capacity);
         let (totals, _) = watch::channel(Arc::new(Totals::default()));
+        let (wanted, _) = watch::channel(Arc::new(PrWanted::default()));
         let shared = Arc::new(Shared {
             config,
             state: Mutex::new(State::default()),
             updates,
             totals,
+            wanted,
         });
 
         let reducer = Reducer::new(shared.clone(), clock);
@@ -288,6 +303,25 @@ impl Store {
     pub fn subscribers(&self) -> usize {
         self.shared.updates.receiver_count()
     }
+
+    /// What the GitHub source should look up, republished whenever it changes.
+    pub fn pr_wanted(&self) -> watch::Receiver<Arc<PrWanted>> {
+        self.shared.wanted.subscribe()
+    }
+
+    /// What the GitHub source needs from the store.
+    pub fn pr_interest(&self) -> PrInterest {
+        let updates = self.shared.updates.clone();
+        PrInterest {
+            wanted: self.pr_wanted(),
+            subscribers: Arc::new(move || updates.receiver_count()),
+        }
+    }
+
+    /// One pull request's current row.
+    pub fn pr(&self, id: &PrId) -> Option<Pr> {
+        self.shared.lock().prs.get(id).cloned()
+    }
 }
 
 /// The single writer.
@@ -297,6 +331,8 @@ struct Reducer {
     facts: Facts,
     /// The rows last published.
     published: BTreeMap<AgentId, Agent>,
+    /// The pull requests last published.
+    published_prs: BTreeMap<PrId, Pr>,
     /// Transcript records not yet turned into tape lines.
     pending_events: Vec<FactEvent>,
     /// Source health as reported, merged with when each last sent anything.
@@ -317,6 +353,7 @@ impl Reducer {
             clock,
             facts: Facts::default(),
             published: BTreeMap::new(),
+            published_prs: BTreeMap::new(),
             pending_events: Vec::new(),
             health: BTreeMap::new(),
             last_event: BTreeMap::new(),
@@ -423,6 +460,7 @@ impl Reducer {
             upserts = tracing::field::Empty,
             removed = tracing::field::Empty,
             tape = tracing::field::Empty,
+            prs = tracing::field::Empty,
         );
         let _entered = span.enter();
         let now = self.clock.now();
@@ -468,6 +506,21 @@ impl Reducer {
             }
         }
 
+        for (id, pr) in &built.prs {
+            match self.published_prs.get(id) {
+                Some(previous) if previous == pr => {}
+                previous => {
+                    tape.extend(pr_lines(previous, pr, now, recent));
+                    updates.push(UpdateKind::PrUpsert(pr.clone()));
+                }
+            }
+        }
+        for id in self.published_prs.keys() {
+            if !built.prs.contains_key(id) {
+                updates.push(UpdateKind::PrRemoved(id.clone()));
+            }
+        }
+
         for event in std::mem::take(&mut self.pending_events) {
             let tape_line = self.event_line(&built.owners, event, recent);
             tape.extend(tape_line);
@@ -481,10 +534,17 @@ impl Reducer {
         span.record("upserts", upserts);
         span.record("removed", updates.len() - upserts);
         span.record("tape", tape.len());
+        span.record("prs", built.prs.len());
+
+        let wanted = self.facts.wanted(&built);
+        if **self.shared.wanted.borrow() != wanted {
+            self.shared.wanted.send_replace(Arc::new(wanted));
+        }
 
         updates.extend(tape.into_iter().map(UpdateKind::Event));
         self.shared.publish(updates);
         self.published = built.agents;
+        self.published_prs = built.prs;
         self.owners = built.owners;
     }
 
@@ -527,7 +587,9 @@ impl Reducer {
                 };
                 (TapeKind::ToolError, text, Severity::Warning)
             }
-            TranscriptEventKind::Usage(_) | TranscriptEventKind::Cost(_) => return None,
+            TranscriptEventKind::Usage(_)
+            | TranscriptEventKind::Cost(_)
+            | TranscriptEventKind::PrOpened(_) => return None,
         };
 
         let agent = owners.get(&event.key)?;
@@ -602,6 +664,68 @@ fn line(
         text,
         severity,
     }
+}
+
+/// The tape lines a pull request's change implies: opened (when recent), CI
+/// passed or failed, merged or closed. A first lookup (from unknown) writes
+/// nothing, so a startup does not flood the tape. A line goes to the
+/// pull request's first agent, else to `pr:<id>`.
+fn pr_lines(previous: Option<&Pr>, pr: &Pr, now: Timestamp, recent: Timestamp) -> Vec<TapeEvent> {
+    let agent = pr
+        .agents
+        .first()
+        .cloned()
+        .unwrap_or_else(|| AgentId::from_wire(format!("pr:{}", pr.id)));
+    let name = format!("{}#{}", pr.repo.name(), pr.number);
+    let mut lines = Vec::new();
+    let Some(previous) = previous else {
+        if pr.opened_at.is_some_and(|opened| opened >= recent) {
+            let at = pr.opened_at.unwrap_or(now);
+            lines.push(line(at, &agent, TapeKind::PrOpened, format!("{name} opened"), Severity::Notice));
+        }
+        return lines;
+    };
+
+    if previous.ci != pr.ci && previous.ci != CiState::Unknown {
+        match pr.ci {
+            CiState::Failed => lines.push(line(
+                now,
+                &agent,
+                TapeKind::PrCiFailed,
+                format!("{name} CI failed"),
+                Severity::Error,
+            )),
+            CiState::Passed => lines.push(line(
+                now,
+                &agent,
+                TapeKind::PrCiPassed,
+                format!("{name} CI passed"),
+                Severity::Notice,
+            )),
+            CiState::Unknown | CiState::None | CiState::Running => {}
+        }
+    }
+    if previous.state != pr.state && previous.state != PrState::Unknown {
+        let at = pr.closed_at.unwrap_or(now);
+        match pr.state {
+            PrState::Merged => lines.push(line(
+                at,
+                &agent,
+                TapeKind::PrMerged,
+                format!("{name} merged"),
+                Severity::Notice,
+            )),
+            PrState::Closed => lines.push(line(
+                at,
+                &agent,
+                TapeKind::PrClosed,
+                format!("{name} closed"),
+                Severity::Info,
+            )),
+            PrState::Unknown | PrState::Open | PrState::Draft => {}
+        }
+    }
+    lines
 }
 
 fn spawned_text(agent: &Agent) -> String {

@@ -50,6 +50,10 @@ message Update {
     Totals totals = 6;
     SourceHealth source = 7;
     Heartbeat heartbeat = 8;
+    // The whole pull request row; replaces the row with the same id.
+    PullRequest pr_upsert = 9;
+    // The id of a pull request that is gone.
+    string pr_removed = 10;
   }
 }
 
@@ -59,6 +63,7 @@ message Snapshot {
   repeated TapeEvent tape = 2;
   Totals totals = 3;
   repeated SourceHealth sources = 4;
+  repeated PullRequest prs = 5;
 }
 
 message Heartbeat {
@@ -77,6 +82,8 @@ enum Source {
   SOURCE_DEMO = 8;
   // The macrod hosting the collector; health only.
   SOURCE_DAEMON = 9;
+  // Pull request status, polled from GitHub through the gh CLI.
+  SOURCE_GITHUB = 10;
 }
 
 enum AgentKind {
@@ -162,6 +169,8 @@ message Agent {
   repeated uint32 activity = 30;
   // The last hour by minute for the drill-in; absent when the hour is empty.
   optional AgentMinutes minutes = 31;
+  // Ids of the pull requests this agent opened or works on, newest first.
+  repeated string prs = 32;
 }
 
 // One agent's last hour by minute, oldest first; 60 values each.
@@ -185,6 +194,11 @@ enum TapeKind {
   TAPE_KIND_FAILURE = 8;
   TAPE_KIND_FINISHED = 9;
   TAPE_KIND_REMOVED = 10;
+  TAPE_KIND_PR_OPENED = 11;
+  TAPE_KIND_PR_CI_PASSED = 12;
+  TAPE_KIND_PR_CI_FAILED = 13;
+  TAPE_KIND_PR_MERGED = 14;
+  TAPE_KIND_PR_CLOSED = 15;
 }
 
 enum Severity {
@@ -244,6 +258,8 @@ message SourceHealth {
   // Startup indexing: `done` of `total` files read.
   optional Progress indexing = 6;
   uint32 restarts = 7;
+  // How often a polled source asks, in seconds; absent for push-driven sources.
+  optional uint32 poll_secs = 8;
 }
 
 message Progress {
@@ -268,4 +284,61 @@ message TranscriptItem {
   optional string tool_name = 5;
   bool is_error = 6;
   optional uint64 duration_ms = 7;
+}
+
+enum PrState {
+  PR_STATE_UNSPECIFIED = 0;
+  // Known from a transcript or manager, not yet looked up.
+  PR_STATE_UNKNOWN = 1;
+  PR_STATE_OPEN = 2;
+  PR_STATE_DRAFT = 3;
+  PR_STATE_MERGED = 4;
+  PR_STATE_CLOSED = 5;
+}
+
+enum CiState {
+  CI_STATE_UNSPECIFIED = 0;
+  CI_STATE_UNKNOWN = 1;
+  CI_STATE_NONE = 2;
+  CI_STATE_RUNNING = 3;
+  CI_STATE_PASSED = 4;
+  CI_STATE_FAILED = 5;
+}
+
+enum ReviewState {
+  REVIEW_STATE_UNSPECIFIED = 0;
+  REVIEW_STATE_NONE = 1;
+  REVIEW_STATE_REVIEW_REQUIRED = 2;
+  REVIEW_STATE_CHANGES_REQUESTED = 3;
+  REVIEW_STATE_APPROVED = 4;
+}
+
+enum Mergeable {
+  MERGEABLE_UNSPECIFIED = 0;
+  MERGEABLE_UNKNOWN = 1;
+  MERGEABLE_MERGEABLE = 2;
+  MERGEABLE_CONFLICTING = 3;
+}
+
+message PullRequest {
+  // `<owner>/<repo>#<number>`.
+  string id = 1;
+  // `<owner>/<repo>`.
+  string repo = 2;
+  uint32 number = 3;
+  string url = 4;
+  optional string title = 5;
+  PrState state = 6;
+  // The `CI gate` status when the head commit has one, else the check rollup.
+  CiState ci = 7;
+  ReviewState review = 8;
+  Mergeable mergeable = 9;
+  // The agent whose transcript recorded opening it.
+  optional string author_agent = 10;
+  // Every tied agent: the author first, then managers and agents on its branch.
+  repeated string agents = 11;
+  optional string branch = 12;
+  optional int64 opened_at_ms = 13;
+  optional int64 updated_at_ms = 14;
+  optional int64 closed_at_ms = 15;
 }

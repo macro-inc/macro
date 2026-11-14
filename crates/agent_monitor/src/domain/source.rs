@@ -2,14 +2,15 @@
 //! readers of an agent's transcript.
 
 use std::pin::Pin;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::Stream;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{Agent, SourceKind, TranscriptItem};
-use crate::domain::observation::Observation;
+use crate::domain::observation::{Observation, PrWanted};
 
 /// Why a source stopped.
 #[derive(Debug, thiserror::Error)]
@@ -77,4 +78,23 @@ pub trait TranscriptFeed: Send + Sync + 'static {
     /// until the stream is dropped.
     async fn follow(&self, agent: &Agent, tail: usize)
     -> Result<TranscriptStream, TranscriptError>;
+}
+
+/// What a pull request source needs from the store: what to look up, and
+/// whether anyone is watching (it asks less often when nobody is).
+#[derive(Clone)]
+pub struct PrInterest {
+    /// What to look up, republished after each reduce that changes it.
+    pub wanted: watch::Receiver<Arc<PrWanted>>,
+    /// How many viewers are subscribed now.
+    pub subscribers: Arc<dyn Fn() -> usize + Send + Sync>,
+}
+
+impl std::fmt::Debug for PrInterest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PrInterest")
+            .field("wanted", &self.wanted)
+            .finish_non_exhaustive()
+    }
 }

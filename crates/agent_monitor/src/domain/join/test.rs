@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use chrono::{TimeZone, Utc};
 
 use super::*;
-use crate::domain::observation::TranscriptEvent;
+use crate::domain::model::{PrRef, RepoName};
+use crate::domain::observation::{BranchCandidate, CheckoutFact, PrStatusFact, TranscriptEvent};
 
 fn at(minute: u32, second: u32) -> Timestamp {
     Utc.with_ymd_and_hms(2026, 1, 2, 10, minute, second)
@@ -454,6 +455,7 @@ fn a_manager_directory_makes_its_terminal_a_manager_with_its_goal_and_state() {
             state: Some("reviewing".to_owned()),
             reviews: 2,
             last_verdict: Some("fail".to_owned()),
+            prs: Vec::new(),
         })]),
         now,
     );
@@ -1076,4 +1078,192 @@ fn prune_drops_old_ended_agents_and_keeps_what_is_live() {
             .contains_key(&FactKey::RunRecord("run-held".to_owned())),
         "a run its live terminal runs is kept"
     );
+}
+
+fn pr_ref(repo: &str, number: u32) -> PrRef {
+    PrRef {
+        repo: RepoName::parse(repo).expect("a repo"),
+        number,
+    }
+}
+
+fn pr_status(pr: PrRef, state: PrState, ci: CiState, branch: &str, closed: Option<Timestamp>) -> Fact {
+    Fact::PrStatus(Box::new(PrStatusFact {
+        url: pr.url(),
+        pr,
+        title: Some("a change".to_owned()),
+        state,
+        ci,
+        review: ReviewState::ReviewRequired,
+        mergeable: Mergeable::Mergeable,
+        branch: Some(branch.to_owned()),
+        created: Some(at(1, 0)),
+        updated: closed.or(Some(at(2, 0))),
+        closed,
+    }))
+}
+
+#[test]
+fn a_pr_joins_its_author_its_manager_and_agents_on_its_branch() {
+    let now = at(10, 0);
+    let mut facts = Facts::default();
+    // t2 runs the session that opened #42; t1 manages; t3 works on the
+    // branch in another checkout of the same repository.
+    observe(
+        &mut facts,
+        SourceKind::Hc,
+        Change::Reset(vec![
+            Fact::Terminal(Box::new(TerminalFact {
+                manager_dir: Some(PathBuf::from("/m/t1-1")),
+                parent: None,
+                ..terminal("t1", 1)
+            })),
+            Fact::Terminal(Box::new(terminal("t2", 4242))),
+            Fact::Terminal(Box::new(TerminalFact {
+                cwd: Some(PathBuf::from("/work-b")),
+                ..terminal("t3", 99)
+            })),
+        ]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::ClaudeRegistry,
+        Change::Reset(vec![registry(4242, "s-author", true), registry(99, "s-other", true)]),
+        now,
+    );
+    // The transcript helper puts both sessions on `feat/x`.
+    let opened = transcript(
+        "s-author",
+        None,
+        vec![TranscriptEvent {
+            at: at(3, 0),
+            kind: TranscriptEventKind::PrOpened(pr_ref("example-org/widgets", 42)),
+        }],
+    );
+    let other = transcript("s-other", None, Vec::new());
+    observe(
+        &mut facts,
+        SourceKind::ClaudeTranscripts,
+        Change::Reset(vec![opened, other]),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::Manager,
+        Change::Reset(vec![Fact::Manager(ManagerFact {
+            dir: PathBuf::from("/m/t1-1"),
+            goal: None,
+            state: None,
+            reviews: 0,
+            last_verdict: None,
+            prs: vec![pr_ref("example-org/widgets", 42), pr_ref("example-org/widgets", 7)],
+        })]),
+        now,
+    );
+
+    // Before GitHub answers, the PR is known but its status is not.
+    let built = build_agents(&facts, now);
+    let id = pr_ref("example-org/widgets", 42).id();
+    let pr = &built.prs[&id];
+    assert_eq!(pr.state, PrState::Unknown);
+    assert_eq!(pr.ci, CiState::Unknown);
+    assert_eq!(pr.author_agent, Some(AgentId::terminal("t2")));
+    assert_eq!(pr.agents, vec![AgentId::terminal("t2"), AgentId::terminal("t1")]);
+    assert_eq!(pr.opened_at, Some(at(3, 0)));
+
+    // GitHub answers; t3's checkout is the same repository.
+    observe(
+        &mut facts,
+        SourceKind::Github,
+        Change::Upsert(pr_status(
+            pr_ref("example-org/widgets", 42),
+            PrState::Open,
+            CiState::Failed,
+            "feat/x",
+            None,
+        )),
+        now,
+    );
+    observe(
+        &mut facts,
+        SourceKind::Github,
+        Change::Upsert(Fact::Checkout(CheckoutFact {
+            cwd: PathBuf::from("/work-b"),
+            repo: RepoName::parse("example-org/widgets").expect("repo"),
+        })),
+        now,
+    );
+    let built = build_agents(&facts, now);
+    let pr = &built.prs[&id];
+    assert_eq!(pr.state, PrState::Open);
+    assert_eq!(pr.ci, CiState::Failed);
+    assert_eq!(pr.branch.as_deref(), Some("feat/x"));
+    assert_eq!(
+        pr.agents,
+        vec![
+            AgentId::terminal("t2"),
+            AgentId::terminal("t1"),
+            AgentId::terminal("t3")
+        ]
+    );
+    assert_eq!(built.agents[&AgentId::terminal("t2")].prs, vec![id.clone()]);
+    assert_eq!(built.agents[&AgentId::terminal("t3")].prs, vec![id.clone()]);
+    // The manager's list is newest first: #42 has an open time, #7 none.
+    assert_eq!(
+        built.agents[&AgentId::terminal("t1")].prs,
+        vec![id, pr_ref("example-org/widgets", 7).id()]
+    );
+
+    // What to look up: both named PRs, and each agent branch with a cwd.
+    let wanted = facts.wanted(&built);
+    assert_eq!(
+        wanted.refs,
+        [pr_ref("example-org/widgets", 7), pr_ref("example-org/widgets", 42)]
+            .into_iter()
+            .collect()
+    );
+    assert!(wanted.branches.contains(&BranchCandidate {
+        cwd: PathBuf::from("/work-b"),
+        branch: "feat/x".to_owned(),
+    }));
+}
+
+#[test]
+fn a_merged_pr_older_than_the_window_is_retired_and_not_asked_for_again() {
+    let history = TimeDelta::hours(24);
+    let mut facts = Facts::default();
+    let merged = pr_ref("example-org/widgets", 1);
+    let open = pr_ref("example-org/widgets", 2);
+    observe(
+        &mut facts,
+        SourceKind::Manager,
+        Change::Reset(vec![Fact::Manager(ManagerFact {
+            dir: PathBuf::from("/m/t1-1"),
+            goal: None,
+            state: None,
+            reviews: 0,
+            last_verdict: None,
+            prs: vec![merged.clone(), open.clone()],
+        })]),
+        at(0, 0),
+    );
+    let statuses = || {
+        Change::Reset(vec![
+            pr_status(merged.clone(), PrState::Merged, CiState::Passed, "a", Some(at(5, 0))),
+            pr_status(open.clone(), PrState::Open, CiState::Running, "b", None),
+        ])
+    };
+    observe(&mut facts, SourceKind::Github, statuses(), at(6, 0));
+
+    assert_eq!(facts.prune(at(30, 0), history), 0);
+    let later = at(0, 0) + TimeDelta::hours(30);
+    assert_eq!(facts.prune(later, history), 1);
+
+    // A later answer about the retired PR is ignored, and it is not wanted.
+    observe(&mut facts, SourceKind::Github, statuses(), later);
+    let built = build_agents(&facts, later);
+    assert!(!built.prs.contains_key(&merged.id()));
+    assert!(built.prs.contains_key(&open.id()), "an open, named PR stays");
+    assert_eq!(facts.wanted(&built).refs, [open].into_iter().collect());
 }

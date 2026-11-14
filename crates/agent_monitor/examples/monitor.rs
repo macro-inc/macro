@@ -161,11 +161,20 @@ mod unix {
         let seq = update.seq;
         match &update.kind {
             UpdateKind::Snapshot(snapshot) => format!(
-                "{seq} snapshot agents={} tape={} sources={}",
+                "{seq} snapshot agents={} tape={} sources={} prs={}",
                 snapshot.agents.len(),
                 snapshot.tape.len(),
-                snapshot.sources.len()
+                snapshot.sources.len(),
+                snapshot.prs.len()
             ),
+            UpdateKind::PrUpsert(pr) => format!(
+                "{seq} pr {} {:?} ci={:?} agents={}",
+                pr.id,
+                pr.state,
+                pr.ci,
+                pr.agents.len()
+            ),
+            UpdateKind::PrRemoved(id) => format!("{seq} pr removed {id}"),
             UpdateKind::Upsert(agent) => format!(
                 "{seq} upsert {} {} {:?} turns={} tools={} errors={} cost={:?} doing={}",
                 agent.id,

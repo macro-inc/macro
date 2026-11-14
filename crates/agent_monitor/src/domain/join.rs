@@ -12,12 +12,14 @@ use std::path::PathBuf;
 use chrono::{DurationRound, TimeDelta};
 
 use crate::domain::model::{
-    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, Cost, SourceKind, Status, Timestamp, Tokens,
+    ACTIVITY_MINUTES, Agent, AgentId, AgentKind, CiState, Cost, Mergeable, Pr, PrId, PrRef,
+    PrState, RepoName, ReviewState, SourceKind, Status, Timestamp, Tokens,
 };
 use crate::domain::observation::{
-    Change, ClaudeSessionFact, Fact, FactKey, FinishReason, MacrodSessionFact, ManagerFact,
-    Observation, RunRecordFact, TerminalActivity, TerminalFact, TerminalState, TranscriptDelta,
-    TranscriptEventKind, TranscriptKey, TranscriptProgram,
+    BranchCandidate, Change, CheckoutFact, ClaudeSessionFact, Fact, FactKey, FinishReason,
+    MacrodSessionFact, ManagerFact, Observation, PrStatusFact, PrWanted, RunRecordFact,
+    TerminalActivity, TerminalFact, TerminalState, TranscriptDelta, TranscriptEventKind,
+    TranscriptKey, TranscriptProgram,
 };
 use crate::domain::pricing;
 
@@ -36,6 +38,13 @@ const DOING_CHARS: usize = 80;
 /// A terminal started at most this long after a transcript's first record
 /// still counts as the terminal that wrote it.
 const TERMINAL_START_SLACK: TimeDelta = TimeDelta::seconds(60);
+
+/// Branches that are never a pull request's head worth looking up.
+const DEFAULT_BRANCHES: &[&str] = &["main", "master", "develop", "trunk", "HEAD"];
+
+/// How many history windows a retired pull request stays retired, so a
+/// branch that still names it does not bring it back.
+const RETIRED_WINDOWS: i32 = 2;
 
 /// One transcript record worth a tape line, from [`Facts::apply`].
 #[derive(Clone, Debug, PartialEq)]
@@ -70,6 +79,8 @@ pub struct Built {
     pub agents: BTreeMap<AgentId, Agent>,
     /// The agent each fact merged into.
     pub owners: BTreeMap<FactKey, AgentId>,
+    /// Every pull request by id.
+    pub prs: BTreeMap<PrId, Pr>,
 }
 
 #[derive(Clone, Debug)]
@@ -112,6 +123,8 @@ struct TranscriptState {
     first_at: Option<Timestamp>,
     last_at: Option<Timestamp>,
     minutes: BTreeMap<Timestamp, TranscriptMinute>,
+    /// Pull requests the session opened, with when.
+    prs: BTreeMap<PrRef, Timestamp>,
 }
 
 impl TranscriptState {
@@ -133,6 +146,7 @@ impl TranscriptState {
             first_at: None,
             last_at: None,
             minutes: BTreeMap::new(),
+            prs: BTreeMap::new(),
         }
     }
 
@@ -199,6 +213,9 @@ impl TranscriptState {
                         self.reported = Some(*usd);
                     }
                 }
+                TranscriptEventKind::PrOpened(pr) => {
+                    self.prs.entry(pr.clone()).or_insert(event.at);
+                }
             }
         }
 
@@ -225,6 +242,11 @@ pub struct Facts {
     macrod_sessions: BTreeMap<String, Owned<MacrodSessionFact>>,
     managers: BTreeMap<PathBuf, Owned<ManagerFact>>,
     run_records: BTreeMap<String, Owned<RunRecordFact>>,
+    prs: BTreeMap<PrId, Owned<PrStatusFact>>,
+    checkouts: BTreeMap<PathBuf, Owned<CheckoutFact>>,
+    /// Pull requests pruned as finished, with when: a later status for one
+    /// is ignored, and nothing asks for it again.
+    retired: BTreeMap<PrId, Timestamp>,
     /// The Claude Code registry reported, so a session missing from it has
     /// no running process.
     registry_seen: bool,
@@ -278,6 +300,19 @@ impl Facts {
                 self.run_records
                     .insert(fact.id.clone(), Owned { source, fact });
             }
+            Fact::PrStatus(fact) => {
+                let id = fact.pr.id();
+                if !self.retired.contains_key(&id) {
+                    self.prs.insert(id, Owned {
+                        source,
+                        fact: *fact,
+                    });
+                }
+            }
+            Fact::Checkout(fact) => {
+                self.checkouts
+                    .insert(fact.cwd.clone(), Owned { source, fact });
+            }
             Fact::Transcript(delta) => {
                 let key = FactKey::Transcript(delta.key.clone());
                 let entry = self
@@ -327,6 +362,12 @@ impl Facts {
             FactKey::RunRecord(id) => {
                 self.run_records.remove(id);
             }
+            FactKey::Pr(id) => {
+                self.prs.remove(id);
+            }
+            FactKey::Checkout(cwd) => {
+                self.checkouts.remove(cwd);
+            }
         }
     }
 
@@ -338,7 +379,10 @@ impl Facts {
     ///   process in the Claude Code registry;
     /// - work runs started before then that no live terminal runs;
     /// - macrod sessions started before then with no transcript or live
-    ///   terminal left to enrich.
+    ///   terminal left to enrich;
+    /// - pull requests merged or closed before then (retired, so they are
+    ///   not asked for again), and open ones unchanged since then that no
+    ///   transcript or manager names any more.
     ///
     /// Every transcript's per-minute counts are trimmed to the last day too.
     /// Returns how many facts were dropped.
@@ -395,6 +439,25 @@ impl Facts {
             enriches || !old(session.started)
         });
 
+        let named = self.named_prs();
+        let mut retire = Vec::new();
+        self.prs.retain(|id, owned| {
+            let pr = &owned.fact;
+            let keep = if pr.state.is_final() {
+                !old(pr.closed.or(pr.updated))
+            } else {
+                named.contains(&pr.pr) || !old(pr.updated)
+            };
+            if !keep {
+                retire.push(id.clone());
+            }
+            keep
+        });
+        self.retired
+            .extend(retire.into_iter().map(|id| (id, now)));
+        let retired_horizon = now - history * RETIRED_WINDOWS;
+        self.retired.retain(|_, at| *at >= retired_horizon);
+
         before - self.len()
     }
 
@@ -414,6 +477,46 @@ impl Facts {
             + self.macrod_sessions.len()
             + self.managers.len()
             + self.run_records.len()
+            + self.prs.len()
+            + self.checkouts.len()
+    }
+
+    /// Pull requests named by a transcript or a manager.
+    fn named_prs(&self) -> BTreeSet<PrRef> {
+        let from_transcripts = self
+            .transcripts
+            .values()
+            .flat_map(|owned| owned.fact.prs.keys());
+        let from_managers = self
+            .managers
+            .values()
+            .flat_map(|owned| owned.fact.prs.iter());
+        from_transcripts.chain(from_managers).cloned().collect()
+    }
+
+    /// What the GitHub source should look up for `built`: every pull
+    /// request named by a transcript, a manager or an earlier lookup (except
+    /// retired ones), and the branch of every agent with a working
+    /// directory, other than a default branch.
+    pub fn wanted(&self, built: &Built) -> PrWanted {
+        let mut refs = self.named_prs();
+        refs.extend(self.prs.values().map(|owned| owned.fact.pr.clone()));
+        refs.retain(|pr| !self.retired.contains_key(&pr.id()));
+        let branches = built
+            .agents
+            .values()
+            .filter_map(|agent| {
+                let branch = agent.branch.as_ref()?;
+                if DEFAULT_BRANCHES.contains(&branch.as_str()) {
+                    return None;
+                }
+                Some(BranchCandidate {
+                    cwd: agent.cwd.clone()?,
+                    branch: branch.clone(),
+                })
+            })
+            .collect();
+        PrWanted { refs, branches }
     }
 
     fn forget(&mut self, source: SourceKind) {
@@ -425,6 +528,8 @@ impl Facts {
             .retain(|_, owned| owned.source != source);
         self.managers.retain(|_, owned| owned.source != source);
         self.run_records.retain(|_, owned| owned.source != source);
+        self.prs.retain(|_, owned| owned.source != source);
+        self.checkouts.retain(|_, owned| owned.source != source);
     }
 }
 
@@ -648,7 +753,166 @@ pub fn build_agents(facts: &Facts, now: Timestamp) -> Built {
     join_run_records(facts, &mut built);
     split_session_costs(facts, &mut built);
     link_parents(facts, &mut built);
+    join_prs(facts, &mut built);
     built
+}
+
+/// A pull request while it is being joined.
+struct PrDraft {
+    pr: PrRef,
+    /// The session that opened it, and when.
+    author: Option<(AgentId, Timestamp)>,
+    agents: Vec<AgentId>,
+}
+
+impl PrDraft {
+    fn tie(&mut self, agent: &AgentId) {
+        if !self.agents.contains(agent) {
+            self.agents.push(agent.clone());
+        }
+    }
+}
+
+/// The draft of `pr`, made on first sight; `None` once it is retired.
+fn draft_of<'a>(
+    drafts: &'a mut BTreeMap<PrId, PrDraft>,
+    retired: &BTreeMap<PrId, Timestamp>,
+    pr: &PrRef,
+) -> Option<&'a mut PrDraft> {
+    let id = pr.id();
+    if retired.contains_key(&id) {
+        return None;
+    }
+    Some(drafts.entry(id).or_insert_with(|| PrDraft {
+        pr: pr.clone(),
+        author: None,
+        agents: Vec::new(),
+    }))
+}
+
+/// Pull requests from what names them, tied to agents:
+///
+/// 1. a transcript that recorded opening one makes its agent the author
+///    (the earliest such, when several did);
+/// 2. a manager that recorded one ties it to the manager's agent;
+/// 3. an agent whose working directory is a checkout of the pull request's
+///    repository, on its head branch, works on it.
+///
+/// Retired pull requests are left out. Each tied agent lists its pull
+/// requests, newest first.
+fn join_prs(facts: &Facts, built: &mut Built) {
+    let mut drafts: BTreeMap<PrId, PrDraft> = BTreeMap::new();
+    let retired = &facts.retired;
+
+    for (key, owned) in &facts.transcripts {
+        let owner = built.owners.get(&FactKey::Transcript(key.clone()));
+        for (pr, at) in &owned.fact.prs {
+            let Some(entry) = draft_of(&mut drafts, retired, pr) else {
+                continue;
+            };
+            let Some(owner) = owner else { continue };
+            if entry.author.as_ref().is_none_or(|(_, first)| at < first) {
+                entry.author = Some((owner.clone(), *at));
+            }
+        }
+    }
+    for (dir, owned) in &facts.managers {
+        let owner = built.owners.get(&FactKey::Manager(dir.clone()));
+        for pr in &owned.fact.prs {
+            if let (Some(entry), Some(owner)) = (draft_of(&mut drafts, retired, pr), owner) {
+                entry.tie(owner);
+            }
+        }
+    }
+    for owned in facts.prs.values() {
+        draft_of(&mut drafts, retired, &owned.fact.pr);
+    }
+
+    // Branch ties: (repository, branch) → pull requests with that head.
+    let mut by_head: BTreeMap<(&RepoName, &str), Vec<PrId>> = BTreeMap::new();
+    for (id, owned) in &facts.prs {
+        if let Some(branch) = &owned.fact.branch {
+            by_head
+                .entry((&owned.fact.pr.repo, branch.as_str()))
+                .or_default()
+                .push(id.clone());
+        }
+    }
+    for agent in built.agents.values() {
+        let (Some(cwd), Some(branch)) = (&agent.cwd, &agent.branch) else {
+            continue;
+        };
+        let Some(checkout) = facts.checkouts.get(cwd) else {
+            continue;
+        };
+        for id in by_head
+            .get(&(&checkout.fact.repo, branch.as_str()))
+            .into_iter()
+            .flatten()
+        {
+            if let Some(entry) = drafts.get_mut(id) {
+                entry.tie(&agent.id);
+            }
+        }
+    }
+
+    for (id, entry) in drafts {
+        let status = facts.prs.get(&id).map(|owned| &owned.fact);
+        let mut agents = Vec::new();
+        if let Some((author, _)) = &entry.author {
+            agents.push(author.clone());
+        }
+        agents.extend(
+            entry
+                .agents
+                .into_iter()
+                .filter(|agent| Some(agent) != entry.author.as_ref().map(|(author, _)| author)),
+        );
+        agents.retain(|agent| built.agents.contains_key(agent));
+
+        let pr = Pr {
+            id: id.clone(),
+            repo: entry.pr.repo.clone(),
+            number: entry.pr.number,
+            url: status.map_or_else(|| entry.pr.url(), |status| status.url.clone()),
+            title: status.and_then(|status| status.title.clone()),
+            state: status.map_or(PrState::Unknown, |status| status.state),
+            ci: status.map_or(CiState::Unknown, |status| status.ci),
+            review: status.map_or(ReviewState::None, |status| status.review),
+            mergeable: status.map_or(Mergeable::Unknown, |status| status.mergeable),
+            author_agent: entry.author.as_ref().map(|(author, _)| author.clone()),
+            agents,
+            branch: status.and_then(|status| status.branch.clone()),
+            opened_at: status
+                .and_then(|status| status.created)
+                .or(entry.author.as_ref().map(|(_, at)| *at)),
+            updated_at: status.and_then(|status| status.updated),
+            closed_at: status.and_then(|status| status.closed),
+        };
+        built.prs.insert(id, pr);
+    }
+
+    // Each agent's pull requests, newest first.
+    let mut by_agent: BTreeMap<&AgentId, Vec<&Pr>> = BTreeMap::new();
+    for pr in built.prs.values() {
+        for agent in &pr.agents {
+            by_agent.entry(agent).or_default().push(pr);
+        }
+    }
+    let mut lists: Vec<(AgentId, Vec<PrId>)> = Vec::new();
+    for (agent, mut prs) in by_agent {
+        prs.sort_by(|a, b| {
+            b.opened_at
+                .cmp(&a.opened_at)
+                .then_with(|| b.number.cmp(&a.number))
+        });
+        lists.push((agent.clone(), prs.into_iter().map(|pr| pr.id.clone()).collect()));
+    }
+    for (agent, prs) in lists {
+        if let Some(agent) = built.agents.get_mut(&agent) {
+            agent.prs = prs;
+        }
+    }
 }
 
 fn join_transcripts(
