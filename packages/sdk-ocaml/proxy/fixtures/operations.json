@@ -1,0 +1,142 @@
+{
+	"operations": [
+		{
+			"name": "storage.create_document",
+			"service": "storage",
+			"operationId": "create_document",
+			"method": "POST",
+			"path": "/documents",
+			"group": "documents",
+			"action": "create"
+		},
+		{
+			"name": "storage.get_document",
+			"service": "storage",
+			"operationId": "get_document",
+			"method": "GET",
+			"path": "/documents/{document_id}",
+			"group": "documents",
+			"action": "read"
+		},
+		{
+			"name": "storage.delete_document",
+			"service": "storage",
+			"operationId": "delete_document",
+			"method": "DELETE",
+			"path": "/documents/{document_id}",
+			"group": "documents",
+			"action": "destroy"
+		},
+		{
+			"name": "storage.edit_document",
+			"service": "storage",
+			"operationId": "edit_document",
+			"method": "POST",
+			"path": "/documents/{document_id}/edit",
+			"group": "documents",
+			"action": "update"
+		},
+		{
+			"name": "storage.search_documents",
+			"service": "storage",
+			"operationId": "search_documents",
+			"method": "GET",
+			"path": "/documents/search",
+			"group": "documents",
+			"action": "read"
+		},
+		{
+			"name": "storage.list_recent_searches",
+			"service": "storage",
+			"operationId": "list_recent_searches",
+			"method": "GET",
+			"path": "/documents/search/recent",
+			"group": "documents",
+			"action": "read"
+		},
+		{
+			"name": "storage.get_comment",
+			"service": "storage",
+			"operationId": "get_comment",
+			"method": "GET",
+			"path": "/documents/{document_id}/comments/{comment_id}",
+			"group": "documents",
+			"action": "read"
+		},
+		{
+			"name": "storage.get_property_report",
+			"service": "storage",
+			"operationId": "get_property_report",
+			"method": "GET",
+			"path": "/properties/report",
+			"group": "properties",
+			"action": "read"
+		},
+		{
+			"name": "properties.get_definition",
+			"service": "properties",
+			"operationId": "get_definition",
+			"method": "GET",
+			"path": "/properties/{definition_id}",
+			"group": "properties",
+			"action": "read"
+		},
+		{
+			"name": "email.send_message",
+			"service": "email",
+			"operationId": "send_message",
+			"method": "POST",
+			"path": "/email/messages/{message_id}/send",
+			"group": "email",
+			"action": "send"
+		},
+		{
+			"name": "email.delete_draft",
+			"service": "email",
+			"operationId": "delete_draft",
+			"method": "DELETE",
+			"path": "/email/drafts/{draft_id}",
+			"group": "email",
+			"action": "destroy"
+		},
+		{
+			"name": "cognition.get_import_state",
+			"service": "cognition",
+			"operationId": "get_import_state",
+			"method": "GET",
+			"path": "/import/state",
+			"group": "onboarding",
+			"action": "read"
+		},
+		{
+			"name": "cognition.get_onboarding_state",
+			"service": "cognition",
+			"operationId": "get_onboarding_state",
+			"method": "GET",
+			"path": "/onboarding",
+			"group": "onboarding",
+			"action": "read"
+		},
+		{
+			"name": "static-files.get_file",
+			"service": "static-files",
+			"operationId": "get_file",
+			"method": "GET",
+			"path": "/api/file/{file_id}",
+			"group": "files",
+			"action": "read"
+		},
+		{
+			"name": "storage.passwords_reveal",
+			"service": "storage",
+			"operationId": "passwords_reveal",
+			"method": "POST",
+			"path": "/passwords/teams/{team}/items/{item}/reveal",
+			"group": "passwords",
+			"action": "read",
+			"headers": [
+				"x-macro-passwords"
+			]
+		}
+	]
+}

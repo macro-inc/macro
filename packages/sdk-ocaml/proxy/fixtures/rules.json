@@ -1,0 +1,29 @@
+{
+	"default": "block",
+	"rules": [
+		{
+			"match": "@read",
+			"decision": "allow"
+		},
+		{
+			"match": "documents@update",
+			"decision": "allow"
+		},
+		{
+			"match": "documents@create",
+			"decision": "allow"
+		},
+		{
+			"match": "email.*",
+			"decision": "allow"
+		},
+		{
+			"match": "@destroy",
+			"decision": "block"
+		},
+		{
+			"match": "email.send_message",
+			"decision": "block"
+		}
+	]
+}

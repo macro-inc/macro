@@ -1,0 +1,12 @@
+{
+	"name": "@macro-inc/sdk-ocaml-proxy",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"permissions": "bun src/permissions.ts",
+		"proxy": "bun src/proxy.ts",
+		"test": "bun test",
+		"type-check": "tsc --noEmit --project tsconfig.json"
+	}
+}
