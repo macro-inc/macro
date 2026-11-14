@@ -1,0 +1,33 @@
+packages/sdk-ocaml/proxy/src/permissions.ts
+  s_4353875c05718c::t_1a18f7b0e326bc 1-63
+packages/sdk-ocaml/proxy/fixtures/operations.json
+  s_4353875c05718c::t_1a18f7b0e326bc 1-11
+packages/sdk-ocaml/proxy/fixtures/rules.json
+  s_4353875c05718c::t_1a18f7b0e326bc 1-9
+packages/sdk-ocaml/proxy/package.json
+  s_4353875c05718c::t_1a18f7b0e326bc 1-12
+packages/sdk-ocaml/proxy/src/rules.test.ts
+  s_4353875c05718c::t_1a18f7b0e326bc 1-184
+packages/sdk-ocaml/proxy/src/http.ts
+  s_4353875c05718c::t_1a18f7b0e326bc 1-52
+packages/sdk-ocaml/proxy/tsconfig.json
+  s_4353875c05718c::t_1a18f7b0e326bc 1-4
+packages/sdk-ocaml/proxy/src/rules.ts
+  s_4353875c05718c::t_1a18f7b0e326bc 1-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e8000e6c563d420da7dfbf178ed52f82aab1f2f9",
+  "prompts": {},
+  "sessions": {
+    "s_4353875c05718c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5827e4a3-eda8-4875-a436-0e2536c4f87a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
