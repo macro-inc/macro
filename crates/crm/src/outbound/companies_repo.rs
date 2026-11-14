@@ -2637,12 +2637,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             LEFT JOIN crm_companies co ON co.id = ct.company_id
             LEFT JOIN LATERAL (
                 SELECT d.domain, dd.name
-                FROM crm_domains d
+                FROM (
+                    SELECT d.domain
+                    FROM crm_domains d
+                    WHERE d.company_id = co.id
+                    ORDER BY d.created_at ASC NULLS LAST, d.id
+                    LIMIT 1
+                ) d
                 LEFT JOIN crm_domain_directory dd
                     ON LOWER(dd.domain) = LOWER(d.domain)
-                WHERE d.company_id = co.id
-                ORDER BY d.created_at ASC NULLS LAST, d.id
-                LIMIT 1
             ) primary_domain ON TRUE
             WHERE ct.id = $1
               AND ct.team_id = $2
