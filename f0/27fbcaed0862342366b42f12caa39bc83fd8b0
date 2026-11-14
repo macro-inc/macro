@@ -1,0 +1,49 @@
+crates/agent_monitor/src/outbound/github/test.rs
+  s_a7d426ced409b1::t_216ba564b88b4d 1-152,158-160,165-191,193-315,322-323
+  s_a7d426ced409b1::t_0c005a020de818 316-321
+  s_a7d426ced409b1::t_7495dce05d4cd9 153-157,161-164,192
+crates/agent_monitor/src/outbound/demo.rs
+  s_a7d426ced409b1::t_780c79923d6032 28-29,32-34,56-176,908,910-925,949-953,957-961,1125-1134
+crates/coding_agent_worker/src/monitor.rs
+  s_a7d426ced409b1::t_0d9f582d8a1058 245,258-259
+crates/coding_agent_worker/config.example.toml
+  s_a7d426ced409b1::t_0d9f582d8a1058 60-61
+crates/agent_monitor/src/outbound.rs
+  s_a7d426ced409b1::t_e837f97386beef 2-5,11
+Cargo.lock
+  s_a7d426ced409b1::t_ddf794b9d123ba 906
+crates/coding_agent_worker/src/config.rs
+  s_a7d426ced409b1::t_0d9f582d8a1058 77-80,91
+crates/agent_monitor/src/outbound/local.rs
+  s_a7d426ced409b1::t_e837f97386beef 6,10,38-42,60-61,85-91
+  s_a7d426ced409b1::t_c039fc8a9f5221 92
+crates/agent_monitor/src/outbound/github.rs
+  s_a7d426ced409b1::t_67eef29c74c6e2 321-326,363-365,371-372,374-381
+  s_a7d426ced409b1::t_6d1861b702661e 1-38,40-172,176-320,327-362,366-370,373,382-454
+  s_a7d426ced409b1::t_7495dce05d4cd9 173-175
+  s_a7d426ced409b1::t_e837f97386beef 39
+crates/coding_agent_worker/README.md
+  s_a7d426ced409b1::t_0d9f582d8a1058 246-258,274-275
+crates/agent_monitor/src/outbound/github/query.rs
+  s_a7d426ced409b1::t_a4496e39c90dc6 1-283
+crates/coding_agent_worker/src/monitor/test.rs
+  s_a7d426ced409b1::t_0d9f582d8a1058 85,103,115
+crates/agent_monitor/fixtures/github/response.json
+  s_a7d426ced409b1::t_00173d61cf131d 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f027fbcaed0862342366b42f12caa39bc83fd8b0",
+  "prompts": {},
+  "sessions": {
+    "s_a7d426ced409b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "399fe238-f278-46d4-acb2-93e5dbcc93ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
