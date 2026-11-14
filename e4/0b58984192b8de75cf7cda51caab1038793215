@@ -1,0 +1,34 @@
+crates/agent_monitor_tui/src/ui/test.rs
+  s_9accbcd761184e::t_c97201864c62fe 8,14,175-225
+  s_9accbcd761184e::t_4871503d578cd8 226
+crates/agent_monitor_tui/src/app.rs
+  s_9accbcd761184e::t_903f73bc4908ca 11-13,69-77,84-85,228-249,251,253-264,268-269,297,307-311,334,336-337,345,367,372,374-378,469-476,478,491
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab.snap
+  s_9accbcd761184e::t_faa5a5feb0cebc 1-49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_without_repositories_lists_the_prs_and_enter_opens_the_author.snap
+  s_9accbcd761184e::t_703a9fe2c7689b 1-49
+crates/coding_agent_worker/README.md
+  s_9accbcd761184e::t_2e344f93f08a56 275-278
+crates/agent_monitor_tui/src/ui/changes.rs
+  s_9accbcd761184e::t_169d725e4c4e78 26,30,160-204
+crates/agent_monitor_tui/src/ui/changes/compact.rs
+  s_9accbcd761184e::t_99b8d899a65e41 13,49-63,66-67,69-72,272-283
+crates/agent_monitor_tui/src/ui/changes/draw.rs
+  s_9accbcd761184e::t_82e0bad1a32b80 17,23,63-71,222-291,383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e40b58984192b8de75cf7cda51caab1038793215",
+  "prompts": {},
+  "sessions": {
+    "s_9accbcd761184e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2f6b3b32-0017-4fb1-872f-a56ce4ce858e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
