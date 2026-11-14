@@ -29,7 +29,7 @@ let unfurl_embed_type_of_yojson : Yojson.Safe.t -> unfurl_embed_type =
   match Json.string json with
   | "None" -> None_
   | "Video" -> Video
-  | other -> Unknown other
+  | other -> Json.unknown "unfurl_embed_type" json (Unknown other)
 
 and yojson_of_unfurl_embed_type : unfurl_embed_type -> Yojson.Safe.t =
  fun value ->

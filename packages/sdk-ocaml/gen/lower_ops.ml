@@ -216,7 +216,16 @@ let body ctx ~at ~fn ~params request_body =
       | Some part ->
           Spec.unsupported ~at:schema_at
             "multipart part %S is not a string or binary" part.json_name
-      | None -> Multipart_body { parts; multipart_required = required })
+      | None ->
+          let binary =
+            List.filter_map
+              (fun (key, property) ->
+                let property = Spec.resolve ctx.L.spec ~at property in
+                if Spec.string "format" property = Some "binary" then Some key
+                else None)
+              (Spec.assoc "properties" resolved)
+          in
+          Multipart_body { parts; binary; multipart_required = required })
   | [ (content_type, _) ] -> Raw_body { content_type; raw_required = required }
   | [] -> Spec.unsupported ~at "a request body without content"
   | _ -> Spec.unsupported ~at "a request body with several media types"

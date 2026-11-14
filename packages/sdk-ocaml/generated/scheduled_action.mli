@@ -307,6 +307,8 @@ and still how a routine that is only an agent is saved. *)
 type nonrec routine_task =
   | Routine_program of routine_program  (** Steps, run in order. *)
   | Agent_task of agent_task  (** A routine that is only an agent. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val routine_task_of_yojson : Yojson.Safe.t -> routine_task
 val yojson_of_routine_task : routine_task -> Yojson.Safe.t
@@ -370,6 +372,8 @@ type nonrec payload_scalar_value =
   | Bool of bool
   | Float of float
   | String of string
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val payload_scalar_value_of_yojson : Yojson.Safe.t -> payload_scalar_value
 val yojson_of_payload_scalar_value : payload_scalar_value -> Yojson.Safe.t

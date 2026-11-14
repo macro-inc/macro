@@ -12,54 +12,68 @@ let env_of_string = function
         (Printf.sprintf "invalid MACRO_ENV %S: expected local, dev, or prod"
            other)
 
-(* Service base URLs per environment. `search` and `properties` are served on
-   the storage host. Hand-copied from HOSTS in packages/sdk/src/config.ts; see
-   .agents/rules/config-and-service-urls.md. *)
-let default_host env service =
-  match (env, service) with
-  | Dev, "agent-harness" -> Some "https://dev-gateway.macro.com/agent-harness"
-  | Dev, ("storage" | "properties" | "search") ->
-      Some "https://dev-gateway.macro.com/dss"
-  | Dev, "auth" -> Some "https://dev-gateway.macro.com/auth"
-  | Dev, "email" -> Some "https://dev-gateway.macro.com/email"
-  | Dev, "calendar" -> Some "https://dev-gateway.macro.com/calendar"
-  | Dev, "cognition" -> Some "https://dev-gateway.macro.com/cognition"
-  | Dev, "notification" -> Some "https://dev-gateway.macro.com/notification"
-  | Dev, "scheduled-action" ->
-      Some "https://dev-gateway.macro.com/scheduled-action"
-  | Dev, "static-files" -> Some "https://static-file-service-dev.macro.com"
-  | Dev, "connection" -> Some "https://dev-gateway.macro.com/connection-gateway"
-  | Dev, "contacts" -> Some "https://dev-gateway.macro.com/contacts"
-  | Dev, "unfurl" -> Some "https://dev-gateway.macro.com/unfurl"
-  | Prod, "agent-harness" -> Some "https://gateway.macro.com/agent-harness"
-  | Prod, ("storage" | "properties" | "search") ->
-      Some "https://gateway.macro.com/dss"
-  | Prod, "auth" -> Some "https://gateway.macro.com/auth"
-  | Prod, "email" -> Some "https://gateway.macro.com/email"
-  | Prod, "calendar" -> Some "https://gateway.macro.com/calendar"
-  | Prod, "cognition" -> Some "https://gateway.macro.com/cognition"
-  | Prod, "notification" -> Some "https://gateway.macro.com/notification"
-  | Prod, "scheduled-action" ->
-      Some "https://gateway.macro.com/scheduled-action"
-  | Prod, "static-files" -> Some "https://static-file-service.macro.com"
-  | Prod, "connection" -> Some "https://gateway.macro.com/connection-gateway"
-  | Prod, "contacts" -> Some "https://gateway.macro.com/contacts"
-  | Prod, "unfurl" -> Some "https://gateway.macro.com/unfurl"
-  | Local, "agent-harness" -> Some "http://localhost:8101"
-  | Local, ("storage" | "properties" | "search") -> Some "http://localhost:8086"
-  | Local, "auth" -> Some "http://localhost:8080"
-  | Local, "email" -> Some "http://localhost:8087"
-  (* calendar_service also serves its routes under /calendar, which keeps
-     local paths identical to the gateway's. *)
-  | Local, "calendar" -> Some "http://localhost:8088/calendar"
-  | Local, "cognition" -> Some "http://localhost:8101/cognition"
-  | Local, "notification" -> Some "http://localhost:8089"
-  | Local, "scheduled-action" -> Some "http://localhost:8101/scheduled-action"
-  | Local, "static-files" -> Some "http://localhost:8100"
-  | Local, "connection" -> Some "http://localhost:8082"
-  | Local, "contacts" -> Some "http://localhost:8083"
-  | Local, "unfurl" -> Some "http://localhost:8095"
-  | _ -> None
+(* Service base URLs per environment, by spec name. `search` and `properties`
+   are served on the storage host. Hand-copied from HOSTS in
+   packages/sdk/src/config.ts; see .agents/rules/config-and-service-urls.md.
+   test_config fails when the two tables differ in either direction. *)
+let hosts =
+  [
+    ( Dev,
+      [
+        ("agent-harness", "https://dev-gateway.macro.com/agent-harness");
+        ("storage", "https://dev-gateway.macro.com/dss");
+        ("auth", "https://dev-gateway.macro.com/auth");
+        ("email", "https://dev-gateway.macro.com/email");
+        ("calendar", "https://dev-gateway.macro.com/calendar");
+        ("cognition", "https://dev-gateway.macro.com/cognition");
+        ("notification", "https://dev-gateway.macro.com/notification");
+        ("properties", "https://dev-gateway.macro.com/dss");
+        ("search", "https://dev-gateway.macro.com/dss");
+        ("scheduled-action", "https://dev-gateway.macro.com/scheduled-action");
+        ("static-files", "https://static-file-service-dev.macro.com");
+        ("connection", "https://dev-gateway.macro.com/connection-gateway");
+        ("contacts", "https://dev-gateway.macro.com/contacts");
+        ("unfurl", "https://dev-gateway.macro.com/unfurl");
+      ] );
+    ( Prod,
+      [
+        ("agent-harness", "https://gateway.macro.com/agent-harness");
+        ("storage", "https://gateway.macro.com/dss");
+        ("auth", "https://gateway.macro.com/auth");
+        ("email", "https://gateway.macro.com/email");
+        ("calendar", "https://gateway.macro.com/calendar");
+        ("cognition", "https://gateway.macro.com/cognition");
+        ("notification", "https://gateway.macro.com/notification");
+        ("properties", "https://gateway.macro.com/dss");
+        ("search", "https://gateway.macro.com/dss");
+        ("scheduled-action", "https://gateway.macro.com/scheduled-action");
+        ("static-files", "https://static-file-service.macro.com");
+        ("connection", "https://gateway.macro.com/connection-gateway");
+        ("contacts", "https://gateway.macro.com/contacts");
+        ("unfurl", "https://gateway.macro.com/unfurl");
+      ] );
+    ( Local,
+      [
+        ("agent-harness", "http://localhost:8101");
+        ("storage", "http://localhost:8086");
+        ("auth", "http://localhost:8080");
+        ("email", "http://localhost:8087");
+        (* calendar_service also serves its routes under /calendar, which
+           keeps local paths identical to the gateway's. *)
+        ("calendar", "http://localhost:8088/calendar");
+        ("cognition", "http://localhost:8101/cognition");
+        ("notification", "http://localhost:8089");
+        ("properties", "http://localhost:8086");
+        ("search", "http://localhost:8086");
+        ("scheduled-action", "http://localhost:8101/scheduled-action");
+        ("static-files", "http://localhost:8100");
+        ("connection", "http://localhost:8082");
+        ("contacts", "http://localhost:8083");
+        ("unfurl", "http://localhost:8095");
+      ] );
+  ]
+
+let default_host env service = List.assoc_opt service (List.assoc env hosts)
 
 module Auth = struct
   type bot_scope = User_scope | Team_scope

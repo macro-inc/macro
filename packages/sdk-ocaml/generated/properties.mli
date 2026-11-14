@@ -956,6 +956,8 @@ val make_property_definition_with_options :
 type nonrec property_definition_response =
   | Property_definition of property_definition
   | Property_definition_with_options of property_definition_with_options
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val property_definition_response_of_yojson :
   Yojson.Safe.t -> property_definition_response

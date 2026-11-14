@@ -160,9 +160,19 @@ let case_expression ~library service op =
   let args =
     List.map
       (fun (a : Emit_ops.argument) ->
+        let value =
+          if a.file then
+            [%expr
+              {
+                Macro_sdk_runtime.Request.filename = "r\xc3\xa9sum\xc3\xa9.pdf";
+                content_type = "application/pdf";
+                data = "%PDF-1.7";
+              }]
+          else sample ~m defs 1 a.arg_ty
+        in
         match a.label with
-        | Optional _ -> (a.label, [%expr Some [%e sample ~m defs 1 a.arg_ty]])
-        | _ -> (a.label, sample ~m defs 1 a.arg_ty))
+        | Optional _ -> (a.label, [%expr Some [%e value]])
+        | _ -> (a.label, value))
       (Emit_ops.arguments op)
   in
   let call =

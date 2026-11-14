@@ -29,6 +29,7 @@ let string = function
 
 let int = function
   | `Int i -> i
+  | `Intlit s -> fail "integer %s does not fit in an OCaml int" s
   | json -> fail "expected integer, got %s" (kind json)
 
 let int64 = function
@@ -85,21 +86,31 @@ let tag fields key = required fields key string
 (* Untagged unions: the first member whose decoder accepts the value wins. *)
 let first_ok decoders json =
   let rec attempt = function
-    | [] -> fail "no member of the union accepts this %s" (kind json)
-    | decode :: rest -> ( try decode json with Decode_error _ -> attempt rest)
+    | [] -> None
+    | decode :: rest -> (
+        try Some (decode json) with Decode_error _ -> attempt rest)
   in
   attempt decoders
 
 (* Externally tagged unions: a bare string for a case without data, or a
    single-key object whose key names the case. *)
 let external_case = function
-  | `String name -> (name, None)
-  | `Assoc [ (name, value) ] -> (name, Some value)
-  | json -> fail "expected a string or a single-key object, got %s" (kind json)
+  | `String name -> Some (name, None)
+  | `Assoc [ (name, value) ] -> Some (name, Some value)
+  | _ -> None
 
-let payload name = function
-  | Some value -> value
-  | None -> fail "case %S needs a value" name
+(* Strict decoding: when set, a value an enum or union does not know is a
+   decode error instead of its [Unknown] case. The operation tests set it to
+   catch a wrong tag or enum mapping; callers can set it to catch spec drift. *)
+let strict = ref false
+
+(* What an enum or union decodes a value it does not know to. *)
+let unknown type_name json value =
+  if !strict then
+    fail "%s does not know %s" type_name
+      (let text = Yojson.Safe.to_string json in
+       if String.length text > 120 then String.sub text 0 120 ^ "..." else text)
+  else value
 
 (* ---------- encoders ---------- *)
 

@@ -10,6 +10,9 @@ type part = {
   data : string;
 }
 
+type file = { filename : string; content_type : string; data : string }
+(** A file for a binary multipart part: the server reads its name and type. *)
+
 type body =
   | Json of Json.t
   | Raw of { content_type : string; data : string }
@@ -70,29 +73,74 @@ type wire = {
   wire_body : string option;
 }
 
-let multipart_boundary = "macro-sdk-boundary-7d3f1a"
+let random = lazy (Random.State.make_self_init ())
 
-let encode_part { name; filename; content_type; data } =
+(* A fresh boundary that occurs in no part, so data can never end its part
+   early or start another (RFC 2046 section 5.1.1). *)
+let boundary_for parts =
+  let occurs_in boundary =
+    List.exists
+      (fun (part : part) ->
+        let rec search i =
+          i + String.length boundary <= String.length part.data
+          && (String.sub part.data i (String.length boundary) = boundary
+             || search (i + 1))
+        in
+        search 0)
+      parts
+  in
+  let rec pick () =
+    let state = Lazy.force random in
+    let boundary =
+      "macro-sdk-"
+      ^ String.init 24 (fun _ -> "0123456789abcdef".[Random.State.int state 16])
+    in
+    if occurs_in boundary then pick () else boundary
+  in
+  pick ()
+
+(* Header parameter values per RFC 7578 section 4.2: UTF-8 as is, with only
+   the quote and CR/LF percent-encoded. *)
+let quoted value =
+  let buffer = Buffer.create (String.length value + 2) in
+  Buffer.add_char buffer '"';
+  String.iter
+    (function
+      | '"' -> Buffer.add_string buffer "%22"
+      | '\r' -> Buffer.add_string buffer "%0D"
+      | '\n' -> Buffer.add_string buffer "%0A"
+      | c -> Buffer.add_char buffer c)
+    value;
+  Buffer.add_char buffer '"';
+  Buffer.contents buffer
+
+let encode_part boundary ({ name; filename; content_type; data } : part) =
   let disposition =
     match filename with
-    | Some file -> Printf.sprintf "form-data; name=%S; filename=%S" name file
-    | None -> Printf.sprintf "form-data; name=%S" name
+    | Some file ->
+        Printf.sprintf "form-data; name=%s; filename=%s" (quoted name)
+          (quoted file)
+    | None -> Printf.sprintf "form-data; name=%s" (quoted name)
   in
   let type_line =
     match content_type with
     | Some ct -> "Content-Type: " ^ ct ^ "\r\n"
     | None -> ""
   in
-  Printf.sprintf "--%s\r\nContent-Disposition: %s\r\n%s\r\n%s\r\n"
-    multipart_boundary disposition type_line data
+  Printf.sprintf "--%s\r\nContent-Disposition: %s\r\n%s\r\n%s\r\n" boundary
+    disposition type_line data
 
-let encode_body = function
+(* The content type and bytes of a body. [boundary] is for tests. *)
+let encode_body ?boundary = function
   | Json json -> ("application/json", Yojson.Safe.to_string json)
   | Raw { content_type; data } -> (content_type, data)
   | Multipart parts ->
-      ( "multipart/form-data; boundary=" ^ multipart_boundary,
-        String.concat "" (List.map encode_part parts)
-        ^ "--" ^ multipart_boundary ^ "--\r\n" )
+      let boundary =
+        match boundary with Some b -> b | None -> boundary_for parts
+      in
+      ( "multipart/form-data; boundary=" ^ boundary,
+        String.concat "" (List.map (encode_part boundary) parts)
+        ^ "--" ^ boundary ^ "--\r\n" )
 
 (* Resolve host, auth and body encoding. Operation headers come last so an
    operation's own x-macro-bot-scope is the one sent. *)
@@ -114,9 +162,12 @@ let prepare (config : Config.t) request =
     Config.Auth.headers ?requested_as:config.requested_as ~has_bot_scope
       config.auth
   in
+  (* A POST, PUT or PATCH without a body still says it has none: some
+     proxies refuse such requests without a content length. *)
   let content_type, wire_body =
     match request.body with
-    | None -> ([], None)
+    | None when request.meth = `GET || request.meth = `DELETE -> ([], None)
+    | None -> ([], Some "")
     | Some body ->
         let content_type, data = encode_body body in
         ([ ("content-type", content_type) ], Some data)

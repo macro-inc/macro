@@ -84,7 +84,7 @@ let add_property_option_request_of_yojson :
           option =
             Json.required fields "option" add_number_option_request_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "add_property_option_request" json (Unknown json)
 
 and yojson_of_add_property_option_request :
     add_property_option_request -> Yojson.Safe.t =
@@ -144,7 +144,7 @@ let property_target_entity_type_of_yojson :
   | "PROJECT" -> Project
   | "THREAD" -> Thread
   | "USER" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "property_target_entity_type" json (Unknown other)
 
 and yojson_of_property_target_entity_type :
     property_target_entity_type -> Yojson.Safe.t =
@@ -176,7 +176,8 @@ let bulk_entity_option_update_status_of_yojson :
   | "applied" -> Applied
   | "skipped_no_permission" -> Skipped_no_permission
   | "failed" -> Failed
-  | other -> Unknown other
+  | other ->
+      Json.unknown "bulk_entity_option_update_status" json (Unknown other)
 
 and yojson_of_bulk_entity_option_update_status :
     bulk_entity_option_update_status -> Yojson.Safe.t =
@@ -590,7 +591,7 @@ let entity_type_of_yojson : Yojson.Safe.t -> entity_type =
   | "TASK" -> Task
   | "THREAD" -> Thread
   | "USER" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "entity_type" json (Unknown other)
 
 and yojson_of_entity_type : entity_type -> Yojson.Safe.t =
  fun value ->
@@ -660,7 +661,7 @@ let property_data_type_of_yojson : Yojson.Safe.t -> property_data_type =
             Json.optional fields "specific_type" entity_type_of_yojson;
         }
   | "link" -> Link { multi = Json.required fields "multi" Json.bool }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_data_type" json (Unknown json)
 
 and yojson_of_property_data_type : property_data_type -> Yojson.Safe.t =
  fun value ->
@@ -728,7 +729,7 @@ let create_property_scope_of_yojson : Yojson.Safe.t -> create_property_scope =
   match Json.string json with
   | "user" -> User
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "create_property_scope" json (Unknown other)
 
 and yojson_of_create_property_scope : create_property_scope -> Yojson.Safe.t =
  fun value ->
@@ -795,7 +796,7 @@ let data_type_of_yojson : Yojson.Safe.t -> data_type =
   | "TAG" -> Tag
   | "ENTITY" -> Entity
   | "LINK" -> Link
-  | other -> Unknown other
+  | other -> Json.unknown "data_type" json (Unknown other)
 
 and yojson_of_data_type : data_type -> Yojson.Safe.t =
  fun value ->
@@ -846,7 +847,7 @@ let tag_scope_of_yojson : Yojson.Safe.t -> tag_scope =
   match Json.string json with
   | "user" -> User
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "tag_scope" json (Unknown other)
 
 and yojson_of_tag_scope : tag_scope -> Yojson.Safe.t =
  fun value ->
@@ -889,7 +890,7 @@ let property_owner_of_yojson : Yojson.Safe.t -> property_owner =
   | "database" ->
       Database { database_id = Json.required fields "database_id" Json.string }
   | "system" -> System
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_owner" json (Unknown json)
 
 and yojson_of_property_owner : property_owner -> Yojson.Safe.t =
  fun value ->
@@ -1010,7 +1011,7 @@ let property_option_value_of_yojson : Yojson.Safe.t -> property_option_value =
   match Json.tag fields "type" with
   | "string" -> String { value = Json.required fields "value" Json.string }
   | "number" -> Number { value = Json.required fields "value" Json.float }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_option_value" json (Unknown json)
 
 and yojson_of_property_option_value : property_option_value -> Yojson.Safe.t =
  fun value ->
@@ -1257,7 +1258,7 @@ let property_value_of_yojson : Yojson.Safe.t -> property_value =
         }
   | "Link" ->
       Link { value = Json.required fields "value" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_value" json (Unknown json)
 
 and yojson_of_property_value : property_value -> Yojson.Safe.t =
  fun value ->
@@ -1648,7 +1649,7 @@ let property_scope_of_yojson : Yojson.Safe.t -> property_scope =
   | "team" -> Team
   | "system" -> System
   | "all" -> All
-  | other -> Unknown other
+  | other -> Json.unknown "property_scope" json (Unknown other)
 
 and yojson_of_property_scope : property_scope -> Yojson.Safe.t =
  fun value ->
@@ -1770,18 +1771,24 @@ let make_property_definition_with_options ~(definition : property_definition)
 type nonrec property_definition_response =
   | Property_definition of property_definition
   | Property_definition_with_options of property_definition_with_options
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let property_definition_response_of_yojson :
     Yojson.Safe.t -> property_definition_response =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> Property_definition (property_definition_of_yojson json));
-      (fun json ->
-        Property_definition_with_options
-          (property_definition_with_options_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> Property_definition (property_definition_of_yojson json));
+        (fun json ->
+          Property_definition_with_options
+            (property_definition_with_options_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "property_definition_response" json (Unknown json)
 
 and yojson_of_property_definition_response :
     property_definition_response -> Yojson.Safe.t =
@@ -1790,6 +1797,7 @@ and yojson_of_property_definition_response :
   | Property_definition inner -> yojson_of_property_definition inner
   | Property_definition_with_options inner ->
       yojson_of_property_definition_with_options inner
+  | Unknown json -> json
 
 type nonrec property_definition_with_options_response = {
   definition : property_definition_detail_response;
@@ -1882,7 +1890,7 @@ let set_property_value_of_yojson : Yojson.Safe.t -> set_property_value =
   | "link" -> Link { url = Json.required fields "url" Json.string }
   | "multi_link" ->
       Multi_link { urls = Json.required fields "urls" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "set_property_value" json (Unknown json)
 
 and yojson_of_set_property_value : set_property_value -> Yojson.Safe.t =
  fun value ->

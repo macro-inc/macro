@@ -103,13 +103,13 @@ let type_declaration def =
           in
           constructor ~doc:c.ext_doc c.ext_name args
         in
-        (Ptype_variant (List.map case cases), None)
+        (Ptype_variant (List.map case cases @ [ unknown_json ]), None)
     | Untagged cases ->
         let case c =
           constructor ~doc:c.untagged_doc c.untagged_name
             (Pcstr_tuple [ core_type c.member ])
         in
-        (Ptype_variant (List.map case cases), None)
+        (Ptype_variant (List.map case cases @ [ unknown_json ]), None)
     | Alias ty -> (Ptype_abstract, Some (core_type ty))
   in
   let declaration =
@@ -120,12 +120,13 @@ let type_declaration def =
 
 (* ---------- codecs ---------- *)
 
-(* Unknown tags and enum values decode to [Unknown]; inside an untagged union
-   that would accept every value, so members there decode strictly. *)
+(* Every enum and union decodes what it does not know to [Unknown]; as a
+   member of an untagged union that would accept every value, so members
+   there decode strictly. *)
 let rec is_open defs = function
   | Named n -> (
       match List.find_opt (fun d -> d.name = n) defs with
-      | Some { kind = Enum _ | Tagged _; _ } -> true
+      | Some { kind = Enum _ | Tagged _ | External _ | Untagged _; _ } -> true
       | Some { kind = Alias ty; _ } -> is_open defs ty
       | _ -> false)
   | _ -> false
@@ -181,7 +182,11 @@ let decoder_body defs def =
   | Enum values ->
       B.pexp_match [%expr Json.string json]
         (List.map (fun (value, c) -> case (pstring value) (ctor c)) values
-        @ [ case [%pat? other] [%expr Unknown other] ])
+        @ [
+            case
+              [%pat? other]
+              [%expr Json.unknown [%e estring def.name] json (Unknown other)];
+          ])
   | Tagged { tag; cases } ->
       let branch c =
         let arg =
@@ -198,26 +203,33 @@ let decoder_body defs def =
         [%e
           B.pexp_match
             [%expr Json.tag fields [%e estring tag]]
-            (List.map branch cases @ [ case [%pat? _] [%expr Unknown json] ])]]
+            (List.map branch cases
+            @ [
+                case
+                  [%pat? _]
+                  [%expr Json.unknown [%e estring def.name] json (Unknown json)];
+              ])]]
   | External cases ->
       let branch c =
         match c.value with
         | None ->
             case
-              (B.ppat_tuple [ pstring c.key; [%pat? None] ])
+              (pctor ~arg:(B.ppat_tuple [ pstring c.key; [%pat? None] ]) "Some")
               (ctor c.ext_name)
         | Some ty ->
             case
-              (B.ppat_tuple [ pstring c.key; [%pat? value] ])
-              (ctor
-                 ~arg:
-                   [%expr
-                     [%e decoder ty] (Json.payload [%e estring c.key] value)]
-                 c.ext_name)
+              (pctor
+                 ~arg:(B.ppat_tuple [ pstring c.key; [%pat? Some value] ])
+                 "Some")
+              (ctor ~arg:[%expr [%e decoder ty] value] c.ext_name)
       in
       B.pexp_match [%expr Json.external_case json]
         (List.map branch cases
-        @ [ case [%pat? name, _] [%expr Json.fail "unknown case %S" name] ])
+        @ [
+            case
+              [%pat? _]
+              [%expr Json.unknown [%e estring def.name] json (Unknown json)];
+          ])
   | Untagged cases ->
       let attempt c =
         let decode = [%expr [%e decoder c.member] json] in
@@ -231,7 +243,10 @@ let decoder_body defs def =
         in
         [%expr fun json -> [%e ctor ~arg:decode c.untagged_name]]
       in
-      [%expr Json.first_ok [%e B.elist (List.map attempt cases)] json]
+      [%expr
+        match Json.first_ok [%e B.elist (List.map attempt cases)] json with
+        | Some value -> value
+        | None -> Json.unknown [%e estring def.name] json (Unknown json)]
   | Alias ty -> [%expr [%e decoder ty] json]
 
 let encoder_body def =
@@ -280,7 +295,8 @@ let encoder_body def =
               [%expr
                 Json.external_value [%e estring c.key] ([%e encoder ty] inner)]
       in
-      B.pexp_match [%expr value] (List.map branch cases)
+      B.pexp_match [%expr value]
+        (List.map branch cases @ [ case [%pat? Unknown json] [%expr json] ])
   | Untagged cases ->
       B.pexp_match [%expr value]
         (List.map
@@ -288,7 +304,8 @@ let encoder_body def =
              case
                (pctor ~arg:[%pat? inner] c.untagged_name)
                [%expr [%e encoder c.member] inner])
-           cases)
+           cases
+        @ [ case [%pat? Unknown json] [%expr json] ])
   | Alias ty -> [%expr [%e encoder ty] value]
 
 let codec_bindings defs def =

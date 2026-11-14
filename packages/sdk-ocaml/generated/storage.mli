@@ -1650,7 +1650,10 @@ type nonrec pdf_anchor =
 val pdf_anchor_of_yojson : Yojson.Safe.t -> pdf_anchor
 val yojson_of_pdf_anchor : pdf_anchor -> Yojson.Safe.t
 
-type nonrec anchor = Pdf_anchor of pdf_anchor
+type nonrec anchor =
+  | Pdf_anchor of pdf_anchor
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val anchor_of_yojson : Yojson.Safe.t -> anchor
 val yojson_of_anchor : anchor -> Yojson.Safe.t
@@ -1716,6 +1719,8 @@ type nonrec animation_repeat =
   | Float of float
       (** Plays this many times in all ([1] = once, no repeat; fractions such as 2.5 are allowed). *)
   | Repeat_until of repeat_until  (** Repeats until an event. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val animation_repeat_of_yojson : Yojson.Safe.t -> animation_repeat
 val yojson_of_animation_repeat : animation_repeat -> Yojson.Safe.t
@@ -1959,6 +1964,8 @@ type nonrec option_ref =
   | Label of string
       (** An option's label, matched without regard to case. An unknown label
 is refused. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val option_ref_of_yojson : Yojson.Safe.t -> option_ref
 val yojson_of_option_ref : option_ref -> Yojson.Safe.t
@@ -2494,6 +2501,8 @@ type nonrec crm_association =
   | Contact of string  (** Items associated with the contact. *)
   | Activity
       (** Activity across visible CRM-enabled teams, excluding hidden records. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val crm_association_of_yojson : Yojson.Safe.t -> crm_association
 val yojson_of_crm_association : crm_association -> Yojson.Safe.t
@@ -2674,6 +2683,8 @@ type nonrec api_group_by_field =
   | Project  (** Group by project *)
   | Property of api_group_by_field_property
       (** Group by a property value (e.g., status, priority, or custom properties) *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val api_group_by_field_of_yojson : Yojson.Safe.t -> api_group_by_field
 val yojson_of_api_group_by_field : api_group_by_field -> Yojson.Safe.t
@@ -4628,6 +4639,8 @@ or <m-document-mention>\{"documentId":"UUID","documentName":"Budget","blockName"
 A date chip is <m-date-mention>\{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"\}</m-date-mention>; a cell holding only that chip calculates as the date.
 Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
 Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val spreadsheet_cell_value_value_of_yojson :
   Yojson.Safe.t -> spreadsheet_cell_value_value
@@ -11945,6 +11958,8 @@ retain their existing download/export behavior. *)
 type nonrec file_type_update =
   | Set of file_type  (** Set the file type to a specific value. *)
   | Clear  (** Clear the file type (set to null). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val file_type_update_of_yojson : Yojson.Safe.t -> file_type_update
 val yojson_of_file_type_update : file_type_update -> Yojson.Safe.t
@@ -12360,6 +12375,8 @@ type nonrec effect_spec_glow_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_glow_options_2 of effect_spec_glow_options_2
       (** Glow options (PowerPoint's Glow Options). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val effect_spec_glow_options_of_yojson :
   Yojson.Safe.t -> effect_spec_glow_options
@@ -12408,6 +12425,8 @@ type nonrec effect_spec_shadow_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_shadow_options_2 of effect_spec_shadow_options_2
       (** Shadow options (PowerPoint's Shadow Options pane). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val effect_spec_shadow_options_of_yojson :
   Yojson.Safe.t -> effect_spec_shadow_options
@@ -12740,6 +12759,8 @@ type nonrec effect_spec_reflection_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_reflection_options_2 of effect_spec_reflection_options_2
       (** Reflection options (PowerPoint's Reflection Options). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val effect_spec_reflection_options_of_yojson :
   Yojson.Safe.t -> effect_spec_reflection_options
@@ -12770,6 +12791,8 @@ type nonrec effect_spec_soft_edge_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_soft_edge_options_2 of effect_spec_soft_edge_options_2
       (** Soft edge options. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val effect_spec_soft_edge_options_of_yojson :
   Yojson.Safe.t -> effect_spec_soft_edge_options
@@ -18342,14 +18365,104 @@ val make_get_or_create_private_request :
 (** Request to get or create a private channel. *)
 
 type nonrec item =
-  | Document of basic_document
-  | Chat of chat
-  | Project of project
+  | Document of {
+      branched_from_id : string option;
+          (** The id of the document this document branched from *)
+      branched_from_version_id : int64 option;
+          (** The id of the version this document branched from
+This could be either DocumentInstance or DocumentBom id depending on
+the file type *)
+      created_at : string option;  (** The time the document was created *)
+      deleted_at : string option;  (** The time the document was deleted *)
+      document_family_id : int64 option;
+          (** The id of the document family this document belongs to *)
+      document_version_id : int64;
+          (** The version of the document
+This could be the document_instance_id or document_bom_id depending on
+the file type *)
+      file_type : string option;
+          (** The file type of the document (e.g. pdf, docx) *)
+      id : string;  (** The document id *)
+      name : string;  (** The name of the document *)
+      owner : string;  (** The owner of the document *)
+      project_id : string option;
+          (** The id of the project that this document belongs to *)
+      sha : string option;
+          (** If the document is a PDF, this is the SHA of the pdf
+If the document is a DOCX, this will not be present *)
+      sub_type : basic_document_sub_type option;
+      updated_at : string option;
+          (** The time the document instance / document BOM was updated *)
+    }
+  | Chat of {
+      created_at : string option;  (** The time the chat was created *)
+      deleted_at : string option;  (** The time the chat was deleted *)
+      id : string;  (** The chat uuid *)
+      is_persistent : bool;
+      model : string option;  (** The model used to generate the chat *)
+      name : string;  (** The name of the chat *)
+      project_id : string option;  (** The project id of the chat *)
+      token_count : int64 option;
+      updated_at : string option;  (** The time the chat was last updated *)
+      user_id : string;  (** Who the chat belongs to *)
+    }
+  | Project of {
+      created_at : string option;  (** The time the project was created *)
+      deleted_at : string option;
+      id : string;  (** The id of the project *)
+      name : string;  (** The name of the project *)
+      parent_id : string option;  (** The parent project id *)
+      updated_at : string option;  (** The time the project was updated *)
+      user_id : string;  (** The user id of who created the project *)
+    }
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
 val item_of_yojson : Yojson.Safe.t -> item
 val yojson_of_item : item -> Yojson.Safe.t
+
+val make_item_document :
+  ?branched_from_id:string ->
+  ?branched_from_version_id:int64 ->
+  ?created_at:string ->
+  ?deleted_at:string ->
+  ?document_family_id:int64 ->
+  document_version_id:int64 ->
+  ?file_type:string ->
+  id:string ->
+  name:string ->
+  owner:string ->
+  ?project_id:string ->
+  ?sha:string ->
+  ?sub_type:basic_document_sub_type ->
+  ?updated_at:string ->
+  unit ->
+  item
+
+val make_item_chat :
+  ?created_at:string ->
+  ?deleted_at:string ->
+  id:string ->
+  is_persistent:bool ->
+  ?model:string ->
+  name:string ->
+  ?project_id:string ->
+  ?token_count:int64 ->
+  ?updated_at:string ->
+  user_id:string ->
+  unit ->
+  item
+
+val make_item_project :
+  ?created_at:string ->
+  ?deleted_at:string ->
+  id:string ->
+  name:string ->
+  ?parent_id:string ->
+  ?updated_at:string ->
+  user_id:string ->
+  unit ->
+  item
 
 type nonrec pinned_item = {
   activity : item;  (** legacy will be removed later *)
@@ -21516,6 +21629,8 @@ type nonrec location_response_data =
       (** The presigned url of the document if it is not a docx *)
   | Presigned_urls of presigned_url list
       (** The presigned urls of the docx bom parts if it is a docx *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val location_response_data_of_yojson : Yojson.Safe.t -> location_response_data
 val yojson_of_location_response_data : location_response_data -> Yojson.Safe.t
@@ -27447,6 +27562,8 @@ type nonrec webhook_event =
 topic. *)
   | User_topic_event of user_topic_event
       (** User profile events from the [macro.users] topic. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val webhook_event_of_yojson : Yojson.Safe.t -> webhook_event
 val yojson_of_webhook_event : webhook_event -> Yojson.Safe.t
@@ -31380,7 +31497,7 @@ Stop syncing the chat, locally. Owner only, in their own session. *)
 
 val external_chat_upload :
   chat_id:string ->
-  file:string ->
+  file:Macro_sdk_runtime.Request.file ->
   unit ->
   ( external_chat_uploaded_attachment,
     Macro_sdk_runtime.Request.no_error )

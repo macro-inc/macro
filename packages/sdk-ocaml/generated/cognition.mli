@@ -853,6 +853,8 @@ type nonrec chat_message_content =
   | String of string  (** Plain text content. *)
   | List of assistant_message_part list
       (** Structured assistant message parts. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val chat_message_content_of_yojson : Yojson.Safe.t -> chat_message_content
 val yojson_of_chat_message_content : chat_message_content -> Yojson.Safe.t
@@ -3572,6 +3574,8 @@ type nonrec user_tool_response_value =
   | Rejected  (** User rejected suggested tool execution *)
   | User_action of Yojson.Safe.t
       (** Tool is executed and has whatever return type the wrapped tool returns *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val user_tool_response_value_of_yojson :
   Yojson.Safe.t -> user_tool_response_value

@@ -12,7 +12,9 @@ type nonrec agent_provider =
 
 let agent_provider_of_yojson : Yojson.Safe.t -> agent_provider =
  fun json ->
-  match Json.string json with "claude" -> Claude | other -> Unknown other
+  match Json.string json with
+  | "claude" -> Claude
+  | other -> Json.unknown "agent_provider" json (Unknown other)
 
 and yojson_of_agent_provider : agent_provider -> Yojson.Safe.t =
  fun value ->
@@ -374,7 +376,7 @@ let agent_sign_in_expiry_stage_of_yojson :
   | "expires_soon" -> Expires_soon
   | "expires_today" -> Expires_today
   | "expired" -> Expired
-  | other -> Unknown other
+  | other -> Json.unknown "agent_sign_in_expiry_stage" json (Unknown other)
 
 and yojson_of_agent_sign_in_expiry_stage :
     agent_sign_in_expiry_stage -> Yojson.Safe.t =
@@ -507,7 +509,7 @@ let entity_type_of_yojson : Yojson.Safe.t -> entity_type =
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "entity_type" json (Unknown other)
 
 and yojson_of_entity_type : entity_type -> Yojson.Safe.t =
  fun value ->
@@ -553,7 +555,7 @@ let channel_type_of_yojson : Yojson.Safe.t -> channel_type =
   | "private" -> Private
   | "directMessage" -> Direct_message
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "channel_type" json (Unknown other)
 
 and yojson_of_channel_type : channel_type -> Yojson.Safe.t =
  fun value ->
@@ -638,7 +640,7 @@ let notification_document_sub_type_of_yojson :
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | _ -> Unknown json
+  | _ -> Json.unknown "notification_document_sub_type" json (Unknown json)
 
 and yojson_of_notification_document_sub_type :
     notification_document_sub_type -> Yojson.Safe.t =
@@ -732,21 +734,28 @@ store carry the message and root UUIDs. *)
 type nonrec comment_ref =
   | Int64 of int64  (** Legacy [Comment.id] or [Thread.id]. *)
   | String of string  (** Message or root id in the shared message store. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let comment_ref_of_yojson : Yojson.Safe.t -> comment_ref =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> Int64 (Json.int64 json));
-      (fun json -> String (Json.string json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> Int64 (Json.int64 json));
+        (fun json -> String (Json.string json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "comment_ref" json (Unknown json)
 
 and yojson_of_comment_ref : comment_ref -> Yojson.Safe.t =
  fun value ->
   match value with
   | Int64 inner -> Json.of_int64 inner
   | String inner -> Json.of_string inner
+  | Unknown json -> json
 
 type nonrec mentioned_in_document_comment_metadata = {
   comment_id : comment_ref;  (** the comment id *)
@@ -966,7 +975,7 @@ let requested_access_level_of_yojson : Yojson.Safe.t -> requested_access_level =
   | "view" -> View
   | "comment" -> Comment
   | "edit" -> Edit
-  | other -> Unknown other
+  | other -> Json.unknown "requested_access_level" json (Unknown other)
 
 and yojson_of_requested_access_level : requested_access_level -> Yojson.Safe.t =
  fun value ->
@@ -1074,7 +1083,7 @@ let initiative_discussion_reason_of_yojson :
   | "reply" -> Reply
   | "assignee" -> Assignee
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "initiative_discussion_reason" json (Unknown other)
 
 and yojson_of_initiative_discussion_reason :
     initiative_discussion_reason -> Yojson.Safe.t =
@@ -1164,7 +1173,7 @@ let crm_discussion_reason_of_yojson : Yojson.Safe.t -> crm_discussion_reason =
   | "mention" -> Mention
   | "reply" -> Reply
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "crm_discussion_reason" json (Unknown other)
 
 and yojson_of_crm_discussion_reason : crm_discussion_reason -> Yojson.Safe.t =
  fun value ->
@@ -1512,7 +1521,7 @@ let invitee_plan_of_yojson : Yojson.Safe.t -> invitee_plan =
   match Json.string json with
   | "free" -> Free
   | "premium" -> Premium
-  | other -> Unknown other
+  | other -> Json.unknown "invitee_plan" json (Unknown other)
 
 and yojson_of_invitee_plan : invitee_plan -> Yojson.Safe.t =
  fun value ->
@@ -1687,7 +1696,9 @@ type nonrec external_chat_provider =
 
 let external_chat_provider_of_yojson : Yojson.Safe.t -> external_chat_provider =
  fun json ->
-  match Json.string json with "whatsapp" -> Whatsapp | other -> Unknown other
+  match Json.string json with
+  | "whatsapp" -> Whatsapp
+  | other -> Json.unknown "external_chat_provider" json (Unknown other)
 
 and yojson_of_external_chat_provider : external_chat_provider -> Yojson.Safe.t =
  fun value ->
@@ -1804,7 +1815,7 @@ let github_pr_event_action_of_yojson : Yojson.Safe.t -> github_pr_event_action =
   | "opened" -> Opened
   | "reopened" -> Reopened
   | "closed" -> Closed
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_event_action" json (Unknown other)
 
 and yojson_of_github_pr_event_action : github_pr_event_action -> Yojson.Safe.t =
  fun value ->
@@ -1827,7 +1838,7 @@ let github_pr_event_status_of_yojson : Yojson.Safe.t -> github_pr_event_status =
   | "open" -> Open
   | "closed" -> Closed
   | "merged" -> Merged
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_event_status" json (Unknown other)
 
 and yojson_of_github_pr_event_status : github_pr_event_status -> Yojson.Safe.t =
  fun value ->
@@ -1962,7 +1973,7 @@ let github_pr_check_run_state_of_yojson :
   match Json.string json with
   | "completed" -> Completed
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_check_run_state" json (Unknown other)
 
 and yojson_of_github_pr_check_run_state :
     github_pr_check_run_state -> Yojson.Safe.t =
@@ -2190,7 +2201,7 @@ let github_pr_comment_kind_of_yojson : Yojson.Safe.t -> github_pr_comment_kind =
   match Json.string json with
   | "issue" -> Issue
   | "review_comment" -> Review_comment
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_comment_kind" json (Unknown other)
 
 and yojson_of_github_pr_comment_kind : github_pr_comment_kind -> Yojson.Safe.t =
  fun value ->
@@ -2315,7 +2326,7 @@ let github_pr_mention_location_of_yojson :
   | "comment" -> Comment
   | "review" -> Review
   | "review_comment" -> Review_comment
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_mention_location" json (Unknown other)
 
 and yojson_of_github_pr_mention_location :
     github_pr_mention_location -> Yojson.Safe.t =
@@ -2440,7 +2451,7 @@ let github_pr_review_state_of_yojson : Yojson.Safe.t -> github_pr_review_state =
   | "approved" -> Approved
   | "changes_requested" -> Changes_requested
   | "commented" -> Commented
-  | other -> Unknown other
+  | other -> Json.unknown "github_pr_review_state" json (Unknown other)
 
 and yojson_of_github_pr_review_state : github_pr_review_state -> Yojson.Safe.t =
  fun value ->
@@ -2691,7 +2702,7 @@ let routine_run_outcome_of_yojson : Yojson.Safe.t -> routine_run_outcome =
   match Json.string json with
   | "succeeded" -> Succeeded
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "routine_run_outcome" json (Unknown other)
 
 and yojson_of_routine_run_outcome : routine_run_outcome -> Yojson.Safe.t =
  fun value ->
@@ -2776,7 +2787,7 @@ let computer_setup_outcome_of_yojson : Yojson.Safe.t -> computer_setup_outcome =
   | "failed" ->
       Failed
         { failure_reason = Json.required fields "failureReason" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "computer_setup_outcome" json (Unknown json)
 
 and yojson_of_computer_setup_outcome : computer_setup_outcome -> Yojson.Safe.t =
  fun value ->
@@ -3306,7 +3317,7 @@ let notif_event_of_yojson : Yojson.Safe.t -> notif_event =
             Json.required fields "content"
               runtime_access_removed_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "notif_event" json (Unknown json)
 
 and yojson_of_notif_event : notif_event -> Yojson.Safe.t =
  fun value ->
@@ -3707,7 +3718,7 @@ let notification_state_of_yojson : Yojson.Safe.t -> notification_state =
   | "unseen" -> Unseen
   | "seen" -> Seen
   | "done" -> Done
-  | other -> Unknown other
+  | other -> Json.unknown "notification_state" json (Unknown other)
 
 and yojson_of_notification_state : notification_state -> Yojson.Safe.t =
  fun value ->
@@ -4118,7 +4129,7 @@ let device_type_of_yojson : Yojson.Safe.t -> device_type =
   | "ios" -> Ios
   | "android" -> Android
   | "iosvoip" -> Iosvoip
-  | other -> Unknown other
+  | other -> Json.unknown "device_type" json (Unknown other)
 
 and yojson_of_device_type : device_type -> Yojson.Safe.t =
  fun value ->
@@ -4424,7 +4435,11 @@ type nonrec notification_service_api_version =
 
 let notification_service_api_version_of_yojson :
     Yojson.Safe.t -> notification_service_api_version =
- fun json -> match Json.string json with "v1" -> V1 | other -> Unknown other
+ fun json ->
+  match Json.string json with
+  | "v1" -> V1
+  | other ->
+      Json.unknown "notification_service_api_version" json (Unknown other)
 
 and yojson_of_notification_service_api_version :
     notification_service_api_version -> Yojson.Safe.t =
@@ -4454,7 +4469,7 @@ let push_notification_navigation_of_yojson :
           message_id = Json.required fields "messageId" Json.string;
           thread_id = Json.optional fields "threadId" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "push_notification_navigation" json (Unknown json)
 
 and yojson_of_push_notification_navigation :
     push_notification_navigation -> Yojson.Safe.t =

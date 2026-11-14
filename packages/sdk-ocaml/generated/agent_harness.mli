@@ -184,6 +184,8 @@ type nonrec elicitation_content_value =
   | Int64 of int64  (** A whole number. *)
   | Float of float  (** A number that is not whole. *)
   | List of string list  (** A multi-select's chosen values. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val elicitation_content_value_of_yojson :
   Yojson.Safe.t -> elicitation_content_value
@@ -224,6 +226,8 @@ type nonrec elicitation_request_id =
 number); agents count their requests from zero, so [i32] is the
 honest TypeScript face. *)
   | String of string  (** A string JSON-RPC id. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val elicitation_request_id_of_yojson : Yojson.Safe.t -> elicitation_request_id
 val yojson_of_elicitation_request_id : elicitation_request_id -> Yojson.Safe.t

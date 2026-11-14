@@ -398,6 +398,8 @@ store carry the message and root UUIDs. *)
 type nonrec comment_ref =
   | Int64 of int64  (** Legacy [Comment.id] or [Thread.id]. *)
   | String of string  (** Message or root id in the shared message store. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val comment_ref_of_yojson : Yojson.Safe.t -> comment_ref
 val yojson_of_comment_ref : comment_ref -> Yojson.Safe.t

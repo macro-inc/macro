@@ -60,7 +60,7 @@ let entity_type_of_yojson : Yojson.Safe.t -> entity_type =
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "entity_type" json (Unknown other)
 
 and yojson_of_entity_type : entity_type -> Yojson.Safe.t =
  fun value ->
@@ -350,7 +350,7 @@ let stream_event_of_yojson : Yojson.Safe.t -> stream_event =
   match Json.tag fields "type" with
   | "created" -> Created (stream_id_of_yojson json)
   | "closed" -> Closed (stream_id_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "stream_event" json (Unknown json)
 
 and yojson_of_stream_event : stream_event -> Yojson.Safe.t =
  fun value ->
@@ -410,7 +410,8 @@ let to_websocket_message_track_entity_type_of_yojson :
  fun json ->
   match Json.string json with
   | "track_entity" -> Track_entity
-  | other -> Unknown other
+  | other ->
+      Json.unknown "to_websocket_message_track_entity_type" json (Unknown other)
 
 and yojson_of_to_websocket_message_track_entity_type :
     to_websocket_message_track_entity_type -> Yojson.Safe.t =
@@ -428,7 +429,9 @@ let to_websocket_message_stream_events_type_of_yojson :
  fun json ->
   match Json.string json with
   | "stream_events" -> Stream_events
-  | other -> Unknown other
+  | other ->
+      Json.unknown "to_websocket_message_stream_events_type" json
+        (Unknown other)
 
 and yojson_of_to_websocket_message_stream_events_type :
     to_websocket_message_stream_events_type -> Yojson.Safe.t =
@@ -450,7 +453,7 @@ let track_action_of_yojson : Yojson.Safe.t -> track_action =
   | "open" -> Open
   | "ping" -> Ping
   | "close" -> Close
-  | other -> Unknown other
+  | other -> Json.unknown "track_action" json (Unknown other)
 
 and yojson_of_track_action : track_action -> Yojson.Safe.t =
  fun value ->
@@ -490,7 +493,7 @@ let to_websocket_message_of_yojson : Yojson.Safe.t -> to_websocket_message =
           entity_id = Json.required fields "entity_id" Json.string;
           entity_type = Json.required fields "entity_type" entity_type_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "to_websocket_message" json (Unknown json)
 
 and yojson_of_to_websocket_message : to_websocket_message -> Yojson.Safe.t =
  fun value ->
@@ -577,7 +580,7 @@ let upload_folder_status_update_of_yojson :
       Failed { request_id = Json.required fields "requestId" Json.string }
   | "unknown" ->
       Unknown_ { request_id = Json.required fields "requestId" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "upload_folder_status_update" json (Unknown json)
 
 and yojson_of_upload_folder_status_update :
     upload_folder_status_update -> Yojson.Safe.t =

@@ -27,7 +27,7 @@ let access_level_of_yojson : Yojson.Safe.t -> access_level =
   | "comment" -> Comment
   | "edit" -> Edit
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "access_level" json (Unknown other)
 
 and yojson_of_access_level : access_level -> Yojson.Safe.t =
  fun value ->
@@ -53,7 +53,7 @@ let request_status_of_yojson : Yojson.Safe.t -> request_status =
   | "granted" -> Granted
   | "denied" -> Denied
   | "cancelled" -> Cancelled
-  | other -> Unknown other
+  | other -> Json.unknown "request_status" json (Unknown other)
 
 and yojson_of_request_status : request_status -> Yojson.Safe.t =
  fun value ->
@@ -264,7 +264,7 @@ let pipeline_record_type_of_yojson : Yojson.Safe.t -> pipeline_record_type =
   match Json.string json with
   | "company" -> Company
   | "contact" -> Contact
-  | other -> Unknown other
+  | other -> Json.unknown "pipeline_record_type" json (Unknown other)
 
 and yojson_of_pipeline_record_type : pipeline_record_type -> Yojson.Safe.t =
  fun value ->
@@ -284,7 +284,7 @@ let pipeline_sharing_of_yojson : Yojson.Safe.t -> pipeline_sharing =
   match Json.string json with
   | "private" -> Private
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "pipeline_sharing" json (Unknown other)
 
 and yojson_of_pipeline_sharing : pipeline_sharing -> Yojson.Safe.t =
  fun value ->
@@ -392,7 +392,7 @@ let account_manager_decision_of_yojson :
   match Json.string json with
   | "approve" -> Approve
   | "decline" -> Decline
-  | other -> Unknown other
+  | other -> Json.unknown "account_manager_decision" json (Unknown other)
 
 and yojson_of_account_manager_decision :
     account_manager_decision -> Yojson.Safe.t =
@@ -413,7 +413,7 @@ let account_manager_role_of_yojson : Yojson.Safe.t -> account_manager_role =
   match Json.string json with
   | "managed" -> Managed
   | "manager" -> Manager
-  | other -> Unknown other
+  | other -> Json.unknown "account_manager_role" json (Unknown other)
 
 and yojson_of_account_manager_role : account_manager_role -> Yojson.Safe.t =
  fun value ->
@@ -442,7 +442,7 @@ let account_manager_grant_status_of_yojson :
   | "active" -> Active
   | "revoked" -> Revoked
   | "expired" -> Expired
-  | other -> Unknown other
+  | other -> Json.unknown "account_manager_grant_status" json (Unknown other)
 
 and yojson_of_account_manager_grant_status :
     account_manager_grant_status -> Yojson.Safe.t =
@@ -714,7 +714,7 @@ let activity_type_of_yojson : Yojson.Safe.t -> activity_type =
   match Json.string json with
   | "view" -> View
   | "interact" -> Interact
-  | other -> Unknown other
+  | other -> Json.unknown "activity_type" json (Unknown other)
 
 and yojson_of_activity_type : activity_type -> Yojson.Safe.t =
  fun value ->
@@ -875,7 +875,7 @@ let entry_field_value_of_yojson : Yojson.Safe.t -> entry_field_value =
   | "references" ->
       References
         { value = Json.required fields "value" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "entry_field_value" json (Unknown json)
 
 and yojson_of_entry_field_value : entry_field_value -> Yojson.Safe.t =
  fun value ->
@@ -1105,7 +1105,8 @@ let add_favorite_request_entity_type_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other ->
+      Json.unknown "add_favorite_request_entity_type" json (Unknown other)
 
 and yojson_of_add_favorite_request_entity_type :
     add_favorite_request_entity_type -> Yojson.Safe.t =
@@ -1225,7 +1226,7 @@ let bot_kind_of_yojson : Yojson.Safe.t -> bot_kind =
   match Json.string json with
   | "owned" -> Owned
   | "system" -> System
-  | other -> Unknown other
+  | other -> Json.unknown "bot_kind" json (Unknown other)
 
 and yojson_of_bot_kind : bot_kind -> Yojson.Safe.t =
  fun value ->
@@ -1247,7 +1248,7 @@ let bot_owner_of_yojson : Yojson.Safe.t -> bot_owner =
   match Json.tag fields "type" with
   | "user" -> User { user_id = Json.required fields "user_id" Json.string }
   | "team" -> Team { team_id = Json.required fields "team_id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "bot_owner" json (Unknown json)
 
 and yojson_of_bot_owner : bot_owner -> Yojson.Safe.t =
  fun value ->
@@ -1354,7 +1355,7 @@ let agent_channel_scope_of_yojson : Yojson.Safe.t -> agent_channel_scope =
   match Json.string json with
   | "all" -> All
   | "selected" -> Selected
-  | other -> Unknown other
+  | other -> Json.unknown "agent_channel_scope" json (Unknown other)
 
 and yojson_of_agent_channel_scope : agent_channel_scope -> Yojson.Safe.t =
  fun value ->
@@ -1426,7 +1427,7 @@ let agent_mcp_servers_of_yojson : Yojson.Safe.t -> agent_mcp_servers =
             Json.required fields "servers"
               (Json.list agent_mcp_server_of_yojson);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "agent_mcp_servers" json (Unknown json)
 
 and yojson_of_agent_mcp_servers : agent_mcp_servers -> Yojson.Safe.t =
  fun value ->
@@ -1454,7 +1455,7 @@ let agent_stopped_reason_of_yojson : Yojson.Safe.t -> agent_stopped_reason =
  fun json ->
   match Json.string json with
   | "no_runtime_access" -> No_runtime_access
-  | other -> Unknown other
+  | other -> Json.unknown "agent_stopped_reason" json (Unknown other)
 
 and yojson_of_agent_stopped_reason : agent_stopped_reason -> Yojson.Safe.t =
  fun value ->
@@ -1672,7 +1673,7 @@ let agent_pull_request_state_of_yojson :
   | "draft" -> Draft
   | "closed" -> Closed
   | "merged" -> Merged
-  | other -> Unknown other
+  | other -> Json.unknown "agent_pull_request_state" json (Unknown other)
 
 and yojson_of_agent_pull_request_state :
     agent_pull_request_state -> Yojson.Safe.t =
@@ -1698,7 +1699,7 @@ let agent_session_archive_cause_of_yojson :
   | "user" -> User
   | "pull_request_merged" -> Pull_request_merged
   | "runtime_closed" -> Runtime_closed
-  | other -> Unknown other
+  | other -> Json.unknown "agent_session_archive_cause" json (Unknown other)
 
 and yojson_of_agent_session_archive_cause :
     agent_session_archive_cause -> Yojson.Safe.t =
@@ -1790,7 +1791,7 @@ let message_parent_of_yojson : Yojson.Safe.t -> message_parent =
   | "crm_company" -> Crm_company { id = Json.required fields "id" Json.string }
   | "crm_contact" -> Crm_contact { id = Json.required fields "id" Json.string }
   | "call" -> Call { id = Json.required fields "id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "message_parent" json (Unknown json)
 
 and yojson_of_message_parent : message_parent -> Yojson.Safe.t =
  fun value ->
@@ -1901,7 +1902,7 @@ let session_source_of_yojson : Yojson.Safe.t -> session_source =
   | "user" -> User
   | "agent" -> Agent
   | "routine" -> Routine
-  | other -> Unknown other
+  | other -> Json.unknown "session_source" json (Unknown other)
 
 and yojson_of_session_source : session_source -> Yojson.Safe.t =
  fun value ->
@@ -2595,7 +2596,7 @@ let agent_session_lifecycle_event_of_yojson :
           metadata =
             Json.required fields "metadata" session_deleted_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "agent_session_lifecycle_event" json (Unknown json)
 
 and yojson_of_agent_session_lifecycle_event :
     agent_session_lifecycle_event -> Yojson.Safe.t =
@@ -2727,7 +2728,7 @@ let agent_session_source_of_yojson : Yojson.Safe.t -> agent_session_source =
   | "user" -> User
   | "agent" -> Agent
   | "routine" -> Routine
-  | other -> Unknown other
+  | other -> Json.unknown "agent_session_source" json (Unknown other)
 
 and yojson_of_agent_session_source : agent_session_source -> Yojson.Safe.t =
  fun value ->
@@ -2752,7 +2753,7 @@ let agent_session_visibility_of_yojson :
   | "listed" -> Listed
   | "unlisted" -> Unlisted
   | "hidden" -> Hidden
-  | other -> Unknown other
+  | other -> Json.unknown "agent_session_visibility" json (Unknown other)
 
 and yojson_of_agent_session_visibility :
     agent_session_visibility -> Yojson.Safe.t =
@@ -2778,7 +2779,7 @@ let agent_typing_phase_of_yojson : Yojson.Safe.t -> agent_typing_phase =
   | "writing" -> Writing
   | "working" -> Working
   | "waiting" -> Waiting
-  | other -> Unknown other
+  | other -> Json.unknown "agent_typing_phase" json (Unknown other)
 
 and yojson_of_agent_typing_phase : agent_typing_phase -> Yojson.Safe.t =
  fun value ->
@@ -3089,7 +3090,7 @@ let pdf_anchor_of_yojson : Yojson.Safe.t -> pdf_anchor =
   match Json.tag fields "anchorType" with
   | "placeable" -> Placeable (pdf_placeable_comment_anchor_of_yojson json)
   | "highlight" -> Highlight (pdf_highlight_anchor_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "pdf_anchor" json (Unknown json)
 
 and yojson_of_pdf_anchor : pdf_anchor -> Yojson.Safe.t =
  fun value ->
@@ -3102,22 +3103,32 @@ and yojson_of_pdf_anchor : pdf_anchor -> Yojson.Safe.t =
         (yojson_of_pdf_highlight_anchor inner)
   | Unknown json -> json
 
-type nonrec anchor = Pdf_anchor of pdf_anchor
+type nonrec anchor =
+  | Pdf_anchor of pdf_anchor
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let anchor_of_yojson : Yojson.Safe.t -> anchor =
  fun json ->
-  Json.first_ok
-    [
-      (fun json ->
-        Pdf_anchor
-          (match pdf_anchor_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json ->
+          Pdf_anchor
+            (match pdf_anchor_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "anchor" json (Unknown json)
 
 and yojson_of_anchor : anchor -> Yojson.Safe.t =
- fun value -> match value with Pdf_anchor inner -> yojson_of_pdf_anchor inner
+ fun value ->
+  match value with
+  | Pdf_anchor inner -> yojson_of_pdf_anchor inner
+  | Unknown json -> json
 
 type nonrec anchor_id_pdf_file_type =
   | Pdf
@@ -3125,7 +3136,10 @@ type nonrec anchor_id_pdf_file_type =
 
 let anchor_id_pdf_file_type_of_yojson : Yojson.Safe.t -> anchor_id_pdf_file_type
     =
- fun json -> match Json.string json with "pdf" -> Pdf | other -> Unknown other
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | other -> Json.unknown "anchor_id_pdf_file_type" json (Unknown other)
 
 and yojson_of_anchor_id_pdf_file_type : anchor_id_pdf_file_type -> Yojson.Safe.t
     =
@@ -3145,7 +3159,7 @@ let pdf_anchor_id_of_yojson : Yojson.Safe.t -> pdf_anchor_id =
   | "free-comment" ->
       Free_comment { uuid = Json.required fields "uuid" Json.string }
   | "highlight" -> Highlight { uuid = Json.required fields "uuid" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "pdf_anchor_id" json (Unknown json)
 
 and yojson_of_pdf_anchor_id : pdf_anchor_id -> Yojson.Safe.t =
  fun value ->
@@ -3180,7 +3194,7 @@ let anchor_id_of_yojson : Yojson.Safe.t -> anchor_id =
   let fields = Json.obj json in
   match Json.tag fields "fileType" with
   | "pdf" -> Pdf { pdf_anchor_id = pdf_anchor_id_of_yojson json }
-  | _ -> Unknown json
+  | _ -> Json.unknown "anchor_id" json (Unknown json)
 
 and yojson_of_anchor_id : anchor_id -> Yojson.Safe.t =
  fun value ->
@@ -3229,7 +3243,7 @@ let animation_class_of_yojson : Yojson.Safe.t -> animation_class =
   | "path" -> Path
   | "media" -> Media
   | "other" -> Other
-  | other -> Unknown other
+  | other -> Json.unknown "animation_class" json (Unknown other)
 
 and yojson_of_animation_class : animation_class -> Yojson.Safe.t =
  fun value ->
@@ -3253,7 +3267,7 @@ let repeat_until_of_yojson : Yojson.Safe.t -> repeat_until =
   match Json.string json with
   | "untilNextClick" -> Until_next_click
   | "untilEndOfSlide" -> Until_end_of_slide
-  | other -> Unknown other
+  | other -> Json.unknown "repeat_until" json (Unknown other)
 
 and yojson_of_repeat_until : repeat_until -> Yojson.Safe.t =
  fun value ->
@@ -3267,25 +3281,32 @@ type nonrec animation_repeat =
   | Float of float
       (** Plays this many times in all ([1] = once, no repeat; fractions such as 2.5 are allowed). *)
   | Repeat_until of repeat_until  (** Repeats until an event. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let animation_repeat_of_yojson : Yojson.Safe.t -> animation_repeat =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> Float (Json.float json));
-      (fun json ->
-        Repeat_until
-          (match repeat_until_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> Float (Json.float json));
+        (fun json ->
+          Repeat_until
+            (match repeat_until_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "animation_repeat" json (Unknown json)
 
 and yojson_of_animation_repeat : animation_repeat -> Yojson.Safe.t =
  fun value ->
   match value with
   | Float inner -> Json.of_float inner
   | Repeat_until inner -> yojson_of_repeat_until inner
+  | Unknown json -> json
 
 (** When an animation starts. *)
 type nonrec animation_start =
@@ -3300,7 +3321,7 @@ let animation_start_of_yojson : Yojson.Safe.t -> animation_start =
   | "onClick" -> On_click
   | "withPrevious" -> With_previous
   | "afterPrevious" -> After_previous
-  | other -> Unknown other
+  | other -> Json.unknown "animation_start" json (Unknown other)
 
 and yojson_of_animation_start : animation_start -> Yojson.Safe.t =
  fun value ->
@@ -3635,7 +3656,7 @@ let annotation_incremental_update_of_yojson :
             Json.required fields "payload"
               annotation_incremental_update_delete_anchor_payload_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "annotation_incremental_update" json (Unknown json)
 
 and yojson_of_annotation_incremental_update :
     annotation_incremental_update -> Yojson.Safe.t =
@@ -3714,19 +3735,22 @@ type nonrec option_ref =
   | Label of string
       (** An option's label, matched without regard to case. An unknown label
 is refused. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let option_ref_of_yojson : Yojson.Safe.t -> option_ref =
  fun json ->
   match Json.external_case json with
-  | "id", value -> Id (Json.string (Json.payload "id" value))
-  | "label", value -> Label (Json.string (Json.payload "label" value))
-  | name, _ -> Json.fail "unknown case %S" name
+  | Some ("id", Some value) -> Id (Json.string value)
+  | Some ("label", Some value) -> Label (Json.string value)
+  | _ -> Json.unknown "option_ref" json (Unknown json)
 
 and yojson_of_option_ref : option_ref -> Yojson.Safe.t =
  fun value ->
   match value with
   | Id inner -> Json.external_value "id" (Json.of_string inner)
   | Label inner -> Json.external_value "label" (Json.of_string inner)
+  | Unknown json -> json
 
 (** A kind of Macro entity a reference column can point at. *)
 type nonrec entity_kind =
@@ -3759,7 +3783,7 @@ let entity_kind_of_yojson : Yojson.Safe.t -> entity_kind =
   | "THREAD" -> Thread
   | "CALENDAR_EVENT" -> Calendar_event
   | "INITIATIVE" -> Initiative
-  | other -> Unknown other
+  | other -> Json.unknown "entity_kind" json (Unknown other)
 
 and yojson_of_entity_kind : entity_kind -> Yojson.Safe.t =
  fun value ->
@@ -3867,7 +3891,7 @@ let cell_value_of_yojson : Yojson.Safe.t -> cell_value =
   | "rows" ->
       Rows { value = Json.required fields "value" (Json.list Json.string) }
   | "clear" -> Clear
-  | _ -> Unknown json
+  | _ -> Json.unknown "cell_value" json (Unknown json)
 
 and yojson_of_cell_value : cell_value -> Yojson.Safe.t =
  fun value ->
@@ -4220,7 +4244,7 @@ let api_attachment_entity_reference_of_yojson :
   | "channel" -> Channel (api_attachment_channel_reference_of_yojson json)
   | "comment" -> Comment (api_attachment_comment_reference_of_yojson json)
   | "generic" -> Generic (api_attachment_generic_reference_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "api_attachment_entity_reference" json (Unknown json)
 
 and yojson_of_api_attachment_entity_reference :
     api_attachment_entity_reference -> Yojson.Safe.t =
@@ -4343,7 +4367,7 @@ let channel_type_of_yojson : Yojson.Safe.t -> channel_type =
   | "private" -> Private
   | "direct_message" -> Direct_message
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "channel_type" json (Unknown other)
 
 and yojson_of_channel_type : channel_type -> Yojson.Safe.t =
  fun value ->
@@ -4367,7 +4391,7 @@ let api_participant_role_of_yojson : Yojson.Safe.t -> api_participant_role =
   | "owner" -> Owner
   | "admin" -> Admin
   | "member" -> Member
-  | other -> Unknown other
+  | other -> Json.unknown "api_participant_role" json (Unknown other)
 
 and yojson_of_api_participant_role : api_participant_role -> Yojson.Safe.t =
  fun value ->
@@ -4526,7 +4550,7 @@ let api_channel_list_type_of_yojson : Yojson.Safe.t -> api_channel_list_type =
   | "private" -> Private
   | "direct_message" -> Direct_message
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "api_channel_list_type" json (Unknown other)
 
 and yojson_of_api_channel_list_type : api_channel_list_type -> Yojson.Safe.t =
  fun value ->
@@ -4551,7 +4575,7 @@ let api_participant_list_role_of_yojson :
   | "owner" -> Owner
   | "admin" -> Admin
   | "member" -> Member
-  | other -> Unknown other
+  | other -> Json.unknown "api_participant_list_role" json (Unknown other)
 
 and yojson_of_api_participant_list_role :
     api_participant_list_role -> Yojson.Safe.t =
@@ -4748,14 +4772,16 @@ type nonrec crm_association =
   | Contact of string  (** Items associated with the contact. *)
   | Activity
       (** Activity across visible CRM-enabled teams, excluding hidden records. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let crm_association_of_yojson : Yojson.Safe.t -> crm_association =
  fun json ->
   match Json.external_case json with
-  | "company", value -> Company (Json.string (Json.payload "company" value))
-  | "contact", value -> Contact (Json.string (Json.payload "contact" value))
-  | "activity", None -> Activity
-  | name, _ -> Json.fail "unknown case %S" name
+  | Some ("company", Some value) -> Company (Json.string value)
+  | Some ("contact", Some value) -> Contact (Json.string value)
+  | Some ("activity", None) -> Activity
+  | _ -> Json.unknown "crm_association" json (Unknown json)
 
 and yojson_of_crm_association : crm_association -> Yojson.Safe.t =
  fun value ->
@@ -4763,6 +4789,7 @@ and yojson_of_crm_association : crm_association -> Yojson.Safe.t =
   | Company inner -> Json.external_value "company" (Json.of_string inner)
   | Contact inner -> Json.external_value "contact" (Json.of_string inner)
   | Activity -> `String "activity"
+  | Unknown json -> json
 
 type nonrec api_entity_filter_ast = {
   asf : Yojson.Safe.t option;
@@ -4966,7 +4993,7 @@ let property_bucketing_of_yojson : Yojson.Safe.t -> property_bucketing =
   let fields = Json.obj json in
   match Json.tag fields "type" with
   | "date_ranges" -> Date_ranges (property_date_ranges_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_bucketing" json (Unknown json)
 
 and yojson_of_property_bucketing : property_bucketing -> Yojson.Safe.t =
  fun value ->
@@ -5007,7 +5034,7 @@ let api_property_entity_type_of_yojson :
   | "TASK" -> Task
   | "THREAD" -> Thread
   | "USER" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "api_property_entity_type" json (Unknown other)
 
 and yojson_of_api_property_entity_type :
     api_property_entity_type -> Yojson.Safe.t =
@@ -5072,17 +5099,18 @@ type nonrec api_group_by_field =
   | Project  (** Group by project *)
   | Property of api_group_by_field_property
       (** Group by a property value (e.g., status, priority, or custom properties) *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let api_group_by_field_of_yojson : Yojson.Safe.t -> api_group_by_field =
  fun json ->
   match Json.external_case json with
-  | "date", None -> Date
-  | "entity_type", None -> Entity_type
-  | "project", None -> Project
-  | "property", value ->
-      Property
-        (api_group_by_field_property_of_yojson (Json.payload "property" value))
-  | name, _ -> Json.fail "unknown case %S" name
+  | Some ("date", None) -> Date
+  | Some ("entity_type", None) -> Entity_type
+  | Some ("project", None) -> Project
+  | Some ("property", Some value) ->
+      Property (api_group_by_field_property_of_yojson value)
+  | _ -> Json.unknown "api_group_by_field" json (Unknown json)
 
 and yojson_of_api_group_by_field : api_group_by_field -> Yojson.Safe.t =
  fun value ->
@@ -5093,6 +5121,7 @@ and yojson_of_api_group_by_field : api_group_by_field -> Yojson.Safe.t =
   | Property inner ->
       Json.external_value "property"
         (yojson_of_api_group_by_field_property inner)
+  | Unknown json -> json
 
 type nonrec api_group_meta = {
   display_order : int option;
@@ -5171,7 +5200,7 @@ let appearance_color_of_yojson : Yojson.Safe.t -> appearance_color =
   | "indigo" -> Indigo
   | "purple" -> Purple
   | "pink" -> Pink
-  | other -> Unknown other
+  | other -> Json.unknown "appearance_color" json (Unknown other)
 
 and yojson_of_appearance_color : appearance_color -> Yojson.Safe.t =
  fun value ->
@@ -5205,7 +5234,7 @@ let appearance_icon_of_yojson : Yojson.Safe.t -> appearance_icon =
   match Json.tag fields "kind" with
   | "macro" -> Macro { name = Json.required fields "name" Json.string }
   | "emoji" -> Emoji { value = Json.required fields "value" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "appearance_icon" json (Unknown json)
 
 and yojson_of_appearance_icon : appearance_icon -> Yojson.Safe.t =
  fun value ->
@@ -5323,7 +5352,7 @@ let table_result_of_yojson : Yojson.Safe.t -> table_result =
           positions =
             Json.required fields "positions" (Json.list view_position_of_yojson);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "table_result" json (Unknown json)
 
 and yojson_of_table_result : table_result -> Yojson.Safe.t =
  fun value ->
@@ -5376,7 +5405,7 @@ let column_result_of_yojson : Yojson.Safe.t -> column_result =
   | "option_updated" -> Option_updated
   | "option_deleted" -> Option_deleted
   | "formula_set" -> Formula_set
-  | _ -> Unknown json
+  | _ -> Json.unknown "column_result" json (Unknown json)
 
 and yojson_of_column_result : column_result -> Yojson.Safe.t =
  fun value ->
@@ -5419,7 +5448,7 @@ let rows_result_of_yojson : Yojson.Safe.t -> rows_result =
       Inserted { rows = Json.required fields "rows" (Json.list Json.string) }
   | "updated" -> Updated { affected = Json.required fields "affected" Json.int }
   | "deleted" -> Deleted { affected = Json.required fields "affected" Json.int }
-  | _ -> Unknown json
+  | _ -> Json.unknown "rows_result" json (Unknown json)
 
 and yojson_of_rows_result : rows_result -> Yojson.Safe.t =
  fun value ->
@@ -5500,7 +5529,7 @@ let lane_key_of_yojson : Yojson.Safe.t -> lane_key =
   | "option" -> Option { id = Json.required fields "id" Json.string }
   | "user" -> User { id = Json.required fields "id" Json.string }
   | "none" -> None_
-  | _ -> Unknown json
+  | _ -> Json.unknown "lane_key" json (Unknown json)
 
 and yojson_of_lane_key : lane_key -> Yojson.Safe.t =
  fun value ->
@@ -5620,7 +5649,7 @@ let view_layout_of_yojson : Yojson.Safe.t -> view_layout =
           range = Json.required fields "range" Json.string;
           title = Json.required fields "title" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "view_layout" json (Unknown json)
 
 and yojson_of_view_layout : view_layout -> Yojson.Safe.t =
  fun value ->
@@ -5676,7 +5705,7 @@ let presence_operator_of_yojson : Yojson.Safe.t -> presence_operator =
   match Json.string json with
   | "isEmpty" -> Is_empty
   | "isNotEmpty" -> Is_not_empty
-  | other -> Unknown other
+  | other -> Json.unknown "presence_operator" json (Unknown other)
 
 and yojson_of_presence_operator : presence_operator -> Yojson.Safe.t =
  fun value ->
@@ -5704,7 +5733,7 @@ let text_operator_of_yojson : Yojson.Safe.t -> text_operator =
   | "doesNotContain" -> Does_not_contain
   | "startsWith" -> Starts_with
   | "endsWith" -> Ends_with
-  | other -> Unknown other
+  | other -> Json.unknown "text_operator" json (Unknown other)
 
 and yojson_of_text_operator : text_operator -> Yojson.Safe.t =
  fun value ->
@@ -5736,7 +5765,7 @@ let number_operator_of_yojson : Yojson.Safe.t -> number_operator =
   | "greaterThanOrEqual" -> Greater_than_or_equal
   | "lessThan" -> Less_than
   | "lessThanOrEqual" -> Less_than_or_equal
-  | other -> Unknown other
+  | other -> Json.unknown "number_operator" json (Unknown other)
 
 and yojson_of_number_operator : number_operator -> Yojson.Safe.t =
  fun value ->
@@ -5764,7 +5793,7 @@ let date_operator_of_yojson : Yojson.Safe.t -> date_operator =
   | "after" -> After
   | "onOrBefore" -> On_or_before
   | "onOrAfter" -> On_or_after
-  | other -> Unknown other
+  | other -> Json.unknown "date_operator" json (Unknown other)
 
 and yojson_of_date_operator : date_operator -> Yojson.Safe.t =
  fun value ->
@@ -5795,7 +5824,7 @@ let date_range_operator_of_yojson : Yojson.Safe.t -> date_range_operator =
   | "endsOnOrAfter" -> Ends_on_or_after
   | "startsAfter" -> Starts_after
   | "startsOnOrBefore" -> Starts_on_or_before
-  | other -> Unknown other
+  | other -> Json.unknown "date_range_operator" json (Unknown other)
 
 and yojson_of_date_range_operator : date_range_operator -> Yojson.Safe.t =
  fun value ->
@@ -5826,7 +5855,7 @@ let set_operator_of_yojson : Yojson.Safe.t -> set_operator =
   | "hasAny" -> Has_any
   | "hasAll" -> Has_all
   | "hasNone" -> Has_none
-  | other -> Unknown other
+  | other -> Json.unknown "set_operator" json (Unknown other)
 
 and yojson_of_set_operator : set_operator -> Yojson.Safe.t =
  fun value ->
@@ -5924,7 +5953,7 @@ let filter_test_of_yojson : Yojson.Safe.t -> filter_test =
           entities = Json.required fields "entities" (Json.list Json.string);
           operator = Json.required fields "operator" set_operator_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "filter_test" json (Unknown json)
 
 and yojson_of_filter_test : filter_test -> Yojson.Safe.t =
  fun value ->
@@ -6049,7 +6078,7 @@ let conjunction_of_yojson : Yojson.Safe.t -> conjunction =
   match Json.string json with
   | "and" -> And
   | "or" -> Or
-  | other -> Unknown other
+  | other -> Json.unknown "conjunction" json (Unknown other)
 
 and yojson_of_conjunction : conjunction -> Yojson.Safe.t =
  fun value ->
@@ -6098,7 +6127,7 @@ and filter_node_of_yojson : Yojson.Safe.t -> filter_node =
   match Json.tag fields "kind" with
   | "condition" -> Condition (filter_condition_of_yojson json)
   | "group" -> Group (filter_group_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "filter_node" json (Unknown json)
 
 and yojson_of_filter_node : filter_node -> Yojson.Safe.t =
  fun value ->
@@ -6123,7 +6152,7 @@ let sort_direction_of_yojson : Yojson.Safe.t -> sort_direction =
   match Json.string json with
   | "ascending" -> Ascending
   | "descending" -> Descending
-  | other -> Unknown other
+  | other -> Json.unknown "sort_direction" json (Unknown other)
 
 and yojson_of_sort_direction : sort_direction -> Yojson.Safe.t =
  fun value ->
@@ -6304,7 +6333,7 @@ let view_result_of_yojson : Yojson.Safe.t -> view_result =
           positions =
             Json.required fields "positions" (Json.list card_position_of_yojson);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "view_result" json (Unknown json)
 
 and yojson_of_view_result : view_result -> Yojson.Safe.t =
  fun value ->
@@ -6448,7 +6477,7 @@ let op_result_of_yojson : Yojson.Safe.t -> op_result =
           tables =
             Json.required fields "tables" (Json.list versioned_table_of_yojson);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "op_result" json (Unknown json)
 
 and yojson_of_op_result : op_result -> Yojson.Safe.t =
  fun value ->
@@ -6592,7 +6621,7 @@ let table_change_of_yojson : Yojson.Safe.t -> table_change =
   | "reorder_views" ->
       Reorder_views
         { order = Json.required fields "order" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "table_change" json (Unknown json)
 
 and yojson_of_table_change : table_change -> Yojson.Safe.t =
  fun value ->
@@ -6716,7 +6745,7 @@ let column_kind_of_yojson : Yojson.Safe.t -> column_kind =
           database = Json.required fields "database" Json.string;
           table = Json.required fields "table" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "column_kind" json (Unknown json)
 
 and yojson_of_column_kind : column_kind -> Yojson.Safe.t =
  fun value ->
@@ -6783,7 +6812,7 @@ let operator_of_yojson : Yojson.Safe.t -> operator =
   | "subtract" -> Subtract
   | "multiply" -> Multiply
   | "divide" -> Divide
-  | other -> Unknown other
+  | other -> Json.unknown "operator" json (Unknown other)
 
 and yojson_of_operator : operator -> Yojson.Safe.t =
  fun value ->
@@ -6826,7 +6855,7 @@ let rec formula_of_yojson : Yojson.Safe.t -> formula =
         }
   | "negate" ->
       Negate { operand = Json.required fields "operand" formula_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "formula" json (Unknown json)
 
 and yojson_of_formula : formula -> Yojson.Safe.t =
  fun value ->
@@ -6920,7 +6949,7 @@ let new_column_of_yojson : Yojson.Safe.t -> new_column =
         }
   | "existing" ->
       Existing { property = Json.required fields "property" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "new_column" json (Unknown json)
 
 and yojson_of_new_column : new_column -> Yojson.Safe.t =
  fun value ->
@@ -7060,7 +7089,7 @@ let column_change_of_yojson : Yojson.Safe.t -> column_change =
       Set_formula { formula = Json.required fields "formula" formula_of_yojson }
   | "delete_option" ->
       Delete_option { option = Json.required fields "option" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "column_change" json (Unknown json)
 
 and yojson_of_column_change : column_change -> Yojson.Safe.t =
  fun value ->
@@ -7211,7 +7240,7 @@ let row_changes_of_yojson : Yojson.Safe.t -> row_changes =
   | "per_row" ->
       Per_row
         { rows = Json.required fields "rows" (Json.list row_change_of_yojson) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "row_changes" json (Unknown json)
 
 and yojson_of_row_changes : row_changes -> Yojson.Safe.t =
  fun value ->
@@ -7275,7 +7304,7 @@ let rows_change_of_yojson : Yojson.Safe.t -> rows_change =
       Update { changes = Json.required fields "changes" row_changes_of_yojson }
   | "delete" ->
       Delete { rows = Json.required fields "rows" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "rows_change" json (Unknown json)
 
 and yojson_of_rows_change : rows_change -> Yojson.Safe.t =
  fun value ->
@@ -7379,7 +7408,7 @@ let requested_layout_of_yojson : Yojson.Safe.t -> requested_layout =
           range = Json.required fields "range" Json.string;
           title = Json.optional fields "title" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "requested_layout" json (Unknown json)
 
 and yojson_of_requested_layout : requested_layout -> Yojson.Safe.t =
  fun value ->
@@ -7510,7 +7539,7 @@ let view_change_of_yojson : Yojson.Safe.t -> view_change =
           lane = Json.required fields "lane" lane_key_of_yojson;
           row = Json.required fields "row" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "view_change" json (Unknown json)
 
 and yojson_of_view_change : view_change -> Yojson.Safe.t =
  fun value ->
@@ -7624,7 +7653,7 @@ let database_op_of_yojson : Yojson.Safe.t -> database_op =
   | "reorder_tables" ->
       Reorder_tables
         { order = Json.required fields "order" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "database_op" json (Unknown json)
 
 and yojson_of_database_op : database_op -> Yojson.Safe.t =
  fun value ->
@@ -7878,7 +7907,7 @@ let attachment_change_of_yojson : Yojson.Safe.t -> attachment_change =
           value =
             Json.required fields "value" attachment_change_delta_value_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "attachment_change" json (Unknown json)
 
 and yojson_of_attachment_change : attachment_change -> Yojson.Safe.t =
  fun value ->
@@ -7920,7 +7949,7 @@ let attendee_response_status_of_yojson :
   | "accepted" -> Accepted
   | "declined" -> Declined
   | "tentative" -> Tentative
-  | other -> Unknown other
+  | other -> Json.unknown "attendee_response_status" json (Unknown other)
 
 and yojson_of_attendee_response_status :
     attendee_response_status -> Yojson.Safe.t =
@@ -7943,7 +7972,7 @@ let audience_of_yojson : Yojson.Safe.t -> audience =
   match Json.string json with
   | "members" -> Members
   | "public" -> Public
-  | other -> Unknown other
+  | other -> Json.unknown "audience" json (Unknown other)
 
 and yojson_of_audience : audience -> Yojson.Safe.t =
  fun value ->
@@ -7963,7 +7992,7 @@ let availability_coverage_of_yojson : Yojson.Safe.t -> availability_coverage =
   match Json.string json with
   | "complete" -> Complete
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other -> Json.unknown "availability_coverage" json (Unknown other)
 
 and yojson_of_availability_coverage : availability_coverage -> Yojson.Safe.t =
  fun value ->
@@ -8019,7 +8048,7 @@ let availability_unknown_reason_of_yojson :
   | "invalid_time_zone" -> Invalid_time_zone
   | "invalid_interval" -> Invalid_interval
   | "conflicting_copies" -> Conflicting_copies
-  | other -> Unknown other
+  | other -> Json.unknown "availability_unknown_reason" json (Unknown other)
 
 and yojson_of_availability_unknown_reason :
     availability_unknown_reason -> Yojson.Safe.t =
@@ -8168,7 +8197,7 @@ let basic_document_sub_type_of_yojson : Yojson.Safe.t -> basic_document_sub_type
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | _ -> Unknown json
+  | _ -> Json.unknown "basic_document_sub_type" json (Unknown json)
 
 and yojson_of_basic_document_sub_type : basic_document_sub_type -> Yojson.Safe.t
     =
@@ -8304,7 +8333,7 @@ let text_direction_of_yojson : Yojson.Safe.t -> text_direction =
   | "eaVert" -> Ea_vert
   | "mongolianVert" -> Mongolian_vert
   | "wordArtVertRtl" -> Word_art_vert_rtl
-  | other -> Unknown other
+  | other -> Json.unknown "text_direction" json (Unknown other)
 
 and yojson_of_text_direction : text_direction -> Yojson.Safe.t =
  fun value ->
@@ -8437,7 +8466,7 @@ let border_edges_of_yojson : Yojson.Safe.t -> border_edges =
   | "right" -> Right
   | "insideHorizontal" -> Inside_horizontal
   | "insideVertical" -> Inside_vertical
-  | other -> Unknown other
+  | other -> Json.unknown "border_edges" json (Unknown other)
 
 and yojson_of_border_edges : border_edges -> Yojson.Safe.t =
  fun value ->
@@ -8501,7 +8530,7 @@ let bot_channel_type_of_yojson : Yojson.Safe.t -> bot_channel_type =
   | "private" -> Private
   | "direct_message" -> Direct_message
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "bot_channel_type" json (Unknown other)
 
 and yojson_of_bot_channel_type : bot_channel_type -> Yojson.Safe.t =
  fun value ->
@@ -8750,7 +8779,7 @@ let bullet_spec_of_yojson : Yojson.Safe.t -> bullet_spec =
           scheme = Json.required fields "scheme" Json.string;
           start = Json.optional fields "start" Json.int;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "bullet_spec" json (Unknown json)
 
 and yojson_of_bullet_spec : bullet_spec -> Yojson.Safe.t =
  fun value ->
@@ -8812,17 +8841,23 @@ or <m-document-mention>\{"documentId":"UUID","documentName":"Budget","blockName"
 A date chip is <m-date-mention>\{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"\}</m-date-mention>; a cell holding only that chip calculates as the date.
 Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
 Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let spreadsheet_cell_value_value_of_yojson :
     Yojson.Safe.t -> spreadsheet_cell_value_value =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> Bool (Json.bool json));
-      (fun json -> Float (Json.float json));
-      (fun json -> String (Json.string json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> Bool (Json.bool json));
+        (fun json -> Float (Json.float json));
+        (fun json -> String (Json.string json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "spreadsheet_cell_value_value" json (Unknown json)
 
 and yojson_of_spreadsheet_cell_value_value :
     spreadsheet_cell_value_value -> Yojson.Safe.t =
@@ -8831,6 +8866,7 @@ and yojson_of_spreadsheet_cell_value_value :
   | Bool inner -> Json.of_bool inner
   | Float inner -> Json.of_float inner
   | String inner -> Json.of_string inner
+  | Unknown json -> json
 
 type nonrec spreadsheet_cell_value = spreadsheet_cell_value_value option
 (** A cell's new input, typed as the caller has it. *)
@@ -9010,7 +9046,7 @@ let conference_provider_of_yojson : Yojson.Safe.t -> conference_provider =
   | "microsoft_teams" -> Microsoft_teams
   | "google_meet" -> Google_meet
   | "other" -> Other
-  | other -> Unknown other
+  | other -> Json.unknown "conference_provider" json (Unknown other)
 
 and yojson_of_conference_provider : conference_provider -> Yojson.Safe.t =
  fun value ->
@@ -9041,7 +9077,7 @@ let event_type_of_yojson : Yojson.Safe.t -> event_type =
   | "working_location" -> Working_location
   | "birthday" -> Birthday
   | "from_gmail" -> From_gmail
-  | other -> Unknown other
+  | other -> Json.unknown "event_type" json (Unknown other)
 
 and yojson_of_event_type : event_type -> Yojson.Safe.t =
  fun value ->
@@ -9159,7 +9195,7 @@ let event_transparency_of_yojson : Yojson.Safe.t -> event_transparency =
   match Json.string json with
   | "opaque" -> Opaque
   | "transparent" -> Transparent
-  | other -> Unknown other
+  | other -> Json.unknown "event_transparency" json (Unknown other)
 
 and yojson_of_event_transparency : event_transparency -> Yojson.Safe.t =
  fun value ->
@@ -9183,7 +9219,7 @@ let event_visibility_of_yojson : Yojson.Safe.t -> event_visibility =
   | "public" -> Public
   | "private" -> Private
   | "confidential" -> Confidential
-  | other -> Unknown other
+  | other -> Json.unknown "event_visibility" json (Unknown other)
 
 and yojson_of_event_visibility : event_visibility -> Yojson.Safe.t =
  fun value ->
@@ -9285,7 +9321,7 @@ let event_status_of_yojson : Yojson.Safe.t -> event_status =
   | "confirmed" -> Confirmed
   | "tentative" -> Tentative
   | "cancelled" -> Cancelled
-  | other -> Unknown other
+  | other -> Json.unknown "event_status" json (Unknown other)
 
 and yojson_of_event_status : event_status -> Yojson.Safe.t =
  fun value ->
@@ -9332,7 +9368,7 @@ let event_time_of_yojson : Yojson.Safe.t -> event_time =
           end_date = Json.required fields "endDate" Json.string;
           start_date = Json.required fields "startDate" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "event_time" json (Unknown json)
 
 and yojson_of_event_time : event_time -> Yojson.Safe.t =
  fun value ->
@@ -9666,7 +9702,7 @@ let calendar_join_request_status_of_yojson :
   | "pending" -> Pending
   | "accepted" -> Accepted
   | "declined" -> Declined
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_join_request_status" json (Unknown other)
 
 and yojson_of_calendar_join_request_status :
     calendar_join_request_status -> Yojson.Safe.t =
@@ -9738,7 +9774,8 @@ let calendar_join_request_error_code_of_yojson :
   | "sharer_cannot_invite" -> Sharer_cannot_invite
   | "request_declined" -> Request_declined
   | "internal" -> Internal
-  | other -> Unknown other
+  | other ->
+      Json.unknown "calendar_join_request_error_code" json (Unknown other)
 
 and yojson_of_calendar_join_request_error_code :
     calendar_join_request_error_code -> Yojson.Safe.t =
@@ -9825,7 +9862,7 @@ let calendar_mention_viewer_copy_of_yojson :
   | "snapshot" -> Snapshot
   | "invitation" -> Invitation
   | "event" -> Event
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_mention_viewer_copy" json (Unknown other)
 
 and yojson_of_calendar_mention_viewer_copy :
     calendar_mention_viewer_copy -> Yojson.Safe.t =
@@ -9961,7 +9998,7 @@ let calendar_mention_preview_kind_of_yojson :
   | "access" -> Access
   | "no_access" -> No_access
   | "does_not_exist" -> Does_not_exist
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_mention_preview_kind" json (Unknown other)
 
 and yojson_of_calendar_mention_preview_kind :
     calendar_mention_preview_kind -> Yojson.Safe.t =
@@ -10171,7 +10208,7 @@ let calendar_sync_status_of_yojson : Yojson.Safe.t -> calendar_sync_status =
   match Json.string json with
   | "syncing" -> Syncing
   | "ready" -> Ready
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_sync_status" json (Unknown other)
 
 and yojson_of_calendar_sync_status : calendar_sync_status -> Yojson.Safe.t =
  fun value ->
@@ -10277,7 +10314,7 @@ let call_discussion_of_yojson : Yojson.Safe.t -> call_discussion =
         }
   | "call_chat" ->
       Call_chat { call_id = Json.required fields "call_id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "call_discussion" json (Unknown json)
 
 and yojson_of_call_discussion : call_discussion -> Yojson.Safe.t =
  fun value ->
@@ -10328,7 +10365,7 @@ let call_entry_status_of_yojson : Yojson.Safe.t -> call_entry_status =
           ended_at = Json.required fields "ended_at" Json.string;
         }
   | "record_deleted" -> Record_deleted
-  | _ -> Unknown json
+  | _ -> Json.unknown "call_entry_status" json (Unknown json)
 
 and yojson_of_call_entry_status : call_entry_status -> Yojson.Safe.t =
  fun value ->
@@ -10362,7 +10399,7 @@ let call_status_of_yojson : Yojson.Safe.t -> call_status =
   | "ATTENDED" -> Attended
   | "MISSED" -> Missed
   | "UNATTENDED" -> Unattended
-  | other -> Unknown other
+  | other -> Json.unknown "call_status" json (Unknown other)
 
 and yojson_of_call_status : call_status -> Yojson.Safe.t =
  fun value ->
@@ -10571,7 +10608,7 @@ let call_notification_event_of_yojson : Yojson.Safe.t -> call_notification_event
           metadata =
             Json.required fields "metadata" call_notification_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "call_notification_event" json (Unknown json)
 
 and yojson_of_call_notification_event : call_notification_event -> Yojson.Safe.t
     =
@@ -10690,7 +10727,7 @@ let call_provider_of_yojson : Yojson.Safe.t -> call_provider =
   match Json.string json with
   | "macro" -> Macro
   | "granola" -> Granola
-  | other -> Unknown other
+  | other -> Json.unknown "call_provider" json (Unknown other)
 
 and yojson_of_call_provider : call_provider -> Yojson.Safe.t =
  fun value ->
@@ -11114,7 +11151,7 @@ let call_record_preview_of_yojson : Yojson.Safe.t -> call_record_preview =
   match Json.tag fields "type" with
   | "exists" -> Exists (call_record_preview_data_of_yojson json)
   | "does_not_exist" -> Does_not_exist (with_call_id_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "call_record_preview" json (Unknown json)
 
 and yojson_of_call_record_preview : call_record_preview -> Yojson.Safe.t =
  fun value ->
@@ -11347,7 +11384,7 @@ let canvas_error_code_of_yojson : Yojson.Safe.t -> canvas_error_code =
   | "edit_refused" -> Edit_refused
   | "edit_failed" -> Edit_failed
   | "internal" -> Internal
-  | other -> Unknown other
+  | other -> Json.unknown "canvas_error_code" json (Unknown other)
 
 and yojson_of_canvas_error_code : canvas_error_code -> Yojson.Safe.t =
  fun value ->
@@ -11396,7 +11433,7 @@ let canvas_read_format_of_yojson : Yojson.Safe.t -> canvas_read_format =
   match Json.string json with
   | "scene" -> Scene
   | "overview" -> Overview
-  | other -> Unknown other
+  | other -> Json.unknown "canvas_read_format" json (Unknown other)
 
 and yojson_of_canvas_read_format : canvas_read_format -> Yojson.Safe.t =
  fun value ->
@@ -11649,7 +11686,7 @@ let cast_verdict_of_yojson : Yojson.Safe.t -> cast_verdict =
   | "safe" -> Safe
   | "checked" -> Checked
   | "never" -> Never
-  | other -> Unknown other
+  | other -> Json.unknown "cast_verdict" json (Unknown other)
 
 and yojson_of_cast_verdict : cast_verdict -> Yojson.Safe.t =
  fun value ->
@@ -11723,7 +11760,7 @@ let file_change_kind_dto_of_yojson : Yojson.Safe.t -> file_change_kind_dto =
   | "modified" -> Modified
   | "deleted" -> Deleted
   | "renamed" -> Renamed
-  | other -> Unknown other
+  | other -> Json.unknown "file_change_kind_dto" json (Unknown other)
 
 and yojson_of_file_change_kind_dto : file_change_kind_dto -> Yojson.Safe.t =
  fun value ->
@@ -11814,7 +11851,7 @@ let changeset_source_dto_of_yojson : Yojson.Safe.t -> changeset_source_dto =
  fun json ->
   match Json.string json with
   | "github_pull_request" -> Github_pull_request
-  | other -> Unknown other
+  | other -> Json.unknown "changeset_source_dto" json (Unknown other)
 
 and yojson_of_changeset_source_dto : changeset_source_dto -> Yojson.Safe.t =
  fun value ->
@@ -11968,7 +12005,7 @@ let channel_access_decision_of_yojson : Yojson.Safe.t -> channel_access_decision
   match Json.string json with
   | "approve" -> Approve
   | "deny" -> Deny
-  | other -> Unknown other
+  | other -> Json.unknown "channel_access_decision" json (Unknown other)
 
 and yojson_of_channel_access_decision : channel_access_decision -> Yojson.Safe.t
     =
@@ -11994,7 +12031,7 @@ let channel_access_request_status_of_yojson :
   | "approved" -> Approved
   | "denied" -> Denied
   | "cancelled" -> Cancelled
-  | other -> Unknown other
+  | other -> Json.unknown "channel_access_request_status" json (Unknown other)
 
 and yojson_of_channel_access_request_status :
     channel_access_request_status -> Yojson.Safe.t =
@@ -12239,7 +12276,7 @@ let notification_state_of_yojson : Yojson.Safe.t -> notification_state =
   | "unseen" -> Unseen
   | "seen" -> Seen
   | "done" -> Done
-  | other -> Unknown other
+  | other -> Json.unknown "notification_state" json (Unknown other)
 
 and yojson_of_notification_state : notification_state -> Yojson.Safe.t =
  fun value ->
@@ -12385,7 +12422,7 @@ let channel_label_rule_of_yojson : Yojson.Safe.t -> channel_label_rule =
   let fields = Json.obj json in
   match Json.tag fields "attribute" with
   | "name" -> Name { contains = Json.required fields "contains" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "channel_label_rule" json (Unknown json)
 
 and yojson_of_channel_label_rule : channel_label_rule -> Yojson.Safe.t =
  fun value ->
@@ -12490,7 +12527,7 @@ let channel_label_scope_selection_of_yojson :
   match Json.string json with
   | "personal" -> Personal
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "channel_label_scope_selection" json (Unknown other)
 
 and yojson_of_channel_label_scope_selection :
     channel_label_scope_selection -> Yojson.Safe.t =
@@ -12599,7 +12636,7 @@ let participant_role_of_yojson : Yojson.Safe.t -> participant_role =
   | "owner" -> Owner
   | "admin" -> Admin
   | "member" -> Member
-  | other -> Unknown other
+  | other -> Json.unknown "participant_role" json (Unknown other)
 
 and yojson_of_participant_role : participant_role -> Yojson.Safe.t =
  fun value ->
@@ -12824,7 +12861,7 @@ let channel_preview_of_yojson : Yojson.Safe.t -> channel_preview =
   | "access" -> Access (channel_preview_data_of_yojson json)
   | "no_access" -> No_access (with_channel_id_of_yojson json)
   | "does_not_exist" -> Does_not_exist (with_channel_id_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "channel_preview" json (Unknown json)
 
 and yojson_of_channel_preview : channel_preview -> Yojson.Safe.t =
  fun value ->
@@ -12866,7 +12903,7 @@ let channel_share_entity_type_of_yojson :
   | "thread" -> Thread
   | "agent_session" -> Agent_session
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "channel_share_entity_type" json (Unknown other)
 
 and yojson_of_channel_share_entity_type :
     channel_share_entity_type -> Yojson.Safe.t =
@@ -13072,7 +13109,7 @@ let channel_topic_event_of_yojson : Yojson.Safe.t -> channel_topic_event =
             Json.required fields "metadata"
               channel_access_requested_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "channel_topic_event" json (Unknown json)
 
 and yojson_of_channel_topic_event : channel_topic_event -> Yojson.Safe.t =
  fun value ->
@@ -13453,7 +13490,7 @@ let harness_access_of_yojson : Yojson.Safe.t -> harness_access =
   | "user" -> User
   | "read" -> Read
   | "none" -> None_
-  | other -> Unknown other
+  | other -> Json.unknown "harness_access" json (Unknown other)
 
 and yojson_of_harness_access : harness_access -> Yojson.Safe.t =
  fun value ->
@@ -13476,7 +13513,7 @@ let claude_mode_of_yojson : Yojson.Safe.t -> claude_mode =
   match Json.string json with
   | "macro_credits" -> Macro_credits
   | "own_account" -> Own_account
-  | other -> Unknown other
+  | other -> Json.unknown "claude_mode" json (Unknown other)
 
 and yojson_of_claude_mode : claude_mode -> Yojson.Safe.t =
  fun value ->
@@ -13508,7 +13545,7 @@ let harness_owner_of_yojson : Yojson.Safe.t -> harness_owner =
   let fields = Json.obj json in
   match Json.tag fields "type" with
   | "user" -> User { user_id = Json.required fields "user_id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "harness_owner" json (Unknown json)
 
 and yojson_of_harness_owner : harness_owner -> Yojson.Safe.t =
  fun value ->
@@ -13664,7 +13701,7 @@ let cloud_storage_item_type_of_yojson : Yojson.Safe.t -> cloud_storage_item_type
   | "document" -> Document
   | "chat" -> Chat
   | "project" -> Project
-  | other -> Unknown other
+  | other -> Json.unknown "cloud_storage_item_type" json (Unknown other)
 
 and yojson_of_cloud_storage_item_type : cloud_storage_item_type -> Yojson.Safe.t
     =
@@ -13733,7 +13770,9 @@ let collab_surface_response_parent_entity_type_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other ->
+      Json.unknown "collab_surface_response_parent_entity_type" json
+        (Unknown other)
 
 and yojson_of_collab_surface_response_parent_entity_type :
     collab_surface_response_parent_entity_type -> Yojson.Safe.t =
@@ -13784,7 +13823,7 @@ let surface_state_of_yojson : Yojson.Safe.t -> surface_state =
   match Json.string json with
   | "pending" -> Pending
   | "ready" -> Ready
-  | other -> Unknown other
+  | other -> Json.unknown "surface_state" json (Unknown other)
 
 and yojson_of_surface_state : surface_state -> Yojson.Safe.t =
  fun value ->
@@ -13879,7 +13918,7 @@ let column_config_of_yojson : Yojson.Safe.t -> column_config =
         }
   | "derived" ->
       Derived { formula = Json.required fields "formula" formula_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "column_config" json (Unknown json)
 
 and yojson_of_column_config : column_config -> Yojson.Safe.t =
  fun value ->
@@ -13916,7 +13955,7 @@ let column_protection_of_yojson : Yojson.Safe.t -> column_protection =
   match Json.string json with
   | "delete" -> Delete
   | "change_type" -> Change_type
-  | other -> Unknown other
+  | other -> Json.unknown "column_protection" json (Unknown other)
 
 and yojson_of_column_protection : column_protection -> Yojson.Safe.t =
  fun value ->
@@ -14024,7 +14063,7 @@ let data_type_of_yojson : Yojson.Safe.t -> data_type =
   | "TAG" -> Tag
   | "ENTITY" -> Entity
   | "LINK" -> Link
-  | other -> Unknown other
+  | other -> Json.unknown "data_type" json (Unknown other)
 
 and yojson_of_data_type : data_type -> Yojson.Safe.t =
  fun value ->
@@ -14074,7 +14113,7 @@ let entity_type_of_yojson : Yojson.Safe.t -> entity_type =
   | "TASK" -> Task
   | "THREAD" -> Thread
   | "USER" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "entity_type" json (Unknown other)
 
 and yojson_of_entity_type : entity_type -> Yojson.Safe.t =
  fun value ->
@@ -14191,7 +14230,7 @@ let column_change_kind_of_yojson : Yojson.Safe.t -> column_change_kind =
   | "reorder" -> Reorder
   | "infer_type" -> Infer_type
   | "related" -> Related
-  | other -> Unknown other
+  | other -> Json.unknown "column_change_kind" json (Unknown other)
 
 and yojson_of_column_change_kind : column_change_kind -> Yojson.Safe.t =
  fun value ->
@@ -14311,7 +14350,7 @@ let property_owner_of_yojson : Yojson.Safe.t -> property_owner =
   | "database" ->
       Database { database_id = Json.required fields "database_id" Json.string }
   | "system" -> System
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_owner" json (Unknown json)
 
 and yojson_of_property_owner : property_owner -> Yojson.Safe.t =
  fun value ->
@@ -14432,7 +14471,7 @@ let property_option_value_of_yojson : Yojson.Safe.t -> property_option_value =
   match Json.tag fields "type" with
   | "string" -> String { value = Json.required fields "value" Json.string }
   | "number" -> Number { value = Json.required fields "value" Json.float }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_option_value" json (Unknown json)
 
 and yojson_of_property_option_value : property_option_value -> Yojson.Safe.t =
  fun value ->
@@ -14609,7 +14648,7 @@ let comment_on_text_refused_code_of_yojson :
  fun json ->
   match Json.string json with
   | "quote_not_placed" -> Quote_not_placed
-  | other -> Unknown other
+  | other -> Json.unknown "comment_on_text_refused_code" json (Unknown other)
 
 and yojson_of_comment_on_text_refused_code :
     comment_on_text_refused_code -> Yojson.Safe.t =
@@ -14781,7 +14820,7 @@ let message_kind_of_yojson : Yojson.Safe.t -> message_kind =
   match Json.string json with
   | "message" -> Message
   | "call_root" -> Call_root
-  | other -> Unknown other
+  | other -> Json.unknown "message_kind" json (Unknown other)
 
 and yojson_of_message_kind : message_kind -> Yojson.Safe.t =
  fun value ->
@@ -15215,7 +15254,7 @@ let upload_id_of_yojson : Yojson.Safe.t -> upload_id =
           slack_channel_id =
             Json.required fields "slackChannelId" conversation_id_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "upload_id" json (Unknown json)
 
 and yojson_of_upload_id : upload_id -> Yojson.Safe.t =
  fun value ->
@@ -15294,7 +15333,7 @@ let conversation_kind_of_yojson : Yojson.Safe.t -> conversation_kind =
   | "private_channel" -> Private_channel
   | "direct_message" -> Direct_message
   | "group_direct_message" -> Group_direct_message
-  | other -> Unknown other
+  | other -> Json.unknown "conversation_kind" json (Unknown other)
 
 and yojson_of_conversation_kind : conversation_kind -> Yojson.Safe.t =
  fun value ->
@@ -15466,7 +15505,7 @@ let import_error_of_yojson : Yojson.Safe.t -> import_error =
   | "lease_lost" -> Lease_lost
   | "retryable" -> Retryable
   | "internal" -> Internal
-  | other -> Unknown other
+  | other -> Json.unknown "import_error" json (Unknown other)
 
 and yojson_of_import_error : import_error -> Yojson.Safe.t =
  fun value ->
@@ -15510,7 +15549,7 @@ let search_state_of_yojson : Yojson.Safe.t -> search_state =
       Submitted { receipt_id = Json.required fields "receiptId" Json.string }
   | "completed" -> Completed
   | "failed" -> Failed
-  | _ -> Unknown json
+  | _ -> Json.unknown "search_state" json (Unknown json)
 
 and yojson_of_search_state : search_state -> Yojson.Safe.t =
  fun value ->
@@ -15549,7 +15588,7 @@ let conversation_status_of_yojson : Yojson.Safe.t -> conversation_status =
   | "completed" -> Completed
   | "skipped" -> Skipped
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "conversation_status" json (Unknown other)
 
 and yojson_of_conversation_status : conversation_status -> Yojson.Safe.t =
  fun value ->
@@ -15579,7 +15618,7 @@ let import_warning_of_yojson : Yojson.Safe.t -> import_warning =
   | "unresolvable_direct_message" -> Unresolvable_direct_message
   | "target_unavailable" -> Target_unavailable
   | "uploads_incomplete" -> Uploads_incomplete
-  | other -> Unknown other
+  | other -> Json.unknown "import_warning" json (Unknown other)
 
 and yojson_of_import_warning : import_warning -> Yojson.Safe.t =
  fun value ->
@@ -15787,7 +15826,7 @@ let document_sub_type_of_yojson : Yojson.Safe.t -> document_sub_type =
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | other -> Unknown other
+  | other -> Json.unknown "document_sub_type" json (Unknown other)
 
 and yojson_of_document_sub_type : document_sub_type -> Yojson.Safe.t =
  fun value ->
@@ -15816,7 +15855,7 @@ let document_content_location_of_yojson :
   | "docx_bom_parts" -> Docx_bom_parts
   | "converted_pdf" -> Converted_pdf
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other -> Json.unknown "document_content_location" json (Unknown other)
 
 and yojson_of_document_content_location :
     document_content_location -> Yojson.Safe.t =
@@ -15842,7 +15881,7 @@ let document_content_state_of_yojson : Yojson.Safe.t -> document_content_state =
   | "unknown" -> Unknown_
   | "pending" -> Pending
   | "ready" -> Ready
-  | other -> Unknown other
+  | other -> Json.unknown "document_content_state" json (Unknown other)
 
 and yojson_of_document_content_state : document_content_state -> Yojson.Safe.t =
  fun value ->
@@ -17208,7 +17247,7 @@ let form_source_of_yojson : Yojson.Safe.t -> form_source =
           database_id = Json.required fields "databaseId" Json.string;
           table_id = Json.required fields "tableId" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "form_source" json (Unknown json)
 
 and yojson_of_form_source : form_source -> Yojson.Safe.t =
  fun value ->
@@ -17297,7 +17336,7 @@ let source_identity_of_yojson : Yojson.Safe.t -> source_identity =
   | "known" ->
       Known { source_id = Json.required fields "sourceId" source_id_of_yojson }
   | "confirmed_unknown" -> Confirmed_unknown
-  | _ -> Unknown json
+  | _ -> Json.unknown "source_identity" json (Unknown json)
 
 and yojson_of_source_identity : source_identity -> Yojson.Safe.t =
  fun value ->
@@ -17447,7 +17486,7 @@ let set_property_value_of_yojson : Yojson.Safe.t -> set_property_value =
   | "link" -> Link { url = Json.required fields "url" Json.string }
   | "multi_link" ->
       Multi_link { urls = Json.required fields "urls" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "set_property_value" json (Unknown json)
 
 and yojson_of_set_property_value : set_property_value -> Yojson.Safe.t =
  fun value ->
@@ -17845,7 +17884,7 @@ let new_field_type_of_yojson : Yojson.Safe.t -> new_field_type =
   | "multi_select" -> Multi_select
   | "person" -> Person
   | "people" -> People
-  | other -> Unknown other
+  | other -> Json.unknown "new_field_type" json (Unknown other)
 
 and yojson_of_new_field_type : new_field_type -> Yojson.Safe.t =
  fun value ->
@@ -18355,7 +18394,12 @@ type nonrec create_unthreaded_anchor_request_pdf_file_type =
 
 let create_unthreaded_anchor_request_pdf_file_type_of_yojson :
     Yojson.Safe.t -> create_unthreaded_anchor_request_pdf_file_type =
- fun json -> match Json.string json with "pdf" -> Pdf | other -> Unknown other
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | other ->
+      Json.unknown "create_unthreaded_anchor_request_pdf_file_type" json
+        (Unknown other)
 
 and yojson_of_create_unthreaded_anchor_request_pdf_file_type :
     create_unthreaded_anchor_request_pdf_file_type -> Yojson.Safe.t =
@@ -18482,7 +18526,7 @@ let create_unthreaded_pdf_anchor_request_of_yojson :
   let fields = Json.obj json in
   match Json.tag fields "anchorType" with
   | "highlight" -> Highlight (pdf_highlight_anchor_request_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "create_unthreaded_pdf_anchor_request" json (Unknown json)
 
 and yojson_of_create_unthreaded_pdf_anchor_request :
     create_unthreaded_pdf_anchor_request -> Yojson.Safe.t =
@@ -18512,7 +18556,7 @@ let create_unthreaded_anchor_request_of_yojson :
           create_unthreaded_pdf_anchor_request =
             create_unthreaded_pdf_anchor_request_of_yojson json;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "create_unthreaded_anchor_request" json (Unknown json)
 
 and yojson_of_create_unthreaded_anchor_request :
     create_unthreaded_anchor_request -> Yojson.Safe.t =
@@ -18619,7 +18663,7 @@ let webhook_scope_of_yojson : Yojson.Safe.t -> webhook_scope =
   match Json.string json with
   | "user" -> User
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "webhook_scope" json (Unknown other)
 
 and yojson_of_webhook_scope : webhook_scope -> Yojson.Safe.t =
  fun value ->
@@ -18694,7 +18738,7 @@ let webhook_status_of_yojson : Yojson.Safe.t -> webhook_status =
   | "active" -> Active
   | "paused" -> Paused
   | "disabled" -> Disabled
-  | other -> Unknown other
+  | other -> Json.unknown "webhook_status" json (Unknown other)
 
 and yojson_of_webhook_status : webhook_status -> Yojson.Safe.t =
  fun value ->
@@ -19280,7 +19324,7 @@ let crm_permission_role_of_yojson : Yojson.Safe.t -> crm_permission_role =
   match Json.string json with
   | "admin" -> Admin
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "crm_permission_role" json (Unknown other)
 
 and yojson_of_crm_permission_role : crm_permission_role -> Yojson.Safe.t =
  fun value ->
@@ -19465,7 +19509,7 @@ let crop_mode_of_yojson : Yojson.Safe.t -> crop_mode =
   match Json.string json with
   | "fill" -> Fill
   | "fit" -> Fit
-  | other -> Unknown other
+  | other -> Json.unknown "crop_mode" json (Unknown other)
 
 and yojson_of_crop_mode : crop_mode -> Yojson.Safe.t =
  fun value ->
@@ -19780,7 +19824,12 @@ type nonrec delete_unthreaded_anchor_request_pdf_file_type =
 
 let delete_unthreaded_anchor_request_pdf_file_type_of_yojson :
     Yojson.Safe.t -> delete_unthreaded_anchor_request_pdf_file_type =
- fun json -> match Json.string json with "pdf" -> Pdf | other -> Unknown other
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | other ->
+      Json.unknown "delete_unthreaded_anchor_request_pdf_file_type" json
+        (Unknown other)
 
 and yojson_of_delete_unthreaded_anchor_request_pdf_file_type :
     delete_unthreaded_anchor_request_pdf_file_type -> Yojson.Safe.t =
@@ -19798,7 +19847,7 @@ let delete_unthreaded_pdf_anchor_request_of_yojson :
   let fields = Json.obj json in
   match Json.tag fields "anchorType" with
   | "highlight" -> Highlight { uuid = Json.required fields "uuid" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "delete_unthreaded_pdf_anchor_request" json (Unknown json)
 
 and yojson_of_delete_unthreaded_pdf_anchor_request :
     delete_unthreaded_pdf_anchor_request -> Yojson.Safe.t =
@@ -19834,7 +19883,7 @@ let delete_unthreaded_anchor_request_of_yojson :
           delete_unthreaded_pdf_anchor_request =
             delete_unthreaded_pdf_anchor_request_of_yojson json;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "delete_unthreaded_anchor_request" json (Unknown json)
 
 and yojson_of_delete_unthreaded_anchor_request :
     delete_unthreaded_anchor_request -> Yojson.Safe.t =
@@ -19910,7 +19959,7 @@ let document_ai_edit_failed_code_of_yojson :
  fun json ->
   match Json.string json with
   | "edit_failed" -> Edit_failed
-  | other -> Unknown other
+  | other -> Json.unknown "document_ai_edit_failed_code" json (Unknown other)
 
 and yojson_of_document_ai_edit_failed_code :
     document_ai_edit_failed_code -> Yojson.Safe.t =
@@ -19958,7 +20007,7 @@ let document_ai_edit_refused_code_of_yojson :
  fun json ->
   match Json.string json with
   | "edit_refused" -> Edit_refused
-  | other -> Unknown other
+  | other -> Json.unknown "document_ai_edit_refused_code" json (Unknown other)
 
 and yojson_of_document_ai_edit_refused_code :
     document_ai_edit_refused_code -> Yojson.Safe.t =
@@ -20994,7 +21043,7 @@ let file_type_of_yojson : Yojson.Safe.t -> file_type =
   | "iso" -> Iso
   | "img" -> Img
   | "swf" -> Swf
-  | other -> Unknown other
+  | other -> Json.unknown "file_type" json (Unknown other)
 
 and yojson_of_file_type : file_type -> Yojson.Safe.t =
  fun value ->
@@ -21762,7 +21811,7 @@ let interaction_reason_of_yojson : Yojson.Safe.t -> interaction_reason =
   | "edited" -> Edited
   | "first_join" -> First_join
   | "last_leave" -> Last_leave
-  | other -> Unknown other
+  | other -> Json.unknown "interaction_reason" json (Unknown other)
 
 and yojson_of_interaction_reason : interaction_reason -> Yojson.Safe.t =
  fun value ->
@@ -21842,7 +21891,7 @@ let document_markdown_failure_code_of_yojson :
   | "revision_conflict" -> Revision_conflict
   | "read_failed" -> Read_failed
   | "write_failed" -> Write_failed
-  | other -> Unknown other
+  | other -> Json.unknown "document_markdown_failure_code" json (Unknown other)
 
 and yojson_of_document_markdown_failure_code :
     document_markdown_failure_code -> Yojson.Safe.t =
@@ -22141,7 +22190,7 @@ let document_preview_data_sub_type_of_yojson :
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | _ -> Unknown json
+  | _ -> Json.unknown "document_preview_data_sub_type" json (Unknown json)
 
 and yojson_of_document_preview_data_sub_type :
     document_preview_data_sub_type -> Yojson.Safe.t =
@@ -22243,7 +22292,7 @@ let document_preview_of_yojson : Yojson.Safe.t -> document_preview =
   | "access" -> Access (document_preview_data_of_yojson json)
   | "no_access" -> No_access (with_document_id_of_yojson json)
   | "does_not_exist" -> Does_not_exist (with_document_id_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "document_preview" json (Unknown json)
 
 and yojson_of_document_preview : document_preview -> Yojson.Safe.t =
  fun value ->
@@ -22283,7 +22332,11 @@ type nonrec document_storage_service_api_version =
 let document_storage_service_api_version_of_yojson :
     Yojson.Safe.t -> document_storage_service_api_version =
  fun json ->
-  match Json.string json with "v1" -> V1 | "v2" -> V2 | other -> Unknown other
+  match Json.string json with
+  | "v1" -> V1
+  | "v2" -> V2
+  | other ->
+      Json.unknown "document_storage_service_api_version" json (Unknown other)
 
 and yojson_of_document_storage_service_api_version :
     document_storage_service_api_version -> Yojson.Safe.t =
@@ -22430,19 +22483,22 @@ let make_document_text_content ?text () = ({ text } : document_text_content)
 type nonrec file_type_update =
   | Set of file_type  (** Set the file type to a specific value. *)
   | Clear  (** Clear the file type (set to null). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let file_type_update_of_yojson : Yojson.Safe.t -> file_type_update =
  fun json ->
   match Json.external_case json with
-  | "set", value -> Set (file_type_of_yojson (Json.payload "set" value))
-  | "clear", None -> Clear
-  | name, _ -> Json.fail "unknown case %S" name
+  | Some ("set", Some value) -> Set (file_type_of_yojson value)
+  | Some ("clear", None) -> Clear
+  | _ -> Json.unknown "file_type_update" json (Unknown json)
 
 and yojson_of_file_type_update : file_type_update -> Yojson.Safe.t =
  fun value ->
   match value with
   | Set inner -> Json.external_value "set" (yojson_of_file_type inner)
   | Clear -> `String "clear"
+  | Unknown json -> json
 
 type nonrec document_updated_metadata = {
   actor : string option;
@@ -22623,7 +22679,7 @@ let document_topic_event_of_yojson : Yojson.Safe.t -> document_topic_event =
             Json.required fields "metadata"
               document_interaction_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "document_topic_event" json (Unknown json)
 
 and yojson_of_document_topic_event : document_topic_event -> Yojson.Safe.t =
  fun value ->
@@ -22739,7 +22795,11 @@ type nonrec edit_anchor_request_pdf_file_type =
 
 let edit_anchor_request_pdf_file_type_of_yojson :
     Yojson.Safe.t -> edit_anchor_request_pdf_file_type =
- fun json -> match Json.string json with "pdf" -> Pdf | other -> Unknown other
+ fun json ->
+  match Json.string json with
+  | "pdf" -> Pdf
+  | other ->
+      Json.unknown "edit_anchor_request_pdf_file_type" json (Unknown other)
 
 and yojson_of_edit_anchor_request_pdf_file_type :
     edit_anchor_request_pdf_file_type -> Yojson.Safe.t =
@@ -22834,7 +22894,7 @@ let edit_pdf_anchor_request_of_yojson : Yojson.Safe.t -> edit_pdf_anchor_request
   match Json.tag fields "anchorType" with
   | "free-comment" ->
       Free_comment (edit_pdf_placeable_comment_anchor_request_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "edit_pdf_anchor_request" json (Unknown json)
 
 and yojson_of_edit_pdf_anchor_request : edit_pdf_anchor_request -> Yojson.Safe.t
     =
@@ -22856,7 +22916,7 @@ let edit_anchor_request_of_yojson : Yojson.Safe.t -> edit_anchor_request =
   match Json.tag fields "fileType" with
   | "pdf" ->
       Pdf { edit_pdf_anchor_request = edit_pdf_anchor_request_of_yojson json }
-  | _ -> Unknown json
+  | _ -> Json.unknown "edit_anchor_request" json (Unknown json)
 
 and yojson_of_edit_anchor_request : edit_anchor_request -> Yojson.Safe.t =
  fun value ->
@@ -22885,7 +22945,7 @@ let update_operation_of_yojson : Yojson.Safe.t -> update_operation =
   | "add" -> Add
   | "remove" -> Remove
   | "replace" -> Replace
-  | other -> Unknown other
+  | other -> Json.unknown "update_operation" json (Unknown other)
 
 and yojson_of_update_operation : update_operation -> Yojson.Safe.t =
  fun value ->
@@ -22938,7 +22998,7 @@ let link_share_of_yojson : Yojson.Safe.t -> link_share =
   match Json.string json with
   | "PUBLIC" -> Public
   | "TEAM" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "link_share" json (Unknown other)
 
 and yojson_of_link_share : link_share -> Yojson.Safe.t =
  fun value ->
@@ -23224,17 +23284,23 @@ type nonrec effect_spec_glow_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_glow_options_2 of effect_spec_glow_options_2
       (** Glow options (PowerPoint's Glow Options). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let effect_spec_glow_options_of_yojson :
     Yojson.Safe.t -> effect_spec_glow_options =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> String (Json.string json));
-      (fun json ->
-        Effect_spec_glow_options_2 (effect_spec_glow_options_2_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> String (Json.string json));
+        (fun json ->
+          Effect_spec_glow_options_2 (effect_spec_glow_options_2_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "effect_spec_glow_options" json (Unknown json)
 
 and yojson_of_effect_spec_glow_options :
     effect_spec_glow_options -> Yojson.Safe.t =
@@ -23243,6 +23309,7 @@ and yojson_of_effect_spec_glow_options :
   | String inner -> Json.of_string inner
   | Effect_spec_glow_options_2 inner ->
       yojson_of_effect_spec_glow_options_2 inner
+  | Unknown json -> json
 
 type nonrec effect_spec_shadow_options_2 = {
   angle_deg : float option;
@@ -23300,18 +23367,24 @@ type nonrec effect_spec_shadow_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_shadow_options_2 of effect_spec_shadow_options_2
       (** Shadow options (PowerPoint's Shadow Options pane). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let effect_spec_shadow_options_of_yojson :
     Yojson.Safe.t -> effect_spec_shadow_options =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> String (Json.string json));
-      (fun json ->
-        Effect_spec_shadow_options_2
-          (effect_spec_shadow_options_2_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> String (Json.string json));
+        (fun json ->
+          Effect_spec_shadow_options_2
+            (effect_spec_shadow_options_2_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "effect_spec_shadow_options" json (Unknown json)
 
 and yojson_of_effect_spec_shadow_options :
     effect_spec_shadow_options -> Yojson.Safe.t =
@@ -23320,6 +23393,7 @@ and yojson_of_effect_spec_shadow_options :
   | String inner -> Json.of_string inner
   | Effect_spec_shadow_options_2 inner ->
       yojson_of_effect_spec_shadow_options_2 inner
+  | Unknown json -> json
 
 type nonrec run_patch = {
   baseline : float option;
@@ -23497,7 +23571,7 @@ let fill_spec_of_yojson : Yojson.Safe.t -> fill_spec =
           angle = Json.optional fields "angle" Json.float;
           colors = Json.required fields "colors" (Json.list Json.string);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "fill_spec" json (Unknown json)
 
 and yojson_of_fill_spec : fill_spec -> Yojson.Safe.t =
  fun value ->
@@ -23724,7 +23798,7 @@ let new_shape_of_yojson : Yojson.Safe.t -> new_shape =
           layout = Json.required fields "layout" Json.string;
           style = Json.optional fields "style" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "new_shape" json (Unknown json)
 
 and yojson_of_new_shape : new_shape -> Yojson.Safe.t =
  fun value ->
@@ -23846,7 +23920,7 @@ let z_order_of_yojson : Yojson.Safe.t -> z_order =
   | "back" -> Back
   | "forward" -> Forward
   | "backward" -> Backward
-  | other -> Unknown other
+  | other -> Json.unknown "z_order" json (Unknown other)
 
 and yojson_of_z_order : z_order -> Yojson.Safe.t =
  fun value ->
@@ -23906,18 +23980,24 @@ type nonrec effect_spec_reflection_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_reflection_options_2 of effect_spec_reflection_options_2
       (** Reflection options (PowerPoint's Reflection Options). *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let effect_spec_reflection_options_of_yojson :
     Yojson.Safe.t -> effect_spec_reflection_options =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> String (Json.string json));
-      (fun json ->
-        Effect_spec_reflection_options_2
-          (effect_spec_reflection_options_2_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> String (Json.string json));
+        (fun json ->
+          Effect_spec_reflection_options_2
+            (effect_spec_reflection_options_2_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "effect_spec_reflection_options" json (Unknown json)
 
 and yojson_of_effect_spec_reflection_options :
     effect_spec_reflection_options -> Yojson.Safe.t =
@@ -23926,6 +24006,7 @@ and yojson_of_effect_spec_reflection_options :
   | String inner -> Json.of_string inner
   | Effect_spec_reflection_options_2 inner ->
       yojson_of_effect_spec_reflection_options_2 inner
+  | Unknown json -> json
 
 type nonrec effect_spec_soft_edge_options_2 = {
   size_pt : float option;
@@ -23953,18 +24034,24 @@ type nonrec effect_spec_soft_edge_options =
   | String of string  (** A preset name, or [none] to remove the effect. *)
   | Effect_spec_soft_edge_options_2 of effect_spec_soft_edge_options_2
       (** Soft edge options. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let effect_spec_soft_edge_options_of_yojson :
     Yojson.Safe.t -> effect_spec_soft_edge_options =
  fun json ->
-  Json.first_ok
-    [
-      (fun json -> String (Json.string json));
-      (fun json ->
-        Effect_spec_soft_edge_options_2
-          (effect_spec_soft_edge_options_2_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json -> String (Json.string json));
+        (fun json ->
+          Effect_spec_soft_edge_options_2
+            (effect_spec_soft_edge_options_2_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "effect_spec_soft_edge_options" json (Unknown json)
 
 and yojson_of_effect_spec_soft_edge_options :
     effect_spec_soft_edge_options -> Yojson.Safe.t =
@@ -23973,6 +24060,7 @@ and yojson_of_effect_spec_soft_edge_options :
   | String inner -> Json.of_string inner
   | Effect_spec_soft_edge_options_2 inner ->
       yojson_of_effect_spec_soft_edge_options_2 inner
+  | Unknown json -> json
 
 (** One drawing command of a \[[GeometryPath]\], in shape-local points:
 [(0, 0)] is the top-left corner of the shape's box before rotation and
@@ -24056,7 +24144,7 @@ let path_command_of_yojson : Yojson.Safe.t -> path_command =
           w_r = Json.required fields "wR" Json.float;
         }
   | "close" -> Close
-  | _ -> Unknown json
+  | _ -> Json.unknown "path_command" json (Unknown json)
 
 and yojson_of_path_command : path_command -> Yojson.Safe.t =
  fun value ->
@@ -24144,7 +24232,7 @@ let path_fill_mode_of_yojson : Yojson.Safe.t -> path_fill_mode =
   | "lightenLess" -> Lighten_less
   | "darken" -> Darken
   | "darkenLess" -> Darken_less
-  | other -> Unknown other
+  | other -> Json.unknown "path_fill_mode" json (Unknown other)
 
 and yojson_of_path_fill_mode : path_fill_mode -> Yojson.Safe.t =
  fun value ->
@@ -24206,7 +24294,7 @@ let merge_mode_of_yojson : Yojson.Safe.t -> merge_mode =
   | "fragment" -> Fragment
   | "intersect" -> Intersect
   | "subtract" -> Subtract
-  | other -> Unknown other
+  | other -> Json.unknown "merge_mode" json (Unknown other)
 
 and yojson_of_merge_mode : merge_mode -> Yojson.Safe.t =
  fun value ->
@@ -24258,7 +24346,7 @@ let slide_scale_of_yojson : Yojson.Safe.t -> slide_scale =
   | "none" -> None_
   | "fit" -> Fit
   | "maximize" -> Maximize
-  | other -> Unknown other
+  | other -> Json.unknown "slide_scale" json (Unknown other)
 
 and yojson_of_slide_scale : slide_scale -> Yojson.Safe.t =
  fun value ->
@@ -24279,7 +24367,7 @@ let guide_orient_of_yojson : Yojson.Safe.t -> guide_orient =
   match Json.string json with
   | "horizontal" -> Horizontal
   | "vertical" -> Vertical
-  | other -> Unknown other
+  | other -> Json.unknown "guide_orient" json (Unknown other)
 
 and yojson_of_guide_orient : guide_orient -> Yojson.Safe.t =
  fun value ->
@@ -24351,7 +24439,7 @@ let placeholder_kind_of_yojson : Yojson.Safe.t -> placeholder_kind =
   | "table" -> Table
   | "smartArt" -> Smart_art
   | "media" -> Media
-  | other -> Unknown other
+  | other -> Json.unknown "placeholder_kind" json (Unknown other)
 
 and yojson_of_placeholder_kind : placeholder_kind -> Yojson.Safe.t =
  fun value ->
@@ -24383,7 +24471,7 @@ let smart_art_position_of_yojson : Yojson.Safe.t -> smart_art_position =
   | "above" -> Above
   | "below" -> Below
   | "assistant" -> Assistant
-  | other -> Unknown other
+  | other -> Json.unknown "smart_art_position" json (Unknown other)
 
 and yojson_of_smart_art_position : smart_art_position -> Yojson.Safe.t =
  fun value ->
@@ -24498,7 +24586,7 @@ let smart_art_edit_of_yojson : Yojson.Safe.t -> smart_art_edit =
       Set_colors { colors = Json.required fields "colors" Json.string }
   | "setStyle" -> Set_style { style = Json.required fields "style" Json.string }
   | "reset" -> Reset
-  | _ -> Unknown json
+  | _ -> Json.unknown "smart_art_edit" json (Unknown json)
 
 and yojson_of_smart_art_edit : smart_art_edit -> Yojson.Safe.t =
  fun value ->
@@ -24619,7 +24707,7 @@ let smart_art_target_of_yojson : Yojson.Safe.t -> smart_art_target =
   match Json.string json with
   | "shapes" -> Shapes
   | "text" -> Text
-  | other -> Unknown other
+  | other -> Json.unknown "smart_art_target" json (Unknown other)
 
 and yojson_of_smart_art_target : smart_art_target -> Yojson.Safe.t =
  fun value ->
@@ -26036,7 +26124,7 @@ let edit_op_of_yojson : Yojson.Safe.t -> edit_op =
           slide = Json.required fields "slide" Json.int;
           to_ = Json.required fields "to" smart_art_target_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "edit_op" json (Unknown json)
 
 and yojson_of_edit_op : edit_op -> Yojson.Safe.t =
  fun value ->
@@ -27269,7 +27357,7 @@ let spreadsheet_border_style_of_yojson :
   | "mediumDashed" -> Medium_dashed
   | "mediumDashDot" -> Medium_dash_dot
   | "mediumDashDotDot" -> Medium_dash_dot_dot
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_border_style" json (Unknown other)
 
 and yojson_of_spreadsheet_border_style :
     spreadsheet_border_style -> Yojson.Safe.t =
@@ -27304,7 +27392,7 @@ let spreadsheet_font_of_yojson : Yojson.Safe.t -> spreadsheet_font =
   | "sans" -> Sans
   | "serif" -> Serif
   | "mono" -> Mono
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_font" json (Unknown other)
 
 and yojson_of_spreadsheet_font : spreadsheet_font -> Yojson.Safe.t =
  fun value ->
@@ -27340,7 +27428,7 @@ let spreadsheet_number_format_of_yojson :
   | "time" -> Time
   | "scientific" -> Scientific
   | "text" -> Text
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_number_format" json (Unknown other)
 
 and yojson_of_spreadsheet_number_format :
     spreadsheet_number_format -> Yojson.Safe.t =
@@ -27373,7 +27461,7 @@ let spreadsheet_horizontal_align_of_yojson :
   | "left" -> Left
   | "center" -> Center
   | "right" -> Right
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_horizontal_align" json (Unknown other)
 
 and yojson_of_spreadsheet_horizontal_align :
     spreadsheet_horizontal_align -> Yojson.Safe.t =
@@ -27399,7 +27487,7 @@ let spreadsheet_vertical_align_of_yojson :
   | "top" -> Top
   | "middle" -> Middle
   | "bottom" -> Bottom
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_vertical_align" json (Unknown other)
 
 and yojson_of_spreadsheet_vertical_align :
     spreadsheet_vertical_align -> Yojson.Safe.t =
@@ -27664,7 +27752,7 @@ let spreadsheet_column_type_of_yojson : Yojson.Safe.t -> spreadsheet_column_type
   | "checkbox" -> Checkbox
   | "dropdown" -> Dropdown
   | "person" -> Person
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_column_type" json (Unknown other)
 
 and yojson_of_spreadsheet_column_type : spreadsheet_column_type -> Yojson.Safe.t
     =
@@ -27898,7 +27986,7 @@ let spreadsheet_operation_of_yojson : Yojson.Safe.t -> spreadsheet_operation =
           sheet_id = Json.required fields "sheetId" Json.string;
           totals_row = Json.optional fields "totalsRow" Json.bool;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "spreadsheet_operation" json (Unknown json)
 
 and yojson_of_spreadsheet_operation : spreadsheet_operation -> Yojson.Safe.t =
  fun value ->
@@ -28121,7 +28209,7 @@ let email_block_scope_of_yojson : Yojson.Safe.t -> email_block_scope =
   match Json.string json with
   | "team" -> Team
   | "personal" -> Personal
-  | other -> Unknown other
+  | other -> Json.unknown "email_block_scope" json (Unknown other)
 
 and yojson_of_email_block_scope : email_block_scope -> Yojson.Safe.t =
  fun value ->
@@ -28143,7 +28231,7 @@ let shared_email_filter_of_yojson : Yojson.Safe.t -> shared_email_filter =
   | "exclude" -> Exclude
   | "include" -> Include
   | "only" -> Only
-  | other -> Unknown other
+  | other -> Json.unknown "shared_email_filter" json (Unknown other)
 
 and yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t =
  fun value ->
@@ -28296,7 +28384,7 @@ let email_reminder_condition_of_yojson :
   match Json.string json with
   | "if_no_reply" -> If_no_reply
   | "regardless" -> Regardless
-  | other -> Unknown other
+  | other -> Json.unknown "email_reminder_condition" json (Unknown other)
 
 and yojson_of_email_reminder_condition :
     email_reminder_condition -> Yojson.Safe.t =
@@ -28325,7 +28413,7 @@ let followup_state_of_yojson : Yojson.Safe.t -> followup_state =
   | "returned" -> Returned
   | "cancelled" -> Cancelled
   | "removed" -> Removed
-  | other -> Unknown other
+  | other -> Json.unknown "followup_state" json (Unknown other)
 
 and yojson_of_followup_state : followup_state -> Yojson.Safe.t =
  fun value ->
@@ -28429,7 +28517,7 @@ let email_followup_command_of_yojson : Yojson.Safe.t -> email_followup_command =
           operation_id = Json.required fields "operationId" Json.string;
           undo = Json.optional fields "undo" Json.bool;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "email_followup_command" json (Unknown json)
 
 and yojson_of_email_followup_command : email_followup_command -> Yojson.Safe.t =
  fun value ->
@@ -28523,7 +28611,7 @@ let email_privacy_change_of_yojson : Yojson.Safe.t -> email_privacy_change =
           domain = Json.required fields "domain" Json.string;
           scope = Json.required fields "scope" email_block_scope_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "email_privacy_change" json (Unknown json)
 
 and yojson_of_email_privacy_change : email_privacy_change -> Yojson.Safe.t =
  fun value ->
@@ -28744,7 +28832,9 @@ let ensure_collab_surface_request_parent_entity_type_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other ->
+      Json.unknown "ensure_collab_surface_request_parent_entity_type" json
+        (Unknown other)
 
 and yojson_of_ensure_collab_surface_request_parent_entity_type :
     ensure_collab_surface_request_parent_entity_type -> Yojson.Safe.t =
@@ -29087,7 +29177,7 @@ let tag_filter_mode_of_yojson : Yojson.Safe.t -> tag_filter_mode =
   match Json.string json with
   | "any" -> Any
   | "all" -> All
-  | other -> Unknown other
+  | other -> Json.unknown "tag_filter_mode" json (Unknown other)
 
 and yojson_of_tag_filter_mode : tag_filter_mode -> Yojson.Safe.t =
  fun value ->
@@ -29251,7 +29341,7 @@ let team_role_of_yojson : Yojson.Safe.t -> team_role =
   | "member" -> Member
   | "admin" -> Admin
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "team_role" json (Unknown other)
 
 and yojson_of_team_role : team_role -> Yojson.Safe.t =
  fun value ->
@@ -29297,7 +29387,7 @@ let entity_permission_of_yojson : Yojson.Safe.t -> entity_permission =
         { role = Json.required fields "role" participant_role_of_yojson }
   | "team_role" ->
       Team_role { role = Json.required fields "role" team_role_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "entity_permission" json (Unknown json)
 
 and yojson_of_entity_permission : entity_permission -> Yojson.Safe.t =
  fun value ->
@@ -29352,7 +29442,7 @@ let entity_permission_response_of_yojson :
             Json.required fields "permission" entity_permission_of_yojson;
         }
   | "no_access" -> No_access
-  | _ -> Unknown json
+  | _ -> Json.unknown "entity_permission_response" json (Unknown json)
 
 and yojson_of_entity_permission_response :
     entity_permission_response -> Yojson.Safe.t =
@@ -29533,7 +29623,7 @@ let external_chat_kind_of_yojson : Yojson.Safe.t -> external_chat_kind =
   match Json.string json with
   | "group" -> Group
   | "direct" -> Direct
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_kind" json (Unknown other)
 
 and yojson_of_external_chat_kind : external_chat_kind -> Yojson.Safe.t =
  fun value ->
@@ -29549,7 +29639,9 @@ type nonrec external_chat_provider =
 
 let external_chat_provider_of_yojson : Yojson.Safe.t -> external_chat_provider =
  fun json ->
-  match Json.string json with "whatsapp" -> Whatsapp | other -> Unknown other
+  match Json.string json with
+  | "whatsapp" -> Whatsapp
+  | other -> Json.unknown "external_chat_provider" json (Unknown other)
 
 and yojson_of_external_chat_provider : external_chat_provider -> Yojson.Safe.t =
  fun value ->
@@ -29621,7 +29713,8 @@ let external_chat_media_presentation_of_yojson :
   | "sticker" -> Sticker
   | "gif" -> Gif
   | "voice_note" -> Voice_note
-  | other -> Unknown other
+  | other ->
+      Json.unknown "external_chat_media_presentation" json (Unknown other)
 
 and yojson_of_external_chat_media_presentation :
     external_chat_media_presentation -> Yojson.Safe.t =
@@ -29648,7 +29741,7 @@ let external_chat_attachment_state_of_yojson :
   | "ready" -> Ready
   | "unavailable" -> Unavailable
   | "unsupported" -> Unsupported
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_attachment_state" json (Unknown other)
 
 and yojson_of_external_chat_attachment_state :
     external_chat_attachment_state -> Yojson.Safe.t =
@@ -29753,7 +29846,7 @@ let external_chat_backfill_state_of_yojson :
   | "waiting_for_phone" -> Waiting_for_phone
   | "done" -> Done
   | "partial" -> Partial
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_backfill_state" json (Unknown other)
 
 and yojson_of_external_chat_backfill_state :
     external_chat_backfill_state -> Yojson.Safe.t =
@@ -29810,7 +29903,7 @@ let external_chat_call_outcome_of_yojson :
   | "missed" -> Missed
   | "rejected" -> Rejected
   | "other" -> Other
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_call_outcome" json (Unknown other)
 
 and yojson_of_external_chat_call_outcome :
     external_chat_call_outcome -> Yojson.Safe.t =
@@ -29866,7 +29959,7 @@ let external_chat_mutation_of_yojson : Yojson.Safe.t -> external_chat_mutation =
   | "reaction" -> Reaction
   | "edit" -> Edit
   | "delete" -> Delete
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_mutation" json (Unknown other)
 
 and yojson_of_external_chat_mutation : external_chat_mutation -> Yojson.Safe.t =
  fun value ->
@@ -30042,7 +30135,7 @@ let external_chat_delivery_state_of_yojson :
   | "unknown" -> Unknown_
   | "accepted" -> Accepted
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_delivery_state" json (Unknown other)
 
 and yojson_of_external_chat_delivery_state :
     external_chat_delivery_state -> Yojson.Safe.t =
@@ -30073,7 +30166,7 @@ let external_chat_reply_block_of_yojson :
   | "not_added" -> Not_added
   | "not_allowed" -> Not_allowed
   | "unavailable" -> Unavailable
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_reply_block" json (Unknown other)
 
 and yojson_of_external_chat_reply_block :
     external_chat_reply_block -> Yojson.Safe.t =
@@ -30443,7 +30536,7 @@ let external_chat_media_kind_of_yojson :
   | "audio" -> Audio
   | "video" -> Video
   | "document" -> Document
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_media_kind" json (Unknown other)
 
 and yojson_of_external_chat_media_kind :
     external_chat_media_kind -> Yojson.Safe.t =
@@ -30503,7 +30596,7 @@ let external_chat_message_kind_of_yojson :
   match Json.string json with
   | "message" -> Message
   | "system" -> System
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_message_kind" json (Unknown other)
 
 and yojson_of_external_chat_message_kind :
     external_chat_message_kind -> Yojson.Safe.t =
@@ -30692,7 +30785,7 @@ let external_chat_system_action_of_yojson :
   | "message_pinned" -> Message_pinned
   | "message_unpinned" -> Message_unpinned
   | "call" -> Call
-  | other -> Unknown other
+  | other -> Json.unknown "external_chat_system_action" json (Unknown other)
 
 and yojson_of_external_chat_system_action :
     external_chat_system_action -> Yojson.Safe.t =
@@ -30780,7 +30873,7 @@ let external_chat_rich_content_of_yojson :
   | "contacts" -> Contacts (external_chat_contacts_of_yojson json)
   | "event" -> Event (external_chat_event_of_yojson json)
   | "system" -> System (external_chat_system_line_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "external_chat_rich_content" json (Unknown json)
 
 and yojson_of_external_chat_rich_content :
     external_chat_rich_content -> Yojson.Safe.t =
@@ -31080,7 +31173,7 @@ let external_chat_reply_content_of_yojson :
             Json.required fields "operation" external_chat_mutation_of_yojson;
           text = Json.optional fields "text" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "external_chat_reply_content" json (Unknown json)
 
 and yojson_of_external_chat_reply_content :
     external_chat_reply_content -> Yojson.Safe.t =
@@ -31391,7 +31484,7 @@ let favorite_entity_type_of_yojson : Yojson.Safe.t -> favorite_entity_type =
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "favorite_entity_type" json (Unknown other)
 
 and yojson_of_favorite_entity_type : favorite_entity_type -> Yojson.Safe.t =
  fun value ->
@@ -31547,7 +31640,7 @@ let favorite_entity_ref_entity_type_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "favorite_entity_ref_entity_type" json (Unknown other)
 
 and yojson_of_favorite_entity_ref_entity_type :
     favorite_entity_ref_entity_type -> Yojson.Safe.t =
@@ -31780,7 +31873,7 @@ let rec file_system_node_with_ids_of_yojson :
               (Json.map file_system_node_with_ids_of_yojson);
           project_id = Json.required fields "project_id" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "file_system_node_with_ids" json (Unknown json)
 
 and yojson_of_file_system_node_with_ids :
     file_system_node_with_ids -> Yojson.Safe.t =
@@ -31966,7 +32059,7 @@ let form_status_of_yojson : Yojson.Safe.t -> form_status =
   match Json.string json with
   | "open" -> Open
   | "closed" -> Closed
-  | other -> Unknown other
+  | other -> Json.unknown "form_status" json (Unknown other)
 
 and yojson_of_form_status : form_status -> Yojson.Safe.t =
  fun value ->
@@ -32119,7 +32212,7 @@ let form_access_of_yojson : Yojson.Safe.t -> form_access =
   | "view" -> View
   | "edit" -> Edit
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "form_access" json (Unknown other)
 
 and yojson_of_form_access : form_access -> Yojson.Safe.t =
  fun value ->
@@ -32184,7 +32277,7 @@ let widget_of_yojson : Yojson.Safe.t -> widget =
   | "choice" -> Choice
   | "dropdown" -> Dropdown
   | "checkboxes" -> Checkboxes
-  | other -> Unknown other
+  | other -> Json.unknown "widget" json (Unknown other)
 
 and yojson_of_widget : widget -> Yojson.Safe.t =
  fun value ->
@@ -32314,7 +32407,7 @@ let form_section_detail_of_yojson : Yojson.Safe.t -> form_section_detail =
           target = Json.optional fields "target" booking_target_of_yojson;
           title = Json.required fields "title" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "form_section_detail" json (Unknown json)
 
 and yojson_of_form_section_detail : form_section_detail -> Yojson.Safe.t =
  fun value ->
@@ -32449,7 +32542,7 @@ let layout_problem_of_yojson : Yojson.Safe.t -> layout_problem =
   | "conditionRule" ->
       Condition_rule { reason = Json.required fields "reason" Json.string }
   | "textTooLong" -> Text_too_long { max = Json.required fields "max" Json.int }
-  | _ -> Unknown json
+  | _ -> Json.unknown "layout_problem" json (Unknown json)
 
 and yojson_of_layout_problem : layout_problem -> Yojson.Safe.t =
  fun value ->
@@ -32570,7 +32663,7 @@ let form_publication_problem_of_yojson :
       Widget_mismatch { question = Json.required fields "question" Json.string }
   | "fileUploadNeedsSignIn" -> File_upload_needs_sign_in
   | "pending" -> Pending
-  | _ -> Unknown json
+  | _ -> Json.unknown "form_publication_problem" json (Unknown json)
 
 and yojson_of_form_publication_problem :
     form_publication_problem -> Yojson.Safe.t =
@@ -32685,7 +32778,7 @@ let form_error_code_of_yojson : Yojson.Safe.t -> form_error_code =
   | "invalidBranding" -> Invalid_branding
   | "conflict" -> Conflict
   | "internal" -> Internal
-  | other -> Unknown other
+  | other -> Json.unknown "form_error_code" json (Unknown other)
 
 and yojson_of_form_error_code : form_error_code -> Yojson.Safe.t =
  fun value ->
@@ -32853,7 +32946,7 @@ let form_section_of_yojson : Yojson.Safe.t -> form_section =
           target = Json.required fields "target" booking_target_of_yojson;
           title = Json.required fields "title" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "form_section" json (Unknown json)
 
 and yojson_of_form_section : form_section -> Yojson.Safe.t =
  fun value ->
@@ -32936,7 +33029,7 @@ let response_status_of_yojson : Yojson.Safe.t -> response_status =
   match Json.string json with
   | "submitted" -> Submitted
   | "stopped" -> Stopped
-  | other -> Unknown other
+  | other -> Json.unknown "response_status" json (Unknown other)
 
 and yojson_of_response_status : response_status -> Yojson.Safe.t =
  fun value ->
@@ -33008,7 +33101,7 @@ let tally_value_of_yojson : Yojson.Safe.t -> tally_value =
   | "option" -> Option { option = Json.required fields "option" Json.string }
   | "checkbox" ->
       Checkbox { checked = Json.required fields "checked" Json.bool }
-  | _ -> Unknown json
+  | _ -> Json.unknown "tally_value" json (Unknown json)
 
 and yojson_of_tally_value : tally_value -> Yojson.Safe.t =
  fun value ->
@@ -33157,7 +33250,7 @@ let pipeline_field_type_of_yojson : Yojson.Safe.t -> pipeline_field_type =
   | "item" -> Item
   | "relation" -> Relation
   | "formula" -> Formula
-  | other -> Unknown other
+  | other -> Json.unknown "pipeline_field_type" json (Unknown other)
 
 and yojson_of_pipeline_field_type : pipeline_field_type -> Yojson.Safe.t =
  fun value ->
@@ -33675,7 +33768,7 @@ let project_preview_of_yojson : Yojson.Safe.t -> project_preview =
   | "access" -> Access (project_preview_data_of_yojson json)
   | "no_access" -> No_access (with_project_id_of_yojson json)
   | "does_not_exist" -> Does_not_exist (with_project_id_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "project_preview" json (Unknown json)
 
 and yojson_of_project_preview : project_preview -> Yojson.Safe.t =
  fun value ->
@@ -34121,7 +34214,7 @@ let get_or_create_action_of_yojson : Yojson.Safe.t -> get_or_create_action =
   match Json.string json with
   | "get" -> Get
   | "create" -> Create
-  | other -> Unknown other
+  | other -> Json.unknown "get_or_create_action" json (Unknown other)
 
 and yojson_of_get_or_create_action : get_or_create_action -> Yojson.Safe.t =
  fun value ->
@@ -34200,9 +34293,56 @@ let make_get_or_create_private_request ~(recipients : string list) () =
   ({ recipients } : get_or_create_private_request)
 
 type nonrec item =
-  | Document of basic_document
-  | Chat of chat
-  | Project of project
+  | Document of {
+      branched_from_id : string option;
+          (** The id of the document this document branched from *)
+      branched_from_version_id : int64 option;
+          (** The id of the version this document branched from
+This could be either DocumentInstance or DocumentBom id depending on
+the file type *)
+      created_at : string option;  (** The time the document was created *)
+      deleted_at : string option;  (** The time the document was deleted *)
+      document_family_id : int64 option;
+          (** The id of the document family this document belongs to *)
+      document_version_id : int64;
+          (** The version of the document
+This could be the document_instance_id or document_bom_id depending on
+the file type *)
+      file_type : string option;
+          (** The file type of the document (e.g. pdf, docx) *)
+      id : string;  (** The document id *)
+      name : string;  (** The name of the document *)
+      owner : string;  (** The owner of the document *)
+      project_id : string option;
+          (** The id of the project that this document belongs to *)
+      sha : string option;
+          (** If the document is a PDF, this is the SHA of the pdf
+If the document is a DOCX, this will not be present *)
+      sub_type : basic_document_sub_type option;
+      updated_at : string option;
+          (** The time the document instance / document BOM was updated *)
+    }
+  | Chat of {
+      created_at : string option;  (** The time the chat was created *)
+      deleted_at : string option;  (** The time the chat was deleted *)
+      id : string;  (** The chat uuid *)
+      is_persistent : bool;
+      model : string option;  (** The model used to generate the chat *)
+      name : string;  (** The name of the chat *)
+      project_id : string option;  (** The project id of the chat *)
+      token_count : int64 option;
+      updated_at : string option;  (** The time the chat was last updated *)
+      user_id : string;  (** Who the chat belongs to *)
+    }
+  | Project of {
+      created_at : string option;  (** The time the project was created *)
+      deleted_at : string option;
+      id : string;  (** The id of the project *)
+      name : string;  (** The name of the project *)
+      parent_id : string option;  (** The parent project id *)
+      updated_at : string option;  (** The time the project was updated *)
+      user_id : string;  (** The user id of who created the project *)
+    }
   | Unknown of Yojson.Safe.t
       (** A case this SDK version does not know, as received. *)
 
@@ -34210,19 +34350,152 @@ let item_of_yojson : Yojson.Safe.t -> item =
  fun json ->
   let fields = Json.obj json in
   match Json.tag fields "type" with
-  | "document" -> Document (basic_document_of_yojson json)
-  | "chat" -> Chat (chat_of_yojson json)
-  | "project" -> Project (project_of_yojson json)
-  | _ -> Unknown json
+  | "document" ->
+      Document
+        {
+          branched_from_id = Json.optional fields "branchedFromId" Json.string;
+          branched_from_version_id =
+            Json.optional fields "branchedFromVersionId" Json.int64;
+          created_at = Json.optional fields "createdAt" Json.string;
+          deleted_at = Json.optional fields "deletedAt" Json.string;
+          document_family_id =
+            Json.optional fields "documentFamilyId" Json.int64;
+          document_version_id =
+            Json.required fields "documentVersionId" Json.int64;
+          file_type = Json.optional fields "fileType" Json.string;
+          id = Json.required fields "id" Json.string;
+          name = Json.required fields "name" Json.string;
+          owner = Json.required fields "owner" Json.string;
+          project_id = Json.optional fields "projectId" Json.string;
+          sha = Json.optional fields "sha" Json.string;
+          sub_type =
+            Json.optional fields "subType" basic_document_sub_type_of_yojson;
+          updated_at = Json.optional fields "updatedAt" Json.string;
+        }
+  | "chat" ->
+      Chat
+        {
+          created_at = Json.optional fields "createdAt" Json.string;
+          deleted_at = Json.optional fields "deletedAt" Json.string;
+          id = Json.required fields "id" Json.string;
+          is_persistent = Json.required fields "isPersistent" Json.bool;
+          model = Json.optional fields "model" Json.string;
+          name = Json.required fields "name" Json.string;
+          project_id = Json.optional fields "projectId" Json.string;
+          token_count = Json.optional fields "tokenCount" Json.int64;
+          updated_at = Json.optional fields "updatedAt" Json.string;
+          user_id = Json.required fields "userId" Json.string;
+        }
+  | "project" ->
+      Project
+        {
+          created_at = Json.optional fields "createdAt" Json.string;
+          deleted_at = Json.optional fields "deletedAt" Json.string;
+          id = Json.required fields "id" Json.string;
+          name = Json.required fields "name" Json.string;
+          parent_id = Json.optional fields "parentId" Json.string;
+          updated_at = Json.optional fields "updatedAt" Json.string;
+          user_id = Json.required fields "userId" Json.string;
+        }
+  | _ -> Json.unknown "item" json (Unknown json)
 
 and yojson_of_item : item -> Yojson.Safe.t =
  fun value ->
   match value with
-  | Document inner ->
-      Json.with_tag "type" "document" (yojson_of_basic_document inner)
-  | Chat inner -> Json.with_tag "type" "chat" (yojson_of_chat inner)
-  | Project inner -> Json.with_tag "type" "project" (yojson_of_project inner)
+  | Document case ->
+      Json.record
+        [
+          ("type", Some (`String "document"));
+          ("branchedFromId", Option.map Json.of_string case.branched_from_id);
+          ( "branchedFromVersionId",
+            Option.map Json.of_int64 case.branched_from_version_id );
+          ("createdAt", Option.map Json.of_string case.created_at);
+          ("deletedAt", Option.map Json.of_string case.deleted_at);
+          ("documentFamilyId", Option.map Json.of_int64 case.document_family_id);
+          ("documentVersionId", Some (Json.of_int64 case.document_version_id));
+          ("fileType", Option.map Json.of_string case.file_type);
+          ("id", Some (Json.of_string case.id));
+          ("name", Some (Json.of_string case.name));
+          ("owner", Some (Json.of_string case.owner));
+          ("projectId", Option.map Json.of_string case.project_id);
+          ("sha", Option.map Json.of_string case.sha);
+          ("subType", Option.map yojson_of_basic_document_sub_type case.sub_type);
+          ("updatedAt", Option.map Json.of_string case.updated_at);
+        ]
+  | Chat case ->
+      Json.record
+        [
+          ("type", Some (`String "chat"));
+          ("createdAt", Option.map Json.of_string case.created_at);
+          ("deletedAt", Option.map Json.of_string case.deleted_at);
+          ("id", Some (Json.of_string case.id));
+          ("isPersistent", Some (Json.of_bool case.is_persistent));
+          ("model", Option.map Json.of_string case.model);
+          ("name", Some (Json.of_string case.name));
+          ("projectId", Option.map Json.of_string case.project_id);
+          ("tokenCount", Option.map Json.of_int64 case.token_count);
+          ("updatedAt", Option.map Json.of_string case.updated_at);
+          ("userId", Some (Json.of_string case.user_id));
+        ]
+  | Project case ->
+      Json.record
+        [
+          ("type", Some (`String "project"));
+          ("createdAt", Option.map Json.of_string case.created_at);
+          ("deletedAt", Option.map Json.of_string case.deleted_at);
+          ("id", Some (Json.of_string case.id));
+          ("name", Some (Json.of_string case.name));
+          ("parentId", Option.map Json.of_string case.parent_id);
+          ("updatedAt", Option.map Json.of_string case.updated_at);
+          ("userId", Some (Json.of_string case.user_id));
+        ]
   | Unknown json -> json
+
+let make_item_document ?branched_from_id ?branched_from_version_id ?created_at
+    ?deleted_at ?document_family_id ~(document_version_id : int64) ?file_type
+    ~(id : string) ~(name : string) ~(owner : string) ?project_id ?sha ?sub_type
+    ?updated_at () =
+  (Document
+     {
+       branched_from_id;
+       branched_from_version_id;
+       created_at;
+       deleted_at;
+       document_family_id;
+       document_version_id;
+       file_type;
+       id;
+       name;
+       owner;
+       project_id;
+       sha;
+       sub_type;
+       updated_at;
+     }
+    : item)
+
+let make_item_chat ?created_at ?deleted_at ~(id : string)
+    ~(is_persistent : bool) ?model ~(name : string) ?project_id ?token_count
+    ?updated_at ~(user_id : string) () =
+  (Chat
+     {
+       created_at;
+       deleted_at;
+       id;
+       is_persistent;
+       model;
+       name;
+       project_id;
+       token_count;
+       updated_at;
+       user_id;
+     }
+    : item)
+
+let make_item_project ?created_at ?deleted_at ~(id : string) ~(name : string)
+    ?parent_id ?updated_at ~(user_id : string) () =
+  (Project { created_at; deleted_at; id; name; parent_id; updated_at; user_id }
+    : item)
 
 type nonrec pinned_item = {
   activity : item;  (** legacy will be removed later *)
@@ -34937,7 +35210,8 @@ let github_pull_request_review_state_of_yojson :
   | "changes_requested" -> Changes_requested
   | "commented" -> Commented
   | "dismissed" -> Dismissed
-  | other -> Unknown other
+  | other ->
+      Json.unknown "github_pull_request_review_state" json (Unknown other)
 
 and yojson_of_github_pull_request_review_state :
     github_pull_request_review_state -> Yojson.Safe.t =
@@ -35005,7 +35279,8 @@ let github_pull_request_review_decision_of_yojson :
   | "approved" -> Approved
   | "changes_requested" -> Changes_requested
   | "review_required" -> Review_required
-  | other -> Unknown other
+  | other ->
+      Json.unknown "github_pull_request_review_decision" json (Unknown other)
 
 and yojson_of_github_pull_request_review_decision :
     github_pull_request_review_decision -> Yojson.Safe.t =
@@ -35169,7 +35444,7 @@ let soup_api_sort_direction_of_yojson : Yojson.Safe.t -> soup_api_sort_direction
   match Json.string json with
   | "asc" -> Asc
   | "desc" -> Desc
-  | other -> Unknown other
+  | other -> Json.unknown "soup_api_sort_direction" json (Unknown other)
 
 and yojson_of_soup_api_sort_direction : soup_api_sort_direction -> Yojson.Safe.t
     =
@@ -35198,7 +35473,7 @@ let grouped_soup_sort_of_yojson : Yojson.Safe.t -> grouped_soup_sort =
   | "viewed_updated" -> Viewed_updated
   | "property" -> Property
   | "name" -> Name
-  | other -> Unknown other
+  | other -> Json.unknown "grouped_soup_sort" json (Unknown other)
 
 and yojson_of_grouped_soup_sort : grouped_soup_sort -> Yojson.Safe.t =
  fun value ->
@@ -35401,7 +35676,7 @@ let property_value_of_yojson : Yojson.Safe.t -> property_value =
         }
   | "Link" ->
       Link { value = Json.required fields "value" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_value" json (Unknown json)
 
 and yojson_of_property_value : property_value -> Yojson.Safe.t =
  fun value ->
@@ -35536,7 +35811,7 @@ let soup_document_sub_type_of_yojson : Yojson.Safe.t -> soup_document_sub_type =
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | _ -> Unknown json
+  | _ -> Json.unknown "soup_document_sub_type" json (Unknown json)
 
 and yojson_of_soup_document_sub_type : soup_document_sub_type -> Yojson.Safe.t =
  fun value ->
@@ -35936,7 +36211,7 @@ let soup_label_list_visibility_of_yojson :
   | "labelShow" -> Label_show
   | "labelShowIfUnread" -> Label_show_if_unread
   | "labelHide" -> Label_hide
-  | other -> Unknown other
+  | other -> Json.unknown "soup_label_list_visibility" json (Unknown other)
 
 and yojson_of_soup_label_list_visibility :
     soup_label_list_visibility -> Yojson.Safe.t =
@@ -35959,7 +36234,7 @@ let soup_message_list_visibility_of_yojson :
   match Json.string json with
   | "show" -> Show
   | "hide" -> Hide
-  | other -> Unknown other
+  | other -> Json.unknown "soup_message_list_visibility" json (Unknown other)
 
 and yojson_of_soup_message_list_visibility :
     soup_message_list_visibility -> Yojson.Safe.t =
@@ -35980,7 +36255,7 @@ let soup_label_type_of_yojson : Yojson.Safe.t -> soup_label_type =
   match Json.string json with
   | "system" -> System
   | "user" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "soup_label_type" json (Unknown other)
 
 and yojson_of_soup_label_type : soup_label_type -> Yojson.Safe.t =
  fun value ->
@@ -36394,7 +36669,7 @@ let soup_message_sender_type_of_yojson :
   match Json.string json with
   | "user" -> User
   | "bot" -> Bot
-  | other -> Unknown other
+  | other -> Json.unknown "soup_message_sender_type" json (Unknown other)
 
 and yojson_of_soup_message_sender_type :
     soup_message_sender_type -> Yojson.Safe.t =
@@ -36857,7 +37132,7 @@ let soup_calendar_event_time_of_yojson :
           end_date = Json.required fields "endDate" Json.string;
           start_date = Json.required fields "startDate" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "soup_calendar_event_time" json (Unknown json)
 
 and yojson_of_soup_calendar_event_time :
     soup_calendar_event_time -> Yojson.Safe.t =
@@ -37662,7 +37937,7 @@ let soup_item_of_yojson : Yojson.Safe.t -> soup_item =
         }
   | "harness" ->
       Harness { data = Json.required fields "data" soup_harness_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "soup_item" json (Unknown json)
 
 and yojson_of_soup_item : soup_item -> Yojson.Safe.t =
  fun value ->
@@ -37949,7 +38224,7 @@ let grouped_soup_page_of_yojson : Yojson.Safe.t -> grouped_soup_page =
   match Json.tag fields "mode" with
   | "initial" -> Initial (grouped_soup_initial_page_of_yojson json)
   | "group_page" -> Group_page (grouped_soup_group_page_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "grouped_soup_page" json (Unknown json)
 
 and yojson_of_grouped_soup_page : grouped_soup_page -> Yojson.Safe.t =
  fun value ->
@@ -38138,7 +38413,7 @@ let thread_anchor_of_yojson : Yojson.Safe.t -> thread_anchor =
           x = Json.required fields "x" Json.float;
           y = Json.required fields "y" Json.float;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "thread_anchor" json (Unknown json)
 
 and yojson_of_thread_anchor : thread_anchor -> Yojson.Safe.t =
  fun value ->
@@ -38478,7 +38753,7 @@ let hash_map_value_of_yojson : Yojson.Safe.t -> hash_map_value =
   match Json.tag fields "type" with
   | "external" -> External (presigned_url_of_yojson json)
   | "internal" -> Internal (s3_object_info_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "hash_map_value" json (Unknown json)
 
 and yojson_of_hash_map_value : hash_map_value -> Yojson.Safe.t =
  fun value ->
@@ -38661,7 +38936,7 @@ let job_status_of_yojson : Yojson.Safe.t -> job_status =
   | "failed" -> Failed
   | "cancelling" -> Cancelling
   | "cancelled" -> Cancelled
-  | other -> Unknown other
+  | other -> Json.unknown "job_status" json (Unknown other)
 
 and yojson_of_job_status : job_status -> Yojson.Safe.t =
  fun value ->
@@ -38777,7 +39052,7 @@ let source_binding_of_yojson : Yojson.Safe.t -> source_binding =
   | "confirmed_unknown" -> Confirmed_unknown
   | "known" ->
       Known { source_id = Json.required fields "sourceId" source_id_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "source_binding" json (Unknown json)
 
 and yojson_of_source_binding : source_binding -> Yojson.Safe.t =
  fun value ->
@@ -39361,7 +39636,7 @@ let initiative_sort_of_yojson : Yojson.Safe.t -> initiative_sort =
   | "updated" -> Updated
   | "name" -> Name
   | "due" -> Due
-  | other -> Unknown other
+  | other -> Json.unknown "initiative_sort" json (Unknown other)
 
 and yojson_of_initiative_sort : initiative_sort -> Yojson.Safe.t =
  fun value ->
@@ -39452,7 +39727,7 @@ let on_other_call_of_yojson : Yojson.Safe.t -> on_other_call =
   match Json.string json with
   | "fail" -> Fail
   | "switch" -> Switch
-  | other -> Unknown other
+  | other -> Json.unknown "on_other_call" json (Unknown other)
 
 and yojson_of_on_other_call : on_other_call -> Yojson.Safe.t =
  fun value ->
@@ -39740,7 +40015,7 @@ let live_call_kind_of_yojson : Yojson.Safe.t -> live_call_kind =
   match Json.string json with
   | "channel" -> Channel
   | "standalone" -> Standalone
-  | other -> Unknown other
+  | other -> Json.unknown "live_call_kind" json (Unknown other)
 
 and yojson_of_live_call_kind : live_call_kind -> Yojson.Safe.t =
  fun value ->
@@ -39762,7 +40037,7 @@ let live_participant_kind_of_yojson : Yojson.Safe.t -> live_participant_kind =
   | "user" -> User
   | "guest" -> Guest
   | "bot" -> Bot
-  | other -> Unknown other
+  | other -> Json.unknown "live_participant_kind" json (Unknown other)
 
 and yojson_of_live_participant_kind : live_participant_kind -> Yojson.Safe.t =
  fun value ->
@@ -39789,7 +40064,7 @@ let live_track_source_of_yojson : Yojson.Safe.t -> live_track_source =
   | "screen_share" -> Screen_share
   | "screen_share_audio" -> Screen_share_audio
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other -> Json.unknown "live_track_source" json (Unknown other)
 
 and yojson_of_live_track_source : live_track_source -> Yojson.Safe.t =
  fun value ->
@@ -39987,17 +40262,16 @@ type nonrec location_response_data =
       (** The presigned url of the document if it is not a docx *)
   | Presigned_urls of presigned_url list
       (** The presigned urls of the docx bom parts if it is a docx *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let location_response_data_of_yojson : Yojson.Safe.t -> location_response_data =
  fun json ->
   match Json.external_case json with
-  | "presignedUrl", value ->
-      Presigned_url (Json.string (Json.payload "presignedUrl" value))
-  | "presignedUrls", value ->
-      Presigned_urls
-        ((Json.list presigned_url_of_yojson)
-           (Json.payload "presignedUrls" value))
-  | name, _ -> Json.fail "unknown case %S" name
+  | Some ("presignedUrl", Some value) -> Presigned_url (Json.string value)
+  | Some ("presignedUrls", Some value) ->
+      Presigned_urls ((Json.list presigned_url_of_yojson) value)
+  | _ -> Json.unknown "location_response_data" json (Unknown json)
 
 and yojson_of_location_response_data : location_response_data -> Yojson.Safe.t =
  fun value ->
@@ -40007,6 +40281,7 @@ and yojson_of_location_response_data : location_response_data -> Yojson.Safe.t =
   | Presigned_urls inner ->
       Json.external_value "presignedUrls"
         ((Json.of_list yojson_of_presigned_url) inner)
+  | Unknown json -> json
 
 (** Location response with content lifecycle metadata. *)
 type nonrec location_response_v3 =
@@ -40056,7 +40331,7 @@ let location_response_v3_of_yojson : Yojson.Safe.t -> location_response_v3 =
           content = Json.required fields "content" document_content_of_yojson;
           metadata = Json.required fields "metadata" document_basic_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "location_response_v3" json (Unknown json)
 
 and yojson_of_location_response_v3 : location_response_v3 -> Yojson.Safe.t =
  fun value ->
@@ -40434,7 +40709,8 @@ let post_message_notification_policy_of_yojson :
   | "Default" -> Default
   | "MentionsOnly" -> Mentions_only
   | "Silent" -> Silent
-  | other -> Unknown other
+  | other ->
+      Json.unknown "post_message_notification_policy" json (Unknown other)
 
 and yojson_of_post_message_notification_policy :
     post_message_notification_policy -> Yojson.Safe.t =
@@ -40457,7 +40733,8 @@ let patch_message_notification_policy_of_yojson :
   match Json.string json with
   | "Default" -> Default
   | "NotifyAsPostedMessage" -> Notify_as_posted_message
-  | other -> Unknown other
+  | other ->
+      Json.unknown "patch_message_notification_policy" json (Unknown other)
 
 and yojson_of_patch_message_notification_policy :
     patch_message_notification_policy -> Yojson.Safe.t =
@@ -40556,7 +40833,7 @@ let message_change_of_yojson : Yojson.Safe.t -> message_change =
           agent = Json.optional fields "agent" agent_typing_of_yojson;
           thread_id = Json.optional fields "thread_id" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "message_change" json (Unknown json)
 
 and yojson_of_message_change : message_change -> Yojson.Safe.t =
  fun value ->
@@ -40736,7 +41013,7 @@ let message_direction_of_yojson : Yojson.Safe.t -> message_direction =
   match Json.string json with
   | "older" -> Older
   | "newer" -> Newer
-  | other -> Unknown other
+  | other -> Json.unknown "message_direction" json (Unknown other)
 
 and yojson_of_message_direction : message_direction -> Yojson.Safe.t =
  fun value ->
@@ -41276,7 +41553,7 @@ let message_timeline_entry_of_yojson : Yojson.Safe.t -> message_timeline_entry =
           message = Json.required fields "message" message_list_item_of_yojson;
           status = Json.required fields "status" call_entry_status_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "message_timeline_entry" json (Unknown json)
 
 and yojson_of_message_timeline_entry : message_timeline_entry -> Yojson.Safe.t =
  fun value ->
@@ -41486,7 +41763,7 @@ let message_topic_event_of_yojson : Yojson.Safe.t -> message_topic_event =
             Json.required fields "metadata"
               message_attachment_removed_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "message_topic_event" json (Unknown json)
 
 and yojson_of_message_topic_event : message_topic_event -> Yojson.Safe.t =
  fun value ->
@@ -41618,7 +41895,7 @@ let my_response_of_yojson : Yojson.Safe.t -> my_response =
           response = Json.required fields "response" form_response_of_yojson;
         }
   | "anonymous" -> Anonymous
-  | _ -> Unknown json
+  | _ -> Json.unknown "my_response" json (Unknown json)
 
 and yojson_of_my_response : my_response -> Yojson.Safe.t =
  fun value ->
@@ -41716,7 +41993,7 @@ let new_thread_anchor_of_yojson : Yojson.Safe.t -> new_thread_anchor =
           x = Json.required fields "x" Json.float;
           y = Json.required fields "y" Json.float;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "new_thread_anchor" json (Unknown json)
 
 and yojson_of_new_thread_anchor : new_thread_anchor -> Yojson.Safe.t =
  fun value ->
@@ -41834,7 +42111,7 @@ let taken_id_of_yojson : Yojson.Safe.t -> taken_id =
   | "option" -> Option { id = Json.required fields "id" Json.string }
   | "view" -> View { id = Json.required fields "id" Json.string }
   | "row" -> Row { id = Json.required fields "id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "taken_id" json (Unknown json)
 
 and yojson_of_taken_id : taken_id -> Yojson.Safe.t =
  fun value ->
@@ -41979,7 +42256,7 @@ let soup_api_sort_of_yojson : Yojson.Safe.t -> soup_api_sort =
   | "notified_at" -> Notified_at
   | "property" -> Property
   | "name" -> Name
-  | other -> Unknown other
+  | other -> Json.unknown "soup_api_sort" json (Unknown other)
 
 and yojson_of_soup_api_sort : soup_api_sort -> Yojson.Safe.t =
  fun value ->
@@ -42062,7 +42339,7 @@ let password_action_of_yojson : Yojson.Safe.t -> password_action =
   | "totp_setup" -> Totp_setup
   | "totp_remove" -> Totp_remove
   | "totp_code" -> Totp_code
-  | other -> Unknown other
+  | other -> Json.unknown "password_action" json (Unknown other)
 
 and yojson_of_password_action : password_action -> Yojson.Safe.t =
  fun value ->
@@ -42174,7 +42451,7 @@ let password_error_code_of_yojson : Yojson.Safe.t -> password_error_code =
   | "vault_busy" -> Vault_busy
   | "folder_missing" -> Folder_missing
   | "vault_unavailable" -> Vault_unavailable
-  | other -> Unknown other
+  | other -> Json.unknown "password_error_code" json (Unknown other)
 
 and yojson_of_password_error_code : password_error_code -> Yojson.Safe.t =
  fun value ->
@@ -42276,7 +42553,7 @@ let password_grantee_kind_of_yojson : Yojson.Safe.t -> password_grantee_kind =
   match Json.string json with
   | "user" -> User
   | "team" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "password_grantee_kind" json (Unknown other)
 
 and yojson_of_password_grantee_kind : password_grantee_kind -> Yojson.Safe.t =
  fun value ->
@@ -42296,7 +42573,7 @@ let password_permission_of_yojson : Yojson.Safe.t -> password_permission =
   match Json.string json with
   | "view" -> View
   | "edit" -> Edit
-  | other -> Unknown other
+  | other -> Json.unknown "password_permission" json (Unknown other)
 
 and yojson_of_password_permission : password_permission -> Yojson.Safe.t =
  fun value ->
@@ -42354,7 +42631,7 @@ let password_item_kind_of_yojson : Yojson.Safe.t -> password_item_kind =
   | "identity" -> Identity
   | "api" -> Api
   | "verification_code" -> Verification_code
-  | other -> Unknown other
+  | other -> Json.unknown "password_item_kind" json (Unknown other)
 
 and yojson_of_password_item_kind : password_item_kind -> Yojson.Safe.t =
  fun value ->
@@ -43756,7 +44033,11 @@ type nonrec post_grouped_soup_ast_request_initial_mode =
 let post_grouped_soup_ast_request_initial_mode_of_yojson :
     Yojson.Safe.t -> post_grouped_soup_ast_request_initial_mode =
  fun json ->
-  match Json.string json with "initial" -> Initial | other -> Unknown other
+  match Json.string json with
+  | "initial" -> Initial
+  | other ->
+      Json.unknown "post_grouped_soup_ast_request_initial_mode" json
+        (Unknown other)
 
 and yojson_of_post_grouped_soup_ast_request_initial_mode :
     post_grouped_soup_ast_request_initial_mode -> Yojson.Safe.t =
@@ -43774,7 +44055,9 @@ let post_grouped_soup_ast_request_group_page_mode_of_yojson :
  fun json ->
   match Json.string json with
   | "group_page" -> Group_page
-  | other -> Unknown other
+  | other ->
+      Json.unknown "post_grouped_soup_ast_request_group_page_mode" json
+        (Unknown other)
 
 and yojson_of_post_grouped_soup_ast_request_group_page_mode :
     post_grouped_soup_ast_request_group_page_mode -> Yojson.Safe.t =
@@ -43983,7 +44266,7 @@ let post_grouped_soup_ast_request_of_yojson :
           sort_property_definition_id =
             Json.optional fields "sort_property_definition_id" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "post_grouped_soup_ast_request" json (Unknown json)
 
 and yojson_of_post_grouped_soup_ast_request :
     post_grouped_soup_ast_request -> Yojson.Safe.t =
@@ -44775,7 +45058,7 @@ let upload_document_status_of_yojson : Yojson.Safe.t -> upload_document_status =
   | "completed" -> Completed
   | "failed" -> Failed
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other -> Json.unknown "upload_document_status" json (Unknown other)
 
 and yojson_of_upload_document_status : upload_document_status -> Yojson.Safe.t =
  fun value ->
@@ -45443,7 +45726,7 @@ let sql_outcome_kind_of_yojson : Yojson.Safe.t -> sql_outcome_kind =
   | "select" -> Select
   | "entity" -> Entity
   | "row" -> Row
-  | other -> Unknown other
+  | other -> Json.unknown "sql_outcome_kind" json (Unknown other)
 
 and yojson_of_sql_outcome_kind : sql_outcome_kind -> Yojson.Safe.t =
  fun value ->
@@ -45530,7 +45813,7 @@ let sql_entity_kind_of_yojson : Yojson.Safe.t -> sql_entity_kind =
   | "CALENDAR_EVENT" -> Calendar_event
   | "INITIATIVE" -> Initiative
   | "DATABASE_ROW" -> Database_row
-  | other -> Unknown other
+  | other -> Json.unknown "sql_entity_kind" json (Unknown other)
 
 and yojson_of_sql_entity_kind : sql_entity_kind -> Yojson.Safe.t =
  fun value ->
@@ -45635,7 +45918,7 @@ let sql_cell_of_yojson : Yojson.Safe.t -> sql_cell =
   | "entities" ->
       Entities { value = Json.required fields "value" (Json.list Json.string) }
   | "row" -> Row { value = Json.required fields "value" row_id_of_yojson }
-  | _ -> Unknown json
+  | _ -> Json.unknown "sql_cell" json (Unknown json)
 
 and yojson_of_sql_cell : sql_cell -> Yojson.Safe.t =
  fun value ->
@@ -45762,7 +46045,7 @@ let ring_status_of_yojson : Yojson.Safe.t -> ring_status =
   | "answered" -> Answered
   | "declined" -> Declined
   | "ended" -> Ended
-  | other -> Unknown other
+  | other -> Json.unknown "ring_status" json (Unknown other)
 
 and yojson_of_ring_status : ring_status -> Yojson.Safe.t =
  fun value ->
@@ -45803,7 +46086,7 @@ let row_change_kind_of_yojson : Yojson.Safe.t -> row_change_kind =
   | "insert" -> Insert
   | "update" -> Update
   | "delete" -> Delete
-  | other -> Unknown other
+  | other -> Json.unknown "row_change_kind" json (Unknown other)
 
 and yojson_of_row_change_kind : row_change_kind -> Yojson.Safe.t =
  fun value ->
@@ -46526,7 +46809,7 @@ let share_entity_type_of_yojson : Yojson.Safe.t -> share_entity_type =
   | "agent_session" -> Agent_session
   | "external_chat" -> External_chat
   | "harness" -> Harness
-  | other -> Unknown other
+  | other -> Json.unknown "share_entity_type" json (Unknown other)
 
 and yojson_of_share_entity_type : share_entity_type -> Yojson.Safe.t =
  fun value ->
@@ -47191,7 +47474,7 @@ let spreadsheet_value_kind_of_yojson : Yojson.Safe.t -> spreadsheet_value_kind =
   | "text" -> Text
   | "boolean" -> Boolean
   | "error" -> Error_
-  | other -> Unknown other
+  | other -> Json.unknown "spreadsheet_value_kind" json (Unknown other)
 
 and yojson_of_spreadsheet_value_kind : spreadsheet_value_kind -> Yojson.Safe.t =
  fun value ->
@@ -47482,7 +47765,7 @@ let spreadsheet_response_of_yojson : Yojson.Safe.t -> spreadsheet_response =
               (Json.list spreadsheet_sheet_summary_of_yojson);
           warnings = Json.required fields "warnings" (Json.list Json.string);
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "spreadsheet_response" json (Unknown json)
 
 and yojson_of_spreadsheet_response : spreadsheet_response -> Yojson.Safe.t =
  fun value ->
@@ -47648,7 +47931,7 @@ let sql_statement_of_yojson : Yojson.Safe.t -> sql_statement =
           table_name = Json.required fields "tableName" Json.string;
           to_ = Json.required fields "to" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "sql_statement" json (Unknown json)
 
 and yojson_of_sql_statement : sql_statement -> Yojson.Safe.t =
  fun value ->
@@ -47976,7 +48259,8 @@ let stored_github_pull_request_status_of_yojson :
   | "open" -> Open
   | "closed" -> Closed
   | "merged" -> Merged
-  | other -> Unknown other
+  | other ->
+      Json.unknown "stored_github_pull_request_status" json (Unknown other)
 
 and yojson_of_stored_github_pull_request_status :
     stored_github_pull_request_status -> Yojson.Safe.t =
@@ -48216,7 +48500,7 @@ let submission_outcome_of_yojson : Yojson.Safe.t -> submission_outcome =
           message = Json.required fields "message" Json.string;
           section = Json.required fields "section" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "submission_outcome" json (Unknown json)
 
 and yojson_of_submission_outcome : submission_outcome -> Yojson.Safe.t =
  fun value ->
@@ -48729,7 +49013,7 @@ let team_calendar_content_of_yojson : Yojson.Safe.t -> team_calendar_content =
           details =
             Json.required fields "details" team_calendar_details_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "team_calendar_content" json (Unknown json)
 
 and yojson_of_team_calendar_content : team_calendar_content -> Yojson.Safe.t =
  fun value ->
@@ -48759,7 +49043,7 @@ let team_calendar_coverage_of_yojson : Yojson.Safe.t -> team_calendar_coverage =
   | "ready" -> Ready
   | "unavailable" -> Unavailable
   | "hidden" -> Hidden
-  | other -> Unknown other
+  | other -> Json.unknown "team_calendar_coverage" json (Unknown other)
 
 and yojson_of_team_calendar_coverage : team_calendar_coverage -> Yojson.Safe.t =
  fun value ->
@@ -48828,7 +49112,7 @@ let team_calendar_sharing_of_yojson : Yojson.Safe.t -> team_calendar_sharing =
   | "all" -> All
   | "busy_only" -> Busy_only
   | "none" -> None_
-  | other -> Unknown other
+  | other -> Json.unknown "team_calendar_sharing" json (Unknown other)
 
 and yojson_of_team_calendar_sharing : team_calendar_sharing -> Yojson.Safe.t =
  fun value ->
@@ -49278,7 +49562,7 @@ let undo_refusal_of_yojson : Yojson.Safe.t -> undo_refusal =
   | "column_written_since" -> Column_written_since
   | "changed_since" -> Changed_since
   | "already_back" -> Already_back
-  | other -> Unknown other
+  | other -> Json.unknown "undo_refusal" json (Unknown other)
 
 and yojson_of_undo_refusal : undo_refusal -> Yojson.Safe.t =
  fun value ->
@@ -49341,7 +49625,7 @@ let undo_outcome_of_yojson : Yojson.Safe.t -> undo_outcome =
           by = Json.optional fields "by" Json.string;
           reason = Json.required fields "reason" undo_refusal_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "undo_outcome" json (Unknown json)
 
 and yojson_of_undo_outcome : undo_outcome -> Yojson.Safe.t =
  fun value ->
@@ -49991,7 +50275,7 @@ let upload_folder_status_of_yojson : Yojson.Safe.t -> upload_folder_status =
   | "completed" -> Completed
   | "failed" -> Failed
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other -> Json.unknown "upload_folder_status" json (Unknown other)
 
 and yojson_of_upload_folder_status : upload_folder_status -> Yojson.Safe.t =
  fun value ->
@@ -50208,7 +50492,7 @@ let user_topic_event_of_yojson : Yojson.Safe.t -> user_topic_event =
             Json.required fields "metadata"
               user_picture_changed_metadata_of_yojson;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "user_topic_event" json (Unknown json)
 
 and yojson_of_user_topic_event : user_topic_event -> Yojson.Safe.t =
  fun value ->
@@ -50427,43 +50711,49 @@ type nonrec webhook_event =
 topic. *)
   | User_topic_event of user_topic_event
       (** User profile events from the [macro.users] topic. *)
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let webhook_event_of_yojson : Yojson.Safe.t -> webhook_event =
  fun json ->
-  Json.first_ok
-    [
-      (fun json ->
-        Document_topic_event
-          (match document_topic_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-      (fun json ->
-        Channel_topic_event
-          (match channel_topic_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-      (fun json ->
-        Call_notification_event
-          (match call_notification_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-      (fun json ->
-        Message_topic_event
-          (match message_topic_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-      (fun json ->
-        Agent_session_lifecycle_event
-          (match agent_session_lifecycle_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-      (fun json ->
-        User_topic_event
-          (match user_topic_event_of_yojson json with
-          | Unknown _ -> Json.fail "unknown value"
-          | known -> known));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json ->
+          Document_topic_event
+            (match document_topic_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+        (fun json ->
+          Channel_topic_event
+            (match channel_topic_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+        (fun json ->
+          Call_notification_event
+            (match call_notification_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+        (fun json ->
+          Message_topic_event
+            (match message_topic_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+        (fun json ->
+          Agent_session_lifecycle_event
+            (match agent_session_lifecycle_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+        (fun json ->
+          User_topic_event
+            (match user_topic_event_of_yojson json with
+            | Unknown _ -> Json.fail "unknown value"
+            | known -> known));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "webhook_event" json (Unknown json)
 
 and yojson_of_webhook_event : webhook_event -> Yojson.Safe.t =
  fun value ->
@@ -50475,6 +50765,7 @@ and yojson_of_webhook_event : webhook_event -> Yojson.Safe.t =
   | Agent_session_lifecycle_event inner ->
       yojson_of_agent_session_lifecycle_event inner
   | User_topic_event inner -> yojson_of_user_topic_event inner
+  | Unknown json -> json
 
 type nonrec webhook_filter = {
   events : string list;  (** Event names matched by this filter. *)
@@ -50551,7 +50842,7 @@ let whats_app_account_state_of_yojson : Yojson.Safe.t -> whats_app_account_state
   | "connected" -> Connected
   | "logged_out" -> Logged_out
   | "disconnected" -> Disconnected
-  | other -> Unknown other
+  | other -> Json.unknown "whats_app_account_state" json (Unknown other)
 
 and yojson_of_whats_app_account_state : whats_app_account_state -> Yojson.Safe.t
     =
@@ -50634,7 +50925,7 @@ let whats_app_cannot_add_of_yojson : Yojson.Safe.t -> whats_app_cannot_add =
   | "community" -> Community
   | "own_chat" -> Own_chat
   | "not_in_chat_list" -> Not_in_chat_list
-  | other -> Unknown other
+  | other -> Json.unknown "whats_app_cannot_add" json (Unknown other)
 
 and yojson_of_whats_app_cannot_add : whats_app_cannot_add -> Yojson.Safe.t =
  fun value ->
@@ -50853,7 +51144,7 @@ let whats_app_lookup_state_of_yojson : Yojson.Safe.t -> whats_app_lookup_state =
   | "found" -> Found
   | "not_on_whatsapp" -> Not_on_whatsapp
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "whats_app_lookup_state" json (Unknown other)
 
 and yojson_of_whats_app_lookup_state : whats_app_lookup_state -> Yojson.Safe.t =
  fun value ->
@@ -50940,7 +51231,7 @@ let whats_app_pairing_state_of_yojson : Yojson.Safe.t -> whats_app_pairing_state
   | "expired" -> Expired
   | "cancelled" -> Cancelled
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "whats_app_pairing_state" json (Unknown other)
 
 and yojson_of_whats_app_pairing_state : whats_app_pairing_state -> Yojson.Safe.t
     =
@@ -51149,7 +51440,7 @@ let word_document_operation_of_yojson : Yojson.Safe.t -> word_document_operation
           paragraph = Json.required fields "paragraph" Json.string;
           text = Json.required fields "text" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "word_document_operation" json (Unknown json)
 
 and yojson_of_word_document_operation : word_document_operation -> Yojson.Safe.t
     =
@@ -51682,7 +51973,7 @@ let list_favorites_entity_type_item_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other -> Json.unknown "list_favorites_entity_type_item" json (Unknown other)
 
 and yojson_of_list_favorites_entity_type_item :
     list_favorites_entity_type_item -> Yojson.Safe.t =
@@ -51773,7 +52064,8 @@ let remove_favorite_by_entity_entity_type_of_yojson :
   | "database_row" -> Database_row
   | "form" -> Form
   | "external_chat" -> External_chat
-  | other -> Unknown other
+  | other ->
+      Json.unknown "remove_favorite_by_entity_entity_type" json (Unknown other)
 
 and yojson_of_remove_favorite_by_entity_entity_type :
     remove_favorite_by_entity_entity_type -> Yojson.Safe.t =
@@ -60972,7 +61264,8 @@ let external_chat_remove ~(chat_id : string) () =
 (** [POST /external-chats/{chat_id}/attachments]
 
 Stage one attachment for a later media send in this chat. *)
-let external_chat_upload ~(chat_id : string) ~(file : string) () =
+let external_chat_upload ~(chat_id : string)
+    ~(file : Macro_sdk_runtime.Request.file) () =
   ({
      Request.service = "storage";
      operation = "external_chat_upload";
@@ -60997,9 +61290,9 @@ let external_chat_upload ~(chat_id : string) ~(file : string) () =
                  Some
                    {
                      Request.name = "file";
-                     filename = Some "file";
-                     content_type = None;
-                     data = file;
+                     filename = Some file.Request.filename;
+                     content_type = Some file.content_type;
+                     data = file.data;
                    };
                ]));
      decode_reply = Request.json external_chat_uploaded_attachment_of_yojson;

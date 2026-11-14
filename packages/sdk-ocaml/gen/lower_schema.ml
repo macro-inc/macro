@@ -108,8 +108,9 @@ and ty_of_union ctx ~at ~hint schema members =
     match others with
     | [] -> Spec.unsupported ~at "a union of only null"
     | [ only ] ->
-        let index = List.length (List.filter Spec.is_null_schema members) in
-        ty_of ctx ~at:(at / "oneOf" / string_of_int index) ~hint only
+        let key = if Spec.has "oneOf" schema then "oneOf" else "anyOf" in
+        let index = Option.get (List.find_index (fun m -> m == only) members) in
+        ty_of ctx ~at:(at / key / string_of_int index) ~hint only
     | _ ->
         let without_null =
           ("oneOf", `List others)
@@ -478,12 +479,27 @@ and discriminated ctx ~at ~name discriminator members =
           | Some (value, _) -> value
           | None -> Spec.ref_name ~at reference
         in
+        (* A plain object member becomes an inline record without the tag,
+           so callers never write it twice. *)
+        let target_at, resolved = target ctx ~at:member_at member in
+        let hint = name ^ "_" ^ tag_value in
+        let payload =
+          if
+            Spec.assoc "properties" resolved <> []
+            && Spec.list "allOf" resolved = []
+            && Spec.union_members resolved = None
+          then
+            match
+              fields_of ctx ~at:target_at ~parent:hint ~skip:[ tag ] resolved
+            with
+            | [] -> No_payload
+            | fields -> Fields fields
+          else Same_object (ty_of ctx ~at:member_at ~hint member)
+        in
         {
           tag_value;
           case_name = Naming.fresh names (Naming.constructor tag_value);
-          payload =
-            Same_object
-              (ty_of ctx ~at:member_at ~hint:(name ^ "_" ^ tag_value) member);
+          payload;
           case_doc = description member;
         })
       members

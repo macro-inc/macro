@@ -2542,7 +2542,11 @@ val preview_view_1_of_yojson : Yojson.Safe.t -> preview_view_1
 val yojson_of_preview_view_1 : preview_view_1 -> Yojson.Safe.t
 
 (** View type. Supported values include standard labels and a custom user label user:<label> *)
-type nonrec preview_view = Preview_view_1 of preview_view_1 | String of string
+type nonrec preview_view =
+  | Preview_view_1 of preview_view_1
+  | String of string
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val preview_view_of_yojson : Yojson.Safe.t -> preview_view
 val yojson_of_preview_view : preview_view -> Yojson.Safe.t

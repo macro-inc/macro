@@ -3122,6 +3122,8 @@ type nonrec search_goto_content =
   | Search_goto_email of search_goto_email
   | Search_goto_channel of search_goto_channel
   | Search_goto_call_record of search_goto_call_record
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 val search_goto_content_of_yojson : Yojson.Safe.t -> search_goto_content
 val yojson_of_search_goto_content : search_goto_content -> Yojson.Safe.t

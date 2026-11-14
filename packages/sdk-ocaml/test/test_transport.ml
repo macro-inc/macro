@@ -45,6 +45,10 @@ let handler log _conn request body =
   | "/base/profiles" ->
       Cohttp_eio.Server.respond_string ~headers:json_headers ~status:`Created
         ~body ()
+  | "/base/ping" ->
+      Cohttp_eio.Server.respond_string ~status:`No_content ~body:"" ()
+  | "/base/attach" ->
+      Cohttp_eio.Server.respond_string ~status:`OK ~body:"stored" ()
   | "/base/profiles/broken" ->
       Cohttp_eio.Server.respond_string ~status:`OK ~body:"not json" ()
   | _ ->
@@ -115,6 +119,53 @@ let () =
       check "content length"
         (Http.Header.get seen.headers "content-length"
         = Some (string_of_int (String.length seen.body)))
+  | [] -> ());
+
+  (* A POST without a body says so with a zero content length. *)
+  check "ping" (Macro_sdk_eio.call macro (ping ()) = Ok ());
+  (match !log with
+  | seen :: _ ->
+      check "empty POST content length"
+        (Http.Header.get seen.headers "content-length" = Some "0")
+  | [] -> ());
+
+  (* Multipart: the file part keeps its name and type on the wire. *)
+  (match
+     Macro_sdk_eio.call macro
+       (attach
+          ~file:
+            {
+              filename = "r\xc3\xa9sum\xc3\xa9.pdf";
+              content_type = "application/pdf";
+              data = "%PDF";
+            }
+          ~note:"hi" ())
+   with
+  | Ok "stored" -> ()
+  | _ -> check "multipart call" false);
+  (match !log with
+  | seen :: _ ->
+      let content_type =
+        Option.value (Http.Header.get seen.headers "content-type") ~default:""
+      in
+      let boundary =
+        String.sub content_type 30 (String.length content_type - 30)
+      in
+      check "multipart content type"
+        (String.starts_with ~prefix:"multipart/form-data; boundary="
+           content_type);
+      check "multipart body on the wire"
+        (seen.body
+        = "--" ^ boundary
+          ^ "\r\n\
+             Content-Disposition: form-data; name=\"file\"; \
+             filename=\"r\xc3\xa9sum\xc3\xa9.pdf\"\r\n\
+             Content-Type: application/pdf\r\n\
+             \r\n\
+             %PDF\r\n\
+             --" ^ boundary
+          ^ "\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhi\r\n--"
+          ^ boundary ^ "--\r\n")
   | [] -> ());
 
   (* A declared error body, an undeclared status, a bad 2xx body. *)

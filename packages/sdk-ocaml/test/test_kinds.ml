@@ -50,14 +50,16 @@ let () =
   decodes_to "external value" command_of_yojson yojson_of_command
     {|{"start":{"speed":3}}|}
     (Start { speed = 3 });
-  rejects "external unknown" command_of_yojson {|"rewind"|};
+  decodes_to "external unknown" command_of_yojson yojson_of_command {|"rewind"|}
+    (Unknown (json {|"rewind"|}));
 
   (* String or object, decided by the value's JSON type. *)
   decodes_to "untagged string" glow_of_yojson yojson_of_glow {|"neon"|}
     (String "neon");
   decodes_to "untagged object" glow_of_yojson yojson_of_glow {|{"size":2.0}|}
     (Glow_2 { size = Some 2.0 });
-  rejects "untagged neither" glow_of_yojson {|true|};
+  decodes_to "untagged unknown" glow_of_yojson yojson_of_glow {|true|}
+    (Unknown (`Bool true));
 
   (* Open enums keep values this version does not know. *)
   decodes_to "enum known" color_of_yojson yojson_of_color {|"green"|} Green;
@@ -107,7 +109,7 @@ let () =
   (* Discriminator mapping. *)
   decodes_to "discriminator" pet_of_yojson yojson_of_pet
     {|{"petType":"dog","barks":true}|}
-    (Dog { pet_type = "dog"; barks = true });
+    (Dog { barks = true });
 
   (* Requests: path encoding, repeated query keys, enums in queries, headers. *)
   let request =
@@ -138,9 +140,79 @@ let () =
       check "raw body"
         (content_type = "application/octet-stream" && data = "\x00\x01")
   | _ -> check "raw body kind" false);
-  (match (attach ~file:"PDF" ()).body with
-  | Some (Request.Multipart [ { name = "file"; data = "PDF"; _ } ]) -> ()
-  | _ -> check "multipart body" false);
+  (* Multipart: a file part carries the caller's filename (UTF-8 as is) and
+     content type; a text part has neither. Only the quote and CR/LF are
+     escaped in the header (RFC 7578). *)
+  let attachment =
+    attach
+      ~file:
+        {
+          filename = "r\xc3\xa9sum\xc3\xa9 \"final\".pdf";
+          content_type = "application/pdf";
+          data = "%PDF";
+        }
+      ~note:"line\r\nbreak" ()
+  in
+  (match attachment.body with
+  | Some (Request.Multipart [ file; note ]) ->
+      check "file part"
+        (file.name = "file"
+        && file.filename = Some "r\xc3\xa9sum\xc3\xa9 \"final\".pdf"
+        && file.content_type = Some "application/pdf"
+        && file.data = "%PDF");
+      check "text part" (note.filename = None && note.content_type = None)
+  | _ -> check "multipart parts" false);
+  (match attachment.body with
+  | Some body ->
+      let content_type, data = Request.encode_body ~boundary:"BOUNDARY" body in
+      check "multipart content type"
+        (content_type = "multipart/form-data; boundary=BOUNDARY");
+      check "multipart bytes"
+        (data
+       = "--BOUNDARY\r\n\
+          Content-Disposition: form-data; name=\"file\"; \
+          filename=\"r\xc3\xa9sum\xc3\xa9 %22final%22.pdf\"\r\n\
+          Content-Type: application/pdf\r\n\
+          \r\n\
+          %PDF\r\n\
+          --BOUNDARY\r\n\
+          Content-Disposition: form-data; name=\"note\"\r\n\
+          \r\n\
+          line\r\n\
+          break\r\n\
+          --BOUNDARY--\r\n")
+  | None -> check "multipart body" false);
+
+  (* The boundary is random per request and never occurs in the data. *)
+  let boundary_of request =
+    match request.Request.body with
+    | Some body ->
+        let content_type, _ = Request.encode_body body in
+        String.sub content_type 30 (String.length content_type - 30)
+    | None -> ""
+  in
+  let first = boundary_of attachment and second = boundary_of attachment in
+  check "random boundary" (first <> second && String.length first > 20);
+  let contains haystack needle =
+    let n = String.length needle in
+    let rec go i =
+      i + n <= String.length haystack
+      && (String.sub haystack i n = needle || go (i + 1))
+    in
+    go 0
+  in
+  let tricky =
+    attach
+      ~file:
+        {
+          filename = "x";
+          content_type = "text/plain";
+          data = "--" ^ first ^ "--";
+        }
+      ~note:first ()
+  in
+  check "boundary absent from data"
+    (not (contains ("--" ^ first ^ "--" ^ first) (boundary_of tricky)));
 
   (* Replies by status, typed errors per status, undeclared statuses. *)
   let tree = put_tree ~body:[] () in
@@ -169,6 +241,24 @@ let () =
   check "binary reply"
     (Request.interpret (download ~name:"f.pdf" ()) ~status:200 "%PDF"
     = Ok "%PDF");
+
+  (* Strict decoding turns every Unknown into an error. *)
+  Macro_sdk_runtime.Json.strict := true;
+  rejects "strict enum" color_of_yojson {|"blue"|};
+  rejects "strict tagged" shape_of_yojson {|{"kind":"hexagon"}|};
+  rejects "strict external" command_of_yojson {|"rewind"|};
+  rejects "strict untagged" glow_of_yojson {|true|};
+  Macro_sdk_runtime.Json.strict := false;
+
+  (* Integers beyond an OCaml int fail loudly, naming the field. *)
+  (match
+     tree_of_yojson (json {|{"value":99999999999999999999,"children":[]}|})
+   with
+  | _ -> check "huge int rejected" false
+  | exception Macro_sdk_runtime.Json.Decode_error message ->
+      check "huge int message"
+        (message
+       = "value: integer 99999999999999999999 does not fit in an OCaml int"));
 
   if !failures > 0 then exit 1;
   print_endline "kinds: all checks passed"

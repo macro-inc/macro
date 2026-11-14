@@ -19,7 +19,7 @@ let attendee_response_status_of_yojson :
   | "accepted" -> Accepted
   | "declined" -> Declined
   | "tentative" -> Tentative
-  | other -> Unknown other
+  | other -> Json.unknown "attendee_response_status" json (Unknown other)
 
 and yojson_of_attendee_response_status :
     attendee_response_status -> Yojson.Safe.t =
@@ -140,7 +140,7 @@ let booking_attendance_of_yojson : Yojson.Safe.t -> booking_attendance =
   | "attended" -> Attended
   | "guestNoShow" -> Guest_no_show
   | "hostNoShow" -> Host_no_show
-  | other -> Unknown other
+  | other -> Json.unknown "booking_attendance" json (Unknown other)
 
 and yojson_of_booking_attendance : booking_attendance -> Yojson.Safe.t =
  fun value ->
@@ -168,7 +168,7 @@ let booking_status_of_yojson : Yojson.Safe.t -> booking_status =
   | "cancelled" -> Cancelled
   | "processing" -> Processing
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "booking_status" json (Unknown other)
 
 and yojson_of_booking_status : booking_status -> Yojson.Safe.t =
  fun value ->
@@ -303,7 +303,7 @@ let booking_change_of_yojson : Yojson.Safe.t -> booking_change =
         }
   | "reschedule" ->
       Reschedule { starts_at = Json.required fields "startsAt" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "booking_change" json (Unknown json)
 
 and yojson_of_booking_change : booking_change -> Yojson.Safe.t =
  fun value ->
@@ -396,7 +396,7 @@ let scheduling_mode_of_yojson : Yojson.Safe.t -> scheduling_mode =
   | "individual" -> Individual
   | "collective" -> Collective
   | "roundRobin" -> Round_robin
-  | other -> Unknown other
+  | other -> Json.unknown "scheduling_mode" json (Unknown other)
 
 and yojson_of_scheduling_mode : scheduling_mode -> Yojson.Safe.t =
  fun value ->
@@ -1221,7 +1221,7 @@ let conference_provider_of_yojson : Yojson.Safe.t -> conference_provider =
   | "microsoft_teams" -> Microsoft_teams
   | "google_meet" -> Google_meet
   | "other" -> Other
-  | other -> Unknown other
+  | other -> Json.unknown "conference_provider" json (Unknown other)
 
 and yojson_of_conference_provider : conference_provider -> Yojson.Safe.t =
  fun value ->
@@ -1303,7 +1303,7 @@ let calendar_deletion_scope_param_of_yojson :
   | "all" -> All
   | "this_event" -> This_event
   | "this_and_following" -> This_and_following
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_deletion_scope_param" json (Unknown other)
 
 and yojson_of_calendar_deletion_scope_param :
     calendar_deletion_scope_param -> Yojson.Safe.t =
@@ -1335,7 +1335,7 @@ let event_type_of_yojson : Yojson.Safe.t -> event_type =
   | "working_location" -> Working_location
   | "birthday" -> Birthday
   | "from_gmail" -> From_gmail
-  | other -> Unknown other
+  | other -> Json.unknown "event_type" json (Unknown other)
 
 and yojson_of_event_type : event_type -> Yojson.Safe.t =
  fun value ->
@@ -1453,7 +1453,7 @@ let event_transparency_of_yojson : Yojson.Safe.t -> event_transparency =
   match Json.string json with
   | "opaque" -> Opaque
   | "transparent" -> Transparent
-  | other -> Unknown other
+  | other -> Json.unknown "event_transparency" json (Unknown other)
 
 and yojson_of_event_transparency : event_transparency -> Yojson.Safe.t =
  fun value ->
@@ -1477,7 +1477,7 @@ let event_visibility_of_yojson : Yojson.Safe.t -> event_visibility =
   | "public" -> Public
   | "private" -> Private
   | "confidential" -> Confidential
-  | other -> Unknown other
+  | other -> Json.unknown "event_visibility" json (Unknown other)
 
 and yojson_of_event_visibility : event_visibility -> Yojson.Safe.t =
  fun value ->
@@ -1579,7 +1579,7 @@ let event_status_of_yojson : Yojson.Safe.t -> event_status =
   | "confirmed" -> Confirmed
   | "tentative" -> Tentative
   | "cancelled" -> Cancelled
-  | other -> Unknown other
+  | other -> Json.unknown "event_status" json (Unknown other)
 
 and yojson_of_event_status : event_status -> Yojson.Safe.t =
  fun value ->
@@ -1626,7 +1626,7 @@ let event_time_of_yojson : Yojson.Safe.t -> event_time =
           end_date = Json.required fields "endDate" Json.string;
           start_date = Json.required fields "startDate" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "event_time" json (Unknown json)
 
 and yojson_of_event_time : event_time -> Yojson.Safe.t =
  fun value ->
@@ -1955,7 +1955,7 @@ let calendar_join_request_status_of_yojson :
   | "pending" -> Pending
   | "accepted" -> Accepted
   | "declined" -> Declined
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_join_request_status" json (Unknown other)
 
 and yojson_of_calendar_join_request_status :
     calendar_join_request_status -> Yojson.Safe.t =
@@ -2021,7 +2021,7 @@ let calendar_join_request_decision_of_yojson :
   match Json.string json with
   | "accept" -> Accept
   | "decline" -> Decline
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_join_request_decision" json (Unknown other)
 
 and yojson_of_calendar_join_request_decision :
     calendar_join_request_decision -> Yojson.Safe.t =
@@ -2081,7 +2081,7 @@ let calendar_mutation_error_code_of_yojson :
   | "macro_call_failed" -> Macro_call_failed
   | "copy_choice_required" -> Copy_choice_required
   | "confirmation_required" -> Confirmation_required
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_mutation_error_code" json (Unknown other)
 
 and yojson_of_calendar_mutation_error_code :
     calendar_mutation_error_code -> Yojson.Safe.t =
@@ -2150,7 +2150,7 @@ let calendar_provider_of_yojson : Yojson.Safe.t -> calendar_provider =
   match Json.string json with
   | "google" -> Google
   | "outlook" -> Outlook
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_provider" json (Unknown other)
 
 and yojson_of_calendar_provider : calendar_provider -> Yojson.Safe.t =
  fun value ->
@@ -2172,7 +2172,7 @@ let replacement_status_of_yojson : Yojson.Safe.t -> replacement_status =
   | "needs_confirmation" -> Needs_confirmation
   | "in_progress" -> In_progress
   | "complete" -> Complete
-  | other -> Unknown other
+  | other -> Json.unknown "replacement_status" json (Unknown other)
 
 and yojson_of_replacement_status : replacement_status -> Yojson.Safe.t =
  fun value ->
@@ -2277,7 +2277,7 @@ let calendar_rsvp_scope_param_of_yojson :
   match Json.string json with
   | "all" -> All
   | "this_event" -> This_event
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_rsvp_scope_param" json (Unknown other)
 
 and yojson_of_calendar_rsvp_scope_param :
     calendar_rsvp_scope_param -> Yojson.Safe.t =
@@ -2305,7 +2305,7 @@ let calendar_update_scope_param_of_yojson :
   match Json.string json with
   | "all" -> All
   | "this_event" -> This_event
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_update_scope_param" json (Unknown other)
 
 and yojson_of_calendar_update_scope_param :
     calendar_update_scope_param -> Yojson.Safe.t =
@@ -2331,7 +2331,7 @@ let conference_change_of_yojson : Yojson.Safe.t -> conference_change =
   | "microsoft_teams" -> Microsoft_teams
   | "google_meet" -> Google_meet
   | "none" -> None_
-  | other -> Unknown other
+  | other -> Json.unknown "conference_change" json (Unknown other)
 
 and yojson_of_conference_change : conference_change -> Yojson.Safe.t =
  fun value ->
@@ -2409,7 +2409,7 @@ let out_of_office_auto_decline_mode_of_yojson :
   | "decline_all_conflicting_invitations" -> Decline_all_conflicting_invitations
   | "decline_only_new_conflicting_invitations" ->
       Decline_only_new_conflicting_invitations
-  | other -> Unknown other
+  | other -> Json.unknown "out_of_office_auto_decline_mode" json (Unknown other)
 
 and yojson_of_out_of_office_auto_decline_mode :
     out_of_office_auto_decline_mode -> Yojson.Safe.t =
@@ -2936,7 +2936,7 @@ let refresh_calendar_event_of_yojson : Yojson.Safe.t -> refresh_calendar_event =
   | "join_request_answered" ->
       Join_request_answered
         { event_id = Json.required fields "event_id" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "refresh_calendar_event" json (Unknown json)
 
 and yojson_of_refresh_calendar_event : refresh_calendar_event -> Yojson.Safe.t =
  fun value ->
@@ -3076,7 +3076,7 @@ let team_calendar_sharing_of_yojson : Yojson.Safe.t -> team_calendar_sharing =
   | "all" -> All
   | "busy_only" -> Busy_only
   | "none" -> None_
-  | other -> Unknown other
+  | other -> Json.unknown "team_calendar_sharing" json (Unknown other)
 
 and yojson_of_team_calendar_sharing : team_calendar_sharing -> Yojson.Safe.t =
  fun value ->

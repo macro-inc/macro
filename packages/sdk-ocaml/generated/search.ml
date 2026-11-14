@@ -14,7 +14,7 @@ let agent_session_author_of_yojson : Yojson.Safe.t -> agent_session_author =
   match Json.string json with
   | "user" -> User
   | "agent" -> Agent
-  | other -> Unknown other
+  | other -> Json.unknown "agent_session_author" json (Unknown other)
 
 and yojson_of_agent_session_author : agent_session_author -> Yojson.Safe.t =
  fun value ->
@@ -311,7 +311,7 @@ let calendar_event_search_time_of_yojson :
           end_date = Json.required fields "endDate" Json.string;
           start_date = Json.required fields "startDate" Json.string;
         }
-  | _ -> Unknown json
+  | _ -> Json.unknown "calendar_event_search_time" json (Unknown json)
 
 and yojson_of_calendar_event_search_time :
     calendar_event_search_time -> Yojson.Safe.t =
@@ -419,7 +419,7 @@ let calendar_event_search_role_of_yojson :
   match Json.string json with
   | "organizer" -> Organizer
   | "guest" -> Guest
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_event_search_role" json (Unknown other)
 
 and yojson_of_calendar_event_search_role :
     calendar_event_search_role -> Yojson.Safe.t =
@@ -640,7 +640,7 @@ let data_type_of_yojson : Yojson.Safe.t -> data_type =
   | "TAG" -> Tag
   | "ENTITY" -> Entity
   | "LINK" -> Link
-  | other -> Unknown other
+  | other -> Json.unknown "data_type" json (Unknown other)
 
 and yojson_of_data_type : data_type -> Yojson.Safe.t =
  fun value ->
@@ -677,7 +677,7 @@ let property_owner_of_yojson : Yojson.Safe.t -> property_owner =
   | "database" ->
       Database { database_id = Json.required fields "database_id" Json.string }
   | "system" -> System
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_owner" json (Unknown json)
 
 and yojson_of_property_owner : property_owner -> Yojson.Safe.t =
  fun value ->
@@ -745,7 +745,7 @@ let entity_type_of_yojson : Yojson.Safe.t -> entity_type =
   | "TASK" -> Task
   | "THREAD" -> Thread
   | "USER" -> User
-  | other -> Unknown other
+  | other -> Json.unknown "entity_type" json (Unknown other)
 
 and yojson_of_entity_type : entity_type -> Yojson.Safe.t =
  fun value ->
@@ -978,7 +978,7 @@ let property_value_of_yojson : Yojson.Safe.t -> property_value =
         }
   | "Link" ->
       Link { value = Json.required fields "value" (Json.list Json.string) }
-  | _ -> Unknown json
+  | _ -> Json.unknown "property_value" json (Unknown json)
 
 and yojson_of_property_value : property_value -> Yojson.Safe.t =
  fun value ->
@@ -1174,7 +1174,7 @@ let calendar_event_search_scope_of_yojson :
   match Json.string json with
   | "own" -> Own
   | "shared_with_you" -> Shared_with_you
-  | other -> Unknown other
+  | other -> Json.unknown "calendar_event_search_scope" json (Unknown other)
 
 and yojson_of_calendar_event_search_scope :
     calendar_event_search_scope -> Yojson.Safe.t =
@@ -1198,7 +1198,7 @@ let call_status_of_yojson : Yojson.Safe.t -> call_status =
   | "ATTENDED" -> Attended
   | "MISSED" -> Missed
   | "UNATTENDED" -> Unattended
-  | other -> Unknown other
+  | other -> Json.unknown "call_status" json (Unknown other)
 
 and yojson_of_call_status : call_status -> Yojson.Safe.t =
  fun value ->
@@ -1498,7 +1498,7 @@ let notification_state_of_yojson : Yojson.Safe.t -> notification_state =
   | "unseen" -> Unseen
   | "seen" -> Seen
   | "done" -> Done
-  | other -> Unknown other
+  | other -> Json.unknown "notification_state" json (Unknown other)
 
 and yojson_of_notification_state : notification_state -> Yojson.Safe.t =
  fun value ->
@@ -1785,7 +1785,7 @@ let match_type_of_yojson : Yojson.Safe.t -> match_type =
   | "partial" -> Partial
   | "regexp" -> Regexp
   | "query" -> Query
-  | other -> Unknown other
+  | other -> Json.unknown "match_type" json (Unknown other)
 
 and yojson_of_match_type : match_type -> Yojson.Safe.t =
  fun value ->
@@ -1808,7 +1808,7 @@ let search_on_of_yojson : Yojson.Safe.t -> search_on =
   | "name" -> Name
   | "content" -> Content
   | "name_content" -> Name_content
-  | other -> Unknown other
+  | other -> Json.unknown "search_on" json (Unknown other)
 
 and yojson_of_search_on : search_on -> Yojson.Safe.t =
  fun value ->
@@ -1829,7 +1829,7 @@ let channel_sort_timestamp_of_yojson : Yojson.Safe.t -> channel_sort_timestamp =
   match Json.string json with
   | "message" -> Message
   | "thread" -> Thread
-  | other -> Unknown other
+  | other -> Json.unknown "channel_sort_timestamp" json (Unknown other)
 
 and yojson_of_channel_sort_timestamp : channel_sort_timestamp -> Yojson.Safe.t =
  fun value ->
@@ -2983,7 +2983,7 @@ let document_sub_type_of_yojson : Yojson.Safe.t -> document_sub_type =
   | "snippet" -> Snippet
   | "skill" -> Skill
   | "initiative_description" -> Initiative_description
-  | other -> Unknown other
+  | other -> Json.unknown "document_sub_type" json (Unknown other)
 
 and yojson_of_document_sub_type : document_sub_type -> Yojson.Safe.t =
  fun value ->
@@ -3188,7 +3188,7 @@ let shared_email_filter_of_yojson : Yojson.Safe.t -> shared_email_filter =
   | "exclude" -> Exclude
   | "include" -> Include
   | "only" -> Only
-  | other -> Unknown other
+  | other -> Json.unknown "shared_email_filter" json (Unknown other)
 
 and yojson_of_shared_email_filter : shared_email_filter -> Yojson.Safe.t =
  fun value ->
@@ -4097,7 +4097,7 @@ let tag_filter_mode_of_yojson : Yojson.Safe.t -> tag_filter_mode =
   match Json.string json with
   | "any" -> Any
   | "all" -> All
-  | other -> Unknown other
+  | other -> Json.unknown "tag_filter_mode" json (Unknown other)
 
 and yojson_of_tag_filter_mode : tag_filter_mode -> Yojson.Safe.t =
  fun value ->
@@ -5137,7 +5137,7 @@ let file_type_of_yojson : Yojson.Safe.t -> file_type =
   | "iso" -> Iso
   | "img" -> Img
   | "swf" -> Swf
-  | other -> Unknown other
+  | other -> Json.unknown "file_type" json (Unknown other)
 
 and yojson_of_file_type : file_type -> Yojson.Safe.t =
  fun value ->
@@ -6067,21 +6067,27 @@ type nonrec search_goto_content =
   | Search_goto_email of search_goto_email
   | Search_goto_channel of search_goto_channel
   | Search_goto_call_record of search_goto_call_record
+  | Unknown of Yojson.Safe.t
+      (** A case this SDK version does not know, as received. *)
 
 let search_goto_content_of_yojson : Yojson.Safe.t -> search_goto_content =
  fun json ->
-  Json.first_ok
-    [
-      (fun json ->
-        Search_goto_agent_session (search_goto_agent_session_of_yojson json));
-      (fun json -> Search_goto_document (search_goto_document_of_yojson json));
-      (fun json -> Search_goto_chat (search_goto_chat_of_yojson json));
-      (fun json -> Search_goto_email (search_goto_email_of_yojson json));
-      (fun json -> Search_goto_channel (search_goto_channel_of_yojson json));
-      (fun json ->
-        Search_goto_call_record (search_goto_call_record_of_yojson json));
-    ]
-    json
+  match
+    Json.first_ok
+      [
+        (fun json ->
+          Search_goto_agent_session (search_goto_agent_session_of_yojson json));
+        (fun json -> Search_goto_document (search_goto_document_of_yojson json));
+        (fun json -> Search_goto_chat (search_goto_chat_of_yojson json));
+        (fun json -> Search_goto_email (search_goto_email_of_yojson json));
+        (fun json -> Search_goto_channel (search_goto_channel_of_yojson json));
+        (fun json ->
+          Search_goto_call_record (search_goto_call_record_of_yojson json));
+      ]
+      json
+  with
+  | Some value -> value
+  | None -> Json.unknown "search_goto_content" json (Unknown json)
 
 and yojson_of_search_goto_content : search_goto_content -> Yojson.Safe.t =
  fun value ->
@@ -6092,6 +6098,7 @@ and yojson_of_search_goto_content : search_goto_content -> Yojson.Safe.t =
   | Search_goto_email inner -> yojson_of_search_goto_email inner
   | Search_goto_channel inner -> yojson_of_search_goto_channel inner
   | Search_goto_call_record inner -> yojson_of_search_goto_call_record inner
+  | Unknown json -> json
 
 type nonrec search_response = {
   results : project_search_response_item_with_metadata list;
@@ -7111,7 +7118,10 @@ let simple_unified_search_response_base_item_human_readable_timestamp_of_yojson
       Calendar_event
         (simple_calendar_event_search_response_base_item_human_readable_timestamp_of_yojson
            json)
-  | _ -> Unknown json
+  | _ ->
+      Json.unknown
+        "simple_unified_search_response_base_item_human_readable_timestamp" json
+        (Unknown json)
 
 and yojson_of_simple_unified_search_response_base_item_human_readable_timestamp
     :
@@ -7230,7 +7240,9 @@ let simple_unified_search_response_base_item_of_yojson :
       Calendar_event
         (simple_calendar_event_search_response_base_item_human_readable_timestamp_of_yojson
            json)
-  | _ -> Unknown json
+  | _ ->
+      Json.unknown "simple_unified_search_response_base_item" json
+        (Unknown json)
 
 and yojson_of_simple_unified_search_response_base_item :
     simple_unified_search_response_base_item -> Yojson.Safe.t =
@@ -7277,7 +7289,7 @@ let term_matching_of_yojson : Yojson.Safe.t -> term_matching =
   match Json.string json with
   | "all" -> All
   | "dynamic" -> Dynamic
-  | other -> Unknown other
+  | other -> Json.unknown "term_matching" json (Unknown other)
 
 and yojson_of_term_matching : term_matching -> Yojson.Safe.t =
  fun value ->
@@ -7594,7 +7606,7 @@ let unified_search_response_item_of_yojson :
         }
   | "agentSession" ->
       Agent_session (agent_session_search_response_item_of_yojson json)
-  | _ -> Unknown json
+  | _ -> Json.unknown "unified_search_response_item" json (Unknown json)
 
 and yojson_of_unified_search_response_item :
     unified_search_response_item -> Yojson.Safe.t =
@@ -7894,7 +7906,11 @@ type nonrec unified_search_response_item_document_type =
 let unified_search_response_item_document_type_of_yojson :
     Yojson.Safe.t -> unified_search_response_item_document_type =
  fun json ->
-  match Json.string json with "document" -> Document | other -> Unknown other
+  match Json.string json with
+  | "document" -> Document
+  | other ->
+      Json.unknown "unified_search_response_item_document_type" json
+        (Unknown other)
 
 and yojson_of_unified_search_response_item_document_type :
     unified_search_response_item_document_type -> Yojson.Safe.t =
@@ -7910,7 +7926,10 @@ type nonrec unified_search_response_item_chat_type =
 let unified_search_response_item_chat_type_of_yojson :
     Yojson.Safe.t -> unified_search_response_item_chat_type =
  fun json ->
-  match Json.string json with "chat" -> Chat | other -> Unknown other
+  match Json.string json with
+  | "chat" -> Chat
+  | other ->
+      Json.unknown "unified_search_response_item_chat_type" json (Unknown other)
 
 and yojson_of_unified_search_response_item_chat_type :
     unified_search_response_item_chat_type -> Yojson.Safe.t =
@@ -7924,7 +7943,11 @@ type nonrec unified_search_response_item_email_type =
 let unified_search_response_item_email_type_of_yojson :
     Yojson.Safe.t -> unified_search_response_item_email_type =
  fun json ->
-  match Json.string json with "email" -> Email | other -> Unknown other
+  match Json.string json with
+  | "email" -> Email
+  | other ->
+      Json.unknown "unified_search_response_item_email_type" json
+        (Unknown other)
 
 and yojson_of_unified_search_response_item_email_type :
     unified_search_response_item_email_type -> Yojson.Safe.t =
@@ -7938,7 +7961,11 @@ type nonrec unified_search_response_item_project_type =
 let unified_search_response_item_project_type_of_yojson :
     Yojson.Safe.t -> unified_search_response_item_project_type =
  fun json ->
-  match Json.string json with "project" -> Project | other -> Unknown other
+  match Json.string json with
+  | "project" -> Project
+  | other ->
+      Json.unknown "unified_search_response_item_project_type" json
+        (Unknown other)
 
 and yojson_of_unified_search_response_item_project_type :
     unified_search_response_item_project_type -> Yojson.Safe.t =
@@ -7954,7 +7981,10 @@ type nonrec unified_search_response_item_call_type =
 let unified_search_response_item_call_type_of_yojson :
     Yojson.Safe.t -> unified_search_response_item_call_type =
  fun json ->
-  match Json.string json with "call" -> Call | other -> Unknown other
+  match Json.string json with
+  | "call" -> Call
+  | other ->
+      Json.unknown "unified_search_response_item_call_type" json (Unknown other)
 
 and yojson_of_unified_search_response_item_call_type :
     unified_search_response_item_call_type -> Yojson.Safe.t =
@@ -7970,7 +8000,9 @@ let unified_search_response_item_calendar_event_type_of_yojson :
  fun json ->
   match Json.string json with
   | "calendarEvent" -> Calendar_event
-  | other -> Unknown other
+  | other ->
+      Json.unknown "unified_search_response_item_calendar_event_type" json
+        (Unknown other)
 
 and yojson_of_unified_search_response_item_calendar_event_type :
     unified_search_response_item_calendar_event_type -> Yojson.Safe.t =

@@ -94,7 +94,11 @@ type body =
     }
       (** [spread]: the body record's fields, passed as the operation's labelled arguments *)
   | Raw_body of { content_type : string; raw_required : bool }
-  | Multipart_body of { parts : field list; multipart_required : bool }
+  | Multipart_body of {
+      parts : field list;
+      binary : string list;  (** parts sent as files, by JSON name *)
+      multipart_required : bool;
+    }
 
 type operation = {
   operation_id : string;  (** as in the spec *)

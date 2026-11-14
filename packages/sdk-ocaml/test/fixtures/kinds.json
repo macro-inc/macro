@@ -58,9 +58,12 @@
     "/attach": {
       "post": {
         "operationId": "attach",
-        "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "format": "binary" } } } } } },
+        "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "type": "object", "required": ["file", "note"], "properties": { "file": { "type": "string", "format": "binary" }, "note": { "type": "string" } } } } } },
         "responses": { "200": { "description": "", "content": { "text/plain": { "schema": { "type": "string" } } } } }
       }
+    },
+    "/ping": {
+      "post": { "operationId": "ping", "responses": { "204": { "description": "" } } }
     },
     "/settings": {
       "post": {

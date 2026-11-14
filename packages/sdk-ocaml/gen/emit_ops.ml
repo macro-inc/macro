@@ -100,7 +100,16 @@ let path_expression ~at defs op =
 
 (* ---------- arguments ---------- *)
 
-type argument = { label : arg_label; arg_name : string; arg_ty : ty }
+(* [file]: a binary multipart part, passed as a [Request.file]. *)
+type argument = {
+  label : arg_label;
+  arg_name : string;
+  arg_ty : ty;
+  file : bool;
+}
+
+let file_type = [%type: Macro_sdk_runtime.Request.file]
+let argument_type a = if a.file then file_type else T.core_type a.arg_ty
 
 let arguments op =
   let of_param p =
@@ -109,14 +118,16 @@ let arguments op =
         (if p.param_required then Labelled p.param_ml else Optional p.param_ml);
       arg_name = p.param_ml;
       arg_ty = p.param_ty;
+      file = false;
     }
   in
-  let of_field (f : field) =
+  let of_field ?(binary = []) (f : field) =
     {
       label =
         (if field_is_option f then Optional f.ml_name else Labelled f.ml_name);
       arg_name = f.ml_name;
       arg_ty = f.ty;
+      file = List.mem f.json_name binary;
     }
   in
   let body_args =
@@ -129,6 +140,7 @@ let arguments op =
             label = (if body_required then Labelled "body" else Optional "body");
             arg_name = "body";
             arg_ty = body_ty;
+            file = false;
           };
         ]
     | Some (Raw_body { raw_required; _ }) ->
@@ -137,9 +149,11 @@ let arguments op =
             label = (if raw_required then Labelled "body" else Optional "body");
             arg_name = "body";
             arg_ty = Prim String;
+            file = false;
           };
         ]
-    | Some (Multipart_body { parts; _ }) -> List.map of_field parts
+    | Some (Multipart_body { parts; binary; _ }) ->
+        List.map (of_field ~binary) parts
   in
   let all = List.map of_param op.params @ body_args in
   let required =
@@ -299,16 +313,27 @@ let body_expression op =
       in
       if raw_required then [%expr Some [%e raw]]
       else [%expr Option.map (fun body -> [%e raw]) body]
-  | Some (Multipart_body { parts; _ }) ->
+  | Some (Multipart_body { parts; binary; _ }) ->
+      (* A file part carries the caller's filename and content type; a text
+         part has neither. *)
       let part (f : field) =
         let make value =
-          [%expr
-            {
-              Request.name = [%e estring f.json_name];
-              filename = Some [%e estring f.json_name];
-              content_type = None;
-              data = [%e value];
-            }]
+          if List.mem f.json_name binary then
+            [%expr
+              {
+                Request.name = [%e estring f.json_name];
+                filename = Some [%e value].Request.filename;
+                content_type = Some [%e value].content_type;
+                data = [%e value].data;
+              }]
+          else
+            [%expr
+              {
+                Request.name = [%e estring f.json_name];
+                filename = None;
+                content_type = None;
+                data = [%e value];
+              }]
         in
         if field_is_option f then
           [%expr
@@ -363,7 +388,7 @@ let structure_item ~service defs op =
         let pattern =
           match a.label with
           | Optional _ -> pvar a.arg_name
-          | _ -> B.ppat_constraint (pvar a.arg_name) (T.core_type a.arg_ty)
+          | _ -> B.ppat_constraint (pvar a.arg_name) (argument_type a)
         in
         fun_ a.label pattern acc)
       (arguments op)
@@ -376,7 +401,7 @@ let structure_item ~service defs op =
 let signature_item op =
   let ty =
     List.fold_right
-      (fun a acc -> B.ptyp_arrow a.label (T.core_type a.arg_ty) acc)
+      (fun a acc -> B.ptyp_arrow a.label (argument_type a) acc)
       (arguments op)
       [%type:
         unit -> [%t request_type ~reply:(reply_type op) ~error:(error_type op)]]

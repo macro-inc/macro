@@ -10,7 +10,10 @@ type nonrec ab_group =
 
 let ab_group_of_yojson : Yojson.Safe.t -> ab_group =
  fun json ->
-  match Json.string json with "A" -> A | "B" -> B | other -> Unknown other
+  match Json.string json with
+  | "A" -> A
+  | "B" -> B
+  | other -> Json.unknown "ab_group" json (Unknown other)
 
 and yojson_of_ab_group : ab_group -> Yojson.Safe.t =
  fun value ->
@@ -30,7 +33,7 @@ let agent_api_key_provider_of_yojson : Yojson.Safe.t -> agent_api_key_provider =
   match Json.string json with
   | "anthropic" -> Anthropic
   | "openai" -> Openai
-  | other -> Unknown other
+  | other -> Json.unknown "agent_api_key_provider" json (Unknown other)
 
 and yojson_of_agent_api_key_provider : agent_api_key_provider -> Yojson.Safe.t =
  fun value ->
@@ -308,7 +311,7 @@ let billing_interval_of_yojson : Yojson.Safe.t -> billing_interval =
   match Json.string json with
   | "month" -> Month
   | "year" -> Year
-  | other -> Unknown other
+  | other -> Json.unknown "billing_interval" json (Unknown other)
 
 and yojson_of_billing_interval : billing_interval -> Yojson.Safe.t =
  fun value ->
@@ -336,7 +339,7 @@ let billing_status_of_yojson : Yojson.Safe.t -> billing_status =
   | "ending" -> Ending
   | "ended" -> Ended
   | "comped" -> Comped
-  | other -> Unknown other
+  | other -> Json.unknown "billing_status" json (Unknown other)
 
 and yojson_of_billing_status : billing_status -> Yojson.Safe.t =
  fun value ->
@@ -362,7 +365,7 @@ let seat_plan_of_yojson : Yojson.Safe.t -> seat_plan =
   match Json.string json with
   | "premium" -> Premium
   | "max" -> Max
-  | other -> Unknown other
+  | other -> Json.unknown "seat_plan" json (Unknown other)
 
 and yojson_of_seat_plan : seat_plan -> Yojson.Safe.t =
  fun value ->
@@ -597,7 +600,7 @@ let codex_login_state_of_yojson : Yojson.Safe.t -> codex_login_state =
   | "connected" -> Connected
   | "expired" -> Expired
   | "failed" -> Failed
-  | other -> Unknown other
+  | other -> Json.unknown "codex_login_state" json (Unknown other)
 
 and yojson_of_codex_login_state : codex_login_state -> Yojson.Safe.t =
  fun value ->
@@ -682,7 +685,7 @@ let computer_size_of_yojson : Yojson.Safe.t -> computer_size =
   | "standard" -> Standard
   | "large" -> Large
   | "xl" -> Xl
-  | other -> Unknown other
+  | other -> Json.unknown "computer_size" json (Unknown other)
 
 and yojson_of_computer_size : computer_size -> Yojson.Safe.t =
  fun value ->
@@ -709,7 +712,7 @@ let setup_step_of_yojson : Yojson.Safe.t -> setup_step =
   | "booting" -> Booting
   | "connecting" -> Connecting
   | "ready" -> Ready
-  | other -> Unknown other
+  | other -> Json.unknown "setup_step" json (Unknown other)
 
 and yojson_of_setup_step : setup_step -> Yojson.Safe.t =
  fun value ->
@@ -781,7 +784,7 @@ let computer_status_kind_of_yojson : Yojson.Safe.t -> computer_status_kind =
   | "failed" -> Failed
   | "purchasing" -> Purchasing
   | "released" -> Released
-  | other -> Unknown other
+  | other -> Json.unknown "computer_status_kind" json (Unknown other)
 
 and yojson_of_computer_status_kind : computer_status_kind -> Yojson.Safe.t =
  fun value ->
@@ -1298,7 +1301,7 @@ let deny_reason_of_yojson : Yojson.Safe.t -> deny_reason =
   | "free_allowance_exhausted" -> Free_allowance_exhausted
   | "overage_limit_reached" -> Overage_limit_reached
   | "overage_payment_failed" -> Overage_payment_failed
-  | other -> Unknown other
+  | other -> Json.unknown "deny_reason" json (Unknown other)
 
 and yojson_of_deny_reason : deny_reason -> Yojson.Safe.t =
  fun value ->
@@ -1358,7 +1361,7 @@ let plan_tier_of_yojson : Yojson.Safe.t -> plan_tier =
   | "free" -> Free
   | "premium" -> Premium
   | "max" -> Max
-  | other -> Unknown other
+  | other -> Json.unknown "plan_tier" json (Unknown other)
 
 and yojson_of_plan_tier : plan_tier -> Yojson.Safe.t =
  fun value ->
@@ -1523,7 +1526,7 @@ let credit_purchase_status_of_yojson : Yojson.Safe.t -> credit_purchase_status =
   | "declined" -> Declined
   | "payment_method_required" -> Payment_method_required
   | "authentication_required" -> Authentication_required
-  | other -> Unknown other
+  | other -> Json.unknown "credit_purchase_status" json (Unknown other)
 
 and yojson_of_credit_purchase_status : credit_purchase_status -> Yojson.Safe.t =
  fun value ->
@@ -1586,7 +1589,7 @@ let system_status_of_yojson : Yojson.Safe.t -> system_status =
       Degraded { message = Json.required fields "message" Json.string }
   | "major_outage" ->
       Major_outage { message = Json.required fields "message" Json.string }
-  | _ -> Unknown json
+  | _ -> Json.unknown "system_status" json (Unknown json)
 
 and yojson_of_system_status : system_status -> Yojson.Safe.t =
  fun value ->
@@ -2100,7 +2103,8 @@ let github_pull_request_review_state_of_yojson :
   | "changes_requested" -> Changes_requested
   | "commented" -> Commented
   | "dismissed" -> Dismissed
-  | other -> Unknown other
+  | other ->
+      Json.unknown "github_pull_request_review_state" json (Unknown other)
 
 and yojson_of_github_pull_request_review_state :
     github_pull_request_review_state -> Yojson.Safe.t =
@@ -2168,7 +2172,7 @@ let github_pull_request_status_of_yojson :
   | "open" -> Open
   | "closed" -> Closed
   | "merged" -> Merged
-  | other -> Unknown other
+  | other -> Json.unknown "github_pull_request_status" json (Unknown other)
 
 and yojson_of_github_pull_request_status :
     github_pull_request_status -> Yojson.Safe.t =
@@ -2603,7 +2607,7 @@ let github_merge_method_of_yojson : Yojson.Safe.t -> github_merge_method =
   | "merge" -> Merge
   | "squash" -> Squash
   | "rebase" -> Rebase
-  | other -> Unknown other
+  | other -> Json.unknown "github_merge_method" json (Unknown other)
 
 and yojson_of_github_merge_method : github_merge_method -> Yojson.Safe.t =
  fun value ->
@@ -2627,7 +2631,8 @@ let github_pull_request_mergeability_of_yojson :
   | "mergeable" -> Mergeable
   | "conflicting" -> Conflicting
   | "unknown" -> Unknown_
-  | other -> Unknown other
+  | other ->
+      Json.unknown "github_pull_request_mergeability" json (Unknown other)
 
 and yojson_of_github_pull_request_mergeability :
     github_pull_request_mergeability -> Yojson.Safe.t =
@@ -2786,7 +2791,7 @@ let github_pull_request_state_of_yojson :
   match Json.string json with
   | "open" -> Open
   | "closed" -> Closed
-  | other -> Unknown other
+  | other -> Json.unknown "github_pull_request_state" json (Unknown other)
 
 and yojson_of_github_pull_request_state :
     github_pull_request_state -> Yojson.Safe.t =
@@ -2839,7 +2844,7 @@ let gtm_invite_link_status_of_yojson : Yojson.Safe.t -> gtm_invite_link_status =
   | "revoked" -> Revoked
   | "redeemed" -> Redeemed
   | "converted" -> Converted
-  | other -> Unknown other
+  | other -> Json.unknown "gtm_invite_link_status" json (Unknown other)
 
 and yojson_of_gtm_invite_link_status : gtm_invite_link_status -> Yojson.Safe.t =
  fun value ->
@@ -3239,7 +3244,7 @@ let language_of_yojson : Yojson.Safe.t -> language =
   | "id" -> Id
   | "vi" -> Vi
   | "th" -> Th
-  | other -> Unknown other
+  | other -> Json.unknown "language" json (Unknown other)
 
 and yojson_of_language : language -> Yojson.Safe.t =
  fun value ->
@@ -3278,7 +3283,7 @@ let link_share_of_yojson : Yojson.Safe.t -> link_share =
   match Json.string json with
   | "PUBLIC" -> Public
   | "TEAM" -> Team
-  | other -> Unknown other
+  | other -> Json.unknown "link_share" json (Unknown other)
 
 and yojson_of_link_share : link_share -> Yojson.Safe.t =
  fun value ->
@@ -3552,7 +3557,7 @@ let team_role_of_yojson : Yojson.Safe.t -> team_role =
   | "member" -> Member
   | "admin" -> Admin
   | "owner" -> Owner
-  | other -> Unknown other
+  | other -> Json.unknown "team_role" json (Unknown other)
 
 and yojson_of_team_role : team_role -> Yojson.Safe.t =
  fun value ->
@@ -4032,7 +4037,7 @@ let purchase_state_of_yojson : Yojson.Safe.t -> purchase_state =
   match Json.string json with
   | "ready" -> Ready
   | "confirming" -> Confirming
-  | other -> Unknown other
+  | other -> Json.unknown "purchase_state" json (Unknown other)
 
 and yojson_of_purchase_state : purchase_state -> Yojson.Safe.t =
  fun value ->
@@ -4644,7 +4649,7 @@ let subscription_billing_line_kind_of_yojson :
   | "human_seat" -> Human_seat
   | "computer" -> Computer
   | "other" -> Other
-  | other -> Unknown other
+  | other -> Json.unknown "subscription_billing_line_kind" json (Unknown other)
 
 and yojson_of_subscription_billing_line_kind :
     subscription_billing_line_kind -> Yojson.Safe.t =
@@ -4982,7 +4987,7 @@ let team_agent_status_of_yojson : Yojson.Safe.t -> team_agent_status =
   | "paused" -> Paused
   | "failed" -> Failed
   | "released" -> Released
-  | other -> Unknown other
+  | other -> Json.unknown "team_agent_status" json (Unknown other)
 
 and yojson_of_team_agent_status : team_agent_status -> Yojson.Safe.t =
  fun value ->
@@ -5266,7 +5271,7 @@ let team_plan_of_yojson : Yojson.Safe.t -> team_plan =
   | "seed" -> Seed
   | "series_a" -> Series_a
   | "growth" -> Growth
-  | other -> Unknown other
+  | other -> Json.unknown "team_plan" json (Unknown other)
 
 and yojson_of_team_plan : team_plan -> Yojson.Safe.t =
  fun value ->
@@ -5484,7 +5489,7 @@ let upstream_error_code_of_yojson : Yojson.Safe.t -> upstream_error_code =
   | "upstream_unavailable" -> Upstream_unavailable
   | "upstream_rate_limited" -> Upstream_rate_limited
   | "upstream_invalid_response" -> Upstream_invalid_response
-  | other -> Unknown other
+  | other -> Json.unknown "upstream_error_code" json (Unknown other)
 
 and yojson_of_upstream_error_code : upstream_error_code -> Yojson.Safe.t =
  fun value ->
