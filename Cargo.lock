@@ -5620,6 +5620,7 @@ dependencies = [
  "opentelemetry",
  "properties",
  "rdkafka",
+ "readonly_pool",
  "rootcause",
  "schemars 1.2.1",
  "serde",

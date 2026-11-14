@@ -96,6 +96,16 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         contact_ids: &[uuid::Uuid],
     ) -> impl Future<Output = Result<Vec<super::previews::CrmContactPreview>, CrmError>> + Send;
 
+    /// The items of `entity_types` whose Companies property names a company,
+    /// or whose Contacts property names a contact, of the activity scope that
+    /// [`Self::resolve_activity`] reads. Not authorized: each item reaches a
+    /// caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
+
     /// Idempotently ingest eligible stored mailbox history for a contact.
     /// The transaction rechecks current team membership, explicit consent for
     /// this exact primary mailbox, and both team and contributor exclusions.

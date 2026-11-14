@@ -282,6 +282,17 @@ impl CrmService for FakeCrmService {
         panic!("unexpected resolve_association call")
     }
 
+    async fn activity_property_edges(
+        &self,
+        _user_id: &str,
+        _access: Option<
+            &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        >,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        panic!("unexpected activity_property_edges call")
+    }
+
     async fn populate_contact(
         &self,
         _team_id: &Uuid,

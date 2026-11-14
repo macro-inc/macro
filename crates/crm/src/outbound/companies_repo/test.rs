@@ -6,6 +6,7 @@
 
 pub(crate) mod helpers;
 
+mod activity_property_edges;
 mod blocked_domains;
 mod contact_emails;
 mod contact_update;
