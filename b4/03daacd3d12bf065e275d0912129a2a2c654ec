@@ -1,0 +1,42 @@
+packages/sdk-ocaml/generator/generate.ts
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-61
+packages/sdk-ocaml/.gitignore
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-7
+packages/sdk-ocaml/dune-project
+  s_4353875c05718c::t_ef1ff3c1d1cfef 1-5
+packages/sdk-ocaml/lib/dune
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-13
+packages/sdk-ocaml/lib/macro_error.ml
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-4
+packages/sdk-ocaml/dune
+  s_4353875c05718c::t_ef1ff3c1d1cfef 1-2
+packages/sdk-ocaml/generator/tsconfig.json
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-15
+packages/sdk-ocaml/shell.nix
+  s_4353875c05718c::t_ef1ff3c1d1cfef 2
+  s_4353875c05718c::t_69e5fe0c14b2e3 1,3-17
+packages/sdk-ocaml/generator/bindings.test.ts
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-80
+packages/sdk-ocaml/lib/macro_json.ml
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-58
+packages/sdk-ocaml/generator/emit.ts
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-1585
+packages/sdk-ocaml/lib/macro_runtime.ml
+  s_4353875c05718c::t_69e5fe0c14b2e3 1-349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b403daacd3d12bf065e275d0912129a2a2c654ec",
+  "prompts": {},
+  "sessions": {
+    "s_4353875c05718c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5827e4a3-eda8-4875-a436-0e2536c4f87a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
