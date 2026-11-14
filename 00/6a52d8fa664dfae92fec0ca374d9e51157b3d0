@@ -1,0 +1,36 @@
+crates/agent_monitor/src/outbound/codex_rollouts.rs
+  s_a7d426ced409b1::t_ba21b1ece213eb 4-6,14,24,29,120-121,143-146,248-254,261-265
+crates/agent_monitor/fixtures/codex_prs/2030/01/02/rollout-2030-01-02T10-00-00-0ccccccc-1111-7222-8333-444444444444.jsonl
+  s_a7d426ced409b1::t_a2a4bb1faec30d 1-5
+crates/agent_monitor/src/outbound/claude_transcripts/test.rs
+  s_a7d426ced409b1::t_a7723e630ec479 280-320
+crates/agent_monitor/fixtures/claude_prs/proj-beta/s-pr.jsonl
+  s_a7d426ced409b1::t_a2a4bb1faec30d 1-9
+crates/agent_monitor/src/outbound/managers/test.rs
+  s_a7d426ced409b1::t_a7723e630ec479 24,47-78
+  s_a7d426ced409b1::t_780c79923d6032 79
+crates/agent_monitor/src/outbound/managers.rs
+  s_a7d426ced409b1::t_6a6ceef4a9a352 3-4,15,24,95,114,139-150
+  s_a7d426ced409b1::t_780c79923d6032 151-152
+crates/agent_monitor/src/outbound/claude_transcripts.rs
+  s_a7d426ced409b1::t_780c79923d6032 410,424
+  s_a7d426ced409b1::t_ba21b1ece213eb 9-12,17,27,44-52,140,165-190,310,346-352,369-406,408-409,411-412,415-423,425-428,430
+crates/agent_monitor/src/outbound/codex_rollouts/test.rs
+  s_a7d426ced409b1::t_a7723e630ec479 144-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "006a52d8fa664dfae92fec0ca374d9e51157b3d0",
+  "prompts": {},
+  "sessions": {
+    "s_a7d426ced409b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "399fe238-f278-46d4-acb2-93e5dbcc93ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
