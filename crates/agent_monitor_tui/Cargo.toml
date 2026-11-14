@@ -1,0 +1,14 @@
+[package]
+description = "The agent monitor's terminal viewer."
+edition = "2024"
+name = "agent_monitor_tui"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent_monitor = { path = "../agent_monitor" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[package.metadata.cargo-shear]
+# The viewer is not written yet; it will render `agent_monitor`'s model.
+ignored = ["agent_monitor"]

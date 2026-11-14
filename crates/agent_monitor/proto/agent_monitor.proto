@@ -1,0 +1,248 @@
+// The agent monitor's wire contract between the collector (in the macrod
+// daemon) and its viewers, over a user-only Unix socket.
+//
+// Debug with stock tools:
+//   grpcurl -unix -import-path crates/agent_monitor/proto -proto agent_monitor.proto \
+//     ~/.macrod/monitor.sock macro.agent_monitor.v1.AgentMonitor/Status
+syntax = "proto3";
+
+package macro.agent_monitor.v1;
+
+service AgentMonitor {
+  // A snapshot first, then deltas with rising `seq`. A subscriber that falls
+  // behind receives a fresh snapshot; drop any update whose `seq` is not above
+  // the latest snapshot's.
+  rpc Subscribe(SubscribeRequest) returns (stream Update);
+  // The last `tail` items of one agent's transcript, then every new item.
+  rpc FollowTranscript(TranscriptRequest) returns (stream TranscriptItem);
+  // The collector's version, protocol, uptime and source health.
+  rpc Status(StatusRequest) returns (DaemonStatus);
+}
+
+message SubscribeRequest {}
+
+message TranscriptRequest {
+  string agent_id = 1;
+  // How many past items to send before following. Zero means the server's default.
+  uint32 tail = 2;
+}
+
+message StatusRequest {}
+
+message DaemonStatus {
+  // Bumped on any incompatible change to this file.
+  uint32 protocol = 1;
+  string version = 2;
+  uint64 uptime_ms = 3;
+  repeated SourceHealth sources = 4;
+  uint32 subscribers = 5;
+}
+
+message Update {
+  uint64 seq = 1;
+  oneof kind {
+    Snapshot snapshot = 2;
+    // The whole agent row; replaces the row with the same id.
+    Agent upsert = 3;
+    // The id of an agent that is gone.
+    string removed = 4;
+    TapeEvent event = 5;
+    Totals totals = 6;
+    SourceHealth source = 7;
+    Heartbeat heartbeat = 8;
+  }
+}
+
+message Snapshot {
+  repeated Agent agents = 1;
+  // Oldest first.
+  repeated TapeEvent tape = 2;
+  Totals totals = 3;
+  repeated SourceHealth sources = 4;
+}
+
+message Heartbeat {
+  int64 at_ms = 1;
+}
+
+enum Source {
+  SOURCE_UNSPECIFIED = 0;
+  SOURCE_HC = 1;
+  SOURCE_CLAUDE = 2;
+  SOURCE_CODEX = 3;
+  SOURCE_MACROD = 4;
+  SOURCE_MANAGER = 5;
+  SOURCE_RUN_RECORD = 6;
+  SOURCE_DEMO = 7;
+}
+
+enum AgentKind {
+  AGENT_KIND_UNSPECIFIED = 0;
+  AGENT_KIND_MANAGER = 1;
+  AGENT_KIND_BUILDER = 2;
+  AGENT_KIND_EXPLORER = 3;
+  AGENT_KIND_PLANNER = 4;
+  AGENT_KIND_CHATTER = 5;
+  AGENT_KIND_REVIEWER = 6;
+  AGENT_KIND_SUBAGENT = 7;
+  AGENT_KIND_MACROD_SESSION = 8;
+  AGENT_KIND_WORK_RUN = 9;
+  AGENT_KIND_FACTORY = 10;
+  AGENT_KIND_SHELL = 11;
+  AGENT_KIND_OTHER = 12;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_WORKING = 1;
+  STATUS_WAITING = 2;
+  STATUS_BLOCKED = 3;
+  STATUS_IDLE = 4;
+  STATUS_DONE = 5;
+  STATUS_FAILED = 6;
+  STATUS_STOPPED = 7;
+}
+
+message Cost {
+  oneof value {
+    // Reported by the agent's own records.
+    double known_usd = 1;
+    // Summed usage times a price table.
+    double estimated_usd = 2;
+    // The model is missing from the price table.
+    Unpriced unpriced = 3;
+  }
+}
+
+message Unpriced {}
+
+message Tokens {
+  uint64 input = 1;
+  uint64 output = 2;
+  uint64 cache_read = 3;
+  uint64 cache_write = 4;
+}
+
+message Agent {
+  string id = 1;
+  repeated Source sources = 2;
+  AgentKind kind = 3;
+  string name = 4;
+  optional string task = 5;
+  Status status = 6;
+  optional string status_detail = 7;
+  optional string program = 8;
+  optional string model = 9;
+  optional string cwd = 10;
+  optional string branch = 11;
+  optional string space = 12;
+  repeated string tags = 13;
+  optional string parent = 14;
+  repeated string children = 15;
+  optional string terminal = 16;
+  optional string session = 17;
+  optional string transcript = 18;
+  optional uint32 pid = 19;
+  optional int64 started_ms = 20;
+  optional int64 ended_ms = 21;
+  optional int64 last_activity_ms = 22;
+  uint32 turns = 23;
+  uint32 tool_calls = 24;
+  uint32 tool_errors = 25;
+  optional string doing = 26;
+  Tokens tokens = 27;
+  Cost cost = 28;
+  uint32 failures = 29;
+  // Tool calls plus turns per minute over the last hour, oldest first; 60 values.
+  repeated uint32 activity = 30;
+}
+
+enum TapeKind {
+  TAPE_KIND_UNSPECIFIED = 0;
+  TAPE_KIND_SPAWNED = 1;
+  TAPE_KIND_STATUS = 2;
+  TAPE_KIND_TURN_START = 3;
+  TAPE_KIND_TURN_END = 4;
+  TAPE_KIND_TOOL_START = 5;
+  TAPE_KIND_TOOL_END = 6;
+  TAPE_KIND_TOOL_ERROR = 7;
+  TAPE_KIND_FAILURE = 8;
+  TAPE_KIND_FINISHED = 9;
+  TAPE_KIND_REMOVED = 10;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_NOTICE = 2;
+  SEVERITY_WARNING = 3;
+  SEVERITY_ERROR = 4;
+}
+
+message TapeEvent {
+  uint64 seq = 1;
+  int64 at_ms = 2;
+  string agent_id = 3;
+  TapeKind kind = 4;
+  string text = 5;
+  Severity severity = 6;
+}
+
+message Totals {
+  uint32 working = 1;
+  uint32 waiting = 2;
+  uint32 blocked = 3;
+  uint32 failed_24h = 4;
+  uint32 turns_24h = 5;
+  uint32 tools_24h = 6;
+  uint32 errors_24h = 7;
+  Cost cost_today = 8;
+  // 24 values, hour 0 to 23 of the collector's local day.
+  repeated float cost_by_hour = 9;
+  // 60 values, oldest minute first.
+  repeated uint32 tokens_per_min = 10;
+}
+
+enum SourceState {
+  SOURCE_STATE_UNSPECIFIED = 0;
+  SOURCE_STATE_STARTING = 1;
+  SOURCE_STATE_HEALTHY = 2;
+  SOURCE_STATE_UNHEALTHY = 3;
+  // Not available on this machine (for example, its program is not installed).
+  SOURCE_STATE_ABSENT = 4;
+}
+
+message SourceHealth {
+  Source source = 1;
+  SourceState state = 2;
+  optional string detail = 3;
+  uint32 items = 4;
+  optional int64 last_event_ms = 5;
+  // Startup indexing: `done` of `total` files read.
+  optional Progress indexing = 6;
+  uint32 restarts = 7;
+}
+
+message Progress {
+  uint32 done = 1;
+  uint32 total = 2;
+}
+
+enum TranscriptItemKind {
+  TRANSCRIPT_ITEM_KIND_UNSPECIFIED = 0;
+  TRANSCRIPT_ITEM_KIND_USER = 1;
+  TRANSCRIPT_ITEM_KIND_ASSISTANT = 2;
+  TRANSCRIPT_ITEM_KIND_TOOL_CALL = 3;
+  TRANSCRIPT_ITEM_KIND_TOOL_RESULT = 4;
+}
+
+message TranscriptItem {
+  int64 at_ms = 1;
+  TranscriptItemKind kind = 2;
+  // Message text, the tool call's arguments, or the tool result, clipped by the server.
+  string text = 3;
+  optional string tool_id = 4;
+  optional string tool_name = 5;
+  bool is_error = 6;
+  optional uint64 duration_ms = 7;
+}

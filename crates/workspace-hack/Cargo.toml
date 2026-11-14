@@ -34,6 +34,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
+axum-core = { version = "0.5", default-features = false, features = ["tracing"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
@@ -85,7 +86,7 @@ hmac-594e8ee84c453af0 = { package = "hmac", version = "0.13", default-features =
 hmac-5ef9efb8ec2df382 = { package = "hmac", version = "0.12", default-features = false, features = ["reset"] }
 hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
 hyper = { version = "1", features = ["full"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "server-auto", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
@@ -117,7 +118,8 @@ phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
 phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 phf_shared-a6292c17cd707f01 = { package = "phf_shared", version = "0.11" }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-prost = { version = "0.12", features = ["prost-derive"] }
+prost-582f2526e08bb6a0 = { package = "prost", version = "0.14" }
+prost-5ef9efb8ec2df382 = { package = "prost", version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
@@ -159,8 +161,9 @@ thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
-tokio-stream = { version = "0.1", features = ["fs"] }
+tokio-stream = { version = "0.1", features = ["fs", "net"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
+tonic = { version = "0.14" }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }
@@ -198,6 +201,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
+axum-core = { version = "0.5", default-features = false, features = ["tracing"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
@@ -252,7 +256,7 @@ hmac-594e8ee84c453af0 = { package = "hmac", version = "0.13", default-features =
 hmac-5ef9efb8ec2df382 = { package = "hmac", version = "0.12", default-features = false, features = ["reset"] }
 hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
 hyper = { version = "1", features = ["full"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "server-auto", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout-6f8ce4dd05d13bba = { package = "inout", version = "0.2", default-features = false, features = ["block-padding"] }
@@ -285,7 +289,10 @@ phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 phf_shared-a6292c17cd707f01 = { package = "phf_shared", version = "0.11" }
 prettyplease = { version = "0.2", default-features = false, features = ["verbatim"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-prost = { version = "0.12", features = ["prost-derive"] }
+prost-582f2526e08bb6a0 = { package = "prost", version = "0.14" }
+prost-5ef9efb8ec2df382 = { package = "prost", version = "0.12", features = ["prost-derive"] }
+prost-build = { version = "0.14", features = ["cleanup-markdown"] }
+prost-types = { version = "0.14" }
 quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
@@ -333,8 +340,9 @@ thiserror = { version = "2" }
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-std", "io-util", "macros", "net", "parking_lot", "process", "rt-multi-thread", "signal", "test-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "logging", "tls12"] }
-tokio-stream = { version = "0.1", features = ["fs"] }
+tokio-stream = { version = "0.1", features = ["fs", "net"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "io", "rt"] }
+tonic = { version = "0.14" }
 tower = { version = "0.5", default-features = false, features = ["balance", "buffer", "limit", "load-shed", "log"] }
 tower-http = { version = "0.6", features = ["compression-gzip", "cors", "fs", "limit", "request-id", "timeout", "trace", "util"] }
 tracing = { version = "0.1", features = ["log"] }

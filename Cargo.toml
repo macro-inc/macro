@@ -18,7 +18,7 @@ members = [
   "crates/suggestions_db_utils",
   "crates/suggestion_generation",
   "crates/activity",
-  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_monitor", "crates/agent_monitor_tui", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",
@@ -488,6 +488,9 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+tonic-prost-build = "0.14.6"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [

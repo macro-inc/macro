@@ -1365,6 +1365,15 @@
       "crates/web_search",
       "crates/workspace-hack"
     ],
+    "agent_monitor": [
+      "crates/agent_monitor",
+      "crates/workspace-hack"
+    ],
+    "agent_monitor_tui": [
+      "crates/agent_monitor",
+      "crates/agent_monitor_tui",
+      "crates/workspace-hack"
+    ],
     "agent_preview": [
       "crates/agent",
       "crates/agent_correlation",
