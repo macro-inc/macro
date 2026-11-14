@@ -398,9 +398,11 @@ across instances) debugging containers:
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
   `--traces jaeger|datadog`, or disable with `--traces off`. A running
-  collector is reused as-is and never recreated, so other stacks keep their
-  network attachments to it; to pick up a changed compose definition, run
-  `docker rm -f macro-lgtm-1` and start a stack again.
+  collector is reused as-is, so other stacks keep their network attachments to
+  it; to pick up a changed compose definition, run `docker rm -f macro-lgtm-1`
+  and start a stack again. It is recreated only to start or stop copying to the
+  hosted Grafana ([`services = true`](#your-stacks-telemetry-in-grafana-opt-in)),
+  and then gets the running stacks' attachments back.
 - **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
   protocol on http://localhost:9222, for agents driving the app (the
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
@@ -662,12 +664,16 @@ authentication_service and agent_harness_service; set them only to override.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
+`COMPUTERS_AGENT_IMAGE` (agent teammates' computers),
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
 Local orchestration supplies reserve `7` GB and oversell factor `3` for both
-fleets. The Docker image is `macro-box:latest`; for Incus set
-`COMPUTERS_INCUS_IMAGE` to the versioned alias imported on `runtime-dev-1`
-(`macro-box/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
-xtask fails when it is unset.
+fleets. The Docker images are `macro-box:latest` and `macro-box-agent:latest`
+(`run_local` builds and loads both: `.#macro-box-docker` and
+`.#macro-box-agent-docker`); for Incus set
+`COMPUTERS_INCUS_IMAGE` and `COMPUTERS_INCUS_AGENT_IMAGE` to the versioned
+aliases imported on `runtime-dev-1` (`macro-box/<version>` and
+`macro-box-agent/<version>`, see [`nix/macro-box/AGENTS.md`](../../nix/macro-box/AGENTS.md));
+xtask fails when either is unset.
 
 Docker additionally requires `COMPUTERS_DOCKER_NETWORK`,
 `COMPUTERS_DOCKER_ENROLLMENT_DIR`, and `COMPUTERS_DOCKER_MEMORY_GB` (`32` locally).
@@ -751,7 +757,8 @@ mappings. A recreate consumes the current deployment addresses and fresh credent
 ### Incus on runtime-dev-1
 
 ```bash
-COMPUTERS_INCUS_IMAGE=macro-box/<version> just run_local --instance computers --computers-incus
+COMPUTERS_INCUS_IMAGE=macro-box/<version> COMPUTERS_INCUS_AGENT_IMAGE=macro-box-agent/<version> \
+  just run_local --instance computers --computers-incus
 ```
 
 This path is currently unavailable: `runtime-dev-1` no longer joins a tailnet
@@ -836,7 +843,7 @@ moves, run `just seed-scenario apply` again to get links that match.
 Local service builds inherit `RUSTC_WRAPPER`, including an empty value to disable
 compiler caching.
 
-The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted into a shared runtime image together with `/nix/store`, which holds the loader and libraries they link. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
+The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted, together with `/nix/store` (which holds the loader and libraries they link), into a runtime image tagged by the Dockerfile and target-platform content hash. Generated compose files use that exact tag, so another worktree rebuilding a different runtime recipe cannot replace a running stack's image. The recipe includes git for agent workspace repositories. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
 
 A Nix garbage collection can delete libraries a running stack's binaries use; rebuild with `r` or `just stack update` if a service then fails to start.
 
@@ -985,7 +992,8 @@ enabled = false
 ```
 
 It is also off when `CI` is set (`MACRO_LOCAL_TELEMETRY=on` overrides that).
-Opted out, nothing is written or sent.
+Opted out, nothing is written or sent, and the next `--traces lgtm` bring-up
+stops sending [your stacks' telemetry](#your-stacks-telemetry-in-grafana-opt-in).
 
 **What is sent.** Each bring-up, `rebuild`, `restart-frontend`, `stop`, `r`/`f`
 hotkey, `stack up`, `stack update` and `build-services` sends one `run` line,
@@ -1002,7 +1010,9 @@ doesn't exist, the first run writes it (mode 0600) from your own `doppler login`
 reading only `LOCAL_TELEMETRY_TOKEN` from the `observability` project's `lcl`
 config. That value is never downloaded with the `local` project's secrets, so it
 never reaches a generated env file, a container or a child process's
-environment. If Doppler can't provide it (logged out, offline, no access), the run
+environment; with [`services = true`](#your-stacks-telemetry-in-grafana-opt-in)
+a copy goes to the forwarder container as a file. If Doppler can't provide it
+(logged out, offline, no access), the run
 carries on, records nothing, prints one hint once, and tries again after an hour.
 A provisioned token that the endpoint rejects is fetched again once. To edit a
 provisioned file, delete its `provisioned = true` line so it is never replaced.
@@ -1031,7 +1041,43 @@ dropped after a week.
 To try it without the hosted stack, run a throwaway Loki and point the file at
 it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
 
-## Local Kubernetes
+### Your stacks' telemetry in Grafana (opt-in)
 
-For the Nix-declared kind runtime, isolated namespaces and two HTTPS slots, see
-[local Kubernetes](local-kubernetes.md).
+To see your local stacks' own traces, logs and metrics in the hosted Grafana,
+next to dev's, add `services = true` to the same settings file. It applies to
+every stack on the machine, from every worktree and instance:
+
+```toml
+# ~/.config/macro/local-telemetry.toml   ($XDG_CONFIG_HOME/macro/ if set)
+services = true
+# machine = "build-box"  # the name it is sent under; default: the hostname up to its first dot
+```
+
+The file needs a token (provisioned or your own), and a provisioned file keeps
+both lines when its token is replaced. Checkouts older than this setting reject
+the file as having unknown keys and send no timings until they are rebased. The next bring-up with the default
+`--traces lgtm` starts a `grafana-forwarder` container (Grafana Alloy,
+`docker/grafana-forwarder/`) and recreates the lgtm collector so it copies
+everything it receives there; stacks that are already running are sent from then
+on, but carry their instance name only after their next bring-up. The summary
+links the `Macro run_local` dashboard filtered to your machine: its last row
+shows bring-ups, stacks, traces, error logs and logs by machine.
+
+**What is sent.** Everything your services send to the local collector, which
+includes request attributes, log messages and error text from your local data;
+the forwarder drops the collector's own telemetry and debug and trace logs. It
+keeps every trace with an error in its first 30 seconds and a tenth of the
+others, keeping each trace whole, and all other logs and metrics. Everything
+is tagged `host.name` = the machine name, `deployment.environment` = `local`
+(which keeps it off dev's dashboards and alerts) and, per stack,
+`macro.local.instance` (also a metric label); your run events gain
+`host_name`. A machine running about ten stacks sends under one request a
+second.
+
+**Turning it off.** Delete the line, set `services = false`, or turn local
+telemetry off (`MACRO_LOCAL_TELEMETRY=off`, `CI`): the next bring-up with
+`--traces lgtm` removes the forwarder, recreates the collector without the copy, and then removes the
+forwarder's copy of the token, which is kept mode 0600 in
+`~/.local/state/macro/local-telemetry/forwarder/` and mounted read-only. A
+settings file that can't be used (invalid, unreadable, or `services = true`
+without a token) leaves the forwarder as it is, with a warning.

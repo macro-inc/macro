@@ -53,7 +53,7 @@ export class DocumentNameTooLongError extends Error {
 
 const uploadWithPresignedUrl = async (params: {
   presignedUrl: string;
-  buffer: ArrayBuffer;
+  buffer: Blob;
   sha: string;
   type: MimeType;
   onProgress?: (sent: number | null) => void;
@@ -188,16 +188,16 @@ async function uploadWithProgress(
 
   let source: UploadSource;
   try {
-    source = await resolveUploadSource(file);
+    source = await resolveUploadSource(file, progress?.preparing);
   } catch (error) {
     return handleUploadError(error instanceof Error ? error : String(error));
   }
   const { sha } = source;
   const putFile = async (presignedUrl: string, type: MimeType) => {
-    if (source.kind === 'bytes') {
+    if (source.kind === 'file') {
       const sent = await uploadWithPresignedUrl({
         presignedUrl,
-        buffer: source.buffer,
+        buffer: source.file,
         sha,
         type,
         onProgress: progress?.sending,
@@ -363,12 +363,16 @@ async function uploadFolderZip(
   };
 }
 
-/** Request ids this tab is following to their end. */
+/**
+ * Request ids this tab has followed, so it shows each folder's end once even
+ * if another tab's write brings back a record it already settled.
+ */
 const followedFolderUploads = new Set<string>();
 
 /**
- * Follows the folders this account sent before the page loaded, showing each
- * as Processing until the server says how it ended.
+ * Follows the account's pending folders that this tab isn't following yet,
+ * sent before the page loaded or from another tab, showing each as
+ * Processing until the server says how it ended.
  */
 export function resumePendingFolderUploads(userId: string): Promise<void>[] {
   return readPendingFolderUploads(userId)
@@ -459,7 +463,6 @@ async function settleFolderUpload(
       })
       .exhaustive(() => undefined);
   } finally {
-    followedFolderUploads.delete(requestId);
     releaseReloadHold();
   }
 }

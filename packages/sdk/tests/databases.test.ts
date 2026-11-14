@@ -4,6 +4,8 @@ import type {
   DatabaseDetail,
   Table,
 } from '../generated/storage/types.gen';
+import { DatabaseTable } from '../src/entities/databases/table';
+import { DatabaseView } from '../src/entities/databases/view';
 import { Macro, MacroOpRefusedError } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -90,6 +92,46 @@ afterEach(() => {
 });
 
 describe('Database', () => {
+  test('links a table and a view, opening the database on them', () => {
+    const database = new Macro({
+      token: 'user-token',
+      hosts: { storage: host },
+      webAppUrl: 'https://app.example.test',
+    }).databases.byId(databaseId);
+    const table = DatabaseTable.byId(database, tableId);
+    const view = DatabaseView.byId(table, 'view-1');
+    expect(table.webUrl()).toBe(
+      `https://app.example.test/app/database/${databaseId}?tableId=${tableId}`,
+    );
+    expect(view.webUrl()).toBe(
+      `https://app.example.test/app/database/${databaseId}?tableId=${tableId}&viewId=view-1`,
+    );
+    expect(JSON.parse(JSON.stringify(view))).toEqual({
+      id: 'view-1',
+      tableId,
+      url: view.webUrl(),
+    });
+  });
+
+  test('creates a database with its first table named', async () => {
+    const writes: { url: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      writes.push({ url: request.url, body: await request.json() });
+      return Response.json(support.database, { status: 201 });
+    });
+    const database = await client().databases.create({
+      name: 'Support',
+      firstTable: 'Tickets',
+    });
+    expect(database.id).toBe(databaseId);
+    expect(writes).toEqual([
+      {
+        url: `${host}/databases`,
+        body: { name: 'Support', firstTable: 'Tickets' },
+      },
+    ]);
+  });
+
   test('renames a table by op with the previously read name and reloads the schema', async () => {
     let current = support;
     let reads = 0;

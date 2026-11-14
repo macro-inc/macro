@@ -8,9 +8,6 @@ import { t } from '@app/lib/i18n';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { debounce } from '@core/util/debounce';
-import { fireAndForget } from '@core/util/fireAndForget';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import { useCopyLink } from '@core/util/useCopyLink';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType as PropertyEntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui';
@@ -351,7 +348,6 @@ function AgentActivityItemRow(props: {
     ) : (
       <EntityIcon targetType={props.item.entityType} size="xs" />
     );
-  const copyLink = useCopyLink();
   const time = (occurredAt: string) => {
     props.now;
     return formatCompactRelativeTimestamp(occurredAt);
@@ -390,28 +386,7 @@ function AgentActivityItemRow(props: {
             }
           : undefined
       }
-      onCopyLink={
-        block()
-          ? () => {
-              const target = block();
-              if (!target) return;
-              props.onSeen();
-              fireCopy(copyLink, target, props.item.entityId);
-            }
-          : undefined
-      }
     />
-  );
-}
-
-function fireCopy(
-  copyLink: ReturnType<typeof useCopyLink>,
-  block: string,
-  id: string
-) {
-  fireAndForget(
-    copyLink(buildSimpleEntityUrl({ type: block, id })),
-    'agent-session-activity-copy-link'
   );
 }
 

@@ -449,6 +449,7 @@ CwIDAQAB
             agent_via: None,
             agent_via_kind: None,
             routine_id: None,
+            agent_scope: None,
             exp: now + 3600, // Token expires in 1 hour
             iss: issuer.to_string(),
             fusion_user_id: fusionauth_id.to_string(),

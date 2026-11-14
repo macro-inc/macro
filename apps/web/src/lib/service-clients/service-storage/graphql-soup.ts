@@ -117,6 +117,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
@@ -934,6 +935,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
+            isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
@@ -1600,6 +1602,34 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'agent_sign_in_expiry'>
     )
     .with(
+      { __typename: 'GraphqlComputerSetupMetadata' },
+      (metadata) =>
+        ({
+          tag: 'computer_setup',
+          content: {
+            computerId: metadata.computerSetupComputerId,
+            harnessId: metadata.computerSetupHarnessId ?? null,
+            computerName: metadata.computerSetupComputerName,
+            agent:
+              metadata.computerSetupAgentUserId &&
+              metadata.computerSetupAgentName
+                ? {
+                    userId: metadata.computerSetupAgentUserId,
+                    name: metadata.computerSetupAgentName,
+                  }
+                : null,
+            outcome: match(metadata.computerSetupOutcome)
+              .with('READY', () => ({ kind: 'ready' as const }))
+              .with('FAILED', () => ({
+                kind: 'failed' as const,
+                failureReason: metadata.computerSetupFailureReason ?? '',
+              }))
+              // An outcome this build doesn't know reads as finished setup.
+              .exhaustive(() => ({ kind: 'ready' as const })),
+          },
+        }) satisfies NotifEventMember<'computer_setup'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({
@@ -2211,6 +2241,13 @@ export function mapGraphqlSoupItem(
                     id: notification.id,
                     state: notificationStateFromGraphql(notification.state),
                     createdAt: notification.createdAt,
+                  }))
+                : undefined,
+            unreadMentions:
+              'unreadMentions' in entity
+                ? entity.unreadMentions.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
                   }))
                 : undefined,
           },

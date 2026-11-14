@@ -13,8 +13,9 @@ files, notification effects and the `/external-chats` routes, over the
 ## Start here
 
 - `src/domain/ports.rs`: `ChatProvider` (accounts, who can send, members,
-  names, communities, adopt/detach, the provider's send outbox) and the
-  repository, publisher, file store and rate limiter ports.
+  names, communities, pictures, adopt/detach, the provider's send outbox) and
+  the repository, publisher, file store (attachments and provider pictures,
+  `store_picture`) and rate limiter ports.
 - `src/domain/service.rs` + `service/timeline.rs`: the use cases. The
   `ReplyBlock` decision (`reply_block`) combines `SendAuthority`, the
   provider account and its `SendingFacts`.

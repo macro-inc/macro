@@ -412,6 +412,13 @@ impl IntoResponse for SetTeamMemberPlanError {
                 }),
             )
                 .into_response(),
+            SetTeamMemberPlanError::SeatIncluded => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "the member's seat is included and has no paid plan".into(),
+                }),
+            )
+                .into_response(),
             SetTeamMemberPlanError::TeamError(e) => e.into_response(),
             SetTeamMemberPlanError::CustomerError(_)
             | SetTeamMemberPlanError::RolesError(_)
@@ -445,6 +452,12 @@ impl IntoResponse for RemoveUserFromTeamError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "user not in team".into(),
+                }),
+            ),
+            RemoveUserFromTeamError::AgentTeammate => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "this member is an agent teammate: remove it from the team's agents (DELETE /team_agents/{id})".into(),
                 }),
             ),
             RemoveUserFromTeamError::CustomerError(_) => (

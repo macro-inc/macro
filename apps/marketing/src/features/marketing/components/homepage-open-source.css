@@ -5,16 +5,15 @@
 .homepage-embedded-content iframe { position: absolute; inset: 0; display: block; width: calc(100% / var(--demo-scale)); height: calc(100% / var(--demo-scale)); transform: scale(var(--demo-scale)); transform-origin: top left; border: 0; background: #0f0f0f; }
 .homepage-embedded-loading { position: absolute; inset: 0; display: grid; place-items: center; font-size: 14px; }
 .homepage-embedded-demo a:focus-visible { outline: 2px solid #eee; outline-offset: 6px; border-radius: 3px; }
-.homepage-sidebar-connection { position: relative; isolation: isolate; padding-top: clamp(140px, 26svh, 260px); }
+.homepage-sidebar-connection { position: relative; isolation: isolate; padding-top: 0; }
 .homepage-sidebar-connection-line { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.homepage-sidebar-connection-line path { stroke: rgb(255 255 255 / 42%); stroke-width: 1; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.homepage-sidebar-connection-line path { stroke: color-mix(in srgb, var(--color-ink) 16%, transparent); stroke-width: .5; stroke-dasharray: 1; stroke-dashoffset: 1; }
 .homepage-sidebar-connection .homepage-sidebar-section { padding-top: 0; }
 @media (max-width: 767px) {
   .homepage-embedded-demo { width: calc(100vw - 24px); padding-top: 136px; }
   .homepage-embedded-wallpaper { padding: 28px 12px; border-radius: 8px; }
   .homepage-embedded-window { height: 590px; border-radius: 9px; }
   .homepage-embedded-content { --demo-scale: 1; }
-  .homepage-sidebar-connection { padding-top: 180px; }
 }
 
 .homepage-embedded-wallpaper::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; opacity: .45; mix-blend-mode: soft-light; background: url('../../../assets/desktop/gradient-grain.svg') repeat; }
@@ -65,8 +64,12 @@ html[data-palette='cream'] .homepage-demo-slide-dot[aria-pressed=true] span { ba
 .homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-window { box-sizing: border-box; padding-bottom: 136px; }
 .homepage-embedded-demo:has(.homepage-demo-carousel[data-active-scene='Agents']) .homepage-embedded-stage::after { inset: calc(100% - 160px) 0 -1px; }
 
-/* Match HomepageOpenSource's viewport gate before hydration. The server sends
-   desktop markup; phones must never paint it before the mobile branch mounts. */
+/* Keep the standalone embedded workspace hidden on narrow screens. */
 @media (max-width: 799px) {
   .homepage-embedded-demo { display: none; }
+}
+
+.homepage-sidebar-connection-endpoint { display: none; opacity: 0; fill: color-mix(in srgb, var(--color-ink) 25%, var(--color-surface)); }
+@media (max-width: 699px) {
+  .homepage-sidebar-connection-endpoint { display: block; }
 }

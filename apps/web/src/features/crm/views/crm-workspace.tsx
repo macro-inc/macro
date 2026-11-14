@@ -146,35 +146,6 @@ function NavigationToggle(props: {
   );
 }
 
-function CrmSearchBar() {
-  const view = useCrmWorkspace();
-  let input: HTMLInputElement | undefined;
-  useViewControlHotkeys({
-    scopeId: view.host.scopeId,
-    enabled: view.host.isActive,
-    search: {
-      description: 'Search companies',
-      run: () => {
-        input?.focus();
-        input?.select();
-        return true;
-      },
-    },
-  });
-  return (
-    <SearchBar
-      ref={(element) => (input = element)}
-      label="Search companies"
-      placeholder="Search companies"
-      value={view.searchText()}
-      onValueChange={view.setSearchText}
-      onEscape={view.host.focus}
-      hotkey="cmd+f"
-      class="max-w-md flex-1"
-    />
-  );
-}
-
 /** Contacts are not in the search index, so People searches the soup query. */
 function PeopleSearchBar(props: {
   value: string;
@@ -478,15 +449,6 @@ export function CrmWorkspaceView(props: {
   );
   const sidebar = (onCollapse?: () => void) => (
     <CrmSidebar
-      searchLabel={peopleActive() ? 'Search people' : 'Search companies'}
-      search={() => (
-        <Show when={peopleActive()} fallback={<CrmSearchBar />}>
-          <PeopleSearchBar
-            value={peopleSearch()}
-            onValueChange={searchPeople}
-          />
-        </Show>
-      )}
       promotion={
         <ConnectorImportSidebar
           category="crm"
@@ -773,10 +735,10 @@ export function CrmWorkspaceView(props: {
                 }
               >
                 <Show when={!peopleActive()}>
-                  <HeaderActionGroup label="Company filters">
+                  <HeaderActionGroup label="Company filters" size="md">
                     <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
                   </HeaderActionGroup>
-                  <HeaderActionGroup label="Company view options">
+                  <HeaderActionGroup label="Company view options" size="md">
                     <SoupViewContextSort grouped />
                     <SoupViewContextGroup grouped hideLabel variant="ghost" />
                     <CompanyDisplayMenu grouped />
