@@ -18,7 +18,11 @@ F-041	a row shows another subject
 F-042	the Mail badge never lights
 F-043	Try again on a failed list does nothing
 F-044	undo of Done does nothing
+F-045	saving a new view from the builder fails
+F-046	clicking a saved view opens nothing
+F-047	saving the edit of a saved view fails
 F-048	deleting a saved view does nothing
+F-049	dropping a saved view moves nothing
 F-052	a search hit opens the thread at its latest message
 F-053	a click on a row opens nothing
 F-054	Shift+click opens the thread in place, not in a new split
@@ -108,6 +112,9 @@ F-150	Clear signature clears nothing
 F-152	the replies-and-forwards signature switch saves nothing
 F-153	an invitation shows no event card
 F-157	turning the calendar off never asks the service
+F-159	a shared thread gets the controls of an own thread
+F-160	Grant access does nothing
+F-174	the refusal of a third inbox is not told
 F-177	Escape does not go back to the list
 F-178	Copy subject copies nothing
 F-179	a right-click on a row opens no menu
@@ -121,4 +128,5 @@ F-186	the watermark opens no upgrade prompt
 F-187	Copy ID copies nothing
 F-188	the thread offers no details panel
 F-189	Try again in the accounts settings does nothing
+F-191	a pasted thread link stays a plain link
 F-196	unblocking a sender does nothing

@@ -157,7 +157,7 @@ F-155	calendar	Open the event or join the meeting from the invitation	yes	yes	ye
 F-156	calendar	Add a forwarded invitation to the calendar	yes	yes	yes	provider
 F-157	calendar	Turn calendar access on or off for an inbox	yes	yes	yes	service
 F-158	sharing	Share a thread with people or channels and set their access	yes	yes	yes	service
-F-159	sharing	Open a thread shared by someone else	yes	yes	yes	service
+F-159	sharing	Open a thread shared by someone else	yes	yes	yes	ui
 F-160	sharing	Request and grant access to a thread	yes	yes	yes	service
 F-161	notifications	Notify about a new email (push, in-app, Mail badge)	yes	yes	yes	service
 F-162	notifications	Turn new-email notifications and the digest on or off	yes	yes	yes	service
