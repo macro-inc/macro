@@ -331,7 +331,7 @@ uniffi::custom_type!(TextProps,FfiTextProps,{remote,lower:|v|FfiTextProps{format
 pub struct FfiElementProps {
     /// Block alignment.
     pub format: ElementFormat,
-    /// Virtual indentation.
+    /// Raw element padding indentation; derive list nesting from child topology.
     pub indent: u32,
     /// Explicit direction.
     pub direction: Option<TextDirection>,

@@ -2827,7 +2827,7 @@ data class FfiElementProps (
     var `format`: ElementFormat
     , 
     /**
-     * Virtual indentation.
+     * Raw element padding indentation; derive list nesting from child topology.
      */
     var `indent`: kotlin.UInt
     , 

@@ -59,3 +59,5 @@ Read group-b.checklist-plan through the existing generation-checked application_
 Forward the shared group-b.table-facts JSON through application_query; preserve all-or-error generation/attached/type checks and never implement table-map placement or resize capture in the adapter.
 
 Convert the actual complete output before acknowledging checklist deliveries; retain pending receipts on conversion failure and request remount reset with counted same-facts rebind:true.
+
+ElementProps.indent carries raw padding, not list nesting; renderers that flatten lists derive ancestor-listitem depth from child topology without changing the FFI record shape.

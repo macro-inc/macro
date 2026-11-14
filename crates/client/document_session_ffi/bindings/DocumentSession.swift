@@ -2127,7 +2127,7 @@ public struct FfiElementProps: Equatable, Hashable {
      */
     public var format: ElementFormat
     /**
-     * Virtual indentation.
+     * Raw element padding indentation; derive list nesting from child topology.
      */
     public var indent: UInt32
     /**
@@ -2154,7 +2154,7 @@ public struct FfiElementProps: Equatable, Hashable {
          * Block alignment.
          */format: ElementFormat, 
         /**
-         * Virtual indentation.
+         * Raw element padding indentation; derive list nesting from child topology.
          */indent: UInt32, 
         /**
          * Explicit direction.
