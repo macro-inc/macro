@@ -12,6 +12,7 @@ async-stream = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }
 futures = { workspace = true }
+mesh_man = { path = "../mesh_man", optional = true }
 ratatui = { workspace = true }
 rootcause = { workspace = true }
 thiserror = { workspace = true }
@@ -22,6 +23,11 @@ tracing = { workspace = true }
 tui-input = { workspace = true }
 tui-tree-widget = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[features]
+default = ["mesh-man"]
+# Draw the BODY pane with the mesh man instead of the vitals panel.
+mesh-man = ["dep:mesh_man"]
 
 [dev-dependencies]
 clap = { workspace = true }

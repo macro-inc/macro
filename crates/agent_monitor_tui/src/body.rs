@@ -2,6 +2,9 @@
 //! swapped. The default is [`Vitals`]: a heartbeat trace and gauges of
 //! activity by channel and by source.
 
+#[cfg(feature = "mesh-man")]
+pub mod mesh;
+
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 

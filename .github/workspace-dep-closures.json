@@ -1372,6 +1372,7 @@
     "agent_monitor_tui": [
       "crates/agent_monitor",
       "crates/agent_monitor_tui",
+      "crates/mesh_man",
       "crates/workspace-hack"
     ],
     "agent_preview": [
@@ -12027,6 +12028,10 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/mention_utils",
+      "crates/workspace-hack"
+    ],
+    "mesh_man": [
+      "crates/mesh_man",
       "crates/workspace-hack"
     ],
     "messages": [
