@@ -550,6 +550,15 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             if let Some(state) = app_handle.try_state::<diagnostics::Diagnostics>() {
                 state.record_native_event(diagnostics::events::NativeEvent::Foreground);
             }
+            // Connections kept from before the app was suspended may have been
+            // dropped without notice; a request sent on one would hang.
+            if let Some(http) = app_handle.try_state::<tauri_plugin_http::Http>() {
+                http.reset_connections()
+                    .inspect_err(|error| {
+                        tracing::warn!(error=?error, "failed to reset http connections on resume")
+                    })
+                    .ok();
+            }
             let app = app_handle.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = retry_waiting_for_wifi(&app).await {
