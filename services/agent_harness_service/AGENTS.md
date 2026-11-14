@@ -213,8 +213,9 @@ Pulumi stacks; they do not host extra agent processes.
   sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
-  (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
-  in-process Macro agent on the person's Ask AI model, admitted and billed
+  (`POST /scheduled-actions/drafts`) in hidden sessions of the in-process
+  Macro agent on the person's Ask AI model, routed as background sessions
+  (`ReplyDelivery::Unseen`: code mode only, a short prompt), admitted and billed
   as their agent session usage; `scheduling.rs` composes the drafter, its
   `scheduled_action_draft` store, the check's code-mode invocation lookup
   (`CorrelationSessions`), what a session created from its agent activity
