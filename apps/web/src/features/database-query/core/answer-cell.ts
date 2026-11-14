@@ -1,3 +1,4 @@
+import { type PluralKey, t } from '@app/lib/i18n';
 import type { AnswerColumn, AnswerOption } from '@core/database-sql/answer';
 import type { Cell, EntityKind } from '@core/database-sql/generated/types';
 import { formatTime } from '@core/util/date';
@@ -36,8 +37,6 @@ export type ReferenceNames = (reference: {
 }) => string | undefined;
 
 export const unknownNames: ReferenceNames = () => undefined;
-
-const UNKNOWN_OPTION = 'Unknown option';
 
 /** A result value as the grid would show it, from the column it was read from. */
 export function resultCell(
@@ -79,7 +78,7 @@ export function resultCell(
               (id) =>
                 source?.options.find((option) => option.id === id) ?? {
                   id,
-                  label: UNKNOWN_OPTION,
+                  label: t('databaseAnswers.unknownOption'),
                   color: null,
                 }
             ),
@@ -151,7 +150,9 @@ export function resultCellText(
     .with({ kind: 'markdown' }, ({ markdown }) => markdownToPlainText(markdown))
     .with({ kind: 'link' }, ({ url }) => url)
     .with({ kind: 'number' }, ({ value }) => formatQueryValue(value))
-    .with({ kind: 'boolean' }, ({ checked }) => (checked ? 'True' : 'False'))
+    .with({ kind: 'boolean' }, ({ checked }) =>
+      checked ? t('databaseAnswers.true') : t('databaseAnswers.false')
+    )
     .with({ kind: 'date' }, ({ date, calendarDay }) =>
       formatResultDate(date, calendarDay)
     )
@@ -207,19 +208,20 @@ export function referenceList(
 }
 
 function referenceCount(type: DatabaseEntityType, count: number): string {
-  const [one, many] = match(type)
-    .with('USER', () => ['person', 'people'])
-    .with('DOCUMENT', () => ['document', 'documents'])
-    .with('TASK', () => ['task', 'tasks'])
-    .with('CHANNEL', () => ['channel', 'channels'])
-    .with('PROJECT', 'INITIATIVE', () => ['project', 'projects'])
-    .with('CHAT', () => ['chat', 'chats'])
-    .with('THREAD', () => ['email', 'emails'])
-    .with('COMPANY', () => ['company', 'companies'])
-    .with('CONTACT', () => ['contact', 'contacts'])
-    .with('CALL_RECORD', () => ['call', 'calls'])
-    .with('CALENDAR_EVENT', () => ['event', 'events'])
-    .with('DATABASE_ROW', () => ['linked record', 'linked records'])
-    .exhaustive(() => ['item', 'items']);
-  return `${count} ${count === 1 ? one : many}`;
+  const key = match(type)
+    .returnType<PluralKey>()
+    .with('USER', () => 'databaseAnswers.peopleCount')
+    .with('DOCUMENT', () => 'databaseAnswers.documentCount')
+    .with('TASK', () => 'databaseAnswers.taskCount')
+    .with('CHANNEL', () => 'databaseAnswers.channelCount')
+    .with('PROJECT', 'INITIATIVE', () => 'databaseAnswers.projectCount')
+    .with('CHAT', () => 'databaseAnswers.chatCount')
+    .with('THREAD', () => 'databaseAnswers.emailCount')
+    .with('COMPANY', () => 'databaseAnswers.companyCount')
+    .with('CONTACT', () => 'databaseAnswers.contactCount')
+    .with('CALL_RECORD', () => 'databaseAnswers.callCount')
+    .with('CALENDAR_EVENT', () => 'databaseAnswers.eventCount')
+    .with('DATABASE_ROW', () => 'databaseAnswers.linkedRecordCount')
+    .exhaustive(() => 'databaseAnswers.itemCount');
+  return t(key, { count });
 }
