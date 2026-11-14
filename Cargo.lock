@@ -9438,7 +9438,6 @@ dependencies = [
  "rootcause",
  "serde",
  "tokio",
- "tracing",
  "uuid",
  "workspace-hack",
 ]
