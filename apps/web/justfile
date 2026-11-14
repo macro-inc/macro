@@ -138,6 +138,7 @@ local-email: ensure-cache-wasm
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
+
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
@@ -249,6 +250,39 @@ test-calendar-details-browser *ARGS:
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
+
+# The bundle the email browser suite serves (tests/email-e2e): every service on
+# the page's own origin, where the suite's front proxies to the email stack.
+build-email-e2e: build-wasm
+    MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true VITE_ENABLE_GRAPHQL_SOUP=true VITE_ENABLE_BROWSER_OTEL=false NODE_OPTIONS="{{node_heap}}" bun run --bun build
+
+# The built app in Chromium against the email stack; the root
+# `just email-e2e-browser` builds what this needs. Same LD_LIBRARY_PATH caveat
+# as the sign-up browser tests above.
+test-email-e2e-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
+
+# The fixture tests that cover a class of email or calendar bug (real
+# components over scripted data, no backend). Each line is a Playwright
+# config and, where the suite holds more than those tests, the files or the
+# titles (`-g`, a dot for each space) to run:
+# the rest of such a suite is not run in CI. A dev server's first page load
+# can outlast a test's first wait, hence the retries. Tests tagged
+# `@known-bug` assert behaviour that is not fixed yet and stay out.
+test-email-fixtures-browser *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    while read -r config files; do
+        env -u LD_LIBRARY_PATH bunx playwright test --config "$config" $files --grep-invert @known-bug --retries 2 {{ARGS}} < /dev/null
+    done <<'SUITES'
+    src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
+    src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/calendar/browser-test/playwright.config.ts
+    src/features/calendar-view/browser-test/playwright.config.ts
+    src/features/settings/browser-test/signatures/playwright.config.ts
+    src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts unavailable-mention.browser -g tapping.the.deleted.event.chip
+    ../../packages/email-renderer/playwright.config.ts rendering.pw
+    SUITES
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
