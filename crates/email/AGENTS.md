@@ -149,7 +149,8 @@ tools — hexagonal, heavily feature-gated.
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
 - An owned All Mail page filtered to one positive OR-tree of addresses (Sales
-  Email, a CRM record's emails under Me) is read in page order by `OwnedRead`
+  Email and a CRM record's emails under Me, a sender or recipient search, Soup
+  hydration by id with an address template) is read in page order by `OwnedRead`
   (`dynamic/query/owned_scope.rs`): a capped probe counts the address
   superset, then either the sorted superset or each inbox's newest threads
   stream into the preview pick until LIMIT, the superset stream finishing a
