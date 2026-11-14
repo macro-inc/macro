@@ -3,7 +3,7 @@ import { readSelection } from '@macro-inc/lexical-wasm-view/view/selection';
 import { Telemetry } from '@macro-inc/observability';
 import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { dispatchApplicationCommand } from '../group-b/command';
-import { nativeBlockAtY } from './nativeGeometry';
+import { nativeBlockAtY, nativeDragGroup } from './nativeGeometry';
 
 export type NativeDragState = {
   hoveredElement: HTMLElement | null;
@@ -11,8 +11,7 @@ export type NativeDragState = {
   targetElement: HTMLElement | null;
   targetPosition: 'before' | 'after' | null;
 };
-const MIME = 'application/x-macro-block-drag';
-let sequence = 0;
+const MIME = 'application/x-lexical-drag-block';
 let active: {
   view: EditorView;
   key: number;
@@ -226,7 +225,11 @@ export function registerNativeDraggableBlock(
   }
   return {
     /** The handle may live in a portal; its owner supplies the hovered element. */
-    start(event: DragEvent, element: HTMLElement): boolean {
+    start(
+      event: DragEvent,
+      element: HTMLElement,
+      preview?: (keys: readonly number[]) => void
+    ): boolean {
       const key = view.keyFromDOM(element);
       if (
         disposed ||
@@ -238,27 +241,14 @@ export function registerNativeDraggableBlock(
         !event.dataTransfer
       )
         return false;
-      const handled = dispatchApplicationCommand(view, 'group-b.move', {
-        action: 'drag-selection',
-        key,
-      });
-      const selection = view.selection().selection;
-      if (!handled || selection.kind !== 'node') return false;
-      const source = selection.keys.at(0);
+      const keys = nativeDragGroup(view, key);
+      const source = keys.at(0);
       const generation = view.mirror.keyGeneration;
       if (source === undefined || generation === null) return false;
-      const formats = view.clipboard.formats(2);
-      event.dataTransfer.setData('text/plain', formats.plain);
-      event.dataTransfer.setData('text/html', formats.html);
-      event.dataTransfer.setData(
-        'application/x-lexical-editor',
-        formats.lexical
-      );
-      const payload = JSON.stringify({ drag: ++sequence });
-      event.dataTransfer.setData(MIME, payload);
+      const payload = String(source);
       event.dataTransfer.effectAllowed = 'move';
-      const dragImage = view.getElementByKey(source);
-      if (dragImage) event.dataTransfer.setDragImage(dragImage, 0, 0);
+      preview?.(keys);
+      event.dataTransfer.setData(MIME, payload);
       active = {
         view,
         key: source,

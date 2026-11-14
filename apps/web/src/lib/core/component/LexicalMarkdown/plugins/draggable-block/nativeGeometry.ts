@@ -59,3 +59,31 @@ export function nativeBlockAtY(
   }
   return null;
 }
+
+/** Resolve Source's dragged list/group without changing the model selection. */
+export function nativeDragGroup(
+  view: EditorView,
+  key: number
+): readonly number[] {
+  const node = view.node(key);
+  if (!node || key === 0) return [];
+  if (node.type !== 'listitem') return [key];
+  const parent = node.parent === null ? null : view.node(node.parent);
+  if (nativeList(parent) && parent?.children.at(0) === key) return [parent.key];
+  const group = [key];
+  const siblings = parent?.children ?? [];
+  const index = siblings.indexOf(key);
+  if (index < 0) return group;
+  for (const siblingKey of siblings.slice(index + 1)) {
+    const sibling = view.node(siblingKey);
+    if (sibling?.type !== 'listitem') break;
+    const nested =
+      (sibling.elementProps?.indent ?? 0) > (node.elementProps?.indent ?? 0);
+    const wrapper =
+      sibling.children.length > 0 &&
+      sibling.children.every((child) => nativeList(view.node(child)));
+    if (!nested && !wrapper) break;
+    group.push(siblingKey);
+  }
+  return group;
+}

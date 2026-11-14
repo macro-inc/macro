@@ -24,52 +24,53 @@ export function createNativeDraggableBlockHost(
   return {
     root: () => view.root,
     start(event, element) {
-      if (!element || !registration.start(event, element)) return;
-      clearPreview();
-      const transfer = event.dataTransfer;
-      const selected = view.selection().selection;
-      if (!transfer || selected.kind !== 'node') return;
-      const first = selected.keys.at(0);
-      if (first === undefined) return;
-      const node = view.node(first);
-      let image = view.getElementByKey(first);
-      if (!image) return;
-      const hidden: HTMLElement[] = [];
-      const parent =
-        node?.parent === null || node?.parent === undefined
-          ? null
-          : view.node(node.parent);
-      if (
-        node?.type === 'listitem' &&
-        nativeList(parent) &&
-        selected.keys.length > 1
-      ) {
-        const parentDOM = parent && view.getElementByKey(parent.key);
-        if (parentDOM) {
-          image = parentDOM;
-          for (const key of parent?.children ?? []) {
-            if (selected.keys.includes(key)) continue;
-            const sibling = view.getElementByKey(key);
-            if (sibling) hidden.push(sibling);
+      if (!element) return;
+      registration.start(event, element, (selected) => {
+        clearPreview();
+        const transfer = event.dataTransfer;
+        if (!transfer) return;
+        const first = selected.at(0);
+        if (first === undefined) return;
+        const node = view.node(first);
+        let image = view.getElementByKey(first);
+        if (!image) return;
+        const hidden: HTMLElement[] = [];
+        const parent =
+          node?.parent === null || node?.parent === undefined
+            ? null
+            : view.node(node.parent);
+        if (
+          node?.type === 'listitem' &&
+          nativeList(parent) &&
+          selected.length > 1
+        ) {
+          const parentDOM = parent && view.getElementByKey(parent.key);
+          if (parentDOM) {
+            image = parentDOM;
+            for (const key of parent?.children ?? []) {
+              if (selected.includes(key)) continue;
+              const sibling = view.getElementByKey(key);
+              if (sibling) hidden.push(sibling);
+            }
           }
         }
-      }
-      const preview = image;
-      const transform = hidden.length ? '' : preview.style.transform;
-      restorePreview = () => {
-        for (const sibling of hidden) sibling.style.display = '';
-        preview.style.transform = transform;
-      };
-      for (const sibling of hidden) sibling.style.display = 'none';
-      preview.style.transform = 'translateZ(0)';
-      try {
-        transfer.setDragImage(preview, 0, 0);
-        timer = setTimeout(clearPreview);
-      } catch (error) {
-        clearPreview();
-        registration.end();
-        throw error;
-      }
+        const preview = image;
+        const transform = hidden.length ? '' : preview.style.transform;
+        restorePreview = () => {
+          for (const sibling of hidden) sibling.style.display = '';
+          preview.style.transform = transform;
+        };
+        for (const sibling of hidden) sibling.style.display = 'none';
+        preview.style.transform = 'translateZ(0)';
+        try {
+          transfer.setDragImage(preview, 0, 0);
+          timer = setTimeout(clearPreview);
+        } catch (error) {
+          clearPreview();
+          registration.end();
+          throw error;
+        }
+      });
     },
     end() {
       clearPreview();

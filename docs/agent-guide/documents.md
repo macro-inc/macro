@@ -109,6 +109,8 @@ pick a tag to insert it, then confirm **Add tag to Document** (or Task) to apply
 it to the item's properties. A second `#` while the menu is open closes it and
 leaves literal text. `@` likewise opens after `(`, `[` and quotes in both engines.
 
+For block dragging, first place the caret in the dragged block, then repeat with the caret in another block. Starting or cancelling the drag must retain that exact selection; after a successful move, check the same logical caret and body focus without clicking the body again.
+
 For block dragging, hover a paragraph or checklist row and drag the handle to
 the indicator before or after another block. Check undo/redo, nested checklist
 group ownership, save/reopen and read-only transitions. The isolated paired
