@@ -1,0 +1,45 @@
+crates/mesh_man/src/figures/test.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 37-41,110-113
+crates/mesh_man/src/lib.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 329-334
+crates/mesh_man/src/figures/neural.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 11-12,54,100-104,124-128,156-159,190-195,266-269,273-276,280-283,370
+crates/mesh_man/src/figures/common.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 434-441,510-513,543-546
+crates/mesh_man/src/figures/cyborg.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 12-13,54-62,145-148,213-216,294,336-340,363-366,370-374,538-545
+crates/agent_monitor_tui/AGENTS.md
+  s_f2380eb080e56a::t_6f9c4015eb155a 58-60
+crates/mesh_man/src/figures/xray.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 59-65,336-339,392,396,499-502,536-542,757-761
+crates/mesh_man/src/widget.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 222-226,303-307
+crates/mesh_man/src/test.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 277-280,305-308,343-346
+crates/mesh_man/examples/frames.rs
+  s_f2380eb080e56a::t_31ddecc95c279f 66-70
+crates/mesh_man/AGENTS.md
+  s_f2380eb080e56a::t_6f9c4015eb155a 33-35,47-54
+crates/mesh_man/convert/src/main.rs
+  s_f2380eb080e56a::t_6e40ff61590e6f 166-169,178-217,259-263,288-295,314-316,385-389,396-405,408-412,418-423,440-442,444-446,451-455,457-458,502-507,523-526,544-546,553-555,557-560,582-585,590-594,609-612,622-625,627-632,634-637,653-659,691-708,727-731
+crates/mesh_man/convert/src/mesh.rs
+  s_f2380eb080e56a::t_957811d55c187f 25-29,56-57,92-96,140-146,155-159,244-247
+crates/mesh_man/convert/src/rig.rs
+  s_f2380eb080e56a::t_53840d03fac181 83-89,114-118,128-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7cd0e4ae3d56303704930230b69e942ad32796e5",
+  "prompts": {},
+  "sessions": {
+    "s_f2380eb080e56a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d4404a78-1231-4bc5-a738-064998a50e3d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
