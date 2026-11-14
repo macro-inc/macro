@@ -1,0 +1,5 @@
+(lang dune 3.0)
+
+(package
+ (name macro_sdk)
+ (synopsis "Typed OCaml client for Macro's HTTP APIs, generated from their OpenAPI specs, through the SDK proxy"))

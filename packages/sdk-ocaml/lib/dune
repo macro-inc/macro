@@ -1,0 +1,13 @@
+; Unwrapped so programs see the top module as `Macro`. Everything but
+; macro_runtime.ml, macro_json.ml and macro_error.ml is generated: bun generator/generate.ts
+(library
+ (name macro_sdk)
+ (public_name macro_sdk)
+ (wrapped false)
+ (libraries unix yojson))
+
+; operations.json is installed beside the package's .cmi files.
+(install
+ (section lib)
+ (package macro_sdk)
+ (files operations.json))

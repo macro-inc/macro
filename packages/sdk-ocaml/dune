@@ -1,0 +1,3 @@
+; generator/ and proxy/ are TypeScript with their own node_modules, not dune
+; targets.
+(dirs :standard \ generator proxy node_modules)
