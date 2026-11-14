@@ -337,9 +337,10 @@ impl<'a> TeamRead<'a> {
         self.push_checks(&mut builder);
         // A better copy is any copy in the inboxes that passes the same
         // checks, listed by this stream or not. The superset stream lists
-        // every such copy only because a message lists only its own inbox's
-        // contacts; a message naming another inbox's contact would let a
-        // copy the superset misses hide this one (docs/CRM_EMAIL_PRIVACY.md).
+        // every such copy, but only because a message lists only its own
+        // inbox's contacts; a message naming another inbox's contact would
+        // let a copy the superset misses hide this one
+        // (docs/CRM_EMAIL_PRIVACY.md).
         builder.push(
             r#"
                     OFFSET 0

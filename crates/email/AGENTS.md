@@ -208,9 +208,11 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT. `ALLOWED` restates `crm_email_thread_allowed`
-  set-based (`allowed_restates_the_privacy_function` compares them); change
-  both. A copy stays only when no better copy passes the same checks, so the
+  whole stream before the LIMIT. `ALLOWED`, and the contributing inboxes in
+  `dynamic/resolve.rs`, restate `crm_email_thread_allowed` set-based
+  (`allowed_restates_the_privacy_function` and
+  `contributing_inboxes_restate_the_privacy_function` compare them); change
+  them together. A copy stays only when no better copy passes the same checks, so the
   representative never depends on the cursor; `test/crm_team_read.rs` compares
   every stream with the general builder page by page. The superset keeps only
   the read inboxes' own contacts, because a message lists only its own inbox's
