@@ -1203,15 +1203,6 @@ export const organise = {
       ],
     },
     {
-      id: 'STL-982',
-      surface: 'SL-23',
-      fn: ['F-084'],
-      state:
-        'result: the row carries the tag as a chip, and loses it once the tag is taken off',
-      trigger: 'after a tag is picked, or picked again, for the thread',
-      source: ['src/features/property/tags/EntityRowTags.tsx'],
-    },
-    {
       id: 'STL-983',
       surface: 'SL-32',
       fn: ['F-088'],
