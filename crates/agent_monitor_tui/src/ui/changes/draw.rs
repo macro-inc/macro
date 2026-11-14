@@ -608,8 +608,8 @@ impl Painter<'_> {
             } else {
                 ("━", line)
             };
-            let glyph = match (&cursor, &cell.oid) {
-                (Some(cursor), Some(oid)) if cursor == oid => "◈",
+            let glyph = match &cursor {
+                Some(cursor) if cell.held.contains(cursor) => "◈",
                 _ => glyph,
             };
             put(buffer, self.x(col), y, glyph, style);
@@ -782,7 +782,10 @@ impl Painter<'_> {
                 Some(age) => theme::glitch(glyph, age, self.clock.now.timestamp_millis()),
                 None => glyph.to_owned(),
             };
-            let glyph = if cursor.as_ref() == Some(&station.oid) {
+            let glyph = if cursor
+                .as_ref()
+                .is_some_and(|cursor| station.held.contains(cursor))
+            {
                 String::from("◈")
             } else {
                 glyph

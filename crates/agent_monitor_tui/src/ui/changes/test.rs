@@ -177,6 +177,8 @@ fn a_fork_left_of_the_window_has_no_start_and_buckets_count_commits() {
     assert_eq!(row.stations.len(), 1);
     assert_eq!(row.stations[0].commits, 2);
     assert!(!row.stations[0].pushed, "nothing pushed: hollow");
+    // Both are held, so the commit cursor marks the bucket on either one.
+    assert_eq!(row.stations[0].held, vec![oid(102), oid(101)]);
 }
 
 #[test]
@@ -211,7 +213,11 @@ fn the_automatic_zoom_fits_most_forks() {
 fn unpushed_counts_a_local_rewrite_as_all_unpushed() {
     let mut lane = lane("feat/a", 60, &[10, 20, 30], 100);
     lane.pushed = Some(oid(101));
-    assert_eq!(super::layout::unpushed(&lane), 1, "one commit above the push");
+    assert_eq!(
+        super::layout::unpushed(&lane),
+        1,
+        "one commit above the push"
+    );
 
     // Amended or rebased locally: the pushed commit is in no carried commit.
     lane.pushed = Some(oid(999));

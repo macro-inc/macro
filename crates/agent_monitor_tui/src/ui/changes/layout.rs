@@ -70,6 +70,8 @@ pub struct TrunkCell {
     pub commits: u16,
     /// The newest of them.
     pub oid: Option<Oid>,
+    /// All of them, so the commit cursor finds its column.
+    pub held: Vec<Oid>,
     /// One of them is a landed pull request of ours.
     pub landed: bool,
     /// A lane forks down here.
@@ -87,6 +89,8 @@ pub struct Station {
     pub commits: u16,
     /// The newest commit there.
     pub oid: Oid,
+    /// Every commit there, so the commit cursor finds its column.
+    pub held: Vec<Oid>,
     /// Every commit there is pushed.
     pub pushed: bool,
 }
@@ -214,6 +218,7 @@ pub fn layout(
         if let Some(cell) = scene.trunk.get_mut(usize::from(col)) {
             cell.commits = cell.commits.saturating_add(1);
             cell.oid = Some(commit.oid.clone());
+            cell.held.push(commit.oid.clone());
             if landed_oids.contains(&commit.oid) || commit.pr.is_some_and(|pr| ours.contains(&pr)) {
                 cell.landed = true;
             }
@@ -260,12 +265,14 @@ pub fn layout(
                 Some(station) if station.col == col => {
                     station.commits = station.commits.saturating_add(1);
                     station.oid = commit.oid.clone();
+                    station.held.push(commit.oid.clone());
                     station.pushed &= pushed;
                 }
                 _ => stations.push(Station {
                     col,
                     commits: 1,
                     oid: commit.oid.clone(),
+                    held: vec![commit.oid.clone()],
                     pushed,
                 }),
             }
