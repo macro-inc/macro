@@ -209,6 +209,9 @@ FROM (VALUES
   -- Only a spam message is from a blocked domain, and spam counts.
   ('blocked-spam', 22, 0, false, 'INBOX', 'p0@dense.test', 'u0@gamma.test'),
   ('blocked-spam', 22, 1, false, 'SPAM', 'p1@blocked.test', 'u0@gamma.test'),
+  -- Only a spam message is to a blocked domain.
+  ('blocked-spam-to', 24, 0, false, 'INBOX', 'p0@dense.test', 'u0@gamma.test'),
+  ('blocked-spam-to', 24, 1, false, 'SPAM', 'p0@dense.test', 'p2@blocked.test'),
   -- Only a spam message is from the company.
   ('dense-spam', 23, 0, false, 'INBOX', 'p0@other7.test', 'u0@gamma.test'),
   ('dense-spam', 23, 1, false, 'SPAM', 'p2@dense.test', 'u0@gamma.test')
