@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.session_id, s.generation_id, s.user_id, s.kind, s.surfaces, g.trace_id\n               FROM suggestion_generation_session AS s\n               JOIN suggestion_generation AS g ON g.id = s.generation_id\n               WHERE s.session_id = $1 AND s.cleanup = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "surfaces",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "trace_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "c71af7108acc8a5ef46b97906f43c3d8c9b6477c276271ebfc29226a1d5fd253"
+}

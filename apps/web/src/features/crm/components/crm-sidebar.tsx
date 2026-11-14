@@ -52,8 +52,6 @@ export function CrmSidebar(props: {
   onSettings: () => void;
   /** Omitted in the narrow menu, which already has split navigation. */
   onCollapse?: () => void;
-  search?: () => JSX.Element;
-  searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
@@ -63,8 +61,6 @@ export function CrmSidebar(props: {
       <header class="flex shrink-0 flex-col">
         <Show when={!isTouchDevice()}>
           <ViewSidebar.Header
-            search={props.search}
-            searchLabel={props.searchLabel}
             collapseControl={
               <Show when={props.onCollapse}>
                 <Tooltip label={t('crm.collapseSidebar')}>

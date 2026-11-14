@@ -55,7 +55,7 @@ export type CardItem = {
   /**
    *  The item's id exactly as a tool returned it: a document id (documents
    *  and spreadsheets), an email thread id, a calendar eventId, or a
-   *  project, channel, routine, form or initiative id.
+   *  database, project, channel, routine, form or initiative id.
    */
   id: string;
 };
@@ -63,6 +63,7 @@ export type CardItem = {
 /**  The kinds of workspace item a card shows. */
 export type CardItemType =
   | 'document'
+  | 'database'
   | 'email_thread'
   | 'calendar_event'
   | 'project'
@@ -431,14 +432,20 @@ export type ListSource = ListSource_Serialize | ListSource_Deserialize;
 export type ListSource_Deserialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Deserialize } & { entities?: never })
-  /**  A fixed set of items. */
+  /**
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
+   */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 
 /**  Where a list's items come from. */
 export type ListSource_Serialize =
   /**  The items a filter matches, fetched by the list itself. */
   | ({ kind: 'query'; query: Query_Serialize } & { entities?: never })
-  /**  A fixed set of items. */
+  /**
+   *  A fixed set of items. Each one shows, even one the list's query
+   *  cannot return; a kind no card loads shows as an unavailable row.
+   */
   | ({ kind: 'items'; entities: EntityRef[] } & { query?: never });
 
 /**  One value of one property. */
@@ -721,8 +728,8 @@ export type Widget_Deserialize =
     })
   /**
    *  Rich cards for the one to four specific items the answer is about: a
-   *  document or spreadsheet, an email thread, a calendar event, a project,
-   *  a channel, a routine, a form or an initiative. Each card opens its
+   *  document or spreadsheet, a database, an email thread, a calendar event,
+   *  a project, a channel, a routine, a form or an initiative. Each card opens its
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */
@@ -983,8 +990,8 @@ export type Widget_Serialize =
     })
   /**
    *  Rich cards for the one to four specific items the answer is about: a
-   *  document or spreadsheet, an email thread, a calendar event, a project,
-   *  a channel, a routine, a form or an initiative. Each card opens its
+   *  document or spreadsheet, a database, an email thread, a calendar event,
+   *  a project, a channel, a routine, a form or an initiative. Each card opens its
    *  item, and a routine's card can pause it or run it now. Use a list
    *  widget for longer sets.
    */

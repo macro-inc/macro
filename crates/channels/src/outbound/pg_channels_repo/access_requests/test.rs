@@ -92,12 +92,15 @@ async fn a_request_is_announced_once_and_approval_adds_the_requester(pool: PgPoo
     assert_eq!(announced.len(), 1, "a replay is not announced again");
     let ChannelEvent::AccessRequested {
         participant_user_ids,
+        requester_name,
         ..
     } = &announced[0]
     else {
         panic!("expected an announcement, got {announced:?}");
     };
     assert_eq!(participant_user_ids.len(), 2);
+    // The timeline shows the name stored with the announcement at mount.
+    assert_eq!(requester_name.as_deref(), Some("Olive Outsider"));
 
     assert!(matches!(
         service

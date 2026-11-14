@@ -678,8 +678,6 @@ export function VaultView(props: {
           <VaultSidebar
             {...sidebarProps()}
             editing={isTouchDevice() && mobileFolders() ? undefined : editing()}
-            search={vault.search()}
-            onSearch={vault.setSearch}
             destination={destination()}
             onCreate={create}
             onLock={vault.lock}

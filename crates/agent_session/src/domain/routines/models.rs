@@ -181,6 +181,9 @@ pub enum RoutineSessionError {
     /// A runtime could not serve the selected agent.
     #[error("selected runtime is unavailable")]
     RuntimeUnavailable,
+    /// The selected agent's harness is an agent teammate's computer.
+    #[error("{}", crate::domain::error::TEAM_AGENT_COMPUTER_MESSAGE)]
+    TeamAgentComputer,
     /// Preparation returned another owner's, persona's, or session's row.
     #[error("prepared session does not match the request")]
     SessionMismatch,

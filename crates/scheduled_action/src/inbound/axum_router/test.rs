@@ -347,7 +347,7 @@ impl EntityAccessService for FakeEntityAccessService {
     }
 }
 
-fn router(events: bool) -> Router {
+pub(crate) fn router(events: bool) -> Router {
     router_with(service(events), FakeEntityAccessService::owner_only())
 }
 

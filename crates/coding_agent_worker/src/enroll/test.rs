@@ -369,3 +369,60 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
     );
     assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
 }
+
+#[test]
+fn an_agent_computer_gets_its_brains_environment_file() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let config = directory.path().join("macrod.toml");
+    let env_path = directory.path().join("var/lib/macrod/agent.env");
+    let agent: hosted_runtimes::domain::agent::AgentEnrollment = serde_json::from_str(
+        r#"{
+            "agent_user_id": "macro|sam-rivera-abc123@agents.macro.invalid",
+            "env": {
+                "MACRO_API_KEY": "mak_secret",
+                "MACRO_REPO_URL": "http://agent-git:8111/macro%7Csam.git",
+                "ODD_VALUE": "a \"quoted\" \\ value"
+            }
+        }"#,
+    )
+    .unwrap();
+    let host = FakeHost::default();
+
+    write_agent_env(&env_path, Some(&agent), &config, &host).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(&env_path).unwrap(),
+        concat!(
+            "MACRO_API_KEY=\"mak_secret\"\n",
+            "MACRO_REPO_URL=\"http://agent-git:8111/macro%7Csam.git\"\n",
+            "ODD_VALUE=\"a \\\"quoted\\\" \\\\ value\"\n",
+        )
+    );
+    assert_eq!(
+        std::fs::metadata(&env_path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    let parent = std::fs::metadata(directory.path()).unwrap();
+    assert_eq!(
+        host.calls.into_inner(),
+        [format!(
+            "chown {} {}:{}",
+            env_path.display(),
+            parent.uid(),
+            parent.gid()
+        )]
+    );
+}
+
+#[test]
+fn a_computer_without_an_agent_has_no_brain_environment() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let config = directory.path().join("macrod.toml");
+    let env_path = directory.path().join("agent.env");
+    std::fs::write(&env_path, "MACRO_API_KEY=\"stale\"\n").unwrap();
+
+    write_agent_env(&env_path, None, &config, &FakeHost::default()).unwrap();
+    assert!(!env_path.exists());
+    // Nothing to remove is fine too.
+    write_agent_env(&env_path, None, &config, &FakeHost::default()).unwrap();
+}

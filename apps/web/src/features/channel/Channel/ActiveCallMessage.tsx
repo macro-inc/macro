@@ -39,7 +39,10 @@ export function ActiveCallMessage(props: { channelId: string }) {
       channelId: props.channelId,
       isExistingCall: true,
     });
-    await call.joinCall();
+    await call.joinCall('user', {
+      kind: 'join',
+      callId: active.data?.callId,
+    });
   }
 
   return (

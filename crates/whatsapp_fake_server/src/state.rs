@@ -138,6 +138,14 @@ pub(crate) struct State {
     /// Groups whose messages name the sender by LID only, without
     /// `participant_pn`, as WhatsApp does for some senders.
     pub(crate) lid_only_groups: std::collections::HashSet<String>,
+    /// Profile pictures of users and groups.
+    pub(crate) pictures: HashMap<crate::picture::PictureTarget, crate::picture::Picture>,
+    /// Picture images by file key, with their content type.
+    pub(crate) picture_files: HashMap<String, (String, Vec<u8>)>,
+    /// Picture queries answered, rate-limited ones included.
+    pub(crate) picture_queries: usize,
+    /// Every picture query is answered 429.
+    pub(crate) pictures_rate_limited: bool,
 }
 
 /// A device JID in the phone-number or LID domain.
@@ -613,6 +621,7 @@ impl State {
                 iq_result(iq, vec![node("list", vec![], children(users))])
             }
             ("usync", "get", _) => self.usync(iq),
+            ("w:profile:picture", "get", Some("picture")) => self.profile_picture(from, iq),
             ("w:g2", "get", Some("query")) => {
                 let group = attr_jid(iq, "to")
                     .and_then(|to| self.groups.get(&to.user))

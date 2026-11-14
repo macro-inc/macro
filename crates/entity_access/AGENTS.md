@@ -62,7 +62,20 @@ the entity-access domain service.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
-
+- `get_documents_access` checks many documents in one statement
+  (`queries/document_access/documents_access.sql`) and must answer each one as
+  `get_document_access` does: change their sources together, and extend
+  `test/documents_access.rs` and its fixture, which compare the two.
+- Spans here never record a user id (a `MacroUserId` is an email): skip it.
+  Checks record how many source ids they bound as `source_id_count`, through
+  `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
+  wraps its checks in `observe_source_ids` to record the count on its own span,
+  as `initiative.read` does. A new check that fetches source ids goes through
+  `user_source_ids` so its span gets the count.
+- `get_user_source_ids` is cached for 10 s per process and concurrent misses
+  for one user share one query through `single_flight`. A failure then arrives
+  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
+  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related

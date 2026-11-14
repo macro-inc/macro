@@ -33,12 +33,13 @@ pub(super) struct Change {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Recipient {
-    pub email_address: Address,
+    pub email_address: Option<Address>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub(super) struct Address {
-    pub address: String,
+    /// Graph leaves it out for some senders and recipients, giving only a name.
+    pub address: Option<String>,
     pub name: Option<String>,
 }
 

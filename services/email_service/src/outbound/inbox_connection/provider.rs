@@ -8,6 +8,9 @@ mod token_scopes;
 pub struct GoogleConnectionProvider {
     pub gmail: crate::outbound::email_api::GmailApi,
     pub auth: Arc<AuthServiceClient>,
+    /// Resolved once at startup, so an override points scope discovery at a
+    /// local Gmail emulator.
+    pub token_info_url: macro_service_urls::GoogleOauthTokenInfoUrl,
 }
 
 impl ConnectionProvider for GoogleConnectionProvider {
@@ -28,7 +31,7 @@ impl ConnectionProvider for GoogleConnectionProvider {
     }
 
     async fn token_scopes(&self, token: &AccessToken) -> Result<Vec<String>, Self::ScopeErr> {
-        token_scopes::fetch_token_scopes(token.expose_secret())
+        token_scopes::fetch_token_scopes(&self.token_info_url, token.expose_secret())
             .await
             .map_err(Into::into)
     }

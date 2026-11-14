@@ -661,6 +661,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		agentSignInExpiryStage: stage
 		agentSignInExpiryExpiresAt: expiresAt
 	}
+	... on GraphqlComputerSetupMetadata {
+		computerSetupComputerId: computerId
+		computerSetupHarnessId: harnessId
+		computerSetupComputerName: computerName
+		computerSetupAgentUserId: agentUserId
+		computerSetupAgentName: agentName
+		computerSetupOutcome: outcome
+		computerSetupFailureReason: failureReason
+	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
 		inviteToTeamTeamId: teamId

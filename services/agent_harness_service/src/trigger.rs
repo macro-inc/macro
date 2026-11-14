@@ -227,6 +227,7 @@ async fn run(
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
+                crate::computers::harness_service(&pool),
             ),
             PgAgentSessionRepo::new(
                 pool.clone(),

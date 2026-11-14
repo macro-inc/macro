@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
 import { CallParticipantsList } from '../CallParticipantsList';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
+import { createCallPin } from '../primitives/create-call-pin';
 
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
@@ -187,6 +189,24 @@ function setUpCallState(
   mocks.callContext = {
     activeChannelId: channelId,
     activeCallId: () => 'call-id',
+    pin: createCallPin({
+      callId: () => 'call-id',
+      participants: () => Array.from(participants().values()),
+      screens: () => {
+        trackVersion();
+        return Array.from(participants().values()).filter((participant) => {
+          const publication = participant.getTrackPublication(
+            LK_TRACK_SOURCE.ScreenShare
+          );
+          return (
+            !!publication?.track &&
+            publication.isSubscribed &&
+            !publication.isMuted
+          );
+        });
+      },
+      screenSharing,
+    }),
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
     isInCall: () => true,
@@ -759,7 +779,7 @@ describe('CallOverlay muted microphone badges', () => {
     ).toHaveLength(2);
   });
 
-  it('keeps the only local tile unchanged when a call becomes solo', () => {
+  it('keeps the local pin when a call becomes solo and another participant returns', () => {
     const remote = createRemoteParticipant('remote', {}, 'Remote');
     const controls = setUpCallState([remote]);
     render(() => <CallOverlay onLeave={() => undefined} />);
@@ -767,7 +787,9 @@ describe('CallOverlay muted microphone badges', () => {
     controls.setParticipants(new Map());
     expect(screen.queryByRole('button', { name: 'Unpin You' })).toBeNull();
     controls.setParticipants(new Map([[remote.identity, remote]]));
-    expect(screen.getAllByRole('button', { name: 'Pin You' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Unpin You' })).toHaveLength(
+      2
+    );
   });
 
   it('leaves phone taps for long-press integration', () => {

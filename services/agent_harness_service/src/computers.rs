@@ -5,6 +5,7 @@
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
 use hosted_runtimes::domain::ids::{ComputerId, PairingId};
+use hosted_runtimes::domain::image::GuestImages;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -25,20 +26,23 @@ use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::PgComputerRepo;
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::config::{ComputerFleetConfig, Config};
 
+pub(crate) mod agent_enrollment;
 pub(crate) mod claude;
 pub(crate) mod claude_expiry;
 pub(crate) mod default_agent;
 pub mod harnessd;
 mod presence;
+pub(crate) mod setup_notice;
 pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
@@ -54,7 +58,30 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+/// The harness service over the harness table, marking agent teammates'
+/// computers from the computer table.
+pub type PgHarnessService =
+    HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo, PgComputerAgents>;
+
+/// [`PgHarnessService`] over `pool`.
+pub fn harness_service(pool: &PgPool) -> PgHarnessService {
+    HarnessServiceImpl::new(
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+        PgComputerAgents::new(pool.clone()),
+    )
+}
+
+/// The notification ingress the operator's setup notices go through.
+pub type SetupNotifications =
+    notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
+
+pub type Operator = ComputerOperator<
+    PgComputerRepo,
+    ConfiguredFleet,
+    HostedHarnesses,
+    SystemClock,
+    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
+>;
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -64,6 +91,7 @@ pub(crate) async fn operator(
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
     default_agents: Arc<dyn DefaultAgents>,
+    notifications: Arc<SetupNotifications>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
     let Some(fleet_config) = fleet_config else {
         tracing::warn!("no computer fleet attached; computer routes are unavailable");
@@ -91,12 +119,16 @@ pub(crate) async fn operator(
                 )?,
                 reserve_gb: settings.computers_host_reserve_gb,
                 oversell_factor: settings.computers_oversell_factor,
-                image: ImageSource {
-                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(
-                        &settings.computers_image,
-                    )?),
-                    remote: None,
-                },
+                images: GuestImages {
+                    regular: &settings.computers_image,
+                    agent: &settings.computers_agent_image,
+                }
+                .try_map(|alias| {
+                    Ok::<_, incus_client::InvalidName>(ImageSource {
+                        reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
+                        remote: None,
+                    })
+                })?,
                 profile: incus_client::ProfileName::try_new(
                     &settings.computers_incus_profile.clone(),
                 )?,
@@ -113,9 +145,11 @@ pub(crate) async fn operator(
                     control_plane_id: ControlPlaneId::parse(
                         settings.computers_control_plane_id.clone(),
                     )?,
-                    image: hosted_runtimes::domain::image::GuestImage::try_new(
-                        &settings.computers_image,
-                    )?,
+                    images: GuestImages {
+                        regular: settings.computers_image.as_str(),
+                        agent: settings.computers_agent_image.as_str(),
+                    }
+                    .try_map(hosted_runtimes::domain::image::GuestImage::try_new)?,
                     network: settings.computers_docker_network.clone(),
                     enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
                     host_name: settings.computers_host_name.clone(),
@@ -133,18 +167,44 @@ pub(crate) async fn operator(
     ServiceDeployment.deployment()?;
 
     let operator = ComputerOperator::start(
-        PgComputerRepo::new(pool.clone(), config.computer_billing_policy()?),
+        PgComputerRepo::new(operator_pool(pool), config.computer_billing_policy()?),
         fleet,
         HostedHarnesses {
             service: harnesses,
             default_agents,
         },
+        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
+    // Every computer asks: one bought for an agent teammate must never
+    // enroll without its agent.
+    // The authentication service checks its own internal key, not ours.
+    .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
+        config.authentication_service_secret_key.as_ref(),
+    )?));
     Ok(Some(Arc::new(operator)))
+}
+
+/// One connection per concurrent pass. The control plane gets its own pool
+/// so a burst of session traffic (or macrod reconnecting after a deploy)
+/// cannot starve it, and its waits stay short: a pass that cannot get a
+/// connection skips its tick instead of queueing behind the burst.
+const OPERATOR_CONNECTIONS: u32 = 5;
+/// How long a pass waits for a connection before skipping its tick.
+const OPERATOR_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Return idle connections; the database is shared by every service.
+const OPERATOR_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// The operator's own pool, on connections made like `pool`'s.
+fn operator_pool(pool: &PgPool) -> PgPool {
+    PgPoolOptions::new()
+        .max_connections(OPERATOR_CONNECTIONS)
+        .acquire_timeout(OPERATOR_ACQUIRE_TIMEOUT)
+        .idle_timeout(OPERATOR_IDLE_TIMEOUT)
+        .connect_lazy_with(pool.connect_options().as_ref().clone())
 }
 
 /// The deployment a computer joins: this service's own typed addresses,
@@ -207,8 +267,7 @@ pub struct ClaudeSignInWatch<Ingress> {
 }
 
 /// [`harnessd::Harnessd`] over the harness table.
-pub type HostedHarnessd =
-    harnessd::Harnessd<HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
@@ -242,6 +301,8 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
 ) {
     let mut interval = tokio::time::interval(pass.tick());
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Consecutive passes skipped because the database had no connection to give.
+    let mut skipped: u32 = 0;
     loop {
         tokio::select! {
             biased;
@@ -287,11 +348,36 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map(|_| ())
                     .map_err(anyhow::Error::from),
             };
-        if let Err(error) = outcome {
-            let name: &'static str = pass.into();
-            tracing::error!(pass = name, error = ?error, "computer pass failed");
+        let name: &'static str = pass.into();
+        match outcome {
+            Ok(()) => {
+                if skipped > 0 {
+                    tracing::info!(pass = name, skipped, "computer pass resumed");
+                }
+                skipped = 0;
+            }
+            // A busy pool is not a failure: skip this tick and try the next,
+            // warning once per outage rather than on every tick.
+            Err(error) if storage_unavailable(&error) => {
+                if skipped == 0 {
+                    tracing::warn!(
+                        pass = name,
+                        "computer storage unavailable; skipping passes until it recovers"
+                    );
+                }
+                skipped = skipped.saturating_add(1);
+            }
+            Err(error) => {
+                tracing::error!(pass = name, error = ?error, "computer pass failed");
+            }
         }
     }
+}
+
+fn storage_unavailable(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<hosted_runtimes::domain::service::ComputerError>()
+        .is_some_and(hosted_runtimes::domain::service::ComputerError::is_storage_unavailable)
 }
 
 /// The slice of [`HarnessService`] the control plane uses; object-safe so
@@ -461,11 +547,7 @@ pub struct ComputerPresence<Inner> {
 }
 
 /// [`sign_in_ahead::SignInAhead`] over the harness table.
-pub type SignInAheadHandle = Arc<
-    sign_in_ahead::SignInAhead<
-        HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>,
-    >,
->;
+pub type SignInAheadHandle = Arc<sign_in_ahead::SignInAhead<PgHarnessService>>;
 
 impl<Inner> ComputerPresence<Inner> {
     pub fn new(

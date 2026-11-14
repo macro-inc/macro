@@ -49,7 +49,7 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
@@ -71,6 +71,7 @@ import {
   on,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
@@ -167,11 +168,21 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const [creating, setCreating] = createSignal(false);
+  // A create request already waiting opens the form on first render, so the
+  // list never flashes before it.
+  const pendingCreate = untrack(agentSettingsRequest);
+  const [creating, setCreating] = createSignal(
+    pendingCreate?.type === 'create'
+  );
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal(
+    pendingCreate?.type === 'create' ? pendingCreate.harnessId : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setCreateHarnessId(undefined);
     setEditingAgent(undefined);
     setDeletingAgent(undefined);
     props.onCloseCreate?.();
@@ -193,7 +204,7 @@ export function Agents(props: {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
-  const harnessesQuery = useHarnessesQuery();
+  const harnessesQuery = useRunnableHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
     return buildAgentModelTargets(cursorConnected(), harnesses).map(
@@ -283,11 +294,21 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request?.type !== 'create') return;
+      setEditingAgent(undefined);
+      setCreateHarnessId(request.harnessId);
+      setCreating(true);
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   // Opened from an agent's user card: wait for the list, then show that
   // agent's editor if it is one the viewer manages.
   createEffect(
     on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
-      if (!request || agentsQuery.isPending) return;
+      if (request?.type !== 'edit' || agentsQuery.isPending) return;
       const agent = agents().find(
         (candidate) => candidate.id === request.agentId
       );
@@ -436,6 +457,7 @@ export function Agents(props: {
       <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
           initialKind={props.createKind}
+          initialHarnessId={createHarnessId()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -672,6 +694,8 @@ function AgentDeleteDialog(props: {
 
 function AgentEditorPage(props: {
   initialKind?: AgentKind;
+  /** The machine a new agent starts on under Where it runs. */
+  initialHarnessId?: string;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -698,6 +722,7 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      props.initialHarnessId ??
       (props.initialKind === 'coder'
         ? props.connectedHarnesses.find((harness) =>
             isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
@@ -907,7 +932,9 @@ function AgentEditorPage(props: {
                     )
                   }
                   fallback={
-                    <p class="settings-input text-ink-muted">
+                    // A status line, not a field: it wraps on a phone
+                    // instead of spilling out of an input's fixed height.
+                    <p class="flex min-h-9 not-touch:min-h-8 items-center text-sm text-ink-muted">
                       {t('computers.modelsWhenOn')}
                     </p>
                   }
@@ -1325,7 +1352,8 @@ function AgentEditorPage(props: {
                 title="Where it runs"
                 description="Pick where this agent does its work."
               >
-                <fieldset class="flex flex-col gap-2">
+                {/* A fieldset is min-content wide by default; a long option would widen the phone form. */}
+                <fieldset class="flex min-w-0 flex-col gap-2">
                   <legend class="sr-only">Where it runs</legend>
                   <WhereItRunsOption
                     value="in-memory"

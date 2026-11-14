@@ -171,7 +171,11 @@ export function RouteEmail() {
         title="All your accounts in one inbox."
         description="Triage all your email accounts in a single inbox, or one at a time. We backfill everything, so search is split-second across every account."
       >
-        <PaperFeatureGraphic label="Switch between all inboxes, individual accounts, and email aliases.">
+        <PaperFeatureGraphic
+          height={380}
+          mobileHeight={590}
+          label="Switch between all inboxes, individual accounts, and email aliases."
+        >
           <PaperEmailAccounts />
         </PaperFeatureGraphic>
       </FeaturePageSection>

@@ -285,7 +285,16 @@ the zone clears the date and times and discards outstanding availability results
 Calendar provider failures show an error; they never report a
 confirmed booking. Current integrations check hosts' connected calendars that
 count as Busy in Settings → Calendar (every calendar unless turned off) and
-write invitations/Google Meet through the existing calendar service.
+write invitations/Google Meet through the existing calendar service. A calendar
+whose sync is failing blocks booking only while it counts as Busy: a transient
+failure still offers slots around its stored events for 45 minutes after its last
+successful sync (a day later for a Google holidays or birthdays calendar, which syncs
+daily), and past that, or on a permanent or reconnect failure, the page
+shows `Availability could not be loaded` while the host sees the calendar's sync
+error in Settings → Calendar and the calendar view. The logs `refusing booking
+availability` and `offering booking availability from a calendar whose sync is
+failing`, under the `scheduling.busy_time` span, carry `calendar_id`,
+`email_link_id` and `reason`.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
@@ -416,8 +425,8 @@ retains its text label until the controls row runs out of room, then becomes an
 icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
-The desktop sidebar's Search icon sits left of collapse and reveals event search
-above New. Its mini calendar browses months independently of the main grid:
+The desktop sidebar has no search of its own; event search is the header's
+`Search events`. Its mini calendar browses months independently of the main grid:
 month arrows, the month picker, and keyboard focus changes do not move the main
 calendar. Selecting a day navigates the main calendar without closing the narrow
 layout's navigation overlay. Main calendar navigation updates the mini calendar's

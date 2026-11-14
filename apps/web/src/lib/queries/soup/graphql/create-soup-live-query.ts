@@ -700,7 +700,12 @@ export function createSoupLiveQuery(
       (cacheStatus === 'idle' || cacheStatus === 'loading')
     )
       return;
-    const known = new Set(liveRecords().map(soupItemKey));
+    // Resubscribing after a network page can clear the predicate snapshot.
+    // Use the scoped display projection so a failed read does not refetch rows
+    // that are already resolved and still visible.
+    const known = new Set(
+      (displayLocalProjection()?.records ?? liveRecords()).map(soupItemKey)
+    );
     const requested = sameScope ? current.entities : [];
     const requestedKeys = new Set(requested.map(soupEntityRefKey));
     const missing = entities.filter((entity) => {

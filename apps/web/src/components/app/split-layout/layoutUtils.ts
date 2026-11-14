@@ -21,6 +21,7 @@ import type {
   SplitManager,
 } from './layoutManager';
 import { shouldAutofocusNavigation } from './should-autofocus-navigation';
+import type { SplitDirection } from './split-direction';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -175,25 +176,13 @@ export function returnSplitToRecentListView(handle: SplitHandle) {
   }
 }
 
-export function focusAdjacentSplit(direction: 'left' | 'right') {
+/** Focuses the split beside the active one toward `direction`, as the splits tile. */
+export function focusAdjacentSplit(direction: SplitDirection) {
   const splitManager = globalSplitManager();
   if (!splitManager) return;
   const activeSplitId = splitManager.activeSplitId();
   if (!activeSplitId) return;
-  const currentSplitIds = splitManager.splits().map((s) => s.id);
-  const currentSplitIndex = currentSplitIds.indexOf(activeSplitId);
-  const getAdjacentSplitId = () => {
-    if (direction === 'left') {
-      if (currentSplitIndex === 0)
-        return currentSplitIds[currentSplitIds.length - 1];
-      return currentSplitIds[currentSplitIndex - 1];
-    } else {
-      if (currentSplitIndex === currentSplitIds.length - 1)
-        return currentSplitIds[0];
-      return currentSplitIds[currentSplitIndex + 1];
-    }
-  };
-  const adjacentSplitId = getAdjacentSplitId();
+  const adjacentSplitId = splitManager.adjacentSplit(activeSplitId, direction);
   if (!adjacentSplitId) return;
   splitManager.activateSplit(adjacentSplitId);
   splitManager.returnFocus();

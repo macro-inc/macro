@@ -19,6 +19,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { ResultError } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import {
   DOCUMENT_NAME_TOO_LONG_CODE,
@@ -31,6 +32,12 @@ import { storageWS } from '@service-storage/websocket';
 import { match } from 'ts-pattern';
 import { FileTypeMap } from '../fileTypeMap';
 import { waitForFolderUpload } from './folderUploadStatus';
+import {
+  forgetPendingFolderUpload,
+  type PendingFolderUpload,
+  readPendingFolderUploads,
+  rememberPendingFolderUpload,
+} from './pendingFolderUploads';
 import { uploadDocx } from './uploadDocx';
 
 /**
@@ -46,7 +53,7 @@ export class DocumentNameTooLongError extends Error {
 
 const uploadWithPresignedUrl = async (params: {
   presignedUrl: string;
-  buffer: ArrayBuffer;
+  buffer: Blob;
   sha: string;
   type: MimeType;
   onProgress?: (sent: number | null) => void;
@@ -181,16 +188,16 @@ async function uploadWithProgress(
 
   let source: UploadSource;
   try {
-    source = await resolveUploadSource(file);
+    source = await resolveUploadSource(file, progress?.preparing);
   } catch (error) {
     return handleUploadError(error instanceof Error ? error : String(error));
   }
   const { sha } = source;
   const putFile = async (presignedUrl: string, type: MimeType) => {
-    if (source.kind === 'bytes') {
+    if (source.kind === 'file') {
       const sent = await uploadWithPresignedUrl({
         presignedUrl,
-        buffer: source.buffer,
+        buffer: source.file,
         sha,
         type,
         onProgress: progress?.sending,
@@ -339,12 +346,55 @@ async function uploadFolderZip(
   });
   progress?.processing(null);
 
+  // Lets a tab opened or reloaded later show how the folder ends.
+  const userId = cachedUserId();
+  const sentAt = Date.now();
+  if (userId) rememberPendingFolderUpload(userId, { requestId, name, sentAt });
+
   return {
     type: 'folder',
     name,
     requestId,
-    projectId: settleFolderUpload(requestId, name, progress),
+    projectId: settleFolderUpload(requestId, name, progress, {
+      userId,
+      sentAt,
+      resumed: false,
+    }),
   };
+}
+
+/**
+ * Request ids this tab has followed, so it shows each folder's end once even
+ * if another tab's write brings back a record it already settled.
+ */
+const followedFolderUploads = new Set<string>();
+
+/**
+ * Follows the account's pending folders that this tab isn't following yet,
+ * sent before the page loaded or from another tab, showing each as
+ * Processing until the server says how it ended.
+ */
+export function resumePendingFolderUploads(userId: string): Promise<void>[] {
+  return readPendingFolderUploads(userId)
+    .filter((upload) => !followedFolderUploads.has(upload.requestId))
+    .map((upload) => followResumedFolderUpload(userId, upload));
+}
+
+async function followResumedFolderUpload(
+  userId: string,
+  upload: PendingFolderUpload
+) {
+  const progress = trackUpload(upload.name, 0);
+  progress.processing(null);
+  try {
+    await settleFolderUpload(upload.requestId, upload.name, progress, {
+      userId,
+      sentAt: upload.sentAt,
+      resumed: true,
+    });
+  } finally {
+    progress.done();
+  }
 }
 
 function partialUploadMessage(
@@ -364,17 +414,22 @@ function partialUploadMessage(
 async function settleFolderUpload(
   requestId: string,
   name: string,
-  progress: UploadProgressHandle | undefined
+  progress: UploadProgressHandle | undefined,
+  follow: { userId: string | undefined; sentAt: number; resumed: boolean }
 ): Promise<string | undefined> {
-  // Reloading into a newer build would lose track of the folder.
+  followedFolderUploads.add(requestId);
+  // A reload resumes the folder, but an automatic one would still interrupt it.
   const releaseReloadHold = holdAutomaticReload();
   try {
     const outcome = await Telemetry.span(
       'folder_upload.server',
       async (span) => {
         span.setAttr('folder_upload.request_id', requestId);
-        const outcome = await waitForFolderUpload(requestId, (fraction) =>
-          progress?.processing(fraction)
+        span.setAttr('folder_upload.resumed', follow.resumed);
+        const outcome = await waitForFolderUpload(
+          requestId,
+          (fraction) => progress?.processing(fraction),
+          { sentAt: follow.sentAt }
         );
         span.setAttr('folder_upload.outcome', outcome.status);
         if (outcome.status === 'failed' || outcome.status === 'unknown') {
@@ -383,6 +438,7 @@ async function settleFolderUpload(
         return outcome;
       }
     );
+    if (follow.userId) forgetPendingFolderUpload(follow.userId, requestId);
     return match(outcome)
       .with({ status: 'completed' }, ({ projectId }) => {
         toast.success(`Uploaded ${name}`);
@@ -397,8 +453,11 @@ async function settleFolderUpload(
         return undefined;
       })
       .with({ status: 'unknown' }, () => {
+        // A resumed folder may have been sent long ago; don't promise it soon.
         toast.alert(
-          `Couldn't confirm that ${name} finished uploading. Check Drive in a few minutes.`
+          follow.resumed
+            ? `Couldn't confirm that ${name} finished uploading. Check Drive.`
+            : `Couldn't confirm that ${name} finished uploading. Check Drive in a few minutes.`
         );
         return undefined;
       })

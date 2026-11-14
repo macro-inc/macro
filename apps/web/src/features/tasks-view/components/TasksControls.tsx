@@ -45,6 +45,7 @@ function DesktopTasksControls() {
         return current === menu ? undefined : current;
       });
     };
+  const isSearching = () => !!state.search.trim();
 
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -60,8 +61,9 @@ function DesktopTasksControls() {
     },
     sort: {
       description: 'Sort tasks',
+      condition: () => !isSearching(),
       run: () => {
-        if (!sortTrigger || state.search.trim()) return false;
+        if (!sortTrigger) return false;
 
         setOpenMenu('sort');
         return true;
@@ -70,7 +72,6 @@ function DesktopTasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
-  const isSearching = () => !!state.search.trim();
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
@@ -141,17 +142,7 @@ function DesktopTasksControls() {
         </Show>
       </HeaderActionGroup>
       <HeaderActionGroup label="Task view options" size="md">
-        <Show
-          when={!isSearching()}
-          fallback={
-            <span
-              class="text-xs text-ink-muted"
-              title="Search keeps its existing result ordering. Clear search to sort tasks."
-            >
-              Search order
-            </span>
-          }
-        >
+        <Show when={!isSearching()}>
           <ListSortDropdown
             grouped
             size="icon-md"

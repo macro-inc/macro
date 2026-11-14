@@ -4,6 +4,7 @@ use crate::domain::catalog::CatalogEntry;
 use crate::domain::code_check::CodeCheckError;
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
+use crate::domain::drafts::jobs::DraftJobError;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
@@ -849,6 +850,13 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(draft) = error.downcast_ref::<InvalidDraft>() {
             return (StatusCode::BAD_REQUEST, draft.to_string()).into_response();
         }
+        if let Some(job) = error.downcast_ref::<DraftJobError>() {
+            let status = match job {
+                DraftJobError::NotFound => StatusCode::NOT_FOUND,
+                DraftJobError::TooMany => StatusCode::CONFLICT,
+            };
+            return (status, job.to_string()).into_response();
+        }
         if let Some(code) = error.downcast_ref::<CodeCheckError>() {
             let status = match code {
                 CodeCheckError::DoesNotCheck { .. } => StatusCode::BAD_REQUEST,
@@ -883,7 +891,9 @@ impl IntoResponse for ScheduledActionApiError {
                 RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
                     (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
                 }
-                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::Conflict | RoutineSessionError::TeamAgentComputer => {
+                    (StatusCode::CONFLICT, session.to_string())
+                }
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "agent service is unavailable".to_owned(),

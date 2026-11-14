@@ -42,6 +42,10 @@ pub struct AgentSessionSearchArgs {
     pub mode: AgentSessionSearchMode,
 }
 
+const INNER_HITS_PER_TERM: u32 = 100;
+/// The fields `SearchGotoAgentSession` decodes from a matching message.
+const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["message_turn", "author"];
+
 struct AgentSessionSearchConfig;
 
 impl SearchQueryConfig for AgentSessionSearchConfig {
@@ -84,7 +88,8 @@ pub(super) fn build_query(
                     .inner_hits(
                         InnerHits::new()
                             .name(format!("agent_term_{index}"))
-                            .size(100)
+                            .size(INNER_HITS_PER_TERM)
+                            .source_fields(MESSAGE_SOURCE_FIELDS)
                             .highlight(inner_hits_content_highlight(&highlight)),
                     )
                     .into(),

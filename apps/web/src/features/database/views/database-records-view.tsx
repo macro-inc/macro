@@ -5,6 +5,7 @@ import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
+  createMemo,
   type JSX,
   Match,
   onCleanup,
@@ -200,6 +201,16 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     return true;
   }
 
+  // The button is built again only when its label changes. Renaming a column
+  // changes `columns()`, and a button rebuilt then, as the blur that saves the
+  // name runs, takes the pointer press from under the user: no click follows.
+  const addColumnLabel = createMemo(() =>
+    columns().length ? undefined : 'Add first column'
+  );
+  const addColumn = createMemo(() =>
+    props.addColumn?.(addColumnLabel(), focusColumn)
+  );
+
   const columnLayout = createColumnLayout({
     view: () => props.view,
     columns,
@@ -356,6 +367,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
+            rowCells={row().cells}
             emptyLabel={options?.emptyLabel ?? ''}
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
@@ -607,7 +619,10 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                         .filter((id): id is string => id !== undefined);
                       const writable = columnIds.filter((id) =>
                         columns().some(
-                          (column) => column.id === id && canEditCell(column)
+                          (column) =>
+                            column.id === id &&
+                            canEditCell(column) &&
+                            column.nullable !== false
                         )
                       );
                       if (!savedRows.length || !writable.length) return true;
@@ -653,15 +668,13 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               canEdit={props.canEdit}
               pending={controller.pending()}
-              addColumn={props.addColumn?.(
-                columns().length ? undefined : 'Add first column',
-                focusColumn
-              )}
+              addColumn={addColumn()}
               renderCell={renderCell}
               renderCellPreview={(row, column) => (
                 <GridCellPreview
                   column={column()}
                   value={rowValue(row(), column().id)}
+                  rowCells={row().cells}
                   canEdit={props.canEdit}
                 />
               )}

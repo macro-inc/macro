@@ -14,11 +14,14 @@ const mocks = vi.hoisted(() => ({
   toastFailure: vi.fn(),
   toastAlert: vi.fn(),
   trackUpload: vi.fn(),
+  uploadPreparing: vi.fn(),
   uploadSending: vi.fn(),
   uploadProcessing: vi.fn(),
   uploadDone: vi.fn(),
   contentHash: vi.fn(),
+  hashFile: vi.fn(),
   fetch: vi.fn(),
+  userInfo: vi.fn(),
 }));
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: mocks.invoke,
@@ -46,6 +49,10 @@ vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
 }));
 vi.mock('@core/util/hash', () => ({ contentHash: mocks.contentHash }));
+vi.mock('@core/util/hashFile', () => ({ hashFile: mocks.hashFile }));
+vi.mock('@queries/client', () => ({
+  queryClient: { getQueryData: mocks.userInfo },
+}));
 vi.mock('@queries/storage/document-location', () => ({
   waitForDocumentContentReady: mocks.ready,
 }));
@@ -67,7 +74,13 @@ vi.mock('@service-storage/websocket', () => ({ storageWS: {} }));
 vi.mock('./uploadDocx', () => ({ uploadDocx: vi.fn() }));
 
 import { createNativeStagedUploadFile } from '@core/mobile/nativeStagedUpload';
-import { upload } from './upload';
+import {
+  readPendingFolderUploads,
+  rememberPendingFolderUpload,
+} from './pendingFolderUploads';
+import { resumePendingFolderUploads, upload } from './upload';
+
+const USER_ID = 'macro|user@example.com';
 
 function stagedPdf() {
   const file = createNativeStagedUploadFile('share', {
@@ -87,9 +100,13 @@ function stagedPdf() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  localStorage.clear();
+  mocks.userInfo.mockReturnValue({ id: USER_ID });
   vi.stubGlobal('fetch', mocks.fetch);
   mocks.contentHash.mockResolvedValue('cd'.repeat(32));
+  mocks.hashFile.mockResolvedValue('cd'.repeat(32));
   mocks.trackUpload.mockReturnValue({
+    preparing: mocks.uploadPreparing,
     sending: mocks.uploadSending,
     processing: mocks.uploadProcessing,
     done: mocks.uploadDone,
@@ -211,17 +228,27 @@ describe('pdf upload checksums', () => {
 });
 
 describe('browser upload checksums', () => {
-  it('still hashes and uploads the original file bytes', async () => {
-    const bytes = new Uint8Array([1, 2, 3]).buffer;
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes });
+  // A large file read whole is held in memory several times over; the upload
+  // must hash it with `hashFile` and send the file itself.
+  function unreadableFile(name: string, type: string) {
+    const file = new File([], name, { type });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => {
+        throw new Error('Must not read the whole file into memory');
+      },
+    });
+    return file;
+  }
+
+  it('hashes the file and sends the file itself as the body', async () => {
+    const file = unreadableFile('browser.pdf', 'application/pdf');
 
     await upload(file);
 
-    expect(mocks.contentHash).toHaveBeenCalledWith(bytes);
+    expect(mocks.hashFile).toHaveBeenCalledWith(file, mocks.uploadPreparing);
     expect(mocks.browserPut).toHaveBeenCalledWith({
       presignedUrl: 'https://example.com/upload',
-      buffer: bytes,
+      buffer: file,
       sha: 'cd'.repeat(32),
       type: 'application/pdf',
       onProgress: mocks.uploadSending,
@@ -234,10 +261,7 @@ describe('browser upload checksums', () => {
   });
 
   it('clears the progress indicator if the PUT throws', async () => {
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: async () => new ArrayBuffer(0),
-    });
+    const file = unreadableFile('browser.pdf', 'application/pdf');
     mocks.browserPut.mockRejectedValue(new TypeError('Failed to fetch'));
 
     await expect(upload(file)).rejects.toThrow('Failed to fetch');
@@ -247,11 +271,8 @@ describe('browser upload checksums', () => {
   });
 
   it('clears the progress indicator before creating a document if hashing fails', async () => {
-    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: async () => new ArrayBuffer(0),
-    });
-    mocks.contentHash.mockRejectedValue(new Error('Hash failed'));
+    const file = unreadableFile('browser.pdf', 'application/pdf');
+    mocks.hashFile.mockRejectedValue(new Error('Hash failed'));
 
     await expect(upload(file)).rejects.toThrow('Hash failed');
 
@@ -345,6 +366,122 @@ describe('folder uploads', () => {
     expect(mocks.toastAlert).toHaveBeenCalledWith(
       'Uploaded Archive, but 3 of 814 files could not be uploaded'
     );
+  });
+
+  it('remembers a sent folder until its outcome is shown', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    let finish!: (outcome: unknown) => void;
+    mocks.waitForFolderUpload.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(readPendingFolderUploads(USER_ID)).toEqual([
+      expect.objectContaining({ requestId: 'zip-request', name: 'Archive' }),
+    ]);
+    finish({ status: 'failed' });
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await result.projectId;
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('does not remember a folder when no one is signed in', async () => {
+    mocks.userInfo.mockReturnValue(undefined);
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(localStorage.length).toBe(0);
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await expect(result.projectId).resolves.toBe('project');
+  });
+
+  it('shows a folder sent before the page loaded until the server finishes it', async () => {
+    const sentAt = Date.now() - 60_000;
+    rememberPendingFolderUpload(USER_ID, {
+      requestId: 'earlier-request',
+      name: 'Records',
+      sentAt,
+    });
+    mocks.waitForFolderUpload.mockResolvedValue({
+      status: 'partially_completed',
+      projectId: 'project',
+      progress: { filesTotal: 10, filesStored: 9, filesFailed: 1 },
+    });
+
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    expect(mocks.trackUpload).toHaveBeenCalledWith('Records', 0);
+    expect(mocks.uploadProcessing).toHaveBeenCalledWith(null);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledWith(
+      'earlier-request',
+      expect.any(Function),
+      { sentAt }
+    );
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      'Uploaded Records, but 1 of 10 files could not be uploaded'
+    );
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('does not promise a resumed folder will show up soon', async () => {
+    rememberPendingFolderUpload(USER_ID, {
+      requestId: 'unconfirmed-request',
+      name: 'Records',
+      sentAt: Date.now(),
+    });
+    mocks.waitForFolderUpload.mockResolvedValue({ status: 'unknown' });
+
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      "Couldn't confirm that Records finished uploading. Check Drive."
+    );
+    expect(readPendingFolderUploads(USER_ID)).toEqual([]);
+  });
+
+  it('follows a folder once in the tab that sent it', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    mocks.createUploadZipRequest.mockResolvedValue(
+      ok({ presignedUrl: 'https://example.com/zip', requestId: 'sent-here' })
+    );
+    let finish!: (outcome: unknown) => void;
+    mocks.waitForFolderUpload.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(resumePendingFolderUploads(USER_ID)).toEqual([]);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledOnce();
+    finish({ status: 'completed', projectId: 'project' });
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await result.projectId;
+  });
+
+  it('shows how a folder ended once even if another tab writes its record back', async () => {
+    const record = {
+      requestId: 'settled-request',
+      name: 'Records',
+      sentAt: Date.now(),
+    };
+    rememberPendingFolderUpload(USER_ID, record);
+    mocks.waitForFolderUpload.mockResolvedValue({
+      status: 'completed',
+      projectId: 'project',
+    });
+    await Promise.all(resumePendingFolderUploads(USER_ID));
+
+    rememberPendingFolderUpload(USER_ID, record);
+
+    expect(resumePendingFolderUploads(USER_ID)).toEqual([]);
+    expect(mocks.waitForFolderUpload).toHaveBeenCalledOnce();
   });
 
   it('refuses a zip the app did not prepare before asking for an upload URL', async () => {

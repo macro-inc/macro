@@ -43,9 +43,12 @@ pub enum Event {
     /// but a give-up before the computer next boots is not paged: a team
     /// retrying repeatedly must not page on-call each time.
     TeamRetry,
-    /// A fleet effect failed after its retries; an operator looks.
+    /// A fleet effect failed after its retries, or for good at once; an
+    /// operator looks.
     EffectFailed {
-        /// Reason for this decision or failure.
+        /// What failed, as the team sees it.
+        failure: Failure,
+        /// The full error, for the logs and the operator page.
         reason: String,
     },
     /// Stop billing at `at`, the end of the current period. The item is
@@ -242,6 +245,27 @@ pub enum Effect {
         /// Reason for this decision or failure.
         reason: String,
     },
+    /// Tell the buyer how first setup ended.
+    NotifySetup {
+        /// Ready, or why it failed.
+        outcome: SetupOutcome,
+    },
+}
+
+/// How a computer's first setup ended, as its buyer hears it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum SetupOutcome {
+    /// macrod connected for the first time. Happens once per computer.
+    Ready,
+    /// Setup gave up before macrod ever connected. A team retry that gives
+    /// up again is a new outcome with a later `failed_at`.
+    Failed {
+        /// Why, as the team sees it.
+        failure: Failure,
+        /// When setup gave up; tells one attempt's failure from the next.
+        failed_at: DateTime<Utc>,
+    },
 }
 
 impl Effect {
@@ -257,7 +281,8 @@ impl Effect {
             | Self::RestartMacrod { .. }
             | Self::Destroy { .. }
             | Self::RevokeHarness
-            | Self::PageOperator { .. } => EffectWorker::Fleet,
+            | Self::PageOperator { .. }
+            | Self::NotifySetup { .. } => EffectWorker::Fleet,
         }
     }
 }

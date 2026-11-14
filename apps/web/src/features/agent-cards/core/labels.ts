@@ -31,6 +31,7 @@ export function documentKind(fileType: string | null | undefined): string {
 
 // The app calls a `project` a folder and an `initiative` a project.
 const ITEM_KINDS: Record<Exclude<CardItemType, 'document'>, string> = {
+  database: 'Database',
   email_thread: 'Email',
   calendar_event: 'Event',
   project: 'Folder',

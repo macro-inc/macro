@@ -38,17 +38,24 @@ import { isCodeModeSupportCall } from '../state/code-mode-support';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { agentContextText, promptOrigin } from '../state/prompt-origin';
+import { sectionSteps } from '../state/section-steps';
 import { thoughtIsStreaming } from '../state/thought-streaming';
-import { isCodeExecution, segmentParts } from '../state/tool-groups';
+import {
+  isBlankText,
+  isCodeExecution,
+  liveToolSegment,
+  type PartSegment,
+  segmentParts,
+} from '../state/tool-groups';
 import {
   ActionLine,
   FailureNoticeCard,
   isToolActive,
   Thought,
+  ToolGroup,
   WorkingLine,
 } from '../ui';
 import { useCodeExecutionRecord } from '../views/code-execution-record';
-import { LiveToolGroup } from '../views/LiveToolGroup';
 import { PromptFooter, ReplyFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
@@ -160,7 +167,8 @@ function AgentMessagePart(props: {
 /**
  * A run of consecutive tool calls and their accompanying thoughts (see
  * `segmentParts`), folded to one row that opens to those parts, each at
- * its original index.
+ * its original index. While the turn is in the run, that row is the turn's
+ * one live line: the step the agent is on, or the session's status line.
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -168,6 +176,8 @@ function ToolGroupPart(props: {
   /** Exclusive. */
   end: number;
   inFlight: boolean;
+  /** The turn is in this run (`liveToolSegment`). */
+  live: boolean;
 }): JSX.Element {
   const parts = () => props.message.parts.slice(props.start, props.end);
   // What the person sees: their steps, not how the agent looked up its tools
@@ -185,43 +195,60 @@ function ToolGroupPart(props: {
         (part): part is ToolUsePart =>
           part.kind === 'tool_use' && isCodeExecution(part)
       ),
-    (part) =>
-      useCodeExecutionRecord(
+    (part) => ({
+      id: part.id,
+      ...useCodeExecutionRecord(
         () => part,
         () => props.message.agentSessionId,
         () => props.inFlight
-      )
+      ),
+    })
   );
+  const rows = () => props.message.segments.flatMap((segment) => segment.rows);
+  // Until a program's saved record loads (or when it can't), the fold's rows
+  // from its receipt stand for its steps, so the run folds the same either way.
+  const receiptRows = (callId: string) =>
+    rows().filter(
+      (row) => row.id === callId || row.id.startsWith(`${callId}:`)
+    );
+  const programSteps = (program: ReturnType<typeof programs>[number]) =>
+    program.steps() || receiptRows(program.id).length;
+  const programFailures = (program: ReturnType<typeof programs>[number]) =>
+    program.steps() > 0
+      ? program.failures()
+      : receiptRows(program.id).filter((row) => row.status === 'failed').length;
   const count = () =>
     programs().reduce(
-      (total, program) => total + program.steps(),
+      (total, program) => total + programSteps(program),
       shownCalls().length
     );
-  // A call the log left running in a finished turn is over (see
-  // `settledToolStatus`), so a settled turn's run is never "Using".
-  // Rows the group renders, so the window follows the right one.
+  const failed = () =>
+    programs().reduce(
+      (total, program) => total + programFailures(program),
+      shownCalls().filter((part) => part.status === 'failed').length
+    );
+  const activity = useSessionActivity(() => props.message.agentSessionId);
+  const steps = () =>
+    sectionSteps({
+      parts: parts(),
+      rows: rows(),
+      observed: (callId) =>
+        programs()
+          .find((program) => program.id === callId)
+          ?.record()?.activity,
+      thinking:
+        props.message.parts.at(-1)?.kind === 'thought' &&
+        thoughtIsStreaming(
+          props.inFlight,
+          props.end - 1,
+          props.message.parts.length
+        ),
+    });
   const shownParts = () =>
     parts()
       .map((part, offset) => ({ part, index: props.start + offset }))
-      .filter(({ part }) => !isCodeModeSupportCall(part));
-  const activeIndex = () =>
-    props.inFlight
-      ? shownParts().findIndex(
-          ({ part }) => part.kind === 'tool_use' && isToolActive(part.status)
-        )
-      : -1;
-  const active = () => activeIndex() !== -1;
-  const activity = useSessionActivity(() => props.message.agentSessionId);
-  // The session's live line names what the turn is doing now, so it belongs
-  // on the run the turn is still in: one with a call in flight, or the
-  // newest run while the agent thinks between calls.
-  const current = () =>
-    active() ||
-    (props.inFlight &&
-      props.message.parts
-        .slice(props.end)
-        .every((part) => part.kind === 'thought'));
-  const summary = () => (current() ? activity() : undefined);
+      // A blank line between calls joins the run but has nothing to show.
+      .filter(({ part }) => !isCodeModeSupportCall(part) && !isBlankText(part));
   const renderParts = () => (
     <Index each={shownParts()}>
       {(shown) => (
@@ -243,18 +270,16 @@ function ToolGroupPart(props: {
   );
 
   return (
-    <Show when={count() > 0 || active() || summary()} fallback={renderParts()}>
-      <LiveToolGroup
+    <Show when={props.live || count() > 0} fallback={renderParts()}>
+      <ToolGroup
         count={count()}
-        active={active()}
-        activeIndex={active() ? activeIndex() : undefined}
-        summary={summary()}
-        // Programs repeat one generic label per step, and a failed step the
-        // agent recovered from is not news: keep their runs closed.
-        autoOpen={programs().length === 0}
+        failed={failed()}
+        live={props.live}
+        steps={props.live ? steps() : undefined}
+        summary={props.live ? activity() : undefined}
       >
         {renderParts()}
-      </LiveToolGroup>
+      </ToolGroup>
     </Show>
   );
 }
@@ -263,13 +288,28 @@ function ToolGroupPart(props: {
  * Whether an open turn should show the working row at its tail.
  *
  * Skipped wherever the transcript already shows the turn is alive — prose
- * streaming in, a thought shimmering — and wherever it is not: a permission
- * or elicitation prompt is waiting on the reader, not working.
+ * streaming in, a thought shimmering, a run of calls on its live line, a
+ * call working on its own row — and wherever it is not: a permission or
+ * elicitation prompt is waiting on the reader, not working. A call still out
+ * in an earlier run doesn't count, since that run reads as settled.
  */
-function showsWorkingLine(message: FoldedMessage): boolean {
+function showsWorkingLine(
+  message: FoldedMessage,
+  segments: readonly PartSegment[],
+  liveRun: number
+): boolean {
+  if (liveRun !== -1) return false;
+  const inRun = (index: number) =>
+    segments.some(
+      (segment) =>
+        segment.kind === 'tools' &&
+        segment.start <= index &&
+        index < segment.end
+    );
   if (
     message.parts.some(
-      (part) => part.kind === 'tool_use' && isToolActive(part.status)
+      (part, index) =>
+        part.kind === 'tool_use' && isToolActive(part.status) && !inRun(index)
     )
   )
     return false;
@@ -306,16 +346,11 @@ function replySentAt(message: FoldedMessage): string | undefined {
 }
 
 /**
- * What the working row says: the last part names the work — a tool call or
- * a plan — and a bare turn is just working.
+ * What the working row says: a plan names the work, and anything else is
+ * just working. A run of calls says what it is doing on its own line.
  */
 function workingLabel(message: FoldedMessage): string {
-  const last = message.parts.at(-1);
-  if (last === undefined) return 'Working';
-  return match(last)
-    .with({ kind: 'tool_use' }, () => 'Running tools')
-    .with({ kind: 'plan' }, () => 'Planning')
-    .otherwise(() => 'Working');
+  return message.parts.at(-1)?.kind === 'plan' ? 'Planning' : 'Working';
 }
 
 /**
@@ -417,6 +452,10 @@ export function Message(props: {
   inFlight: boolean;
 }) {
   const inFlight = () => props.inFlight;
+  const segments = createMemo(() => segmentParts(props.message.parts));
+  const liveRun = createMemo(() =>
+    inFlight() ? liveToolSegment(props.message.parts, segments()) : -1
+  );
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
@@ -437,8 +476,8 @@ export function Message(props: {
             {/* Segments are positional, and a run at the tail grows as calls
               stream in — so rows are keyed by index, not by segment value,
               and a group keeps its open state while it fills. */}
-            <Index each={segmentParts(props.message.parts)}>
-              {(segment) => (
+            <Index each={segments()}>
+              {(segment, index) => (
                 <Show
                   when={segment().kind === 'tools'}
                   fallback={
@@ -459,13 +498,19 @@ export function Message(props: {
                     start={segment().start}
                     end={segment().end}
                     inFlight={inFlight()}
+                    live={index === liveRun()}
                   />
                 </Show>
               )}
             </Index>
             {/* The turn is open with nothing to read yet — a ripple and a label
               naming the work, so the wait reads as work rather than a stall. */}
-            <Show when={inFlight() && showsWorkingLine(props.message)}>
+            <Show
+              when={
+                inFlight() &&
+                showsWorkingLine(props.message, segments(), liveRun())
+              }
+            >
               <WorkingLine label={workingLabel(props.message)} />
             </Show>
             {/* A turn the runtime errored is something that happened to the
