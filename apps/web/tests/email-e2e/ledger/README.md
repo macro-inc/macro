@@ -100,7 +100,9 @@ Both CI jobs run the report with `--enforce`. It fails when
 - a passing test covers what `waivers.tsv` waives: remove the line;
 - a function with tests on every provider has no line in `proofs.tsv`;
 - a test tagged `@known-bug` passes: remove the tag, and the waiver that
-  stood for the bug;
+  stood for the bug. A bug that shows only in some runs is also tagged
+  `@sometimes`, and a pass of its test fails nothing: one run cannot tell
+  that it is gone;
 - `waivers.tsv` or `full-stack-only.tsv` names what the manifest lacks, or
   the manifest differs from the source.
 

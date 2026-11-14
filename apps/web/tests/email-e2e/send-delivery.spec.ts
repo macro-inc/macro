@@ -163,9 +163,10 @@ for (const provider of PROVIDERS) {
     // When this fails, a reply that was sent is offered again as a draft
     // after a reload: the page was reloaded before it heard that the send
     // arrived, and the composer reopens with the sent text and a Send button
-    // that answers "This draft session is no longer active".
+    // that answers "This draft session is no longer active". Not in every
+    // run (about two in three here, on either provider): `@sometimes`.
     test('known bug: sent-reply-reopens-as-draft-after-reload: a reply sent before a reload is not offered again in the composer @known-bug', {
-      tag: '@known-bug',
+      tag: ['@known-bug', '@sometimes'],
     }, async ({ page, mailbox }) => {
       const thread = await lunch(mailbox);
       // The service receives the send; its answer never arrives, and until
@@ -365,8 +366,9 @@ test.describe('a send an Outlook mailbox rejected', () => {
   // When this fails, Retry send on a reply the provider rejected once does
   // not send it: the reply ends as a draft conflict ("This draft changed in
   // your mailbox. Choose which version to keep.") and nothing goes out.
+  // Not in every run (two in three here): `@sometimes`.
   test('known bug: outlook-retry-send-after-rejection-conflicts: Retry send delivers the rejected reply once @known-bug', {
-    tag: '@known-bug',
+    tag: ['@known-bug', '@sometimes'],
   }, async ({ page, mailbox }) => {
     const thread = await lunch(mailbox);
     await injectFault(mailbox, {

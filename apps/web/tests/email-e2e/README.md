@@ -81,7 +81,9 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
   tagged `{ tag: '@known-bug' }`. The suite leaves it out;
   `EMAIL_E2E_KNOWN_BUGS=1` runs only those (a non-gating CI step, on each
   stack). Once it passes, the coverage step fails until the tag and the
-  bug's line in `ledger/waivers.tsv` are removed.
+  bug's line in `ledger/waivers.tsv` are removed. A bug that shows only in
+  some runs is tagged `['@known-bug', '@sometimes']`, with its rate in the
+  comment: a pass of that test fails nothing.
 - A new test must fail with its bug put back: build a bundle with the fix
   reverted into another directory and run with `EMAIL_E2E_DIST` pointing at it.
 - A failing test prints its service log directory and keeps a Playwright trace

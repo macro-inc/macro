@@ -187,7 +187,7 @@ const WAIVER_KINDS: Record<Waiver['kind'], string> = {
 };
 
 const ENFORCED =
-  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test has no line in proofs.tsv; when a test tagged @known-bug passes; and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
 
 function waiverTable(): Table {
   return {
@@ -604,7 +604,8 @@ function report(mode: Mode): void {
       fullStackOnly: FULL_STACK_ONLY,
       covered,
       knownBugsPassing: knownBugs.tests
-        .filter((test) => test.status === 'expected')
+        // One pass of a bug that shows only sometimes says nothing.
+        .filter((test) => test.status === 'expected' && !test.sometimes)
         .map((test) => `${test.file}:${test.line} ${test.title}`),
     }),
     ...ledger.drift.flatMap((each) =>

@@ -105,9 +105,9 @@ for (const provider of PROVIDERS) {
     // out of its status row: Cancel leaves the row, loses the text, or the
     // recovered reply goes out twice or not at all. On Outlook the second
     // send is sometimes answered with a draft conflict (about one run in
-    // three) and the reply never goes out.
+    // three) and the reply never goes out: `@sometimes`.
     test(`${provider === 'OUTLOOK' ? 'known bug: outlook-resend-after-recovered-send-conflicts: ' : ''}a refused reply is cancelled back into its composer and goes out once when sent again`, {
-      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
+      tag: provider === 'OUTLOOK' ? ['@known-bug', '@sometimes'] : [],
     }, async ({ page, mailbox }) => {
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',

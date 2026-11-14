@@ -211,9 +211,10 @@ for (const provider of PROVIDERS) {
     // choosing makes the composer save the draft and ask for the move right
     // after, and the service refuses a move while that save is not yet at
     // Outlook. From shows the first inbox again. Nothing on screen tells
-    // when the choice would hold, so there is nothing to wait for.
+    // when the choice would hold, so there is nothing to wait for. Tagged
+    // `@sometimes`: one pass does not say the bug is gone.
     test(`${provider === 'OUTLOOK' ? 'known bug: outlook-from-choice-dropped-while-draft-syncs: ' : ''}a message is sent from the inbox chosen in From`, {
-      tag: provider === 'OUTLOOK' ? '@known-bug' : [],
+      tag: provider === 'OUTLOOK' ? ['@known-bug', '@sometimes'] : [],
     }, async ({ page, mailbox }) => {
       const work = await mailbox.stack.link(
         mailbox.user,

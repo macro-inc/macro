@@ -28,6 +28,8 @@ export type Test = {
   file: string;
   line: number;
   knownBug: boolean;
+  /** A known bug that shows only in some runs (`@sometimes`). */
+  sometimes: boolean;
   /** Playwright's verdict over the retries. */
   status: 'expected' | 'unexpected' | 'flaky' | 'skipped';
   results: JsonResult[];
@@ -62,6 +64,9 @@ export function readRun(run: Run): RunResult {
           line: spec.line,
           knownBug: spec.tags.some(
             (tag) => tag.replace('@', '') === 'known-bug'
+          ),
+          sometimes: spec.tags.some(
+            (tag) => tag.replace('@', '') === 'sometimes'
           ),
           status: test.status as Test['status'],
           results: test.results,
