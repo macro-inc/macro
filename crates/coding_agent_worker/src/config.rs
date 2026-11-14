@@ -79,6 +79,9 @@ pub struct MonitorSettings {
     /// most every 5 minutes with none. Values under 15 are raised to 15.
     /// 0 turns pull request status off.
     pub pr_poll_secs: u32,
+    /// Map the git repositories agents work in (branches, commits, pull
+    /// requests) for the CHANGES page. Read-only: never fetches or locks.
+    pub changes: bool,
 }
 
 impl Default for MonitorSettings {
@@ -90,6 +93,7 @@ impl Default for MonitorSettings {
             run_record_dirs: Vec::new(),
             run_id_labels: Vec::new(),
             pr_poll_secs: 60,
+            changes: true,
         }
     }
 }

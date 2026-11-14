@@ -83,6 +83,7 @@ fn monitor_settings_default_when_the_table_or_file_is_missing() {
             run_record_dirs: Vec::new(),
             run_id_labels: Vec::new(),
             pr_poll_secs: 60,
+            changes: true,
         }
     );
 
@@ -100,7 +101,7 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
     let path = directory.path().join("macrod.toml");
     std::fs::write(
         &path,
-        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\nrun_id_labels = [\"run.id\"]\npr_poll_secs = 0\n",
+        "[monitor]\nenabled = false\nrun_record_dirs = [\"/var/runs\"]\nrun_id_labels = [\"run.id\"]\npr_poll_secs = 0\nchanges = false\n",
     )
     .unwrap();
 
@@ -113,6 +114,7 @@ fn a_partial_monitor_table_overrides_only_its_keys() {
             run_record_dirs: vec![PathBuf::from("/var/runs")],
             run_id_labels: vec![String::from("run.id")],
             pr_poll_secs: 0,
+            changes: false,
         }
     );
 }

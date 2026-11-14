@@ -3,15 +3,21 @@
 //! calls can be counted (`strace -c -f -p <pid>`): an idle run must show no
 //! periodic `stat` storm, only the 30 s reconcile.
 //!
+//! It also maps the git repositories the agents work in, as the `git` source
+//! does, and prints each one's trunk and lanes with the gather's time.
+//!
 //! `cargo run -p agent_monitor --example sources_dump -- --home ~ [--run-dir DIR]... [--idle 30]`
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use agent_monitor::domain::join::{Facts, build_agents};
+use agent_monitor::domain::join::{Facts, build_agents, git_wanted};
 use agent_monitor::domain::model::{Cost, SourceKind, SourceState, Status};
+use agent_monitor::domain::model::{LaneBase, RepoId};
 use agent_monitor::domain::observation::Change;
+use agent_monitor::outbound::git::{GitBackend as _, GitCli, RepoPlace, RepoWanted, gather};
+use agent_monitor::outbound::github::repo_of_remote;
 use agent_monitor::outbound::local::LocalSources;
 use chrono::Utc;
 use clap::Parser;
@@ -116,6 +122,7 @@ async fn main() {
     );
 
     print_agents(&facts, args.rows);
+    print_repos(&facts, &args.home).await;
 
     if args.idle > 0 {
         println!("idle for {} s (pid {})", args.idle, std::process::id());
@@ -211,5 +218,106 @@ fn print_agents(facts: &Facts, rows: usize) {
             cost,
             agent.doing.clone().unwrap_or_default(),
         );
+    }
+}
+
+/// Maps every repository an agent works in and prints its graph.
+async fn print_repos(facts: &Facts, home: &std::path::Path) {
+    let built = build_agents(facts, Utc::now());
+    let wanted = git_wanted(&built);
+    let git = GitCli::new(GitCli::default_programs(home));
+    let mut repos: BTreeMap<PathBuf, BTreeMap<PathBuf, bool>> = BTreeMap::new();
+    let mut outside = 0;
+    for (cwd, live) in &wanted.cwds {
+        match git.discover(cwd.clone()).await {
+            Some(found) => {
+                repos
+                    .entry(found.common_dir)
+                    .or_default()
+                    .insert(cwd.clone(), *live);
+            }
+            None => outside += 1,
+        }
+    }
+    println!(
+        "repositories: {} from {} agent directories ({outside} not in a checkout)",
+        repos.len(),
+        wanted.cwds.len()
+    );
+    for (common, cwds) in repos {
+        let remote = git
+            .origin(common.clone())
+            .await
+            .as_deref()
+            .and_then(repo_of_remote);
+        let place = RepoPlace {
+            id: RepoId::of_common_dir(&common),
+            name: remote
+                .as_ref()
+                .map_or_else(|| common.display().to_string(), |r| r.to_string()),
+            common_dir: common.clone(),
+            remote: remote.clone(),
+        };
+        let wanted = RepoWanted {
+            cwds,
+            pr_branches: remote
+                .as_ref()
+                .and_then(|remote| wanted.pr_branches.get(remote))
+                .cloned()
+                .unwrap_or_default(),
+        };
+        let started = std::time::Instant::now();
+        let graph = gather(&git, &place, &wanted, Utc::now()).await;
+        let took = started.elapsed();
+        let graph = match graph {
+            Ok(Some(graph)) => graph,
+            Ok(None) => {
+                println!("{} ({}): no trunk", place.name, common.display());
+                continue;
+            }
+            Err(error) => {
+                println!("{} ({}): {error}", place.name, common.display());
+                continue;
+            }
+        };
+        println!(
+            "{} ({}) gathered in {} ms: trunk {} {} commits, local {:?}, fetched {:?}, {} lanes (+{} hidden), {} agent dirs",
+            graph.name,
+            common.display(),
+            took.as_millis(),
+            graph.trunk.name,
+            graph.trunk.commits.len(),
+            graph.trunk.local,
+            graph.trunk.fetched_at,
+            graph.lanes.len(),
+            graph.hidden_lanes,
+            wanted.cwds.len(),
+        );
+        for lane in &graph.lanes {
+            let base = match &lane.base {
+                LaneBase::Trunk { oid, at } => {
+                    format!("trunk {} {}", oid.short(), at.format("%m-%d %H:%M"))
+                }
+                LaneBase::Lane { branch, oid } => format!("on {branch} {}", oid.short()),
+            };
+            println!(
+                "  {:<44} +{:<4} -{:<4} {:>2} commits (+{} elided) base {base}{}{}{}",
+                lane.branch,
+                lane.ahead,
+                lane.behind,
+                lane.commits.len(),
+                lane.elided,
+                if lane.aliases.is_empty() {
+                    String::new()
+                } else {
+                    format!(" aliases {:?}", lane.aliases)
+                },
+                if lane.pushed.is_some() { " pushed" } else { "" },
+                lane.worktree
+                    .as_ref()
+                    .map(|path| format!(" @ {}", path.display()))
+                    .unwrap_or_default(),
+            );
+        }
     }
 }

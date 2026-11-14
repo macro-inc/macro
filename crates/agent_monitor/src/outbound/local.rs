@@ -3,10 +3,11 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::domain::source::{AgentSource, PrInterest};
+use crate::domain::source::{AgentSource, GitInterest, PrInterest};
 use crate::outbound::claude_registry::ClaudeRegistrySource;
 use crate::outbound::claude_transcripts::ClaudeTranscriptsSource;
 use crate::outbound::codex_rollouts::CodexRolloutsSource;
+use crate::outbound::git::{GitCli, GitSource};
 use crate::outbound::github::{GhCli, GithubSource};
 use crate::outbound::hc::{HcLabels, HcSource};
 use crate::outbound::macrod_sessions::MacrodSessionsSource;
@@ -40,6 +41,11 @@ pub struct LocalSources {
     /// How often pull request status is asked of GitHub while someone
     /// watches (`[monitor] pr_poll_secs`); `None` turns it off.
     pub pr_poll: Option<Duration>,
+    /// Where to look for `git`, in order; a bare name is looked up on `PATH`.
+    pub git: Vec<PathBuf>,
+    /// Whether to map local repositories for the CHANGES page
+    /// (`[monitor] changes`).
+    pub changes: bool,
 }
 
 impl LocalSources {
@@ -59,6 +65,8 @@ impl LocalSources {
             history,
             gh: GhCli::default_programs(&home),
             pr_poll: Some(Duration::from_secs(60)),
+            git: GitCli::default_programs(&home),
+            changes: true,
         }
     }
 
@@ -88,6 +96,16 @@ impl LocalSources {
     pub fn github(&self, interest: PrInterest) -> Option<SourceMaker> {
         let every = self.pr_poll.filter(|every| !every.is_zero())?;
         let source = GithubSource::new(GhCli::new(self.gh.clone()), interest, every);
+        Some(Box::new(move || Box::new(source.clone())))
+    }
+
+    /// The local repository source, fed by the store's `interest`; `None`
+    /// when `changes` is off.
+    pub fn git(&self, interest: GitInterest) -> Option<SourceMaker> {
+        if !self.changes {
+            return None;
+        }
+        let source = GitSource::new(GitCli::new(self.git.clone()), interest);
         Some(Box::new(move || Box::new(source.clone())))
     }
 }

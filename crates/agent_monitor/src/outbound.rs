@@ -2,12 +2,14 @@
 //! store as [`Observation`](crate::domain::observation::Observation)s. All but
 //! one are push-driven (a child process's stdout, or file-system
 //! notifications; a 30 s reconcile only re-checks what is already known);
-//! [`github`] polls GitHub for pull request status.
+//! [`github`] polls GitHub for pull request status. [`git`] maps local
+//! repositories, woken by ref watches.
 
 pub mod claude_registry;
 pub mod claude_transcripts;
 pub mod codex_rollouts;
 pub mod demo;
+pub mod git;
 pub mod github;
 pub mod hc;
 pub mod local;

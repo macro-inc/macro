@@ -48,6 +48,11 @@ impl Watch {
         self.watcher.watch(path, mode)
     }
 
+    /// Stops watching a directory added with [`Watch::add`].
+    pub fn remove(&mut self, path: &Path) -> notify::Result<()> {
+        self.watcher.unwatch(path)
+    }
+
     /// Waits for the next change, then takes every change already queued, so
     /// a burst of writes is handled once. `None` once the watcher has stopped.
     /// Reads alone (opening or closing a file) are not changes.
