@@ -798,8 +798,9 @@ While a call is live, the controls bar instead has a **Call sharing** dropdown w
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
 are disabled while connecting or saving. Team sharing is canonical **view** access
-(the same `Team access` model documents and AI chats use), enabled by default for
-channel calls. Any participant with edit access can change it, and other
+(the same `Team access` model documents and AI chats use). Calls in DMs and private
+channels start **Private**; calls in team and public channels start with team
+sharing. Any participant with edit access can change it, and other
 participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.

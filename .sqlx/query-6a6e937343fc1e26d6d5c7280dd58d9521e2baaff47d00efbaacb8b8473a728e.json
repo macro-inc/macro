@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
+  "query": "\n            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)\n            VALUES (\n                $1, $2, $3, $4, $5,\n                (SELECT c.channel_type NOT IN ('direct_message', 'private') FROM comms_channels c WHERE c.id = $2)\n            )\n            ON CONFLICT (channel_id) DO NOTHING\n            RETURNING id, channel_id, room_name, created_by, created_at, egress_id\n            ",
   "describe": {
     "columns": [
       {
@@ -52,5 +52,5 @@
       true
     ]
   },
-  "hash": "d0dcb62233091aee045f96c8f2cd8ebee5614196a92bcbc250b9702a8194c329"
+  "hash": "6a6e937343fc1e26d6d5c7280dd58d9521e2baaff47d00efbaacb8b8473a728e"
 }
