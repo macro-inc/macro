@@ -583,6 +583,13 @@ async fn drive_turn(
     // A turn nobody watches gets code mode and the documentation its request
     // needs, not a conversation's prompt and tools (see `unseen`).
     let unseen = delivery == ReplyDelivery::Unseen;
+    // EVAL ONLY (never commit): a background turn at low effort when the
+    // container has /tmp/session-fast-low.
+    let reasoning_effort = if unseen && std::path::Path::new("/tmp/session-fast-low").exists() {
+        agent::ReasoningEffort::Low
+    } else {
+        reasoning_effort
+    };
     if let Some(key) = &agent_key
         && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
     {

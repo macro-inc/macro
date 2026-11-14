@@ -1247,6 +1247,66 @@ impl<Code: RoutineCode, Sessions> super::RoutineDrafts<Code, Sessions> {
         )))
     }
 
+    /// EVAL ONLY: the fast session drafter's brief. The find call and the
+    /// name lookup run first, as for a direct draft, and the brief carries
+    /// what they found and the reference of the routines area, `ai` and the
+    /// areas the find call named.
+    pub(super) async fn session_fast_brief(
+        &self,
+        direct: &super::Direct,
+        owner: &MacroUserIdStr<'static>,
+        request: &DraftRequest,
+        program: &[Step],
+        context: &DraftContext,
+    ) -> std::result::Result<String, &'static str> {
+        let span = tracing::Span::current();
+        span.record("routine.draft.drafter", "session_fast");
+        let code = self.code_available(request, context);
+        let task = super::task(request, program, code)?;
+        if direct.drafting.model.admit(owner).await.is_err() {
+            return Err(request.failed());
+        }
+        let named = self
+            .find(&direct.drafting, &direct.prompts, owner, request)
+            .await;
+        let lookup = self.look_up(&direct.drafting, owner, &named).await;
+        span.record("routine.draft.found", lookup.found.len());
+        span.record(
+            "routine.draft.left",
+            lookup.left.len() + lookup.failed.len(),
+        );
+        let mut areas: Vec<String> = named
+            .sdk
+            .iter()
+            .map(|area| area.trim().to_owned())
+            .filter(|area| area != AI_AREA && area != "routines" && !area.is_empty())
+            .take(MAX_AREAS)
+            .collect();
+        if areas.is_empty() {
+            areas = FALLBACK_AREAS.iter().map(|area| (*area).to_owned()).collect();
+        }
+        let mut wanted = vec!["routines".to_owned()];
+        if code {
+            wanted.push(AI_AREA.to_owned());
+            wanted.extend(areas);
+        }
+        let reference = self.code.area_reference(&wanted);
+        let items = format!(
+            "{}\n{}",
+            lookup.for_writer(),
+            ITEMS_BY_NAME
+                .trim()
+                .replace(
+                    "in a trigger filter's `ids`",
+                    "in a trigger filter's `entities`, as the routines reference says"
+                )
+                .replace("the routines guide below", "the routines guide"),
+        );
+        Ok(super::fast_brief(
+            &task, context, code, owner, &items, &reference,
+        ))
+    }
+
     /// Whether `request` may be written with code steps here.
     pub(super) fn code_available(&self, request: &DraftRequest, context: &DraftContext) -> bool {
         let code = self.code.sdk().is_some()

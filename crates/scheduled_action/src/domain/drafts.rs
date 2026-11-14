@@ -386,6 +386,40 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         let span = draft_span(&request);
         async {
             let (program, context) = self.read_request(&request, context)?;
+            // EVAL ONLY (never commit): the fast session drafter when the
+            // container has /tmp/session-fast.
+            if let Some(direct) = &self.direct
+                && std::path::Path::new("/tmp/session-fast").exists()
+            {
+                let brief = match self
+                    .session_fast_brief(direct, &owner, &request, &program, &context)
+                    .await
+                {
+                    Ok(brief) => brief,
+                    Err(message) => return Ok(finish(failed(message))),
+                };
+                let session = AgentSessionId::new();
+                if let Err(error) = self
+                    .hand_backs
+                    .begin(session.as_uuid(), &owner, self.agent.bot)
+                    .await
+                {
+                    tracing::error!(error = ?error, "could not start a routine draft");
+                    return Ok(finish(failed(request.failed())));
+                }
+                let draft = self
+                    .drafted(
+                        &owner,
+                        &request,
+                        &program,
+                        &context,
+                        brief,
+                        Drafting::waited(session),
+                    )
+                    .await?
+                    .unwrap_or_else(|| failed(request.failed()));
+                return Ok(finish(draft));
+            }
             if let Some(direct) = &self.direct {
                 let run = DirectRun {
                     id: macro_uuid::generate_uuid_v7(),
@@ -1080,6 +1114,70 @@ fn task(request: &DraftRequest, program: &[Step], code: bool) -> Result<String, 
             )
         }
     })
+}
+
+/// EVAL ONLY: the fast session drafter's first prompt. The items the words
+/// name are looked up and the SDK reference the routine needs is given, so
+/// the session reads nothing and writes one program that ends with the check.
+pub(super) fn fast_brief(
+    task: &str,
+    context: &DraftContext,
+    code: bool,
+    owner: &MacroUserIdStr<'static>,
+    items: &str,
+    reference: &str,
+) -> String {
+    let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    let timezone = &context.timezone;
+    let model = &context.agent_model;
+    let steps = if code {
+        format!(
+            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            catalog_examples(context.conditions)
+        )
+    } else {
+        format!(
+            "Code steps can't be used: use one Ask AI step ({{type: 'agent', model: '{model}', instructions}}) for the work."
+        )
+    };
+    let conditions = if context.conditions {
+        "An event trigger may carry a `condition`, a yes/no question the item must answer yes."
+    } else {
+        "Never give a trigger a `condition`."
+    };
+    format!(
+        "{task}
+
+You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}.
+
+Everything you need is here: the items the request names, already looked up, and the SDK reference for the routines area and the areas this routine uses. Don't read documentation and don't search for items. Write ONE ExecuteCode program that builds the whole routine and ends with `return await macro.routines.check(routine, {{ created: [] }});`.
+
+## Items the request names
+
+Before you, the drafter looked up by name each item the request names, as the owner would see it.
+
+{items}
+- A name listed under \"Left for the owner\" has no item, several items have it, or it couldn't be looked up: don't guess, don't create it and don't search for it. Leave it out (no `entities`, or a knob whose value is `\"\"`) and the owner picks it before saving.
+- Anything else the code needs (the owner, a person by email address, their labels' or properties' ids), it reads from the SDK when it runs.
+
+## The SDK reference
+
+<sdk>
+{reference}
+</sdk>
+
+## For this draft
+
+1. You can't ask them anything.
+
+2. Don't create the routine itself, run it or test it: you hand it back for them to review.
+
+3. Write the routine as `macro.routines.check` takes it, following the routines reference above exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
+
+{steps}
+
+4. Hand it back by checking it, at the end of the same program. The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back. If it reports problems, fix exactly those and check the whole routine again. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+    )
 }
 
 /// Macro's catalog routines that are code, as worked examples of whole
