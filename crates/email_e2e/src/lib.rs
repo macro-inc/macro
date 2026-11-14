@@ -12,15 +12,17 @@
 
 mod api;
 mod aws;
-mod email_tools;
 mod calendar;
+mod email_tools;
 pub mod events;
+mod evidence;
 mod inbox;
 mod infra;
 mod lambda;
 mod macro_services;
 mod process;
 mod provider_catalog;
+mod recording_proxy;
 mod stack;
 mod tls;
 mod user;
@@ -28,10 +30,10 @@ mod wait;
 
 pub use api::ApiResponse;
 pub use aws::StoredObject;
-pub use email_tools::EmailTools;
 pub use calendar::Calendar;
 /// Dates and times, for calendar scenarios.
 pub use chrono;
+pub use email_tools::EmailTools;
 /// The Gmail emulator's own API, for what the inbox methods do not cover.
 pub use gmail_emulator;
 pub use inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};

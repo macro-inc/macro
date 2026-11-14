@@ -7,7 +7,9 @@ use super::{Aws, SQS_TARGET};
 #[tokio::test]
 async fn a_refused_send_is_answered_once() {
     // Nothing listens here, so a request that is passed on answers 502.
-    let aws = Aws::start("http://127.0.0.1:1").await.unwrap();
+    let aws = Aws::start("http://127.0.0.1:1", crate::evidence::Recorder::default())
+        .await
+        .unwrap();
     let queue_url = "http://127.0.0.1:1/000000000000/scheduled";
     aws.refuse_sends(queue_url, 1);
 

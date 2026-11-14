@@ -25,6 +25,8 @@ use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
+use crate::evidence::Recorder;
+
 #[cfg(test)]
 mod test;
 
@@ -71,6 +73,7 @@ struct Endpoint {
     sqs_url: String,
     objects: Objects,
     refused_sends: RefusedSends,
+    recorder: Recorder,
 }
 
 /// The queue URLs whose next `SendMessage` is refused, once per entry.
@@ -90,7 +93,7 @@ const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 impl Aws {
     /// Starts the endpoint in front of the SQS server at `sqs_url`.
-    pub(crate) async fn start(sqs_url: &str) -> Result<Self, Report> {
+    pub(crate) async fn start(sqs_url: &str, recorder: Recorder) -> Result<Self, Report> {
         let objects = Objects::default();
         let refused_sends = RefusedSends::default();
         let endpoint = Endpoint {
@@ -102,6 +105,7 @@ impl Aws {
             sqs_url: sqs_url.trim_end_matches('/').to_owned(),
             objects: objects.clone(),
             refused_sends: refused_sends.clone(),
+            recorder,
         };
 
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -389,6 +393,7 @@ async fn forward_to_sqs(
         url.push_str(query);
     }
 
+    let sent = body.clone();
     let mut forwarded = endpoint.http.request(method, url).body(body);
     for (name, value) in headers {
         if name != HOST && name != CONTENT_LENGTH {
@@ -408,6 +413,14 @@ async fn forward_to_sqs(
     let Ok(bytes) = answered.bytes().await else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
+    if status.is_success()
+        && let Some(operation) = headers
+            .get(SQS_TARGET)
+            .and_then(|target| target.to_str().ok())
+            .and_then(|target| target.rsplit('.').next())
+    {
+        endpoint.recorder.queue_call(operation, &sent, &bytes);
+    }
 
     let mut response = (status, bytes).into_response();
     for (name, value) in &answered_headers {

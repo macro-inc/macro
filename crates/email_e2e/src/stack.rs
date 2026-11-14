@@ -3,9 +3,9 @@
 //! `pubsub_workers` binaries running against them, with
 //! `document_storage_service` beside them when the scenario asks.
 
-mod document_storage_environment;
 mod calendar_environment;
 mod calendar_reads;
+mod document_storage_environment;
 mod environment;
 
 use std::collections::BTreeMap;
@@ -23,12 +23,14 @@ use uuid::Uuid;
 use self::calendar_reads::CalendarReads;
 pub use self::calendar_reads::CalendarSignal;
 use crate::aws::{Aws, StoredObject};
+use crate::evidence::{Collected, Recorder, counted, path_shape, shape};
 use crate::inbox::{Mail, Provider};
 use crate::infra::postgres::Database;
 use crate::infra::redis::RedisDatabase;
 use crate::infra::sqs::Queues;
 use crate::macro_services::{HeldRequest, MacroServices, ServiceRequest};
 use crate::process::ServiceProcess;
+use crate::recording_proxy::RecordingProxy;
 use crate::tls::TlsFront;
 use crate::user::User;
 use crate::wait::eventually;
@@ -54,6 +56,14 @@ const CALENDAR: &str = "calendar_service";
 const APP: &str = "app";
 /// The Lambda binary of the scheduled-send sweep.
 const SCHEDULED_HANDLER: &str = "email_scheduled_handler";
+/// The topic the email services publish their events to.
+const EMAIL_EVENTS: &str = "macro.email";
+/// What the name of a queue's dead-letter queue ends with, in the evidence.
+const DEAD_LETTER_SUFFIX: &str = "-dlq";
+/// Every inbox the scenario linked, with its provider: the ones still
+/// linked and the ones unlinked since.
+const LINKS_QUERY: &str = "SELECT lower(provider::text), id::text FROM email_links \
+     UNION SELECT lower(provider::text), link_id::text FROM email_links_history";
 /// How long a service gets to answer its health check.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 /// How often a service is started again on another port when the one picked
@@ -107,6 +117,14 @@ pub struct Stack {
     aws: Option<Aws>,
     macro_services: Option<MacroServices>,
     tls: Option<TlsFront>,
+    /// What the scenario made the services do.
+    recorder: Recorder,
+    /// The listeners scenarios and providers reach the API and the GraphQL
+    /// API through, which record what was served.
+    api_proxy: Option<RecordingProxy>,
+    graphql_proxy: Option<RecordingProxy>,
+    /// Where the email event topic ended when the stack started.
+    event_starts: Vec<(i32, i64)>,
     api: ServiceProcess,
     workers: Option<ServiceProcess>,
     document_storage: Option<ServiceProcess>,
@@ -177,8 +195,14 @@ impl Stack {
             discard(database, Some(redis), Some(queues)).await;
             return Err(error);
         }
+        let recorder = Recorder::default();
+        // A broker that cannot be asked yet is asked again at the end, from
+        // the topic's start.
+        let event_starts = crate::infra::kafka::topic_ends(&servers.kafka, EMAIL_EVENTS)
+            .await
+            .unwrap_or_default();
         let booted = Self::boot(
-            &options, &servers, &gmail, &outlook, &database, &redis, &queues, &log_dir,
+            &options, &servers, &gmail, &outlook, &database, &redis, &queues, &log_dir, &recorder,
         )
         .await;
         let booted = match booted {
@@ -194,6 +218,7 @@ impl Stack {
             http,
             api,
             tls,
+            api_proxy,
             env,
             api_url,
             workers,
@@ -217,6 +242,10 @@ impl Stack {
             aws: Some(aws),
             macro_services: Some(macro_services),
             tls: Some(tls),
+            recorder,
+            api_proxy: Some(api_proxy),
+            graphql_proxy: None,
+            event_starts,
             api,
             workers: Some(workers),
             document_storage: None,
@@ -296,7 +325,11 @@ impl Stack {
                     if let Some(services) = &self.macro_services {
                         services.route_document_storage(&url);
                     }
-                    self.graphql_url = Some(format!("{url}{GRAPHQL_PATH}"));
+                    let proxy =
+                        RecordingProxy::start(DOCUMENT_STORAGE, &url, self.recorder.clone())
+                            .await?;
+                    self.graphql_url = Some(format!("{}{GRAPHQL_PATH}", proxy.url()));
+                    self.graphql_proxy = Some(proxy);
                     self.document_storage = Some(service);
                     return Ok(());
                 }
@@ -393,8 +426,9 @@ impl Stack {
         redis: &RedisDatabase,
         queues: &Queues,
         log_dir: &std::path::Path,
+        recorder: &Recorder,
     ) -> Result<Booted, Report> {
-        let aws = Aws::start(&servers.sqs).await?;
+        let aws = Aws::start(&servers.sqs, recorder.clone()).await?;
         let macro_services = MacroServices::start(
             &gmail.base_url(),
             &outlook.base_url(),
@@ -408,10 +442,14 @@ impl Stack {
             .context("could not build the scenario's HTTP client")?;
 
         let mut attempt = 0;
-        let (api, tls, env, api_url) = loop {
+        let (api, tls, api_proxy, env) = loop {
             attempt += 1;
             let port = free_port().await?;
-            let tls = TlsFront::start(SocketAddr::from(([127, 0, 0, 1], port))).await?;
+            let api_url = format!("http://127.0.0.1:{port}");
+            // Everything but the health check reaches the API through the
+            // proxy, Outlook's notifications included.
+            let api_proxy = RecordingProxy::start(API, &api_url, recorder.clone()).await?;
+            let tls = TlsFront::start(api_proxy.address()).await?;
             let mut env = environment::service_env(&environment::Addresses {
                 port,
                 public_url: tls.url(),
@@ -428,13 +466,13 @@ impl Stack {
             env.extend(options.env.iter().cloned());
 
             let mut api = ServiceProcess::spawn(API, &env, log_dir)?;
-            let api_url = format!("http://127.0.0.1:{port}");
             match wait_for_health(&http, &api_url, &mut api).await {
-                Ok(()) => break (api, tls, env, api_url),
+                Ok(()) => break (api, tls, api_proxy, env),
                 Err(error) if attempt < PORT_ATTEMPTS && api.log().contains("AddrInUse") => {
                     tracing::warn!(error = ?error, port, "the API's port was taken; trying another");
                     api.stop().await;
                     tls.stop().await;
+                    api_proxy.stop().await;
                 }
                 Err(error) => {
                     let report = error.attach(format!(
@@ -444,6 +482,7 @@ impl Stack {
                     ));
                     api.stop().await;
                     tls.stop().await;
+                    api_proxy.stop().await;
                     macro_services.stop().await;
                     aws.stop().await;
                     return Err(report);
@@ -451,6 +490,7 @@ impl Stack {
             }
         };
         let workers = ServiceProcess::spawn(WORKERS, &env, log_dir)?;
+        let api_url = api_proxy.url();
 
         Ok(Booted {
             aws,
@@ -458,6 +498,7 @@ impl Stack {
             http,
             api,
             tls,
+            api_proxy,
             env,
             api_url,
             workers,
@@ -560,7 +601,9 @@ impl Stack {
     pub async fn run_scheduled_sweep(&self) -> Result<(), Report> {
         let mut env = self.worker_env.clone();
         env.insert("DATABASE_URL".to_owned(), self.database().url());
-        crate::lambda::invoke_scheduled(SCHEDULED_HANDLER, &env, &self.log_dir).await
+        let ran = crate::lambda::invoke_scheduled(SCHEDULED_HANDLER, &env, &self.log_dir).await;
+        self.recorder.lambda_ran(SCHEDULED_HANDLER, ran.is_ok());
+        ran
     }
 
     /// A Macro user with exactly this address, for scenarios where the
@@ -785,8 +828,101 @@ impl Stack {
     pub async fn finish(mut self) -> Result<(), Report> {
         let health = self.check_services();
         self.finished = health.is_ok();
+        // Only a scenario that ended well is evidence of anything. A record
+        // that cannot be written does not fail it: the coverage report
+        // lists scenarios that passed and left none.
+        if health.is_ok()
+            && let Err(error) = self.write_evidence().await
+        {
+            eprintln!("email_e2e: could not write the scenario's evidence: {error}");
+        }
         self.tear_down().await;
         health
+    }
+
+    pub(crate) fn recorder(&self) -> &Recorder {
+        &self.recorder
+    }
+
+    /// Writes what the scenario made the services do to its log directory.
+    async fn write_evidence(&self) -> Result<(), Report> {
+        let links: Vec<(String, String)> = sqlx::query_as(LINKS_QUERY)
+            .fetch_all(self.db())
+            .await
+            .context("could not read the scenario's inboxes")?;
+
+        let gmail = self.gmail.requests().into_iter().map(|request| {
+            provider_call(
+                "gmail",
+                request.route.map(|route| route.to_string()),
+                &request.method,
+                &request.path,
+                request.status,
+            )
+        });
+        let outlook = self.outlook.requests().into_iter().map(|request| {
+            provider_call(
+                "outlook",
+                request.route.map(|route| route.to_string()),
+                &request.method,
+                &request.path,
+                request.status,
+            )
+        });
+        let provider = counted(gmail.chain(outlook));
+
+        let services = counted(self.service_requests().iter().map(|request| {
+            serde_json::json!({
+                "service": request.service,
+                "method": request.method,
+                "path": path_shape(&request.path),
+                "body": request.body.as_ref().map(shape),
+            })
+        }));
+
+        let brokers = self
+            .worker_env
+            .get(KAFKA_BROKERS)
+            .cloned()
+            .unwrap_or_default();
+        let published =
+            crate::infra::kafka::published_since(&brokers, EMAIL_EVENTS, self.event_starts.clone())
+                .await?;
+        // The topic is every scenario's: an event is this one's when it is
+        // about one of its inboxes.
+        let kafka = counted(published.iter().filter_map(|payload| {
+            let event: serde_json::Value = serde_json::from_slice(payload).ok()?;
+            let link_id = event["metadata"]["link_id"].as_str()?;
+            links
+                .iter()
+                .any(|(_, id)| id == link_id)
+                .then(|| serde_json::json!({ "topic": EMAIL_EVENTS, "event": event["event_type"] }))
+        }));
+
+        let queue_names = self
+            .queues()
+            .all()
+            .iter()
+            .flat_map(|queue| {
+                [
+                    (queue.url.clone(), queue.name.to_owned()),
+                    (
+                        queue.dead_letter_url.clone(),
+                        format!("{}{DEAD_LETTER_SUFFIX}", queue.name),
+                    ),
+                ]
+            })
+            .collect();
+        self.recorder.write(
+            &self.log_dir,
+            &queue_names,
+            Collected {
+                links,
+                provider,
+                kafka,
+                services,
+            },
+        )
     }
 
     pub(crate) fn http(&self) -> &reqwest::Client {
@@ -884,6 +1020,12 @@ impl Stack {
         }
         if let Some(tls) = self.tls.take() {
             tls.stop().await;
+        }
+        for proxy in [self.api_proxy.take(), self.graphql_proxy.take()]
+            .into_iter()
+            .flatten()
+        {
+            proxy.stop().await;
         }
         if let Some(macro_services) = self.macro_services.take() {
             macro_services.stop().await;
@@ -1013,6 +1155,7 @@ struct Booted {
     http: reqwest::Client,
     api: ServiceProcess,
     tls: TlsFront,
+    api_proxy: RecordingProxy,
     env: BTreeMap<String, String>,
     api_url: String,
     workers: ServiceProcess,
@@ -1029,6 +1172,25 @@ async fn discard(database: Database, redis: Option<RedisDatabase>, queues: Optio
     if let Err(error) = database.drop_database().await {
         tracing::warn!(error = ?error, "could not drop the scenario database");
     }
+}
+
+/// One provider call as the evidence keeps it: by the API method the
+/// emulator matched it to, or by its method and path when it matched none.
+fn provider_call(
+    provider: &str,
+    route: Option<String>,
+    method: &str,
+    path: &str,
+    status: u16,
+) -> serde_json::Value {
+    let unmatched = route.is_none().then(|| path_shape(path));
+    serde_json::json!({
+        "provider": provider,
+        "route": route,
+        "method": method,
+        "path": unmatched,
+        "status": status,
+    })
 }
 
 /// Waits until the API answers its health check, failing at once when the

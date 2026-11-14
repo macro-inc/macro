@@ -7,7 +7,7 @@ use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::{BaseConsumer, CommitMode, Consumer};
 use rdkafka::types::RDKafkaErrorCode;
-use rdkafka::{Offset, TopicPartitionList};
+use rdkafka::{Message, Offset, TopicPartitionList};
 use rootcause::prelude::*;
 
 /// How long the broker may take to create the topics.
@@ -109,4 +109,118 @@ fn commit_missing_offsets(brokers: &str, group: &str) -> Result<(), Report> {
              it is running, or one was killed moments ago"
         ))?;
     Ok(())
+}
+
+/// How long reading a topic's recent events may take.
+const READ_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long one wait for the next event is.
+const POLL: Duration = Duration::from_millis(250);
+/// The group the evidence reader names. It never subscribes or commits, so
+/// every scenario can use it at once.
+const EVIDENCE_GROUP: &str = "email-e2e-evidence";
+
+/// Where each partition of `topic` ends right now: (partition, offset).
+pub(crate) async fn topic_ends(
+    brokers: &str,
+    topic: &'static str,
+) -> Result<Vec<(i32, i64)>, Report> {
+    let brokers = brokers.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let consumer = reader(&brokers)?;
+        Ok(watermarks(&consumer, topic)?
+            .into_iter()
+            .map(|(partition, _, end)| (partition, end))
+            .collect())
+    })
+    .await
+    .context("the Kafka offset task did not finish")?
+}
+
+/// The payload of every event published to `topic` since `starts`, which
+/// [`topic_ends`] answered earlier, up to where the topic ends now. A
+/// partition `starts` does not name is read from its beginning.
+pub(crate) async fn published_since(
+    brokers: &str,
+    topic: &'static str,
+    starts: Vec<(i32, i64)>,
+) -> Result<Vec<Vec<u8>>, Report> {
+    let brokers = brokers.to_owned();
+    tokio::task::spawn_blocking(move || read_since(&brokers, topic, &starts))
+        .await
+        .context("the Kafka read task did not finish")?
+}
+
+fn reader(brokers: &str) -> Result<BaseConsumer, Report> {
+    Ok(ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .set("group.id", EVIDENCE_GROUP)
+        .set("enable.auto.commit", "false")
+        .create()
+        .context("could not create a Kafka consumer for EMAIL_E2E_KAFKA_BROKERS")?)
+}
+
+/// Each partition of `topic` with where it starts and ends.
+fn watermarks(consumer: &BaseConsumer, topic: &str) -> Result<Vec<(i32, i64, i64)>, Report> {
+    let metadata = consumer
+        .fetch_metadata(Some(topic), GROUP_TIMEOUT)
+        .context("could not read a Kafka topic's partitions")?;
+    let mut partitions = Vec::new();
+    for described in metadata.topics() {
+        for partition in described.partitions() {
+            let (start, end) = consumer
+                .fetch_watermarks(topic, partition.id(), GROUP_TIMEOUT)
+                .context("could not read where a Kafka topic ends")?;
+            partitions.push((partition.id(), start, end));
+        }
+    }
+    Ok(partitions)
+}
+
+fn read_since(brokers: &str, topic: &str, starts: &[(i32, i64)]) -> Result<Vec<Vec<u8>>, Report> {
+    let consumer = reader(brokers)?;
+    let mut assignment = TopicPartitionList::new();
+    // Partition to the offset its reading stops before.
+    let mut ends = std::collections::BTreeMap::new();
+    for (partition, first, end) in watermarks(&consumer, topic)? {
+        let start = starts
+            .iter()
+            .find(|(known, _)| *known == partition)
+            .map_or(first, |(_, offset)| (*offset).max(first));
+        if start < end {
+            assignment
+                .add_partition_offset(topic, partition, Offset::Offset(start))
+                .context("could not name a Kafka offset")?;
+            ends.insert(partition, end);
+        }
+    }
+    if ends.is_empty() {
+        return Ok(Vec::new());
+    }
+    consumer
+        .assign(&assignment)
+        .context("could not read the Kafka topic")?;
+
+    let mut payloads = Vec::new();
+    let deadline = std::time::Instant::now() + READ_TIMEOUT;
+    while !ends.is_empty() {
+        if std::time::Instant::now() > deadline {
+            bail!("the events of {topic} could not be read within {READ_TIMEOUT:?}");
+        }
+        let Some(message) = consumer.poll(POLL) else {
+            continue;
+        };
+        let message = message.context("could not read an event")?;
+        let Some(end) = ends.get(&message.partition()).copied() else {
+            continue;
+        };
+        if message.offset() < end
+            && let Some(payload) = message.payload()
+        {
+            payloads.push(payload.to_vec());
+        }
+        if message.offset() + 1 >= end {
+            ends.remove(&message.partition());
+        }
+    }
+    Ok(payloads)
 }

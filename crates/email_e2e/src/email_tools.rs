@@ -48,6 +48,7 @@ const LEXICAL: &str = "lexical";
 /// The email tools of one scenario. See [`Stack::email_tools`].
 pub struct EmailTools {
     context: Context,
+    recorder: crate::evidence::Recorder,
 }
 
 impl Stack {
@@ -72,6 +73,7 @@ impl Stack {
             0,
         );
         Ok(EmailTools {
+            recorder: self.recorder().clone(),
             context: EmailToolContext::new(
                 Arc::new(service),
                 Arc::new(NoOpGmailTokenProvider),
@@ -106,6 +108,7 @@ impl EmailTools {
             )
             .await
             .map_err(|error| report!("the email toolset refused the call to {name}: {error}"))?;
+        self.recorder.tool_called(name, result.is_ok());
         Ok(result.map_err(|error| error.description))
     }
 }
