@@ -1585,6 +1585,14 @@ function mapGraphqlNotificationMetadata(
             computerId: metadata.computerSetupComputerId,
             harnessId: metadata.computerSetupHarnessId ?? null,
             computerName: metadata.computerSetupComputerName,
+            agent:
+              metadata.computerSetupAgentUserId &&
+              metadata.computerSetupAgentName
+                ? {
+                    userId: metadata.computerSetupAgentUserId,
+                    name: metadata.computerSetupAgentName,
+                  }
+                : null,
             outcome: match(metadata.computerSetupOutcome)
               .with('READY', () => ({ kind: 'ready' as const }))
               .with('FAILED', () => ({

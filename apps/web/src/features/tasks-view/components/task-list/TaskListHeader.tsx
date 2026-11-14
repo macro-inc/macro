@@ -145,13 +145,7 @@ export function TaskListHeader(props: {
       style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
-      <span
-        role="columnheader"
-        class="ms-2 truncate"
-        style={{ 'grid-area': 'content' }}
-      >
-        Task
-      </span>
+      <SortableHeader label="Task" area="content" sortId="title" />
       <SortableHeader
         label="Due date"
         area="dueDate"

@@ -1,4 +1,8 @@
-import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
+import { BotMarkAvatar } from '@core/component/BotMarkAvatar';
+import {
+  firstPartyBotMark,
+  mcpClientMark,
+} from '@core/component/firstPartyBotMark';
 import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
@@ -9,7 +13,7 @@ import {
 } from '@queries/messages/message-sender';
 import type { MessageSender } from '@service-storage/messages';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { BotIcon } from './BotIcon';
 import { useMessage } from './context';
 
@@ -25,10 +29,18 @@ export function SenderIcon(props: SenderIconProps) {
   const sender = (): MessageSender =>
     message().sender ?? senderFromStorageId(message().sender_id);
 
+  // A post a user made through a client is that client's, so it shows the
+  // client's mark (or initial, for clients without one) rather than the mark
+  // of the bot that carried it.
+  const clientMark = () => {
+    const current = sender();
+    if (current.type !== 'bot' || !current.triggered_via) return undefined;
+    return mcpClientMark(current.triggered_via);
+  };
+
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
-  // does. A post a user made through a client is that client's, so it shows
-  // the client's initial rather than the mark of the bot that carried it.
+  // does.
   const botSender = (): MessageSender | undefined => {
     const current = sender();
     if (current.type !== 'bot') return undefined;
@@ -68,12 +80,7 @@ export function SenderIcon(props: SenderIconProps) {
   };
 
   const avatar = () => (
-    <Show
-      when={
-        message().guest_name
-          ? { name: message().guest_name, avatar_url: null }
-          : (externalAuthor() ?? botSender())
-      }
+    <Switch
       fallback={
         <UserIcon
           id={message().sender_id}
@@ -83,10 +90,21 @@ export function SenderIcon(props: SenderIconProps) {
         />
       }
     >
-      {(bot) => (
-        <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
-      )}
-    </Show>
+      <Match when={!message().guest_name && clientMark()} keyed>
+        {(mark) => <BotMarkAvatar mark={mark} size="fill" />}
+      </Match>
+      <Match
+        when={
+          message().guest_name
+            ? { name: message().guest_name, avatar_url: null }
+            : (externalAuthor() ?? botSender())
+        }
+      >
+        {(bot) => (
+          <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
+        )}
+      </Match>
+    </Switch>
   );
 
   return (

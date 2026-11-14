@@ -221,6 +221,8 @@ export function ComputerSetupSteps(props: {
    * that agent, so the last step offers that instead of a new agent.
    */
   selectsForAgent?: boolean;
+  /** An agent teammate's computer: no agent is tried or created on it. */
+  teamAgentComputer?: boolean;
   /** Bring your AI was opened, so choosing credits there completes it. */
   signInVisited?: boolean;
 }) {
@@ -561,26 +563,28 @@ export function ComputerSetupSteps(props: {
           <Button type="button" variant="ghost" onClick={props.onClose}>
             {t('computers.done')}
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={!done()}
-            onClick={createAgentHere}
-          >
-            {props.selectsForAgent
-              ? t('computers.useForThisAgent')
-              : t('computers.createAgentHere')}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!done()}
-            onClick={tryIt}
-          >
-            {t('computers.tryIt')}
-          </Button>
-          <Show when={!done()}>
-            <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
+          <Show when={!props.teamAgentComputer}>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!done()}
+              onClick={createAgentHere}
+            >
+              {props.selectsForAgent
+                ? t('computers.useForThisAgent')
+                : t('computers.createAgentHere')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={!done()}
+              onClick={tryIt}
+            >
+              {t('computers.tryIt')}
+            </Button>
+            <Show when={!done()}>
+              <DisabledReason>{t('computers.tryItAfterSetup')}</DisabledReason>
+            </Show>
           </Show>
         </ActionDialogShell.Footer>
       </Match>

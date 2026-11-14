@@ -506,10 +506,26 @@ export type CommonChannelMetadata = {
 };
 
 /**
+ * The agent teammate a computer was bought for, so its inviter hears about
+ * the agent rather than the machine.
+ */
+export type ComputerSetupAgent = {
+    /**
+     * The agent's name.
+     */
+    name: string;
+    /**
+     * The agent's Macro user id, to open a DM with it.
+     */
+    userId: string;
+};
+
+/**
  * A team's Macro computer finished first-time setup, or could not be set
  * up. Sent to its buyer, who continues (or retries) from the setup flow.
  */
 export type ComputerSetupMetadata = {
+    agent?: null | ComputerSetupAgent;
     /**
      * The computer that was set up.
      */

@@ -84,7 +84,7 @@ async fn computer_route_access(
     use harness_id::HarnessId;
     use harnesses::domain::{
         models::{ClaudeMode, Harness, HarnessOwner},
-        ports::MockHarnessRepo,
+        ports::{MockComputerTeamAgents, MockHarnessRepo},
         service::HarnessServiceImpl,
     };
     use macro_authorization::{
@@ -115,6 +115,7 @@ async fn computer_route_access(
                 computer_id: Some(computer_id::ComputerId::new_from_uuid(
                     uuid::Uuid::from_u128(1),
                 )),
+                team_agent_user_id: None,
                 claude_mode: ClaudeMode::OwnAccount,
             }))
         })
@@ -176,7 +177,7 @@ async fn computer_route_access(
             )])),
         );
     }
-    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo, MockComputerTeamAgents::new()));
     // The repo mock expects no login write; harnessd records every request.
     let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
         harnessd_protocol::Response::SignedOut {
@@ -465,7 +466,7 @@ async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
     use harness_id::HarnessId;
     use harnesses::domain::{
         models::{ClaudeMode, Harness, HarnessAccess, HarnessOwner},
-        ports::MockHarnessRepo,
+        ports::{MockComputerTeamAgents, MockHarnessRepo},
         service::HarnessServiceImpl,
     };
     use macro_authorization::{
@@ -497,6 +498,7 @@ async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
                 computer_id: Some(computer_id::ComputerId::new_from_uuid(
                     uuid::Uuid::from_u128(1),
                 )),
+                team_agent_user_id: None,
                 claude_mode: ClaudeMode::MacroCredits,
             }))
         })
@@ -531,7 +533,7 @@ async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
             )])),
         );
     }
-    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo, MockComputerTeamAgents::new()));
     let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
         harnessd_protocol::Response::SignInStarted {
             agent: harnessd_protocol::AgentProvider::Claude,

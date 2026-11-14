@@ -671,6 +671,8 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		computerSetupComputerId: computerId
 		computerSetupHarnessId: harnessId
 		computerSetupComputerName: computerName
+		computerSetupAgentUserId: agentUserId
+		computerSetupAgentName: agentName
 		computerSetupOutcome: outcome
 		computerSetupFailureReason: failureReason
 	}

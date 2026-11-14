@@ -36,6 +36,7 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
     app.snapshot.harness = Some(Harness {
         allow_permission_bypass: true,
         computer_id: None,
+        team_agent_user_id: None,
         claude_mode: ClaudeMode::MacroCredits,
         id: HarnessId::TEST_A,
         kind: "macrod".to_owned(),

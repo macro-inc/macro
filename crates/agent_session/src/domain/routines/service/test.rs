@@ -220,6 +220,7 @@ impl Fixture {
             owner_user_id: Some(session.owner_user().unwrap().clone()),
             owner_team_id: None,
             harness_id: None,
+            on_team_agent_computer: false,
             managed_profile: Some(ManagedAgentProfile {
                 model: "persona-default".into(),
                 harness: "persona-runtime".into(),

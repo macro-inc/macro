@@ -226,10 +226,14 @@ Open call returns to the existing meeting/channel route. More offers
 only after explicit selection and reports success or failure. More stays available
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
-starts bottom-right, follows the speaker and gives screen sharing priority.
-Speaker changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen
-shares and participant departures update immediately. Reduced motion skips both
-the hold and the fade; outgoing controls stop accepting input during a transition.
+starts bottom-right and keeps the pinned participant or screen, regardless of
+Layout. A pinned participant keeps their camera/avatar even while sharing;
+your own camera pin survives other participants leaving the call.
+Unpinning or losing the pinned source immediately restores the default selection:
+screen share, speaker, camera, then first participant. Without a pin, speaker
+changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen shares
+and participant departures update immediately. Reduced motion skips both the hold
+and the fade; outgoing controls stop accepting input during a transition.
 Drag its header freely within the window. The nearest corner glows faintly within
 120px, strengthening until both edges reach the 24px snap range. This
 edge-anchored success gradient previews the snap, fading

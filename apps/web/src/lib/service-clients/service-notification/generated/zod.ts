@@ -2370,6 +2370,25 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
                           computerId: zod
                             .uuid()
                             .describe('The computer that was set up.'),
@@ -4668,6 +4687,25 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
                           computerId: zod
                             .uuid()
                             .describe('The computer that was set up.'),
@@ -6916,6 +6954,25 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's name."),
+                                  userId: zod
+                                    .string()
+                                    .describe(
+                                      "The agent's Macro user id, to open a DM with it."
+                                    ),
+                                })
+                                .describe(
+                                  'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                                ),
+                            ])
+                            .optional(),
                           computerId: zod
                             .uuid()
                             .describe('The computer that was set up.'),
@@ -9000,6 +9057,23 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  agent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          name: zod.string().describe("The agent's name."),
+                          userId: zod
+                            .string()
+                            .describe(
+                              "The agent's Macro user id, to open a DM with it."
+                            ),
+                        })
+                        .describe(
+                          'The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.'
+                        ),
+                    ])
+                    .optional(),
                   computerId: zod
                     .uuid()
                     .describe('The computer that was set up.'),

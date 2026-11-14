@@ -1,4 +1,5 @@
-//! Notification sent to a Macro computer's buyer when its first setup ends.
+//! Notification sent to a Macro computer's buyer when its first setup ends;
+//! for an agent teammate's computer, that is the agent's inviter.
 use super::*;
 
 /// How a computer's first setup ended.
@@ -15,6 +16,17 @@ pub enum ComputerSetupOutcome {
     },
 }
 
+/// The agent teammate a computer was bought for, so its inviter hears about
+/// the agent rather than the machine.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerSetupAgent {
+    /// The agent's Macro user id, to open a DM with it.
+    pub user_id: String,
+    /// The agent's name.
+    pub name: String,
+}
+
 /// A team's Macro computer finished first-time setup, or could not be set
 /// up. Sent to its buyer, who continues (or retries) from the setup flow.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
@@ -26,6 +38,9 @@ pub struct ComputerSetupMetadata {
     pub harness_id: Option<Uuid>,
     /// The computer's name when the notice was sent.
     pub computer_name: String,
+    /// The agent teammate the computer runs; absent for a plain computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<ComputerSetupAgent>,
     /// Ready, or why setup failed.
     pub outcome: ComputerSetupOutcome,
 }
@@ -36,6 +51,14 @@ impl Notification for ComputerSetupMetadata {
 
 impl NotificationTitle for ComputerSetupMetadata {
     fn format_title(&self, _sender_id: Option<MacroUserIdStr<'_>>) -> Result<String, Report> {
+        if let Some(agent) = &self.agent {
+            return Ok(match &self.outcome {
+                ComputerSetupOutcome::Ready => format!("{} is ready", agent.name),
+                ComputerSetupOutcome::Failed { .. } => {
+                    format!("{} couldn't be set up", agent.name)
+                }
+            });
+        }
         Ok(match &self.outcome {
             ComputerSetupOutcome::Ready => {
                 "Your computer is ready: connect your AI and finish setup".to_owned()
@@ -47,6 +70,15 @@ impl NotificationTitle for ComputerSetupMetadata {
     }
 
     fn format_body(&self, _sender_id: Option<MacroUserIdStr<'_>>) -> Result<String, Report> {
+        if let Some(agent) = &self.agent {
+            return Ok(match &self.outcome {
+                ComputerSetupOutcome::Ready => format!("Message {} to get started.", agent.name),
+                ComputerSetupOutcome::Failed { failure_reason } => format!(
+                    "{failure_reason} Retry from {}'s row in Members.",
+                    agent.name
+                ),
+            });
+        }
         Ok(match &self.outcome {
             ComputerSetupOutcome::Ready => format!(
                 "{} is up. Bring your AI, then create an agent on it.",

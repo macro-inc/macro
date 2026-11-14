@@ -17,7 +17,7 @@ inbound = [
 outbound = ["dep:entity_access_db_utils", "dep:models_permissions", "dep:sqlx", "harnessd_protocol/sqlx", "ports"]
 ports = ["dep:tokio"]
 # `ToSchema` for the domain types other crates put in their API, e.g. `AgentProvider`.
-schema = ["dep:utoipa", "harnessd_protocol/schema"]
+schema = ["dep:utoipa", "harnessd_protocol/schema", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]

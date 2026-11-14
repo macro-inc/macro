@@ -33,6 +33,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -732,11 +733,34 @@ function getSupportedHandler(
             )
       )
       // Back into the computer's guided setup, at Bring your AI: a ready
-      // computer continues there, a failed one offers Retry setup.
+      // computer continues there, a failed one offers Retry setup. An agent
+      // teammate's computer has no setup of its own: a ready agent opens its
+      // DM, and a failed one its row in Members, which offers Retry.
       .with('computer_setup', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'computer_setup') return null;
         const computerId = meta.content.computerId;
+        const agent = meta.content.agent;
+        if (agent) {
+          const ready = meta.content.outcome.kind === 'ready';
+          return async (lm: SplitManager, newSplit = false) => {
+            if (!ready) {
+              openTeamMembersSettings(lm, {
+                newSplit,
+                sourceHandle,
+                onApplied,
+              });
+              return;
+            }
+            // Loaded on demand: the DM lookup pulls in the channel list.
+            const { openDirectMessage } = await import(
+              '@core/util/open-direct-message'
+            );
+            await openDirectMessage(cachedUserId(), agent.userId, (content) =>
+              openContent(lm, content, { newSplit, sourceHandle, onApplied })
+            );
+          };
+        }
         return async (lm: SplitManager, newSplit = false) => {
           requestComputerSetup(computerId);
           openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
@@ -766,6 +790,24 @@ export function openRuntimesSettings(
       id: 'settings',
       entryMetadata: {
         route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
+  );
+}
+
+/** Settings → Members, where an agent teammate's row shows its setup. */
+export function openTeamMembersSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'team-members' } }),
       },
     },
     options
