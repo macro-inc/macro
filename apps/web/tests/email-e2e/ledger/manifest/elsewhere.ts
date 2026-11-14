@@ -737,6 +737,23 @@ export const elsewhere = {
       ],
     },
     {
+      id: 'STX-968',
+      surface: 'SX-22',
+      fn: ['F-051'],
+      state:
+        'Email result in global Search: the subject of the thread and the text that matched',
+      trigger: 'search a word of a message from Search',
+      source: ['src/features/next-soup/search-navigation.ts'],
+    },
+    {
+      id: 'STX-969',
+      surface: 'SX-22',
+      fn: ['F-051'],
+      state: 'result: the thread of the result is open',
+      trigger: 'after the action succeeds',
+      source: ['src/features/next-soup/search-navigation.ts'],
+    },
+    {
       id: 'STX-315',
       surface: 'SX-26',
       fn: ['F-165'],

@@ -38,6 +38,11 @@ Outlook,
 A function the user does nothing for (mail arriving, the unread badge) has
 no action row, and is covered by 2 and 3 alone.
 
+Evidence comes from two gating runs: the suite on per-test stacks
+(`ledger-results/gating/`) and its full-stack tier
+(`ledger-results/full-stack/`, written when `EMAIL_E2E_STACK_PROXY_URL` is
+set). The report reads whichever of the two exist and counts them together.
+
 A covered function is **proved** when `proofs.tsv` names the break that was
 put into the product for it and made its tests fail (see Proving a test). The
 headline counts covered and proved functions; a covered function without a

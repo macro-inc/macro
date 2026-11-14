@@ -3,7 +3,7 @@
 // neither skipped nor kept for a known bug.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { type Run, runPaths } from './paths';
+import { GATING_RUNS, type Run, runPaths } from './paths';
 import type { Evidence } from './record';
 
 type JsonResult = {
@@ -77,6 +77,7 @@ export function readRun(run: Run): RunResult {
 
   const evidence: Evidence[] = [];
   const dropped: RunResult['dropped'] = [];
+  const gates = run !== 'known-bugs';
   const names = existsSync(paths.evidence) ? readdirSync(paths.evidence) : [];
   for (const name of names.sort()) {
     const one = JSON.parse(
@@ -86,13 +87,24 @@ export function readRun(run: Run): RunResult {
     const result = test?.results.find((each) => each.retry === one.retry);
     const why = !test
       ? 'not in the report'
-      : run === 'gating' && test.knownBug
+      : gates && test.knownBug
         ? 'a test for a known bug'
-        : run === 'gating' && result?.status !== 'passed'
+        : gates && result?.status !== 'passed'
           ? `the result ${result?.status ?? 'is missing'}`
           : undefined;
     if (why) dropped.push({ file: name, why });
     else evidence.push(one);
   }
   return { found: true, tests: [...tests.values()], evidence, dropped };
+}
+
+/** The gating runs as one: the per-test stack's and the full-stack tier's. */
+export function readGatingRuns(): RunResult {
+  const runs = GATING_RUNS.map(readRun);
+  return {
+    found: runs.some((run) => run.found),
+    tests: runs.flatMap((run) => run.tests),
+    evidence: runs.flatMap((run) => run.evidence),
+    dropped: runs.flatMap((run) => run.dropped),
+  };
 }

@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { SignedInUser } from './front';
-import { send, sendJson } from './http';
+import { type Answer, send, sendJson } from './http';
 import { clearSignUpCounters } from './sign-up-limit';
 import type {
   EmailStack,
@@ -405,7 +405,19 @@ export class LocalStack implements EmailStack {
    */
   async finish(): Promise<void> {
     const kept: string[] = [];
-    for (const { user, linkId } of this.linked) {
+    // Also the inboxes a test connected through the app itself.
+    const all = [...this.linked];
+    for (const user of this.users.values()) {
+      const { links } = await this.as<{ links: { id: string }[] }>(
+        user,
+        '/email/email/links'
+      );
+      for (const { id } of links) {
+        if (!all.some((each) => each.linkId === id))
+          all.push({ user, linkId: id });
+      }
+    }
+    for (const { user, linkId } of all) {
       const removed = await send(
         `${this.addresses.proxyUrl}/email/email/links/${linkId}`,
         { method: 'DELETE', headers: { cookie: user.cookie ?? '' } }
@@ -418,4 +430,26 @@ export class LocalStack implements EmailStack {
     }
     if (kept.length > 0) throw new Error(kept.join('\n'));
   }
+}
+
+/**
+ * A request to a service of the local stack as one of its users, through the
+ * proxy: what another person, signed in elsewhere, is answered.
+ */
+export function askAs(
+  user: SignedInUser,
+  path: string,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  } = {}
+): Promise<Answer> {
+  const local = localStackAddresses();
+  if (!local)
+    throw new Error('askAs asks a local stack: tag the test @full-stack');
+  return send(`${local.proxyUrl}${path}`, {
+    ...init,
+    headers: { cookie: user.cookie ?? '', ...init.headers },
+  });
 }

@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
-import { readRun } from './evidence';
+import { readGatingRuns, readRun } from './evidence';
 import {
   buildLedger,
   type FunctionRow,
@@ -444,7 +444,7 @@ ${section('Tests that passed only on a retry', tests.flaky.length ? html(flaky) 
 }
 
 function report(enforce: boolean): void {
-  const gating = readRun('gating');
+  const gating = readGatingRuns();
   if (!gating.found) {
     console.error('no run to report: run the suite first');
     process.exit(enforce ? 1 : 0);
@@ -474,7 +474,7 @@ function report(enforce: boolean): void {
   );
   writeFileSync(`${REPORT}/summary.md`, summary);
   writeFileSync(`${REPORT}/index.html`, page);
-  for (const run of ['gating', 'known-bugs'] satisfies Run[]) {
+  for (const run of ['gating', 'full-stack', 'known-bugs'] satisfies Run[]) {
     const from = runPaths(run).playwright;
     if (existsSync(from))
       copyFileSync(from, `${REPORT}/playwright-${run}.json`);

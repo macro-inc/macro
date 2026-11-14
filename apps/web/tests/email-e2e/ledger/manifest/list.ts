@@ -1350,6 +1350,15 @@ export const list = {
       source: ['src/features/email-view/components/EmailEmptyState.tsx'],
     },
     {
+      id: 'STL-987',
+      surface: 'SL-53',
+      fn: ['F-050'],
+      state:
+        'result: the list shows the threads the search found, and no others',
+      trigger: 'search with matches',
+      source: ['src/features/email-view/components/EmailList.tsx'],
+    },
+    {
       id: 'STL-008',
       surface: 'SL-53',
       fn: ['F-034'],
