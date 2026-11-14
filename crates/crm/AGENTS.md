@@ -84,8 +84,10 @@ tools/HTTP/GraphQL surfaces over them.
   holds, and the request hangs.
 - The Pipelines card (`entries`) starts from the records: `referencing_rows`
   reaches primary cells through `idx_ep_database_row_references_gin` (keep its
-  literal `entity_type`/`type` predicates and the guarded uuid cast), grants
-  are read for the holding pipelines only, and one `lock_live_many` guard
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
   covers every pipeline while `storage_tables_rows` reads their columns and
   cells. Never start it from the viewer's pipelines or lock them one at a time:
   that cost grew with every pipeline the viewer can see.
