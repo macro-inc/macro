@@ -9438,7 +9438,6 @@ dependencies = [
  "rootcause",
  "serde",
  "tokio",
- "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -9610,6 +9609,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
