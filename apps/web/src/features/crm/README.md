@@ -117,8 +117,11 @@ before pagination; visible People remains viewer-wide. Team reads its contacts a
 page at a time from `GET /crm/companies/{id}/contacts/page` (`queries/company-contacts.ts`):
 the server applies the Visible/Archived choice (a contact is archived when it or
 its company is) and the search, in the order the full list had, and the list loads
-the next page as its end scrolls into view. The company read itself passes
-`includeContacts=false`. Confirmed visibility and contact edits patch cached Team
+the next page as its end scrolls into view. A cursor continues only the company,
+Visible/Archived choice and search it came from (anything else answers 400), and the
+loaded pages list each contact once. The server's search answer is shown as it
+came; only rows of an earlier search, kept while the new one loads, are narrowed
+on the client. The company read itself passes `includeContacts=false`. Confirmed visibility and contact edits patch cached Team
 pages in place and refresh the lists a contact can move between.
 
 Successful REST mutations write confirmed flags through the normalized Soup update
