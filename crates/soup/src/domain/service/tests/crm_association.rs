@@ -17,7 +17,10 @@ use crm::domain::{
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{
+    BotId, BotReceiptScope, EditAccessLevel, Entity, EntityAccessAuth, EntityPermission,
+    EntityType as AccessEntityType, TeamRole, ViewAccessLevel,
+};
 use item_filters::ast::{crm_association::CrmAssociation as Record, document::DocumentLiteral};
 use models_properties::EntityType as PropertyEntityType;
 
@@ -29,11 +32,16 @@ const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 
 /// Resolves the company to its two contacts; any other record is not visible.
 /// The activity scope has one domain and one address, and one property edge
-/// per item kind ([`ACTIVITY_EDGES`]); its calls are recorded.
+/// per item kind ([`ACTIVITY_EDGES`]); its calls are recorded, and the access
+/// each edges read was given.
 #[derive(Clone, Default)]
 struct FakeCrm {
     activity_calls: Arc<Mutex<Vec<ActivityCall>>>,
+    edge_access: Arc<Mutex<Vec<Option<EdgeAccess>>>>,
 }
+
+/// The team a receipt grants, and the scope of the bot holding it.
+type EdgeAccess = (Uuid, Option<BotReceiptScope>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ActivityCall {
@@ -110,10 +118,17 @@ impl CrmService for FakeCrm {
     async fn activity_property_edges(
         &self,
         user_id: &str,
-        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
         entity_types: &[PropertyEntityType],
     ) -> Result<Vec<crm::domain::association::CrmActivityEdge>, CrmError> {
         assert_eq!(user_id, USER);
+        self.edge_access.lock().unwrap().push(access.map(|access| {
+            let bot = match access.receipt().auth() {
+                EntityAccessAuth::Bot(bot) => Some(bot.scope().clone()),
+                _ => None,
+            };
+            (access.team_id(), bot)
+        }));
         self.activity_calls
             .lock()
             .unwrap()
@@ -829,5 +844,83 @@ async fn activity_with_database_rows_takes_the_record_path() {
     assert_eq!(
         *crm.activity_calls.lock().unwrap(),
         [ActivityCall::Participants]
+    );
+}
+
+/// The grouped path resolves the activity scope too, under the viewer's own
+/// teams: it reads only the edges Sales Tasks lists, and hands the grouped
+/// candidate query the resolved ids.
+#[tokio::test]
+async fn sales_tasks_grouped_reads_only_document_and_task_edges() {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.crm_association, None);
+            let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+            documents.sort();
+            assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+            let tree = serde_json::to_string(filter).unwrap();
+            for unread in [ACTIVITY_CALL, ACTIVITY_CHAT] {
+                assert!(!tree.contains(&unread.to_string()), "{tree}");
+            }
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    let items: Vec<_> = service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup_grouped(GroupedSortRequest {
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), sales_view("tasks")),
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: Some(100),
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+    assert_eq!(*crm.edge_access.lock().unwrap(), [None]);
+}
+
+/// A bot's team receipt reaches the edges read, so the CRM service scopes
+/// them to the bot's team rather than to the user it acts for.
+#[tokio::test]
+async fn sales_tasks_pass_a_bots_team_receipt_to_the_edges_read() {
+    const TEAM: Uuid = Uuid::from_u128(0x7ea);
+    let receipt = EntityAccessReceipt::<MemberTeamRole>::try_new_bot(
+        BotId::new_from_uuid(Uuid::from_u128(0xb07)).into_storage_id(),
+        BotReceiptScope::Team { team_id: TEAM },
+        Entity {
+            entity_id: TEAM.to_string(),
+            entity_type: AccessEntityType::Team,
+        },
+        EntityPermission::TeamRole {
+            role: TeamRole::Member,
+        },
+    )
+    .unwrap();
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup(request(sales_view("tasks")), Some(receipt))
+        .await
+        .unwrap();
+    assert_eq!(
+        *crm.edge_access.lock().unwrap(),
+        [Some((TEAM, Some(BotReceiptScope::Team { team_id: TEAM })))]
     );
 }
