@@ -1,0 +1,27 @@
+crates/agent_monitor_tui/src/ui/panes.rs
+  s_7a07194ea723e2::t_77fc8104e3eacf 10,48-53,65,67-68,89,109,156-163,188,222,379-382,385-391
+crates/agent_monitor_tui/src/view.rs
+  s_7a07194ea723e2::t_5515807a182cbc 8,264-266,270,279,300-315
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_200x56.snap
+  s_7a07194ea723e2::t_7f1834422088ee 13-39,41,56-58
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_narrow_100x30.snap
+  s_7a07194ea723e2::t_eeb494e94ae38b 9-22,24
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_one_column_80x24.snap
+  s_7a07194ea723e2::t_d3a47e539e42d9 9-14,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7da71be5efc5ce7cb14b214f467a5682d814c265",
+  "prompts": {},
+  "sessions": {
+    "s_7a07194ea723e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cced1ada-7777-489f-a84e-460fa3fe74c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
