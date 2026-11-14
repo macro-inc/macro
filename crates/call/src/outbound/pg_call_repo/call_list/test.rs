@@ -34,12 +34,20 @@ const I1: Uuid = Uuid::from_u128(0xca06);
 const I2: Uuid = Uuid::from_u128(0xca07);
 const X1: Uuid = Uuid::from_u128(0xca08);
 const A3: Uuid = Uuid::from_u128(0xca09);
+const U1: Uuid = Uuid::from_u128(0xca0a);
+const W1: Uuid = Uuid::from_u128(0xca0b);
+const W2: Uuid = Uuid::from_u128(0xca0c);
+const T1: Uuid = Uuid::from_u128(0xca0d);
+const T2: Uuid = Uuid::from_u128(0xca0e);
 
-const ALL_CALLS: [Uuid; 9] = [A1, L1, A2, S1, S2, I1, I2, X1, A3];
-/// The viewer's calls by last activity, newest first.
-const BY_ACTIVITY: [Uuid; 5] = [A2, L1, A1, I1, S2];
+const ALL_CALLS: [Uuid; 14] = [A1, L1, A2, S1, S2, I1, I2, X1, A3, U1, W1, W2, T1, T2];
+/// Calls the viewer must never see, whichever filter names them.
+const HIDDEN: [Uuid; 6] = [S1, I2, X1, A3, W1, W2];
+/// The viewer's calls by last activity, newest first. T1 and T2 tie, so the
+/// larger id comes first.
+const BY_ACTIVITY: [Uuid; 8] = [A2, L1, A1, I1, S2, U1, T2, T1];
 /// The viewer's calls by start, newest first.
-const BY_START: [Uuid; 5] = [L1, A1, I1, A2, S2];
+const BY_START: [Uuid; 8] = [L1, A1, I1, A2, S2, U1, T2, T1];
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap().into_owned()
@@ -114,8 +122,10 @@ async fn call_id_filter_keeps_the_visibility_rules(pool: Pool<Postgres>) -> anyh
     // viewer's own grant, and a channel the viewer left grants nothing.
     let records = list(&pool, &call_ids(&ALL_CALLS), 50, page(false)).await?;
     assert_eq!(ids(&records), BY_ACTIVITY);
+    let records = list(&pool, &call_ids(&ALL_CALLS), 50, page(true)).await?;
+    assert_eq!(ids(&records), BY_START);
 
-    let records = list(&pool, &call_ids(&[S1, I2, X1, A3]), 50, page(false)).await?;
+    let records = list(&pool, &call_ids(&HIDDEN), 50, page(false)).await?;
     assert_eq!(ids(&records), Vec::<Uuid>::new());
 
     // A record with no calls sends the nil id.
@@ -138,10 +148,15 @@ async fn channel_filter_lists_the_channels_visible_calls(
         ids(&list(&pool, &channel(CH_MEMBER), 50, page(false)).await?),
         vec![L1, A1]
     );
-    // A2 through the team grant; X1 has no grant the viewer holds.
+    // A2 through the team grant and U1 through the viewer's own grant. X1
+    // has no grant the viewer holds, and W1's is on a document, not a call.
     assert_eq!(
         ids(&list(&pool, &channel(CH_OTHER), 50, page(false)).await?),
-        vec![A2]
+        vec![A2, U1]
+    );
+    assert_eq!(
+        ids(&list(&pool, &channel(CH_OTHER), 50, page(true)).await?),
+        vec![A2, U1]
     );
     assert_eq!(
         ids(&list(&pool, &channel(CH_LEFT), 50, page(false)).await?),
@@ -157,6 +172,129 @@ async fn channel_filter_lists_the_channels_visible_calls(
         ),
     )));
     assert_eq!(ids(&list(&pool, &both, 50, page(false)).await?), vec![A1]);
+
+    let own_grant_only = Some(Arc::new(Expr::and(
+        Expr::val(CallLiteral::ChannelId(CH_OTHER)),
+        Expr::or(
+            Expr::or(
+                Expr::val(CallLiteral::CallId(U1)),
+                Expr::val(CallLiteral::CallId(W1)),
+            ),
+            Expr::val(CallLiteral::CallId(X1)),
+        ),
+    )));
+    assert_eq!(
+        ids(&list(&pool, &own_grant_only, 50, page(false)).await?),
+        vec![U1]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_list")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn hidden_calls_stay_hidden_under_every_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // S1 and I2 carry their owner's grant and a grant from the viewer's team
+    // (S1 also one from the viewer's channel); W1's viewer grant is on a
+    // document, and W2's names the viewer as a team.
+    let in_member_and_named = Some(Arc::new(Expr::and(
+        Expr::val(CallLiteral::ChannelId(CH_MEMBER)),
+        HIDDEN
+            .iter()
+            .chain([&A1])
+            .map(|id| Expr::val(CallLiteral::CallId(*id)))
+            .reduce(Expr::or)
+            .unwrap(),
+    )));
+    let filters = [
+        None,
+        call_ids(&HIDDEN),
+        call_ids(&ALL_CALLS),
+        channel(CH_MEMBER),
+        channel(CH_OTHER),
+        channel(CH_LEFT),
+        in_member_and_named.clone(),
+    ];
+    for filter in &filters {
+        for by_start in [false, true] {
+            let listed = ids(&list(&pool, filter, 50, page(by_start)).await?);
+            let leaked: Vec<_> = listed.iter().filter(|id| HIDDEN.contains(id)).collect();
+            assert!(
+                leaked.is_empty(),
+                "{leaked:?} listed for by_start={by_start}, filter={filter:?}"
+            );
+        }
+    }
+    assert_eq!(
+        ids(&list(&pool, &in_member_and_named, 50, page(false)).await?),
+        vec![A1]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_list")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn calls_that_tie_sort_by_id_and_the_cursor_crosses_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // T1 (archived) and T2 (imported) started and ended at the same times.
+    // By last activity both sort at 6:10, by start at 6:00.
+    let orders = [(false, at(6, 10), at(7, 45)), (true, at(6, 0), at(7, 30))];
+    for filter in [None, call_ids(&ALL_CALLS)] {
+        for (by_start, tie_at, u1_at) in orders {
+            let after_u1 = CallRecordPage {
+                by_start,
+                after: Some((u1_at, U1)),
+            };
+            assert_eq!(
+                ids(&list(&pool, &filter, 2, after_u1).await?),
+                vec![T2, T1],
+                "by_start={by_start}, filter={filter:?}"
+            );
+            let after_t2 = CallRecordPage {
+                by_start,
+                after: Some((tie_at, T2)),
+            };
+            assert_eq!(
+                ids(&list(&pool, &filter, 1, after_t2).await?),
+                vec![T1],
+                "by_start={by_start}, filter={filter:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_list")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn an_archived_call_is_listed_once(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // Archiving moves L1 from `calls` to `call_records` in one transaction,
+    // so the list finds it in exactly one table.
+    PgCallRepo::new(pool.clone()).archive_call(&L1).await?;
+    let tables = sqlx::query_scalar!(
+        r#"
+        SELECT (SELECT count(*) FROM calls WHERE id = $1)
+             + (SELECT count(*) FROM call_records WHERE id = $1)
+             + (SELECT count(*) FROM call_entities WHERE id = $1 AND created_via <> 'native')
+             AS "tables!"
+        "#,
+        L1,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(tables, 1);
+
+    let records = list(&pool, &None, 50, page(true)).await?;
+    assert_eq!(ids(&records), BY_START);
+    assert!(!record(&records, L1).is_active);
+
+    let records = list(&pool, &call_ids(&[L1]), 50, page(true)).await?;
+    assert_eq!(ids(&records), vec![L1]);
     Ok(())
 }
 
@@ -168,11 +306,14 @@ async fn pages_reach_every_live_archived_and_imported_call(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     for (by_start, expected) in [(false, BY_ACTIVITY), (true, BY_START)] {
-        for filter in [None, call_ids(&ALL_CALLS)] {
+        for (filter, size) in [None, call_ids(&ALL_CALLS)]
+            .into_iter()
+            .flat_map(|filter| [1, 2, 3].map(|size| (filter.clone(), size)))
+        {
             let mut seen = Vec::new();
             let mut cursor = page(by_start);
             loop {
-                let records = list(&pool, &filter, 2, cursor).await?;
+                let records = list(&pool, &filter, size, cursor).await?;
                 let Some(last) = records.last() else { break };
                 seen.extend(ids(&records));
                 let sort_at = if by_start {
