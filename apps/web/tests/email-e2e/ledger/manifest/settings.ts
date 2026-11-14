@@ -1265,5 +1265,14 @@ export const settings = {
       trigger: 'after the action succeeds',
       source: ['src/features/settings/email-settings.tsx'],
     },
+    {
+      id: 'STX-965',
+      surface: 'SX-01',
+      fn: ['F-004'],
+      state:
+        'result: the new inbox is listed in the inbox picker beside the first',
+      trigger: 'after the action succeeds',
+      source: ['src/features/email-view/components/EmailInboxSelector.tsx'],
+    },
   ],
 } as const satisfies Group;

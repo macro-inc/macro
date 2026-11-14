@@ -12,6 +12,21 @@ async function connectedInboxes(mailbox: Mailbox): Promise<string[]> {
   return links.map((link) => link.email_address).sort();
 }
 
+/** When Google's push watch on an account's mailbox runs out, if it has one. */
+async function googleWatch(
+  mailbox: Mailbox,
+  address: string
+): Promise<string | null | undefined> {
+  const response = await fetch(
+    `${mailbox.stack.info.gmailUrl}/_emulator/mailboxes`
+  );
+  const accounts = (await response.json()) as {
+    email: string;
+    watch_expires_at: string | null;
+  }[];
+  return accounts.find(({ email }) => email === address)?.watch_expires_at;
+}
+
 /** The scopes the provider's consent page is asking the person to grant. */
 async function scopesOnConsentPage(page: Page): Promise<string[]> {
   await page.waitForURL(/\/o\/oauth2\/v2\/auth/);
@@ -39,6 +54,7 @@ test.describe('connecting another account', () => {
     auth,
   }) => {
     await auth.googleAccount({ email: 'work@example.com' });
+    expect(await googleWatch(mailbox, 'work@example.com')).toBeNull();
     await mailbox.deliver({
       from: 'Grace <grace@example.com>',
       subject: 'Lunch?',
@@ -82,10 +98,20 @@ test.describe('connecting another account', () => {
       .poll(() => connectedInboxes(mailbox))
       .toEqual([mailbox.inbox.email, 'work@example.com'].sort());
     confirmed('F-004');
+    // Macro watching the new mailbox at Google is what a connect leaves
+    // there: without it no mail of that account ever arrives.
+    await expect
+      .poll(() => googleWatch(mailbox, 'work@example.com'))
+      .toEqual(expect.any(String));
+    confirmed('F-001');
     await page.getByRole('button', { name: /^Select inbox/ }).click();
+    await expect(
+      page.getByRole('menu').getByText(mailbox.inbox.email)
+    ).toBeVisible();
     await expect(
       page.getByRole('menu').getByText('work@example.com')
     ).toBeVisible();
+    saw('STX-965');
 
     expect(auth.starts.map((start) => start.scopes)).toEqual([
       'gmail',
@@ -164,6 +190,66 @@ test.describe('connecting when Outlook is offered', () => {
     did('AX-028');
     expect(await scopesOnConsentPage(page)).toEqual([MAIL_SCOPE]);
     expect(auth.starts.map((start) => start.provider)).toEqual(['GMAIL']);
+  });
+});
+
+test.describe('connecting from an Outlook inbox when Outlook is offered', () => {
+  test.use({ provider: 'OUTLOOK', outlookOffered: true });
+
+  // Class link-connect-flow-ui: someone whose inbox is at Outlook backs out
+  // of the provider choice, then picks Outlook while the connection cannot
+  // be started. Both must leave them on their mail, and the failure must be
+  // said. When this fails cancelling navigates away, or a connection that
+  // never started fails silently and the person waits for a consent screen.
+  test('backing out of the provider choice, then a connection that cannot start, each leave the mail in place', async ({
+    page,
+    mailbox,
+    auth,
+  }) => {
+    await mailbox.deliver({
+      from: 'Grace <grace@example.com>',
+      subject: 'Lunch?',
+      text: 'Noon at the usual place?',
+    });
+    await mailbox.synced('Lunch?');
+    // The authentication service refusing to start an Outlook connection.
+    const refused: string[] = [];
+    mailbox.front.stub(({ method, path }) => {
+      if (method !== 'POST' || path !== '/auth/link/outlook') return undefined;
+      refused.push(path);
+      return { status: 500, json: { message: 'unavailable' } };
+    });
+    await mailbox.open('/app/mail');
+    const connect = page.getByRole('button', {
+      name: 'Connect another account',
+    });
+    const chooser = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Connect email' });
+
+    await connect.click();
+    did('AL-044');
+    await expect(
+      chooser.getByRole('button', { name: /Outlook/ })
+    ).toBeVisible();
+    await chooser.getByRole('button', { name: 'Cancel' }).click();
+    did('AX-030');
+    await expect(chooser).toBeHidden();
+    await expect(page).toHaveURL(/\/app\/mail$/);
+    expect(refused).toEqual([]);
+
+    await connect.click();
+    did('AL-044');
+    await chooser.getByRole('button', { name: /Outlook/ }).click();
+    await expect(
+      page.getByText('Failed to start inbox connection')
+    ).toBeVisible();
+    saw('STX-023');
+    expect(refused).toEqual(['/auth/link/outlook']);
+    await expect(page).toHaveURL(/\/app\/mail$/);
+    await expect(page.getByText('Lunch?').first()).toBeVisible();
+    expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
+    expect(auth.starts).toEqual([]);
   });
 });
 
