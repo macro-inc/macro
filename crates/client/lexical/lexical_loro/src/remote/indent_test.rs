@@ -6,6 +6,9 @@ use serde_json::json;
 struct TreeIndentPolicy;
 static POLICY: TreeIndentPolicy = TreeIndentPolicy;
 impl SyncPolicy for TreeIndentPolicy {
+    fn stored_normalized_fields(&self, _: &str) -> &'static [&'static str] {
+        &[]
+    }
     fn is_dropped(&self, _: StateRef<'_>, _: NodeKey) -> bool {
         false
     }
