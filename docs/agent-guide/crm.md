@@ -713,7 +713,9 @@ Metadata errors may cancel the detail flow when the outer error panel replaces i
 Existing and new members start with CRM access. An admin or owner can patch a
 team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
 change this setting, and admins and owners cannot be denied. Mailbox contribution
-consent stays unchanged. `GET /crm/member-access` reports current access even
+consent stays unchanged. Preference mutations return 503 while the deployment
+rollout is disabled; existing access checks continue to enforce stored denials.
+`GET /crm/member-access` reports current access even
 when record routes return access denied. Settings controls and retirement of
 already-cached client content follow separately.
 

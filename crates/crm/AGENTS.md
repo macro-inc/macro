@@ -143,6 +143,8 @@ tools/HTTP/GraphQL surfaces over them.
   team operation; aggregate Soup/search paths return no denied records. Entity
   receipts and requester-side email grants use the same primary-backed predicate.
   Contribution consent is independent and remains manageable after CRM denial.
+  Team preference writes remain disabled by the rollout gate until old removal
+  writers have drained; that gate never weakens these read checks.
   `/crm/member-access` reads authority even for a denied viewer; storage's response
   header lets an open client retire stale snapshots.
 - Population is independent of the contributor's CRM viewing permission.

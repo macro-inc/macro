@@ -1,6 +1,23 @@
 //! Policy for per-member CRM access, independent of mailbox contribution.
 
 use super::model::{TeamError, TeamRole};
+use std::{future::Future, pin::Pin};
+
+/// Rollout check for changing preferences, independent of their enforcement.
+pub trait CrmAccessRollout: std::fmt::Debug + Send + Sync + 'static {
+    /// Refuse writes until all membership writers preserve the preference.
+    fn require_enabled(&self) -> Pin<Box<dyn Future<Output = Result<(), TeamError>> + Send + '_>>;
+}
+
+/// Unwired services cannot introduce denials during a rolling deployment.
+#[derive(Debug)]
+pub struct DisabledCrmAccessRollout;
+
+impl CrmAccessRollout for DisabledCrmAccessRollout {
+    fn require_enabled(&self) -> Pin<Box<dyn Future<Output = Result<(), TeamError>> + Send + '_>> {
+        Box::pin(async { Err(TeamError::CrmAccessChangesUnavailable) })
+    }
+}
 
 /// Validate roles read under the membership write lock. The repository holds
 /// that lock through the update so concurrent promotions cannot cause lockout.

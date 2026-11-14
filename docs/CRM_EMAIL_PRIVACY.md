@@ -10,6 +10,17 @@ hides or deletes a company or contact.
 
 ## Member access
 
+Preference changes are rollout-gated by `enable-crm-member-access-changes`,
+evaluated for service context `team-crm-member-access`. It starts off: missing
+configuration, missing/disabled flags, or evaluation failure returns 503 without
+updating the team. Enable it only after every old membership-removal writer has
+drained and all access consumers are upgraded. Older removal compensation omits
+the preference and would restore the default. Existing denial enforcement never
+depends on this flag. Before rollback, disable writes and drain already-admitted
+preference changes, including those waiting for database locks. Previously denied
+memberships still require a compatibility decision before introducing older
+writers or access consumers; disabling writes does not erase them.
+
 `team_user.crm_access` defaults to true. Effective access is that flag or an
 admin/owner role. Only a current admin/owner may change it; the mutation locks
 both membership rows and rejects denying an admin/owner or self-restoration by

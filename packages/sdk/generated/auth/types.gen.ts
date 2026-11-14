@@ -4491,6 +4491,7 @@ export type PatchTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type PatchTeamError = PatchTeamErrors[keyof PatchTeamErrors];

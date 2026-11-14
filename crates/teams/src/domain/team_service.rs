@@ -38,6 +38,7 @@ use notification::domain::{models::SendNotificationRequestBuilder, service::Noti
 use crate::domain::{
     contacts_enqueuer::{ContactsEnqueuer, NoOpContactsEnqueuer},
     crm_enqueuer::CrmEnqueuer,
+    crm_member_access::{CrmAccessRollout, DisabledCrmAccessRollout},
     customer_repo::CustomerRepository,
     events::{
         OwnedEntityMetadata, TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata,
@@ -164,6 +165,8 @@ pub struct TeamServiceImpl<
     owned_entity_cleanup: OEC,
     /// Rewards whoever brought a new member onto the team.
     invite_rewarder: Arc<dyn InviteRewarder>,
+    /// Gates preference changes until every membership writer is upgraded.
+    crm_access_rollout: Arc<dyn CrmAccessRollout>,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
@@ -201,6 +204,7 @@ where
             open_seat_release: self.open_seat_release.clone(),
             owned_entity_cleanup: self.owned_entity_cleanup.clone(),
             invite_rewarder: self.invite_rewarder.clone(),
+            crm_access_rollout: self.crm_access_rollout.clone(),
         }
     }
 }
@@ -306,6 +310,7 @@ where
             open_seat_release: NoOpOpenSeatRelease,
             owned_entity_cleanup: UnwiredOwnedEntityCleanup,
             invite_rewarder: Arc::new(NoOpInviteRewarder),
+            crm_access_rollout: Arc::new(DisabledCrmAccessRollout),
         }
     }
 }
@@ -693,6 +698,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -718,6 +724,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -743,7 +750,14 @@ where
             open_seat_release,
             owned_entity_cleanup: self.owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
+    }
+
+    /// Supply the rollout gate for CRM preference writes. Read enforcement is unconditional.
+    pub fn with_crm_access_rollout(mut self, rollout: Arc<dyn CrmAccessRollout>) -> Self {
+        self.crm_access_rollout = rollout;
+        self
     }
 
     /// Replaces the rewarder for whoever brought a new member onto a team.
@@ -799,6 +813,7 @@ where
             open_seat_release: self.open_seat_release,
             owned_entity_cleanup,
             invite_rewarder: self.invite_rewarder,
+            crm_access_rollout: self.crm_access_rollout,
         }
     }
 
@@ -2638,6 +2653,7 @@ where
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
 
         if let Some(change) = &req.member_crm_access {
+            self.crm_access_rollout.require_enabled().await?;
             if req
                 .user_role_updates
                 .as_ref()

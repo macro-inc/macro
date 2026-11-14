@@ -69,6 +69,7 @@ use crate::domain::{
     team_repo::TeamRepository,
 };
 
+mod crm_member_access;
 mod delete_team;
 mod invite_link;
 mod team_agent;
@@ -103,6 +104,7 @@ struct MockTeamRepository {
     accepted_invite: Option<AcceptedTeamInvite<'static>>,
     removed_member: Option<TeamMember<'static>>,
     removed_member_crm_access: bool,
+    crm_access_changes: Arc<Mutex<Vec<(uuid::Uuid, String, String, bool)>>>,
     rolled_back_crm_access: Arc<Mutex<Vec<bool>>>,
     rollback_accept_calls: Arc<Mutex<usize>>,
     rollback_remove_calls: Arc<Mutex<usize>>,
@@ -194,6 +196,7 @@ impl MockTeamRepository {
             accepted_invite: None,
             removed_member: None,
             removed_member_crm_access: true,
+            crm_access_changes: Arc::new(Mutex::new(Vec::new())),
             rolled_back_crm_access: Arc::new(Mutex::new(Vec::new())),
             rollback_accept_calls: Arc::new(Mutex::new(0)),
             rollback_remove_calls: Arc::new(Mutex::new(0)),
@@ -290,12 +293,18 @@ impl MockTeamRepository {
 impl TeamRepository for MockTeamRepository {
     async fn set_member_crm_access(
         &self,
-        _: uuid::Uuid,
-        _: &MacroUserIdStr<'_>,
-        _: &MacroUserIdStr<'_>,
-        _: bool,
+        team_id: uuid::Uuid,
+        actor: &MacroUserIdStr<'_>,
+        target: &MacroUserIdStr<'_>,
+        enabled: bool,
     ) -> Result<(), TeamError> {
-        unimplemented!("member access tests use the database repository")
+        self.crm_access_changes.lock().unwrap().push((
+            team_id,
+            actor.to_string(),
+            target.to_string(),
+            enabled,
+        ));
+        Ok(())
     }
 
     fn is_seat_included(

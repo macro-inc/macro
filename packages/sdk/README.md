@@ -640,7 +640,9 @@ kind.
 even when access is denied. `team.members()` includes `crmAccess` for each member.
 Admins and owners use `team.setMemberCrmAccess(user, enabled)` to deny or restore
 an ordinary member; admins and owners cannot be denied. This never changes the
-member's mailbox contribution consent. Record, search, email and tool requests
+member's mailbox contribution consent. The mutation returns 503 until the
+server rollout enables access changes; existing denials remain enforced while
+changes are disabled. Record, search, email and tool requests
 recheck access on the server. A separately shared pipeline still exposes its own
 rows and cell values, while its CRM record references need separate access.
 
