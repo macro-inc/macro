@@ -1,0 +1,21 @@
+packages/sdk-ocaml/lib/macro_runtime.ml
+  s_9112f34ff430c3::t_998d281242e147 2-3
+packages/sdk-ocaml/proxy/src/proxy.ts
+  s_9112f34ff430c3::t_e8cb1606615736 2-3,171,188-189,269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "19c91f9c5c705e3860adeef59cf6a926a994205b",
+  "prompts": {},
+  "sessions": {
+    "s_9112f34ff430c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7f2f1b9-0d51-4192-a482-51131529ed86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
