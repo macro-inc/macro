@@ -80,13 +80,14 @@ import {
   type PaneCreateContext,
   useCreateContext,
 } from './context/create-context';
-import { creatableDescription, creatableId } from './core/creatable';
+import { creatableDescription } from './core/creatable';
 import type { CreateMenuSection } from './core/create-menu-details';
 import {
   launcherItemKey,
   recentLauncherBlocks,
   sortLauncherBlocks,
 } from './core/launcher-history';
+import { searchLauncherBlocks } from './core/launcher-search';
 import { createCallCommand } from './create-call-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName, OpenCreatedItem } from './types';
@@ -122,28 +123,6 @@ function trackLauncherItemUsage(item: CreatableBlock) {
     count: (previous?.count ?? 0) + 1,
     lastUsedAt: Date.now(),
   });
-}
-
-function matchesLauncherSearch(item: CreatableBlock, query: string) {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-
-  if (terms.length === 0) return true;
-
-  // Translated text plus the English id and keywords, so English terms keep
-  // matching in every interface language.
-  const searchableText = [
-    item.label,
-    creatableId(item),
-    creatableDescription(item),
-    item.launcherHint,
-    item.blockName,
-    ...(item.keywords ?? []),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  return terms.every((term) => searchableText.includes(term));
 }
 
 const createBlock = async (spec: {
@@ -1056,22 +1035,21 @@ export const LauncherShell = (
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
   const recentBlocks = useRecentCreateMenuBlocks(availableBlocks);
+  const isSearching = () => searchMode() && searchQuery().trim() !== '';
   const filteredBlocks = createMemo(() => {
-    if (!searchMode()) return sortedBlocks();
-
-    return sortedBlocks().filter((item) =>
-      matchesLauncherSearch(item, searchQuery())
-    );
+    if (!isSearching()) return sortedBlocks();
+    return searchLauncherBlocks(sortedBlocks(), searchQuery());
   });
-  const sections = createMemo<CreateMenuSection[]>(
-    () =>
-      props.groupItems?.(filteredBlocks(), recentBlocks()) ?? [
-        {
-          group: { id: 'other', label: t('create.results'), tagline: '' },
-          items: filteredBlocks(),
-        },
-      ]
-  );
+  const sections = createMemo<CreateMenuSection[]>(() => {
+    const results: CreateMenuSection = {
+      group: { id: 'other', label: t('create.results'), tagline: '' },
+      items: filteredBlocks(),
+    };
+    // Typed results keep their relevance order; grouping by recent use or
+    // category would put a weaker match first.
+    if (isSearching() || !props.groupItems) return [results];
+    return props.groupItems(filteredBlocks(), recentBlocks());
+  });
   const blocks = createMemo(() =>
     sections().flatMap((section) => section.items)
   );
