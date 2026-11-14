@@ -5267,6 +5267,12 @@ export type CreateCrmTeamContactRequest = {
  */
 export type CreateDatabaseRequest = {
     /**
+     * The first table's display name; "Table 1" when omitted. Name it when
+     * you are about to fill a table, and build into it rather than adding a
+     * second table beside an empty "Table 1".
+     */
+    firstTable?: string | null;
+    /**
      * Display name.
      */
     name: string;

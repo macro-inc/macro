@@ -113,6 +113,25 @@ describe('Database', () => {
     });
   });
 
+  test('creates a database with its first table named', async () => {
+    const writes: { url: string; body: unknown }[] = [];
+    intercept(async (request) => {
+      writes.push({ url: request.url, body: await request.json() });
+      return Response.json(support.database, { status: 201 });
+    });
+    const database = await client().databases.create({
+      name: 'Support',
+      firstTable: 'Tickets',
+    });
+    expect(database.id).toBe(databaseId);
+    expect(writes).toEqual([
+      {
+        url: `${host}/databases`,
+        body: { name: 'Support', firstTable: 'Tickets' },
+      },
+    ]);
+  });
+
   test('renames a table by op with the previously read name and reloads the schema', async () => {
     let current = support;
     let reads = 0;
