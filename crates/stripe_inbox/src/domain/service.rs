@@ -164,6 +164,20 @@ where
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }
 
+    /// Makes up to `limit` dead cursors due again (an operator's bulk
+    /// replay, after the cause is fixed); returns how many.
+    pub async fn replay_dead(
+        &self,
+        consumer: Option<Consumer>,
+        skip_dead_event: bool,
+        limit: u32,
+    ) -> Result<u64, rootcause::Report> {
+        self.repo
+            .replay_dead(consumer, skip_dead_event, limit)
+            .await
+            .map_err(|error| rootcause::Report::new(error).into_dynamic())
+    }
+
     /// Applies one leased cursor's pending events until it is caught up or
     /// one fails. Storage errors leave the lease to expire, so another pass
     /// retries.

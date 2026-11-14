@@ -48,4 +48,8 @@ pub fn router() -> Router<ApiContext> {
             delete(delete_inbox_grant_user::handler),
         )
         .route("/stripe_inbox/replay", post(stripe_inbox_replay::handler))
+        .route(
+            "/stripe_inbox/replay_dead",
+            post(stripe_inbox_replay::replay_dead_handler),
+        )
 }

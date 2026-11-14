@@ -809,6 +809,58 @@ async fn a_rejected_event_dead_letters_at_once_and_replay_can_skip_it(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn dead_cursors_replay_in_bulk_by_consumer(pool: PgPool) {
+    let (inbox, _, recorder) = inbox(&pool);
+    for consumer in [Consumer::PersonalPlan, Consumer::TeamSubscription] {
+        recorder
+            .failing
+            .lock()
+            .unwrap()
+            .insert(consumer, Outcome::Reject);
+    }
+    inbox
+        .receive(&event(
+            "evt_Bad",
+            "customer.subscription.created",
+            1_800_000_000,
+            subscription("sub_Ordered", "active", 1_800_000_000),
+        ))
+        .await
+        .unwrap();
+    inbox.run_pass().await.unwrap();
+    assert_eq!(cursor_state(&pool, Consumer::PersonalPlan).await.0, "dead");
+    assert_eq!(cursor_state(&pool, Consumer::TeamSubscription).await.0, "dead");
+
+    recorder.failing.lock().unwrap().clear();
+    assert_eq!(
+        inbox
+            .replay_dead(Some(Consumer::PersonalPlan), false, 100)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::PersonalPlan).await,
+        ("dirty".to_owned(), 0, None, None)
+    );
+    assert_eq!(cursor_state(&pool, Consumer::TeamSubscription).await.0, "dead");
+
+    // Skipping moves every remaining dead cursor past its event.
+    assert_eq!(inbox.replay_dead(None, true, 100).await.unwrap(), 1);
+    assert_eq!(inbox.replay_dead(None, true, 100).await.unwrap(), 0);
+    inbox.run_pass().await.unwrap();
+    assert_eq!(recorder.applied(Consumer::PersonalPlan), vec!["evt_Bad"]);
+    assert_eq!(
+        recorder.applied(Consumer::TeamSubscription),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        cursor_state(&pool, Consumer::TeamSubscription).await,
+        ("idle".to_owned(), 0, Some("evt_Bad".to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_lease_hides_a_cursor_from_other_replicas_until_it_expires(pool: PgPool) {
     let (inbox, _, _) = inbox(&pool);
     inbox

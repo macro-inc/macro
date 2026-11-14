@@ -176,6 +176,15 @@ pub trait InboxRepo: Clone + Send + Sync + 'static {
         key: &OrderingKey,
         skip_dead_event: bool,
     ) -> impl Future<Output = Result<Replayed, Self::Err>> + Send;
+
+    /// Makes up to `limit` dead cursors (of `consumer`, or of every one) due
+    /// again, as [`Self::replay`] does; returns how many.
+    fn replay_dead(
+        &self,
+        consumer: Option<Consumer>,
+        skip_dead_event: bool,
+        limit: u32,
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 }
 
 /// One page of a Stripe list.

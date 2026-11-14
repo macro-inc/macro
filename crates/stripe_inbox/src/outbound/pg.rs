@@ -610,6 +610,52 @@ impl InboxRepo for PgInbox {
         transaction.commit().await?;
         Ok(Replayed::Rearmed)
     }
+
+    async fn replay_dead(
+        &self,
+        consumer: Option<Consumer>,
+        skip_dead_event: bool,
+        limit: u32,
+    ) -> Result<u64, Self::Err> {
+        // A dead cursor holds no lease (dead-lettering releases it).
+        let mut transaction = self.pool.begin().await?;
+        let updated = sqlx::query!(
+            r#"
+            UPDATE stripe_event_cursor cursor
+            SET state = 'dirty',
+                attempts = 0,
+                next_attempt_at = now(),
+                last_error = NULL,
+                applied_at = CASE WHEN $2 AND picked.dead_at IS NOT NULL THEN picked.dead_at ELSE cursor.applied_at END,
+                applied_event_id = CASE WHEN $2 AND picked.dead_at IS NOT NULL THEN picked.dead_id ELSE cursor.applied_event_id END,
+                dead_event_id = NULL,
+                dead_cause = NULL,
+                updated_at = now()
+            FROM (
+                SELECT dead_cursor.consumer, dead_cursor.ordering_key,
+                    dead.id AS dead_id, dead.created_at AS dead_at
+                FROM stripe_event_cursor dead_cursor
+                LEFT JOIN stripe_events dead ON dead.id = dead_cursor.dead_event_id
+                WHERE dead_cursor.state = 'dead'
+                  AND ($1::text IS NULL OR dead_cursor.consumer = $1::text::stripe_consumer)
+                LIMIT $3
+                FOR UPDATE OF dead_cursor SKIP LOCKED
+            ) picked
+            WHERE cursor.consumer = picked.consumer AND cursor.ordering_key = picked.ordering_key
+            "#,
+            consumer.as_ref().map(AsRef::<str>::as_ref),
+            skip_dead_event,
+            i64::from(limit),
+        )
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected();
+        if updated > 0 {
+            notify(&mut transaction).await?;
+        }
+        transaction.commit().await?;
+        Ok(updated)
+    }
 }
 
 impl AuditRepo for PgInbox {
