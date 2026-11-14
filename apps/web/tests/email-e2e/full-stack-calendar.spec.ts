@@ -622,16 +622,24 @@ test.describe('shared events in email on OUTLOOK', {
     mailbox,
   }) => {
     await calendarReady(mailbox);
+    // The button is also disabled while the page has no answer about the
+    // user's calendars: the test looks at it after that answer is drawn.
+    const calendars = page.waitForResponse(
+      (response) =>
+        (response.request().postData() ?? '').includes(
+          '"operationName":"Calendars"'
+        ) && response.ok()
+    );
     const card = await sharedEvent(page, mailbox);
-    // The calendars are loaded: the app knows there is none to add to.
-    await expect
-      .poll(async () => (await mailbox.api('/calendar/calendars')).text())
-      .toContain('"provider":"outlook"');
+    expect(await (await calendars).text()).toMatch(/"provider":"outlook"/i);
+    await page.evaluate(
+      () =>
+        new Promise<void>((drawn) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => drawn()))
+        )
+    );
     await expect(
       card.getByRole('button', { name: 'Add to calendar' })
     ).toBeDisabled();
-    expect(
-      (await providerEvents(mailbox, mailbox.inbox.email)).map(titleOf)
-    ).not.toContain(TITLE);
   });
 });

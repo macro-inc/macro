@@ -134,7 +134,7 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   test asserts only on its own threads.
 - A list keeps paging in older mail for a while after it opens, which also
   brings in new mail. A test of the live update waits until that paging
-  has stopped (`backfillWatch` in `full-stack-notifications.spec.ts`).
+  is finished (`backfilled` in `full-stack-notifications.spec.ts`).
   `askAs(user, path)` asks a service as another signed-in user.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's.

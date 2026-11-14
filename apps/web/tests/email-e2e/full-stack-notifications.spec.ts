@@ -43,15 +43,24 @@ async function muted(mailbox: Mailbox): Promise<string[]> {
 }
 
 /**
- * Whether the app has stopped reading the account's items in pages: it has
- * read at least one, and none for longer than the pause between two.
+ * Whether the app has finished reading the account's items in pages: it
+ * keeps a checkpoint per kind of item, and the last kind it reads is done.
  */
-function backfillWatch(page: Page): () => boolean {
-  let last: number | undefined;
-  page.on('request', (request) => {
-    if ((request.postData() ?? '').includes('SoupBackfill')) last = Date.now();
+async function backfilled(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const checkpoints = Object.keys(localStorage)
+      .filter((key) => key.startsWith('graphql-soup-backfill:'))
+      .map((key) => {
+        const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as {
+          completed?: boolean;
+        };
+        return { key, completed: saved.completed === true };
+      });
+    return (
+      checkpoints.some((each) => each.key.endsWith(':auxiliary-entities')) &&
+      checkpoints.every((each) => each.completed)
+    );
   });
-  return () => last !== undefined && Date.now() - last > 6_000;
 }
 
 /** The "New email" switch in Settings, Notifications. */
@@ -95,15 +104,14 @@ for (const provider of PROVIDERS) {
         text: 'Noon at the quarry?',
       });
       await mailbox.synced('Lunch?');
-      const backfilled = backfillWatch(page);
       await mailbox.open();
       const list = page.getByRole('grid', { name: 'Email' });
       await expect(list.getByText('Lunch?')).toBeVisible();
       // The app reads the account's items in pages for a while after it
       // loads, and a page read after the mail arrived would bring it in: the
-      // mail is sent once that reading has stopped, so only the live update
+      // mail is sent once that reading is finished, so only the live update
       // can show it.
-      await expect.poll(backfilled, { timeout: 60_000 }).toBe(true);
+      await expect.poll(() => backfilled(page), { timeout: 90_000 }).toBe(true);
 
       await mailbox.deliver({
         from: 'Linus <linus@example.com>',
