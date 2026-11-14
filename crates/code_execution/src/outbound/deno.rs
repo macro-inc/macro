@@ -21,14 +21,141 @@ use tokio_util::{
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
-/// Node timer and worker modules resolve to timers.mjs, which refuses to
-/// sleep; see bootstrap.mjs.
-const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#;
-/// An unattended program's requests go through the bootstrap's `fetch`, where
-/// a dry run holds back writes, so the Node modules that open their own
-/// connections or threads resolve to a module that doesn't exist. Timers
-/// refuse to sleep, as above.
-const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
+const UNAVAILABLE: &str = include_str!("deno/unavailable.mjs");
+/// Node built-ins a program may import: none opens a connection or a process,
+/// or loads another built-in. `process` and `module` must stay out: their named
+/// exports (`getBuiltinModule`, `createRequire`) load any built-in, past both
+/// this map and the bootstrap's removals.
+const NODE_ALLOWED: &[&str] = &[
+    "assert",
+    "assert/strict",
+    "async_hooks",
+    "buffer",
+    "console",
+    "crypto",
+    "events",
+    "path",
+    "path/posix",
+    "path/win32",
+    "perf_hooks",
+    "punycode",
+    "querystring",
+    "stream",
+    "stream/consumers",
+    "stream/promises",
+    "stream/web",
+    "string_decoder",
+    "sys",
+    "url",
+    "util",
+    "util/types",
+    "zlib",
+];
+/// Every Node built-in the pinned Deno resolves: its `builtinModules` (see the
+/// test), plus `_http_client` and `_http_incoming`, which it doesn't have but a
+/// newer Deno resolves without listing.
+const NODE_BUILTINS: &[&str] = &[
+    "_http_agent",
+    "_http_client",
+    "_http_common",
+    "_http_incoming",
+    "_http_outgoing",
+    "_http_server",
+    "_stream_duplex",
+    "_stream_passthrough",
+    "_stream_readable",
+    "_stream_transform",
+    "_stream_writable",
+    "_tls_common",
+    "_tls_wrap",
+    "assert",
+    "assert/strict",
+    "async_hooks",
+    "buffer",
+    "child_process",
+    "cluster",
+    "console",
+    "constants",
+    "crypto",
+    "dgram",
+    "diagnostics_channel",
+    "dns",
+    "dns/promises",
+    "domain",
+    "events",
+    "fs",
+    "fs/promises",
+    "http",
+    "http2",
+    "https",
+    "inspector",
+    "inspector/promises",
+    "module",
+    "net",
+    "os",
+    "path",
+    "path/posix",
+    "path/win32",
+    "perf_hooks",
+    "process",
+    "punycode",
+    "querystring",
+    "readline",
+    "readline/promises",
+    "repl",
+    "sqlite",
+    "stream",
+    "stream/consumers",
+    "stream/promises",
+    "stream/web",
+    "string_decoder",
+    "sys",
+    "test",
+    "test/reporters",
+    "timers",
+    "timers/promises",
+    "tls",
+    "trace_events",
+    "tty",
+    "url",
+    "util",
+    "util/types",
+    "v8",
+    "vm",
+    "wasi",
+    "worker_threads",
+    "zlib",
+];
+
+/// Every program's requests go through the bootstrap's `fetch`, which marks
+/// them as the program's (`x-macro-code-execution`) so an API can tell them
+/// from the person's own. Any other Node built-in could open its own
+/// connection with the run's token unmarked, so every built-in not in
+/// [`NODE_ALLOWED`] resolves to unavailable.mjs, which throws. Timer modules,
+/// and an attended program's worker modules, resolve to timers.mjs, which
+/// refuses to sleep; see bootstrap.mjs. A bare allowed name (`crypto`) resolves
+/// as its `node:` form.
+fn import_map(unattended: bool) -> String {
+    let mut imports = serde_json::Map::new();
+    imports.insert("@macro-inc/sdk".into(), "./sdk.mjs".into());
+    if !unattended {
+        imports.insert("handlebars".into(), "./handlebars.mjs".into());
+    }
+    for &name in NODE_BUILTINS {
+        let target = match name {
+            _ if NODE_ALLOWED.contains(&name) => {
+                imports.insert(name.into(), format!("node:{name}").into());
+                continue;
+            }
+            "timers" | "timers/promises" => "./timers.mjs",
+            "worker_threads" if !unattended => "./timers.mjs",
+            _ => "./unavailable.mjs",
+        };
+        imports.insert(format!("node:{name}"), target.into());
+        imports.insert(name.into(), target.into());
+    }
+    serde_json::json!({ "imports": imports }).to_string()
+}
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 
@@ -119,13 +246,12 @@ impl DenoRunner {
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
             .await
             .map_err(internal)?;
+        tokio::fs::write(root.join("unavailable.mjs"), UNAVAILABLE)
+            .await
+            .map_err(internal)?;
         tokio::fs::write(
             root.join("imports.json"),
-            if job.environment.unattended.is_some() {
-                UNATTENDED_IMPORTS
-            } else {
-                IMPORTS
-            },
+            import_map(job.environment.unattended.is_some()),
         )
         .await
         .map_err(internal)?;

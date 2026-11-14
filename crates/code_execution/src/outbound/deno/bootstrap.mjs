@@ -73,6 +73,10 @@ for (const name of ["setTimeout", "setInterval", "setImmediate", "Worker"]) glob
 AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
+// A static import of a blocked built-in fails to link before unavailable.mjs
+// can throw; the catch below explains it the same way.
+const unavailable = new Set(entries(parse(Deno.readTextFileSync(new URL("./imports.json", import.meta.url))).imports)
+  .filter(([, target]) => target === "./unavailable.mjs").map(([specifier]) => specifier));
 try {
   const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
@@ -125,11 +129,22 @@ try {
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
-  if (unattended) {
-    // A dry run's backstop lives in fetch; nothing else may reach the
-    // network (raw sockets) or start a realm with its own fetch (workers).
-    for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
-    globalThis.Worker = undefined;
+  // Every request must go through the fetch above, which marks it as the
+  // program's and holds back a dry run's writes. Nothing else may reach the
+  // network (raw sockets, listeners, websockets), start a realm with its own
+  // fetch (workers), or reach Node's or Deno's internals past the import map.
+  for (const name of ["connect", "connectTls", "startTls", "listen", "listenTls", "serve", "serveHttp", "upgradeWebSocket"]) {
+    Object.defineProperty(Deno, name, {value: undefined});
+  }
+  delete Deno[Deno.internal];
+  for (const name of ["WebSocket", "EventSource"]) globalThis[name] = undefined;
+  // An unattended program gets no Worker at all; an attended one keeps the
+  // Worker above, which throws like a timer.
+  if (unattended) globalThis.Worker = undefined;
+  // `node:process` exports its own getBuiltinModule, so the import map blocks
+  // that module too.
+  if (globalThis.process) {
+    for (const name of ["getBuiltinModule", "binding"]) globalThis.process[name] = undefined;
   }
   const { main } = await import(program);
   let value;
@@ -157,6 +172,10 @@ try {
   }
   exit(0);
 } catch (error) {
-  emit({type: "error", message: String(error)});
+  const link = /^SyntaxError: The requested module '([^']+)' does not provide an export named/.exec(String(error));
+  const message = link && unavailable.has(link[1])
+    ? `Error: ${link[1]} is unavailable in ExecuteCode. Make requests with fetch or the macro SDK.`
+    : String(error);
+  emit({type: "error", message});
   exit(0);
 }
