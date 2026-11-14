@@ -29,17 +29,21 @@
 // span (`search.search_on`, `search.caller`) and its child spans from
 // crates/search_service, and the text of sqlx's slow-acquire warning.
 //
-// Thresholds come from the `soup.pool.acquire` span, the nearest existing
-// measure of the same wait, since the metrics are newer than every incident.
-// Its 10-minute average was 1-5 ms on a quiet weekday, about 35 ms in a
-// two-minute burst on 2026-11-11, and 1.3-2.3 s on 2026-11-09 (prod, primary
-// overloaded) and 2026-11-13 (dev, one task out of CPU with the database
-// idle). The warning would have fired in all three and the critical within
-// about two minutes of the start of the last two, by the span. The span is
-// only a guide: it is weighted by request where the probe is weighted by
-// time, indexed spans over-represent slow requests, and the span also counts
-// waits while connections were idle, which the probe reads as 0. Retune once
-// the metrics have a week of data.
+// There is no per-task tag: tasks in one availability zone share a series, so
+// every query takes `max` (or `min` for idle) and the graphs split by zone.
+// Percentiles are not enabled on the two histograms; a p95 or p99 query needs
+// them enabled in Datadog first.
+//
+// The monitor takes the longest wait in each minute, counts a minute without
+// one as 0, and averages that over 10 minutes: one slow sample cannot fire
+// it, a pool that stays exhausted does. On dev in the first two hours of
+// data both pools filled for a second at a time (20 of 20 and 100 of 100),
+// the longest wait was 0.4 s and the 10-minute figure peaked at 0.08 s, so
+// neither threshold was reached. During the 2026-11-09 (prod, primary overloaded)
+// and 2026-11-13 (dev, one task out of CPU) stalls the `soup.pool.acquire`
+// span, the nearest older measure, ran into the 30 s acquire timeout for
+// minutes on end, which would put the figure well past the critical. The
+// thresholds stay provisional until prod has a week of data.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
@@ -130,21 +134,21 @@ const dashboard = new datadog.Dashboard('storage-pool-saturation', {
     graphGroup('Pool', [
       thresholdGraph({
         title: TITLE,
-        query: `avg:db.client.connection.wait_time{${SERVICE}} by {${POOL}}`,
-        critical: '0.25',
-        warning: '0.025',
+        query: `default_zero(max:db.client.connection.wait_time{${SERVICE}} by {${POOL}})`,
+        critical: '5',
+        warning: '0.5',
       }),
       lines(
-        'Longest wait for a connection (s) by pool',
-        `max:db.client.connection.wait_time{${SERVICE}} by {${POOL}}`
+        'Longest wait for a connection (s) by pool and zone',
+        `max:db.client.connection.wait_time{${SERVICE}} by {${POOL},availability-zone}`
       ),
       lines(
-        'Connections in use against the maximum, busiest task, by pool',
-        `max:db.client.connection.used{${SERVICE}} by {${POOL}}, max:db.client.connection.max{${SERVICE}} by {${POOL}}`
+        'Most connections in use in any second, by pool and zone, against the pool maximum',
+        `max:db.client.connection.used{${SERVICE}} by {${POOL},availability-zone}, max:db.client.connection.max{${SERVICE}} by {${POOL}}`
       ),
       lines(
-        'Idle connections, emptiest task, by pool',
-        `min:db.client.connection.count{${SERVICE},db.client.connection.state:idle} by {${POOL}}`
+        'Fewest idle connections (one reading a minute), by pool and zone',
+        `min:db.client.connection.count{${SERVICE},db.client.connection.state:idle} by {${POOL},availability-zone}`
       ),
       lines(
         'Probes that timed out or failed, by pool and outcome',
@@ -257,10 +261,10 @@ const dashboard = new datadog.Dashboard('storage-pool-saturation', {
 prodMonitor('storage-pool-wait', {
   title: TITLE,
   service: 'cloud-storage-service',
-  query: `avg(last_10m):avg:db.client.connection.wait_time{env:prod,service:cloud-storage-service} by {${POOL}} > 0.25`,
-  monitorThresholds: { critical: '0.25', warning: '0.025' },
+  query: `avg(last_10m):default_zero(max:db.client.connection.wait_time{env:prod,service:cloud-storage-service} by {${POOL}}) > 5`,
+  monitorThresholds: { critical: '5', warning: '0.5' },
   pages: false,
-  description: `The prod cloud-storage-service \`{{[${POOL}].name}}\` pool took {{value}} s on average to hand out a database connection over 10 minutes. Normal is under 5 ms. It is above zero only while every connection in the pool is in use, and it is time queued inside the service before any SQL runs, not query time. Two causes look the same here. The database is slow, so connections come back late: active sessions per vCPU or I/O credits on the dashboard are off and task CPU is normal or low. Or the service is starved, so its tasks hold connections they are not using: the busiest task's CPU is near 100% and the database is idle.`,
+  description: `The prod cloud-storage-service \`{{[${POOL}].name}}\` pool's longest wait for a database connection averaged {{value}} s a minute over 10 minutes. Normal is 0. A wait is recorded only while every connection in the pool is in use, and it is time queued inside the service before any SQL runs, not query time. Two causes look the same here. The database is slow, so connections come back late: active sessions per vCPU or I/O credits on the dashboard are off and task CPU is normal or low. Or the service is starved, so its tasks hold connections they are not using: the busiest task's CPU is near 100% and the database is idle.`,
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#pool-waits',
 });
