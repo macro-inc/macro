@@ -1,6 +1,10 @@
-//! Source DatabaseQuery save/discard behind the database answer editor.
+//! Source DatabaseQuery insertion and save/discard behind the database answer editor.
 use super::*;
 use crate::nodes::{DatabaseQueryData, DatabaseQueryDisplayMode, DatabaseQueryNode};
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InsertInput {}
 
 #[derive(Clone, Debug, serde::Deserialize)]
 struct SaveInput {
@@ -19,6 +23,7 @@ struct SaveCommand {
     data: DatabaseQueryData,
 }
 
+static INSERT: CommandKey<u32> = CommandKey::new("group-b.database-query-insert");
 static SAVE: CommandKey<SaveCommand> = CommandKey::new("group-b.database-query-save");
 static DISCARD: CommandKey<NodeKey> = CommandKey::new("group-b.database-query-discard");
 
@@ -27,6 +32,13 @@ fn key(index: u32, generation: u32) -> NodeKey {
 }
 
 pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    if name == INSERT.name() {
+        let object: serde_json::Map<String, serde_json::Value> = serde_json::from_str(json)?;
+        let _: InsertInput = serde_json::from_value(serde_json::Value::Object(object))?;
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &INSERT, generation,
+        ))));
+    }
     if name == SAVE.name() {
         let input: SaveInput = serde_json::from_str(json)?;
         let data = crate::nodes::parse_database_query_data(&input.data)
@@ -53,7 +65,12 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(DatabaseQueryActions)
 }
 
-static COMMANDS: [CommandRegistration; 2] = [
+static COMMANDS: [CommandRegistration; 3] = [
+    CommandRegistration {
+        command: CommandKind::Extension(&INSERT),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
     CommandRegistration {
         command: CommandKind::Extension(&SAVE),
         priority: CommandPriority::Normal,
@@ -78,6 +95,21 @@ impl Plugin for DatabaseQueryActions {
         let Command::Extension(command) = command else {
             return Ok(Handled::No);
         };
+        if let Some(generation) = command.payload(&INSERT) {
+            if *generation != tx.committed_state().max_key().generation() {
+                return Ok(Handled::No);
+            }
+            let node = tx.create(DatabaseQueryNode {
+                data: DatabaseQueryData {
+                    query_id: String::new(),
+                    prompt: String::new(),
+                    display_mode: DatabaseQueryDisplayMode::Scalar,
+                    ..Default::default()
+                },
+            })?;
+            tx.insert_nodes_at_selection(&[node.key()])?;
+            return Ok(Handled::Yes);
+        }
         if let Some(save) = command.payload(&SAVE) {
             if !tx.is::<DatabaseQueryNode>(save.key) {
                 return Ok(Handled::No);
@@ -136,3 +168,6 @@ fn save(tx: &mut Transaction<'_>, node: NodeKey, data: &DatabaseQueryData) -> Re
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod insert_test;

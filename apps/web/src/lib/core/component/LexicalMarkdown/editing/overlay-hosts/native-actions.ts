@@ -1,3 +1,4 @@
+import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
@@ -6,6 +7,7 @@ import type { Action, ActionContext } from '../../plugins/actions/types';
 import {
   dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
+  dispatchApplicationCommandSettledIfSessionEdit,
   queryApplication,
 } from '../../plugins/group-b/command';
 import type { ActionMenuHost } from './actions';
@@ -69,7 +71,12 @@ export function createNativeActionMenuHost(
     if (typeof requests.additionalActions?.get(item) === 'function')
       return true;
     if (!ACTIONS.includes(item)) return false;
-    if (blockKinds.has(item.id) || item.id === 'hr') return true;
+    if (
+      blockKinds.has(item.id) ||
+      item.id === 'hr' ||
+      item.id === 'database-query'
+    )
+      return true;
     switch (item.id) {
       case 'table':
         return typeof requests.requestTable === 'function';
@@ -129,11 +136,24 @@ export function createNativeActionMenuHost(
       requests.requestCreation(item.id, context);
       return;
     }
+    // Source Query checks the shared flag before scheduling its insertion update.
+    if (item.id === 'database-query' && !isFeatureEnabled(enableDatabases))
+      return;
     const requestContext = Telemetry.captureContext();
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     if (!current()) return;
     return requestContext.run(async () => {
-      if (item.id === 'table') {
+      if (item.id === 'database-query') {
+        const result = await dispatchApplicationCommandSettledIfSessionEdit(
+          view,
+          'group-b.database-query-insert',
+          () => ({}),
+          { admit: current }
+        );
+        if (result.status === 'error') throw result.error;
+        // Cancellation ends this action without a replacement input or success claim.
+        return;
+      } else if (item.id === 'table') {
         await requests.requestTable();
       } else if (
         (item.id === 'image' || item.id === 'video') &&

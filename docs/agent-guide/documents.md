@@ -3462,6 +3462,8 @@ node-insertion flows. In particular, reload a fresh document, type three
 backticks, Enter, then code: one Ctrl+Z must remove the code block and leave an
 empty paragraph; a second Ctrl+Z must leave the body empty.
 
+For native Query slash changes, type `/query`, wait until **Query** is the selected menu item, and press Enter. Check that one inline question editor opens, accepts text, and leaves the surrounding document text intact.
+
 For native mention changes, use the editing browser suite's user-mentions fixture
 to type `@`, choose a supplied user by keyboard and pointer, verify the rendered
 mention, close a query with Escape, and close the installation with the picker

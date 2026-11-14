@@ -23,6 +23,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 - Answer action dependency queries from actual registered node-kind metadata; preserve generation-before-decode and never treat registration as JavaScript availability or construction authority.
 
+- Insert an empty scalar DatabaseQuery through group-b.database-query-insert with an object-only empty payload and the current generation; preserve shared current/previous/root-end selection fallback and keep save/discard behavior separate.
+
 - Insert horizontal rules through the configured factory and shared list splitter; preserve detached construction without a Range and Source decorator selectNext caret restoration.
 
 - Share table hover-delete bounds with bulk facts; obtain selected-cell paint from actual TableSelection traversal independently, preserving merged-cell closure and current selection-only updates.
