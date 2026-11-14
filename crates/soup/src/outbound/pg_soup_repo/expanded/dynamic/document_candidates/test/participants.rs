@@ -343,6 +343,9 @@ enum Write {
     Renamed(Contact),
     /// Moves the attachment to the other message.
     MovedAttachment,
+    /// Moves the attachment's link from another document to this one; the
+    /// foreign key check skips an attachment that did not change.
+    Relinked,
 }
 
 impl Write {
@@ -378,6 +381,13 @@ impl Write {
                 "UPDATE email_attachments SET message_id = $2 WHERE id = $1",
                 chain.attachment,
                 chain.other_message,
+            )
+            .execute(conn)
+            .await?,
+            Self::Relinked => sqlx::query!(
+                "UPDATE document_email SET document_id = $2 WHERE email_attachment_id = $1",
+                chain.attachment,
+                chain.document,
             )
             .execute(conn)
             .await?,
@@ -489,6 +499,32 @@ async fn a_link_and_a_participant_write_on_its_chain_wait_for_each_other(
     Ok(())
 }
 
+/// A relink (a link updated to another document, which its foreign key check
+/// skips, since the attachment stays) and a move of its attachment wait for
+/// each other, whichever comes first.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_relink_and_a_move_of_its_attachment_wait_for_each_other(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    for (case, (first, then)) in [
+        (Write::Relinked, Write::MovedAttachment),
+        (Write::MovedAttachment, Write::Relinked),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let chain = Chain::seed(conn, format!("relinked-{case}"), false).await?;
+        let previous = format!("{}-previous-doc", chain.case);
+        set_replication_role(conn, "replica").await?;
+        insert_document(conn, &previous).await?;
+        set_replication_role(conn, "origin").await?;
+        link(conn, &previous, chain.attachment).await?;
+        race(&db, &chain, first, then).await?;
+    }
+    Ok(())
+}
+
 /// Two writes on a linked chain that bring in a participant between them (an
 /// attachment move and a write on the message it moves to, or a new
 /// participant and a change of their address) wait for each other too.
@@ -589,6 +625,91 @@ async fn a_message_delete_and_a_link_to_its_attachment_never_deadlock(
     Ok(())
 }
 
+/// A link that waited for its attachment's message while a move took the
+/// attachment to another message locks that message too, before its foreign
+/// key check takes the attachment. So a delete that holds the message the
+/// attachment moved to deletes it while the link waits, and the link fails
+/// its foreign key check instead of deadlocking with the delete.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_link_locks_the_message_its_attachment_moved_to(db: PgPool) -> anyhow::Result<()> {
+    // Five sessions at once fill the test pool: the four below and the one
+    // `blocked_by` polls with.
+    let chain = Chain::seed(
+        &mut *db.acquire().await?,
+        "moved-while-linking".to_owned(),
+        false,
+    )
+    .await?;
+    let mut holder = db.acquire().await?;
+    let holder_pid = backend_pid(&mut holder).await?;
+    let mut holding = holder.begin().await?;
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        chain.message
+    )
+    .fetch_one(&mut *holding)
+    .await?;
+    let mut linker = db.acquire().await?;
+    let linker_pid = backend_pid(&mut linker).await?;
+    let linking = tokio::spawn({
+        let chain = chain.clone();
+        async move { link(&mut linker, &chain.document, chain.attachment).await }
+    });
+    blocked_by(&db, linker_pid, holder_pid, &linking)
+        .await
+        .context("the link waits for the message")?;
+
+    // The attachment moves while the link waits, and a delete takes the
+    // message it moved to as soon as the move commits.
+    let mut mover = db.acquire().await?;
+    let mover_pid = backend_pid(&mut mover).await?;
+    let mut moving = mover.begin().await?;
+    Write::MovedAttachment.apply(&chain, &mut moving).await?;
+    let mut deleter = db.acquire().await?;
+    let deleter_pid = backend_pid(&mut deleter).await?;
+    let (took_message, message_taken) = tokio::sync::oneshot::channel();
+    let (go, delete_now) = tokio::sync::oneshot::channel();
+    let moved_to = chain.other_message;
+    let deleting = tokio::spawn(async move {
+        let mut deleting = deleter.begin().await?;
+        sqlx::query!(
+            "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+            moved_to
+        )
+        .fetch_one(&mut *deleting)
+        .await?;
+        took_message
+            .send(())
+            .map_err(|()| anyhow::anyhow!("the test stopped"))?;
+        delete_now.await?;
+        sqlx::query!("DELETE FROM email_messages WHERE id = $1", moved_to)
+            .execute(&mut *deleting)
+            .await?;
+        deleting.commit().await?;
+        anyhow::Ok(())
+    });
+    blocked_by(&db, deleter_pid, mover_pid, &deleting)
+        .await
+        .context("the delete waits for the move")?;
+    moving.commit().await?;
+    message_taken.await?;
+    holding.commit().await?;
+
+    blocked_by(&db, linker_pid, deleter_pid, &linking)
+        .await
+        .context("the link waits for the message the attachment moved to")?;
+    go.send(())
+        .map_err(|()| anyhow::anyhow!("the delete stopped"))?;
+    deleting.await??;
+    match linking.await? {
+        Err(sqlx::Error::Database(e)) => {
+            assert_eq!(e.code().as_deref(), Some(FOREIGN_KEY_VIOLATION), "{e}");
+        }
+        result => anyhow::bail!("the link outlived its attachment: {result:?}"),
+    }
+    Ok(())
+}
+
 /// One statement that deletes several documents deletes all their rows.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_documents_deletes_their_participants(db: PgPool) -> anyhow::Result<()> {
@@ -607,6 +728,78 @@ async fn deleting_documents_deletes_their_participants(db: PgPool) -> anyhow::Re
         assert!(participants_of(conn, &chain.document).await?.is_empty());
     }
     assert_eq!(participants_of(conn, &chains[3].document).await?.len(), 2);
+    Ok(())
+}
+
+/// Calls of the row triggers' functions so far in this transaction, counted
+/// with `track_functions` set.
+async fn row_trigger_calls(conn: &mut PgConnection) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COALESCE(sum(pg_stat_get_xact_function_calls(f::regproc)), 0)::bigint AS "calls!"
+           FROM unnest(ARRAY[
+               'document_email_participants_attachment_moved',
+               'document_email_participants_recipient_changed',
+               'document_email_participants_sender_changed',
+               'document_email_participants_address_changed'
+           ]) f"#
+    )
+    .fetch_one(conn)
+    .await?)
+}
+
+/// The row triggers' `WHEN` clauses skip updates that leave a chain alone:
+/// an attachment, a recipient or a sender set to what it was, a sender
+/// cleared (its contact deleted), and an address changed only in case. A real
+/// change still calls one.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn updates_that_keep_a_chain_call_no_trigger(db: PgPool) -> anyhow::Result<()> {
+    let conn = &mut *db.acquire().await?;
+    let chain = Chain::seed(conn, "kept".to_owned(), true).await?;
+    let mut tx = conn.begin().await?;
+    sqlx::query!("SET LOCAL track_functions = 'all'")
+        .execute(&mut *tx)
+        .await?;
+    let before = row_trigger_calls(&mut tx).await?;
+    sqlx::query!(
+        "UPDATE email_attachments SET message_id = message_id WHERE id = $1",
+        chain.attachment
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_message_recipients SET message_id = message_id, contact_id = contact_id
+         WHERE message_id = $1",
+        chain.message
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_messages SET from_contact_id = from_contact_id WHERE id = $1",
+        chain.message
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_messages SET from_contact_id = NULL WHERE id = $1",
+        chain.other_message
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_contacts SET email_address = UPPER(email_address) WHERE id = $1",
+        chain.recipient
+    )
+    .execute(&mut *tx)
+    .await?;
+    assert_eq!(row_trigger_calls(&mut tx).await? - before, 0);
+
+    // A contact this transaction has not updated: a second update of the
+    // same row checks its mailbox foreign key, and the test mailbox does not
+    // exist.
+    Write::Renamed(Contact::OtherRecipient)
+        .apply(&chain, &mut tx)
+        .await?;
+    assert_eq!(row_trigger_calls(&mut tx).await? - before, 1);
     Ok(())
 }
 
