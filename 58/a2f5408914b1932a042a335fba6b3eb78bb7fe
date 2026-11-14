@@ -1,0 +1,32 @@
+.github/workflows/pr-ci.yml
+  s_65316fb49f4b19::t_74ae83a97879ea 27,529-534,610-616,644
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check/test.rs
+  s_65316fb49f4b19::t_b34ac64f330181 1-27
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_65316fb49f4b19::t_45691bf6e266ff 74,500-503
+  s_65316fb49f4b19::t_ba5b3b27df7b2e 504
+.github/workflows/sdk-ocaml-check.yml
+  s_65316fb49f4b19::t_74ae83a97879ea 1-45
+tooling/xtask/crates/xtask_workflows/src/workflows/pr_ci.rs
+  s_65316fb49f4b19::t_85cffc5b32fc8d 34-35
+  s_65316fb49f4b19::t_45691bf6e266ff 128-132
+  s_65316fb49f4b19::t_8b5ea392eb31ab 133
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+  s_65316fb49f4b19::t_b34ac64f330181 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "58a2f5408914b1932a042a335fba6b3eb78bb7fe",
+  "prompts": {},
+  "sessions": {
+    "s_65316fb49f4b19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2291efef-03f9-4d9a-a2d2-ab88c561180f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
