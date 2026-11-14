@@ -61,6 +61,9 @@ const CONTAINERS_LANE: &str = "containers";
 const CARGO_LANE: &str = "cargo";
 /// The run event's `<start>/<run_id>/<machine>`, see [`bring_up_key`].
 const BRING_UP_FIELD: &str = "bring_up";
+/// Seconds from the run's start to a step's or container's start. Not `offset`: that is a
+/// LogQL keyword, so no query could filter or unwrap it.
+const OFFSET_FIELD: &str = "offset_in_run";
 /// Cargo's timing report of the last build, relative to the workspace root.
 const CARGO_TIMINGS: &str = "target/cargo-timings/cargo-timing.html";
 /// Compilation units shorter than this get no `crate` event.
@@ -334,7 +337,7 @@ impl RunTelemetry {
             .with("step", step)
             .with("seconds", seconds(elapsed))
             .with("outcome", outcome)
-            .with("offset", seconds(offset))
+            .with(OFFSET_FIELD, seconds(offset))
             .with("lane", placement.lane)
             .lasting(step, elapsed)
             .span(&placement.key);
@@ -976,7 +979,7 @@ fn inspect_services(shared: &Shared, phase: &str) {
                 let offset = started
                     .duration_since(shared.started_at)
                     .unwrap_or_default();
-                event = event.with("offset", seconds(offset)).at(started + wait);
+                event = event.with(OFFSET_FIELD, seconds(offset)).at(started + wait);
             }
         }
         shared.record(event);

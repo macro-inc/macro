@@ -312,7 +312,7 @@ fn nested_steps_name_their_parent_and_lanes_keep_their_own() {
     assert_eq!(inner["fields"]["lane"], json!("main"));
     assert_eq!(frontend["fields"]["lane"], json!("frontend"));
     assert!(frontend.get("parent").is_none(), "{frontend}");
-    assert!(outer["fields"]["offset"].as_f64().is_some());
+    assert!(outer["fields"][super::OFFSET_FIELD].as_f64().is_some());
     assert_ne!(outer["span"], frontend["span"]);
 }
 
