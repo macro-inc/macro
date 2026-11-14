@@ -40,11 +40,11 @@ expression: "render(&mut app(), 200, 56)"
 ┏━ 02 // TAPE  500 LINES  ▼ FOLLOWING ──────────────────────────────────────────────────────────━━━┓┏━ 08 // CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────────────────────────━━━┓
 ┃10:01:40 fix-19         TURN turn start                                                           ┃┃  LANE            PR      CI REV    12h ········ NOW  ±MAIN      AGE                              ┃
 │10:01:40 rpc-server     TOOL Task explore the reducer                                             ││✕ ui-pages        #4215   ✕  draft                ◉◎  +12 −4      20s                             │
-│10:01:40 explore the r… TEND turn end                                                             ││⚠ feat/invoice-ex…#4190   ✓  CHG    «─●──●──●─●──●    +9 −36       1h                             │
+│10:01:40 explore the r… TEND turn end                                                             ││⚠ feat/invoice-e… #4190   ✓  CHG    «─●──●──●─●──●    +9 −36       1h                             │
 │10:01:40 explore the r… TOOL Read store.rs                                                        ││  feat/trace-gaps —       ·  —                   ╰◉◎  +6 −5       10s                             │
 │10:01:40 rpc-server     CMIT committed 880ed88 chore(deps): bump the TLS stack                    ││  chore/deps-bump —       ·  —                 ╰◉     +2 −7        2h                             │
 │10:01:40 agent-toolu_d… GONE removed                                                              ││▶ rpc-server      #4211   ✓  REQ               ●◉●◉▶  +11 −8       0s                             │
-│10:01:40 mesh-plan      STAT working                                                              ││  feat/search-ran…—       ·  —              ╰●●●●●●   +6 −11      26m                             │
+│10:01:40 mesh-plan      STAT working                                                              ││  feat/search-ra… —       ·  —              ╰●●●●●●   +6 −11      26m                             │
 │10:01:40 fix-19         STAT working                                                              ││  store-reducer   #4207   ✓  APPR         ╰─●─●●●─●   +5 −13      51m                             │
 │10:01:40 explore the r… SPWN subagent explore the reducer                                         │┃ ◆ #4188 landed 36m      ▼ 6 more                                                                 ┃
 │10:01:39 fix-16         TOOL Bash just check                                                      │┗━━━────────────────────────────────────────────────────────────────────────────────────────────━━━┛

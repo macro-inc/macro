@@ -63,9 +63,16 @@ pub fn draw(
         return;
     };
 
+    // In the grid, lanes needing attention first; zoomed, the order the
+    // cursor walks.
+    let sort = if zoomed {
+        app.cursors.changes.sort
+    } else {
+        LaneSort::Attention
+    };
     let lanes: Vec<Lane> = app
         .view
-        .sorted_lanes(&graph, &app.filter, LaneSort::Attention)
+        .sorted_lanes(&graph, &app.filter, sort)
         .into_iter()
         .cloned()
         .collect();
@@ -151,7 +158,7 @@ pub fn draw(
         let mut spans = vec![
             Span::styled(mark, theme::bold(mark_token)),
             Span::styled(
-                format::cell(&lane_tag(app, lane), 16),
+                format::cell(&lane_tag(app, lane), 15) + " ",
                 theme::bold(if working { Token::Text } else { Token::TextDim }),
             ),
         ];

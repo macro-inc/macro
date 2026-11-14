@@ -7,18 +7,18 @@ expression: "render(&mut app, 80, 24)"
  WORKING 25 ╱ WAITING 0 ╱ BLOCKED 1 ╱ TURNS 24H 234 ╱ TOOLS 24H 644 ╱ ERR 24H 50
 ┏━ 08 // CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 FAILING · ◆ 1 LANDED ───────━━━┓
 ┃  LANE            PR      CI REV    12h ········ NOW  AGE                     ┃
-│✕ ui-pages        #4215   ✕  draft                ◉◎   20s                    │
-│⚠ feat/invoice-ex…#4190   ✓  CHG    «─●──●──●─●──●      1h                    │
 │  feat/trace-gaps —       ·  —                   ╰◉◎   10s                    │
 │  chore/deps-bump —       ·  —                 ╰◉       2h                    │
 │▶ rpc-server      #4211   ✓  REQ               ●◉●◉▶    0s                    │
-│  feat/search-ran…—       ·  —              ╰●●●●●●    26m                    │
+│  feat/search-ra… —       ·  —              ╰●●●●●●    26m                    │
 │  store-reducer   #4207   ✓  APPR         ╰─●─●●●─●    51m                    │
+│✕ ui-pages        #4215   ✕  draft                ◉◎   20s                    │
 │  sync/backoff-1  —       ·  —           ╰●●●           5h                    │
 │  sync/backoff-2  —       ·  —              ╰●●●        3h                    │
 │  sync/backoff-3  —       ·  —                 ╰●○      1h                    │
 │▶ mesh-plan       —       ·  —          ╰▶               —                    │
-│  eric/scratch-pe…—       ·  —      ╰◎                 10h                    │
+│  eric/scratch-p… —       ·  —      ╰◎                 10h                    │
+│⚠ feat/invoice-e… #4190   ✓  CHG    «─●──●──●─●──●      1h                    │
 │  flaky-tests     —       ·  —      «                   1d                    │
 │   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·   ·  │
 │                                                                              │

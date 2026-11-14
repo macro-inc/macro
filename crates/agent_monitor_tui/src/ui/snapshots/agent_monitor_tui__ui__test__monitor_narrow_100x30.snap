@@ -23,7 +23,7 @@ expression: "render(&mut app(), 100, 30)"
 ┗━━━──────────────────────────────────────────────────────────━━━┛┗━━━──────────────────────────━━━┛
 ┏━ 02 // TAPE  500 LINES  ▼ FOLLOWING ────────━━━┓┏━ 08 // CHANGES  ▸ 13 LANES · 4 PRS OPEN · ✕ 1 F┓
 ┃10:01:40 fix-19         TURN turn start         ┃┃  LANE            PR      CI AGE                ┃
-│10:01:40 rpc-server     TOOL Task explore the re││⚠ feat/invoice-ex…#4190   ✓    1h               │
+│10:01:40 rpc-server     TOOL Task explore the re││⚠ feat/invoice-e… #4190   ✓    1h               │
 │10:01:40 explore the r… TEND turn end           ││  feat/trace-gaps —       ·   10s               │
 │10:01:40 explore the r… TOOL Read store.rs      │┃ ◆ #4188 landed 36m      ▼ 11 more              ┃
 │10:01:40 rpc-server     CMIT committed 880ed88 c│┗━━━──────────────────────────────────────────━━━┛
