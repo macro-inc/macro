@@ -78,15 +78,7 @@ reason = "served by the emulator, never called by the product: every Graph call 
 # ---------------------------------------------------- sign-in, full stack
 
 [[deferred]]
-entry = "provider gmail:oauth.authorize"
-reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
-
-[[deferred]]
 entry = "provider gmail:oauth.userinfo"
-reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
-
-[[deferred]]
-entry = "provider outlook:oauth.authorize"
 reason = "a sign-in route the authentication service or a browser calls; the stack replaces that service with a stand-in"
 
 [[deferred]]
