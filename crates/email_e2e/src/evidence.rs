@@ -30,6 +30,9 @@ pub(crate) const FILE_NAME: &str = "evidence.json";
 /// The version of the file's layout, for the report to refuse one it does
 /// not know.
 const VERSION: u8 = 1;
+/// Provider routes of signing in, which a user of either provider may use
+/// and which therefore do not say where an inbox is.
+const SIGN_IN_ROUTES: &str = "oauth.";
 /// The longest string a shape keeps as it is.
 const TAG_LENGTH: usize = 48;
 const TEXT: &str = "<str>";
@@ -255,10 +258,18 @@ impl Recorder {
                 .cloned()
                 .unwrap_or_else(|| url.rsplit('/').next().unwrap_or_default().to_owned())
         };
+        // An inbox the scenario removed is no longer among its links: the
+        // mailbox calls made for it still say which provider it was on.
+        let called = collected.provider.iter().filter_map(|call| {
+            let route = call["route"].as_str()?;
+            (!route.starts_with(SIGN_IN_ROUTES)).then(|| call["provider"].as_str())?
+        });
         let providers: BTreeSet<String> = collected
             .links
             .iter()
-            .map(|(provider, _)| provider.to_ascii_lowercase())
+            .map(|(provider, _)| provider.as_str())
+            .chain(called)
+            .map(str::to_ascii_lowercase)
             .collect();
         let (binary, test) = scenario();
         let evidence = json!({
