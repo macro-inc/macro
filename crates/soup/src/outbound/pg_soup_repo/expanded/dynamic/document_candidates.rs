@@ -153,13 +153,14 @@ impl DocumentCandidates {
         self.domains.len() + self.addresses.len()
     }
 
-    /// [`CandidateArm::EachCandidate`]'s `FROM` clause: the candidates,
-    /// collected behind an `OFFSET` fence before any document is read, joined
-    /// to `"Document" d`.
+    /// [`CandidateArm::EachCandidate`]'s `FROM` clause: the distinct
+    /// candidates, collected behind an `OFFSET` fence before any document is
+    /// read, joined to `"Document" d`. A single set has no `UNION` to remove
+    /// a document listed under two of its participants.
     fn fenced_source(self, arrays: &mut DocumentIdArrays) -> String {
         format!(
             r#"FROM (
-                    SELECT candidates.id FROM (
+                    SELECT DISTINCT candidates.id FROM (
                         {}
                     ) candidates
                     {PER_CANDIDATE}

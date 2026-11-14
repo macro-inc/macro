@@ -174,6 +174,37 @@ async fn first_page(
         .collect::<Result<_, sqlx::Error>>()?)
 }
 
+/// Copies pat@acme.test on the message doc A's attachment came in, so doc A
+/// has two participant rows under acme.test.
+async fn add_second_acme_recipient(db: &PgPool) -> anyhow::Result<()> {
+    let to_acme = uuid!("ea000001-0000-0000-0000-000000000099");
+    let pat = Uuid::now_v7();
+    let mut tx = db.begin().await?;
+    sqlx::raw_sql("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        "INSERT INTO email_contacts (id, link_id, email_address)
+         SELECT $1, link_id, 'pat@acme.test' FROM email_messages WHERE id = $2",
+        pat,
+        to_acme,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql("SET LOCAL session_replication_role = 'origin'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'CC')",
+        to_acme,
+        pat,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 fn documents(filter: Expr<DocumentLiteral>) -> EntityFilterAst {
     EntityFilterAst {
         document_filter: Some(Arc::new(filter)),
@@ -192,13 +223,16 @@ async fn starting_from_candidates_returns_the_page_access_returns(
     db: PgPool,
 ) -> anyhow::Result<()> {
     seeded::seed_crm_document_associations(&db, Uuid::now_v7()).await?;
+    add_second_acme_recipient(&db).await?;
     let doc_a = Uuid::parse_str(seeded::DOC_A)?;
     let doc_c = uuid!("cccccccc-cccc-cccc-cccc-cccccccccccc");
     let doc_d = uuid!("dddddddd-dddd-dddd-dddd-dddddddddddd");
     let filters = [
         // Doc B's attachment moved off the message to acme.test: its
-        // projection rows stay, and the filter drops it.
+        // projection rows stay, and the filter drops it. Doc A has two rows
+        // under the domain.
         domain("ACME.test"),
+        Expr::or(address("vendor@acme.test"), address("pat@acme.test")),
         address("other@globex.test"),
         Expr::or(domain("acme.test"), id(doc_c)),
         // The Files tab's shape.
