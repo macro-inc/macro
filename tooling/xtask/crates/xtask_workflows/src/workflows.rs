@@ -49,6 +49,7 @@ mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
+mod email_e2e;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod ios_app_store_publish;
@@ -190,6 +191,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_desktop_on_tag",
         file_name: "build_desktop_on_tag.yml",
         render_yaml: || render_gh_workflow(build_desktop_on_tag::build_desktop_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "email_e2e",
+        file_name: "email_e2e.yml",
+        render_yaml: || render_gh_workflow(email_e2e::email_e2e)(),
     },
     WorkflowFile {
         slug: "code_check_infra",
