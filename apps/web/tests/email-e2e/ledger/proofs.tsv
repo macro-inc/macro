@@ -1,4 +1,123 @@
 id	break
+AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
+AL-004	the phone's tab pills do not switch tabs
+AL-005	pressing g and a letter opens no tab
+AL-006	the number keys do not switch tabs
+AL-007	pressing Tab or Shift+Tab does not move between the Inbox tabs
+AL-008	pressing Escape does not go back to the Signal tab
+AL-011	the header's New email opens no new email
+AL-014	pressing / beside an open thread leaves the thread open instead of showing the list
+AL-015	pressing Ctrl+F does not focus the search field
+AL-019	pressing f does not open the filter menu
+AL-021	a Done choice in the filter menu does not narrow the list (the same wiring serves AL-023, AL-024, AL-410)
+AL-022	picking Starred under Has in the filter menu does not narrow the list to starred threads
+AL-025	picking a person in the filter menu does not narrow the list to that person's threads
+AL-026	picking an importance in the filter menu does not narrow the list
+AL-027	picking a Latest activity range does not narrow the list to recent threads
+AL-029	the filter menu's Clear filters leaves the filters on
+AL-030	the phone's Open email filters opens no drawer
+AL-031	a facet checkbox in the phone's filter drawer filters nothing
+AL-032	the phone filter drawer's Clear all leaves the filters on
+AL-036	pressing Shift+V does not hide or show the reading pane
+AL-037	a list width dragged at the divider is shown but not kept
+AL-040	an alias picked in the inbox menu or the phone drawer does not narrow the list to the mail sent to that address
+AL-042	an inbox picked in the header menu does not narrow the list to that inbox
+AL-043	an inbox checkbox in the phone drawer does not narrow the list to that inbox
+AL-047	the link on the caught-up Focus tab does not open the rest of the inbox
+AL-049	pressing End, Shift+G or Cmd+Down does not move the cursor to the last row
+AL-053	pressing Cmd+A selects nothing
+AL-054	pressing Shift+Arrow does not extend the selection
+AL-055	pressing Escape does not clear the selection
+AL-056	the selection toolbar's X leaves the rows selected (the same wiring serves AL-407)
+AL-062	the row's Archive button does not mark the thread done
+AL-065	pressing Shift+E does not bring a done thread back to the inbox
+AL-069	the discard keys on a draft row do not discard the draft
+AL-075	picking Share in the command menu opens no Share dialog
+AL-077	the row's lightning button opens no command menu
+AL-078	the row menu's Mark Done does not mark the thread done
+AL-079	the row menu's Mark Read does not mark the thread read
+AL-080	the row menu's Favorite does not favorite the thread
+AL-082	the row menu's Remind me opens no reminder form
+AL-083	the row menu's Add tag opens no tag picker
+AL-085	the row menu's Share opens no Share dialog
+AL-089	the row menu's Delete does not move the thread to Trash
+AL-091	the row menu's Move to folder opens no folder picker
+AL-092	the selection toolbar's Actions opens no list of actions
+AL-097	a swipe to the right on a row opens no Remind me menu
+AL-104	the breadcrumb name at the list opens no menu of views
+AL-107	the changed view's Save view opens no dialog to name the view
+AL-108	the changed view's Revert keeps the changed filters
+AL-115	Move up in the phone picker's row menu moves nothing
+AL-116	Save changes on an edited saved view saves nothing
+AL-117	Reset on an edited saved view keeps the edits
+AL-118	Reload saved view after a refused save reloads nothing
+AL-119	Return to Email on a missing saved view goes nowhere
+AL-120	Retry loading views asks for nothing
+AL-121	the phone's views pill opens no drawer
+AL-125	the open thread's Previous item and Next item arrows do not move to another thread
+AL-126	the open thread's envelope button does not mark it unread
+AL-127	the open thread's check button does not mark it done
+AL-149	the title menu's Share opens no Share dialog
+AL-150	the title menu's Mark Done does not mark the thread done
+AL-151	the title menu's Mark Unread does not mark the thread unread
+AL-153	the title menu's Create task opens no task composer
+AL-154	the title menu's Create event opens no event composer
+AL-155	the title menu's Move to folder opens no folder picker
+AL-157	the title menu's Delete does not move the thread to Trash
+AL-158	the title menu's Sender to Signal does not move the sender to Signal
+AL-159	the title menu's Sender to Noise does not move the sender to Noise
+AL-160	the title menu's Block Sender does not block the sender
+AL-161	the title menu's Remind me opens no reminder form
+AL-189	the Remind me form's Cancel leaves it open
+AL-196	the open thread's Copy Share Link copies nothing
+AL-400	pressing g then e from another view does not open Email
+AL-402	pressing Cmd+K with nothing selected opens no command menu
+AL-403	a Cmd+click or Ctrl+click on a row opens it instead of selecting it
+AL-404	a Shift+click on a row checkbox does not select the range up to it
+AL-405	on a touch screen, tapping another row while one is selected does not add it to the selection
+AL-406	the toolbar's Restore and Not spam do not bring the selected threads back (the same wiring serves F-076, F-078, F-082)
+AL-407	clearing from the selection toolbar leaves the rows selected
+AL-411	a right-click on a row opens no menu
+AL-413	pressing Enter or clicking the row the reading pane shows does not move the focus into the pane
+AL-601	an action picked in the command menu does not run (the same wiring serves AL-608, AL-611)
+AL-605	a long press on a row on a phone opens no actions drawer
+AL-612	pressing Cmd+S in an open thread opens no Share dialog
+AL-613	the title menu's Favorite does not favorite the thread
+AL-615	the title menu's Add tag opens no tag picker
+AL-616	the title menu's Copy Link copies nothing
+AL-617	the title menu's Copy ID copies nothing
+AL-622	the Remind me form's Retry does not load the reminder again
+AL-700	Load more views loads nothing
+AL-701	the Saved views header does not fold the section
+AL-702	a view chosen in the phone drawer is not opened
+AL-703	Create view in the empty phone drawer opens nothing
+AL-704	a tag picked in the view builder is not added to the view
+AL-705	Advanced settings in the view builder shows nothing
+AL-706	Cancel in the view builder leaves it open
+AX-008	the Cancel button of Turn off calendar leaves the dialog open
+AX-012	the Cancel button of Remove inbox leaves the dialog open
+AX-015	the Manage notifications button does not open the notification settings
+AX-016	the Manage calendars button does not open the calendar settings
+AX-017	words typed into the signature editor never reach the signature, so it cannot be saved (the same wiring serves AX-018, AX-202)
+AX-018	the signature toolbar's buttons, such as Bold and Link, do nothing
+AX-022	answering Continue to rich text does not switch the signature to rich text
+AX-023	answering Use pasted signature keeps the old signature
+AX-033	the Back to app button under Finishing account connection goes nowhere
+AX-035	the Connect a different account button of Admin approval required closes it without offering the account chooser
+AX-041	the Try again button of the Email access required prompt closes it without opening the account chooser
+AX-044	no Try again is offered when the connected accounts fail to load during onboarding
+AX-201	dragging a signature picture's resize handle does not change its width
+AX-202	pasting an address over selected words in the signature pastes plain text instead of making a link
+AX-203	the Cancel button of the Convert to rich text question leaves it open
+AX-204	a signature with its own layout pasted into an empty editor is dropped
+AX-205	the Cancel button of the Replace with pasted signature question leaves it open
+AX-206	a provider picked in the Add inbox dialog starts no sign-in
+AX-207	cancelling the Add inbox dialog leaves the chooser open
+AX-210	the Maybe later button of the Email access required prompt leaves it on screen
+AX-212	the Connect personal email button starts no account sign-in
+AX-213	the Continue button on the onboarding email steps does not move on
+AX-214	the Skip for now button on the onboarding email step does not move on
+AX-215	answering Sign out in the remove-local-drafts question keeps the user signed in
 F-001	the return from consent never sets up the inbox
 F-002	Outlook in the connect dialog starts nothing
 F-003	Copy admin approval link copies nothing
@@ -169,17 +288,3 @@ F-190	the steps a program of the assistant took are not listed in the conversati
 F-191	a pasted thread link stays a plain link
 F-192	adding a domain to a CRM blacklist in Settings does nothing
 F-196	unblocking a sender does nothing
-AL-115	Move up in the phone picker's row menu moves nothing
-AL-116	Save changes on an edited saved view saves nothing
-AL-117	Reset on an edited saved view keeps the edits
-AL-118	Reload saved view after a refused save reloads nothing
-AL-119	Return to Email on a missing saved view goes nowhere
-AL-120	Retry loading views asks for nothing
-AL-121	the phone's views pill opens no drawer
-AL-700	Load more views loads nothing
-AL-701	the Saved views header does not fold the section
-AL-702	a view chosen in the phone drawer is not opened
-AL-703	Create view in the empty phone drawer opens nothing
-AL-704	a tag picked in the view builder is not added to the view
-AL-705	Advanced settings in the view builder shows nothing
-AL-706	Cancel in the view builder leaves it open
