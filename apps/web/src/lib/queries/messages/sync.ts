@@ -12,6 +12,7 @@ import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { noteChannelPush } from './local/catch-up';
+import { channelCacheHost } from './local/flag';
 import { normalizeMessageSender } from './message-sender';
 import {
   getCachedThreadState,
@@ -30,6 +31,7 @@ import {
   insertActivitiesIntoMessageTimeline,
   invalidateMessageTimeline,
   type MessageTimelineData,
+  placeTopLevelMessageInMessageTimeline,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
@@ -106,6 +108,8 @@ function noteCommittedChannelChange(
  * device queue. That answer passes through the device before it reaches the
  * views, which may by then show a reaction someone else made since: the
  * answer predates it, so the reactions on screen stay.
+ * A delivered root message also moves to where the server placed it: messages
+ * pushed while it waited were put below it, though the server holds them first.
  */
 export function applyQueuedWrite(
   message: Message,
@@ -123,6 +127,11 @@ export function applyQueuedWrite(
     shown ? { ...message, reactions: shown.reactions } : message,
     change
   );
+  if (change === 'posted' && !message.thread_id) {
+    setMessageTimelineData(message.parent, (data) =>
+      placeTopLevelMessageInMessageTimeline(data, message.id)
+    );
+  }
 }
 
 /** Committed timeline activity, delivered whole so loaded history needs no re-read. */
@@ -210,6 +219,13 @@ export function applyMessage(
         thread: { reply_count: 0, preview: [], latest_reply_at: null },
       };
       insertMessageIntoTargetCaches(parent, target, item);
+      // With the device queue a person's own message can wait above this one
+      // with a later time, or the server can have placed this one earlier.
+      if (parent.type === 'channel' && channelCacheHost()) {
+        setMessageTimelineData(parent, (data) =>
+          placeTopLevelMessageInMessageTimeline(data, message.id)
+        );
+      }
     }
   } else {
     patchTargetMessage(parent, target, normalized);
