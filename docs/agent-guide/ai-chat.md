@@ -2537,12 +2537,20 @@ also exercise direct ACP model-change requests, downgrade, and resume.
 
 ## Composing routines from a conversation
 
-The built-in **Compose Routines** skill walks an agent through creating or
-changing a routine with `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`: read
-the existing routine first, pick schedule or activity triggers, write code steps
-that act and decide (`macro.ai.decide`), keep to one Ask AI step, resolve every
-id before writing, and send the complete
-configuration, since an update replaces name, triggers, steps and required apps.
+The built-in **Compose Routines** skill is how an agent writes or changes a
+routine from a conversation. A code-mode session reads it right after the
+routines guide, without looking for it, and usually does the whole job in one
+program: it finds every item the request names by its exact name with the
+SDK (`macro.channels.search`, a name search of `macro.search.page`,
+`macro.users.search`, or the list for its kind), asking, with `AskUser` where
+it can or else in its reply, when a name has no exact match or several; then
+`macro.routines.check` and `create` or `update`; then a one- or two-sentence
+reply with the routine's link. The routine is saved switched on. A code step
+takes each item from a knob holding its name, which it looks up when it runs,
+and never messages the routine's owner: an Ask AI step tells them, as in the
+routine drafter. Hosts without code get the skill in the form they can follow:
+each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
+like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a
