@@ -458,6 +458,7 @@ where
                 request,
                 participant_user_ids,
                 metadata,
+                ..
             } => {
                 self.publish_access_request_change(&request, &participant_user_ids)
                     .await;
@@ -1202,12 +1203,17 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::AccessRequested { request, .. } => {
+        ChannelEvent::AccessRequested {
+            request,
+            requester_name,
+            ..
+        } => {
             vec![ChannelMacroEvent::access_requested(
                 ChannelAccessRequestedMetadata {
                     channel_id: request.channel_id,
                     request_id: request.id,
                     requester_id: request.requester_id.clone(),
+                    requester_name: requester_name.clone(),
                 },
             )]
         }

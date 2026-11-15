@@ -56,6 +56,13 @@ pub struct PrepareRoutineSession {
     /// schedulers omit it and get `Billable`, as every session was.
     #[serde(default, skip_serializing_if = "SessionBilling::is_billable")]
     pub billing: SessionBilling,
+    /// Instructions the session keeps for every turn, snapshotted when it
+    /// opens. A background session puts them in its cached prompt prefix
+    /// (see `agent_inmem`), so text every opener of its kind sends belongs
+    /// here and what is particular to one request in the prompt. Older
+    /// schedulers omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
 }
 
 /// A verified, persisted session ready for its first prompt.
@@ -181,6 +188,9 @@ pub enum RoutineSessionError {
     /// A runtime could not serve the selected agent.
     #[error("selected runtime is unavailable")]
     RuntimeUnavailable,
+    /// The selected agent's harness is an agent teammate's computer.
+    #[error("{}", crate::domain::error::TEAM_AGENT_COMPUTER_MESSAGE)]
+    TeamAgentComputer,
     /// Preparation returned another owner's, persona's, or session's row.
     #[error("prepared session does not match the request")]
     SessionMismatch,

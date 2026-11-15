@@ -1,6 +1,8 @@
 //! Filing a database in a folder, with the grants the folder passes down.
 
-use entity_access_db_utils::project_grants::{drop_project_grants, inherit_project_grants};
+use entity_access_db_utils::project_grants::{
+    drop_project_grants, inherit_project_grants, refuse_filing,
+};
 use entity_access_db_utils::team_share;
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -36,6 +38,16 @@ pub(super) async fn move_database(
     )
     .execute(&mut *transaction)
     .await?;
+    // Checked against the grants it holds before the swap below.
+    if let Some(project_id) = project_id {
+        refuse_filing(
+            &mut transaction,
+            id.as_uuid(),
+            EntityType::Database,
+            &Uuid::parse_str(project_id)?,
+        )
+        .await?;
+    }
     if let Some(previous) = previous {
         drop_project_grants(
             &mut transaction,

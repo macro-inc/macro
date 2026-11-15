@@ -29,7 +29,11 @@ impl ServiceProcess {
         env: &BTreeMap<String, String>,
         log_dir: &Path,
     ) -> Result<Self, Report> {
-        let binary = binary_dir()?.join(name);
+        // Absolute: the child starts in another directory.
+        let binary = binary_dir()?
+            .join(name)
+            .canonicalize()
+            .context("could not resolve the service binary")?;
 
         let log_path = log_dir.join(format!("{name}.log"));
         // Appended, so a restarted service keeps what it logged before.
@@ -106,8 +110,8 @@ pub(crate) fn ensure_built(names: &[&str]) -> Result<(), Report> {
         let binary = dir.join(name);
         if !binary.is_file() {
             bail!(
-                "{} is missing: build it with `cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p calendar_service --bin calendar_service`, \
-                 or run the suite with `just email-e2e`",
+                "{} is missing: run the suite with `just email-e2e`, which builds the \
+                 services it starts",
                 binary.display()
             );
         }

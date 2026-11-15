@@ -1,8 +1,8 @@
 import { routePhoneToMobileSignup } from '../../core/navigation';
 import './macro-hero.css';
 
-export const homepageDescription =
-  'Macro replaces 27+ apps with one connected system designed for humans and agents to work together.';
+const homepageDescription =
+  'Macro replaces 27+ apps with one connected system designed for humans and agents.';
 
 /** Centered homepage introduction. */
 export function MacroHero() {
@@ -17,6 +17,7 @@ export function MacroHero() {
         <h2>{homepageDescription}</h2>
         <a
           class="site-nav-start homepage-hero-cta macro-home-button"
+          target="_self"
           href="/app/signup"
           onClick={routePhoneToMobileSignup}
         >

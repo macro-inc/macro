@@ -11,7 +11,8 @@ slow-timeout = { period = "120s", terminate-after = 3 }
 failure-output = "immediate-final"
 fail-fast = false
 
-# Each scenario runs two service processes with their own connection pools.
+# Each scenario runs two service processes, or three when it serves the
+# GraphQL API, with their own connection pools.
 [test-groups.email-e2e]
 max-threads = 6
 

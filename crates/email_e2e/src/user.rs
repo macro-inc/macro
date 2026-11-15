@@ -65,6 +65,7 @@ impl User {
             api: ApiClient {
                 http: stack.http().clone(),
                 api_url: stack.api_url().to_owned(),
+                graphql_url: stack.graphql_url(),
                 internal_api_key: stack.internal_api_key().to_owned(),
                 macro_user_id,
                 fusion_user_id,
@@ -74,6 +75,13 @@ impl User {
             outlook: stack.outlook().clone(),
             calendar_urls: stack.calendar_urls(),
         })
+    }
+
+    /// Runs a GraphQL operation as the user, as the web app does, and
+    /// answers its `data`; an `errors` answer fails the call. Needs a stack
+    /// started with `document_storage: true`.
+    pub async fn graphql(&self, query: &str, variables: &Value) -> Result<Value, Report> {
+        self.api.graphql(query, variables).await
     }
 
     /// The user's address, which is also their first inbox's.

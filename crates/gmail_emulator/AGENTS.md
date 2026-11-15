@@ -85,7 +85,9 @@ a local stack, without Google accounts.
 - Point a local `email_service` and `pubsub_workers` at it:
   `OVERRIDE_GMAIL_API_URL=<base>/gmail/v1`,
   `OVERRIDE_GOOGLE_PEOPLE_API_URL=<base>/people/v1`,
-  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`, and
+  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`,
+  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL=<base>/oauth2/v3/tokeninfo` (on
+  `email_service` only), and
   `OVERRIDE_AUTH_SERVICE_URL=<base>/_emulator/authentication-service` to get
   access tokens without the authentication service. Start the emulator with
   `--push-endpoint http://<email_service>/gmail/webhook`.
@@ -123,6 +125,9 @@ a local stack, without Google accounts.
   Provider failure: `POST /_emulator/faults` (`inject_fault`) with a `route`
   such as `messages.get` and an `error` such as `rate_limit`. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`.
+- The signature of a mailbox's primary address: `PUT
+  /_emulator/mailboxes/{email}/signature` with `{"signature": "<html>"}`
+  (`set_signature`); `settings.sendAs.list` answers it. It is empty until set.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
@@ -140,6 +145,8 @@ a local stack, without Google accounts.
 - Responses are Google's shapes, not ours: absent fields are omitted, not
   null, and carry fields `models_email` does not read. Don't build them from
   `models_email` types.
+- A `message/rfc822` part that is not an attachment (the original a bounce
+  returns) carries the wrapped message as its one child part, as at Gmail.
 - Push tokens are dated by the real clock, because the verifier reads the
   real clock; everything else follows the emulator's clock.
 - Scopes add to the grant a mailbox already holds, as at Google, and a
