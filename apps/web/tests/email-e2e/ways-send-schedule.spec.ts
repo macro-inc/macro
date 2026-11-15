@@ -18,11 +18,12 @@ import {
   scheduledNotice,
   scheduledTimes,
 } from './harness/ways-send';
+import type { ActionId } from './ledger/manifest';
 import { confirmed, did, saw } from './ledger/record';
 
 /** A way to choose a time in the open picker, and the time it stands for. */
 type Way = {
-  row: string;
+  row: ActionId;
   subject: string;
   choose: (page: Page) => Promise<Date>;
 };

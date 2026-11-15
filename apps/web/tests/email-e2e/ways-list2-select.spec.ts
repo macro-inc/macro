@@ -56,7 +56,9 @@ test.describe('other ways to select rows of the mail list, in a Gmail inbox', ()
     await expect.poll(() => selectedIds(page)).toEqual([rows[1]]);
 
     // The toolbar's Clear.
-    await page.getByRole('button', { name: /^Clear(?! filters)/ }).click();
+    await page
+      .getByRole('button', { name: /^Clear(?! filters| selection)/ })
+      .click();
     did('AL-407');
     await expect(count(1)).toHaveCount(0);
     await expect.poll(() => selectedIds(page)).toEqual([]);

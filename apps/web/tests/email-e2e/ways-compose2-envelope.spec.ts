@@ -9,6 +9,7 @@ import {
   sentCopy,
   YARA,
 } from './harness/ways-compose2';
+import type { ActionId } from './ledger/manifest';
 import { did } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
@@ -30,7 +31,7 @@ const hotkey = (keys: string) => async (page: Page) => {
 
 /** Every way to reveal a hidden copy field of a reply. */
 const REVEALS: {
-  row: string;
+  row: ActionId;
   field: 'cc' | 'bcc';
   reveal: (page: Page) => Promise<void>;
 }[] = [

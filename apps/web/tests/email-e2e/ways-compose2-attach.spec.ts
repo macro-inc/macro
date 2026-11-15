@@ -20,6 +20,7 @@ import {
   sentCopy,
   stubStaticFiles,
 } from './harness/ways-compose2';
+import type { ActionId } from './ledger/manifest';
 import { did } from './ledger/record';
 
 test.beforeEach(async ({ page }) => {
@@ -49,7 +50,7 @@ async function choose(page: Page, row: string, open: () => Promise<void>) {
 }
 
 /** Every way to attach a file to a reply. */
-const ATTACHES: { row: string; attach: (page: Page) => Promise<void> }[] = [
+const ATTACHES: { row: ActionId; attach: (page: Page) => Promise<void> }[] = [
   {
     row: 'AC-084',
     attach: (page) => choose(page, 'AC-084', () => attachButton(page).click()),
@@ -112,8 +113,14 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       const uploads = stubStaticFiles(mailbox);
       const picture = { name: 'map.png', mimeType: 'image/png', base64: PIXEL };
       const ways = [
-        { row: 'AC-085', put: () => dropFile(replyEditor(page), picture) },
-        { row: 'AC-086', put: () => pasteFile(replyEditor(page), picture) },
+        {
+          row: 'AC-085' as const,
+          put: () => dropFile(replyEditor(page), picture),
+        },
+        {
+          row: 'AC-086' as const,
+          put: () => pasteFile(replyEditor(page), picture),
+        },
       ];
       for (const [index, way] of ways.entries()) {
         await test.step(way.row, async () => {
