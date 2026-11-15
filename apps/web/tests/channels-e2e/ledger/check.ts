@@ -17,7 +17,15 @@ type InventoryRow = {
 };
 type ProofRow = { test: string; change: string; outcome: string };
 type DefectRow = { test: string; defect: string };
-type ReportSpec = { title: string; ok: boolean; tests: { status: string }[] };
+type KnownDefectRow = DefectRow & { builds: string };
+type ReportSpec = {
+  title: string;
+  ok: boolean;
+  tests: {
+    status: string;
+    results?: { annotations?: { type: string }[] }[];
+  }[];
+};
 type ReportSuite = { specs?: ReportSpec[]; suites?: ReportSuite[] };
 
 const LEDGER = dirname(fileURLToPath(import.meta.url));
@@ -64,12 +72,23 @@ function specsOf(suite: ReportSuite): ReportSpec[] {
   ];
 }
 
-function outcomes(reportFile: string): Map<string, string> {
+type Outcome = { status: string; defectSeen: boolean };
+
+function outcomes(reportFile: string): Map<string, Outcome> {
   const report = JSON.parse(readFileSync(reportFile, 'utf8')) as ReportSuite;
-  const found = new Map<string, string>();
+  const found = new Map<string, Outcome>();
   for (const spec of specsOf(report)) {
     const id = spec.title.split(' ')[0];
-    found.set(id, spec.tests.map((test) => test.status).join(','));
+    found.set(id, {
+      status: spec.tests.map((test) => test.status).join(','),
+      defectSeen: spec.tests.some((test) =>
+        (test.results ?? []).some((result) =>
+          (result.annotations ?? []).some(
+            (note) => note.type === 'intermittent-defect'
+          )
+        )
+      ),
+    });
   }
   return found;
 }
@@ -85,7 +104,17 @@ const inventory: InventoryRow[] = rows('inventory.tsv', 4).map(
 const proofs: ProofRow[] = rows('proofs.tsv', 3).map(
   ([test, change, outcome]) => ({ test, change, outcome })
 );
-const defects: DefectRow[] = rows('known-defects.tsv', 2).map(
+const defects: KnownDefectRow[] = rows('known-defects.tsv', 3).map(
+  ([test, builds, defect]) => ({ test, builds, defect })
+);
+for (const row of defects) {
+  if (!['off', 'on', 'both'].includes(row.builds)) {
+    throw new Error(
+      `known-defects.tsv: ${row.test} has builds "${row.builds}"`
+    );
+  }
+}
+const sometimes: DefectRow[] = rows('intermittent-defects.tsv', 2).map(
   ([test, defect]) => ({ test, defect })
 );
 
@@ -94,6 +123,11 @@ const problems: string[] = [];
 const listed = new Set(inventory.flatMap((row) => row.tests));
 const proved = new Set(proofs.map((row) => row.test));
 const defective = new Set(defects.map((row) => row.test));
+// The proofs are run on a build without the flag: a defect there is itself the
+// proof that the test can fail.
+const failsUnbroken = new Set(
+  defects.filter((row) => row.builds !== 'on').map((row) => row.test)
+);
 
 for (const row of inventory) {
   if (row.tests.length === 0 && row.reason === '') {
@@ -107,11 +141,15 @@ for (const row of inventory) {
 }
 for (const id of tests.keys()) {
   if (!listed.has(id)) problems.push(`${id}: not in inventory.tsv`);
-  if (!proved.has(id) && !defective.has(id)) {
+  if (!proved.has(id) && !failsUnbroken.has(id)) {
     problems.push(`${id}: no proof in proofs.tsv that it can fail`);
   }
 }
-for (const id of [...proved, ...defective]) {
+for (const id of [
+  ...proved,
+  ...defective,
+  ...sometimes.map((row) => row.test),
+]) {
   if (!tests.has(id)) problems.push(`${id}: in the ledger but not a test`);
 }
 
@@ -119,17 +157,22 @@ const reportAt = process.argv.indexOf('--report');
 if (reportAt !== -1) {
   const ran = outcomes(process.argv[reportAt + 1]);
   for (const id of tests.keys()) {
-    const status = ran.get(id);
-    if (status === undefined) problems.push(`${id}: did not run`);
-    else if (status !== 'expected')
-      problems.push(`${id}: ${status} in the run`);
+    const outcome = ran.get(id);
+    if (outcome === undefined) problems.push(`${id}: did not run`);
+    else if (outcome.status !== 'expected')
+      problems.push(`${id}: ${outcome.status} in the run`);
+    else if (outcome.defectSeen) {
+      if (sometimes.some((row) => row.test === id))
+        console.log(`${id}: its intermittent defect showed in the run`);
+      else problems.push(`${id}: not in intermittent-defects.tsv`);
+    }
   }
 }
 
 const covered = inventory.filter((row) => row.tests.length > 0).length;
 console.log(
   `${tests.size} tests; ${covered} of ${inventory.length} listed behaviours covered, ` +
-    `${inventory.length - covered} not, each with a reason; ${defects.length} known defects`
+    `${inventory.length - covered} not, each with a reason; ${defects.length} known defects, ${sometimes.length} intermittent`
 );
 if (problems.length > 0) {
   console.error(problems.join('\n'));

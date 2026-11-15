@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/ChannelAccessDenied.tsx b/apps/web/src/features/channel/ChannelAccessDenied.tsx
+index d10535626e..9c8ffb0bc7 100644
+--- a/apps/web/src/features/channel/ChannelAccessDenied.tsx
++++ b/apps/web/src/features/channel/ChannelAccessDenied.tsx
+@@ -27,7 +27,7 @@ export function ChannelAccessDenied(props: {
+   const unavailable = createMemo<string | undefined>((previous) => {
+     if (!authenticated()) return;
+     const loaded = state.read();
+-    if (loaded.status === 'not-found') return props.channelId;
++    if (loaded.status === 'not-found') return;
+     // Refetching a 404 without cached data returns the query to pending.
+     if (loaded.status !== 'ready' && previous === props.channelId)
+       return previous;

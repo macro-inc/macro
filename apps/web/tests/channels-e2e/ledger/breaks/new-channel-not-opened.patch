@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/CreateChannelModal.tsx b/apps/web/src/features/channel/CreateChannelModal.tsx
+index 10c460fabb..9fc20cb644 100644
+--- a/apps/web/src/features/channel/CreateChannelModal.tsx
++++ b/apps/web/src/features/channel/CreateChannelModal.tsx
+@@ -176,7 +176,6 @@ export function CreateChannelModal() {
+           'create-channel'
+         );
+       setStep('invite');
+-      replaceOrInsertSplit({ type: 'channel', id });
+     } catch (cause) {
+       console.error('Failed to create channel', cause);
+       setError('Failed to create channel. Try again.');

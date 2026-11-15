@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Message/Reactions.tsx b/apps/web/src/features/channel/Message/Reactions.tsx
+index c114512161..5fda13589b 100644
+--- a/apps/web/src/features/channel/Message/Reactions.tsx
++++ b/apps/web/src/features/channel/Message/Reactions.tsx
+@@ -24,7 +24,7 @@ export function Reactions(props: ReactionsProps) {
+   const canReact = () => actions?.onReact !== undefined;
+ 
+   return (
+-    <Show when={message().reactions.length > 0}>
++    <Show when={message().reactions.length > 99}>
+       <div
+         class={cn(
+           'flex flex-row flex-wrap items-center gap-1 mt-0.5 mb-1',

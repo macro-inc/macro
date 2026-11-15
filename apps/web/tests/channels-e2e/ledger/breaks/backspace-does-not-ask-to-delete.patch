@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+index f9bba3814d..38f4c61509 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+@@ -180,6 +180,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
+     hotkeyToken: TOKENS.channel.deleteMessage,
+     description: 'Delete message',
+     condition: () => {
++      if (options) return false;
+       if (!canRunSelectionActionHotkeys()) return false;
+       const msg = getSelectedMessage();
+       return canDeleteSelectedMessageFromHotkey({

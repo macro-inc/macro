@@ -1,0 +1,15 @@
+diff --git a/apps/web/src/features/channel/Message/Content.tsx b/apps/web/src/features/channel/Message/Content.tsx
+index 9953137d83..32d068245c 100644
+--- a/apps/web/src/features/channel/Message/Content.tsx
++++ b/apps/web/src/features/channel/Message/Content.tsx
+@@ -78,7 +78,9 @@ export function Content(props: ContentProps) {
+ 
+   // The body only: an agent message's leading session node is chrome the
+   // sender line renders (`Message.AgentSessionLink`), not part of the text.
+-  const content = createMemo(() => splitMessageContent(message()).body);
++  const content = createMemo(() =>
++    splitMessageContent(message()).body.replaceAll("**", "")
++  );
+   const bigEmoji = createMemo(() => isEmojiOnly(content()));
+   // An agent's references stand out from its text, as in its session view.
+   const fromAgent = () => isBotSenderId(message().sender_id);

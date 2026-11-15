@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/auth/banner/Banner.tsx b/apps/web/src/features/auth/banner/Banner.tsx
+index b4dd8034f4..52d6303901 100644
+--- a/apps/web/src/features/auth/banner/Banner.tsx
++++ b/apps/web/src/features/auth/banner/Banner.tsx
+@@ -9,7 +9,6 @@ export default function Banner() {
+           <span class="text-sm text-ink-muted px-2">
+             Create an account to get started.
+           </span>
+-          <LoginButton />
+         </div>
+       </Surface>
+     </div>

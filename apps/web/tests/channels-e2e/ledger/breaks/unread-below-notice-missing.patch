@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/UnreadNotificationsOverlay.tsx b/apps/web/src/features/channel/Channel/UnreadNotificationsOverlay.tsx
+index 809c4b6b29..da4c020488 100644
+--- a/apps/web/src/features/channel/Channel/UnreadNotificationsOverlay.tsx
++++ b/apps/web/src/features/channel/Channel/UnreadNotificationsOverlay.tsx
+@@ -10,7 +10,7 @@ export function UnreadNotificationsOverlay(props: {
+   bottomInset?: number;
+ }) {
+   return (
+-    <Show when={props.count > 0}>
++    <Show when={props.count > 0 && props.direction === 'above'}>
+       <Layer depth={3}>
+         <button
+           type="button"

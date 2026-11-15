@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-message-actions.ts b/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
+index 733ca1870e..ec19f64f6d 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
+@@ -185,7 +185,7 @@ export function createChannelMessageActions(
+         !isDeleted && message.content
+           ? async () => {
+               try {
+-                await effects.copyToClipboard(message.content);
++                await effects.copyToClipboard("");
+                 effects.notifyCopyMessageTextSuccess();
+               } catch (error) {
+                 effects.notifyCopyMessageTextFailure(error);

@@ -1,0 +1,32 @@
+diff --git a/apps/web/src/features/channel/Input/create-input-view.ts b/apps/web/src/features/channel/Input/create-input-view.ts
+index 22467e6fc2..f412d60240 100644
+--- a/apps/web/src/features/channel/Input/create-input-view.ts
++++ b/apps/web/src/features/channel/Input/create-input-view.ts
+@@ -37,12 +37,26 @@ export type InputView = {
+   reset: () => void;
+ };
+ 
++const MEMORY = new Map<string, string>();
++const MEMORY_STORAGE = {
++  getItem: (key: string) => MEMORY.get(key) ?? null,
++  setItem: (key: string, value: string) => {
++    MEMORY.set(key, value);
++  },
++  removeItem: (key: string) => {
++    MEMORY.delete(key);
++  },
++};
++
+ export function createInputView(options: CreateInputViewOptions): InputView {
+   const rawValue = createSignal<string | undefined>(
+     options.initialInput.value || undefined
+   );
+   const [persistedValue, setValueSignal] = options.persistenceKey
+-    ? makePersisted(rawValue, { name: options.persistenceKey })
++    ? makePersisted(rawValue, {
++        name: options.persistenceKey,
++        storage: MEMORY_STORAGE,
++      })
+     : rawValue;
+   const value = () => persistedValue() ?? '';
+ 

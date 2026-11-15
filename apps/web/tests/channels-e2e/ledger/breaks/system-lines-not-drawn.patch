@@ -1,0 +1,32 @@
+diff --git a/apps/web/src/features/channel/SystemActivity.tsx b/apps/web/src/features/channel/SystemActivity.tsx
+index 3e3948c20d..3200ab3ca8 100644
+--- a/apps/web/src/features/channel/SystemActivity.tsx
++++ b/apps/web/src/features/channel/SystemActivity.tsx
+@@ -12,7 +12,7 @@ import {
+ import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+ import { getBotDisplayName } from '@queries/messages/message-sender';
+ import type { ChannelAccessDecision } from '@service-storage/generated/schemas/channelAccessDecision';
+-import { Match, Switch } from 'solid-js';
++import { Match, Show, Switch } from 'solid-js';
+ import { match } from 'ts-pattern';
+ import {
+   AccessRequestActivityRow,
+@@ -62,11 +62,13 @@ export function SystemActivity(props: {
+   return (
+     <Switch
+       fallback={
+-        <SystemActivityRow
+-          event={props.event}
+-          actorName={name(props.event.actorId)}
+-          participantName={participant()}
+-        />
++        <Show when={props.event.action.kind === 'call_ended'}>
++          <SystemActivityRow
++            event={props.event}
++            actorName={name(props.event.actorId)}
++            participantName={participant()}
++          />
++        </Show>
+       }
+     >
+       <Match when={accessRequest()}>

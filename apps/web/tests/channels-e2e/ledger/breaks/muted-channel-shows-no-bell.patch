@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/components/ChannelMutedIndicator.tsx b/apps/web/src/features/channel/components/ChannelMutedIndicator.tsx
+index 73c0844485..771899202c 100644
+--- a/apps/web/src/features/channel/components/ChannelMutedIndicator.tsx
++++ b/apps/web/src/features/channel/components/ChannelMutedIndicator.tsx
+@@ -7,7 +7,7 @@ export function ChannelMutedIndicator(props: {
+   class?: string;
+ }) {
+   return (
+-    <Show when={props.muted}>
++    <Show when={props.muted && false}>
+       <Tooltip
+         as="span"
+         label="Notifications are muted"

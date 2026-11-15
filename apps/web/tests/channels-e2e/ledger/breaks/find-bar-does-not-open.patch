@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+index f9bba3814d..0a28cba507 100644
+--- a/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-hotkeys.ts
+@@ -246,7 +246,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
+       description: 'Find in channel',
+       runWithInputFocused: true,
+       keyDownHandler: () => {
+-        options.onOpenFindBar();
+         return true;
+       },
+     });

@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Participants/ParticipantsList.tsx b/apps/web/src/features/channel/Participants/ParticipantsList.tsx
+index 84f21729a2..95f823abae 100644
+--- a/apps/web/src/features/channel/Participants/ParticipantsList.tsx
++++ b/apps/web/src/features/channel/Participants/ParticipantsList.tsx
+@@ -21,7 +21,7 @@ export function ParticipantsList(props: {
+   return (
+     <Scroll aria-label="Participants list" scrollRef={setScrollRoot}>
+       <Show
+-        when={props.participants().length > 0}
++        when={props.participants().length > 99}
+         fallback={<ParticipantsEmptyState searchQuery={props.searchQuery()} />}
+       >
+         <div class="px-2 py-1">
