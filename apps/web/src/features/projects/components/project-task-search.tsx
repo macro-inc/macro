@@ -42,7 +42,7 @@ export function ProjectTaskSearch(props: {
         ref={(input) => queueMicrotask(() => input.focus())}
         label={label()}
         placeholder={label()}
-        class="h-8 w-56 shrink-0"
+        class="h-8 w-56 shrink-0 mobile:shrink"
         value={props.value}
         onValueChange={props.onValueChange}
         onClose={close}

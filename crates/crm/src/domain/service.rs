@@ -11,8 +11,9 @@ use crate::domain::{
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
-        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
+        CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
+        DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -43,6 +44,18 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
         record: super::association::CrmAssociation,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
+    /// The items of `entity_types` whose Companies or Contacts property names
+    /// a record of the viewer's activity scope (see [`Self::resolve_association`]
+    /// for [`super::association::CrmAssociation::Activity`]), in one statement
+    /// that reads only the scope's record ids. Not authorized: each item
+    /// reaches the caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Contribute eligible stored history from an explicitly consented mailbox.
     /// Team and personal exclusions (including mixed-thread participants) apply
@@ -338,13 +351,13 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
     /// Fetch the contact addressed by `access`, scoped to its owning
-    /// team. The receipt's role decides whether a hidden contact (or one
-    /// under a hidden company) is revealed. See
-    /// [`CompaniesRepository::get_contact_for_team`].
+    /// team, with its company's name and visibility. The receipt's role
+    /// decides whether a hidden contact (or one under a hidden company) is
+    /// revealed. See [`CompaniesRepository::get_contact_for_team`].
     fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Search the caller's team's contacts by email or name, most recently
     /// interacted first. The caller's role decides whether hidden contacts
@@ -378,6 +391,19 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
+    /// Preview the companies and contacts `user_id` may open, each as its
+    /// single read would title it after the access check (see
+    /// [`CompaniesRepository::preview_companies`] and
+    /// [`CompaniesRepository::preview_contacts`]). Records the viewer may not
+    /// open are left out. Takes at most
+    /// [`super::previews::MAX_PREVIEW_IDS`] ids of each kind.
+    fn preview_records(
+        &self,
+        user_id: &str,
+        company_ids: &[uuid::Uuid],
+        contact_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<super::previews::CrmPreviews, CrmError>> + Send;
 
     /// Read the team's CRM configuration. Any team member may read;
     /// a team without a settings row gets the defaults. See
@@ -1134,6 +1160,19 @@ where
     }
 
     #[tracing::instrument(skip(self, access, user_id), err)]
+    async fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        let scope = viewer_scope(user_id, access)?;
+        self.companies_repository
+            .activity_property_edges(scope, entity_types)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
@@ -1171,12 +1210,12 @@ where
     async fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         let team_id = access.team_id();
         let contact_id = access.contact_id()?;
         let include_hidden = access.include_hidden();
         self.companies_repository
-            .get_contact_for_team(&team_id, &contact_id, include_hidden)
+            .get_contact_detail_for_team(&team_id, &contact_id, include_hidden)
             .await
     }
 
@@ -1228,6 +1267,59 @@ where
         self.companies_repository
             .get_company_for_team(&team_id, &company_id, include_hidden)
             .await
+    }
+
+    #[tracing::instrument(
+        name = "crm.preview_records",
+        skip_all,
+        fields(
+            company_count = company_ids.len(),
+            contact_count = contact_ids.len(),
+            companies_found = tracing::field::Empty,
+            contacts_found = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn preview_records(
+        &self,
+        user_id: &str,
+        company_ids: &[uuid::Uuid],
+        contact_ids: &[uuid::Uuid],
+    ) -> Result<super::previews::CrmPreviews, CrmError> {
+        use super::previews::{CrmPreviews, MAX_PREVIEW_IDS};
+
+        if company_ids.len() > MAX_PREVIEW_IDS || contact_ids.len() > MAX_PREVIEW_IDS {
+            return Err(CrmError::InvalidRequest(format!(
+                "preview at most {MAX_PREVIEW_IDS} companies and {MAX_PREVIEW_IDS} contacts at once"
+            )));
+        }
+
+        // One statement per kind, run together; a kind with no ids sends none.
+        let companies = async {
+            if company_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.companies_repository
+                .preview_companies(user_id, company_ids)
+                .await
+        };
+        let contacts = async {
+            if contact_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.companies_repository
+                .preview_contacts(user_id, contact_ids)
+                .await
+        };
+        let (companies, contacts) = futures::try_join!(companies, contacts)?;
+
+        let span = tracing::Span::current();
+        span.record("companies_found", companies.len());
+        span.record("contacts_found", contacts.len());
+        Ok(CrmPreviews {
+            companies,
+            contacts,
+        })
     }
 
     #[tracing::instrument(skip(self, access), err)]
@@ -1372,6 +1464,17 @@ impl CrmService for NoOpCrmService {
                 CrmError::InvalidRequest("activity scope unavailable".into())
             }
         })
+    }
+
+    async fn activity_property_edges(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        Err(CrmError::InvalidRequest(
+            "activity scope unavailable".into(),
+        ))
     }
 
     async fn populate_contact(
@@ -1554,7 +1657,7 @@ impl CrmService for NoOpCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         Ok(None)
     }
 
@@ -1580,6 +1683,15 @@ impl CrmService for NoOpCrmService {
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         Ok(None)
+    }
+
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<super::previews::CrmPreviews, CrmError> {
+        Ok(super::previews::CrmPreviews::default())
     }
 
     async fn get_team_settings(

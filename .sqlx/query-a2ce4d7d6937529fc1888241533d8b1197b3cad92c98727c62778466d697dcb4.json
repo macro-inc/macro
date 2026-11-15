@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH reference AS MATERIALIZED (\n                   SELECT record.id AS record_id, r.id AS row_id, r.table_id, r.position,\n                          ep.property_definition_id\n                   FROM UNNEST($1::uuid[]) AS record(id)\n                   JOIN entity_properties ep\n                     ON ep.entity_type = 'DATABASE_ROW'\n                    AND ep.values ->> 'type' = 'EntityReference'\n                    AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id::text))\n                   -- A row cell's entity id is its row id's canonical text;\n                   -- anything else names no row, and must not abort the statement.\n                   JOIN database_rows r\n                     ON r.id = (CASE\n                         WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n                         THEN ep.entity_id\n                     END)::uuid\n               )\n               SELECT p.id AS \"pipeline_id!\", reference.row_id AS \"row_id!\",\n                      reference.record_id AS \"record_id!\"\n               FROM reference\n               JOIN crm_pipeline_entities p ON p.table_id = reference.table_id\n               JOIN database_columns c\n                 ON c.id = p.primary_column_id\n                AND c.property_definition_id = reference.property_definition_id\n               WHERE p.record_type = $2 AND p.trashed_at IS NULL\n                 AND ($3::uuid IS NULL OR p.id = $3)\n               ORDER BY p.id, reference.position, reference.row_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "row_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "a2ce4d7d6937529fc1888241533d8b1197b3cad92c98727c62778466d697dcb4"
+}
