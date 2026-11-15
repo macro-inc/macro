@@ -612,3 +612,96 @@ async fn outlook_a_refused_label_deletion_is_reported_until_it_goes_through() ->
 {
     a_refused_label_deletion_is_reported_until_it_goes_through(Provider::Outlook).await
 }
+
+/// A label put on one message of an Outlook inbox, the way an agent files a
+/// single message, shows as a category on that message at Outlook and on
+/// the message in Macro.
+///
+/// When it fails: labelling one message of an Outlook inbox is answered as
+/// done and never reaches Outlook, so the category is missing there and in
+/// every other mail client.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "known bug: outlook-message-labels-not-written"]
+async fn outlook_a_label_on_one_message_reaches_outlook() -> Result<(), Report> {
+    use email_e2e::{DEFAULT_TIMEOUT, eventually};
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_outlook().await?;
+    let delivered = inbox.deliver(&Mail::new(
+        "Grace <grace@example.com>",
+        "One message to file",
+        "File me.",
+    ))?;
+    let thread_id = id_of(
+        &inbox
+            .wait_for_preview("inbox", "One message to file")
+            .await?,
+    );
+    let message_id = inbox.thread(&thread_id).await?["messages"][0]["db_id"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+
+    let label_id = create_label(&inbox, "Clients").await?;
+    assert!(!label_id.is_empty(), "the new label is listed");
+    // Outlook gets the category after Macro has answered.
+    eventually(
+        "the category to exist at Outlook with nothing waiting",
+        DEFAULT_TIMEOUT,
+        async || {
+            let at_provider = stack.provider_labels(&inbox).await?;
+            let waiting = waiting_settings_changes(&inbox).await?;
+            Ok(
+                (at_provider.iter().any(|name| name == "Clients") && waiting.is_empty())
+                    .then_some(()),
+            )
+        },
+    )
+    .await?;
+    let labels = inbox.get("/email/labels").await?.ok()?;
+    let provider_label = labels["labels"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|label| label["id"] == label_id.as_str())
+        .and_then(|label| label["providerLabelId"].as_str())
+        .unwrap_or_default()
+        .to_owned();
+    assert!(!provider_label.is_empty(), "Macro knows the category");
+
+    let filed = inbox
+        .patch(
+            "/email/messages/labels",
+            Some(&json!({ "message_ids": [message_id], "label_id": label_id, "value": true })),
+        )
+        .await?
+        .ok()?;
+    assert_eq!(filed["successful_ids"], json!([message_id]), "{filed}");
+    assert_eq!(filed["failed_ids"], json!([]), "{filed}");
+
+    // The folder's name comes first; the categories follow it.
+    inbox
+        .wait_for_provider_message("the category on the message at Outlook", |message| {
+            message.id == delivered.id
+                && message
+                    .labels
+                    .iter()
+                    .skip(1)
+                    .any(|category| category == "Clients")
+        })
+        .await?;
+    sync_barrier(&inbox, "After the category").await?;
+    let thread = inbox.thread(&thread_id).await?;
+    assert!(
+        first_message_labels(&thread).contains(&provider_label),
+        "the message carries the label in Macro: {thread}"
+    );
+    assert_eq!(
+        stack.dead_letters("gmail-ops").await?,
+        0,
+        "nothing was left for Gmail's worker"
+    );
+
+    stack.finish().await
+}
