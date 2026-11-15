@@ -10,6 +10,7 @@ import { onlineManager } from '@tanstack/solid-query';
 import {
   catchUpAndRefresh,
   catchUpChannel,
+  MAX_PUSH_REREADS,
   pushesStored,
   refreshChannelViews,
 } from './catch-up';
@@ -124,9 +125,14 @@ export async function loadLocalChannelTimelinePage(
     });
     if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
     // The views may already show a push this device page is older than.
-    if (loaded.source === 'device' && (await pushesStored(read.channelId))) {
-      loaded = await loadChannelPage(host, request, { signal: read.signal });
-      if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
+    for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
+      if (loaded.source !== 'device') break;
+      if (!(await pushesStored(read.channelId, loaded.storedSeq))) break;
+      const again = await loadChannelPage(host, request, {
+        signal: read.signal,
+      });
+      if (again === 'unsupported' || again === 'not-ready') return undefined;
+      loaded = again;
     }
     if (!anchored && loaded.source === 'device') {
       // Opening from the device counts as use, which eviction goes by; a
@@ -164,7 +170,10 @@ export async function loadLocalChannelThread(
   if (!host || !channelCacheAnswered(host)) return undefined;
   try {
     let loaded = await loadChannelThread(host, channelId, rootId);
-    if (loaded?.source === 'device' && (await pushesStored(channelId))) {
+    // The views may already show a push this device thread is older than.
+    for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
+      if (loaded?.source !== 'device') break;
+      if (!(await pushesStored(channelId))) break;
       loaded = await loadChannelThread(host, channelId, rootId);
     }
     if (loaded?.source === 'device') {

@@ -191,4 +191,36 @@ describe('pushesStored', () => {
     await vi.advanceTimersByTimeAsync(2_500);
     expect(await waiting).toBe(true);
   });
+
+  it('does not wait for a push the device page already holds', async () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost('8'));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    expect(await pushesStored(CHANNEL_ID, '8')).toBe(false);
+    expect(await pushesStored(CHANNEL_ID, '9')).toBe(false);
+  });
+
+  it('waits for a push newer than the device page', async () => {
+    vi.useFakeTimers();
+    const host = sequencedHost('7');
+    host.channelTimeline = () => new Promise(() => {});
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    const waiting = pushesStored(CHANNEL_ID, '7');
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(await waiting).toBe(true);
+  });
+
+  it('lets a waiting read go when the channels are reset', async () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost('7'));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    const waiting = pushesStored(CHANNEL_ID);
+    resetChannelSync();
+    expect(await waiting).toBe(true);
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
 });

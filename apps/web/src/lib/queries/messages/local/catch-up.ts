@@ -40,6 +40,8 @@ const MAX_CHANGE_PAGES = 6;
 /** Pushes inside this window share one request for their changes. */
 const PUSH_SETTLE_MS = 250;
 const MAX_PUSH_RERUNS = 3;
+/** How many times one device read is made again for pushes that keep arriving. */
+export const MAX_PUSH_REREADS = 3;
 /** How long a device read waits for the device to take a push. */
 const PUSH_STORE_WAIT_MS = 2_000;
 
@@ -201,6 +203,8 @@ export async function catchUpAndRefresh(
     } else if (outcome.kind === 'applied') {
       refresh ||= !allPushed(state, outcome.from, outcome.seq);
     }
+    // Nothing is kept for a channel the device does not hold.
+    if (outcome.kind === 'not-held') state.pushed.clear();
     if (outcome.kind !== 'applied' && outcome.kind !== 'current') break;
     forgetPushed(state, outcome.seq);
     // A push that landed after this run read the log needs another.
@@ -257,11 +261,21 @@ async function storePushes(
  * takes a push a moment after the views do, from the server's log, so what it
  * answers meanwhile is older than what is on screen. Resolves true when there
  * was such a push: a device read made before this resolved is to be made
- * again, not shown.
+ * again, not shown. `heldSeq` is the sequence that read was made at, when it
+ * is known; a read at or past every pushed change is already current.
  */
-export async function pushesStored(channelId: string): Promise<boolean> {
-  const storing = channels.get(channelId)?.storing;
-  if (!storing) return false;
+export async function pushesStored(
+  channelId: string,
+  heldSeq?: string | null
+): Promise<boolean> {
+  const state = channels.get(channelId);
+  const storing = state?.storing;
+  if (!state || !storing) return false;
+  if (heldSeq != null) {
+    const held = BigInt(heldSeq);
+    const ahead = [...state.pushed].some((seq) => BigInt(seq) > held);
+    if (!ahead) return false;
+  }
   await Promise.race([storing.promise, sleep(PUSH_STORE_WAIT_MS)]);
   return true;
 }

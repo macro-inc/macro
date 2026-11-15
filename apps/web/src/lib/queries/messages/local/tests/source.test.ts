@@ -1,0 +1,136 @@
+import type { CacheHost } from '@graphql-cache/index';
+import type {
+  MessageThread,
+  MessageTimelinePage,
+} from '@service-storage/messages';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  loadLocalChannelThread,
+  loadLocalChannelTimelinePage,
+} from '../source';
+import { CHANNEL_ID } from './fixtures';
+
+const mocks = vi.hoisted(() => ({
+  channelCacheHost: vi.fn(),
+  loadChannelPage: vi.fn(),
+  loadChannelThread: vi.fn(),
+  pushesStored: vi.fn(),
+  catchUpAndRefresh: vi.fn(async () => {}),
+}));
+
+vi.mock('../flag', () => ({
+  channelCacheHost: mocks.channelCacheHost,
+  channelCacheAnswered: () => true,
+}));
+vi.mock('../pages', () => ({
+  loadChannelPage: mocks.loadChannelPage,
+  pageHasPendingWrites: vi.fn(async () => false),
+}));
+vi.mock('../thread', () => ({
+  loadChannelThread: mocks.loadChannelThread,
+  loadChannelMessage: vi.fn(),
+}));
+vi.mock('../catch-up', () => ({
+  MAX_PUSH_REREADS: 3,
+  catchUpAndRefresh: mocks.catchUpAndRefresh,
+  catchUpChannel: vi.fn(),
+  pushesStored: mocks.pushesStored,
+  refreshChannelViews: vi.fn(),
+}));
+
+const host = {
+  channelTimelineCommit: vi.fn(async () => ({})),
+} as unknown as CacheHost;
+const page = (name: string) => ({ name }) as unknown as MessageTimelinePage;
+const devicePage = (name: string, storedSeq: string) => ({
+  page: page(name),
+  source: 'device' as const,
+  storedSeq,
+});
+const thread = (name: string) => ({ name }) as unknown as MessageThread;
+const read = { channelId: CHANNEL_ID, limit: 50 };
+
+beforeEach(() => {
+  for (const mock of Object.values(mocks)) mock.mockReset();
+  mocks.channelCacheHost.mockReturnValue(host);
+  mocks.catchUpAndRefresh.mockResolvedValue(undefined);
+});
+
+describe('loadLocalChannelTimelinePage', () => {
+  it('answers with the device page when no push is ahead of it', async () => {
+    mocks.loadChannelPage.mockResolvedValue(devicePage('first', '7'));
+    mocks.pushesStored.mockResolvedValue(false);
+
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(page('first'));
+    expect(mocks.loadChannelPage).toHaveBeenCalledTimes(1);
+    expect(mocks.pushesStored).toHaveBeenCalledWith(CHANNEL_ID, '7');
+  });
+
+  it('reads the device again once it holds a push the views already show', async () => {
+    mocks.loadChannelPage
+      .mockResolvedValueOnce(devicePage('older', '7'))
+      .mockResolvedValueOnce(devicePage('current', '8'));
+    mocks.pushesStored.mockResolvedValueOnce(true).mockResolvedValue(false);
+
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(page('current'));
+    expect(mocks.pushesStored.mock.calls).toEqual([
+      [CHANNEL_ID, '7'],
+      [CHANNEL_ID, '8'],
+    ]);
+  });
+
+  it('stops reading again while pushes keep arriving', async () => {
+    mocks.loadChannelPage.mockResolvedValue(devicePage('page', '7'));
+    mocks.pushesStored.mockResolvedValue(true);
+
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(page('page'));
+    expect(mocks.loadChannelPage).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not wait on a page the server answered', async () => {
+    mocks.loadChannelPage.mockResolvedValue({
+      page: page('server'),
+      source: 'server',
+      serverSeq: '9',
+      stored: Promise.resolve('9'),
+    });
+
+    expect(await loadLocalChannelTimelinePage(read)).toEqual(page('server'));
+    expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+
+  it('leaves the read to REST when the device stops serving it', async () => {
+    mocks.loadChannelPage
+      .mockResolvedValueOnce(devicePage('older', '7'))
+      .mockResolvedValueOnce('not-ready');
+    mocks.pushesStored.mockResolvedValue(true);
+
+    expect(await loadLocalChannelTimelinePage(read)).toBeUndefined();
+  });
+});
+
+describe('loadLocalChannelThread', () => {
+  it('reads the device thread again once it holds a pushed change', async () => {
+    mocks.loadChannelThread
+      .mockResolvedValueOnce({ thread: thread('older'), source: 'device' })
+      .mockResolvedValueOnce({ thread: thread('current'), source: 'device' });
+    mocks.pushesStored.mockResolvedValueOnce(true).mockResolvedValue(false);
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
+      thread('current')
+    );
+    expect(mocks.loadChannelThread).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not wait on a thread the server answered', async () => {
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toEqual(
+      thread('server')
+    );
+    expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+});

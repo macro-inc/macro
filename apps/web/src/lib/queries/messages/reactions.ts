@@ -206,7 +206,10 @@ type ReactionMutationContext = ReactionContext | undefined;
  * by then show a reaction someone else made since: the answer predates it, so
  * only this person's change is laid over what is on screen.
  */
-function confirmQueuedReaction(vars: ReactionParams, add: boolean): void {
+export function confirmQueuedReaction(
+  vars: ReactionParams,
+  add: boolean
+): void {
   const target = resolveMessageTarget({
     parent: vars.parent,
     messageId: vars.messageId,
