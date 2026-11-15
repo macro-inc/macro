@@ -7951,6 +7951,10 @@ enum GraphqlScheduledActionEventName {
 	Macro's GitHub App received a delivery.
 	"""
 	GITHUB
+	"""
+	Someone POSTed to the routine's webhook URL.
+	"""
+	WEBHOOK
 }
 
 """
