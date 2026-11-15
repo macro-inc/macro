@@ -530,10 +530,7 @@ where
         if let Err(error) = &result {
             self.cancel(&run.action, &handle, error).await;
         }
-        let trigger = match run.run.pending.event.event_name() {
-            crate::domain::event_trigger::EventName::Webhook => RunTrigger::Webhook,
-            name => RunTrigger::Event(name),
-        };
+        let trigger = RunTrigger::Event(run.run.pending.event.event_name());
         let parent_name = self.parent_name(&run.action).await;
         if let Some(finished) =
             finished_run(&run.action, parent_name, trigger, run.started_at, &result)

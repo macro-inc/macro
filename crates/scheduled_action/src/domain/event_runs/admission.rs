@@ -56,15 +56,12 @@ impl<R: EventRunRepository, A: CurrentOwnerAccess> EventAdmissionService<R, A> {
         if AuthorizedEventRun::prepare(pending, &configuration, access).is_err() {
             return Ok(false);
         }
-        let Some(filters) = &configuration.filters else {
-            return Ok(false);
-        };
         Ok(self
             .repository
             .admit(
                 configuration.action_id,
                 configuration.revision,
-                &filters.run_event(event),
+                &configuration.filters.run_event(event),
             )
             .await?
             == AdmissionResult::Admitted)

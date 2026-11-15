@@ -44,6 +44,7 @@ use crate::domain::{
     event_runs::{AuthorizedEventRun, EventAccessCapability, condition::EventContentReader},
     event_trigger::{EventName, EventReference, EventSource},
     ports::RoutineEventReader,
+    webhook::WebhookDelivery,
 };
 
 mod routine_event;
@@ -155,8 +156,8 @@ enum EventContent {
     Call(Option<CallRecord>),
     /// A GitHub delivery, as it was received.
     Github(Box<GithubWebhookReceived>),
-    /// A webhook delivery's body, as it was received.
-    Webhook(Value),
+    /// A webhook delivery, as it was received.
+    Webhook(Box<WebhookDelivery>),
 }
 
 struct ChannelMessage {
@@ -199,7 +200,7 @@ where
                 )),
             },
             EventAccessCapability::Webhook { .. } => match event.webhook_delivery() {
-                Some(delivery) => Ok(EventContent::Webhook(delivery.body.clone())),
+                Some(delivery) => Ok(EventContent::Webhook(Box::new(delivery.clone()))),
                 None => Err(rootcause::report!(
                     "a webhook capability was minted for another event"
                 )),
@@ -383,8 +384,20 @@ fn content_json(event: &EventReference, content: &EventContent) -> Value {
             ),
         }),
         EventContent::Github(delivery) => json!({ "github": github_json(delivery) }),
-        EventContent::Webhook(body) => json!({ "webhook": { "body": body } }),
+        EventContent::Webhook(delivery) => json!({ "webhook": webhook_json(delivery) }),
     }
+}
+
+/// A webhook body as code and conditions read it: `json` holds the parsed
+/// body (null when it isn't JSON), and `body` the text only when it isn't,
+/// so a JSON body is carried once.
+fn webhook_json(delivery: &WebhookDelivery) -> Value {
+    let parsed = delivery.json();
+    let mut value = json!({ "content_type": delivery.content_type, "json": parsed });
+    if parsed.is_none() {
+        value["body"] = json!(delivery.body);
+    }
+    value
 }
 
 /// The Macro entity a Macro event names.

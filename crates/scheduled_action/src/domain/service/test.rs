@@ -1823,3 +1823,33 @@ async fn an_update_that_changes_nothing_keeps_the_revision() {
         created.configuration_revision
     );
 }
+
+#[tokio::test]
+async fn a_webhook_alone_needs_no_event_rollout() {
+    let (tx, _rx) = tokio::sync::mpsc::channel(8);
+    let repo = Arc::new(FakeRepo::default());
+    let svc = ScheduledActionServiceImpl::new(
+        repo.clone(),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    );
+    let mut config = configuration(true);
+    config.trigger =
+        serde_json::from_value(json!({"type": "events", "filters": [{"events": ["webhook"]}]}))
+            .unwrap();
+    let created = svc
+        .create_action(&user_principal(), config.clone())
+        .await
+        .unwrap();
+    assert!(created.event_activated_at.is_some());
+    config.trigger = serde_json::from_value(json!({"type": "events", "filters": [
+        {"events": ["webhook"]}, {"events": ["document.created"]},
+    ]}))
+    .unwrap();
+    assert_policy(
+        svc.update_action(edit_receipt(created.id.unwrap()), update(config))
+            .await,
+        ActionPolicyError::EventManagementDisabled,
+    );
+}

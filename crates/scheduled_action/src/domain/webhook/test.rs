@@ -23,7 +23,7 @@ fn user(id: &'static str) -> MacroUserIdStr<'static> {
 }
 
 fn webhook_trigger() -> ActionTrigger {
-    serde_json::from_value(json!({"type": "multiple", "triggers": [{"type": "webhook"}]})).unwrap()
+    serde_json::from_value(json!({"type": "events", "filters": [{"events": ["webhook"]}]})).unwrap()
 }
 
 fn routine(trigger: ActionTrigger) -> ScheduledAction {
@@ -257,6 +257,7 @@ fn post<'a>(hook_id: &'a str, secret: &'a str, body: &'a [u8]) -> DeliveryReques
         secret,
         address: Some(ADDRESS),
         body,
+        content_type: Some("application/json"),
         idempotency_key: None,
     }
 }
@@ -284,24 +285,34 @@ async fn a_correct_post_queues_one_run_with_its_body() {
     let EventSource::Webhook(delivery) = admission.event.source() else {
         panic!("expected a webhook event");
     };
-    assert_eq!(delivery.body, json!({"order": 42}));
+    assert_eq!(delivery.body.as_deref(), Some(r#"{"order": 42}"#));
+    assert_eq!(delivery.content_type.as_deref(), Some("application/json"));
+    assert_eq!(delivery.json(), Some(json!({"order": 42})));
     assert_eq!(admission.max_queued, MAX_QUEUED);
 }
 
 #[tokio::test]
-async fn an_empty_body_is_null() {
+async fn any_text_is_a_body_and_json_is_read_as_json() {
     let fixture = fixture(webhook_trigger());
     let minted = fixture.mint().await;
     let hook_id = minted.hook_id.to_string();
-    fixture
-        .service
-        .receive(post(&hook_id, minted.secret.expose(), b""))
-        .await
-        .unwrap();
+    for body in [&b""[..], b"status: failed"] {
+        let mut request = post(&hook_id, minted.secret.expose(), body);
+        request.content_type = Some("  text/plain; charset=utf-8  ");
+        fixture.service.receive(request).await.unwrap();
+    }
     let state = fixture.store.0.lock().unwrap();
+    let deliveries: Vec<_> = state
+        .admitted
+        .iter()
+        .map(|admission| admission.event.webhook_delivery().unwrap().clone())
+        .collect();
+    assert_eq!(deliveries[0].body.as_deref(), Some(""));
+    assert_eq!(deliveries[1].body.as_deref(), Some("status: failed"));
+    assert_eq!(deliveries[1].json(), None);
     assert_eq!(
-        state.admitted[0].event.webhook_delivery().unwrap().body,
-        Value::Null
+        deliveries[1].content_type.as_deref(),
+        Some("text/plain; charset=utf-8")
     );
 }
 
@@ -365,11 +376,17 @@ async fn a_removed_url_is_not_found() {
 }
 
 #[tokio::test]
-async fn oversized_and_non_json_bodies_are_refused_before_queueing() {
+async fn oversized_and_non_text_bodies_are_refused_before_queueing() {
     let fixture = fixture(webhook_trigger());
     let minted = fixture.mint().await;
     let hook_id = minted.hook_id.to_string();
-    let large = vec![b' '; MAX_BODY_BYTES + 1];
+    let largest = vec![b'a'; MAX_BODY_BYTES];
+    fixture
+        .service
+        .receive(post(&hook_id, minted.secret.expose(), &largest))
+        .await
+        .unwrap();
+    let large = vec![b'a'; MAX_BODY_BYTES + 1];
     let error = fixture
         .service
         .receive(post(&hook_id, minted.secret.expose(), &large))
@@ -378,11 +395,17 @@ async fn oversized_and_non_json_bodies_are_refused_before_queueing() {
     assert!(matches!(error, DeliveryError::TooLarge));
     let error = fixture
         .service
-        .receive(post(&hook_id, minted.secret.expose(), b"order=42"))
+        .receive(post(&hook_id, minted.secret.expose(), &[0xff, 0xfe]))
         .await
         .unwrap_err();
-    assert!(matches!(error, DeliveryError::NotJson));
-    assert_eq!(fixture.store.admitted(), 0);
+    assert!(matches!(error, DeliveryError::NotText));
+    let error = fixture
+        .service
+        .receive(post(&hook_id, minted.secret.expose(), b"deploy\0failed"))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DeliveryError::NotText));
+    assert_eq!(fixture.store.admitted(), 1);
 }
 
 #[tokio::test]
@@ -471,6 +494,15 @@ async fn admission_outcomes_reach_the_sender() {
         .await
         .unwrap_err();
     assert!(matches!(error, DeliveryError::Busy { .. }));
+    fixture.store.answer(AdmissionOutcome::Unmatched);
+    assert_eq!(
+        fixture
+            .service
+            .receive(post(&hook_id, minted.secret.expose(), b"{}"))
+            .await
+            .unwrap(),
+        Delivered::Unmatched
+    );
 }
 
 #[tokio::test]
@@ -547,10 +579,8 @@ async fn a_minted_secret_is_256_random_bits_stored_only_as_its_hash() {
     let second = fixture.mint().await;
     assert_ne!(first.secret.expose(), second.secret.expose());
     assert_ne!(first.hook_id, second.hook_id);
-    assert_eq!(
-        URL_SAFE_NO_PAD.decode(first.secret.expose()).unwrap().len(),
-        32
-    );
+    let encoded = first.secret.expose().strip_prefix("mrw_").unwrap();
+    assert_eq!(URL_SAFE_NO_PAD.decode(encoded).unwrap().len(), 32);
     assert_eq!(format!("{:?}", first.secret), "WebhookSecret(..)");
     let state = fixture.store.0.lock().unwrap();
     let (_, hash, _) = state.hooks[&fixture.action.id.unwrap()];

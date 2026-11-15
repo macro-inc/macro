@@ -176,13 +176,9 @@ impl<
             Ok(run) => run,
             Err(reason) => return self.cancel(&pending, reason).await,
         };
-        let requirement = configuration
-            .filters
-            .as_ref()
-            .map_or(ConditionRequirement::Unconditional, |filters| {
-                filters.condition_requirement(&pending.event)
-            });
-        if let ConditionRequirement::AnyOf(conditions) = requirement {
+        if let ConditionRequirement::AnyOf(conditions) =
+            configuration.filters.condition_requirement(&pending.event)
+        {
             match self.conditions.check(owner, &authorized, &conditions).await {
                 Ok(ConditionVerdict::Met(_)) => {}
                 Ok(ConditionVerdict::NotMet(probability)) => {

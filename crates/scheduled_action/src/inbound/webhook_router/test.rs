@@ -20,6 +20,7 @@ struct Received {
     hook_id: String,
     secret: String,
     body: Vec<u8>,
+    content_type: Option<String>,
     idempotency_key: Option<String>,
 }
 
@@ -68,6 +69,7 @@ impl RoutineWebhookService for Fake {
             hook_id: request.hook_id.to_owned(),
             secret: request.secret.to_owned(),
             body: request.body.to_vec(),
+            content_type: request.content_type.map(str::to_owned),
             idempotency_key: request.idempotency_key,
         });
         self.answer
@@ -123,8 +125,26 @@ async fn the_secret_in_the_path_starts_a_run() {
             hook_id: HOOK.into(),
             secret: SECRET.into(),
             body: br#"{"order":42}"#.to_vec(),
+            content_type: Some("application/json".into()),
             idempotency_key: Some("order-42".into()),
         }]
+    );
+}
+
+#[tokio::test]
+async fn a_body_failing_the_payload_tests_is_answered_without_a_run() {
+    let fake = Fake::answering(Ok(Delivered::Unmatched));
+    let (status, _, body) = send(
+        app(fake),
+        post(&format!("/scheduled-action/hooks/{HOOK}/{SECRET}"))
+            .body(Body::from("status: passed"))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&body).unwrap(),
+        json!({"runId": null})
     );
 }
 
@@ -185,7 +205,7 @@ async fn refusals_map_to_their_statuses() {
             Some("1"),
         ),
         (DeliveryError::TooLarge, StatusCode::PAYLOAD_TOO_LARGE, None),
-        (DeliveryError::NotJson, StatusCode::BAD_REQUEST, None),
+        (DeliveryError::NotText, StatusCode::BAD_REQUEST, None),
         (
             DeliveryError::InvalidIdempotencyKey,
             StatusCode::BAD_REQUEST,
@@ -371,9 +391,10 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
     let repo = Arc::new(test_repo(pool.clone()));
     let mut action = sample_action(user_owner(USER_A), "webhook routine");
     action.trigger =
-        serde_json::from_value(json!({"type": "multiple", "triggers": [{"type": "webhook"}]}))
+        serde_json::from_value(json!({"type": "events", "filters": [{"events": ["webhook"]}]}))
             .unwrap();
     action.next_run_at = None;
+    action.event_activated_at = Some(chrono::Utc::now() - chrono::Duration::minutes(1));
     let action = repo.create_action(action).await.unwrap();
     let service = Arc::new(RoutineWebhooks::new(
         Arc::clone(&repo),
@@ -419,7 +440,7 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
             .body(Body::from("{}"))
             .unwrap(),
         post(&format!("/scheduled-action/hooks/{hook}/{secret}"))
-            .body(Body::from("not json"))
+            .body(Body::from(vec![0xff, 0xfe]))
             .unwrap(),
     ];
     let mut statuses = Vec::new();

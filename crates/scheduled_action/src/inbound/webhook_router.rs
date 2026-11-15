@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, FromRef, Path, State};
-use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, RETRY_AFTER};
+use axum::http::header::{AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE, RETRY_AFTER};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -157,12 +157,13 @@ pub struct MintedWebhookResponse {
     pub created_at: DateTime<Utc>,
 }
 
-/// A started run.
+/// An accepted delivery: the run it started, or none when the body failed
+/// the trigger's payload tests.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WebhookDeliveryResponse {
-    #[schema(value_type = String, format = Uuid)]
-    pub run_id: Uuid,
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub run_id: Option<Uuid>,
 }
 
 #[utoipa::path(
@@ -295,16 +296,17 @@ impl IntoResponse for WebhookManagementError {
     path = "/hooks/{hook_id}/{token}",
     tag = "routine webhooks",
     operation_id = "deliver_routine_webhook",
-    description = "Start a run of the routine this webhook URL belongs to, with the JSON body (at most 256 KB; empty is null) as its trigger data. Answers 202 at once with the run's id. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.",
+    description = "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.",
     params(
         ("hook_id" = String, Path, description = "The webhook's public id"),
         ("token" = String, Path, description = "The webhook's secret"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
     ),
-    request_body(content = serde_json::Value, content_type = "application/json"),
+    request_body(content = String, content_type = "application/json"),
     responses(
+        (status = 200, body = WebhookDeliveryResponse, description = "The body failed the trigger's payload tests: no run"),
         (status = 202, body = WebhookDeliveryResponse),
-        (status = 400, description = "The body is not JSON, or the key is invalid"),
+        (status = 400, description = "The body is not UTF-8 text, or the key is invalid"),
         (status = 404),
         (status = 409, description = "The routine is paused"),
         (status = 413),
@@ -331,8 +333,9 @@ pub async fn deliver_in_path<W: RoutineWebhookService>(
         ("hook_id" = String, Path, description = "The webhook's public id"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
     ),
-    request_body(content = serde_json::Value, content_type = "application/json"),
+    request_body(content = String, content_type = "application/json"),
     responses(
+        (status = 200, body = WebhookDeliveryResponse),
         (status = 202, body = WebhookDeliveryResponse),
         (status = 400), (status = 404), (status = 409), (status = 413), (status = 429),
     ),
@@ -378,17 +381,24 @@ async fn deliver<W: RoutineWebhookService>(
         // caller's; without one, callers share a count.
         address: address.ok().map(|address| address.origin_ip()),
         body,
+        content_type: headers
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
         idempotency_key,
     };
     match service.receive(request).await {
-        Ok(delivered) => {
-            let (Delivered::Started { run_id } | Delivered::Repeated { run_id }) = delivered;
-            (
-                StatusCode::ACCEPTED,
-                Json(WebhookDeliveryResponse { run_id }),
-            )
-                .into_response()
-        }
+        Ok(Delivered::Started { run_id } | Delivered::Repeated { run_id }) => (
+            StatusCode::ACCEPTED,
+            Json(WebhookDeliveryResponse {
+                run_id: Some(run_id),
+            }),
+        )
+            .into_response(),
+        Ok(Delivered::Unmatched) => (
+            StatusCode::OK,
+            Json(WebhookDeliveryResponse { run_id: None }),
+        )
+            .into_response(),
         Err(error) => error.into_response(),
     }
 }
@@ -410,7 +420,7 @@ impl IntoResponse for DeliveryError {
                 retry(StatusCode::TOO_MANY_REQUESTS, retry_after, message)
             }
             Self::TooLarge => (StatusCode::PAYLOAD_TOO_LARGE, self.to_string()).into_response(),
-            Self::NotJson | Self::InvalidIdempotencyKey => {
+            Self::NotText | Self::InvalidIdempotencyKey => {
                 (StatusCode::BAD_REQUEST, self.to_string()).into_response()
             }
             Self::Paused => (StatusCode::CONFLICT, self.to_string()).into_response(),

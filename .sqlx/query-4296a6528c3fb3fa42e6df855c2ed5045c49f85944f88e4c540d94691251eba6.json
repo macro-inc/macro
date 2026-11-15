@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(jsonb_path_exists(event_filters, '$[*].events[*] ? (@ == \"webhook\")'), FALSE) AS \"has_trigger!\"\n            FROM scheduled_action WHERE id = $1 FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_trigger!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4296a6528c3fb3fa42e6df855c2ed5045c49f85944f88e4c540d94691251eba6"
+}

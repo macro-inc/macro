@@ -43,7 +43,6 @@ impl From<&FinishedRoutineRun> for RunProperties {
             RunTrigger::Scheduled => ("scheduled", None),
             RunTrigger::Manual => ("manual", None),
             RunTrigger::Event(name) => ("event", Some(name.as_str())),
-            RunTrigger::Webhook => ("webhook", None),
         };
         Self {
             routine_id: run.routine_id,

@@ -1153,8 +1153,6 @@ pub enum RunTrigger {
     Manual,
     /// An event it watches happened.
     Event(EventName),
-    /// Something POSTed to its webhook URL.
-    Webhook,
 }
 
 /// Who did a routine run's work: a program's agent step, when it has one.

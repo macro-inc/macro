@@ -256,9 +256,7 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                                     .flatten(),
                             })
                         }
-                        RoutineTrigger::Once { .. }
-                        | RoutineTrigger::Events { .. }
-                        | RoutineTrigger::Webhook {} => None,
+                        RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
                     })
                     .collect(),
                 once: triggers
@@ -266,9 +264,7 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                     .iter()
                     .filter_map(|trigger| match trigger {
                         RoutineTrigger::Once { at } => Some(once_trigger(action, *at)),
-                        RoutineTrigger::Cron { .. }
-                        | RoutineTrigger::Events { .. }
-                        | RoutineTrigger::Webhook {} => None,
+                        RoutineTrigger::Cron { .. } | RoutineTrigger::Events { .. } => None,
                     })
                     .collect(),
                 events: action.trigger.event_filters().map(event_filters),

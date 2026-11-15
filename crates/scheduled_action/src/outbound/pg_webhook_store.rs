@@ -7,6 +7,7 @@ use rootcause::Report;
 use serde_json::Value;
 use sqlx::PgPool;
 
+use crate::domain::event_trigger::EventFilters;
 use crate::domain::webhook::{
     AdmissionOutcome, HookId, SecretHash, StoredHook, WebhookAdmission, WebhookInfo, WebhookStore,
 };
@@ -54,11 +55,11 @@ impl WebhookStore for PgWebhookStore {
         created_at: DateTime<Utc>,
     ) -> Result<bool, Report> {
         let mut tx = self.pool.begin().await?;
-        // Under the routine's lock, so a save removing the trigger either
+        // Under the routine's lock, so a save removing the filter either
         // comes first and refuses this, or comes after and deletes it.
         let has_trigger = sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(jsonb_path_exists(trigger_config, '$.triggers[*] ? (@.type == "webhook")'), FALSE) AS "has_trigger!"
+            SELECT COALESCE(jsonb_path_exists(event_filters, '$[*].events[*] ? (@ == "webhook")'), FALSE) AS "has_trigger!"
             FROM scheduled_action WHERE id = $1 FOR UPDATE
             "#,
             action_id,
@@ -129,10 +130,13 @@ impl WebhookStore for PgWebhookStore {
         // for this delivery to commit.
         let routine = sqlx::query!(
             r#"
-            SELECT a.enabled, a.configuration_revision FROM scheduled_action a
+            SELECT a.enabled, a.configuration_revision,
+                   a.event_filters AS "event_filters!", a.event_activated_at AS "event_activated_at!"
+            FROM scheduled_action a
             JOIN scheduled_action_webhook w ON w.action_id = a.id
             WHERE a.id = $1 AND w.hook_id = $2 AND w.secret_hash = $3
-              AND jsonb_path_exists(a.trigger_config, '$.triggers[*] ? (@.type == "webhook")')
+              AND a.event_activated_at IS NOT NULL
+              AND jsonb_path_exists(a.event_filters, '$[*].events[*] ? (@ == "webhook")')
             FOR UPDATE OF a, w
             "#,
             admission.action_id,
@@ -172,6 +176,11 @@ impl WebhookStore for PgWebhookStore {
         if !routine.enabled {
             tx.rollback().await?;
             return Ok(AdmissionOutcome::Paused);
+        }
+        let filters: EventFilters = serde_json::from_value(routine.event_filters)?;
+        if !filters.matches(&admission.event, routine.event_activated_at) {
+            tx.rollback().await?;
+            return Ok(AdmissionOutcome::Unmatched);
         }
         let queued = sqlx::query_scalar!(
             r#"

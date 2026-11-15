@@ -41,25 +41,42 @@ struct Fixture {
     action: ScheduledAction,
 }
 
-fn webhook_and_cron(cron: &ScheduledAction) -> ActionTrigger {
-    let ActionTrigger::Cron { schedule, timezone } = cron.trigger.clone() else {
-        panic!("sample actions run on a schedule");
+/// The sample routine's schedule, and its webhook with `filter`'s extra keys.
+fn webhook_and_cron(cron: &ScheduledAction, filter: Value) -> ActionTrigger {
+    let schedule = match &cron.trigger {
+        ActionTrigger::Cron { schedule, timezone } => RoutineTrigger::Cron {
+            schedule: schedule.clone(),
+            timezone: timezone.clone(),
+        },
+        ActionTrigger::Multiple { triggers } => triggers.as_slice()[0].clone(),
+        ActionTrigger::Events { .. } | ActionTrigger::Once { .. } => {
+            panic!("sample actions run on a schedule")
+        }
     };
+    let mut webhook = json!({"events": ["webhook"]});
+    if let (Value::Object(webhook), Value::Object(extra)) = (&mut webhook, filter) {
+        webhook.extend(extra);
+    }
     serde_json::from_value(json!({
         "type": "multiple",
         "triggers": [
-            serde_json::to_value(RoutineTrigger::Cron { schedule, timezone }).unwrap(),
-            {"type": "webhook"},
+            serde_json::to_value(schedule).unwrap(),
+            {"type": "events", "filters": [webhook]},
         ],
     }))
     .unwrap()
 }
 
 async fn fixture(pool: PgPool) -> Fixture {
+    fixture_with(pool, json!({})).await
+}
+
+async fn fixture_with(pool: PgPool, filter: Value) -> Fixture {
     insert_user(&pool, USER_A).await;
     let repo = Arc::new(test_repo(pool.clone()));
     let mut action = sample_action(user_owner(USER_A), "webhook routine");
-    action.trigger = webhook_and_cron(&action);
+    action.trigger = webhook_and_cron(&action, filter);
+    action.event_activated_at = Some(Utc::now() - chrono::Duration::minutes(1));
     let action = repo.create_action(action).await.unwrap();
     let webhooks = RoutineWebhooks::new(
         Arc::clone(&repo),
@@ -107,6 +124,7 @@ impl Fixture {
                 secret: minted.secret.expose(),
                 address: None,
                 body: body.as_bytes(),
+                content_type: Some("application/json"),
                 idempotency_key: key.map(str::to_owned),
             })
             .await
@@ -140,12 +158,14 @@ impl Fixture {
 }
 
 fn run_id(delivered: Delivered) -> Uuid {
-    let (Delivered::Started { run_id } | Delivered::Repeated { run_id }) = delivered;
-    run_id
+    match delivered {
+        Delivered::Started { run_id } | Delivered::Repeated { run_id } => run_id,
+        Delivered::Unmatched => panic!("the delivery started no run"),
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_delivery_is_claimed_with_its_body_and_the_routines_own_trigger(pool: PgPool) {
+async fn a_delivery_is_claimed_with_its_body_as_a_webhook_event(pool: PgPool) {
     let fixture = fixture(pool).await;
     let minted = fixture.mint().await;
     let delivered = fixture
@@ -161,7 +181,14 @@ async fn a_delivery_is_claimed_with_its_body_and_the_routines_own_trigger(pool: 
     assert_eq!(state, "pending");
     assert_eq!(
         context,
-        &json!({"event_name": "webhook", "webhook": {"body": {"order": 42}}})
+        &json!({
+            "event_name": "webhook",
+            "webhook": {
+                "hook_id": minted.hook_id,
+                "body": r#"{"order": 42}"#,
+                "content_type": "application/json",
+            },
+        })
     );
 
     let events = PgEventRunRepo::new(fixture.pool.clone());
@@ -170,8 +197,8 @@ async fn a_delivery_is_claimed_with_its_body_and_the_routines_own_trigger(pool: 
         .await
         .unwrap()
         .unwrap();
-    assert!(configuration.webhook);
-    assert!(configuration.filters.is_none());
+    assert_eq!(configuration.hook_id, Some(minted.hook_id));
+    assert!(configuration.filters.watches_webhook());
     let pending = events
         .pending_runs(PageSize::try_from(10).unwrap())
         .await
@@ -179,7 +206,11 @@ async fn a_delivery_is_claimed_with_its_body_and_the_routines_own_trigger(pool: 
     let [pending] = pending.as_slice() else {
         panic!("expected one pending run");
     };
-    assert!(configuration.accepts(&pending.event));
+    assert!(
+        configuration
+            .filters
+            .matches(&pending.event, configuration.activated_at)
+    );
     let now = Utc::now();
     let claimed = events
         .claim(
@@ -196,11 +227,44 @@ async fn a_delivery_is_claimed_with_its_body_and_the_routines_own_trigger(pool: 
         .await
         .unwrap()
         .expect("the run is claimed");
-    assert_eq!(claimed.action.trigger, fixture.action.trigger);
     assert_eq!(
-        claimed.run.pending.event.webhook_delivery().unwrap().body,
-        json!({"order": 42})
+        claimed.action.trigger.event_filters(),
+        fixture.action.trigger.event_filters()
     );
+    assert_eq!(
+        claimed
+            .run
+            .pending
+            .event
+            .webhook_delivery()
+            .unwrap()
+            .body
+            .as_deref(),
+        Some(r#"{"order": 42}"#)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_body_failing_the_payload_tests_starts_nothing(pool: PgPool) {
+    let fixture = fixture_with(
+        pool,
+        json!({"match": [{"path": ["status"], "equals": "failed"}]}),
+    )
+    .await;
+    let minted = fixture.mint().await;
+    for body in [r#"{"status": "passed"}"#, "status: failed", ""] {
+        assert_eq!(
+            fixture.post(&minted, body, None).await.unwrap(),
+            Delivered::Unmatched
+        );
+    }
+    assert!(fixture.runs().await.is_empty());
+    let started = fixture
+        .post(&minted, r#"{"status": "failed"}"#, None)
+        .await
+        .unwrap();
+    assert!(matches!(started, Delivered::Started { .. }));
+    assert_eq!(fixture.runs().await.len(), 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -276,6 +340,7 @@ async fn saving_without_the_trigger_revokes_the_url_for_good(pool: PgPool) {
     let minted = fixture.mint().await;
     let mut cron_only = fixture.action.clone();
     cron_only.trigger = sample_action(user_owner(USER_A), "cron").trigger;
+    cron_only.event_activated_at = None;
     cron_only.configuration_revision = cron_only.configuration_revision.next().unwrap();
     let saved = fixture.repo.update_action(cron_only).await.unwrap();
     assert_eq!(fixture.hooks().await, 0);
@@ -285,7 +350,8 @@ async fn saving_without_the_trigger_revokes_the_url_for_good(pool: PgPool) {
     ));
     // Putting the trigger back doesn't bring the old URL back.
     let mut restored = saved;
-    restored.trigger = webhook_and_cron(&restored);
+    restored.trigger = webhook_and_cron(&restored, json!({}));
+    restored.event_activated_at = Some(Utc::now() - chrono::Duration::minutes(1));
     restored.configuration_revision = restored.configuration_revision.next().unwrap();
     fixture.repo.update_action(restored).await.unwrap();
     assert!(matches!(
@@ -328,6 +394,7 @@ async fn saving_with_the_trigger_keeps_the_url(pool: PgPool) {
 async fn removing_and_deleting_revoke_the_url(pool: PgPool) {
     let fixture = fixture(pool).await;
     let minted = fixture.mint().await;
+    fixture.post(&minted, "{}", None).await.unwrap();
     assert!(
         fixture
             .webhooks
@@ -339,7 +406,35 @@ async fn removing_and_deleting_revoke_the_url(pool: PgPool) {
         fixture.post(&minted, "{}", None).await,
         Err(DeliveryError::NotFound)
     ));
+    let events = PgEventRunRepo::new(fixture.pool.clone());
+    let current = events
+        .current_configuration(fixture.id())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.hook_id, None);
+    // A delivery queued before the removal doesn't run after it, even once
+    // the routine has a new URL.
     let minted = fixture.mint().await;
+    let pending = events
+        .pending_runs(PageSize::try_from(10).unwrap())
+        .await
+        .unwrap()
+        .remove(0);
+    let current = events
+        .current_configuration(fixture.id())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.hook_id, Some(minted.hook_id));
+    assert_ne!(
+        pending.event.webhook_delivery().unwrap().hook_id,
+        minted.hook_id
+    );
+    assert!(matches!(
+        current.check_pending(&pending),
+        Err(crate::domain::event_runs::CancellationReason::Superseded)
+    ));
     fixture.post(&minted, "{}", None).await.unwrap();
     fixture.repo.delete_action(&fixture.id()).await.unwrap();
     assert_eq!(fixture.hooks().await, 0);
@@ -375,6 +470,13 @@ async fn a_finished_run_drops_its_body_from_the_queue(pool: PgPool) {
     let runs = fixture.runs().await;
     assert_eq!(
         runs[0].2,
-        json!({"event_name": "webhook", "webhook": {"idempotency_key": "k"}})
+        json!({
+            "event_name": "webhook",
+            "webhook": {
+                "hook_id": minted.hook_id,
+                "content_type": "application/json",
+                "idempotency_key": "k",
+            },
+        })
     );
 }

@@ -496,8 +496,6 @@ pub enum RoutineTrigger {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         condition: Option<String>,
     },
-    /// A POST to its webhook URL.
-    Webhook,
 }
 
 /// The GitHub deliveries a routine watches. Empty lists match everything.
@@ -651,9 +649,12 @@ pub enum RoutineEvent {
     },
     /// Something outside Macro POSTed to the routine's webhook URL.
     Webhook {
-        /// The JSON body it sent, or null. Untrusted: whoever holds the URL
-        /// chose it.
-        body: Value,
+        /// The text it sent. Untrusted: whoever holds the URL chose it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<String>,
+        /// The sender's `Content-Type`, when it sent one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content_type: Option<String>,
     },
 }
 

@@ -23,7 +23,8 @@ use super::{
     code_upgrade::{NoCodeUpgrades, current_code},
     event_runs::{AuthorizedEventRun, condition::EventContentReader},
     event_trigger::{
-        ActionTrigger, ConditionRequirement, EventFilters, EventReference, RoutineTrigger,
+        ActionTrigger, ConditionRequirement, EventFilters, EventName, EventReference,
+        RoutineTrigger,
     },
     execution::ExecutionHandle,
     models::{RunInfo, RunStart, Schedule, ScheduledAction},
@@ -116,12 +117,7 @@ where
         let acts_as = program.code_identity();
         // Code gets the triggering item whenever there is one.
         let trigger = match firing {
-            // A webhook's body is its own; there is no item to read.
-            RoutineRun::Event(run)
-                if has_code && run.pending.event.webhook_delivery().is_none() =>
-            {
-                Some(self.trigger(owner, run).await?)
-            }
+            RoutineRun::Event(run) if has_code => Some(self.trigger(owner, run).await?),
             _ => None,
         };
         let (mut info, code_context) = self
@@ -289,6 +285,7 @@ where
                     // The run page shows what the sender sent.
                     Some(delivery) => RunStart::Webhook {
                         body: delivery.body.clone(),
+                        content_type: delivery.content_type.clone(),
                     },
                     None => RunStart::Event {
                         event: run.pending.event.event_name().as_str().to_owned(),
@@ -316,10 +313,11 @@ where
             RunStart::Event { event, .. } => {
                 json!({ "kind": "event", "event": event, "item": item })
             }
-            RunStart::Manual { by } => json!({ "kind": "manual", "by": by }),
-            RunStart::Webhook { body } => {
-                json!({ "kind": "webhook", "body": body, "receivedAt": at })
+            // Code reads a webhook as the event it is; its item holds the body.
+            RunStart::Webhook { .. } => {
+                json!({ "kind": "event", "event": EventName::Webhook.as_str(), "item": item })
             }
+            RunStart::Manual { by } => json!({ "kind": "manual", "by": by }),
         };
         let context = json!({
             "run": {
@@ -420,9 +418,7 @@ fn first_schedule(trigger: &ActionTrigger) -> Option<(String, String)> {
                 .iter()
                 .find_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
-                    RoutineTrigger::Once { .. }
-                    | RoutineTrigger::Events { .. }
-                    | RoutineTrigger::Webhook {} => None,
+                    RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
                 })
         }
         ActionTrigger::Once { .. } | ActionTrigger::Events { .. } => None,
@@ -479,7 +475,7 @@ fn schedule(trigger: &ActionTrigger) -> String {
             .filter_map(|trigger| match trigger {
                 RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
                 RoutineTrigger::Once { at } => Some(once(at)),
-                RoutineTrigger::Events { .. } | RoutineTrigger::Webhook {} => None,
+                RoutineTrigger::Events { .. } => None,
             })
             .collect::<Vec<_>>()
             .join("; "),
@@ -510,7 +506,6 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                 } => Some(schedule(cron, timezone)),
                 RoutineTrigger::Once { at } => Some(ContextTrigger::Once { at: *at }),
                 RoutineTrigger::Events { .. } => None,
-                RoutineTrigger::Webhook {} => Some(ContextTrigger::Webhook),
             })
             .collect(),
         ActionTrigger::Events { .. } => Vec::new(),

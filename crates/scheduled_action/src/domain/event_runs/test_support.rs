@@ -39,12 +39,12 @@ pub fn configuration() -> EventActionConfiguration {
         owner: Owner::User(user()),
         enabled: true,
         revision: ConfigurationRevision::INITIAL,
-        filters: Some(
-            serde_json::from_value(json!([{"events":["document.updated", "channel.created"]}]))
-                .unwrap(),
-        ),
-        activated_at: Some(Utc::now() - chrono::Duration::days(1)),
-        webhook: false,
+        filters: serde_json::from_value(
+            json!([{"events":["document.updated", "channel.created"]}]),
+        )
+        .unwrap(),
+        activated_at: Utc::now() - chrono::Duration::days(1),
+        hook_id: None,
     }
 }
 
@@ -315,7 +315,7 @@ impl EventRunRepository for Repo {
                 owner: config.owner,
                 name: "routine".into(),
                 trigger: ActionTrigger::Events {
-                    filters: config.filters.unwrap(),
+                    filters: config.filters,
                 },
                 kind: ActionKind::Agent,
                 task: json!({}),
@@ -323,7 +323,7 @@ impl EventRunRepository for Repo {
                 updated_at: started_at,
                 enabled: true,
                 configuration_revision: config.revision,
-                event_activated_at: config.activated_at,
+                event_activated_at: Some(config.activated_at),
                 next_run_at: None,
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,

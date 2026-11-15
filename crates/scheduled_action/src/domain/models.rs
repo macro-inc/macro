@@ -433,9 +433,11 @@ pub enum RunStart {
     },
     /// Something POSTed to its webhook URL.
     Webhook {
-        /// The JSON body it sent, or null. Untrusted: whoever holds the URL
-        /// chose it.
-        body: serde_json::Value,
+        /// The text it sent. Untrusted: whoever holds the URL chose it.
+        body: Option<String>,
+        /// The sender's `Content-Type`, when it sent one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content_type: Option<String>,
     },
 }
 

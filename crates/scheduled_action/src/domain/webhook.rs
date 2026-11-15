@@ -1,16 +1,19 @@
 //! Routine webhooks: a URL whose POST starts a run of its routine.
 //!
-//! A routine's `webhook` trigger holds no secret. Its owner mints the URL,
+//! A routine watches its webhook with a `webhook` event filter, which holds
+//! no secret. Its owner mints the URL,
 //! shown once: a public hook id and a random 256-bit secret, of which only
 //! the SHA-256 is stored. Rotating replaces both, so the old URL stops at
-//! once; removing the trigger or deleting the routine deletes them. A POST
+//! once; saving the routine without the filter, or deleting it, deletes them. A POST
 //! with an unknown hook, a wrong secret, or a revoked or deleted one gets
 //! the same answer after the same work: the stored hash, or a fixed one when
 //! there is none, is compared in constant time. The secret is never logged,
 //! traced, stored or returned again.
 //!
 //! An accepted delivery joins the routine's event-run queue as a `webhook`
-//! event carrying its JSON body, which runs read as untrusted data. The
+//! event carrying its body, text that runs read as untrusted data, once the
+//! filter's payload tests pass on it; its AI condition is answered like any
+//! event's before the run starts. The
 //! sender chooses nothing else: not the routine, its steps, its owner or its
 //! model. The run acts as, and is billed to, the routine's owner.
 
@@ -39,8 +42,11 @@ use super::service::granted_action;
 #[cfg(test)]
 mod test;
 
-/// The largest body a delivery may carry.
-pub const MAX_BODY_BYTES: usize = 256 * 1024;
+/// The largest body a delivery may carry. Like a GitHub delivery's payload,
+/// it waits in the queue row and goes into the run's prompt.
+pub const MAX_BODY_BYTES: usize = 64 * 1024;
+/// Characters of the `Content-Type` header kept.
+const MAX_CONTENT_TYPE_CHARS: usize = 255;
 /// Deliveries waiting for a routine's run before more are refused.
 pub const MAX_QUEUED: u16 = 20;
 /// How long a repeated `Idempotency-Key` answers with its first delivery.
@@ -59,6 +65,10 @@ pub const HOOK_LIMIT: Limit = Limit {
 /// Compared against when no webhook has the presented id, so an unknown
 /// hook costs what a wrong secret does.
 const NO_HOOK_HASH: SecretHash = SecretHash([0; 32]);
+/// Marks a secret as a Macro routine webhook's, for secret scanners.
+const SECRET_PREFIX: &str = "mrw_";
+/// The prefix and 32 bytes in unpadded base64 (43 characters), with room.
+const SECRET_TEXT_CAPACITY: usize = 64;
 const SECRET_BYTES: usize = 32;
 const MAX_IDEMPOTENCY_KEY: usize = 255;
 
@@ -104,7 +114,11 @@ impl WebhookSecret {
     fn generate() -> Self {
         let mut bytes = Zeroizing::new([0u8; SECRET_BYTES]);
         rand::rng().fill_bytes(bytes.as_mut());
-        Self(Zeroizing::new(URL_SAFE_NO_PAD.encode(bytes.as_ref())))
+        // Room for all of it up front, so no growth leaves an unwiped copy.
+        let mut text = Zeroizing::new(String::with_capacity(SECRET_TEXT_CAPACITY));
+        text.push_str(SECRET_PREFIX);
+        URL_SAFE_NO_PAD.encode_string(bytes.as_ref(), &mut *text);
+        Self(text)
     }
 
     /// The secret's text, for the one response that shows it.
@@ -198,12 +212,57 @@ impl IdempotencyKey {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebhookDelivery {
-    /// The JSON body, or null when the POST had none. Dropped from the queue
-    /// row once its run ends; the run's record keeps it.
-    #[serde(default)]
-    pub body: Value,
+    /// The URL it came through. A delivery queued before the routine's URL
+    /// was rotated or removed doesn't run.
+    pub hook_id: HookId,
+    /// The body as sent: UTF-8 text without NUL, possibly empty. Dropped from
+    /// the queue row once its run ends; the run's record keeps it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    /// The sender's `Content-Type`, when it sent one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<IdempotencyKey>,
+}
+
+/// A body a delivery may carry: UTF-8 text within the limit.
+fn body_text(body: &[u8]) -> Result<&str, DeliveryError> {
+    if body.len() > MAX_BODY_BYTES {
+        return Err(DeliveryError::TooLarge);
+    }
+    let body = std::str::from_utf8(body).map_err(|_| DeliveryError::NotText)?;
+    // Postgres can't keep U+0000 in the jsonb the queue row holds.
+    if body.contains('\0') {
+        return Err(DeliveryError::NotText);
+    }
+    Ok(body)
+}
+
+impl WebhookDelivery {
+    /// A delivery of `body` through `hook_id`, keeping a bounded content type.
+    pub fn new(
+        hook_id: HookId,
+        body: &str,
+        content_type: Option<&str>,
+        idempotency_key: Option<IdempotencyKey>,
+    ) -> Self {
+        Self {
+            hook_id,
+            body: Some(body.to_owned()),
+            content_type: content_type
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| value.chars().take(MAX_CONTENT_TYPE_CHARS).collect()),
+            idempotency_key,
+        }
+    }
+
+    /// The body read as JSON, when it is JSON, whatever its `Content-Type`
+    /// says. Payload tests run against it.
+    pub fn json(&self) -> Option<Value> {
+        serde_json::from_str(self.body.as_deref()?).ok()
+    }
 }
 
 /// A routine's webhook, without its secret.
@@ -256,6 +315,8 @@ pub struct DeliveryRequest<'a> {
     /// The caller's address, when the request has one.
     pub address: Option<IpAddr>,
     pub body: &'a [u8],
+    /// The `Content-Type` header, when it is text.
+    pub content_type: Option<&'a str>,
     pub idempotency_key: Option<String>,
 }
 
@@ -270,6 +331,8 @@ pub enum Delivered {
     Repeated {
         run_id: Uuid,
     },
+    /// The body failed the filter's payload tests: no run.
+    Unmatched,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -280,10 +343,10 @@ pub enum DeliveryError {
     NotFound,
     #[error("too many requests")]
     TooManyRequests { retry_after: Duration },
-    #[error("the body is larger than 256 KB")]
+    #[error("the body is larger than 64 KiB")]
     TooLarge,
-    #[error("the body is not JSON")]
-    NotJson,
+    #[error("the body must be UTF-8 text without NUL characters")]
+    NotText,
     #[error("Idempotency-Key must be 1 to 255 visible ASCII characters")]
     InvalidIdempotencyKey,
     #[error("the routine is paused")]
@@ -319,6 +382,8 @@ pub enum AdmissionOutcome {
         run_id: Uuid,
     },
     Paused,
+    /// The body failed the filter's payload tests.
+    Unmatched,
     Full,
     /// Rotated, removed or deleted since it was found.
     Revoked,
@@ -332,7 +397,7 @@ pub trait WebhookStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<WebhookInfo>, Report>> + Send;
 
     /// Set the routine's hook id and secret hash, replacing any it had,
-    /// while its triggers hold a webhook; false when they don't.
+    /// while its event filters watch its webhook; false when they don't.
     fn replace(
         &self,
         action_id: Uuid,
@@ -350,8 +415,9 @@ pub trait WebhookStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<StoredHook>, Report>> + Send;
 
     /// Under the routine's lock: recheck the hook, its secret and the
-    /// trigger, answer a repeated key, refuse a paused or full routine, then
-    /// queue the delivery at the routine's current revision.
+    /// filter, answer a repeated key, refuse a paused routine, a body its
+    /// filters don't match or a full queue, then queue the delivery at the
+    /// routine's current revision.
     fn admit(
         &self,
         admission: WebhookAdmission,
@@ -435,11 +501,11 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
             .address
             .map_or(LimitScope::NoAddress, LimitScope::Address);
         self.limit(address, ADDRESS_LIMIT).await?;
-        let body = parse_body(request.body)?;
         let idempotency_key = request
             .idempotency_key
             .map(IdempotencyKey::try_from)
             .transpose()?;
+        let body = body_text(request.body)?;
         let hook_id = Uuid::parse_str(request.hook_id).ok().map(HookId::from);
         let stored = match hook_id {
             Some(hook_id) => self
@@ -464,10 +530,7 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
             .map_err(|error| DeliveryError::Unavailable(Report::new(error).into_dynamic()))?;
         let event = EventReference::webhook(
             event_id,
-            WebhookDelivery {
-                body,
-                idempotency_key,
-            },
+            WebhookDelivery::new(hook_id, body, request.content_type, idempotency_key),
         );
         let outcome = self
             .store
@@ -486,6 +549,7 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
                 run_id: event_id.as_uuid(),
             },
             AdmissionOutcome::Repeated { run_id } => Delivered::Repeated { run_id },
+            AdmissionOutcome::Unmatched => return Ok(Delivered::Unmatched),
             AdmissionOutcome::Paused => return Err(DeliveryError::Paused),
             AdmissionOutcome::Full => {
                 return Err(DeliveryError::Busy {
@@ -494,8 +558,9 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
             }
             AdmissionOutcome::Revoked => return Err(DeliveryError::NotFound),
         };
-        let (Delivered::Started { run_id } | Delivered::Repeated { run_id }) = delivered;
-        span.record("run_id", tracing::field::display(run_id));
+        if let Delivered::Started { run_id } | Delivered::Repeated { run_id } = delivered {
+            span.record("run_id", tracing::field::display(run_id));
+        }
         Ok(delivered)
     }
 }
@@ -590,7 +655,7 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhookSe
         })
     }
 
-    /// Revoke the routine's URL; its trigger stays until the routine is saved
+    /// Revoke the routine's URL; its filter stays until the routine is saved
     /// without it.
     #[tracing::instrument(name = "routine.webhook.remove", skip_all, err)]
     async fn remove(
@@ -618,10 +683,11 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhookSe
         let outcome = match &result {
             Ok(Delivered::Started { .. }) => "started",
             Ok(Delivered::Repeated { .. }) => "repeated",
+            Ok(Delivered::Unmatched) => "unmatched",
             Err(DeliveryError::NotFound) => "not_found",
             Err(DeliveryError::TooManyRequests { .. }) => "rate_limited",
             Err(DeliveryError::TooLarge) => "too_large",
-            Err(DeliveryError::NotJson) => "not_json",
+            Err(DeliveryError::NotText) => "not_text",
             Err(DeliveryError::InvalidIdempotencyKey) => "invalid_key",
             Err(DeliveryError::Paused) => "paused",
             Err(DeliveryError::Busy { .. }) => "busy",
@@ -633,15 +699,4 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhookSe
         tracing::Span::current().record("outcome", outcome);
         result
     }
-}
-
-/// An empty body is null; anything else must be JSON within the limit.
-fn parse_body(body: &[u8]) -> Result<Value, DeliveryError> {
-    if body.len() > MAX_BODY_BYTES {
-        return Err(DeliveryError::TooLarge);
-    }
-    if body.iter().all(u8::is_ascii_whitespace) {
-        return Ok(Value::Null);
-    }
-    serde_json::from_slice(body).map_err(|_| DeliveryError::NotJson)
 }

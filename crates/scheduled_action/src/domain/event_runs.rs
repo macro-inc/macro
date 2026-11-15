@@ -17,6 +17,7 @@ use super::event_trigger::{
     IncomingEvent,
 };
 use super::models::{ActionExecutionRecord, ScheduledAction};
+use super::webhook::HookId;
 
 pub mod admission;
 pub mod condition;
@@ -186,13 +187,11 @@ pub struct EventActionConfiguration {
     pub owner: Owner,
     pub enabled: bool,
     pub revision: ConfigurationRevision,
-    /// None for a routine without event filters, such as one that runs only
-    /// on its webhook.
-    pub filters: Option<EventFilters>,
-    /// When its event filters took effect; None without them.
-    pub activated_at: Option<DateTime<Utc>>,
-    /// Whether its triggers hold a webhook that has a URL.
-    pub webhook: bool,
+    pub filters: EventFilters,
+    pub activated_at: DateTime<Utc>,
+    /// Its webhook URL's id now. A delivery through another, rotated or
+    /// removed since, doesn't run.
+    pub hook_id: Option<HookId>,
 }
 
 #[derive(Debug, Clone)]
@@ -311,26 +310,20 @@ impl AuthorizedEventRun {
 }
 
 impl EventActionConfiguration {
-    /// Whether the routine, as configured now, runs on `event`.
-    pub fn accepts(&self, event: &EventReference) -> bool {
-        match event.source() {
-            EventSource::Webhook(_) => self.webhook,
-            EventSource::Entity { .. } | EventSource::Github(_) => {
-                match (&self.filters, self.activated_at) {
-                    (Some(filters), Some(activated_at)) => filters.matches(event, activated_at),
-                    _ => false,
-                }
-            }
-        }
-    }
-
-    fn check_pending(&self, pending: &PendingEventRun) -> Result<(), CancellationReason> {
+    pub(crate) fn check_pending(
+        &self,
+        pending: &PendingEventRun,
+    ) -> Result<(), CancellationReason> {
         if !self.enabled {
             return Err(CancellationReason::Disabled);
         }
         if self.action_id != pending.action_id
             || self.revision != pending.revision
-            || !self.accepts(&pending.event)
+            || !self.filters.matches(&pending.event, self.activated_at)
+            || pending
+                .event
+                .webhook_delivery()
+                .is_some_and(|delivery| Some(delivery.hook_id) != self.hook_id)
         {
             return Err(CancellationReason::Superseded);
         }
