@@ -11,6 +11,7 @@ open or edit it; its id is derived from its slug.
 - `src/lib.rs`: `SystemSkill`, the `SYSTEM_SKILLS` registry, lookup by id.
 - `src/compose_routines.rs`: Compose Routines, writing a routine from a
   chat, and the example of a skill that comes with an SDK area's guide.
+  Its text is in `src/compose_routines/*.md`; the module composes it.
 
 ## How a skill reaches a session
 
