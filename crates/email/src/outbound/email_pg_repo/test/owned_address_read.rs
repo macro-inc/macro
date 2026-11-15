@@ -81,8 +81,8 @@ const READS: [(&str, OwnedReadTuning); 7] = [
             ..OwnedReadTuning::DEFAULT
         },
     ),
-    // Windows that stop growing at 16 threads and probes at 27 rows, which
-    // fits the sparse company but not a quarter more than its caps before.
+    // Windows that stop growing at 16 threads and probe caps at 27 rows: the
+    // sparse company's 26 superset rows fit only the one probe at the most.
     ("capped", CAPPED),
 ];
 
