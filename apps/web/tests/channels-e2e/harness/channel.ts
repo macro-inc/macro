@@ -248,12 +248,26 @@ export class ChannelView {
       seen.push(...now.slice(newestKnown + 1));
     };
 
+    // Losing the place is final: more scrolling cannot bring back rows the
+    // list skipped, so it ends the reading instead of being tried again.
+    let lost: unknown;
+    const look = async () => {
+      try {
+        await record();
+      } catch (error) {
+        lost = error;
+      }
+    };
+
     await record();
     await expect(async () => {
+      if (lost) return;
       await this.wheel(direction === 'back' ? -600 : 600);
-      await record();
+      await look();
+      if (lost) return;
       await expect(last).toBeVisible({ timeout: 300 });
     }).toPass({ timeout: 150_000, intervals: [50] });
+    if (lost) throw lost;
     await record();
     return seen;
   }
