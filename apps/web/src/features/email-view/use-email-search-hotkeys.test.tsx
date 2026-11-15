@@ -38,7 +38,7 @@ function ListHeader(props: {
   return <div data-testid="list-header" />;
 }
 
-function renderEmail(options: { sidebarAvailable: boolean }) {
+function renderEmail() {
   const [listOnScreen, setListOnScreen] = createSignal(true);
   const [canSearch, setCanSearch] = createSignal(true);
   const handled: string[] = [];
@@ -59,11 +59,9 @@ function renderEmail(options: { sidebarAvailable: boolean }) {
       scopeId: emailScope,
       enabled: () => true,
       canSearch,
-      openSidebarSearch: () => {
-        if (!options.sidebarAvailable) return false;
-
-        handled.push('sidebar search');
-        return true;
+      showList: () => {
+        handled.push('show list');
+        setListOnScreen(true);
       },
     });
 
@@ -86,24 +84,35 @@ function renderEmail(options: { sidebarAvailable: boolean }) {
 }
 
 it('focuses the list search while the list is on screen', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+  const email = renderEmail();
 
   press('/');
 
   expect(email.handled).toEqual(['list search']);
 });
 
-it('opens the sidebar search once a thread replaces the list', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+it('returns to the list and focuses its search once a thread replaces the list', () => {
+  const email = renderEmail();
   email.setListOnScreen(false);
 
   press('/');
 
-  expect(email.handled).toEqual(['sidebar search']);
+  expect(email.handled).toEqual(['show list', 'list search']);
+});
+
+it('focuses the returning list search once per press', () => {
+  const email = renderEmail();
+  email.setListOnScreen(false);
+  press('/');
+
+  email.setListOnScreen(false);
+  email.setListOnScreen(true);
+
+  expect(email.handled).toEqual(['show list', 'list search']);
 });
 
 it('returns to the list search when the list comes back', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+  const email = renderEmail();
   email.setListOnScreen(false);
   email.setListOnScreen(true);
 
@@ -112,17 +121,8 @@ it('returns to the list search when the list comes back', () => {
   expect(email.handled).toEqual(['list search']);
 });
 
-it('leaves the key to the search view when Email has no search field to show', () => {
-  const email = renderEmail({ sidebarAvailable: false });
-  email.setListOnScreen(false);
-
-  press('/');
-
-  expect(email.handled).toEqual(['search view']);
-});
-
 it('leaves the key to the search view on a tab without search', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+  const email = renderEmail();
   email.setCanSearch(false);
 
   press('/');
@@ -131,7 +131,7 @@ it('leaves the key to the search view on a tab without search', () => {
 });
 
 it('focuses the list search with Cmd+F while the list is on screen', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+  const email = renderEmail();
 
   const keydown = press('f', { ctrlKey: true });
 
@@ -140,7 +140,7 @@ it('focuses the list search with Cmd+F while the list is on screen', () => {
 });
 
 it('leaves Cmd+F to the browser once a thread replaces the list', () => {
-  const email = renderEmail({ sidebarAvailable: true });
+  const email = renderEmail();
   email.setListOnScreen(false);
 
   const keydown = press('f', { ctrlKey: true });

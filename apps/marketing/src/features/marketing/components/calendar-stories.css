@@ -20,8 +20,9 @@
 .calendar-story .feature-demo-backdrop::before { opacity: .5; }
 .calendar-story svg { flex: 0 0 auto; width: 16px; height: 16px; }
 .calendar-story-glass {
+  --illustration-radius: 16px;
   min-width: 0;
-  border-radius: 16px;
+  border-radius: var(--illustration-radius);
   background: linear-gradient(150deg, #ffffff0e, #ffffff05);
   box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0d;
   backdrop-filter: blur(12px);
