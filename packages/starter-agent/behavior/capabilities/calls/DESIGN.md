@@ -29,8 +29,11 @@ enrollment's secrets.
   replaced, so the socket opens on the relay.
 - **The voice** is `config/voice.json` in the agent's repository,
   `{ "model": "aura-2-<voice>-<language>" }`, which Macro's agent settings
-  commit; Thalia until one is chosen (`parseVoice` in `voices.ts`). A file
-  that names no Aura-2 voice fails the join.
+  commit; Thalia until one is chosen (`parseVoice` in `voices.ts`). Each
+  call fetches the remote's main and reads the file there
+  (`voice-file.ts`), so a new voice is used on the next call without a pull
+  or restart; the checkout's copy is the fallback. A file that names no
+  Aura-2 voice fails the join.
 
 The join judgment and the switch judgment run `claude -p`, which the agent
 has anyway; screen sharing needs the screen area's browser to be up.

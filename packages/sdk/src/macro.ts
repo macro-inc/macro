@@ -90,6 +90,7 @@ export {
   type ChangeColumnTypeOptions,
   type ColumnType,
   type ConvertIntoNewColumnOptions,
+  type CreateDatabaseOptions,
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
@@ -563,14 +564,6 @@ export {
   SavedView,
   type SavedViewConfig,
 } from './entities/saved-views/saved-view';
-export type {
-  NamedEntity,
-  NameKind,
-  NameMatch,
-  NameQuery,
-  NameResult,
-  NamesLookup,
-} from './entities/search/names';
 export type { SearchOn, SearchOpts } from './entities/search/options';
 export type {
   SearchOptions,

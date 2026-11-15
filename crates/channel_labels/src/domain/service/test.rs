@@ -6,9 +6,8 @@ use uuid::Uuid;
 
 use super::ChannelLabelsServiceImpl;
 use crate::domain::models::{
-    ChannelLabel, ChannelLabelName, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt,
-    ChannelLabelsScope, LabelWriteOutcome, NewChannelLabel, SetChannelLabelOutcome,
-    SmartTagPreview,
+    ChannelLabel, ChannelLabelRule, ChannelLabelsError, ChannelLabelsReceipt, ChannelLabelsScope,
+    LabelWriteOutcome, NewChannelLabel, SetChannelLabelOutcome, SmartTagPreview,
 };
 use crate::domain::ports::{ChannelLabelsRepo, ChannelLabelsService};
 
@@ -94,16 +93,6 @@ impl ChannelLabelsRepo for FakeRepo {
             scope.team_id().unwrap_or_default(),
             "Enterprise",
         )])
-    }
-
-    async fn list_label_names(
-        &self,
-        _scope: &ChannelLabelsScope,
-    ) -> Result<Vec<ChannelLabelName>, Self::Err> {
-        Ok(vec![ChannelLabelName {
-            id: Uuid::nil(),
-            name: "Enterprise".to_string(),
-        }])
     }
 
     async fn get_label(

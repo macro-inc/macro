@@ -95,6 +95,7 @@ import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
+import type { CrmContactDetailResponse } from './generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
@@ -139,6 +140,7 @@ import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupP
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { HarnessComputerId } from './generated/schemas/harnessComputerId';
+import type { HarnessTeamAgentUserId } from './generated/schemas/harnessTeamAgentUserId';
 import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
@@ -377,6 +379,8 @@ export type Harness = {
   last_connected_at: string | null;
   /** Set when this is a team's Macro computer. */
   computer_id?: HarnessComputerId;
+  /** Set when that computer is an agent teammate's, which runs only its agent. */
+  team_agent_user_id?: HarnessTeamAgentUserId;
   /** How Claude Code on a Macro computer is paid for. */
   claude_mode?: ClaudeMode;
 };
@@ -2951,10 +2955,17 @@ export const storageServiceClient = {
       { method: 'DELETE' }
     );
   },
-  async getContact({ contactId }: { contactId: string }) {
-    return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
-      method: 'GET',
-    });
+  async getContact({
+    contactId,
+    signal,
+  }: {
+    contactId: string;
+    signal?: AbortSignal;
+  }) {
+    return await dssFetch<CrmContactDetailResponse>(
+      `/crm/contacts/${contactId}`,
+      { method: 'GET', signal }
+    );
   },
   async getContactByEmail({
     email,

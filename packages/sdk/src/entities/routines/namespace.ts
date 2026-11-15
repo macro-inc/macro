@@ -25,8 +25,33 @@ export interface CreatedEntity {
  * ## Routines
  *
  * - "Remind me", "every Monday", "tomorrow at 9" and "whenever something happens" ask for a routine: work that runs later, as the user, after this conversation ends. A meeting with other people is a calendar event, not a routine.
- * - To write a routine or change one, follow the Compose Routines skill, which comes right after this guide; where it doesn't, read it from `macro.documents.systemSkills()`.
+ * - A routine's run never sees this conversation. Write its instructions to stand alone: what to do, the items involved by id or link, absolute dates, and where to report the result.
+ * - Before creating one, look for a routine of the user's that already does this, and update it instead of adding a second.
  * - A routine created by a routine's run, from its code or its Ask AI step, is that routine's sub-routine: it is listed under it, pauses and is deleted with it, and `list()` leaves it out unless asked. A routine has at most 50 active sub-routines (one-time ones that have run don't count); creating another is refused. When a run may create the same routine again, pass a `key` so the second create updates the first instead of adding a duplicate.
+ *
+ * ### Writing one
+ *
+ * - Find each item the request names (a channel, person, folder, project, label, tag, agent, database or document) with SDK search, as the user would, paging and refining the search until you find the item itself. The item is the one whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no item has that name, or several do, ask which one rather than guess.
+ * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key. A code step uses an item by its id, in a knob.
+ * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and use its id. Create nothing else.
+ * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
+ * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
+ * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
+ *
+ * Events an `events` trigger starts on (`EventName` lists every one):
+ *
+ * - `channel.created`: a channel you can access is created.
+ * - `channel.message_posted`: someone sends a message in a selected channel.
+ * - `channel.mentioned`: you are @ mentioned in a selected channel.
+ * - `document.created`: a document you can access is created. Tasks have their own trigger.
+ * - `document.deleted`: a selected document is deleted.
+ * - `task.created`: a task you can access is created.
+ * - `task.status_changed`: a task's status changes.
+ * - `task.priority_changed`: a task's priority changes.
+ * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
+ * - `email.message_received`: new mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.
+ * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
+ * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */
 export class RoutineNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -37,11 +62,13 @@ export class RoutineNamespace {
   }
 
   /**
-   * Create a routine: one agent task (`prompt`, with `model`, `agent`, or
-   * both), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only
-   * when the user explicitly asked for it to act, send or post as them. To
-   * check on something later, such as a spawned session or a long job, create
-   * a routine instead of waiting in a program. A cron `schedule` has 6 fields
+   * Create a routine from `steps`: code steps and at most one Ask AI
+   * (`agent`) step. The older single agent task (`prompt`, with `model`,
+   * `agent`, or both) still saves and runs as one Ask AI step; write new
+   * routines as steps. Set `dangerouslyOperateAsUser` only when the user
+   * explicitly asked for it to act, send or post as them. To check on
+   * something later, such as a spawned session or a long job, create a
+   * routine instead of waiting in a program. A cron `schedule` has 6 fields
    * (second minute hour day-of-month month day-of-week) or 7 with a year; a
    * 7-field schedule that names one date runs once. A code step's `source`
    * exports `async function main({ macro, run, trigger, steps, knobs })` and
@@ -60,22 +87,30 @@ export class RoutineNamespace {
    * // Every ten minutes, in New York time.
    * const routine = await macro.routines.create({
    *   name: 'Check the import',
-   *   prompt: 'Read the import task and post its status in the channel.',
-   *   userPrompt: 'Check on the import every ten minutes.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: {
    *     type: 'cron',
    *     schedule: '0 0/10 * * * *',
    *     timezone: 'America/New_York',
    *   },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the import task and post its status in the channel.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // Once, at 14:30 on 3 November 2027.
    * await macro.routines.create({
    *   name: 'Follow up on the review',
-   *   prompt: 'Read the review session and summarize its outcome.',
-   *   userPrompt: 'Follow up on the review on 3 November 2027.',
-   *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
+   *   steps: [
+   *     {
+   *       type: 'agent',
+   *       instructions: 'Read the review session and summarize its outcome.',
+   *       model: 'anthropic/claude-sonnet-5-5',
+   *     },
+   *   ],
    * });
    * // A code step that posts in a channel, disabled until turned on. The
    * // user asked for the post to come from them.
@@ -87,13 +122,8 @@ export class RoutineNamespace {
    *     {
    *       type: 'code',
    *       title: 'Post hello',
-   *       knobs: [{ type: 'text', name: 'channel', label: 'Channel to post in', value: 'general' }],
-   *       sentence: 'Post Hello in {channel}.',
-   *       source: `export async function main({ macro, knobs }: StepContext) {
-   *   const [{ matches }] = (await macro.search.names([{ name: knobs.channel, kinds: ['channel'] }])).results;
-   *   const match = matches.find((m) => m.exact && m.type === 'channel');
-   *   if (match?.type !== 'channel') throw new Error('There is no channel named ' + knobs.channel + '. Change the channel to post in.');
-   *   await match.entity.send('Hello');
+   *       source: `export async function main({ macro }: StepContext) {
+   *   await macro.channels.byId('<channel id>').send('Hello');
    * }`,
    *     },
    *   ],
@@ -103,10 +133,14 @@ export class RoutineNamespace {
    * await macro.routines.create(
    *   {
    *     name: `Check on ${taskName}`,
-   *     prompt: `Read task ${taskId} and post its status in the channel.`,
-   *     userPrompt: 'Check on each open task tomorrow.',
-   *     model: 'anthropic/claude-sonnet-5-5',
    *     trigger: { type: 'once', at: tomorrow },
+   *     steps: [
+   *       {
+   *         type: 'agent',
+   *         instructions: `Read task ${taskId} and post its status in the channel.`,
+   *         model: 'anthropic/claude-sonnet-5-5',
+   *       },
+   *     ],
    *   },
    *   { key: `check-${taskId}` },
    * );

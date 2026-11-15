@@ -532,7 +532,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -541,6 +541,7 @@ pub(crate) type DssBotsState =
 /// Type alias for the harnesses service wired into DSS.
 pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
     harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+    hosted_runtimes::outbound::pg::PgComputerAgents,
 >;
 
 /// Type alias for the harnesses router state.
@@ -1026,10 +1027,6 @@ pub(crate) struct ApiContext {
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
-    /// Name sources for `POST /search/names` over the kinds this service
-    /// hosts, built once at startup (`outbound::name_sources`).
-    #[from_ref(skip)]
-    pub name_sources: Vec<Arc<dyn search_service::names::NameSource>>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
@@ -1111,7 +1108,6 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
-            name_sources: ctx.name_sources.clone(),
             term_matching_rollout: ctx.search_term_matching.clone(),
         }
     }

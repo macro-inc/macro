@@ -14,7 +14,6 @@ pub mod chat;
 pub mod crm_company;
 pub mod document;
 pub mod email;
-pub mod names;
 pub mod project;
 pub mod score;
 mod simple;

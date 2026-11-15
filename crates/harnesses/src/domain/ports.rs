@@ -471,6 +471,38 @@ pub trait HarnessService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, HarnessError>> + Send;
 }
 
+/// Which agent teammate a Macro computer was bought for. The computer
+/// service owns that link; the listings mark the computer's harness with it.
+#[cfg_attr(feature = "test-utils", mockall::automock(type Err = anyhow::Error;))]
+pub trait ComputerTeamAgents: Send + Sync + 'static {
+    /// Lookup failure.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// The agent teammate each of `computers` runs, in one lookup; a
+    /// computer bought for people has no entry.
+    fn team_agents_of(
+        &self,
+        computers: &[ComputerId],
+    ) -> impl Future<
+        Output = Result<std::collections::HashMap<ComputerId, MacroUserIdStr<'static>>, Self::Err>,
+    > + Send;
+}
+
+/// Whether a harness is an agent teammate's computer. An agent teammate is
+/// a member people message, so nothing else may run on its computer: callers
+/// that bind agents or open sessions on a harness refuse one.
+///
+/// Trusted: it checks no caller and answers only about the harness.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait HarnessTeamAgents: Send + Sync + 'static {
+    /// The agent teammate whose computer the live harness is; `None` for
+    /// any other harness, or an unknown one.
+    fn harness_team_agent(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, HarnessError>> + Send;
+}
+
 /// Harness service error.
 #[derive(Debug, thiserror::Error)]
 pub enum HarnessError {

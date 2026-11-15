@@ -37,11 +37,6 @@ enforced by the ordinary backend APIs.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
-  `search.names` (`search/names.ts`) is one `POST /search/names` that
-  resolves up to 10 names to items of every kind, exact matches first; tag
-  and channel-label matches load their records (one read per tag set) to
-  return `PropertyOption` and `ChannelLabel` values; a failed record read
-  drops only that kind's matches and lists the kind in `unavailable`.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
   (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
@@ -53,9 +48,11 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  either the single agent task or `steps` (generated `CodeStep`s, agent steps
-  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
-  restricts to an explicit user request; `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
+  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
+  request, or the older single agent task. Its examples use steps only:
+  agents copy them, and a routine draft hands back steps, converting a single
+  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
@@ -63,10 +60,10 @@ enforced by the ordinary backend APIs.
   `{ includeChildren }` adds active sub-routines and `{ parent }` returns one
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
   `children()` and `keepAsOwn()` read and change the link, and
-  `RoutineExecution.created` holds the routines a run created. The `@agent` block on
-  `RoutineNamespace` says when a request is a routine; how to write one is
-  the Compose Routines skill (`crates/system_skills`), which comes with that
-  guide.
+  `RoutineExecution.created` holds the routines a run created. The rules an
+  agent needs are in the `@agent` block on `RoutineNamespace`, which the
+  routine drafter also reads; code mode follows it with the Compose Routines
+  skill (`crates/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.

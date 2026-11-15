@@ -37,19 +37,21 @@ open or edit it; its id is derived from its slug.
 - `cargo test -p system_skills`
 - If you change Compose Routines: `cargo test -p agent_code_mode`, and its
   example step's type check, with the pinned Deno on `PATH`:
-  `cargo test -p agent_harness_service --bin agent_harness_service --
-  --include-ignored every_catalog_routine_and_example_step_type_checks`.
+  `cargo test -p agent_harness_service --lib -- --include-ignored
+  every_catalog_routine_and_example_step_type_checks`.
 
 ## Gotchas
 
 - A slug is permanent: renaming it changes the skill's id, which
   attachments and mentions refer to.
-- How to write a routine lives in `routine_program`: `WRITING` is
-  `ROUTINE_RULES` + `CODE_STEPS`. Compose Routines ends with `WRITING`
-  (`DIRECT` with `ROUTINE_RULES`, since `CreateRoutine`'s description carries
-  `CODE_STEPS`); the drafter and suggestion briefs take `ROUTINE_RULES` and
-  add `CODE_STEPS` when code steps can be written. The skill adds only how a
-  session finds, checks, saves and reports.
+- Compose Routines comes after the routines guide (`packages/sdk`), which
+  says what a routine is, its events and its cron rule; the skill adds only
+  how a session finds, writes, checks, saves and reports a routine, how steps
+  use items and tell the owner, and `routine_program::CODE_STEPS`. `DIRECT`
+  leaves out `CODE_STEPS`, since `CreateRoutine`'s description carries it.
+- Keep how steps use items and tell the owner in step with the drafter's
+  (`scheduled_action`'s `drafts/finding/items.md` and `finding.rs`): both
+  write routines the same owner reviews.
 
 ## Related
 

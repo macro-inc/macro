@@ -27,7 +27,7 @@ use whatsmeow::proto::wa_history_sync::conversation::EndOfHistoryTransferType;
 use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::store::{ContactStore, LidStore, StoreError};
-use whatsmeow::types::events::GroupInfo;
+use whatsmeow::types::events::{GroupInfo, Picture};
 use whatsmeow::types::{
     ContactInfo, DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, IsOnWhatsAppResponse, Jid,
     MessageSource,
@@ -186,6 +186,29 @@ pub async fn phone_chat(lids: &dyn LidStore, chat: Jid) -> Jid {
             tracing::debug!(error = %error, "Reading a chat's LID mapping failed");
             chat
         }
+    }
+}
+
+/// A person's or group's picture changed: the JID and, for a person, the
+/// other half of its phone-number/LID pair, as pictures are tracked by
+/// whichever address was known first. A store failure only loses the other
+/// half.
+pub async fn picture_changed(lids: &dyn LidStore, picture: &Picture) -> SessionEvent {
+    let jid = picture.jid.to_non_ad();
+    let alternate = match jid.server.as_str() {
+        HIDDEN_USER_SERVER => lids.get_pn_for_lid(&jid).await,
+        DEFAULT_USER_SERVER => lids.get_lid_for_pn(&jid).await,
+        _ => Ok(None),
+    };
+    let alternate = alternate.unwrap_or_else(|error| {
+        tracing::debug!(error = %error, "Reading a picture's LID mapping failed");
+        None
+    });
+    let mut jids = vec![jid.to_string()];
+    jids.extend(alternate.map(|alternate| alternate.to_non_ad().to_string()));
+    SessionEvent::PictureChanged {
+        jids,
+        picture_id: (!picture.remove).then(|| picture.picture_id.clone()),
     }
 }
 

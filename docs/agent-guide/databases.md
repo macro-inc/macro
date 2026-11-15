@@ -17,6 +17,9 @@ the background; a slow discovery refresh must not delay the new database card.
 Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
+`?tableId=<uuid>&viewId=<uuid>` (what the SDK's table and view `webUrl()` hand out)
+opens that table and view over the viewer's remembered tab; without `viewId` the
+table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
@@ -388,7 +391,8 @@ Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
 rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
 data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
-cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+cell; a plain arrow collapses it. The grid marks itself
+`data-owns-arrow-keys`, so these keys don't move split focus. Inside an open cell editor Shift+Arrow selects
 text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears

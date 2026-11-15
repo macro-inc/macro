@@ -33,6 +33,9 @@ universal_input = { path = "../../crates/universal_input" }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
+nom = { workspace = true }
+models_search = { path = "../../crates/models_search" }
+document_sub_type = { path = "../../crates/document_sub_type" }
 activity = { path = "../../crates/activity", default-features = false, features = ["axum", "outbound", "schema"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
@@ -111,7 +114,7 @@ harness_id = { path = "../../crates/harness_id" }
 harnessd_protocol = { workspace = true }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["inbound", "outbound", "ports"] }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
-agent_credentials = { path = "../../crates/agent_credentials" }
+agent_credentials = { path = "../../crates/agent_credentials", features = ["postgres"] }
 hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
 incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
@@ -197,7 +200,7 @@ strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
-team_agents = { path = "../../crates/team_agents", features = ["inbound"] }
+team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
@@ -231,6 +234,7 @@ macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
+wiremock = { workspace = true }
 
 [features]
 local = []

@@ -216,7 +216,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       bulkUpdateEntitiesPropertyOptions
     `,
   },
-  search: { searched: 'unifiedSearch searchNames' },
+  search: { searched: 'unifiedSearch' },
   storage: {
     generated: 'renderCanvas',
     rejected: 'declineCall',

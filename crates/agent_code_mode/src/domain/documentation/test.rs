@@ -399,6 +399,25 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     assert!(result.contains(catalog[32].index.as_deref().unwrap()));
 }
 
+/// Every session that sets up a routine reads these rules here, and the
+/// routine drafter's brief carries this same guide.
+#[test]
+fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
+    let guide = entity_guide("routines").expect("routines has a guide");
+    for rule in [
+        "never bug-reports-archive",
+        "never an id, and never an `ids` key",
+        "Create nothing else.",
+        "makes no task today",
+        "weekday numbers start at 1 = Sunday",
+        "check the whole routine with `macro.routines.check`",
+        "`channel.message_posted`",
+    ] {
+        assert!(guide.contains(rule), "{rule}: {guide}");
+    }
+    assert!(inline_guides(GuideHost::Code).contains(guide));
+}
+
 /// A session that reads the routines guide reads the Compose Routines skill
 /// right after it, without having to find it: code mode the skill's code
 /// form, and a direct host, which can't run the skill's programs, its
@@ -409,10 +428,6 @@ fn the_routines_guide_carries_the_compose_routines_skill_each_host_can_follow() 
     let skill = compose_routines::CODE.to_string();
     let direct_skill = compose_routines::DIRECT.to_string();
     let guide = entity_guide("routines").expect("routines has a guide");
-    assert!(
-        guide.contains("follow the Compose Routines skill"),
-        "{guide}"
-    );
     let routines = sdk_documentation()
         .iter()
         .find(|doc| doc.name == "routines")

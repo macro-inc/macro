@@ -10,6 +10,7 @@ jobs:
   linux:
     name: macrod update (linux)
     runs-on: namespace-profile-linux-rust-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -92,6 +93,7 @@ jobs:
     runs-on: nscloud-macos-sequoia-arm64-6x14
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
+    timeout-minutes: 10
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -121,6 +123,7 @@ jobs:
     runs-on: nscloud-windows-2022-amd64-8x16
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
+    timeout-minutes: 20
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

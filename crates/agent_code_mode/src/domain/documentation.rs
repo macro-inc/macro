@@ -55,8 +55,9 @@ static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
 /// reads how an area works also reads how to do its main job there, without
 /// having to find the skill: how to write a routine. Code mode carries the
 /// skill's code form; direct hosts carry its routine-tools form. No byte
-/// budget counts it: it has a fixed size, and only a session that gets the
-/// routines guide gets it.
+/// budget counts it: it has a fixed size and comes only with the routines
+/// guide, which routed guidance gives a session that needs it and inline
+/// guides give every session.
 fn attached_skill(entity: &str, host: GuideHost) -> Option<&'static str> {
     use system_skills::compose_routines;
     static CODE: LazyLock<String> = LazyLock::new(|| compose_routines::CODE.to_string());

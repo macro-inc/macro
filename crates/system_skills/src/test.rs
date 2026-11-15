@@ -47,29 +47,34 @@ fn skills_render_non_empty_titled_markdown() {
     }
 }
 
-/// The Compose Routines skill ends with the text every writer of routines
-/// follows, whole, so a chat session and the drafter write by the same rules.
-/// The code form code mode carries leaves out the routine-tools part, and the
-/// routine-tools form carries that text short of the code-step contract,
-/// which `CreateRoutine`'s description already carries.
+/// The Compose Routines skill finds items with the SDK's existing searches
+/// and lists, tells the owner through an Ask AI step, and ends with the
+/// code-step text CreateRoutine and the drafter read. The code form code mode
+/// carries leaves out the routine-tools part, and the routine-tools form
+/// leaves out the code-step text, which `CreateRoutine`'s description already
+/// carries.
 #[test]
-fn compose_routines_carries_the_shared_writing_text() {
+fn compose_routines_finds_items_with_the_sdk_and_ends_with_the_code_step_text() {
     let content = compose_routines::SKILL.render_content();
-    assert!(content.contains(routine_program::WRITING));
     for rule in [
-        "one `macro.search.names([...])` call",
+        "macro.channels.search(name)",
+        "searchOn: 'name', matchType: 'exact'",
+        "macro.users.search(name)",
+        "macro.initiatives.summaries()",
         "macro.routines.check(routine, { created })",
-        "kinds: ['channel']",
+        "a code step never messages or emails the routine's owner",
+        "This replaces what the routines guide says about ids in knobs.",
         "# Without code",
     ] {
         assert!(content.contains(rule), "{rule}");
     }
     let code = compose_routines::CODE.to_string();
-    assert!(code.contains(routine_program::WRITING));
+    assert!(content.trim_end().ends_with(routine_program::CODE_STEPS.trim_end()));
+    assert!(code.trim_end().ends_with(routine_program::CODE_STEPS.trim_end()));
     assert!(code.contains("macro.routines.check(routine, { created })"));
     assert!(!code.contains("# Without code"));
     let direct = compose_routines::DIRECT.to_string();
-    assert!(direct.contains(routine_program::ROUTINE_RULES));
+    assert!(direct.contains("a code step never messages or emails the routine's owner"));
     assert!(!direct.contains(routine_program::CODE_STEPS));
     assert!(direct.contains("`NameSearch`"));
     assert!(!direct.contains("ExecuteCode"));

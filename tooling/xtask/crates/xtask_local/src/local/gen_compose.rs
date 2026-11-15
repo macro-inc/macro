@@ -295,10 +295,9 @@ fn add_computers(
             let dct::Environment::KvPair(env) = &mut harness.environment else {
                 anyhow::bail!("harness environment must be a key-value map");
             };
-            env.insert(
-                "COMPUTERS_FLEET".into(),
-                Some(dct::SingleValue::String("disabled".into())),
-            );
+            // The harness reads an absent `COMPUTERS_FLEET` as "no fleet" and
+            // rejects any other value, so drop every computer setting.
+            env.retain(|key, _| !key.starts_with("COMPUTERS_"));
         }
         Fleet::Docker => {
             // Same path on both sides: the harness writes enrollments here and
