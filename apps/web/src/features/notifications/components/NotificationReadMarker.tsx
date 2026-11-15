@@ -1,7 +1,6 @@
 import { useReadsHeldByAgentArrival } from '@app/features/agent-navigation/context/agent-arrivals';
 import type { Entity } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
 import { onCleanup, onMount, Show } from 'solid-js';
@@ -156,8 +155,6 @@ type EmailReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   threadId: string;
-  /** The inbox the thread belongs to; scopes mark-as-seen to a non-primary inbox. */
-  linkId?: string;
 };
 
 /** Marks an email thread seen; waits, like the others, in a pane an agent opened. */
@@ -173,7 +170,6 @@ export function EmailReadMarker(props: EmailReadMarkerProps) {
 
 function EmailSeenOnMount(props: EmailReadMarkerProps) {
   const markSeenMutation = useMarkThreadAsSeenMutation();
-  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
   return (
     <>
@@ -185,10 +181,7 @@ function EmailSeenOnMount(props: EmailReadMarkerProps) {
       <DebouncedMarker
         debounceTime={props.debounceTime ?? 0}
         debouncedFn={() =>
-          markSeenMutation.mutate({
-            threadId: props.threadId,
-            linkId: toHeaderLinkId(props.linkId),
-          })
+          markSeenMutation.mutate({ threadId: props.threadId })
         }
       />
     </>

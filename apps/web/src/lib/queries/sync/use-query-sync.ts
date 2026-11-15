@@ -1,10 +1,6 @@
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { publishSessionActivity } from '@core/agent-session/session-activity';
 import { noteSessionActivity } from '@core/agent-session/session-turn';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionPreview } from '@queries/agent-session/preview';
@@ -40,10 +36,6 @@ import {
   handleMessageEvent,
   handleTimelineActivity,
 } from '@queries/messages/sync';
-import {
-  applyNotificationStatusUpdate,
-  notificationStatusUpdatePayloadSchema,
-} from '@queries/notification/user-notifications';
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
@@ -217,20 +209,6 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.data,
           handleAgentSessionQueue
         );
-      })
-      .with({ type: 'notification_status_updated' }, () => {
-        if (isFeatureEnabled(enableGraphqlSoup)) return;
-        const result = notificationStatusUpdatePayloadSchema.safeParse(
-          data.data
-        );
-        if (!result.success) {
-          console.warn(
-            'Malformed notification status update payload',
-            data.data
-          );
-          return;
-        }
-        applyNotificationStatusUpdate(result.data);
       })
       .with({ type: 'refresh_email' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleRefreshEmail);

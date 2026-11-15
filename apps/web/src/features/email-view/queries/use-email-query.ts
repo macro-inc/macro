@@ -151,8 +151,7 @@ export function useEmailDataSource(
   const showsFocus = () => state.tab === 'focus';
   const showsScheduled = () => state.tab === 'scheduled';
   const showsFavorites = () => state.tab === 'favorites';
-  // Uses GraphQL favorites with enable-graphql-soup, REST otherwise. Guard
-  // the data read so a pending favorites request cannot suspend the view.
+  // Guard the data read so a pending favorites request cannot suspend the view.
   const favorites = useFavoritesQuery({ entityType: ['email_thread'] });
   const favoriteThreadIds = createMemo(() =>
     favorites.isSuccess
@@ -483,8 +482,8 @@ export function useEmailDataSource(
   );
   const recoveryQueries = indexArray(recoveryBatches, (ids) =>
     useSoupAstItemsQuery(
-      () => ({
-        ...buildEmailQuery(
+      () =>
+        buildEmailQuery(
           {
             tab: 'all',
             inboxIds: undefined,
@@ -493,8 +492,6 @@ export function useEmailDataSource(
           },
           ids()
         ),
-        transport: 'graphql',
-      }),
       () => ({ enabled: sourceEnabled(), keepPreviousData: false })
     )
   );

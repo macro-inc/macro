@@ -1,8 +1,4 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
@@ -771,7 +767,6 @@ export async function refetchSoupEntity(
     !options?.ownTouch &&
     !options?.created &&
     !(options?.notified && mountedNotifiedLists().length > 0) &&
-    isFeatureEnabled(enableGraphqlSoup) &&
     !hasSoupEntity(entityId)
   ) {
     return;

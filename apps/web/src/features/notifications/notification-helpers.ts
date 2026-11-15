@@ -1,7 +1,3 @@
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
 import { isMutedItem } from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
@@ -89,7 +85,7 @@ export function notificationIsRead(notification: UnifiedNotification): boolean {
  * @param entity
  * @returns boolean
  */
-export function entityHasUnreadNotifications(
+function entityHasUnreadNotifications(
   notificationSource: NotificationSource,
   entity: Entity
 ): boolean {
@@ -230,7 +226,7 @@ export async function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
-  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
+  if (entityRef) {
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',

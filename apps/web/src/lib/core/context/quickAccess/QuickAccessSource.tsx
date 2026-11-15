@@ -15,7 +15,6 @@ import {
   enableCrm,
   enableDatabases,
   enableForms,
-  enableGraphqlSoup,
   enableProjects,
 } from '@core/constant/featureFlags';
 import {
@@ -395,7 +394,6 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 export function createQuickAccessValue(): QuickAccessContextValue {
   const crmFlag = useFeatureFlag(enableCrm);
   const projectsFlag = useFeatureFlag(enableProjects);
-  const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
@@ -410,13 +408,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
   const cacheHost = createMemo(() => {
-    // The host getter reads PostHog imperatively; retry when the remote flag
-    // arrives after mount, while leaving cache lifetime decisions to the getter.
-    graphqlFlag();
     const graphqlCacheHost = getGraphqlSoupCacheHost();
     return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
   });
-  const localDrafts = createLocalDraftSource(() => graphqlFlag().enabled);
+  const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
     localDraftQuickAccessItems(localDrafts.drafts())
   );

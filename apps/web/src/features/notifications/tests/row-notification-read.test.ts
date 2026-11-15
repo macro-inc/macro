@@ -23,8 +23,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
 }));
 vi.mock('@macro-inc/collaboration/websocket', () => ({
   createSocketEffect: vi.fn(),
@@ -282,7 +280,6 @@ it('marks an unread email with a draft reply in its owning inbox without waiting
     );
     expect(mocks.emailSeen).toHaveBeenCalledExactlyOnceWith({
       threadId: 'unread-thread',
-      linkId: 'secondary-inbox',
     });
     expect(mocks.seen).not.toHaveBeenCalled();
   } finally {

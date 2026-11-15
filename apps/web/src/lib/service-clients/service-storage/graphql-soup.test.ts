@@ -291,7 +291,6 @@ it('maps agent sessions without discarding persona, favorites or notifications',
 
 const mocks = vi.hoisted(() => {
   let enabled = true;
-  let graphqlEnabled = true;
   let tauri = false;
   let signedIn = true;
   let releaseApi: (() => void) | undefined;
@@ -341,12 +340,6 @@ const mocks = vi.hoisted(() => {
     },
     set enabled(value: boolean) {
       enabled = value;
-    },
-    get graphqlEnabled() {
-      return graphqlEnabled;
-    },
-    set graphqlEnabled(value: boolean) {
-      graphqlEnabled = value;
     },
     get tauri() {
       return tauri;
@@ -423,8 +416,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/servers')>()),
@@ -447,7 +438,7 @@ vi.mock('@core/util/platformFetch', () => ({
 }));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
-    const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
+    const enabled = mocks.tauri || mocks.enabled;
     return {
       enabled,
       cohort: mocks.tauri ? 'unknown' : enabled ? 'treatment' : 'control',
@@ -455,7 +446,7 @@ vi.mock('@graphql-cache/rollout', () => ({
         ? 'tauri-native-unchanged'
         : enabled
           ? 'graphql-transport-enabled'
-          : 'graphql-transport-disabled',
+          : 'emergency-disabled',
       nativeCacheUnchanged: mocks.tauri,
     };
   },
@@ -810,7 +801,6 @@ describe('GraphQL Soup browser cache session gate', () => {
     vi.resetModules();
     vi.clearAllMocks();
     mocks.enabled = true;
-    mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.signedIn = true;
     mocks.resetQueue();
@@ -1671,10 +1661,9 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     const soup = await import('./graphql-soup');
     const nativeClient = soup.getGraphqlSoupClient();
-    mocks.graphqlEnabled = false;
 
-    expect(soup.graphqlCacheEnabled()).toBe(false);
-    expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+    expect(soup.graphqlCacheEnabled()).toBe(true);
+    expect(soup.getGraphqlSoupClient()).toBe(nativeClient);
     expect(nativeClient).not.toBe(mocks.plainClient);
     expect(mocks.host.dispose).not.toHaveBeenCalled();
     expect(mocks.createTauriCacheHost).toHaveBeenCalledOnce();

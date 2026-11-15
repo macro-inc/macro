@@ -16,7 +16,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   enableCalendarUi,
-  enableGraphqlSoup,
   enableInboxNotifiedSort,
   enableSnippets,
   enableSupportedSoupForeignEntities,
@@ -234,20 +233,16 @@ export type HomeListDataSource = HomeDataSource & {
 };
 
 /**
- * Home's list. Desktop Signal reads the server work feed wherever GraphQL
- * Soup is on, since the feed's live changes ride its websocket and cache;
- * every other view (Noise, touch devices, search) merges Soup, notification
- * and recent-activity sources on the client.
+ * Home's list. Desktop Signal reads the server work feed, since the feed's
+ * live changes ride the GraphQL Soup websocket and cache; every other view
+ * (Noise, touch devices, search) merges Soup, notification and
+ * recent-activity sources on the client.
  */
 export function useHomeDataSource(
   state: HomeDataSourceInput
 ): HomeListDataSource {
-  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const usesWorkFeed = () =>
-    graphqlSoup().enabled &&
-    state.tab === 'signal' &&
-    !isTouchDevice() &&
-    !state.search.trim();
+    state.tab === 'signal' && !isTouchDevice() && !state.search.trim();
 
   const soup = useSoupHomeDataSource(state, {
     enabled: () => !usesWorkFeed(),

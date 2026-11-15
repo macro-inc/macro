@@ -98,7 +98,6 @@ it('keeps the header to the subject and details, with thread actions in the titl
     title: 'A shared email',
     threadId: () => 'thread-1',
     source: {},
-    threadTransport: {},
     host: {},
   } as ComponentProps<typeof MobileEmailThread>;
   render(() => <MobileEmailThread {...props} />);

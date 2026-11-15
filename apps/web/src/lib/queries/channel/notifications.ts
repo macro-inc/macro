@@ -7,7 +7,7 @@ import {
   getGraphqlSoupClient,
   mapGraphqlNotification,
 } from '@service-storage/graphql-soup';
-import { type Accessor, onCleanup } from 'solid-js';
+import { onCleanup } from 'solid-js';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
@@ -16,10 +16,7 @@ import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 /** Complete, live unread channel notifications; never read the global GraphQL feed. */
-export function createChannelNotificationsQuery(
-  channelId: string,
-  enabled: Accessor<boolean>
-) {
+export function createChannelNotificationsQuery(channelId: string) {
   // The same variables as the open detail, so both read one request.
   const variables = {
     input: buildGraphqlEntitySoupInput('CHANNEL', channelId)!,
@@ -28,7 +25,6 @@ export function createChannelNotificationsQuery(
     query: ChannelDetailSoupDocument,
     client: getGraphqlSoupClient(),
     variables,
-    enabled: enabled(),
     requestPolicy: 'cache-and-network',
     select: (data: ChannelDetailSoupQuery) =>
       (
@@ -40,7 +36,7 @@ export function createChannelNotificationsQuery(
     client: getGraphqlSoupClient(),
     queries: [{ document: ChannelDetailSoupDocument, variables }],
     reader: {
-      enabled: enabled(),
+      enabled: true,
       fetching: query.isFetching,
       channelId,
       // Unread only: a read update can remove a known notification.
@@ -50,11 +46,10 @@ export function createChannelNotificationsQuery(
         : [],
     },
   }));
-  onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
+  onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: () => true, refresh }));
   onCleanup(
     registerGraphqlSoupRevalidations(
-      () =>
-        enabled() ? [{ document: ChannelDetailSoupDocument, variables }] : [],
+      () => [{ document: ChannelDetailSoupDocument, variables }],
       getGraphqlSoupClient
     )
   );

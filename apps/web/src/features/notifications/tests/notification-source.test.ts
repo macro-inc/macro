@@ -18,7 +18,6 @@ import { type UnifiedNotification, unifiedNotificationSchema } from '../types';
 
 const mocks = vi.hoisted(() => ({
   graphqlCacheEnabled: true,
-  graphqlEnabled: false,
   documentMentionsEnabled: true,
   graphqlPatchCallback: undefined as
     | ((patch: Record<string, unknown>) => void)
@@ -44,8 +43,6 @@ vi.mock('@core/constant/featureFlags', () => ({
   get ENABLE_DOCUMENT_MENTION_NOTIFICATIONS() {
     return mocks.documentMentionsEnabled;
   },
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 
 vi.mock('@macro-inc/collaboration/websocket', () => ({
@@ -128,7 +125,6 @@ function notification(
 describe('createNotificationSource', () => {
   beforeEach(() => {
     mocks.graphqlCacheEnabled = true;
-    mocks.graphqlEnabled = false;
     mocks.documentMentionsEnabled = true;
     mocks.graphqlPatchCallback = undefined;
     mocks.socketCallback = undefined;
@@ -412,7 +408,6 @@ describe('createNotificationSource', () => {
   it.each(['array', 'accessor'] as const)(
     'applies done and undo to GraphQL-attached notifications (%s) before server snapshots change',
     (attachment) => {
-      mocks.graphqlEnabled = true;
       mocks.graphqlCacheEnabled = true;
       const row = notification(
         `soup-attached-${attachment}`,
@@ -461,7 +456,6 @@ describe('createNotificationSource', () => {
   );
 
   it('tells an entity-wide mark seen which notifications it expects to change', async () => {
-    mocks.graphqlEnabled = true;
     const { toNotificationEntityRef, updateNotificationsForEntities } =
       await import('@queries/notification/entity-mutations');
     vi.mocked(toNotificationEntityRef).mockReturnValue({
@@ -500,7 +494,6 @@ describe('createNotificationSource', () => {
   });
 
   it('expects nothing from a feed that has not started, without starting it', async () => {
-    mocks.graphqlEnabled = true;
     const { toNotificationEntityRef, updateNotificationsForEntities } =
       await import('@queries/notification/entity-mutations');
     vi.mocked(toNotificationEntityRef).mockReturnValue({
@@ -536,7 +529,6 @@ describe('createNotificationSource', () => {
   });
 
   it('can release a failed reversal to authoritative state without clearing newer intent', () => {
-    mocks.graphqlEnabled = true;
     const row: UnifiedNotification = {
       ...notification('partial-reversal', 'document', 'task'),
       state: 'seen',
@@ -568,7 +560,6 @@ describe('createNotificationSource', () => {
   });
 
   it('undo reopens a GraphQL-attached notification whose cached server state is already done', () => {
-    mocks.graphqlEnabled = true;
     mocks.graphqlCacheEnabled = true;
     const row = {
       ...notification('soup-undo-committed', 'document', 'task'),
@@ -602,9 +593,8 @@ describe('createNotificationSource', () => {
   });
 
   it.each([true, false])(
-    'only overlays attached Soup edges when GraphQL is enabled (%s)',
+    'only overlays attached Soup edges on the GraphQL transport (%s)',
     (graphql) => {
-      mocks.graphqlEnabled = graphql;
       const row = notification('edge-outside-feed', 'document', 'task');
       const attached = [row];
       mocks.notificationsQuery = {
@@ -640,7 +630,6 @@ describe('createNotificationSource', () => {
   it.each(['seen', 'done'] as const)(
     'retains %s intent on a stale Soup edge when its feed row disappears or confirms the write',
     async (state) => {
-      mocks.graphqlEnabled = true;
       const row = notification(`edge-leaves-feed-${state}`, 'document', 'task');
       const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
       const [pending, setPending] = createSignal(true);
@@ -697,7 +686,6 @@ describe('createNotificationSource', () => {
   it.each(['seen', 'done'] as const)(
     'rolls back a failed %s action after its notification leaves the feed',
     async (state) => {
-      mocks.graphqlEnabled = true;
       const row = notification(
         `edge-leaves-feed-rollback-${state}`,
         'document',
@@ -930,9 +918,6 @@ describe('createNotificationSource', () => {
   });
 
   it('follows the query transport for pagination, realtime delivery and edge overrides', async () => {
-    // An imperative flag snapshot can disagree with the mounted query during
-    // startup. Only the facade's reactive transport owns source behavior.
-    mocks.graphqlEnabled = true;
     const [transport, setTransport] = createSignal<'rest' | 'graphql'>('rest');
     const fetchNextPage = vi.fn(async () => undefined);
     const refetch = vi.fn(async () => undefined);
@@ -1008,7 +993,6 @@ describe('createNotificationSource', () => {
     const incoming = notification('new-notification', 'channel', 'channel-1');
     const refetch = vi.fn().mockResolvedValue(undefined);
     mocks.graphqlCacheEnabled = false;
-    mocks.graphqlEnabled = true;
     mocks.notificationsQuery = {
       data: [],
       fetchNextPage: vi.fn(),
@@ -1077,7 +1061,6 @@ describe('createNotificationSource', () => {
     const incoming = notification('new-notification', 'channel', 'channel-1');
     const refetch = vi.fn().mockResolvedValue(undefined);
     mocks.graphqlCacheEnabled = true;
-    mocks.graphqlEnabled = true;
     mocks.notificationsQuery = {
       data: [],
       fetchNextPage: vi.fn(),
@@ -1133,7 +1116,7 @@ describe('createNotificationSource', () => {
     }
   });
 
-  it('keeps connection gateway notifications authoritative when GraphQL is disabled', () => {
+  it('keeps connection gateway notifications authoritative on the REST transport', () => {
     const incoming: UnifiedNotification = {
       ...notification(
         '00000000-0000-4000-8000-000000000001',

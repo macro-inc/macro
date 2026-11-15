@@ -48,7 +48,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup(initialNotifiedSort = false) {
+function setup(initialNotifiedSort = false, signedIn = true) {
   const operations: Operation[] = [];
   const network = makeSubject<OperationResult>();
   const client = createClient({
@@ -66,12 +66,13 @@ function setup(initialNotifiedSort = false) {
   mocks.client.mockReturnValue(client);
   const root = createRoot((dispose) => {
     cleanups.push(dispose, () => disposeChannelNotificationRefresh(client));
-    const [enabled, setEnabled] = createSignal(false);
     const [notifiedSort, setNotifiedSort] = createSignal(initialNotifiedSort);
     mocks.notifiedSort.mockImplementation(notifiedSort);
     const [state, setState] = createSignal<'unseen' | 'seen' | 'done'>();
     const [pending, setPending] = createSignal(false);
-    const [userId, setUserId] = createSignal<string | undefined>('viewer');
+    const [userId, setUserId] = createSignal<string | undefined>(
+      signedIn ? 'viewer' : undefined
+    );
     mocks.userId.mockImplementation(userId);
     mocks.legacyUnread.mockReturnValue(true);
     mocks.legacy.mockReturnValue({
@@ -82,7 +83,7 @@ function setup(initialNotifiedSort = false) {
         },
         get data() {
           if (pending()) throw new Error('Read paused initial Soup query');
-          if (enabled() && !notifiedSort())
+          if (userId() && !notifiedSort())
             throw new Error('Read inactive full Soup query');
           return { entities: [] };
         },
@@ -105,10 +106,9 @@ function setup(initialNotifiedSort = false) {
         },
       }),
     });
-    const unread = useHomeUnreadQuery(enabled);
+    const unread = useHomeUnreadQuery();
     return {
       unread,
-      setEnabled,
       setState,
       setNotifiedSort,
       setPending,
@@ -150,7 +150,7 @@ function setup(initialNotifiedSort = false) {
 
 describe('Home unread presence query', () => {
   it('does not read a paused initial legacy query', () => {
-    const h = setup();
+    const h = setup(true);
     h.setPending(true);
     expect(h.unread()).toBe(false);
     expect(mocks.legacyUnread).not.toHaveBeenCalled();
@@ -185,12 +185,8 @@ describe('Home unread presence query', () => {
     expect(print(HomeUnreadPresenceDocument)).not.toContain('SoupItemFields');
   });
 
-  it('switches rollout paths without enabling or reading full GraphQL Soup', async () => {
+  it('reads bounded witnesses without enabling or reading full Soup', async () => {
     const f = setup();
-    expect(f.unread()).toBe(true);
-    expect(f.queries()).toHaveLength(0);
-    expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(true);
-    f.setEnabled(true);
     expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(false);
     expect(f.unread()).toBe(false);
     await vi.waitFor(() => expect(f.queries()).toHaveLength(1));
@@ -210,17 +206,12 @@ describe('Home unread presence query', () => {
     expect(f.unread()).toBe(true);
     f.respond('SEEN');
     expect(f.unread()).toBe(false);
-    f.setEnabled(false);
-    expect(f.unread()).toBe(true);
-    expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([]);
   });
 
   it('waits for the viewer before querying GraphQL', async () => {
-    const f = setup();
-    f.setUserId(undefined);
+    const f = setup(false, false);
     // The legacy query waits for the viewer too, so it has no page yet.
     f.setPending(true);
-    f.setEnabled(true);
     expect(f.unread()).toBe(false);
     expect(f.queries()).toHaveLength(0);
     f.setPending(false);
@@ -231,11 +222,8 @@ describe('Home unread presence query', () => {
     );
   });
 
-  it('keeps notified-at sorting on REST, including while GraphQL is disabled', async () => {
+  it('keeps notified-at sorting on REST', async () => {
     const f = setup(true);
-    expect(f.unread()).toBe(true);
-    expect(f.queries()).toHaveLength(0);
-    f.setEnabled(true);
     expect(f.unread()).toBe(true);
     expect(mocks.legacy.mock.calls[0][1].enabled()).toBe(true);
     expect(f.queries()).toHaveLength(0);
@@ -253,7 +241,6 @@ describe('Home unread presence query', () => {
   it('refreshes the bounded edge after notification mutations and unregisters it on disposal', async () => {
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
     const f = setup();
-    f.setEnabled(true);
     await vi.waitFor(() => expect(f.queries()).toHaveLength(1));
     f.respond('UNSEEN');
     expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([
@@ -278,7 +265,6 @@ describe('Home unread presence query', () => {
 
   it('retains cached evidence if a background refresh fails', async () => {
     const f = setup();
-    f.setEnabled(true);
     await vi.waitFor(() => expect(f.queries()).toHaveLength(1));
     f.respond('UNSEEN');
     f.respond(

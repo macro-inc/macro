@@ -13,10 +13,6 @@ import {
   traceCacheWrite,
   traceFollowResumed,
 } from '@core/agent-session/load-telemetry';
-import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type {
   AgentSessionLogEntryDto,
@@ -103,13 +99,9 @@ export type SessionLogFollow = {
   gap: () => void;
 };
 
-/**
- * Whether a watch can follow the session over GraphQL. Only the client
- * built with the Soup websocket carries subscriptions; without it, live
- * rows still arrive through the connection gateway.
- */
+/** Whether a watch can follow the session over the GraphQL subscription. */
 export function canFollowAgentSessionLog(): boolean {
-  return isFeatureEnabled(enableGraphqlSoup);
+  return true;
 }
 
 const DIRECTIONS: ReadonlySet<string> = new Set<LogDirectionDto>([

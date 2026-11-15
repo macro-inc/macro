@@ -43,10 +43,7 @@ export function markRowNotificationsSeenOnOpen(
   if (entity.type === 'foreign' && !isGithubPrEntity(entity)) return;
 
   if (entity.type === 'email' && !entity.isRead) {
-    fireAndForget(
-      markEmailThreadSeen({ threadId: entity.id, linkId: entity.linkId }),
-      'email-read'
-    );
+    fireAndForget(markEmailThreadSeen({ threadId: entity.id }), 'email-read');
   }
 
   const hasLoadedNotifications =

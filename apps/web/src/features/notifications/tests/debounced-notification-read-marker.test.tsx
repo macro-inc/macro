@@ -28,9 +28,6 @@ vi.mock('../notification-helpers', () => ({
 vi.mock('@queries/email/thread', () => ({
   useMarkThreadAsSeenMutation: () => ({ mutate: mocks.markThread }),
 }));
-vi.mock('@queries/email/link', () => ({
-  useNonPrimaryEmailLinkIdHeader: () => (linkId: string | undefined) => linkId,
-}));
 
 const source = {
   _notificationsQuery: { transport: 'graphql' },
@@ -63,16 +60,11 @@ describe('background notification read markers', () => {
 
   it('marks email immediately and does not repeat the read while it stays mounted', async () => {
     const view = render(() => (
-      <EmailReadMarker
-        notificationSource={source}
-        threadId="thread"
-        linkId="secondary-inbox"
-      />
+      <EmailReadMarker notificationSource={source} threadId="thread" />
     ));
     dispose = view.unmount;
     expect(mocks.markThread).toHaveBeenCalledExactlyOnceWith({
       threadId: 'thread',
-      linkId: 'secondary-inbox',
     });
     await vi.advanceTimersByTimeAsync(2_000);
     expect(mocks.markThread).toHaveBeenCalledTimes(1);
@@ -148,7 +140,6 @@ describe('background notification read markers', () => {
       <EmailReadMarker
         notificationSource={source}
         threadId="thread"
-        linkId="secondary-inbox"
         debounceTime={10}
       />
     ));
@@ -160,7 +151,6 @@ describe('background notification read markers', () => {
     });
     expect(mocks.markThread).toHaveBeenCalledExactlyOnceWith({
       threadId: 'thread',
-      linkId: 'secondary-inbox',
     });
     complete();
   });

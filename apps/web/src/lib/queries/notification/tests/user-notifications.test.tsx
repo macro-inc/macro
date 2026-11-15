@@ -2,32 +2,17 @@
  * @vitest-environment jsdom
  */
 
-import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { createClient, type Operation } from '@urql/core';
 import { ok } from 'neverthrow';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  type JSX,
-} from 'solid-js';
+import { createEffect, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { filter, map, pipe } from 'wonka';
-import type {
-  GraphqlNotificationsQueryArgs,
-  GraphqlNotificationsQueryOptions,
-} from '../graphql/user-notifications';
 import { notificationKeys } from '../keys';
 import {
-  applyNotificationStatusUpdate,
   optimisticInsertNotification,
-  restoreUserNotifications,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -39,43 +24,21 @@ const {
   createGraphqlQueryMock,
   executeGraphqlMutationMock,
   graphqlCacheEnabledMock,
-  graphqlSoupEnabledMock,
   refreshActiveSoupQueriesMock,
-  restMarkDoneMock,
-  restMarkSeenMock,
   restUserNotificationsMock,
-  restMarkUndoneMock,
-  useFeatureFlagMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
   executeGraphqlMutationMock: vi.fn(),
   graphqlCacheEnabledMock: vi.fn(() => true),
-  graphqlSoupEnabledMock: vi.fn(() => true),
   refreshActiveSoupQueriesMock: vi.fn(async () => undefined),
-  restMarkDoneMock: vi.fn(),
-  restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
-  restMarkUndoneMock: vi.fn(),
-  useFeatureFlagMock: vi.fn(),
-}));
-
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: useFeatureFlagMock,
-}));
-
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: {
     userNotifications: restUserNotificationsMock,
     bulkGetUserNotificationsByEventItemId: vi.fn(),
-    bulkMarkNotificationAsDone: restMarkDoneMock,
-    bulkMarkNotificationAsSeen: restMarkSeenMock,
-    bulkMarkNotificationAsUndone: restMarkUndoneMock,
   },
   channelMentionMetadata: {},
   documentMentionMetadata: {},
@@ -154,10 +117,6 @@ afterEach(async () => {
 
 beforeEach(() => {
   graphqlCacheEnabledMock.mockReturnValue(true);
-  graphqlSoupEnabledMock.mockReturnValue(true);
-  useFeatureFlagMock.mockReturnValue(() => ({
-    enabled: graphqlSoupEnabledMock(),
-  }));
   restUserNotificationsMock.mockResolvedValue(
     ok({ items: [], next_cursor: null })
   );
@@ -311,7 +270,7 @@ describe('state-aware notification cache partitions', () => {
     });
   });
   afterEach(() => testQueryClient.clear());
-  it('keeps done patches in history, and restores undo as seen only in active feeds', () => {
+  it('keeps optimistic inserts out of done history', () => {
     const notification = createMockNotification({
       id: 'partitioned',
       state: 'unseen',
@@ -324,37 +283,21 @@ describe('state-aware notification cache partitions', () => {
       done: true,
     }).queryKey;
     testQueryClient.setQueryData(historyKey, {
-      pages: [createMockNotificationPage([{ ...notification, state: 'done' }])],
+      pages: [createMockNotificationPage([])],
       pageParams: [{ limit: 20 }],
     });
-    applyNotificationStatusUpdate({
-      type: 'notification_status_updated',
-      updates: [
-        {
-          t: 'Patch',
-          c: {
-            id: notification.id,
-            state: 'done',
-            viewed_at: null,
-            updated_at: '2026-01-01T00:00:00Z',
-          },
-        },
-      ],
-    });
-    expect(getNotificationsFromCache()).toHaveLength(0);
     const history = () =>
       testQueryClient.getQueryData<{
         pages: GetAllUserNotificationsResponse[];
       }>(historyKey)!.pages[0].items;
-    expect(history()[0].state).toBe('done');
-    restoreUserNotifications([notification as ApiUserNotification]);
-    expect(getNotificationsFromCache()[0].state).toBe('seen');
-    expect(getNotificationsFromCache()[0].viewed_at).toBeNull();
-    expect(history()).toHaveLength(0);
     optimisticInsertNotification(
       createMockNotification({ id: 'fresh', state: 'unseen' })
     );
     expect(history()).toHaveLength(0);
+    expect(getNotificationsFromCache().map((n) => n.id)).toEqual([
+      'fresh',
+      'partitioned',
+    ]);
     expect(testQueryClient.getQueryData(activeKey)).toBeDefined();
   });
 });
@@ -466,111 +409,6 @@ describe('useUserNotificationsQuery transport facade', () => {
     dispose();
   });
 
-  it.each([false, true])(
-    'reacts to GraphQL flags arriving during a cold REST fetch (done=%s)',
-    async (done) => {
-      const [enabled, setEnabled] = createSignal(false);
-      useFeatureFlagMock.mockReturnValue(() => ({ enabled: enabled() }));
-      graphqlSoupEnabledMock.mockReturnValue(false);
-      const restNotification = createMockNotification({ id: 'rest-document' });
-      const graphqlNotification = createMockNotification({
-        id: 'graphql-document',
-      });
-      let resolveRest!: (page: GetAllUserNotificationsResponse) => void;
-      restUserNotificationsMock.mockImplementationOnce(async () => {
-        const page = await new Promise<GetAllUserNotificationsResponse>(
-          (resolve) => {
-            resolveRest = resolve;
-          }
-        );
-        return ok(page);
-      });
-
-      const operations: Operation[] = [];
-      const client = createClient({
-        url: 'http://localhost/graphql',
-        exchanges: [
-          () => (operations$) =>
-            pipe(
-              operations$,
-              filter((operation) => operation.kind === 'query'),
-              map((operation) => {
-                operations.push(operation);
-                return {
-                  operation,
-                  data: { items: [graphqlNotification], nextCursor: null },
-                  stale: false,
-                  hasNext: false,
-                };
-              })
-            ),
-        ],
-      });
-      createGraphqlQueryMock.mockImplementationOnce(
-        (
-          _args: Accessor<GraphqlNotificationsQueryArgs>,
-          options: Accessor<GraphqlNotificationsQueryOptions>
-        ) =>
-          createUrqlInfiniteQuery<
-            { items: UnifiedNotification[]; nextCursor: string | null },
-            { cursor: string | null },
-            string | null,
-            UnifiedNotification[]
-          >(() => ({
-            client,
-            query: 'query Notifications { items { id } nextCursor }',
-            variables: (cursor) => ({ cursor }),
-            enabled: options().enabled,
-            initialPageParam: null,
-            getNextPageParam: (page) => page.nextCursor,
-            select: ({ pages }) => pages.flatMap((page) => page.items),
-          }))
-      );
-      let query!: UserNotificationsQuery;
-      let notifications!: Accessor<UnifiedNotification[]>;
-      const dispose = renderWithClient(() => {
-        query = useUserNotificationsQuery(() => ({ limit: 500, done }));
-        notifications = createMemo(() => query.data ?? []);
-        return <div />;
-      });
-      try {
-        await vi.waitFor(() => expect(resolveRest).toBeDefined());
-        expect(query.transport).toBe('rest');
-        expect(operations).toHaveLength(0);
-
-        graphqlSoupEnabledMock.mockReturnValue(true);
-        setEnabled(true);
-        resolveRest(createMockNotificationPage([restNotification]));
-        await vi.waitFor(() =>
-          expect(notifications()).toEqual([
-            done ? restNotification : graphqlNotification,
-          ])
-        );
-        expect(query.transport).toBe(done ? 'rest' : 'graphql');
-        expect(operations).toHaveLength(done ? 0 : 1);
-
-        if (done) return;
-        await query.refetch();
-        expect(operations).toHaveLength(2);
-        expect(operations[1].context.requestPolicy).toBe('network-only');
-
-        // A later rollback must also re-enable REST, not just change getters.
-        restUserNotificationsMock.mockClear();
-        graphqlSoupEnabledMock.mockReturnValue(false);
-        setEnabled(false);
-        expect(query.transport).toBe('rest');
-        await vi.waitFor(() =>
-          expect(notifications()).toEqual([restNotification])
-        );
-        await query.refetch();
-        expect(restUserNotificationsMock).toHaveBeenCalledOnce();
-        expect(operations).toHaveLength(2);
-      } finally {
-        dispose();
-      }
-    }
-  );
-
   it('keeps done-history pagination on REST', () => {
     let query: UserNotificationsQuery | undefined;
 
@@ -581,94 +419,6 @@ describe('useUserNotificationsQuery transport facade', () => {
 
     expect(query?.transport).toBe('rest');
     dispose();
-  });
-
-  it('falls back to REST while GraphQL Soup is disabled', () => {
-    graphqlSoupEnabledMock.mockReturnValue(false);
-    let query: UserNotificationsQuery | undefined;
-
-    const dispose = renderWithClient(() => {
-      query = useUserNotificationsQuery(() => ({ limit: 500 }));
-      return <div />;
-    });
-
-    expect(query?.transport).toBe('rest');
-    dispose();
-  });
-});
-
-describe('notification realtime status updates', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    testQueryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-  });
-
-  afterEach(() => {
-    testQueryClient.clear();
-  });
-
-  it('patches notifications in the user cache', () => {
-    const n1 = createMockNotification({
-      id: 'n1',
-      viewed_at: null,
-      state: 'unseen',
-    });
-    const n2 = createMockNotification({
-      id: 'n2',
-      viewed_at: null,
-      state: 'unseen',
-    });
-    seedQueryCache([createMockNotificationPage([n1, n2])]);
-
-    applyNotificationStatusUpdate({
-      type: 'notification_status_updated',
-      updates: [
-        {
-          t: 'Patch',
-          c: {
-            id: 'n1',
-            state: 'seen',
-            viewed_at: '2024-01-01T00:00:00.000Z',
-            updated_at: '2024-01-01T00:00:01.000Z',
-          },
-        },
-      ],
-    });
-
-    const notifications = getNotificationsFromCache();
-    expect(notifications[0].viewed_at).toBe('2024-01-01T00:00:00.000Z');
-    expect(notifications[0].updated_at).toBe('2024-01-01T00:00:01.000Z');
-    expect(notifications[1].viewed_at).toBe(null);
-  });
-
-  it('removes deleted and done notifications from the user cache', () => {
-    const n1 = createMockNotification({ id: 'n1' });
-    const n2 = createMockNotification({ id: 'n2' });
-    const n3 = createMockNotification({ id: 'n3' });
-    seedQueryCache([createMockNotificationPage([n1, n2, n3])]);
-
-    applyNotificationStatusUpdate({
-      type: 'notification_status_updated',
-      updates: [
-        { t: 'Delete', c: { id: 'n1' } },
-        {
-          t: 'Patch',
-          c: {
-            id: 'n2',
-            state: 'done',
-            viewed_at: null,
-            updated_at: '2024-01-01T00:00:01.000Z',
-          },
-        },
-      ],
-    });
-
-    expect(getNotificationsFromCache().map((n) => n.id)).toEqual(['n3']);
   });
 });
 
@@ -742,35 +492,6 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
-      cleanup();
-    });
-
-    it('uses the REST fallback while GraphQL Soup is disabled', async () => {
-      graphqlSoupEnabledMock.mockReturnValue(false);
-      restMarkSeenMock.mockResolvedValue(ok({ success: true }));
-      const n1 = createMockNotification({
-        id: 'n1',
-        viewed_at: null,
-        state: 'unseen',
-      });
-      seedQueryCache([createMockNotificationPage([n1])]);
-
-      let mutatePromise: Promise<unknown> | undefined;
-      const TestComponent = () => {
-        const mutation = useMarkNotificationsAsSeenMutation();
-        mutatePromise = mutation.mutateAsync({ notificationIds: ['n1'] });
-        return null;
-      };
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-
-      expect(restMarkSeenMock).toHaveBeenCalledWith({
-        notificationIds: ['n1'],
-      });
-      expect(executeGraphqlMutationMock).not.toHaveBeenCalled();
-      expect(typeof getNotificationsFromCache()[0].viewed_at).toBe('string');
-
       cleanup();
     });
 
@@ -874,31 +595,6 @@ describe('notification mutations', () => {
       const notifications = getNotificationsFromCache();
       expect(notifications).toHaveLength(1);
       expect(notifications[0].id).toBe('n2');
-
-      cleanup();
-    });
-
-    it('uses the REST done endpoint while GraphQL Soup is disabled', async () => {
-      graphqlSoupEnabledMock.mockReturnValue(false);
-      restMarkDoneMock.mockResolvedValue(ok({ success: true }));
-      const n1 = createMockNotification({ id: 'n1' });
-      seedQueryCache([createMockNotificationPage([n1])]);
-
-      let mutatePromise: Promise<unknown> | undefined;
-      const TestComponent = () => {
-        const mutation = useMarkNotificationsAsDoneMutation();
-        mutatePromise = mutation.mutateAsync({ notificationIds: ['n1'] });
-        return null;
-      };
-      const cleanup = renderWithClient(TestComponent);
-
-      await mutatePromise;
-
-      expect(restMarkDoneMock).toHaveBeenCalledWith({
-        notificationIds: ['n1'],
-      });
-      expect(executeGraphqlMutationMock).not.toHaveBeenCalled();
-      expect(getNotificationsFromCache()).toEqual([]);
 
       cleanup();
     });

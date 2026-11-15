@@ -26,16 +26,13 @@ import { useHomeEntitiesQuery } from './use-home-query';
 const selectItems = (data: HomeUnreadPresenceQuery) => data.user.soup.items;
 
 /** Home's existing membership, with bounded state-only edges rather than history. */
-export function useHomeUnreadQuery(
-  graphqlEnabled: Accessor<boolean>
-): Accessor<boolean> {
+export function useHomeUnreadQuery(): Accessor<boolean> {
   // Notified-at sorting is REST-only. Keep that rollout's existing candidate
   // page rather than silently changing its order/bounds or building an invalid
   // GraphQL input. Disabled queries must not compile an unsupported AST either.
   const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
   const userId = useUserId();
-  const enabled = () =>
-    graphqlEnabled() && !notifiedSort().enabled && Boolean(userId());
+  const enabled = () => !notifiedSort().enabled && Boolean(userId());
   const legacy = useHomeEntitiesQuery(
     { tab: 'signal', facets: { read: ['unread'] } },
     { enabled: () => !enabled() }

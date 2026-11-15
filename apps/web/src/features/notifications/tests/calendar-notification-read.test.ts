@@ -19,8 +19,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: () => true,
 }));
 vi.mock('@macro-inc/collaboration/websocket', () => ({
   createSocketEffect: vi.fn(),

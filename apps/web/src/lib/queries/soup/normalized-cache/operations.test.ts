@@ -15,20 +15,6 @@ let testQueryClient: QueryClient;
 
 const getSoupItemsMock = vi.hoisted(() => vi.fn());
 const refreshActiveGraphqlSoupQueriesMock = vi.hoisted(() => vi.fn());
-const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
-
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...actual,
-    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
-      flag === actual.enableGraphqlSoup
-        ? graphqlSoup.enabled
-        : actual.isFeatureEnabled(flag),
-  };
-});
-
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: getSoupItemsMock },
 }));
@@ -205,7 +191,6 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  graphqlSoup.enabled = false;
   getSoupItemsMock.mockResolvedValue({
     isErr: () => false,
     value: { items: [] },
@@ -314,19 +299,18 @@ describe('refetchSoupEntity', () => {
     await refetchSoupEntity('task-1', 'document', { refreshGraphql: true });
 
     expect(refreshActiveGraphqlSoupQueriesMock).toHaveBeenCalledOnce();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   it('does not refresh GraphQL Soup queries for legacy-only refetches', async () => {
     await refetchSoupEntity('task-1', 'document');
 
     expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
-    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).not.toHaveBeenCalled();
   });
 
   describe('when GraphQL owns the soup lists', () => {
     beforeEach(() => {
-      graphqlSoup.enabled = true;
       getSoupItemsMock.mockResolvedValue({
         isErr: () => false,
         value: { items: [mockDocumentItem('doc-new')] },
