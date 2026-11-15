@@ -158,6 +158,8 @@ AL-019	pressing f does not open the filter menu
 AL-020	The desktop Filter email menu in EmailControls.tsx ignores a choice in its Read status group instead of calling filters.setSelected; other groups still apply.
 AL-021	a Done choice in the filter menu does not narrow the list (the same wiring serves AL-023, AL-024, AL-410)
 AL-022	picking Starred under Has in the filter menu does not narrow the list to starred threads
+AL-023	The Attachments choice in the filter menu does not narrow the list: the facet writer in use-email-filters.tsx, the one AL-021 goes through, drops the choice when the facet is attachments.
+AL-024	The same break as AL-021: the Tags choice is written by the facet writer in use-email-filters.tsx, which drops it, so the list is not narrowed.
 AL-025	picking a person in the filter menu does not narrow the list to that person's threads
 AL-026	picking an importance in the filter menu does not narrow the list
 AL-027	picking a Latest activity range does not narrow the list to recent threads
@@ -320,6 +322,7 @@ AL-406	the toolbar's Restore and Not spam do not bring the selected threads back
 AL-407	clearing from the selection toolbar leaves the rows selected
 AL-408	The folder (project) name on an email row in EmailList.tsx returns before openEntity, so clicking it no longer opens the folder.
 AL-409	The sidebar toggle's onClick in ViewShell.tsx (ViewSidebarToggle) returns before collapsing when it is the "Hide navigation" button; "Show navigation" still works.
+AL-410	The same break as AL-021: the Focus choice is written by the facet writer in use-email-filters.tsx, which drops it, so the Focus tab keeps listing every thread.
 AL-411	a right-click on a row opens no menu
 AL-412	The list's keyboard navigation in EmailList.tsx no longer opens the row under the cursor in the reading pane (followInPane); an action's move still follows.
 AL-413	pressing Enter or clicking the row the reading pane shows does not move the focus into the pane
@@ -343,6 +346,8 @@ AL-601	an action picked in the command menu does not run (the same wiring serves
 AL-603	The row menu's "Copy ID" item in createSoupEntityActions.ts no longer calls the copy-ID action, so choosing it does nothing.
 AL-604	The desktop row context menu in SoupEntityContextMenu.tsx renders no items (its content Show gets no entity), so a right-click on a row opens an empty menu.
 AL-605	a long press on a row on a phone opens no actions drawer
+AL-608	The same break as AL-601: Favorite picked in the command menu goes through the menu's one run handler in CommandMenu.tsx, which does not run it.
+AL-611	The same break as AL-601: Delete picked in the command menu goes through the menu's one run handler in CommandMenu.tsx, which does not run it.
 AL-612	pressing Cmd+S in an open thread opens no Share dialog
 AL-613	the title menu's Favorite does not favorite the thread
 AL-615	the title menu's Add tag opens no tag picker
