@@ -29,11 +29,7 @@ import type {
 } from '@urql/core';
 import { ResultAsync } from 'neverthrow';
 import { mapChannelMessage } from './map';
-import {
-  CHANNEL_MESSAGE_TYPENAME,
-  liveReplySortKey,
-  rootSortKey,
-} from './sort-key';
+import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
 import { noteUnqueuedSend } from './unqueued-sends';
 
@@ -254,17 +250,16 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
 }
 
 /**
- * The row the device shows until the server's copy replaces it. It carries the
- * position the server will give it, so the timeline does not reorder on commit.
+ * The row the device shows until the server's copy replaces it. It sorts after
+ * every message the server has placed, where the server will put it too unless
+ * someone else's message arrives first.
  */
 function predictedMessage(
   send: QueuedChannelSend,
   createdAt: string
 ): ChannelMessageFieldsFragment | undefined {
   const threadId = send.message.thread_id ?? null;
-  const sortKey = threadId
-    ? liveReplySortKey(createdAt, send.id)
-    : rootSortKey(createdAt, send.id);
+  const sortKey = unplacedSortKey(createdAt, send.id, threadId !== null);
   if (!sortKey) return undefined;
   return {
     __typename: CHANNEL_MESSAGE_TYPENAME,

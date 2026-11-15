@@ -16,7 +16,7 @@ import {
 } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import { mapChannelMessage } from '../map';
-import { rootSortKey } from '../sort-key';
+import { unplacedSortKey } from '../sort-key';
 import {
   type ChannelWriteHost,
   deleteChannelMessage,
@@ -147,7 +147,7 @@ describe('queued channel writes', () => {
         id: stored.id,
         channelId: CHANNEL_ID,
         threadId: null,
-        sortKey: rootSortKey(NOW.toISOString(), stored.id),
+        sortKey: unplacedSortKey(NOW.toISOString(), stored.id, false),
         senderId: SENDER,
         content: 'hello',
         deletedAt: null,
@@ -178,7 +178,7 @@ describe('queued channel writes', () => {
     expect(calls[0].context.optimisticResponse).toMatchObject({
       sendChannelMessage: {
         threadId: root.id,
-        sortKey: `~-${rootSortKey(NOW.toISOString(), reply.id)}`,
+        sortKey: unplacedSortKey(NOW.toISOString(), reply.id, true),
         thread: null,
       },
     });
