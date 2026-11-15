@@ -267,6 +267,7 @@ fn save_in_address_book(
                 &email_e2e::outlook_emulator::SeedContact {
                     email: address.to_owned(),
                     name: Some(name.to_owned()),
+                    photo: None,
                 },
             )?;
         }
@@ -477,6 +478,107 @@ async fn outlook_the_owners_photo_becomes_the_inboxs() -> Result<(), Report> {
         async || Ok((photo_pushes(&stack, &inbox) > 0).then_some(())),
     )
     .await?;
+
+    stack.finish().await
+}
+
+/// The photo Macro keeps for an address of the inbox's contacts, as
+/// `GET /email/contacts` answers it; none while the contact is not listed
+/// or has no photo.
+async fn contact_photo_url(inbox: &Inbox, address: &str) -> Result<Option<String>, Report> {
+    let contacts = inbox.get("/email/contacts").await?.ok()?;
+    Ok(contacts["contacts"][inbox.link_id().to_string()]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|contact| contact["email_address"] == address)
+        .and_then(|contact| contact["photo_url"].as_str())
+        .map(str::to_owned))
+}
+
+/// How many files the services have put with Macro's static files.
+fn stored_files(stack: &Stack) -> usize {
+    stack
+        .service_requests()
+        .into_iter()
+        .filter(|request| request.service == "static-files" && request.method == "PUT")
+        .count()
+}
+
+/// A person saved in the Outlook address book with a photo shows that photo
+/// in Macro: it is read from Outlook and kept with Macro's static files.
+/// A person saved without one gets none.
+///
+/// When it fails: the people of an Outlook address book never get their
+/// pictures in Macro, or a picture lands on the wrong person.
+#[tokio::test(flavor = "multi_thread")]
+async fn outlook_a_contacts_photo_shows_in_macro() -> Result<(), Report> {
+    use email_e2e::outlook_emulator::{Route, SeedContact, SeedPhoto};
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    stack.seed_mailbox(Provider::Outlook, ada.email(), &[])?;
+    stack.outlook().upsert_contact(
+        ada.email(),
+        None,
+        &SeedContact {
+            email: "grace@example.com".to_owned(),
+            name: Some("Grace Example".to_owned()),
+            photo: Some(SeedPhoto {
+                mime_type: Some("image/png".to_owned()),
+                base64: PIXEL_PNG_BASE64.to_owned(),
+            }),
+        },
+    )?;
+    stack.outlook().upsert_contact(
+        ada.email(),
+        None,
+        &SeedContact {
+            email: "alan@example.com".to_owned(),
+            name: Some("Alan Example".to_owned()),
+            photo: None,
+        },
+    )?;
+    let inbox = ada.link_outlook().await?;
+    // Macro lists the people the user has written to.
+    inbox
+        .send(&json!({
+            "subject": "Compiler notes",
+            "to": [{ "email": "grace@example.com" }, { "email": "alan@example.com" }],
+            "body_text": "Here are my notes.",
+        }))
+        .await?;
+
+    let photo_url = email_e2e::eventually(
+        "Grace to have her photo in Macro",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || contact_photo_url(&inbox, "grace@example.com").await,
+    )
+    .await?;
+    assert!(photo_url.contains("static-files"), "{photo_url}");
+    assert!(
+        provider_calls(&stack, Provider::Outlook, ada.email(), "contacts.photo") > 0,
+        "the photo was not read from Outlook"
+    );
+    assert_eq!(stored_files(&stack), 1, "one photo was kept");
+
+    // Outlook was asked for Alan's photo as well and has none.
+    email_e2e::eventually(
+        "Macro to ask Outlook for the photo Alan does not have",
+        email_e2e::DEFAULT_TIMEOUT,
+        async || {
+            Ok(stack
+                .outlook()
+                .requests()
+                .iter()
+                .any(|request| request.route == Some(Route::ContactsPhoto) && request.status == 404)
+                .then_some(()))
+        },
+    )
+    .await?;
+    wait_for_picker_name(&inbox, "alan@example.com").await?;
+    assert_eq!(contact_photo_url(&inbox, "alan@example.com").await?, None);
+    assert_eq!(stored_files(&stack), 1, "no photo was kept for Alan");
 
     stack.finish().await
 }
