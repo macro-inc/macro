@@ -294,3 +294,29 @@ fn a_request_without_the_field_asks_for_strict_matching() -> Result<(), serde_js
     assert_eq!(request.term_matching, TermMatching::All);
     Ok(())
 }
+
+#[test]
+fn trimmed_query_accepts_one_and_two_character_queries() {
+    assert_eq!(trimmed_query("a").ok(), Some("a"));
+    assert_eq!(trimmed_query(" pr ").ok(), Some("pr"));
+    assert_eq!(trimmed_query("项").ok(), Some("项"));
+}
+
+#[test]
+fn trimmed_query_rejects_a_blank_query() {
+    assert!(matches!(trimmed_query(""), Err(SearchError::EmptyQuery)));
+    assert!(matches!(
+        trimmed_query(" \t "),
+        Err(SearchError::EmptyQuery)
+    ));
+}
+
+#[test]
+fn trimmed_query_rejects_quotes_around_nothing() {
+    assert!(matches!(trimmed_query("\""), Err(SearchError::EmptyQuery)));
+    assert!(matches!(
+        trimmed_query("\" \""),
+        Err(SearchError::EmptyQuery)
+    ));
+    assert_eq!(trimmed_query("\"a\"").ok(), Some("\"a\""));
+}
