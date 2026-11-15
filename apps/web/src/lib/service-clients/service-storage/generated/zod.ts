@@ -16701,6 +16701,82 @@ export const getCrmPipelineViewPositionsResponse = zod.array(
 );
 
 /**
+ * @summary Title many CRM company and contact chips at once. Each record answers as
+its own read (`GET /crm/companies/{company_id}`,
+`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,
+or that does not exist, is left out of the response.
+ */
+export const previewCrmRecordsBody = zod
+  .object({
+    companyIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Companies to preview, at most 100.'),
+    contactIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Contacts to preview, at most 100.'),
+  })
+  .describe('The CRM records whose chips to title.');
+
+export const previewCrmRecordsResponse = zod
+  .object({
+    companies: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('The company.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                "The team's name override, else the primary domain's directory name."
+              ),
+            primaryDomain: zod
+              .string()
+              .nullish()
+              .describe(
+                "The company's first domain, which titles a company with no name."
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe(
+                "The company's last interaction, as the company read's `updatedAt`."
+              ),
+          })
+          .describe(
+            'What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.'
+          )
+      )
+      .describe('Company previews, in no particular order.'),
+    contacts: zod
+      .array(
+        zod
+          .object({
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email, which titles a contact with no name."
+              ),
+            id: zod.uuid().describe('The contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe("The contact's display name."),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record last changed.'),
+          })
+          .describe('What a contact chip shows.')
+      )
+      .describe('Contact previews, in no particular order.'),
+  })
+  .describe(
+    'The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.'
+  );
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */

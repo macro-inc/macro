@@ -380,6 +380,15 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.get_company_for_team")
     }
 
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<crm::domain::previews::CrmPreviews, CrmError> {
+        unimplemented!("FakeCrm.preview_records")
+    }
+
     async fn get_team_settings(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,

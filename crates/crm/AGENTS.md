@@ -174,6 +174,15 @@ tools/HTTP/GraphQL surfaces over them.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 
+- `POST /crm/previews` titles up to 100 companies and 100 contacts in one
+  read for web chips (`src/outbound/companies_repo/previews.rs`). It must
+  answer each record as `GET /crm/companies/{id}` and `GET /crm/contacts/{id}`
+  do (team membership; members see no hidden company, hidden contact, or
+  contact under a hidden company; the name and first domain the read returns,
+  domains ordered by `created_at`, then id), and leave out any record the
+  reads refuse (401, for a missing record too). Change both together;
+  `companies_repo/test/previews.rs` compares them for every role and caller.
+
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
   homepage metadata through `unfurl`; every other

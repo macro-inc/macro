@@ -515,6 +515,15 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_company_for_team call")
     }
 
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<crate::domain::previews::CrmPreviews, CrmError> {
+        panic!("unexpected preview_records call")
+    }
+
     async fn get_team_settings(
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,

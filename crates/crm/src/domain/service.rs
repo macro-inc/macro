@@ -404,6 +404,19 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         include_contacts: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
+    /// Preview the companies and contacts `user_id` may open, each as its
+    /// single read would title it after the access check (see
+    /// [`CompaniesRepository::preview_companies`] and
+    /// [`CompaniesRepository::preview_contacts`]). Records the viewer may not
+    /// open are left out. Takes at most
+    /// [`super::previews::MAX_PREVIEW_IDS`] ids of each kind.
+    fn preview_records(
+        &self,
+        user_id: &str,
+        company_ids: &[uuid::Uuid],
+        contact_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<super::previews::CrmPreviews, CrmError>> + Send;
+
     /// Read the team's CRM configuration. Any team member may read;
     /// a team without a settings row gets the defaults. See
     /// [`CompaniesRepository::get_team_settings`].
@@ -1296,6 +1309,59 @@ where
             .await
     }
 
+    #[tracing::instrument(
+        name = "crm.preview_records",
+        skip_all,
+        fields(
+            company_count = company_ids.len(),
+            contact_count = contact_ids.len(),
+            companies_found = tracing::field::Empty,
+            contacts_found = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn preview_records(
+        &self,
+        user_id: &str,
+        company_ids: &[uuid::Uuid],
+        contact_ids: &[uuid::Uuid],
+    ) -> Result<super::previews::CrmPreviews, CrmError> {
+        use super::previews::{CrmPreviews, MAX_PREVIEW_IDS};
+
+        if company_ids.len() > MAX_PREVIEW_IDS || contact_ids.len() > MAX_PREVIEW_IDS {
+            return Err(CrmError::InvalidRequest(format!(
+                "preview at most {MAX_PREVIEW_IDS} companies and {MAX_PREVIEW_IDS} contacts at once"
+            )));
+        }
+
+        // One statement per kind, run together; a kind with no ids sends none.
+        let companies = async {
+            if company_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.companies_repository
+                .preview_companies(user_id, company_ids)
+                .await
+        };
+        let contacts = async {
+            if contact_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.companies_repository
+                .preview_contacts(user_id, contact_ids)
+                .await
+        };
+        let (companies, contacts) = futures::try_join!(companies, contacts)?;
+
+        let span = tracing::Span::current();
+        span.record("companies_found", companies.len());
+        span.record("contacts_found", contacts.len());
+        Ok(CrmPreviews {
+            companies,
+            contacts,
+        })
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     async fn get_team_settings(
         &self,
@@ -1669,6 +1735,15 @@ impl CrmService for NoOpCrmService {
         _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         Ok(None)
+    }
+
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<super::previews::CrmPreviews, CrmError> {
+        Ok(super::previews::CrmPreviews::default())
     }
 
     async fn get_team_settings(
