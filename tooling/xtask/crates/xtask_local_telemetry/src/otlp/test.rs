@@ -22,6 +22,8 @@ fn record(seq: u32, at_ns: u64) -> Record {
         name: Some("Running migrations".to_owned()),
         at_ns,
         duration_ns: Some(2_000_000_000),
+        span: None,
+        parent: None,
         fields: BTreeMap::from([
             ("seconds".to_owned(), json!(2.0)),
             ("units".to_owned(), json!(3)),
@@ -90,4 +92,53 @@ fn events_without_a_duration_are_not_spans() {
     let mut instant = record(1, NOW_NS);
     instant.duration_ns = None;
     assert_eq!(traces(&begin(), &[instant]), None);
+}
+
+#[test]
+fn a_run_id_is_its_trace_id_and_every_span_carries_it() {
+    let run_id = "01a1dba5b0e97f92910956f18bdc03f1";
+    let begin = Begin {
+        run_id: run_id.to_owned(),
+        ..begin()
+    };
+    let body = traces(&begin, &[record(1, NOW_NS)]).expect("a span");
+    let span = &body["resourceSpans"][0]["scopeSpans"][0]["spans"][0];
+    assert_eq!(span["traceId"], json!(run_id));
+    assert!(
+        span["attributes"]
+            .as_array()
+            .expect("attributes")
+            .contains(&json!({ "key": "run_id", "value": { "stringValue": run_id } }))
+    );
+    let logged = logs(&begin, &[record(1, NOW_NS)], NOW_NS);
+    assert_eq!(
+        logged["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["traceId"],
+        json!(run_id)
+    );
+}
+
+#[test]
+fn a_keyed_span_is_the_parent_of_the_records_under_it() {
+    let mut parent = record(2, NOW_NS);
+    parent.span = Some("step/1".to_owned());
+    let mut child = record(1, NOW_NS - 1_000_000_000);
+    child.span = Some("step/2".to_owned());
+    child.parent = Some("step/1".to_owned());
+    let body = traces(&begin(), &[child, parent]).expect("spans");
+    let spans = &body["resourceSpans"][0]["scopeSpans"][0]["spans"];
+    assert_eq!(spans[0]["parentSpanId"], spans[1]["spanId"]);
+    assert_ne!(spans[1]["parentSpanId"], spans[1]["spanId"]);
+    // The log line of a keyed record names the same span.
+    let logged = logs(&begin(), &[record_with_span(2, "step/1")], NOW_NS);
+    assert_eq!(
+        logged["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0]["spanId"],
+        spans[1]["spanId"]
+    );
+}
+
+fn record_with_span(seq: u32, key: &str) -> Record {
+    Record {
+        span: Some(key.to_owned()),
+        ..record(seq, NOW_NS)
+    }
 }

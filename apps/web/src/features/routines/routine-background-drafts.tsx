@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type JSX, Show } from 'solid-js';
 import { RoutineDescribe } from './components/routine-describe';
 import { RoutineDraftProgress } from './components/routine-draft-progress';
@@ -12,6 +13,7 @@ import {
 import {
   discardDraftJob,
   draftJobName,
+  reportDraftJob,
   startDraftJob,
   useDraftJobs,
 } from './queries/draft-jobs';
@@ -57,6 +59,7 @@ export function RoutineBackgroundDrafts(props: {
         open: () => props.open(),
       }),
     discard: discardDraftJob,
+    report: (job) => fireAndForget(reportDraftJob(job), 'routines'),
   });
   const drafting = () => {
     const view = dialog.view();
