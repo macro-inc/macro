@@ -77,8 +77,8 @@ All checks below passed locally. The Rust validation sequence ran in order.
 | Pass | `just check` | Format, dependency, code-rule and privacy checks; existing warnings concern unchanged files. |
 | Pass | `just pr-privacy` | Branch commit-message privacy check. |
 | Pass | Call and document package `check` recipes | Both use `cargo check --all-features`. |
-| Pass | `check_delayed_writers.py` | Pinned old methods and current delayed copies match source tokens except the injected timing interval and its returned duration. |
-| Pass | `sync_append_plan_sql.py --check` | Both measured append statements match their source SQL byte for byte. |
+| Pass | `check_delayed_writers.ts` | Pinned old methods and current delayed copies match source tokens except the injected timing interval and its returned duration. |
+| Pass | `sync_append_plan_sql.ts --check` | Both measured append statements match their source SQL byte for byte. |
 | Pass | `git diff --check` | No whitespace errors. |
 
 The standard workspace Rust check recipes use their configured offline SQLx
