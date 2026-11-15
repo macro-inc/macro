@@ -1,11 +1,22 @@
 import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import { QueryObserver } from '@app/lib/urql-solid/query-observer';
-import { createClient, type Exchange, gql } from '@urql/core';
+import {
+  createClient,
+  createRequest,
+  type Exchange,
+  gql,
+  makeOperation,
+} from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { filter, fromPromise, map, mergeMap, pipe } from 'wonka';
 import { cacheAuthorityExchange } from './authority-exchange';
 import { networkRevalidationExchange } from './network-revalidation-exchange';
-import { optimisticMutationDispositionOf } from './optimistic';
+import {
+  optimisticMutationContext,
+  optimisticMutationDispositionOf,
+  withOptimisticMutationDisposition,
+  withoutOptimisticSnapshot,
+} from './optimistic';
 
 const query = gql`query Mail { user { emailThread { id name } } }`;
 const copied = {
@@ -14,6 +25,32 @@ const copied = {
 afterEach(() => beginQueryAuthorizationReset()());
 
 describe('final cache authority admission', () => {
+  it('keeps a queued acknowledgement without falling back to a rejected copied snapshot', () => {
+    const operation = makeOperation(
+      'mutation',
+      createRequest(gql`mutation Seen { markEmailThreadSeen { id name } }`, {}),
+      {
+        url: '/graphql',
+        requestPolicy: 'network-only',
+        suspense: false,
+        ...optimisticMutationContext(copied),
+      }
+    );
+    const result = withOptimisticMutationDisposition(
+      {
+        operation: withoutOptimisticSnapshot(operation),
+        data: copied,
+        stale: false,
+        hasNext: false,
+      },
+      { kind: 'queued', transactionId: 'pending-command' }
+    );
+    expect(result.data).toBeUndefined();
+    expect(optimisticMutationDispositionOf(result)).toEqual({
+      kind: 'queued',
+      transactionId: 'pending-command',
+    });
+  });
   it('keeps a committed queue disposition but drops its data after delayed revalidation crosses revoke and regrant', async () => {
     const revalidating = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

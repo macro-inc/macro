@@ -598,3 +598,38 @@ it('retains an individually shared pipeline while denying the records workspace'
   setAllowed(true);
   expect(screen.getByText('Record list')).toBeTruthy();
 });
+
+it.each([false, true])(
+  'can navigate from denied records to an individually shared pipeline (touch: %s)',
+  (touch) => {
+    fixture.touch = touch;
+    fixture.canAccess = () => false;
+    const { activeTab } = setup();
+    expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+    const navigation = within(
+      screen.getByRole('navigation', {
+        name: touch ? 'CRM views' : 'CRM sidebar',
+      })
+    );
+    if (!touch)
+      expect(
+        screen.getByRole('button', { name: 'Expand CRM sidebar' })
+      ).toBeTruthy();
+    fireEvent.click(navigation.getByRole('button', { name: 'Sales' }));
+    expect(activeTab()).toBe('pipeline:sales');
+    expect(screen.getByText('Sales table')).toBeTruthy();
+    expect(screen.queryByText('Record list')).toBeNull();
+  }
+);
+
+it('preserves a saved list route through an initial denial and later grant', () => {
+  const [allowed, setAllowed] = createSignal(false);
+  fixture.canAccess = allowed;
+  const { activeTab } = setup('list:favorites');
+  expect(activeTab()).toBe('list:favorites');
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setAllowed(true);
+  expect(activeTab()).toBe('list:favorites');
+  expect(screen.getByText('Record list')).toBeTruthy();
+});

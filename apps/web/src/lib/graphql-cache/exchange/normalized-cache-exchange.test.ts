@@ -35,6 +35,7 @@ import {
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
+import { StaleCacheAuthorityError } from '../authority';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -56,6 +57,7 @@ import {
   type ReadResult,
   type WriteResult,
 } from '../protocol';
+import { rememberResponseAuthority } from '../response-authority';
 import { entityFromArgument } from './entity-resolvers';
 import { recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
@@ -728,6 +730,45 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it('finishes a rejected authority response before rereading an affected query', async () => {
+    const { ops, network, forwarded, results, client } =
+      controlledQueryHarness(host);
+    ops.next(makeOp(47));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+    const response = new Response('{}');
+    rememberResponseAuthority(response, 'retired-generation', async () => {
+      throw new StaleCacheAuthorityError();
+    });
+    const request = forwarded[0]!;
+    network.next(
+      queryResult(
+        makeOperation('query', request, {
+          ...request.context,
+          cacheAuthorityResponse: { response },
+        }),
+        { from: 'retired-response' }
+      )
+    );
+    await vi.waitFor(() => expect(results).toHaveLength(1));
+    const metadata = normalizedCacheResultMetadata(results[0]!);
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source === 'live-network') await metadata.persistence;
+    expect(results[0]?.data).toBeUndefined();
+    expect(results[0]?.error?.networkError).toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    expect(host.writes).toHaveLength(0);
+
+    host.scriptRead({ kind: 'hit', data: { from: 'current-cache' } });
+    host.pushAffected([47]);
+    await vi.waitFor(() =>
+      expect(results.at(-1)?.data).toEqual({ from: 'current-cache' })
+    );
+    expect(results.at(-1)?.stale).toBe(false);
+    expect(client.reexecuteOperation).toHaveBeenCalledOnce();
+    expect(forwarded).toHaveLength(1);
   });
 
   it.each(['constructor', 'prototype', '__proto__'])(

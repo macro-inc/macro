@@ -392,7 +392,7 @@ export function CrmWorkspaceView(props: {
     'Companies';
   const navigate = (id: string) => {
     settings.close();
-    if (!listsEnabled() && id.startsWith('list:')) id = 'active';
+    if (!listsFlag() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
     if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
       id = 'active';
@@ -432,7 +432,7 @@ export function CrmWorkspaceView(props: {
     });
   };
   onMount(() => {
-    if (!listsEnabled() && active().startsWith('list:')) navigate('active');
+    if (!listsFlag() && active().startsWith('list:')) navigate('active');
     // Saved and shared links to the retired Databases view open Companies.
     if (active() === 'databases') navigate('active');
   });
@@ -522,76 +522,104 @@ export function CrmWorkspaceView(props: {
     />
   );
   return (
-    <Show when={canAccess() || !!pipelineId()} fallback={<CrmAccessDenied />}>
-      <ViewShell.Root aside={collapsed() ? false : {}} main={{ min: 320 }}>
-        <ViewShell.Aside>
-          <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
-            {sidebar(() => setCollapsed(true))}
-          </Suspense>
-        </ViewShell.Aside>
-        <ViewShell.Main>
+    <ViewShell.Root aside={collapsed() ? false : {}} main={{ min: 320 }}>
+      <ViewShell.Aside>
+        <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
+          {sidebar(() => setCollapsed(true))}
+        </Suspense>
+      </ViewShell.Aside>
+      <ViewShell.Main>
+        <Show when={canAccess()}>
           <Suspense>
             <CrmEmailOptInBanner />
           </Suspense>
+        </Show>
+        <Show
+          when={!settings.isOpen()}
+          fallback={
+            <>
+              <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2">
+                <NavigationToggle onExpand={() => setCollapsed(false)}>
+                  <Suspense>{sidebar()}</Suspense>
+                </NavigationToggle>
+                <Tooltip label="Back">
+                  <Button
+                    aria-label="Close CRM settings"
+                    tooltip="Close CRM settings"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={settings.close}
+                  >
+                    <ArrowLeftIcon class="size-4" />
+                  </Button>
+                </Tooltip>
+                <ViewSidebar.Title caret={false} class="h-7 flex-1">
+                  CRM settings
+                </ViewSidebar.Title>
+              </div>
+              {/* The header above already clears the status bar on touch. */}
+              <div class="min-h-0 min-w-0 flex-1 [--mobile-content-inset-top:0px]">
+                <CrmSettings />
+              </div>
+            </>
+          }
+        >
+          <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
+            <ViewShell.Header>
+              <CrmMobileTabs
+                canAccess={canAccess()}
+                active={activeRecord()}
+                pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
+                lists={listsEnabled() ? lists.lists() : []}
+                onNavigate={(id) => {
+                  const pipeline = pipelineIdOfTab(id);
+                  if (pipeline) selectPipeline(pipeline);
+                  else navigate(id);
+                }}
+                leading={
+                  <Show
+                    when={
+                      canAccess() &&
+                      !peopleActive() &&
+                      !pipelineId() &&
+                      !activityTab()
+                    }
+                  >
+                    <Suspense>
+                      <MobileFilterDrawer />
+                    </Suspense>
+                  </Show>
+                }
+              />
+            </ViewShell.Header>
+            <Show
+              when={
+                canAccess() &&
+                !peopleActive() &&
+                !pipelineId() &&
+                !activityTab()
+              }
+            >
+              <Suspense>
+                <SoupFiltersBar />
+              </Suspense>
+            </Show>
+          </Show>
           <Show
-            when={!settings.isOpen()}
+            when={canAccess() || !!pipelineId()}
             fallback={
               <>
-                <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2">
-                  <NavigationToggle onExpand={() => setCollapsed(false)}>
-                    <Suspense>{sidebar()}</Suspense>
-                  </NavigationToggle>
-                  <Tooltip label="Back">
-                    <Button
-                      aria-label="Close CRM settings"
-                      tooltip="Close CRM settings"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={settings.close}
-                    >
-                      <ArrowLeftIcon class="size-4" />
-                    </Button>
-                  </Tooltip>
-                  <ViewSidebar.Title caret={false} class="h-7 flex-1">
-                    CRM settings
-                  </ViewSidebar.Title>
-                </div>
-                {/* The header above already clears the status bar on touch. */}
-                <div class="min-h-0 min-w-0 flex-1 [--mobile-content-inset-top:0px]">
-                  <CrmSettings />
-                </div>
+                <Show when={!isTouchDevice()}>
+                  <ViewShell.Header>
+                    <NavigationToggle onExpand={() => setCollapsed(false)}>
+                      <Suspense>{sidebar()}</Suspense>
+                    </NavigationToggle>
+                  </ViewShell.Header>
+                </Show>
+                <CrmAccessDenied />
               </>
             }
           >
-            <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
-              <ViewShell.Header>
-                <CrmMobileTabs
-                  canAccess={canAccess()}
-                  active={activeRecord()}
-                  pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
-                  lists={listsEnabled() ? lists.lists() : []}
-                  onNavigate={(id) => {
-                    const pipeline = pipelineIdOfTab(id);
-                    if (pipeline) selectPipeline(pipeline);
-                    else navigate(id);
-                  }}
-                  leading={
-                    <Show
-                      when={!peopleActive() && !pipelineId() && !activityTab()}
-                    >
-                      <Suspense>
-                        <MobileFilterDrawer />
-                      </Suspense>
-                    </Show>
-                  }
-                />
-              </ViewShell.Header>
-              <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
-                <Suspense>
-                  <SoupFiltersBar />
-                </Suspense>
-              </Show>
-            </Show>
             <Show when={itemKey()} keyed>
               <CrmItemDetail
                 sourceName={activePipeline()?.name ?? title()}
@@ -814,91 +842,91 @@ export function CrmWorkspaceView(props: {
               </div>
             </Show>
           </Show>
-        </ViewShell.Main>
-        <Show when={creatingPipeline() && canCreatePipeline()}>
-          <PipelineDialog
-            onClose={() => setCreatingPipeline(false)}
-            onCreate={async (input) => {
-              const pipeline = await pipelines.create(input);
-              selectPipeline(pipeline.id);
-            }}
-          />
         </Show>
-        <Show when={listsEnabled() && editing()}>
-          {(initial) => {
-            const companies = useQuickAccessCrmCompaniesQuery();
-            return (
-              <CrmListDialog
-                initial={
-                  initial().id ? { ...initial(), id: initial().id! } : undefined
-                }
-                companies={companies.companies()}
-                loading={companies.query.isLoading}
-                onClose={() => setEditing(undefined)}
-                onSave={async (name, companyIds) => {
-                  const id = await lists.save.mutateAsync({
-                    id: initial().id,
-                    name,
-                    companyIds,
-                  });
-                  navigate(`list:${id}`);
-                }}
-                onDelete={
-                  initial().id
-                    ? async () => {
-                        await lists.remove.mutateAsync(initial().id!);
-                        navigate('active');
-                      }
-                    : undefined
-                }
-              />
-            );
+      </ViewShell.Main>
+      <Show when={creatingPipeline() && canCreatePipeline()}>
+        <PipelineDialog
+          onClose={() => setCreatingPipeline(false)}
+          onCreate={async (input) => {
+            const pipeline = await pipelines.create(input);
+            selectPipeline(pipeline.id);
           }}
-        </Show>
-        <Show when={canAccess() && exporting()}>
-          <CrmExport
-            kind="companies"
-            currentView={title()}
-            onClose={() => setExporting(false)}
-            onLoad={createCrmExportLoader(
-              view.source,
-              fetchCrmExportCompanies,
-              isCrmCompanyEntity
-            )}
-          />
-        </Show>
-        <Show when={canAccess() && importing()}>
-          <CrmImport
-            onClose={() => setImporting(false)}
-            pipelines={
-              canCreatePipeline()
-                ? {
-                    existing: () =>
-                      pipelines
-                        .pipelines()
-                        .filter(
-                          (pipeline) =>
-                            pipeline.recordType === 'company' &&
-                            (pipeline.grant === 'owner' ||
-                              pipeline.grant === 'edit')
-                        ),
-                    create: (name, sharing) =>
-                      pipelines.create({
-                        name,
-                        recordType: 'company',
-                        sharing,
-                      }),
-                    transfer: useCrmContext().createPipelineTransfer,
-                  }
-                : undefined
-            }
-            onOpenPipeline={(id) => {
-              setImporting(false);
-              selectPipeline(id);
-            }}
-          />
-        </Show>
-      </ViewShell.Root>
-    </Show>
+        />
+      </Show>
+      <Show when={listsEnabled() && editing()}>
+        {(initial) => {
+          const companies = useQuickAccessCrmCompaniesQuery();
+          return (
+            <CrmListDialog
+              initial={
+                initial().id ? { ...initial(), id: initial().id! } : undefined
+              }
+              companies={companies.companies()}
+              loading={companies.query.isLoading}
+              onClose={() => setEditing(undefined)}
+              onSave={async (name, companyIds) => {
+                const id = await lists.save.mutateAsync({
+                  id: initial().id,
+                  name,
+                  companyIds,
+                });
+                navigate(`list:${id}`);
+              }}
+              onDelete={
+                initial().id
+                  ? async () => {
+                      await lists.remove.mutateAsync(initial().id!);
+                      navigate('active');
+                    }
+                  : undefined
+              }
+            />
+          );
+        }}
+      </Show>
+      <Show when={canAccess() && exporting()}>
+        <CrmExport
+          kind="companies"
+          currentView={title()}
+          onClose={() => setExporting(false)}
+          onLoad={createCrmExportLoader(
+            view.source,
+            fetchCrmExportCompanies,
+            isCrmCompanyEntity
+          )}
+        />
+      </Show>
+      <Show when={canAccess() && importing()}>
+        <CrmImport
+          onClose={() => setImporting(false)}
+          pipelines={
+            canCreatePipeline()
+              ? {
+                  existing: () =>
+                    pipelines
+                      .pipelines()
+                      .filter(
+                        (pipeline) =>
+                          pipeline.recordType === 'company' &&
+                          (pipeline.grant === 'owner' ||
+                            pipeline.grant === 'edit')
+                      ),
+                  create: (name, sharing) =>
+                    pipelines.create({
+                      name,
+                      recordType: 'company',
+                      sharing,
+                    }),
+                  transfer: useCrmContext().createPipelineTransfer,
+                }
+              : undefined
+          }
+          onOpenPipeline={(id) => {
+            setImporting(false);
+            selectPipeline(id);
+          }}
+        />
+      </Show>
+    </ViewShell.Root>
   );
 }

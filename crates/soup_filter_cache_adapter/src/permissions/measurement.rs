@@ -321,7 +321,22 @@ fn measure_full_permission_retirement_with_properties_and_pending_commands() {
                 assert_eq!(original.client_metadata, retired.client_metadata);
                 assert_eq!(original.identity_bindings, retired.identity_bindings);
                 if index % 2 == 1 {
-                    assert_eq!(before.optimistic, after.optimistic);
+                    assert_eq!(
+                        before.optimistic.optimistic_data_json,
+                        after.optimistic.optimistic_data_json
+                    );
+                    // Directly seeded layers omit the lifecycle marker that
+                    // the engine derives from an explicit non-delete binding.
+                    let mut expected = before.optimistic.normalized_updates.clone();
+                    expected
+                        .get_mut(&queued_keys[index])
+                        .unwrap()
+                        .fields
+                        .insert(
+                            cache_core::identity::DELETED_FIELD.into(),
+                            CacheValue::Bool(false),
+                        );
+                    assert_eq!(expected, after.optimistic.normalized_updates);
                     assert_eq!(shadows_before[index], shadows_after[index]);
                     assert_eq!(queued_base_after[index], Some(queued_base[index].1.clone()));
                 } else {

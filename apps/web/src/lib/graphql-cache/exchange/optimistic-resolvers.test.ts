@@ -1,8 +1,17 @@
 import { createClient, type Exchange, gql, type Operation } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import { fromValue, mergeMap, pipe } from 'wonka';
-import { MarkEmailThreadSeenDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
-import { executeOptimisticMutation, optimisticContextOf } from './optimistic';
+import {
+  MarkEmailThreadSeenDocument,
+  PropertyAssignmentParentFragmentDoc,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  executeOptimisticMutation,
+  optimisticContextOf,
+  remove,
+  selectRecord,
+  update,
+} from './optimistic';
 import {
   type OptimisticResolver,
   optimisticResolver,
@@ -13,7 +22,8 @@ describe('automatic local mutation resolvers', () => {
   function setup(
     resolvers = (seen: OptimisticResolver): readonly OptimisticResolver[] => [
       seen,
-    ]
+    ],
+    currentGeneration?: () => string | undefined
   ) {
     const forwarded: Operation[] = [];
     const resolved: unknown[] = [];
@@ -38,10 +48,65 @@ describe('automatic local mutation resolvers', () => {
     });
     const client = createClient({
       url: 'http://test.invalid',
-      exchanges: [optimisticResolversExchange(resolvers(resolver)), capture],
+      exchanges: [
+        optimisticResolversExchange(resolvers(resolver), currentGeneration),
+        capture,
+      ],
     });
     return { client, forwarded, resolved, resolver };
   }
+
+  it('captures authored predictions before their resolver evaluates', async () => {
+    let generation = 'source-generation';
+    const { client, forwarded } = setup(
+      () => [
+        optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => {
+          generation = 'replacement-generation';
+          return { id: String(input.threadId), isRead: true };
+        }),
+      ],
+      () => generation
+    );
+    await client
+      .mutation(MarkEmailThreadSeenDocument, { input: { threadId: 'thread' } })
+      .toPromise();
+    expect(optimisticContextOf(forwarded[0])?.authorityGeneration).toBe(
+      'source-generation'
+    );
+  });
+
+  it.each([undefined, 'old-generation'])(
+    'never relabels caller updates with source generation %s',
+    async (authorityGeneration) => {
+      const { client, forwarded } = setup(
+        undefined,
+        () => 'current-generation'
+      );
+      await client
+        .mutation(
+          MarkEmailThreadSeenDocument,
+          { input: { threadId: 'thread' } },
+          {
+            optimisticMutation: {
+              authorityGeneration,
+              updates: [
+                update(
+                  selectRecord(PropertyAssignmentParentFragmentDoc, {
+                    __typename: 'GraphqlSoupEmailThread',
+                    id: 'thread',
+                  }).field('properties'),
+                  remove({ __typename: 'GraphqlProperty', id: 'property' })
+                ),
+              ],
+            },
+          }
+        )
+        .toPromise();
+      expect(optimisticContextOf(forwarded[0])?.authorityGeneration).toBe(
+        authorityGeneration
+      );
+    }
+  );
 
   it('predicts the field for another document under its own response key', async () => {
     const { client, forwarded, resolved } = setup();

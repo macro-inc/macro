@@ -197,8 +197,11 @@ impl Storage for OwnerOnlyStorage {
             cache_core::queue::MutationId,
             cache_core::queue::PersistedOptimisticLayer,
         )],
+        retired_projection_owners: &[cache_core::queue::MutationId],
     ) -> Result<(), Self::Error> {
-        self.0.replace_optimistic_layers(layers).await
+        self.0
+            .replace_optimistic_layers(layers, retired_projection_owners)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

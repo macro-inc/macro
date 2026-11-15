@@ -270,11 +270,16 @@ impl<S: Storage> Engine<S> {
         &mut self,
         typenames: &[String],
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.retire_optimistic_snapshots_where(|entry, _source| {
-            entry.optimistic.normalized_updates.keys().any(|key| {
+        self.retire_optimistic_snapshots_where(|entry, source| {
+            let requested = |key: &EntityKey<'_>| {
                 key.typename()
                     .is_some_and(|name| typenames.iter().any(|kind| kind == name))
-            })
+            };
+            entry.optimistic.normalized_updates.keys().any(requested)
+                || source
+                    .projection_mutations
+                    .iter()
+                    .any(|mutation| requested(&EntityKey(mutation.record_key().as_str().into())))
         })
         .await
     }
@@ -293,7 +298,7 @@ impl<S: Storage> Engine<S> {
             .load_mutation_queue()
             .await
             .map_err(EngineError::Storage)?;
-        let mut replacements = Vec::new();
+        let mut retired_projection_owners = BTreeSet::new();
         for entry in &mut queued {
             let mut source = decode_optimistic_source(&entry.optimistic.optimistic_data_json)
                 .map_err(|detail| EngineError::InvalidQueuedMutation {
@@ -312,11 +317,34 @@ impl<S: Storage> Engine<S> {
                 optimistic_data_json: encode_optimistic_source(&source),
                 normalized_updates: RecordUpdates::new(),
             };
-            replacements.push((entry.id, entry.optimistic.clone()));
+            retired_projection_owners.insert(entry.id);
         }
-        self.rebuild_queued_layers(queued).await?;
+        // Even a preserved command's materialized link update can contain a
+        // retired record copied from its old base. Persist the rebuilt updates,
+        // while retaining projection shadows owned by preserved commands.
+        let persisted = queued
+            .iter()
+            .map(|entry| (entry.id, entry.optimistic.clone()))
+            .collect::<Vec<_>>();
+        let rebuilt = self.rebuild_queued_layers(queued).await?;
+        let replacements = persisted
+            .into_iter()
+            .zip(rebuilt)
+            .filter_map(|((id, mut layer), rebuilt)| {
+                if !retired_projection_owners.contains(&id)
+                    && layer.normalized_updates == rebuilt.updates
+                {
+                    return None;
+                }
+                layer.normalized_updates = rebuilt.updates;
+                Some((id, layer))
+            })
+            .collect::<Vec<_>>();
         self.storage
-            .replace_optimistic_layers(&replacements)
+            .replace_optimistic_layers(
+                &replacements,
+                &retired_projection_owners.into_iter().collect::<Vec<_>>(),
+            )
             .await
             .map_err(EngineError::Storage)?;
         self.refresh_optimistic_queue().await

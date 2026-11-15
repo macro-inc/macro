@@ -4,6 +4,97 @@ use pollster::block_on;
 use serde_json::json;
 
 #[test]
+fn retirement_strips_projection_only_sources_and_preserves_other_queued_owners() {
+    block_on(async {
+        use predicate_index::{
+            IndexDocument, OptimisticProjectionMutation, Profile, RecordKey, Token,
+        };
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut keys = Vec::new();
+        for (kind, uuid) in [
+            (
+                "GraphqlSoupCrmContact",
+                "00000000-0000-4000-8000-000000000010",
+            ),
+            (
+                "GraphqlSoupDocument",
+                "00000000-0000-4000-8000-000000000011",
+            ),
+        ] {
+            let key = RecordKey::new(format!("{kind}:record")).unwrap();
+            engine
+                .begin_optimistic_write_with_projections(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: Some(&json!({"intent":"keep command"})),
+                        identity_bindings: &[],
+                        uuid,
+                        query: "mutation Rename($inputs: [RenameEntityInput!]!) { renameEntities(inputs: $inputs) { results { __typename } } }",
+                        operation_name: Some("Rename"),
+                        variables: json!({"inputs":[{"entity":{"type":"DOCUMENT","id":"record"},"displayName":"authored name"}]}).as_object().unwrap(),
+                        data: &json!({}),
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 17,
+                    },
+                    vec![OptimisticProjectionMutation::Replace(IndexDocument {
+                        record_key: key.clone(),
+                        profile: Profile::new(Token::new("authority-test").unwrap()),
+                        partition: Token::new("items").unwrap(),
+                        exact_facts: vec![],
+                        integer_facts: vec![],
+                        sort_facts: vec![],
+                    })],
+                )
+                .await
+                .unwrap();
+            keys.push(key);
+        }
+        let before = engine.storage().load_mutation_queue().await.unwrap();
+        assert!(
+            before
+                .iter()
+                .all(|entry| entry.optimistic.normalized_updates.is_empty())
+        );
+        let shadows = engine
+            .storage()
+            .load_optimistic_projections(&keys)
+            .await
+            .unwrap();
+        assert!(shadows.iter().all(Option::is_some));
+
+        engine
+            .retire_optimistic_snapshots(&["GraphqlSoupCrmContact".into()])
+            .await
+            .unwrap();
+        let mut reopened = Engine::new(engine.into_storage());
+        reopened.refresh_optimistic_queue().await.unwrap();
+        let after = reopened.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(after.len(), before.len());
+        for (before, after) in before.iter().zip(&after) {
+            assert_eq!(before.id, after.id);
+            assert_eq!(before.uuid, after.uuid);
+            assert_eq!(before.superseded, after.superseded);
+            assert_eq!(before.mutation, after.mutation);
+        }
+        let retired = decode_optimistic_source(&after[0].optimistic.optimistic_data_json).unwrap();
+        assert!(retired.projection_mutations.is_empty());
+        assert_eq!(
+            retired.client_metadata,
+            Some(json!({"intent":"keep command"}))
+        );
+        assert_eq!(after[1].optimistic, before[1].optimistic);
+        let after_shadows = reopened
+            .storage()
+            .load_optimistic_projections(&keys)
+            .await
+            .unwrap();
+        assert!(after_shadows[0].is_none());
+        assert_eq!(after_shadows[1], shadows[1]);
+    });
+}
+
+#[test]
 fn stale_success_settles_the_command_and_identity_without_restoring_its_response() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

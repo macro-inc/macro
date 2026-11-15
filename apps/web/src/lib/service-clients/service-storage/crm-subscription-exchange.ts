@@ -40,8 +40,17 @@ export function graphqlSoupSubscriptionExchange(
             if (disposed || version !== attempt) return;
             waitingForProof = false;
             const sourceEpoch = queryAuthorization().epoch;
+            const finish = (terminal: () => void) => {
+              delivered = delivered
+                .catch(() => {})
+                .then(() => {
+                  if (!disposed && version === attempt) terminal();
+                });
+              fireAndForget(delivered, 'crm.access.subscription');
+            };
             stop = websocketClient.subscribe(graphqlWsPayload, {
-              ...sink,
+              complete: () => finish(() => sink.complete()),
+              error: (error) => finish(() => sink.error(error)),
               next(value) {
                 delivered = delivered
                   .catch(() => {})

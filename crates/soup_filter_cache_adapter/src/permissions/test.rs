@@ -524,7 +524,12 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
     block_on(async {
         use cache_core::engine::BeginOptimisticWrite;
         use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch};
-        let mut engine = Engine::new(InMemoryStorage::new());
+        use cache_turso::TursoFileDatabase;
+        use predicate_index::{IndexDocument, OptimisticProjectionMutation, Profile, Token};
+        let directory = tempfile::tempdir().unwrap();
+        let database =
+            TursoFileDatabase::new(directory.path().join("favorite-retirement.turso")).unwrap();
+        let mut engine = Engine::new(database.open("viewer").unwrap());
         let favorites =
             "query Favorites { user { __typename id favorites { __typename id entityType } } }";
         engine.write_query(None, favorites, Some("Favorites"), &Map::new(), &json!({"user":{"__typename":"GraphqlUser","id":"viewer","favorites":[{"__typename":"GraphqlFavorite","id":"company","entityType":"CRM_COMPANY"}]}}), None).await.unwrap();
@@ -547,8 +552,44 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
                 entity_key: key("GraphqlFavorite", "document"),
             },
         };
-        engine.begin_optimistic_write(None, BeginOptimisticWrite { uuid: &Uuid::now_v7().to_string(), client_metadata: None, query: mutation, operation_name: Some("Favorite"), variables: &Map::new(), data: &json!({"setFavorite":{"favorite":{"__typename":"GraphqlFavorite","id":"document","entityType":"DOCUMENT"}}}), link_patches: &[patch], revalidations: &[], identity_bindings: &[], created_at_ms: 1 }).await.unwrap();
+        let projection_key = RecordKey::new("GraphqlFavorite:document").unwrap();
+        engine
+            .begin_optimistic_write_with_projections(
+                None,
+                BeginOptimisticWrite {
+                    uuid: &Uuid::now_v7().to_string(),
+                    client_metadata: Some(&json!({"intent":"favorite document"})),
+                    query: mutation,
+                    operation_name: Some("Favorite"),
+                    variables: &Map::new(),
+                    data: &json!({"setFavorite":{"favorite":{"__typename":"GraphqlFavorite","id":"document","entityType":"DOCUMENT"}}}),
+                    link_patches: &[patch],
+                    revalidations: &[],
+                    identity_bindings: &[],
+                    created_at_ms: 1,
+                },
+                vec![OptimisticProjectionMutation::Replace(IndexDocument {
+                    record_key: projection_key.clone(),
+                    profile: Profile::new(Token::new("permission-test").unwrap()),
+                    partition: Token::new("favorites").unwrap(),
+                    exact_facts: vec![],
+                    integer_facts: vec![],
+                    sort_facts: vec![],
+                })],
+            )
+            .await
+            .unwrap();
         let before = engine.storage().load_mutation_queue().await.unwrap();
+        assert!(
+            format!("{:?}", before[0].optimistic.normalized_updates)
+                .contains("GraphqlFavorite:company")
+        );
+        let shadows = engine
+            .storage()
+            .load_optimistic_projections(std::slice::from_ref(&projection_key))
+            .await
+            .unwrap();
+        assert!(shadows[0].is_some());
         let initial = engine.current_authority("profile").await.unwrap();
         transition_crm_authority(
             &mut engine,
@@ -560,6 +601,25 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
         .unwrap();
         let after = engine.storage().load_mutation_queue().await.unwrap();
         assert_eq!(before[0].mutation, after[0].mutation);
+        assert_eq!(before[0].id, after[0].id);
+        assert_eq!(before[0].uuid, after[0].uuid);
+        assert_eq!(before[0].superseded, after[0].superseded);
+        assert!(
+            !format!("{:?}", after[0].optimistic.normalized_updates)
+                .contains("GraphqlFavorite:company")
+        );
+        assert_eq!(
+            after[0].optimistic.optimistic_data_json,
+            before[0].optimistic.optimistic_data_json
+        );
+        assert_eq!(
+            engine
+                .storage()
+                .load_optimistic_projections(std::slice::from_ref(&projection_key))
+                .await
+                .unwrap(),
+            shadows
+        );
         let source = decode_optimistic_source(&after[0].optimistic.optimistic_data_json).unwrap();
         assert_eq!(
             source.mutation_data["setFavorite"]["favorite"]["entityType"],
@@ -580,6 +640,23 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
                 .unwrap()[0]
                 .is_none()
         );
+        engine.into_storage().try_close().unwrap();
+        let mut reopened = Engine::new(database.open("viewer").unwrap());
+        reopened.refresh_optimistic_queue().await.unwrap();
+        assert_eq!(
+            reopened.storage().load_mutation_queue().await.unwrap(),
+            after
+        );
+        assert_eq!(
+            reopened
+                .storage()
+                .load_optimistic_projections(&[projection_key])
+                .await
+                .unwrap(),
+            shadows
+        );
+        reopened.into_storage().try_close().unwrap();
+        directory.close().unwrap();
     });
 }
 

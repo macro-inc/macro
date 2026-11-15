@@ -199,8 +199,11 @@ impl Storage for BrowserStorage {
             cache_core::queue::MutationId,
             cache_core::queue::PersistedOptimisticLayer,
         )],
+        retired_projection_owners: &[cache_core::queue::MutationId],
     ) -> Result<(), Self::Error> {
-        self.inner.replace_optimistic_layers(layers).await
+        self.inner
+            .replace_optimistic_layers(layers, retired_projection_owners)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

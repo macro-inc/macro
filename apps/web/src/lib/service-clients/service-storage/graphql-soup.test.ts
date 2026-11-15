@@ -841,6 +841,24 @@ describe('GraphQL Soup browser cache session gate', () => {
     vi.unstubAllGlobals();
   });
 
+  it('publishes the client and host before authority reset can reenter client lookup', async () => {
+    const soup = await import('./graphql-soup');
+    const { installCrmCacheHost } = await import('./crm-access-cache');
+    let reenteredClient: unknown;
+    let reenteredHost: unknown;
+    vi.mocked(installCrmCacheHost).mockImplementationOnce(() => {
+      reenteredClient = soup.getGraphqlSoupClient();
+      reenteredHost = soup.getGraphqlSoupCacheHost();
+    });
+
+    const client = soup.getGraphqlSoupClient();
+
+    expect(reenteredClient).toBe(client);
+    expect(reenteredHost).toBe(soup.getGraphqlSoupCacheHost());
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+    expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
+  });
+
   it.each([false, true])(
     'binds contact cleanup recovery to its original backend and scope (native=%s)',
     async (native) => {

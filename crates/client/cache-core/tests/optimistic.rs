@@ -216,8 +216,13 @@ impl Storage for ClaimFailingStorage {
             cache_core::queue::MutationId,
             cache_core::queue::PersistedOptimisticLayer,
         )],
+        retired_projection_owners: &[cache_core::queue::MutationId],
     ) -> Result<(), Self::Error> {
-        Ok(self.inner.replace_optimistic_layers(layers).await.unwrap())
+        self.inner
+            .replace_optimistic_layers(layers, retired_projection_owners)
+            .await
+            .unwrap();
+        Ok(())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

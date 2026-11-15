@@ -25,6 +25,10 @@ const schema = buildSchema(
   )
 );
 
+const TEAM_ID = '00000000-0000-4000-8000-000000000099';
+const CRM_ACCESS_POLICY = `${TEAM_ID}:allowed`;
+const AUTHORITY_HEADERS = { 'x-macro-crm-access': CRM_ACCESS_POLICY };
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((complete) => {
@@ -62,12 +66,39 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
       await route.abort();
       return;
     }
+    if (url.pathname === '/auth/user/legacy_user_permissions') {
+      await route.fulfill({
+        json: {
+          userId: 'functional-viewer',
+          email: 'viewer@example.com',
+          permissions: [],
+          licenseStatus: 'active',
+          tutorialComplete: true,
+          isAgent: false,
+          hasChromeExt: false,
+          hasTrialed: false,
+          aiDataConsent: false,
+          referralCode: '',
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/dss/crm/member-access') {
+      await route.fulfill({
+        headers: AUTHORITY_HEADERS,
+        json: { team_id: TEAM_ID, allowed: true },
+      });
+      return;
+    }
     if (
       /^\/(auth|cognition|contacts|dss|email|notification|connection-gateway)\//.test(
         url.pathname
       )
     ) {
-      await route.fulfill({ json: {} });
+      await route.fulfill({
+        headers: url.pathname.startsWith('/dss/') ? AUTHORITY_HEADERS : {},
+        json: {},
+      });
       return;
     }
     // Serve Vite assets through the runner as well. Host interface changes
@@ -96,6 +127,7 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
       }
       if (outcome === 'reject') {
         await route.fulfill({
+          headers: AUTHORITY_HEADERS,
           json: {
             errors: [
               { message: 'Edit forbidden', extensions: { code: 'FORBIDDEN' } },
@@ -114,6 +146,7 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
       user: {
         id: 'functional-viewer',
         emailLinks: [],
+        pendingEmailSends: { attempts: [], nextCursor: null },
         soup: ({ input }: { input: SoupInput }) => ({
           items: items.filter(
             ({ id }) =>
@@ -195,21 +228,50 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
       delayedQueries.push(() => gate.resolve());
       await gate.promise;
     }
-    await route.fulfill({ json: result });
+    await route.fulfill({ headers: AUTHORITY_HEADERS, json: result });
   });
   await page.goto(
     `/tests/functional/optimistic-mutations/index.html?cache=${mode}`
   );
-  await expect(page.getByTestId('ready')).toHaveText('ready');
+  try {
+    await expect(page.getByTestId('ready')).toHaveText('ready');
+  } catch (error) {
+    await test.info().attach('cache-authority', {
+      body: JSON.stringify(
+        await page.evaluate(() => window.optimisticMutations.authorityState())
+      ),
+      contentType: 'application/json',
+    });
+    throw error;
+  }
   expect(unexpected).toEqual([]);
   expect(await page.evaluate(() => window.optimisticMutations.hasCache())).toBe(
     mode !== 'disabled'
   );
+  if (mode !== 'disabled') {
+    expect(
+      await page.evaluate(() => window.optimisticMutations.authority())
+    ).toMatchObject({
+      account: 'functional-viewer',
+      policy: CRM_ACCESS_POLICY,
+      ready: true,
+    });
+  }
   if (mode === 'retired') {
     await page.evaluate(() => window.optimisticMutations.retireCache());
     expect(
       await page.evaluate(() => window.optimisticMutations.hasCache())
     ).toBe(false);
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.optimisticMutations.authorityState())
+      )
+      .toMatchObject({
+        account: 'functional-viewer',
+        allowed: true,
+        authorization: { paused: false },
+      });
+    await expect(page.getByTestId('ready')).toHaveText('ready');
   }
   return {
     mutations,

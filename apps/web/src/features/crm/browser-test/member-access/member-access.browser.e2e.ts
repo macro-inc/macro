@@ -29,11 +29,28 @@ test('revokes open tabs, retains an individual pipeline, denies record navigatio
     .click();
   await expect(page.getByText("You don't have access to CRM")).toBeVisible();
   await expect(page.getByText('Private record content')).toHaveCount(0);
+  const directory = process.env.CRM_ACCESS_SCREENSHOTS;
+  if (directory)
+    await page.screenshot({
+      path: `${directory}/records-denied-navigation-${info.project.name}.png`,
+      fullPage: true,
+    });
+  const navigation =
+    info.project.name === 'phone'
+      ? page.getByRole('navigation', { name: 'CRM views' })
+      : page.locator('aside');
+  await navigation
+    .getByRole('button', { name: 'Shared pipeline', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Shared pipeline' })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Open records route' }).click();
+  await expect(page.getByText("You don't have access to CRM")).toBeVisible();
   await expect(pipeline.getByText('Private collection')).toHaveCount(0);
   await expect(
     pipeline.getByRole('heading', { name: 'Shared pipeline' })
   ).toBeVisible();
-  const directory = process.env.CRM_ACCESS_SCREENSHOTS;
   if (directory)
     await pipeline.screenshot({
       path: `${directory}/shared-pipeline-${info.project.name}.png`,

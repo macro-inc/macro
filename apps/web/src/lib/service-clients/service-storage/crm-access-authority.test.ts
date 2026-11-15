@@ -2,7 +2,10 @@ import type {
   CacheAuthority,
   CacheAuthorityHost,
 } from '@graphql-cache/authority';
-import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import {
+  createAuthorityObserver,
+  StaleCacheAuthorityError,
+} from '@graphql-cache/authority';
 import { describe, expect, it, vi } from 'vitest';
 import { createCrmAccessAuthority } from './crm-access-authority';
 
@@ -89,6 +92,62 @@ describe('CRM authority across cache clients', () => {
     await owner.verifyRead();
     expect(authority.allowed()).toBe(false);
   });
+  it('retries a current-state read overtaken by another cache client before fetching proof', async () => {
+    const storage = sharedOwner();
+    const port = storage.port();
+    const observer = createAuthorityObserver(storage.state().identity);
+    observer.observe(storage.state());
+    const delayed = Promise.withResolvers<CacheAuthority>();
+    let reads = 0;
+    const owner: CacheAuthorityHost = {
+      ...port,
+      async current() {
+        const version = observer.version();
+        const state =
+          ++reads === 1 ? await delayed.promise : await port.current();
+        return observer.observe(state, version);
+      },
+      onChanged(callback) {
+        return port.onChanged((state) => {
+          observer.observe(state);
+          callback(state);
+        });
+      },
+    };
+    const fetchProof = vi.fn(async () => `${team}:denied`);
+    const { authority } = client(owner, fetchProof);
+    const old = storage.state();
+    const refreshing = authority.refresh();
+    await port.transition(old.generation, `${team}:denied`);
+    delayed.resolve(old);
+
+    await expect(refreshing).resolves.toMatchObject({
+      generation: storage.state().generation,
+    });
+    expect(fetchProof).toHaveBeenCalledTimes(1);
+    expect(authority.allowed()).toBe(false);
+    expect(storage.state().ready).toBe(true);
+  });
+  it.each(['session', 'host'] as const)(
+    'does not retry preparation after its %s is replaced',
+    async (replacement) => {
+      const storage = sharedOwner();
+      const delayed = Promise.withResolvers<CacheAuthority>();
+      const owner: CacheAuthorityHost = {
+        ...storage.port(),
+        current: () => delayed.promise,
+      };
+      const { authority, fetchProof } = client(owner);
+      const refreshing = authority.refresh();
+      if (replacement === 'session') authority.setSession('another-account');
+      else authority.setHost(sharedOwner().port());
+      delayed.resolve(storage.state());
+
+      await expect(refreshing).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+      expect(fetchProof).not.toHaveBeenCalled();
+      expect(authority.allowed()).toBe(false);
+    }
+  );
   it('does not confuse the anonymous profile with the account, or reuse a prior login proof', async () => {
     const { authority } = client(sharedOwner().port());
     await authority.refresh();

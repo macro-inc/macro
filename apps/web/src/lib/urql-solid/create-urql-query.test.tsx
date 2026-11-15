@@ -20,8 +20,10 @@ import {
 } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
+import { queryAuthorization } from './authorization';
 import { UrqlProvider } from './context';
 import { createUrqlQuery } from './create-urql-query';
+import { QueryObserver } from './query-observer';
 import type {
   UrqlClientSource,
   UrqlQueryOptions,
@@ -104,6 +106,65 @@ const OTHER_DOCUMENT = gql`
     otherTest(input: $input)
   }
 `;
+
+it.each([false, true])(
+  'keeps a refetch pending through an authority replay retry (failure=%s)',
+  async (failure) => {
+    const { client, executions } = makeFakeClient();
+    const query = gql`query Soup { soup { items { id } } }`;
+    const observer = new QueryObserver(client, {
+      query,
+      variables: { input: 'fixture' },
+    });
+    try {
+      const pending = observer.refetch({ throwOnError: true });
+      const resolved = vi.fn();
+      const rejected = vi.fn();
+      void pending.then(resolved, rejected);
+      const replay = executions.at(-1)!;
+      replay.next({
+        data: { value: 'retired' },
+        operation: makeOperation(
+          'query',
+          createRequest<Data, Variables>(query, replay.variables),
+          {
+            ...replay.context,
+            url: '/graphql',
+            requestPolicy: replay.context.requestPolicy ?? 'cache-first',
+            suspense: false,
+            cacheAuthorizationEpoch: queryAuthorization().epoch - 1,
+          }
+        ),
+      });
+      await vi.waitFor(() => expect(executions).toHaveLength(3));
+      expect(resolved).not.toHaveBeenCalled();
+      expect(rejected).not.toHaveBeenCalled();
+      expect(observer.getCurrentResult().data).toBeUndefined();
+      const retry = executions.at(-1)!;
+      expect(retry.context.requestPolicy).toBe('network-only');
+      if (failure) {
+        const error = new CombinedError({
+          networkError: new Error('retry failed'),
+        });
+        retry.next({ error, stale: false, hasNext: false });
+        retry.complete();
+        await expect(pending).rejects.toBe(error);
+      } else {
+        retry.next({
+          data: { value: 'current' },
+          stale: false,
+          hasNext: false,
+        });
+        retry.complete();
+        await expect(pending).resolves.toMatchObject({
+          data: { value: 'current' },
+        });
+      }
+    } finally {
+      observer.destroy();
+    }
+  }
+);
 
 const disabledWithoutVariables: UrqlQueryOptions<Data, Variables> = {
   query: DOCUMENT,

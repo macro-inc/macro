@@ -64,11 +64,12 @@ pub struct QueueDiagnostics {
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
 
-    /// Atomically replace only cached optimistic layers and remove their derived
-    /// projections. Preserve mutation requests, UUIDs, leases and retry metadata.
+    /// Atomically replace cached optimistic layers and remove projections only
+    /// for the specified owners. Preserve other shadows and all command metadata.
     fn replace_optimistic_layers(
         &mut self,
         layers: &[(MutationId, PersistedOptimisticLayer)],
+        retired_projection_owners: &[MutationId],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Enumerate raw normalized keys of one type, including hidden, partial and
@@ -788,6 +789,7 @@ impl Storage for InMemoryStorage {
     async fn replace_optimistic_layers(
         &mut self,
         layers: &[(MutationId, PersistedOptimisticLayer)],
+        retired_projection_owners: &[MutationId],
     ) -> Result<(), Self::Error> {
         for (id, layer) in layers {
             if let Some(entry) = self.mutations.get_mut(id) {
@@ -795,7 +797,7 @@ impl Storage for InMemoryStorage {
             }
         }
         self.optimistic_projections
-            .retain(|_, projection| !layers.iter().any(|(id, _)| *id == projection.owner));
+            .retain(|_, projection| !retired_projection_owners.contains(&projection.owner));
         Ok(())
     }
 

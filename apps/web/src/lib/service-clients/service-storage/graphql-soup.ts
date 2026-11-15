@@ -868,7 +868,6 @@ export function getGraphqlSoupClient(): Client {
               })
         );
       host = createHost(true);
-      installCrmCacheHost(host);
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
       const graphqlWsClient = createGraphqlSoupWebSocketClient(
         subscriptionsLifecycle.connected,
@@ -891,7 +890,10 @@ export function getGraphqlSoupClient(): Client {
         exchanges: [
           cacheAuthorityExchange,
           captureTraceParentExchange,
-          optimisticResolversExchange(soupOptimisticResolvers),
+          optimisticResolversExchange(
+            soupOptimisticResolvers,
+            () => host?.authority?.snapshot()?.generation
+          ),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
             ...localDraftQueueLifecycle(host),
@@ -937,6 +939,9 @@ export function getGraphqlSoupClient(): Client {
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),
       });
+      // Installing authority synchronously resets mounted query observers.
+      // Publish both resources first so reentrant readers use this client.
+      cachedClient = client;
       cachedCacheHost = host;
       // A replacement stays blocked until its persisted queue is readable.
       if (cacheRecovery.state() !== 'recovering')
@@ -947,6 +952,7 @@ export function getGraphqlSoupClient(): Client {
       subscriptionsLifecycle.replace(client, host);
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;
+      installCrmCacheHost(host);
       return client;
     } catch (error) {
       reportCacheError(error, 'initialization');

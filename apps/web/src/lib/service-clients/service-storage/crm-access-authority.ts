@@ -214,17 +214,17 @@ export function createCrmAccessAuthority(options: {
       'crm.access.refresh',
       { sampling: 'perf' },
       async (span) => {
-        // A concurrent proof may win the owner CAS. Retry by asking the primary
-        // again; an older proof is never relabelled with the winner's generation.
+        // A concurrent owner change can overtake preparation or win the proof
+        // CAS. Retry the full read and primary proof without relabelling old data.
         for (let attempt = 0; ; attempt++) {
-          const captured = await span.span('crm.access.prepare', async () =>
-            prepare()
-          );
-          const policy = await span.span('crm.access.proof', async () =>
-            options.fetchProof()
-          );
-          span.setAttr('crm.access.attempt', attempt + 1);
           try {
+            const captured = await span.span('crm.access.prepare', async () =>
+              prepare()
+            );
+            const policy = await span.span('crm.access.proof', async () =>
+              options.fetchProof()
+            );
+            span.setAttr('crm.access.attempt', attempt + 1);
             return await span.run(() => accept(captured, policy));
           } catch (error) {
             if (

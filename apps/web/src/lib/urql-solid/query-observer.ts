@@ -367,13 +367,17 @@ export class QueryObserver<
       ) {
         execution.authorityRetryScheduled = true;
         queueMicrotask(() => {
-          if (this.execution === execution && !this.destroyed)
-            this.execute(
-              execution.options,
-              this.client,
-              { requestPolicy: 'network-only' },
-              execution.pending
-            );
+          if (this.execution !== execution || this.destroyed) return;
+          // Transfer the caller's refetch promise before cancelling the old
+          // subscription; only the replacement can settle its outcome.
+          const pending = execution.pending;
+          execution.pending = undefined;
+          this.execute(
+            execution.options,
+            this.client,
+            { requestPolicy: 'network-only' },
+            pending
+          );
         });
       }
       return;

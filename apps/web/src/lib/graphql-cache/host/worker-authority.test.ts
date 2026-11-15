@@ -47,15 +47,17 @@ beforeEach(() => {
         if (request.kind === 'current-authority') result = state;
         if (request.kind === 'transition-authority') {
           expect(request.expected).toBe(state.generation);
-          state = {
-            ...state,
-            generation: crypto.randomUUID(),
-            ready: true,
-            policy: request.policy,
-          };
+          const changed = !state.ready || state.policy !== request.policy;
+          if (changed)
+            state = {
+              ...state,
+              generation: crypto.randomUUID(),
+              ready: true,
+              policy: request.policy,
+            };
           result = {
             authority: state,
-            changed: true,
+            changed,
             affectedOps: [],
             revision: '0',
           };
@@ -92,15 +94,18 @@ it('requires a proof again after a preserved owner replacement', async () => {
   const read = () =>
     host.readQuery({ query: '{ user { emailThread { id } } }' });
   await expect(read()).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+  const transitions: boolean[] = [];
   const proof = vi.fn(async () => {
-    await host.authority!.transition(
+    const result = await host.authority!.transition(
       (await host.authority!.current()).generation,
       'none'
     );
+    transitions.push(result.changed);
   });
   host.authority!.setReadGuard(proof);
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
   expect(proof).toHaveBeenCalledOnce();
+  const preservedGeneration = state.generation;
   options.onEngineReplaced?.(2, 'opened-existing');
   await host.authority!.current();
   host.authority!.setReadGuard(async () => {});
@@ -108,6 +113,8 @@ it('requires a proof again after a preserved owner replacement', async () => {
   host.authority!.setReadGuard(proof);
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
   expect(proof).toHaveBeenCalledTimes(2);
+  expect(transitions).toEqual([true, false]);
+  expect(state.generation).toBe(preservedGeneration);
 });
 
 it('broadens unknown or stale pushes to rereads without delivering their field content', async () => {

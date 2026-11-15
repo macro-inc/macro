@@ -1600,7 +1600,9 @@ export function normalizedCacheExchange(
                 throw new StaleCacheAuthorityError();
             }
           } catch (error) {
-            return {
+            // A rejected payload still completes its network request. Keep
+            // the normal query accounting and persistence acknowledgement.
+            result = {
               ...result,
               data: undefined,
               error: new CombinedError({

@@ -3,6 +3,7 @@ import { cacheAuthorityExchange } from '@graphql-cache/exchange/authority-exchan
 import { createClient, gql } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { afterEach, expect, it, vi } from 'vitest';
+import { onEnd, pipe, subscribe as subscribeToResults } from 'wonka';
 import {
   configureCrmAccessAuthority,
   crmAccessAuthority,
@@ -82,7 +83,7 @@ it('admits fresh frames after restarting a mounted subscription and rejects the 
   const sinks: Parameters<GraphqlWsClient['subscribe']>[1][] = [];
   const subscribe = vi.fn<GraphqlWsClient['subscribe']>((_payload, sink) => {
     sinks.push(sink);
-    return () => {};
+    return () => sink.complete();
   });
   const client = createClient({
     url: '/graphql',
@@ -118,6 +119,14 @@ it('admits fresh frames after restarting a mounted subscription and rejects the 
       })
     );
     sinks[0].next({ data: { activityUpdates: [{ id: 'late old socket' }] } });
+    sinks[0].error(new Error('retired socket failed'));
+    sinks[0].complete();
+    sinks[1].next({ data: { activityUpdates: [{ id: 'still subscribed' }] } });
+    await vi.waitFor(() =>
+      expect(values).toContainEqual({
+        activityUpdates: [{ id: 'still subscribed' }],
+      })
+    );
     await Promise.resolve();
     expect(values).not.toContainEqual({
       activityUpdates: [{ id: 'old forbidden frame' }],
@@ -129,3 +138,70 @@ it('admits fresh frames after restarting a mounted subscription and rejects the 
     subscription.unsubscribe();
   }
 });
+
+it.each(['complete', 'error'] as const)(
+  'delivers the final frame after its proof and before socket %s',
+  async (terminal) => {
+    let resume = () => {};
+    let releaseProof = () => {};
+    const fetchProof = vi.fn(async () => 'none');
+    configureCrmAccessAuthority({
+      fetchProof,
+      retire: async () => {
+        resume = beginQueryAuthorizationReset();
+      },
+      verified: () => resume(),
+    });
+    crmAccessAuthority.setHost(undefined);
+    crmAccessAuthority.setSession('viewer');
+    const sinks: Parameters<GraphqlWsClient['subscribe']>[1][] = [];
+    const subscribe = vi.fn<GraphqlWsClient['subscribe']>((_payload, sink) => {
+      sinks.push(sink);
+      return () => sink.complete();
+    });
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        cacheAuthorityExchange,
+        graphqlSoupSubscriptionExchange({ subscribe }, (document) => document),
+      ],
+    });
+    const values: unknown[] = [];
+    let completed = false;
+    const subscription = pipe(
+      client.subscription(
+        gql`subscription Activity { activityUpdates { ... on GraphqlActivityEvent { id } } }`,
+        {}
+      ),
+      onEnd(() => {
+        completed = true;
+      }),
+      subscribeToResults((result) => {
+        if (result.data) values.push(result.data);
+      })
+    );
+    try {
+      await vi.waitFor(() => expect(sinks).toHaveLength(1));
+      fetchProof.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            releaseProof = () => resolve('none');
+          })
+      );
+      sinks[0].next({ data: { activityUpdates: [{ id: 'final frame' }] } });
+      if (terminal === 'error') sinks[0].error(new Error('socket ended'));
+      else sinks[0].complete();
+      await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(2));
+      expect(completed).toBe(false);
+      expect(values).toHaveLength(0);
+      releaseProof();
+      await vi.waitFor(() => expect(completed).toBe(true));
+      expect(values).toContainEqual({
+        activityUpdates: [{ id: 'final frame' }],
+      });
+    } finally {
+      releaseProof();
+      subscription.unsubscribe();
+    }
+  }
+);

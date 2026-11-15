@@ -23,6 +23,7 @@ import {
   createAuthorityObserver,
   StaleCacheAuthorityError,
 } from '../authority';
+import { CacheAuthoritySchema } from '../authority.generated';
 import {
   isAuthoredSettlement,
   isAuthorityLifecycle,
@@ -88,6 +89,7 @@ const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
 const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
+const AUTHORITY_CHANGED_EVENT = 'graphql-cache://authority-changed';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
 type OpsAffectedPayload = {
@@ -145,6 +147,7 @@ const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   INIT_COMMAND,
   INSPECT_MUTATIONS_COMMAND,
+  'graphql_cache_current_authority',
   'graphql_cache_current_revision',
   'graphql_cache_current_storage_generation',
   'graphql_cache_read',
@@ -164,6 +167,34 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
 // occluded or napping window, a long task): the engine's answer may already be
 // queued behind it. Time out only after a window the page ran through on time.
 const PAGE_STALL_MS = 1_000;
+
+type RequestDeadlineState = { timedOut: boolean; pageStallMs: number };
+
+function withRequestDeadline<T>(
+  command: string,
+  operation: Promise<T>,
+  timeoutMs: number,
+  state: RequestDeadlineState
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    const arm = () => {
+      const due = performance.now() + timeoutMs;
+      timer = setTimeout(() => {
+        const late = performance.now() - due;
+        if (late > PAGE_STALL_MS) {
+          state.pageStallMs += late;
+          arm();
+          return;
+        }
+        state.timedOut = true;
+        reject(new Error(`graphql cache ipc timeout: ${command}`));
+      }, timeoutMs);
+    };
+    arm();
+  });
+  return Promise.race([operation, deadline]).finally(() => clearTimeout(timer));
+}
 
 const DRAFTS_NEED_UPDATE =
   'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.';
@@ -282,31 +313,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     span.setAttr('graphql_cache.ipc.command', command);
     const traceparent = span.traceparent();
     const wireArgs = traceparent ? { ...args, traceparent } : args;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    let pageStallMs = 0;
+    const deadline = { timedOut: false, pageStallMs: 0 };
     try {
       const operation = span.run(() => invoke<T>(command, wireArgs));
-      const deadline = TIMED_COMMANDS.has(command)
-        ? new Promise<never>((_, reject) => {
-            const arm = () => {
-              const due = performance.now() + requestTimeoutMs;
-              timer = setTimeout(() => {
-                const late = performance.now() - due;
-                if (late > PAGE_STALL_MS) {
-                  pageStallMs += late;
-                  arm();
-                  return;
-                }
-                timedOut = true;
-                reject(new Error(`graphql cache ipc timeout: ${command}`));
-              }, requestTimeoutMs);
-            };
-            arm();
-          })
-        : undefined;
-      const value = await (deadline
-        ? Promise.race([operation, deadline])
+      const value = await (TIMED_COMMANDS.has(command)
+        ? withRequestDeadline(command, operation, requestTimeoutMs, deadline)
         : operation);
       if (!isAuthorityLifecycle(command) && !isAuthoredSettlement(command)) {
         const current = await currentAuthority();
@@ -316,20 +327,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
       return markSourceAuthority(value, captured);
     } catch (error) {
-      span.setAttr('graphql_cache.ipc.outcome', timedOut ? 'timeout' : 'error');
+      span.setAttr(
+        'graphql_cache.ipc.outcome',
+        deadline.timedOut ? 'timeout' : 'error'
+      );
       span.error(
-        timedOut
+        deadline.timedOut
           ? 'Native cache request timed out'
           : 'Native cache request failed'
       );
       // Native command errors cross the boundary as strings.
       throw cacheAuthorityError(error);
     } finally {
-      clearTimeout(timer);
-      if (pageStallMs > 0)
+      if (deadline.pageStallMs > 0)
         span.setAttr(
           'graphql_cache.ipc.page_stall_ms',
-          Math.round(pageStallMs)
+          Math.round(deadline.pageStallMs)
         );
       span.end();
     }
@@ -343,11 +356,43 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     return authorityObserver.observe(value, version);
   }
 
-  const unlistenAuthority = listen('graphql-cache://authority-changed', () => {
-    pendingReads.clear();
-    liveQueries.clear();
-    fireAndForget(currentAuthority(), 'graphql_cache.authority');
-  });
+  let authorityListenerError: Error | undefined;
+  const authorityListenerDeadline = { timedOut: false, pageStallMs: 0 };
+  const installingAuthorityListener = listen<unknown>(
+    AUTHORITY_CHANGED_EVENT,
+    (event) => {
+      const parsed = CacheAuthoritySchema.safeParse(event.payload);
+      if (!parsed.success || parsed.data.identity !== options.scope) return;
+      authorityObserver.reset();
+      // Publish the owner-issued generation before any async refresh so retained
+      // query callbacks are fenced by the application's retirement epoch too.
+      authorityObserver.observe(parsed.data);
+      pendingReads.clear();
+      liveQueries.clear();
+      fireAndForget(currentAuthority(), 'graphql_cache.authority');
+    }
+  );
+  const unlistenAuthority: Promise<UnlistenFn | undefined> =
+    withRequestDeadline(
+      AUTHORITY_CHANGED_EVENT,
+      installingAuthorityListener,
+      requestTimeoutMs,
+      authorityListenerDeadline
+    ).catch((error: unknown) => {
+      authorityListenerError =
+        error instanceof Error ? error : new Error(String(error));
+      authorityObserver.reset();
+      return undefined;
+    });
+  fireAndForget(
+    installingAuthorityListener.then(
+      (unlisten) => {
+        if (authorityListenerDeadline.timedOut) return unlisten();
+      },
+      () => undefined
+    ),
+    'graphql-cache-host'
+  );
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
@@ -452,6 +497,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const unlistenHydration = listenForHydration();
 
   async function initialize(): Promise<void> {
+    // Authority notifications fence replies already in flight. Without the
+    // listener this host cannot safely publish cached content.
+    await unlistenAuthority;
+    if (authorityListenerError) throw authorityListenerError;
     const { default: schemaSdl } = await import(
       '../../../../../../static_assets/schema.graphql?raw'
     );
@@ -739,7 +788,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           keys,
         }
       );
-      return { ...result, revision: parseCacheRevision(result.revision) };
+      return markSourceAuthority(
+        { ...result, revision: parseCacheRevision(result.revision) },
+        sourceAuthorityGeneration(result)
+      );
     },
 
     async search(args: SearchCacheArgs): Promise<SearchCachePage> {

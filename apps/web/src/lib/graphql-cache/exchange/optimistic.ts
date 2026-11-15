@@ -547,6 +547,7 @@ export function optimisticMutationContext<TData>(
   }
   const context: OptimisticMutationContext<TData> = {
     uuid,
+    snapshotRejected: options.snapshotRejected,
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
     authorizationEpoch:
@@ -600,6 +601,7 @@ export function optimisticContextOf(
     }
     return {
       uuid: context.uuid,
+      snapshotRejected: context.snapshotRejected,
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
       authorizationEpoch: context.authorizationEpoch,

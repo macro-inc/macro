@@ -25,7 +25,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/normalize.rs` / `src/denormalize.rs`: GraphQL response ↔ normalized record
   transforms.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
-- `src/engine/authority.rs`: durable permission generations and admission under the owner lock. Keep the closed marker until application retirement completes; preserve queue command identity/lifecycle while stripping obsolete response snapshots. Generate Rust/TypeScript transport schemas with `bun run gen-cache-authority-schema --rust` from `apps/web`.
+- `src/engine/authority.rs`: durable permission generations and admission under the owner lock. Keep the closed marker until application retirement completes; retire projection-only sources and persist rebuilt layers without changing commands or unrelated projection shadows. Generate Rust/TypeScript transport schemas with `bun run gen-cache-authority-schema --rust` from `apps/web`.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
   used to select which cached records satisfy a query.
 - `src/search.rs`: disposable Quick Access projection (version 6); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`.
