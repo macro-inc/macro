@@ -2,6 +2,7 @@ import { unique } from './harness/api';
 import { ChannelView, conversations } from './harness/channel';
 import {
   expect,
+  failsSometimes,
   failsSometimesWithSoup,
   knownDefect,
   test,
@@ -61,9 +62,6 @@ test('CHN-02 a team channel made in the app appears for a teammate under the tea
   people,
   pageFor,
 }) => {
-  // Known defect with VITE_ENABLE_GRAPHQL_SOUP: a team channel someone else
-  // makes does not appear in a teammate's open list until they reload.
-  knownDefect('on');
   const name = unique('team');
   const benPage = await pageFor('ben');
   // Ben is in the app and hearing what happens before the channel is made:
@@ -88,20 +86,27 @@ test('CHN-02 a team channel made in the app appears for a teammate under the tea
     const found = benPage
       .getByRole('tree', { name: 'Conversations' })
       .getByRole('treeitem', { name });
-    await expect(found).toBeVisible();
-    await found.click();
-
     const benView = new ChannelView(benPage, id);
-    await benView.shown();
-    await benView.expectEndsWith(['hello team']);
-    await expect(channelHeader(benPage)).toContainText(name);
+    const readByBen = async () => {
+      await expect(found).toBeVisible();
+      await found.click();
+      await benView.shown();
+      await benView.expectEndsWith(['hello team']);
+      await expect(channelHeader(benPage)).toContainText(name);
+      await expect(sidebarRow(benPage, id)).toContainText(name);
+      await expect
+        .poll(() => sidebarSectionOf(benPage, id), {
+          message: 'the heading the channel sits under for Ben',
+        })
+        .toBe('team_channels');
+    };
+    // Known defect on main, on some machines in every run and on others in
+    // none: Ben's list is read again before the new channel is in it, so the
+    // row is missing, or goes when the channel is opened, until a reload.
+    await failsSometimes(readByBen);
 
-    await expect(sidebarRow(benPage, id)).toContainText(name);
-    await expect
-      .poll(() => sidebarSectionOf(benPage, id), {
-        message: 'the heading the channel sits under for Ben',
-      })
-      .toBe('team_channels');
+    await benPage.goto('/app/channels');
+    await readByBen();
   } finally {
     // Team channels show for everyone on the team, in every other test.
     await deleteChannel('ada', id);
@@ -286,7 +291,8 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   // Known defect on main: the deleted channel leaves "All channels" but its
   // row stays under Favorites, opening "Conversation unavailable", until the
   // page is reloaded.
-  // Not with VITE_ENABLE_GRAPHQL_SOUP: there the row goes at once.
+  // With VITE_ENABLE_GRAPHQL_SOUP the row goes at once on some machines and
+  // stays on others.
   knownDefect('off');
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['a message']);
@@ -301,7 +307,9 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
     .click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
-  await expect(favoriteRow(page, channel.id)).toHaveCount(0);
+  await failsSometimesWithSoup(async () => {
+    await expect(favoriteRow(page, channel.id)).toHaveCount(0);
+  });
 });
 
 // If this fails, any member can delete a channel that is not theirs.

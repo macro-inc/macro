@@ -90,16 +90,20 @@ test('SCROLL-04 scrolled up, a message from someone else does not move what is b
   await view.open();
   await view.expectAtBottom();
   await view.wheel(-2_800);
-  // The list has stopped when two looks in a row find the same message in
-  // the same place.
+  // The list has stopped when five looks in a row find the same message in
+  // the same place: on a slow machine older history is still being drawn
+  // above after two looks agree.
   let reading = await view.topVisible();
+  let unmoved = 0;
   await expect
     .poll(async () => {
       const before = reading;
       reading = await view.topVisible();
-      return reading.id === before.id && reading.top === before.top;
+      const same = reading.id === before.id && reading.top === before.top;
+      unmoved = same ? unmoved + 1 : 0;
+      return unmoved;
     })
-    .toBe(true);
+    .toBeGreaterThanOrEqual(5);
   const height = await view.list.evaluate((list) => list.scrollHeight);
 
   await ben.post(channel.id, 'arrives below the window');

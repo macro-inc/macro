@@ -114,3 +114,30 @@ export function readHistory(ofCast = cast()): History {
   ) as StoredHistory;
   return stored.history;
 }
+
+/**
+ * Takes every channel out of the cast's Favorites. The sidebar draws only the
+ * rows near its window, and a deleted channel can stay under Favorites
+ * (CHN-08), so on a stack many runs have used the row a test has just made
+ * would be past the ones drawn.
+ */
+export async function clearFavoriteChannels(ofCast: number): Promise<void> {
+  const http = await apiFor('ada', ofCast);
+  try {
+    const listed = await http.get('/dss/favorites?entityType=channel');
+    if (!listed.ok()) {
+      throw new Error(`list favorites failed (${listed.status()})`);
+    }
+    const { favorites } = (await listed.json()) as {
+      favorites: { entityId: string }[];
+    };
+    for (const { entityId } of favorites) {
+      const removed = await http.delete(`/dss/favorites/channel/${entityId}`);
+      if (!removed.ok() && removed.status() !== 404) {
+        throw new Error(`remove favorite failed (${removed.status()})`);
+      }
+    }
+  } finally {
+    await http.dispose();
+  }
+}
