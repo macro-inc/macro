@@ -275,18 +275,21 @@ for (const provider of PROVIDERS) {
         ]);
 
       await deleteAtProvider(mailbox, second);
+      // The app is asked first: the thread is opened again until it shows
+      // the deletion, which the service syncs a little later.
+      await expect(async () => {
+        await mailbox.open(`/app/mail/${thread.id}`);
+        await expect(messages(page)).toHaveText(
+          [/Where shall we go\?/, /The coast, I think\./],
+          { timeout: 5_000 }
+        );
+        await expect(page.getByText('Forget that: wrong list.')).toHaveCount(0);
+      }).toPass({ timeout: provider === 'OUTLOOK' ? 150_000 : 60_000 });
+      saw('STL-902');
       await expect
-        .poll(bodies, { timeout: provider === 'OUTLOOK' ? 150_000 : 60_000 })
+        .poll(bodies)
         .toEqual(['Where shall we go?', 'The coast, I think.']);
       confirmed('F-020');
-
-      await mailbox.open(`/app/mail/${thread.id}`);
-      await expect(messages(page)).toHaveText([
-        /Where shall we go\?/,
-        /The coast, I think\./,
-      ]);
-      await expect(page.getByText('Forget that: wrong list.')).toHaveCount(0);
-      saw('STL-902');
     });
 
     // When this fails, mail the owner sent from the provider's own client

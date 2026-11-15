@@ -76,11 +76,19 @@ for (const provider of PROVIDERS) {
 
       await page.getByRole('button', { name: 'Cc', exact: true }).click();
       did('AC-011');
+      // The button gives way to its field.
+      await expect(
+        page.getByRole('button', { name: 'Cc', exact: true })
+      ).toBeHidden();
       await recipientInput(page, 'Cc').fill(zed);
       await page.keyboard.press('Enter');
       did('AC-003');
       await page.getByRole('button', { name: 'Bcc', exact: true }).click();
       did('AC-012');
+      // The button gives way to its field.
+      await expect(
+        page.getByRole('button', { name: 'Bcc', exact: true })
+      ).toBeHidden();
       await recipientInput(page, 'Bcc').fill(ida);
       await page.keyboard.press('Enter');
       did('AC-003');

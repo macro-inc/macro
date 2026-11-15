@@ -109,11 +109,14 @@ test.describe('moving a thread to a folder', () => {
     await mailbox.open('/app/mail');
     await focusRow(page, contract.id);
     await page.keyboard.press('m');
+    did('AL-197');
+    await expect(
+      page.getByRole('combobox', { name: /Search folders/ })
+    ).toBeVisible();
     await page
       .getByRole('combobox', { name: /Search folders/ })
       .fill('Clients 2026');
     await page.keyboard.press('Enter');
-    did('AL-197');
     await page
       .getByRole('status')
       .filter({ hasText: 'Moved to folder' })

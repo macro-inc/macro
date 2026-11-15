@@ -346,7 +346,12 @@ for (const provider of PROVIDERS) {
       await expect(
         messageCard(page, 'Approved from my side.').last()
       ).toBeVisible();
-      await expect(messageCard(page, 'About Budget.').first()).toBeVisible();
+      // The original in a card of its own: the reply's quote holds its text too.
+      await expect(
+        messageCard(page, 'About Budget.').filter({
+          hasNotText: 'Approved from my side.',
+        })
+      ).toBeVisible();
       saw('STL-940');
 
       const raw = await onlySentRaw(mailbox);

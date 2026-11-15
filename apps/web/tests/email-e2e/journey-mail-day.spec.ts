@@ -192,11 +192,14 @@ for (const provider of PROVIDERS) {
       // Filed in a new Macro folder: the folder lists it and not the others.
       await focusRow(page, contract.id);
       await page.keyboard.press('m');
+      did('AL-197');
+      await expect(
+        page.getByRole('combobox', { name: /Search folders/ })
+      ).toBeVisible();
       await page
         .getByRole('combobox', { name: /Search folders/ })
         .fill('Clients 2026');
       await page.keyboard.press('Enter');
-      did('AL-197');
       await page
         .getByRole('status')
         .filter({ hasText: 'Moved to folder' })
