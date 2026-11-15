@@ -5,7 +5,6 @@ import { existsSync } from 'node:fs';
 import {
   type DerivedOperation,
   emailOwned,
-  emailSource,
   graphqlOperations,
   hotkeys,
   restCalls,
@@ -271,11 +270,6 @@ export type Drift = {
   /** What it is about, as a heading. */
   check: string;
   items: string[];
-  /**
-   * Reported and never fails the check: a difference that a change with no
-   * meaning for email can cause.
-   */
-  advisory?: true;
 };
 
 export type Ledger = {
@@ -439,10 +433,11 @@ function difference(
 const NETWORK_LIST = 'tests/email-e2e/ledger/manifest/network.ts';
 
 /**
- * The network list against the source, for email's own operations only: one
- * that is email's and unlisted, and one listed as email's or shared that the
- * source no longer defines. An operation of another part of the app is no
- * difference, listed or not, so that adding one there cannot fail this check.
+ * The network list against the source, for email's own operations only
+ * (`emailOwned`): one the source defines that is not listed, and one listed
+ * that the source no longer defines. An operation of another part of the
+ * app is no difference, listed or not, so that adding, renaming or removing
+ * one there cannot fail this check.
  */
 export function networkDrift(
   check: string,
@@ -466,14 +461,14 @@ export function networkDrift(
   }
   const source = new Set(defined.map((each) => each.id));
   const stale = listed
-    .filter((each) => each.scope !== 'other' && !source.has(each.id))
+    .filter((each) => emailOwned(each) && !source.has(each.id))
     .map(
       (each) =>
-        `${each.id}: listed as ${each.scope}, no longer in the source: remove or rename its line in ${list} in ${NETWORK_LIST}`
+        `${each.id}: no longer in the source: remove or rename its line in ${list} in ${NETWORK_LIST}`
     );
   if (stale.length) {
     drift.push({
-      check: `${check}: in the network list, gone from the source`,
+      check: `${check}: email's in the network list, gone from the source`,
       items: stale,
     });
   }
@@ -492,7 +487,6 @@ function manifestDrift(): Drift[] {
 
   const lost: string[] = [];
   const gone: string[] = [];
-  const goneElsewhere: string[] = [];
   for (const group of GROUPS as readonly Group[]) {
     const surfaces = new Set(group.surfaces.map((surface) => surface.id));
     for (const row of [...group.actions, ...group.states]) {
@@ -506,10 +500,7 @@ function manifestDrift(): Drift[] {
         const path = file.startsWith('src/')
           ? `${WEB}${file}`
           : `${REPOSITORY}${file}`;
-        if (existsSync(path)) continue;
-        // A file of another part of the app can be renamed with no change to
-        // email: the row's tests still say whether the element works.
-        (emailSource(file) ? gone : goneElsewhere).push(`${row.id}: ${file}`);
+        if (!existsSync(path)) gone.push(`${row.id}: ${file}`);
       }
     }
   }
@@ -517,14 +508,6 @@ function manifestDrift(): Drift[] {
     drift.push({ check: 'Rows on an unknown surface', items: lost });
   if (gone.length) {
     drift.push({ check: 'Rows whose source file is gone', items: gone });
-  }
-  if (goneElsewhere.length) {
-    drift.push({
-      check:
-        'Rows whose source file outside the email code is gone (reported, does not fail): name the new file',
-      items: goneElsewhere,
-      advisory: true,
-    });
   }
 
   const actions = (GROUPS as readonly Group[]).flatMap(

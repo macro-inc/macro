@@ -614,9 +614,9 @@ function report(mode: Mode): void {
       : [
           'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',
         ]),
-    ...ledger.drift
-      .filter((each) => !each.advisory)
-      .flatMap((each) => each.items.map((item) => `${each.check}: ${item}`)),
+    ...ledger.drift.flatMap((each) =>
+      each.items.map((item) => `${each.check}: ${item}`)
+    ),
   ];
   const { summary, page } = render(
     ledger,

@@ -113,21 +113,25 @@ export type DerivedOperation = {
 };
 
 /**
- * Whether an operation the source defines is email's own, so that the
- * manifest has to list it: one in an `email-*.graphql` document, or a call
- * of the email service's `/email` paths. The app's other documents and the
- * calendar calls of the same client change without email changing, and the
- * check leaves them alone.
+ * Whether an operation is email's own, so that the manifest and the source
+ * have to agree on it. A GraphQL operation is when its name says so (`Email`
+ * or `Mail`) or its document does (`email-*.graphql`); a call of the email
+ * service's client is unless it goes to the calendar. Every other operation
+ * can come and go with no change to email, and the check leaves it alone.
+ * The name is what a line of the manifest still has once the operation is
+ * gone from the source, so the rule can be asked of both.
  */
-export function emailOwned(operation: DerivedOperation): boolean {
-  if (operation.kind === 'rest') return /^[A-Z]+ \/email\//.test(operation.id);
-  return /(^|\/)email-[^/]*\.graphql$/.test(operation.file);
-}
-
-/** Whether a source file is part of the web app's email code. */
-export function emailSource(file: string): boolean {
-  return EMAIL_SOURCE.some(
-    (root) => file === root || file.startsWith(`${root}/`)
+export function emailOwned(operation: {
+  id: string;
+  kind: DerivedOperation['kind'];
+  file?: string;
+}): boolean {
+  if (operation.kind === 'rest') {
+    return !/^[A-Z]+ \/calendar(\/|$)/.test(operation.id);
+  }
+  return (
+    /Email|Mail/.test(operation.id) ||
+    /(^|\/)email-[^/]*\.graphql$/.test(operation.file ?? '')
   );
 }
 

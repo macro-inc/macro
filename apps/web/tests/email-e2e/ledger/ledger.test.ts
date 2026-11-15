@@ -416,7 +416,8 @@ describe('networkDrift', () => {
         'GraphQL operations',
         'GRAPHQL',
         [
-          ...defined.filter((each) => each.id !== 'Calendars'),
+          // Soup is listed as shared and Calendars as other: both gone.
+          ...defined.filter((each) => each.id === 'SaveEmailDraft'),
           {
             id: 'NotificationInboxClears',
             kind: 'query',
@@ -478,21 +479,35 @@ describe('networkDrift', () => {
     ]);
   });
 
-  it('fails when an operation email makes is gone from the source', () => {
+  it('fails when an operation of email is gone from the source', () => {
     expect(
       networkDrift(
         'GraphQL operations',
         'GRAPHQL',
-        defined.filter((each) => each.id !== 'Soup'),
+        defined.filter((each) => each.id !== 'SaveEmailDraft'),
         listed
       )
     ).toEqual([
       {
-        check: 'GraphQL operations: in the network list, gone from the source',
+        check:
+          "GraphQL operations: email's in the network list, gone from the source",
         items: [
-          'Soup: listed as shared, no longer in the source: remove or rename its line in GRAPHQL in tests/email-e2e/ledger/manifest/network.ts',
+          'SaveEmailDraft: no longer in the source: remove or rename its line in GRAPHQL in tests/email-e2e/ledger/manifest/network.ts',
         ],
       },
+    ]);
+    expect(
+      networkDrift(
+        'Email service calls',
+        'REST',
+        [],
+        [
+          { id: 'GET /email/email/threads/{}', kind: 'rest', scope: 'email' },
+          { id: 'GET /calendar/calendars', kind: 'rest', scope: 'other' },
+        ]
+      )[0].items
+    ).toEqual([
+      'GET /email/email/threads/{}: no longer in the source: remove or rename its line in REST in tests/email-e2e/ledger/manifest/network.ts',
     ]);
   });
 });

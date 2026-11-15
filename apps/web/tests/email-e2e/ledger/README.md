@@ -194,17 +194,18 @@ that one variable in `crates/email_e2e/src/process.rs`.
 `derive.ts` reads these off the code, and the report lists every difference
 under "Manifest against the source":
 
-- every operation of email's own (in an `email-*.graphql` document, or a
-  call of the email service's `/email` paths) is in `manifest/network.ts`,
-  and every operation listed there as `email` or `shared` is still in the
-  source. Operations of the rest of the app are not checked, listed or not:
-  a change there with no meaning for email must not fail this job;
+- the operations of email's own are the same in the source and in
+  `manifest/network.ts`: a GraphQL operation named for email (`Email` or
+  `Mail` in its name) or in an `email-*.graphql` document, and every call
+  of the email service's client that is not to the calendar. The other
+  operations are not checked, listed or not: adding, renaming or removing
+  one has no meaning for email and must not fail this job. So the lines for
+  them (Soup, saved views, notifications) are kept by hand;
 - every hotkey the email code registers and every email hotkey token is on an
   action row;
 - every toast the email code raises is on a state row;
-- every source file a row names exists (one outside the email code that is
-  gone is reported and does not fail: name the new file), ids are unique,
-  rows are on a surface of their group;
+- every source file a row names exists, ids are unique, rows are on a surface
+  of their group;
 - every row belongs to a function of `functions.tsv`, and every function
   with a UI has a row, and a state row to see its result by.
 
