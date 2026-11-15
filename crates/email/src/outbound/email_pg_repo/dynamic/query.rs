@@ -1,5 +1,7 @@
+mod owned_scope;
 mod team_scope;
 
+use super::SqlFragment;
 use super::filters::*;
 use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
@@ -11,9 +13,14 @@ use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
+use owned_scope::OwnedRead;
+#[cfg(test)]
+pub(crate) use owned_scope::inbox_window;
+pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
-use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use team_scope::TeamRead;
@@ -257,6 +264,18 @@ fn push_preview_message_select(
     email_filter: &Expr<EmailLiteral>,
     params: &QueryParams,
 ) {
+    push_preview_message_select_with(builder, view, email_filter, params, None);
+}
+
+/// [`push_preview_message_select`], with one more column of the picked
+/// message as `(expression on m, name)`.
+fn push_preview_message_select_with(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    column: Option<(SqlFragment, &str)>,
+) {
     builder.push(
         r#"
             SELECT
@@ -264,7 +283,15 @@ fn push_preview_message_select(
                    m.snippet,
                    m.from_contact_id,
                    m.from_name,
-                   m.is_draft
+                   m.is_draft"#,
+    );
+    if let Some((expression, name)) = column {
+        builder.push(",\n                   ");
+        expression.push_into(builder, &params.user_id);
+        builder.push(format!(" AS {name}"));
+    }
+    builder.push(
+        r#"
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND "#,
@@ -1250,6 +1277,83 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     team_id: Option<Uuid>,
     team_read: Option<TeamReadTuning>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: team_read,
+            owned: Some(OwnedReadTuning::DEFAULT),
+        },
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+/// [`dynamic_email_thread_cursor`] with the owned address read's switch
+/// points given, or with `owned_read: None`, owned address filters read by
+/// the general builder, as the parity tests compare. Also returns the
+/// streams that read the page when the owned address read took it.
+#[cfg(test)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the entry point's arguments plus the owned read's tuning"
+)]
+pub(crate) async fn dynamic_email_thread_cursor_owned_with(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    owned_read: Option<OwnedReadTuning>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: owned_read,
+        },
+    )
+    .await
+}
+
+/// The page-order reads a request may take; `None` leaves its requests to the
+/// general builder.
+struct Reads {
+    team: Option<TeamReadTuning>,
+    owned: Option<OwnedReadTuning>,
+}
+
+/// A page, and the owned address read's streams when it read the page.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the entry point's arguments plus the reads' tunings"
+)]
+async fn read_page(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    reads: Reads,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+    // A repeated inbox would list its threads twice.
+    let link_ids = distinct_links(link_ids);
+    let link_ids = link_ids.as_slice();
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = query.vals();
@@ -1293,7 +1397,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     // resulting contact_id / TRASH label_id sets cover all team mailboxes.
     let resolved = resolve_filters(pool, link_ids, team_id, email_filter).await?;
     if can_short_circuit(email_filter, &resolved) {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), None));
     }
     let subject_subscans =
         team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
@@ -1312,8 +1416,22 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         project_scope,
     };
 
+    // The owned read's gate refuses team requests itself, so a test that
+    // drops that check sees team pages leave the team read.
+    let params = match reads.owned {
+        Some(tuning) => match OwnedRead::new(view, email_filter, params, tuning) {
+            Ok(read) => {
+                let (streams, rows) = read_owned_page(pool, read).await?;
+                return Ok((rows, Some(streams)));
+            }
+            Err(params) => *params,
+        },
+        None => params,
+    };
     if team_id.is_some() {
-        return read_team_page(pool, view, email_filter, params, team_read).await;
+        return read_team_page(pool, view, email_filter, params, reads.team)
+            .await
+            .map(|rows| (rows, None));
     }
 
     let mut qb = build_query(view, email_filter, params);
@@ -1336,10 +1454,10 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
             .await?;
         let rows = query.fetch_all(&mut *transaction).await?;
         transaction.commit().await?;
-        return Ok(rows);
+        return Ok((rows, None));
     }
 
-    query.fetch_all(pool).await
+    Ok((query.fetch_all(pool).await?, None))
 }
 
 /// How long a team-scoped (CRM) page may run in the database, across all its
@@ -1377,6 +1495,38 @@ async fn read_team_page(
     };
     transaction.commit().await?;
     Ok(rows)
+}
+
+/// `link_ids` without repeats, in order.
+fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
+    let mut seen = HashSet::with_capacity(link_ids.len());
+    link_ids
+        .iter()
+        .copied()
+        .filter(|link| seen.insert(*link))
+        .collect()
+}
+
+/// Reads an owned address page with [`OwnedRead`], all its statements on one
+/// snapshot: a short inbox page is final only if the window it read is the
+/// one the count sees. Like the general builder's owned requests, it has no
+/// statement timeout, so it never errors where the general builder answers.
+async fn read_owned_page(
+    pool: &PgPool,
+    read: OwnedRead<'_>,
+) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+    let mut transaction = begin_snapshot(pool).await?;
+    let page = read.fetch(&mut transaction).await?;
+    transaction.commit().await?;
+    Ok(page)
+}
+
+/// A read-only transaction whose statements all read one snapshot.
+pub(crate) async fn begin_snapshot(
+    pool: &PgPool,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    pool.begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        .await
 }
 
 /// Bounds the transaction's next statement by what is left until `deadline`.

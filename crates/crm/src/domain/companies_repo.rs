@@ -1,8 +1,8 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-    CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
+    CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     DomainMetadata,
 };
 use chrono::{DateTime, Utc};
@@ -74,6 +74,27 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         &self,
         scope: super::contact_listing::CrmContactListScope<'_>,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
+    /// Previews of the companies in `company_ids` that `viewer_id` may open,
+    /// each as [`Self::get_company_for_team`] titles it after the access
+    /// check: the viewer belongs to the company's team, and a hidden company
+    /// is visible only to that team's admins and owners. Others are left out.
+    fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmCompanyPreview>, CrmError>> + Send;
+
+    /// Previews of the contacts in `contact_ids` that `viewer_id` may open,
+    /// with [`Self::get_contact_for_team`]'s visibility after the access
+    /// check: the viewer belongs to the contact's team, and a hidden contact,
+    /// or one under a hidden company, is visible only to its admins and
+    /// owners. Others are left out.
+    fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmContactPreview>, CrmError>> + Send;
 
     /// The items of `entity_types` whose Companies property names a company,
     /// or whose Contacts property names a contact, of the activity scope that
@@ -594,6 +615,18 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// [`Self::get_contact_for_team`] with the contact's company summary,
+    /// in one statement. The summary's name and domain resolve as
+    /// [`Self::get_company_for_team`] resolves them; it is `None` when the
+    /// contact has no company. Visibility is the contact read's: a member
+    /// never reaches a contact under a hidden company.
+    fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Searches the team's contacts whose email or name contains `query`
     /// (case-insensitive), most recently interacted first, at most `limit`

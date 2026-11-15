@@ -7,13 +7,15 @@ mod association;
 mod contact_listing;
 mod contact_update;
 mod email_privacy;
+mod previews;
 
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
-        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts,
-        CrmContact, CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
+        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanySummary,
+        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmDomain, CrmDomainStatus, CrmError,
+        CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
+        DepopulateContactOutcome, DomainMetadata,
     },
     stages::TeamSettingsStore,
 };
@@ -1079,6 +1081,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         scope: crate::domain::contact_listing::CrmContactListScope<'_>,
     ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
         self.query_activity(scope).await
+    }
+
+    async fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        self.query_company_previews(viewer_id, company_ids).await
+    }
+
+    async fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        self.query_contact_previews(viewer_id, contact_ids).await
     }
 
     async fn activity_property_edges(
@@ -2588,6 +2606,103 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
+        // `read_contact` with its company's summary in the same statement.
+        // Visibility is `read_contact`'s: a member never reaches a contact
+        // under a hidden company, so a summary is hidden only for admins.
+        // The name resolves as `get_company_for_team` resolves it: the
+        // team's override, else the directory name of the oldest domain,
+        // which is also the domain shown when the company has no name.
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!",
+                CASE WHEN co.team_id = ct.team_id THEN co.id END AS "summary_id?",
+                COALESCE(co.custom_name, primary_domain.name) AS "summary_name?",
+                primary_domain.domain AS "summary_domain?",
+                co.hidden AS "summary_hidden?"
+            FROM crm_contacts ct
+            LEFT JOIN crm_companies co ON co.id = ct.company_id
+            LEFT JOIN LATERAL (
+                SELECT d.domain, dd.name
+                FROM (
+                    SELECT d.domain
+                    FROM crm_domains d
+                    WHERE d.company_id = co.id
+                    ORDER BY d.created_at ASC NULLS LAST, d.id
+                    LIMIT 1
+                ) d
+                LEFT JOIN crm_domain_directory dd
+                    ON LOWER(dd.domain) = LOWER(d.domain)
+            ) primary_domain ON TRUE
+            WHERE ct.id = $1
+              AND ct.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
+            "#,
+            contact_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        else {
+            return Ok(None);
+        };
+        let company = row.summary_id.map(|id| CrmCompanySummary {
+            id,
+            name: row.summary_name,
+            domain: row.summary_domain,
+            hidden: row.summary_hidden.unwrap_or_default(),
+        });
+        Ok(Some(CrmContactDetail {
+            contact: CrmContact {
+                id: row.id,
+                company_id: row.company_id,
+                email: row.email,
+                name: row.name,
+                hidden: row.hidden,
+                first_interaction: row.first_interaction,
+                last_interaction: row.last_interaction,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                emails: row.emails,
+                company_domain_emails: row.company_domain_emails,
+            },
+            company,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn search_contacts_for_team(
         &self,
         team_id: &uuid::Uuid,
@@ -2746,8 +2861,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         // Mirrors `list_companies_for_soup`'s domain + directory join shape
         // but scoped to a single id. Domains arrive ordered by their
-        // `created_at` so the first row carries the "primary" domain and
-        // its `crm_domain_directory` row contributes name/description.
+        // `created_at`, then id (as the preview batch orders them), so the
+        // first row carries the "primary" domain and its
+        // `crm_domain_directory` row contributes name/description.
         // First-interaction / last-interaction are aliased into the
         // CrmCompany.created_at / updated_at slots — same convention as
         // the soup listing.
@@ -2772,7 +2888,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             WHERE c.id = $1
               AND c.team_id = $2
               AND ($3 OR c.hidden = FALSE)
-            ORDER BY d.created_at ASC NULLS LAST
+            ORDER BY d.created_at ASC NULLS LAST, d.id
             "#,
             company_id,
             team_id,
@@ -2789,7 +2905,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // Display name is the team-scoped override when set, otherwise
         // the primary domain's directory name (first row by
-        // `created_at ASC` per the ORDER BY). Description comes from
+        // `created_at ASC, id` per the ORDER BY). Description comes from
         // the directory.
         let name = first.display_name.clone();
         let description = first.dir_description.clone();

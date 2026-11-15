@@ -470,6 +470,20 @@ impl AccessRepository for MockRepo {
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         Ok(self.pipeline_access_list.lock().await.clone())
     }
+    async fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        Ok(self
+            .pipeline_access_list
+            .lock()
+            .await
+            .iter()
+            .filter(|(id, _)| ids.contains(id))
+            .copied()
+            .collect())
+    }
 
     async fn get_database_access(
         &self,
