@@ -1405,8 +1405,9 @@ can run a routine again.
 
 **Webhooks** (**Webhook received**) is offered while `enable-routine-webhooks`
 is on (on by default in development), whatever `enable-event-routines` says:
-the server serves webhook routines without either flag. A webhook trigger
-reads without **in**; its panel shows **Webhook URL** and **Only when the JSON
+the server serves webhook routines without either flag. A saved webhook trigger
+reads **Webhook received at its URL**, where **its URL** reopens its panel;
+the panel shows **Webhook URL** and **Only when the JSON
 body…** rows (the GitHub payload rows, over the POSTed JSON). Before the
 routine is saved it says **Save the routine to get its URL.**; then **Create
 URL** mints one (routine owner with edit access, in a person's own session;
