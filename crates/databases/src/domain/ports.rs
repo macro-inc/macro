@@ -102,6 +102,14 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         table_id: TableId,
     ) -> impl Future<Output = Result<Vec<RowRef>, Self::Error>> + Send;
 
+    /// Those of `row_ids` that are rows of one of `table_ids`, by table id,
+    /// then in each table's position order. Reads only the named rows.
+    fn rows_in_tables(
+        &self,
+        table_ids: &[TableId],
+        row_ids: &[RowId],
+    ) -> impl Future<Output = Result<Vec<(TableId, RowRef)>, Self::Error>> + Send;
+
     /// Current versions for a set of tables.
     fn table_versions(
         &self,

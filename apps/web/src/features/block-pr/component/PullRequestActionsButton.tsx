@@ -18,6 +18,7 @@ export function PullRequestActionsButton(props: { actions: PrActions }) {
           <ButtonGroup
             variant={primary().key === 'merge' ? 'success' : 'secondary'}
             size="sm"
+            class="border-0"
             aria-label={t('entityActions.prActions')}
           >
             <ButtonGroup.Button

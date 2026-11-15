@@ -35,6 +35,7 @@ export function InviteAgentPanel(props: {
   teamId: string;
   header?: JSX.Element;
   onCancel: () => void;
+  /** The invite went through; setup goes on without the dialog. */
   onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
@@ -56,9 +57,9 @@ export function InviteAgentPanel(props: {
         teamId: props.teamId,
         request,
       });
-      toast.success(t('teamAgents.invited', { name: agent.name }), {
-        subtext: t('teamAgents.invitedDescription'),
-      });
+      // Setup takes minutes; the inviter hears from a notification once the
+      // agent is ready, and its row in Members shows the step meanwhile.
+      toast.success(t('teamAgents.beingSetUp', { name: agent.name }));
       if (!disposed) props.onInvited();
     } catch (failure) {
       if (!disposed) setError(inviteFailure(failure));

@@ -237,7 +237,8 @@ const DUPLICATE_ANSWERED_CALL_WINDOW_MS = 2_000;
 
 async function joinChannelCallWhenReady(
   channelId: string,
-  nativeMedia = false
+  nativeMedia = false,
+  callId?: string
 ): Promise<void> {
   console.info('[callkit] waiting for split manager before joining', {
     channelId,
@@ -268,7 +269,7 @@ async function joinChannelCallWhenReady(
     });
     return openChannelCallTab(channelId);
   }
-  return joinChannelCall(channelId);
+  return joinChannelCall(channelId, { kind: 'join', callId });
 }
 
 /**
@@ -410,7 +411,7 @@ export function useCallKitSetup() {
       });
       markNativeCallActivity();
       nativeCall.setBootstrapChannelId(channelId);
-      joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
+      joinChannelCallWhenReady(channelId, nativeMedia, callId).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
       );
     };

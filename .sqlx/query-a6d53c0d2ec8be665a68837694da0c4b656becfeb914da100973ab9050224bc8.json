@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE stripe_event_cursor\n            SET applied_at = $4,\n                applied_event_id = $5,\n                attempts = 0,\n                state = CASE WHEN state = 'failing' THEN 'dirty'::stripe_cursor_state ELSE state END,\n                last_error = NULL,\n                locked_until = now() + $6::bigint * interval '1 second',\n                updated_at = now()\n            WHERE consumer = ($1::text)::stripe_consumer AND ordering_key = $2 AND locked_by = $3\n              AND applied_at IS NOT DISTINCT FROM $7\n              AND applied_event_id IS NOT DISTINCT FROM $8\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a6d53c0d2ec8be665a68837694da0c4b656becfeb914da100973ab9050224bc8"
+}

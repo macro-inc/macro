@@ -119,7 +119,9 @@ describe('NewCallButton', () => {
 
     await waitFor(() => {
       expect(mocks.joinChannelCall).toHaveBeenCalledOnce();
-      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123');
+      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123', {
+        kind: 'start',
+      });
     });
   });
 });
