@@ -179,13 +179,15 @@ pub(super) type Turn =
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
 /// check route would, then ends, unless the session `hangs`. Its turn
-/// can't be read while it is `unreadable`.
+/// can't be read while it is `unreadable`, nor stopped while it is
+/// `unstoppable`.
 pub(super) struct Sessions {
     pub(super) rows: Arc<Rows>,
     pub(super) code: Arc<Checker>,
     pub(super) turn: Turn,
     pub(super) hangs: bool,
     pub(super) unreadable: bool,
+    pub(super) unstoppable: bool,
     pub(super) refuses: Option<RoutineSessionError>,
     /// Where preparing waits for its admission.
     pub(super) admitting: Gate,
@@ -207,6 +209,7 @@ impl Sessions {
             turn,
             hangs: false,
             unreadable: false,
+            unstoppable: false,
             refuses: None,
             admitting: Gate::default(),
             stopping: Gate::default(),
@@ -279,6 +282,9 @@ impl RoutineSessions for Sessions {
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.stopping.pass().await;
+        if self.unstoppable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         self.cancelled.lock().unwrap().push(command.session_id);
         Ok(())
     }
