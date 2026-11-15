@@ -35,7 +35,7 @@ it('previews task projects through Soup without a GraphQL record', async () => {
       ],
     })
   );
-  const previews = await fetchRestPreviewBatch([
+  const batch = await fetchRestPreviewBatch([
     { type: 'initiative', id: 'initiative-1' },
     { type: 'initiative', id: 'hidden' },
   ]);
@@ -46,11 +46,11 @@ it('previews task projects through Soup without a GraphQL record', async () => {
       limit: 2,
     }),
   });
-  expect(previews.get('initiative-1')).toMatchObject({
+  expect(batch.previews.get('initiative-1')).toMatchObject({
     type: 'initiative',
     access: 'access',
     name: 'Roadmap',
   });
   // The loader reports ids Soup does not return as no access.
-  expect(previews.has('hidden')).toBe(false);
+  expect(batch.previews.has('hidden')).toBe(false);
 });

@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import {
   type DatabaseQueryDisplayMode,
@@ -122,7 +123,7 @@ export function AnswerSkeleton(props: {
   displayMode: DatabaseQueryDisplayMode;
 }) {
   return (
-    <ListSkeleton.Root label="Loading answer">
+    <ListSkeleton.Root label={t('databaseAnswers.loadingAnswer')}>
       <Show
         when={isDatabaseQueryChartMode(props.displayMode)}
         fallback={<TableSkeleton />}
@@ -156,7 +157,9 @@ export function QuestionCardSkeleton(props: {
           <LightningIcon class="size-3.5 shrink-0 text-ink-muted" />
           <span class="truncate">{props.title}</span>
         </span>
-        <span class="shrink-0 px-2 py-1 text-xs text-ink-muted">Details</span>
+        <span class="shrink-0 px-2 py-1 text-xs text-ink-muted">
+          {t('databaseAnswers.details')}
+        </span>
       </div>
       <ResizableAnswer height={props.height}>
         <AnswerSkeleton displayMode={props.displayMode} />
