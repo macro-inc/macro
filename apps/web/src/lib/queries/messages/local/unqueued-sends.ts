@@ -60,8 +60,8 @@ export interface UnqueuedSendsDeps {
   locks?: Pick<LockManager, 'request' | 'query'>;
   pageId?: string;
   now?: () => number;
-  /** Whether the page is being left. */
-  leaving?: () => boolean;
+  /** Runs `work` a little later, if the page still runs then. */
+  later?: (work: () => void) => void;
 }
 
 const PAGE_ID = crypto.randomUUID();
@@ -84,12 +84,6 @@ async function holdForPageLifetime(): Promise<void> {
 }
 
 let pageLockRequested = false;
-/**
- * Set while the page is being left. What the queue answers from then on, such
- * as a request cut off by the unload, says nothing about whether it stored the
- * send, so the note stays for the next page to settle.
- */
-let pageLeaving = false;
 
 /** Marks this page alive for as long as it runs. Call when the app starts. */
 export function holdUnqueuedSendsPage(
@@ -97,18 +91,6 @@ export function holdUnqueuedSendsPage(
 ): void {
   if (pageLockRequested || !locks) return;
   pageLockRequested = true;
-  // Capturing, to run before the cache host's listener fails what is in flight.
-  globalThis.addEventListener?.(
-    'pagehide',
-    () => {
-      pageLeaving = true;
-    },
-    { capture: true }
-  );
-  // A page kept for back and forward navigation runs again.
-  globalThis.addEventListener?.('pageshow', () => {
-    pageLeaving = false;
-  });
   fireAndForget(
     locks.request(pageLockName(PAGE_ID), holdForPageLifetime),
     'channel-local-sync'
@@ -129,28 +111,43 @@ function writeEntry(
   }
 }
 
-/**
- * Notes a send before the queue is asked to store it. The returned function
- * forgets it; call that once the queue holds the write or has refused it.
- */
+export interface UnqueuedSendNote {
+  /** The queue holds the write: forget the note now. */
+  stored: () => void;
+  /**
+   * The request to the queue ended some other way. A page being left fails its
+   * requests in flight, which looks the same as the queue refusing the write,
+   * so the note is forgotten only if the page still runs a moment later.
+   */
+  ended: () => void;
+}
+
+/** How long after a request ended a page counts as still running. */
+const ENDED_GRACE_MS = 2_000;
+
+const NO_NOTE: UnqueuedSendNote = { stored: () => {}, ended: () => {} };
+
+/** Notes a send before the queue is asked to store it. */
 export function noteUnqueuedSend(
   send: UnqueuedSend,
   createdAt: string,
   deps: UnqueuedSendsDeps = {}
-): () => void {
+): UnqueuedSendNote {
   const storage = deps.storage ?? browserStorage();
-  if (!storage) return () => {};
+  if (!storage) return NO_NOTE;
   holdUnqueuedSendsPage(deps.locks);
   writeEntry(storage, { pageId: deps.pageId ?? PAGE_ID, createdAt, send });
   const key = entryKey(send.senderId, send.id);
-  return () => {
-    if (deps.leaving?.() ?? pageLeaving) return;
+  const stored = () => {
     try {
       storage.removeItem(key);
     } catch {
       // It is sent again at the next start, and the queue recognises its id.
     }
   };
+  const later =
+    deps.later ?? ((work: () => void) => setTimeout(work, ENDED_GRACE_MS));
+  return { stored, ended: () => later(stored) };
 }
 
 function readEntries(

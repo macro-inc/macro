@@ -84,8 +84,7 @@ it('sends again what a page that is gone noted and never saw stored', async () =
 it('leaves alone a send whose page still runs, and one the queue stored', async () => {
   const { storage, deps, host, resend } = world(['other-tab', 'new-page']);
   noteUnqueuedSend(send('m1'), CREATED_AT, deps('other-tab'));
-  const forget = noteUnqueuedSend(send('m2'), CREATED_AT, deps('old-page'));
-  forget();
+  noteUnqueuedSend(send('m2'), CREATED_AT, deps('old-page')).stored();
 
   expect(
     await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
@@ -128,17 +127,29 @@ it('drops a send a day old, an unreadable one, and leaves another person’s', a
   expect(storage.length).toBe(1);
 });
 
-it('keeps a send whose queue request was cut off by the page being left', async () => {
-  const { deps, host, resend } = world(['new-page']);
-  const forget = noteUnqueuedSend(send('m1'), CREATED_AT, {
+it('keeps a send whose queue request ended as its page was left', async () => {
+  const { storage, deps, host, resend } = world(['new-page']);
+  const stillRunning: (() => void)[] = [];
+  const note = noteUnqueuedSend(send('m1'), CREATED_AT, {
     ...deps('old-page'),
-    leaving: () => true,
+    later: (work) => stillRunning.push(work),
   });
-  // The unload fails the request, which looks like the queue refusing it.
-  forget();
+  // The unload fails the request, and the page never gets to run again.
+  note.ended();
 
   expect(
     await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
   ).toBe(1);
   expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
+
+  // A page that does go on forgets a send the queue refused.
+  const refused = noteUnqueuedSend(send('m2'), CREATED_AT, {
+    ...deps('new-page'),
+    later: (work) => stillRunning.push(work),
+  });
+  refused.ended();
+  for (const work of stillRunning) work();
+  expect(
+    storage.getItem(`channel-send-awaiting-queue:v1:${SENDER}:m2`)
+  ).toBeNull();
 });

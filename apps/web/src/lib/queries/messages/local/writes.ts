@@ -318,7 +318,7 @@ export function sendChannelMessage(
   const createdAt = (deps.now?.() ?? new Date()).toISOString();
   const predicted = predictedMessage(send, createdAt);
   // Until the queue holds it, a reload would lose a message already shown.
-  const forget = noteUnqueuedSend(send, createdAt);
+  const note = noteUnqueuedSend(send, createdAt);
   return queuedWrite(host, deps, {
     operation: 'channel.write.send',
     channelId: send.channelId,
@@ -345,10 +345,10 @@ export function sendChannelMessage(
           (predicted
             ? { sendChannelMessage: predicted }
             : {}) as OptimisticResponse<SendChannelMessageMutation>,
-          { uuid: send.id, onEnqueued: forget }
+          { uuid: send.id, onEnqueued: note.stored }
         ).toPromise();
       } finally {
-        forget();
+        note.ended();
       }
     },
     written: (data) => data.sendChannelMessage,
