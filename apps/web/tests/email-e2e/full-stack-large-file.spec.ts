@@ -39,6 +39,8 @@ for (const provider of PROVIDERS) {
       page,
       mailbox,
     }) => {
+      // The upload and the service's Undo hold each take a minute at worst.
+      test.slow();
       const zed = await addMailbox(mailbox, ZED);
       await composeNew(page, mailbox, {
         to: zed,
