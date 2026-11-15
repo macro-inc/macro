@@ -893,6 +893,46 @@ async fn sales_tasks_grouped_reads_only_document_and_task_edges() {
     assert_eq!(*crm.edge_access.lock().unwrap(), [None]);
 }
 
+/// Grouped pages without properties resolve the activity scope the same way.
+#[tokio::test]
+async fn sales_tasks_grouped_without_properties_resolve_the_activity_scope() {
+    let crm = FakeCrm::default();
+    let mut repo = MockSoupRepo::new();
+    repo.expect_expanded_grouped_cursor_soup()
+        .times(1)
+        .returning(|request| {
+            let filter = request.cursor.filter();
+            assert_eq!(filter.crm_association, None);
+            let mut documents = document_ids(filter.document_filter.as_deref().unwrap());
+            documents.sort();
+            assert_eq!(documents, [ACTIVITY_TASK, ACTIVITY_DOCUMENT]);
+            Box::pin(async { Ok(Vec::<ItemGroupingInfo>::new().into_iter()) })
+        });
+    repo.expect_populate_properties().times(0);
+    let items: Vec<_> = service_with(repo, ReferencingComms::default(), crm.clone())
+        .get_user_soup_grouped_without_properties(GroupedSortRequest {
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), sales_view("tasks")),
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            grouping: GroupingConfig {
+                field: GroupByField::Date,
+                group_key: None,
+                per_group_limit: Some(100),
+            },
+        })
+        .await
+        .unwrap()
+        .collect();
+    assert!(items.is_empty());
+    assert_eq!(
+        *crm.activity_calls.lock().unwrap(),
+        [ActivityCall::Edges(vec![
+            PropertyEntityType::Document,
+            PropertyEntityType::Task
+        ])]
+    );
+}
+
 /// A bot's team receipt reaches the edges read, so the CRM service scopes
 /// them to the bot's team rather than to the user it acts for.
 #[tokio::test]
