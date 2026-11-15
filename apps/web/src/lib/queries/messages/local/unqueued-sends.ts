@@ -60,6 +60,8 @@ export interface UnqueuedSendsDeps {
   locks?: Pick<LockManager, 'request' | 'query'>;
   pageId?: string;
   now?: () => number;
+  /** Whether the page is being left. */
+  leaving?: () => boolean;
 }
 
 const PAGE_ID = crypto.randomUUID();
@@ -82,6 +84,12 @@ async function holdForPageLifetime(): Promise<void> {
 }
 
 let pageLockRequested = false;
+/**
+ * Set while the page is being left. What the queue answers from then on, such
+ * as a request cut off by the unload, says nothing about whether it stored the
+ * send, so the note stays for the next page to settle.
+ */
+let pageLeaving = false;
 
 /** Marks this page alive for as long as it runs. Call when the app starts. */
 export function holdUnqueuedSendsPage(
@@ -89,6 +97,13 @@ export function holdUnqueuedSendsPage(
 ): void {
   if (pageLockRequested || !locks) return;
   pageLockRequested = true;
+  globalThis.addEventListener?.('pagehide', () => {
+    pageLeaving = true;
+  });
+  // A page kept for back and forward navigation runs again.
+  globalThis.addEventListener?.('pageshow', () => {
+    pageLeaving = false;
+  });
   fireAndForget(
     locks.request(pageLockName(PAGE_ID), holdForPageLifetime),
     'channel-local-sync'
@@ -124,6 +139,7 @@ export function noteUnqueuedSend(
   writeEntry(storage, { pageId: deps.pageId ?? PAGE_ID, createdAt, send });
   const key = entryKey(send.senderId, send.id);
   return () => {
+    if (deps.leaving?.() ?? pageLeaving) return;
     try {
       storage.removeItem(key);
     } catch {

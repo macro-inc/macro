@@ -127,3 +127,18 @@ it('drops a send a day old, an unreadable one, and leaves another person’s', a
   expect(resend).not.toHaveBeenCalled();
   expect(storage.length).toBe(1);
 });
+
+it('keeps a send whose queue request was cut off by the page being left', async () => {
+  const { deps, host, resend } = world(['new-page']);
+  const forget = noteUnqueuedSend(send('m1'), CREATED_AT, {
+    ...deps('old-page'),
+    leaving: () => true,
+  });
+  // The unload fails the request, which looks like the queue refusing it.
+  forget();
+
+  expect(
+    await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
+  ).toBe(1);
+  expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
+});
