@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import LightningIcon from '@icon/system/regular/lightning.svg';
@@ -37,7 +38,9 @@ export function LiveQuestion(props: {
   const [open, setOpen] = createSignal(!props.source.queryId && !!props.editor);
   let content: HTMLDivElement | undefined;
   const title = () =>
-    props.source.title || props.source.chart?.title || 'Database answer';
+    props.source.title ||
+    props.source.chart?.title ||
+    t('databaseAnswers.databaseAnswer');
   const [renaming, setRenaming] = createSignal(false);
   const [draftTitle, setDraftTitle] = createSignal('');
   const startRename = (event: MouseEvent | KeyboardEvent) => {
@@ -68,16 +71,16 @@ export function LiveQuestion(props: {
   const answering = () =>
     !!props.source.queryId && !props.error && !props.answer;
   const value = () => {
-    if (!props.source.queryId) return 'Database';
-    if (props.error) return 'Answer unavailable';
-    if (!props.answer) return 'Loading answer…';
+    if (!props.source.queryId) return t('databaseAnswers.database');
+    if (props.error) return t('databaseAnswers.answerUnavailable');
+    if (!props.answer) return t('databaseAnswers.loadingAnswerValue');
     if (isScalarAnswer(props.answer))
       return resultCellText(
         resultCell(props.answer.rows[0][0] ?? null, props.answer.columns[0]),
         names()
       );
     const count = props.answer.rows.length;
-    return `${count} ${count === 1 ? 'record' : 'records'}`;
+    return t('databaseAnswers.recordCount', { count });
   };
   return (
     <Popover
@@ -119,7 +122,11 @@ export function LiveQuestion(props: {
                   : value()
               }
               title={
-                props.onRename ? `${title()} · Double-click to rename` : title()
+                props.onRename
+                  ? t('databaseAnswers.titleDoubleClickToRename', {
+                      title: title(),
+                    })
+                  : title()
               }
             >
               <LightningIcon class="size-3 shrink-0" />
@@ -169,7 +176,11 @@ export function LiveQuestion(props: {
                 <span
                   class="truncate rounded outline-none focus-visible:ring-2 focus-visible:ring-ink/20"
                   tabIndex={props.onRename ? 0 : undefined}
-                  title={props.onRename ? 'Double-click to rename' : undefined}
+                  title={
+                    props.onRename
+                      ? t('databaseAnswers.doubleClickToRename')
+                      : undefined
+                  }
                   onDblClick={startRename}
                   onKeyDown={(event) => {
                     if (event.key === 'F2') startRename(event);
@@ -180,7 +191,7 @@ export function LiveQuestion(props: {
               </Show>
             </span>
             <Popover.Trigger class="shrink-0 rounded px-2 py-1 text-xs text-ink-muted">
-              Details
+              {t('databaseAnswers.details')}
             </Popover.Trigger>
           </div>
           <ResizableAnswer
@@ -242,7 +253,7 @@ export function LiveQuestion(props: {
             </Popover.Title>
             <Popover.CloseButton
               class="rounded p-1 text-ink-muted hover:bg-hover"
-              aria-label="Close database answer"
+              aria-label={t('databaseAnswers.closeDatabaseAnswer')}
             >
               <XIcon class="size-4" />
             </Popover.CloseButton>
