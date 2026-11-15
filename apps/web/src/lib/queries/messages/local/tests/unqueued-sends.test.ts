@@ -1,0 +1,129 @@
+import { expect, it, vi } from 'vitest';
+import {
+  noteUnqueuedSend,
+  resendUnqueuedSends,
+  type UnqueuedSend,
+  type UnqueuedSendsDeps,
+} from '../unqueued-sends';
+
+const SENDER = 'person-1';
+const NOW = Date.parse('2026-01-01T00:00:10.000Z');
+const CREATED_AT = '2026-01-01T00:00:00.000Z';
+
+function send(id: string, senderId = SENDER): UnqueuedSend {
+  return {
+    channelId: 'channel-1',
+    id,
+    senderId,
+    message: { content: `message ${id}` },
+  };
+}
+
+function memoryStorage(): NonNullable<UnqueuedSendsDeps['storage']> {
+  const items = new Map<string, string>();
+  return {
+    get length() {
+      return items.size;
+    },
+    key: (index) => [...items.keys()][index] ?? null,
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => {
+      items.set(key, value);
+    },
+    removeItem: (key) => {
+      items.delete(key);
+    },
+  };
+}
+
+/** Locks of the pages in `alivePages`; every request is granted at once. */
+function pageLocks(
+  alivePages: string[]
+): NonNullable<UnqueuedSendsDeps['locks']> {
+  return {
+    request: (async (_name: string, callback: () => Promise<unknown>) =>
+      await callback()) as LockManager['request'],
+    query: async () => ({
+      held: alivePages.map((pageId) => ({
+        name: `channel-send-awaiting-queue:v1:page:${pageId}`,
+      })),
+    }),
+  };
+}
+
+function world(alivePages: string[], queuedIds: string[] = []) {
+  const storage = memoryStorage();
+  const deps = (pageId: string): UnqueuedSendsDeps => ({
+    storage,
+    locks: pageLocks(alivePages),
+    pageId,
+    now: () => NOW,
+  });
+  const host = {
+    inspectMutations: async () => queuedIds.map((uuid) => ({ uuid }) as never),
+  };
+  const resend = vi.fn<(send: UnqueuedSend, createdAt: string) => void>();
+  return { storage, deps, host, resend };
+}
+
+it('sends again what a page that is gone noted and never saw stored', async () => {
+  const { deps, host, resend } = world(['new-page']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  const resent = await resendUnqueuedSends(
+    host,
+    SENDER,
+    resend,
+    deps('new-page')
+  );
+
+  expect(resent).toBe(1);
+  expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
+});
+
+it('leaves alone a send whose page still runs, and one the queue stored', async () => {
+  const { storage, deps, host, resend } = world(['other-tab', 'new-page']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('other-tab'));
+  const forget = noteUnqueuedSend(send('m2'), CREATED_AT, deps('old-page'));
+  forget();
+
+  expect(
+    await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
+  ).toBe(0);
+  expect(resend).not.toHaveBeenCalled();
+  expect(storage.length).toBe(1);
+});
+
+it('hands a send to one page only when two start together', async () => {
+  const { deps, host, resend } = world(['page-a', 'page-b']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  await resendUnqueuedSends(host, SENDER, resend, deps('page-a'));
+  await resendUnqueuedSends(host, SENDER, resend, deps('page-b'));
+
+  expect(resend).toHaveBeenCalledOnce();
+});
+
+it('forgets a send the queue already holds instead of sending it twice', async () => {
+  const { storage, deps, host, resend } = world(['new-page'], ['m1']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  expect(
+    await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
+  ).toBe(0);
+  expect(resend).not.toHaveBeenCalled();
+  expect(storage.length).toBe(0);
+});
+
+it('drops a send a day old, an unreadable one, and leaves another person’s', async () => {
+  const { storage, deps, host, resend } = world(['new-page']);
+  noteUnqueuedSend(send('old'), '2025-12-30T00:00:00.000Z', deps('old-page'));
+  storage.setItem(`channel-send-awaiting-queue:v1:${SENDER}:broken`, '{');
+  noteUnqueuedSend(send('theirs', 'person-2'), CREATED_AT, deps('old-page'));
+
+  expect(
+    await resendUnqueuedSends(host, SENDER, resend, deps('new-page'))
+  ).toBe(0);
+  expect(resend).not.toHaveBeenCalled();
+  expect(storage.length).toBe(1);
+});

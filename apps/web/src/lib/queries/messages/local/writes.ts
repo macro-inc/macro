@@ -35,6 +35,7 @@ import {
   rootSortKey,
 } from './sort-key';
 import { loadChannelMessage } from './thread';
+import { noteUnqueuedSend } from './unqueued-sends';
 
 /**
  * Channel message hooks run their `mutationFn` while offline when the device
@@ -321,31 +322,40 @@ export function sendChannelMessage(
 ): Promise<Message> {
   const createdAt = (deps.now?.() ?? new Date()).toISOString();
   const predicted = predictedMessage(send, createdAt);
+  // Until the queue holds it, a reload would lose a message already shown.
+  const forget = noteUnqueuedSend(send, createdAt);
   return queuedWrite(host, deps, {
     operation: 'channel.write.send',
     channelId: send.channelId,
     messageId: send.id,
     predicted,
-    run: (client) =>
-      executeOptimisticMutation(
-        client,
-        SendChannelMessageDocument,
-        {
-          input: {
-            channelId: send.channelId,
-            id: send.id,
-            content: send.message.content,
-            threadId: send.message.thread_id ?? null,
-            mentions: (send.message.mentions ?? []).map(mentionInput),
-            attachments: (send.message.attachments ?? []).map(attachmentInput),
-            nonce: send.id,
+    run: async (client) => {
+      try {
+        return await executeOptimisticMutation(
+          client,
+          SendChannelMessageDocument,
+          {
+            input: {
+              channelId: send.channelId,
+              id: send.id,
+              content: send.message.content,
+              threadId: send.message.thread_id ?? null,
+              mentions: (send.message.mentions ?? []).map(mentionInput),
+              attachments: (send.message.attachments ?? []).map(
+                attachmentInput
+              ),
+              nonce: send.id,
+            },
           },
-        },
-        (predicted
-          ? { sendChannelMessage: predicted }
-          : {}) as OptimisticResponse<SendChannelMessageMutation>,
-        { uuid: send.id }
-      ).toPromise(),
+          (predicted
+            ? { sendChannelMessage: predicted }
+            : {}) as OptimisticResponse<SendChannelMessageMutation>,
+          { uuid: send.id, onEnqueued: forget }
+        ).toPromise();
+      } finally {
+        forget();
+      }
+    },
     written: (data) => data.sendChannelMessage,
   });
 }
