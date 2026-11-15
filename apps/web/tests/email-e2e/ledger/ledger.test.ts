@@ -229,6 +229,9 @@ describe('functionRows', () => {
     const proved = functionRows(functions, both, rows, proofs);
     expect(functionTotals(proved).proved).toBe(1);
     expect(proved[1].proof).toBe('the sort ignores its key');
+    expect(
+      parseProofs('id\tbreak\nAL-120\tRetry asks for nothing\n').get('AL-120')
+    ).toBe('Retry asks for nothing');
     expect(() => parseProofs('id\tbreak\nF-2\tx\n')).toThrow('F-2');
     expect(() => parseProofs('id\tbreak\nF-002\tx\nF-002\ty\n')).toThrow(
       'twice'

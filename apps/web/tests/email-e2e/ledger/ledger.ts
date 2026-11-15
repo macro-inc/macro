@@ -496,9 +496,16 @@ function manifestDrift(): Drift[] {
       items: unseen.map((fn) => `${fn.id} ${fn.name}`),
     });
   }
-  const unknownProofs = [...PROOFS.keys()].filter((id) => !known.has(id));
-  if (unknownProofs.length)
-    drift.push({ check: 'Proofs of unknown functions', items: unknownProofs });
+  const rows = new Set(all.map((row) => row.id));
+  const unknownProofs = [...PROOFS.keys()].filter(
+    (id) => !known.has(id) && !rows.has(id)
+  );
+  if (unknownProofs.length) {
+    drift.push({
+      check: 'Proofs of unknown functions or rows',
+      items: unknownProofs,
+    });
+  }
   const twiceFn = FUNCTIONS.map((fn) => fn.id).filter(
     (id, index, ids) => ids.indexOf(id) !== index
   );
