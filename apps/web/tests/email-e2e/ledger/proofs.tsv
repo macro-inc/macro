@@ -169,3 +169,17 @@ F-190	the steps a program of the assistant took are not listed in the conversati
 F-191	a pasted thread link stays a plain link
 F-192	adding a domain to a CRM blacklist in Settings does nothing
 F-196	unblocking a sender does nothing
+AL-115	Move up in the phone picker's row menu moves nothing
+AL-116	Save changes on an edited saved view saves nothing
+AL-117	Reset on an edited saved view keeps the edits
+AL-118	Reload saved view after a refused save reloads nothing
+AL-119	Return to Email on a missing saved view goes nowhere
+AL-120	Retry loading views asks for nothing
+AL-121	the phone's views pill opens no drawer
+AL-700	Load more views loads nothing
+AL-701	the Saved views header does not fold the section
+AL-702	a view chosen in the phone drawer is not opened
+AL-703	Create view in the empty phone drawer opens nothing
+AL-704	a tag picked in the view builder is not added to the view
+AL-705	Advanced settings in the view builder shows nothing
+AL-706	Cancel in the view builder leaves it open

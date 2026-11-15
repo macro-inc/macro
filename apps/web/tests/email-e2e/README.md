@@ -199,6 +199,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |
+| `ways-<area>-*` | the other ways into a function: each menu entry, button, shortcut and phone control that does what another test already does through one of them. One test walks every way into a function in turn and checks the same outcome for each | `harness/ways-<area>.ts` |
 | `ledger/` | the coverage manifest, the recorder and the report | |
 | `journey-*` | whole user journeys for a Gmail and an Outlook inbox: a mail day, a new message, scheduled send, triage, a received attachment, phone width, Settings › Email | `harness/journeys.ts` |
 
