@@ -37,6 +37,8 @@ mod saved_queries;
 mod schema_ops;
 mod sharing;
 #[cfg(feature = "gateway")]
+mod storage_reads;
+#[cfg(feature = "gateway")]
 mod tables;
 #[cfg(feature = "gateway")]
 mod team_share;

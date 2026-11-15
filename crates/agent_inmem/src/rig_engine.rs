@@ -51,6 +51,8 @@ mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
+#[path = "outbound/rig_engine/unseen.rs"]
+mod unseen;
 
 #[cfg(test)]
 #[path = "outbound/rig_engine/measure_prompt_cache.rs"]
@@ -312,6 +314,9 @@ fn tools_for_turn(
 struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    /// An unseen turn's native tools: only the pager for its cut results;
+    /// code mode comes from the MCP servers.
+    unseen: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
     /// [`Self::prompt`] without area guidance, for turns that route SDK
     /// entities.
@@ -341,6 +346,10 @@ impl NativeTools {
         Self {
             with_user_input: Arc::new(with_user_input),
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
+            unseen: Arc::new(
+                AsyncToolCollection::<InMemToolContext>::new()
+                    .add_tool::<ReadToolResult, ToolResultLimit>(),
+            ),
             prompt: tools.prompt.to_string(),
             routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
@@ -571,6 +580,10 @@ async fn drive_turn(
     // reads no memory, offers the model no tools, and is read, not shown, so
     // no opening line races it.
     let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
+    // A turn nobody watches gets code mode and what its opener gave it, not a
+    // conversation's prompt and tools (see `unseen`).
+    let unseen = delivery == ReplyDelivery::Unseen;
+    let reasoning_effort = unseen_effort(unseen, &model, reasoning_effort);
     if let Some(key) = &agent_key
         && agent_api_keys::domain::ModelProvider::of_model(&model) != Some(key.key.provider())
     {
@@ -650,20 +663,29 @@ async fn drive_turn(
         };
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
+        // An unseen turn is routed the same way, unless its opener gave the
+        // documentation (see `routes_documentation`).
         let routed = skills.entities;
-        let docs = agent_code_mode::domain::select_documentation(
-            &owner,
-            request,
-            base_context.cognition_tool_context.service.as_ref(),
-            if routed {
-                agent_code_mode::domain::Guidance::Selected
-            } else {
-                agent_code_mode::domain::Guidance::Inline
-            },
-            &cancel,
-        );
+        let picks = routes_documentation(delivery, instructions.as_deref());
+        let docs = async {
+            if !picks {
+                return String::new();
+            }
+            agent_code_mode::domain::select_documentation(
+                &owner,
+                request,
+                base_context.cognition_tool_context.service.as_ref(),
+                if routed || unseen {
+                    agent_code_mode::domain::Guidance::Selected
+                } else {
+                    agent_code_mode::domain::Guidance::Inline
+                },
+                &cancel,
+            )
+            .await
+        };
         let loaded_skills = async {
-            if !skills.routes {
+            if !skills.routes || unseen {
                 return Vec::new();
             }
             let selection = select_skills(
@@ -695,12 +717,21 @@ async fn drive_turn(
             instructions.as_deref(),
             user_memory.as_deref(),
         );
-        (
-            prompt,
-            native_tools.for_turn(user_input.is_some()),
-            Arc::clone(&native_tools.deferred),
-            loaded_skills,
-        )
+        if unseen {
+            (
+                prompt,
+                Arc::clone(&native_tools.unseen),
+                Arc::from(Vec::new()),
+                loaded_skills,
+            )
+        } else {
+            (
+                prompt,
+                native_tools.for_turn(user_input.is_some()),
+                Arc::clone(&native_tools.deferred),
+                loaded_skills,
+            )
+        }
     };
     // Carry the feature on the context so AI calls made by tools are attributed to it,
     // and record whatever the tools spend as part of this session.
@@ -816,6 +847,10 @@ async fn drive_turn(
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
+        Some(mcp) if unseen => Arc::new(
+            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
+                .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
+        ),
         Some(mcp) => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, mcp)
                 .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
@@ -1003,6 +1038,10 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
 /// Memory stays after the instructions so a remembered fact is never read as
 /// an instruction. The turn's documentation goes after everything the loop
 /// adds, because each turn picks different documentation.
+///
+/// An unseen turn splits after its identity and instructions instead: its
+/// opener gives every session of its kind the same ones (every routine
+/// draft's), so they are read back from the cache across those sessions.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     sdk_docs: &str,
@@ -1012,31 +1051,42 @@ fn system_prompt(
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
-    let mut shared = String::new();
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
-    if let Some(identity) = identity {
-        rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
-            &identity.name,
-            &identity.handle,
-        ));
-    }
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
-    if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        rest.push_str("\n<session_instructions>\n");
-        rest.push_str(instructions);
-        rest.push_str("\n</session_instructions>");
+    let instructions = instructions
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| format!("\n<session_instructions>\n{text}\n</session_instructions>"))
+        .unwrap_or_default();
+    let identity = identity.map_or_else(String::new, |identity| {
+        format!(
+            "\n{}",
+            prompt::agent_identity::render(&identity.name, &identity.handle)
+        )
+    });
+    // A turn nobody watches has neither a conversation to write for nor the
+    // tools `tools_prompt` describes. Its opener sends every session of its
+    // kind (every routine draft) the same instructions, so they join the
+    // cached shared block and are read back across sessions.
+    let (shared, mut rest) = match delivery {
+        ReplyDelivery::Unseen => (
+            format!("{}{identity}{instructions}", unseen::PROMPT),
+            String::new(),
+        ),
+        ReplyDelivery::Streamed | ReplyDelivery::Whole => (
+            format!("{}{tools_prompt}", prompt::agent_session::PROMPT),
+            format!("{identity}{instructions}"),
+        ),
+    };
+    // An unseen turn has no ContentSearch to look back with.
+    if delivery != ReplyDelivery::Unseen {
+        rest.push_str(&format!(
+            "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
+             long, its earlier part is summarized to keep it within your context. To find the exact \
+             words of anything said earlier, summarized or not, run ContentSearch with \
+             agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
+        ));
     }
-    rest.push_str(&format!(
-        "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
-         long, its earlier part is summarized to keep it within your context. To find the exact \
-         words of anything said earlier, summarized or not, run ContentSearch with \
-         agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
-    ));
     if delivery == ReplyDelivery::Whole {
         rest.push('\n');
         rest.push_str(opener::NOT_OPENED);
@@ -1047,6 +1097,30 @@ fn system_prompt(
         rest.push_str("\n</user_memory>");
     }
     SystemPrompt::split(shared, rest).with_turn(sdk_docs)
+}
+
+/// The effort a turn runs at. Someone waits on an unseen turn (a routine
+/// draft) and its opener wrote out what the work needs, so it runs at low
+/// effort where its model takes one.
+fn unseen_effort(
+    unseen: bool,
+    model: &str,
+    effort: agent::ReasoningEffort,
+) -> agent::ReasoningEffort {
+    let low = agent::ReasoningEffort::Low;
+    if unseen && agent::ReasoningEffort::supported(model).contains(&low) {
+        low
+    } else {
+        effort
+    }
+}
+
+/// Whether a turn's request picks the SDK documentation its prompt carries.
+/// A background session whose opener wrote its instructions was given the
+/// reference its work needs, in them and in its prompt: documentation picked
+/// again would repeat it, uncached, after a routing call.
+fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> bool {
+    delivery != ReplyDelivery::Unseen || instructions.is_none_or(|text| text.trim().is_empty())
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
