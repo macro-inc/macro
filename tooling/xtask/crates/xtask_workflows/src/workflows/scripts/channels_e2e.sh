@@ -12,4 +12,11 @@ failed=0
 started=$(date +%s)
 (cd apps/web && just test-channels-e2e "$CHANNELS_E2E_INSTANCE") || failed=1
 echo "Channels suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+# The ledger against the tests and the run: every test listed and proven able
+# to fail, every outcome the one the ledger expects, and the intermittent
+# defects that showed.
+(cd apps/web && bun tests/channels-e2e/ledger/check.ts \
+  --report tests/channels-e2e/.run/playwright-report.json) 2>&1 |
+  tee -a "$GITHUB_STEP_SUMMARY" || failed=1
 exit "$failed"

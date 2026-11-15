@@ -166,6 +166,13 @@ jobs:
         started=$(date +%s)
         (cd apps/web && just test-channels-e2e "$CHANNELS_E2E_INSTANCE") || failed=1
         echo "Channels suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+        # The ledger against the tests and the run: every test listed and proven able
+        # to fail, every outcome the one the ledger expects, and the intermittent
+        # defects that showed.
+        (cd apps/web && bun tests/channels-e2e/ledger/check.ts \
+          --report tests/channels-e2e/.run/playwright-report.json) 2>&1 |
+          tee -a "$GITHUB_STEP_SUMMARY" || failed=1
         exit "$failed"
       env:
         CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
@@ -190,6 +197,7 @@ jobs:
         path: target/channels-e2e
         if-no-files-found: ignore
         retention-days: '7'
+        include-hidden-files: 'true'
     - name: Upload channels-e2e-off-results artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -198,6 +206,7 @@ jobs:
         path: apps/web/tests/channels-e2e/.run
         if-no-files-found: ignore
         retention-days: '7'
+        include-hidden-files: 'true'
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -354,6 +363,13 @@ jobs:
         started=$(date +%s)
         (cd apps/web && just test-channels-e2e "$CHANNELS_E2E_INSTANCE") || failed=1
         echo "Channels suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+        # The ledger against the tests and the run: every test listed and proven able
+        # to fail, every outcome the one the ledger expects, and the intermittent
+        # defects that showed.
+        (cd apps/web && bun tests/channels-e2e/ledger/check.ts \
+          --report tests/channels-e2e/.run/playwright-report.json) 2>&1 |
+          tee -a "$GITHUB_STEP_SUMMARY" || failed=1
         exit "$failed"
       env:
         CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
@@ -378,6 +394,7 @@ jobs:
         path: target/channels-e2e
         if-no-files-found: ignore
         retention-days: '7'
+        include-hidden-files: 'true'
     - name: Upload channels-e2e-on-results artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -386,6 +403,7 @@ jobs:
         path: apps/web/tests/channels-e2e/.run
         if-no-files-found: ignore
         retention-days: '7'
+        include-hidden-files: 'true'
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
