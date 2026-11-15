@@ -617,7 +617,7 @@ use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
-do not fetch additional pages to find every unread item. With GraphQL enabled,
+do not fetch additional pages to find every unread item.
 Home uses `HomeUnreadPresence` over its existing 100-item Signal/unread candidate
 page, with one state-only notification witness per entity (plus one reminder
 witness for email). It must not fetch full notification history just to draw the
@@ -625,7 +625,7 @@ dot. Channel/thread scoping happens before the witness limit; seen thread reason
 still affect that scoping. Reading or completing a witness refreshes the bounded
 edge so an older unread item can keep the dot lit. These witnesses must never be
 used as the complete mark-read/done input. The experimental notification-time
-sort remains on its existing REST path; disabling GraphQL or enabling that sort
+sort remains on its existing REST path; enabling that sort
 must not construct an unsupported GraphQL input or blank the app shell.
 Cold offline launch must retain navigation even while notification preferences
 or badge queries are pending. Unknown preferences use the default enabled
@@ -1882,7 +1882,7 @@ share one right-click menu, and the mobile long-press drawer shows the same
 items. It offers an item only where its action works for the row's type:
 Rename for documents, chats, folders, calls, agent sessions, and channels you
 take part in (not DMs); Duplicate for
-documents, chats, and folders (with GraphQL Soup); Move to folder for documents, chats, folders, and email you own (a folder is
+documents, chats, and folders; Move to folder for documents, chats, folders, and email you own (a folder is
 one location shared by everyone, and its sharing passes to what it holds, so
 only the owner moves an item; the server enforces the same);
 Delete for email and owned documents, chats, folders, calls, agent sessions, and

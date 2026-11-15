@@ -91,9 +91,7 @@ replies. It returns one row per thread and never matches only a snippet or body.
 Coverage is existing cached mail: automatic backfill includes 90 days of signal
 mail and 30 days of noise mail, plus other cached threads. Use full-text search
 for uncached older mail. No new backfill or server name-search fallback is added.
-Email name results require the existing normalized GraphQL cache rollout. When
-verifying a local iOS build without PostHog configuration, enable that path with
-the build-time `VITE_ENABLE_GRAPHQL_SOUP=true` override; see the
+Email name results come from the normalized GraphQL cache; see the
 [cache guide](../../apps/web/docs/graphql-normalized-cache-plan.md#cached-email-quick-access).
 
 Category/mode changes keep the same input mounted and focused. Return inserts

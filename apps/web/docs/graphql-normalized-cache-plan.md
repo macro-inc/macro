@@ -776,7 +776,7 @@ Use one default per data shape:
 | Data shape | Default | Notes |
 | --- | --- | --- |
 | GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
-| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the REST fallback for unsupported queries, grouping, and entity mapping. |
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
@@ -1447,14 +1447,10 @@ subjects take precedence over stale cached copies; sync retires the recovery row
 The backfill leader also warms `MailAccounts` concurrently with paged hydration
 so first-use offline composition can resolve sender ownership and aliases.
 
-Normalized email Quick Access results require the existing `enable-graphql-soup`
-rollout and a healthy normalized cache; local recovery rows remain available while
-that rollout is enabled even if the cache host is unavailable. The legacy REST
-sources do not supply email Quick Access rows.
-Quick Access observes flag loading reactively so a cold launch can attach the cache
-after PostHog responds. For a local native preview without PostHog configuration,
-build with `VITE_ENABLE_GRAPHQL_SOUP=true` to exercise this path; do not change the
-remote rollout or backfill to make a test pass.
+Normalized email Quick Access results require a healthy normalized cache; local
+recovery rows remain available even if the cache host is unavailable. The legacy
+REST sources do not supply email Quick Access rows. Do not change the backfill
+to make a test pass.
 
 Opening an older cache rebuilds search documents through the existing projection
 version mechanism, preserving normalized records, pending mutations, and storage
