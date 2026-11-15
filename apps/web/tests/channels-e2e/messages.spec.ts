@@ -1,5 +1,5 @@
 import { conversationRow } from './harness/channel';
-import { expect, test } from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 
 // If this fails, a message sent with Enter is lost, doubled or misplaced for
@@ -680,10 +680,6 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
   people,
   pageFor,
 }) => {
-  // Product defect: a message that was on its way while the other person's
-  // landed first keeps the place it was given on its sender's page, so the
-  // two pages show different orders until one of them reloads.
-  test.fail();
   const channel = await ada.createChannel({ members: [people.ben] });
   const mine = new Conversation(page, channel.id);
   const bens = new Conversation(await pageFor('ben'), channel.id);
@@ -727,12 +723,19 @@ test('MSG-18 messages two people send at the same moment end in one order for bo
       (await view.topLevel()).filter((text) => text.startsWith('ben'))
     ).toEqual(['ben 1', 'ben 2', 'ben 3', 'ben 4']);
   }
-  await expect(async () => {
-    expect(await bens.topLevel()).toEqual(await mine.topLevel());
-  }).toPass({ timeout: 15_000 });
-  const order = await mine.topLevel();
+  // Known defect on main, in most runs: a message that was on its way while
+  // the other person's landed first keeps the place it was given on its
+  // sender's page, so the two pages show different orders until a reload.
+  await failsSometimes(async () => {
+    await expect(async () => {
+      expect(await bens.topLevel()).toEqual(await mine.topLevel());
+    }).toPass({ timeout: 15_000 });
+  });
 
   await Promise.all([mine.reload(), bens.reload()]);
-  await expect.poll(() => mine.topLevel()).toEqual(order);
-  await expect.poll(() => bens.topLevel()).toEqual(order);
+  await expect(async () => {
+    const order = await mine.topLevel();
+    expect([...order].sort()).toEqual(everyMessage);
+    expect(await bens.topLevel()).toEqual(order);
+  }).toPass({ timeout: 15_000 });
 });

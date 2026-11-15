@@ -1,5 +1,5 @@
 import { ChannelView } from './harness/channel';
-import { expect, test } from './harness/fixtures';
+import { expect, knownDefect, test } from './harness/fixtures';
 import { HISTORY_LENGTH, historyText } from './harness/history';
 
 // If this fails, a link to a message opens the channel somewhere else, or
@@ -101,7 +101,7 @@ test('NAV-05 reading forward from an old message reaches the latest with nothing
   // Known defect on main: when the page that reaches the present arrives,
   // the list jumps to its end and the messages between are never shown.
   // Remove this line when that is fixed; the test then says so by failing.
-  test.fail();
+  knownDefect('both');
   test.setTimeout(240_000);
   const view = new ChannelView(page, history.id);
   await view.open({ messageId: history.messages[14].id });

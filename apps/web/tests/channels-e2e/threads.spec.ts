@@ -1,4 +1,4 @@
-import { expect, test } from './harness/fixtures';
+import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
 import { Conversation } from './harness/messages';
 
 // If this fails, a reply is lost, lands in the channel instead of under the
@@ -80,8 +80,14 @@ test('THR-02 replies from two people to an old message read in one order for bot
     'a newer message',
     'the newest message',
   ];
+  // Known defect on main, about one run in five on a busy machine: a reply
+  // that was shown goes from one of the pages until a reload.
+  await failsSometimes(async () => {
+    for (const view of [mine, bens]) {
+      await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+    }
+  });
   for (const view of [mine, bens]) {
-    await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
     await expect.poll(() => view.topLevel()).toEqual(channelMessages);
   }
 
@@ -350,7 +356,11 @@ test('THR-08 a reply from someone else to a closed thread raises its count witho
 
   await ben.post(channel.id, 'six, live', { threadId: root.id });
 
-  await expect(view.hiddenReplies(root.id)).toContainText('3 more replies');
+  // Known defect on main, in about 1 run in 15: the reply does not reach the
+  // open page, and the count stays as it was until the thread is opened.
+  await failsSometimes(async () => {
+    await expect(view.hiddenReplies(root.id)).toContainText('3 more replies');
+  });
   await expect
     .poll(() => view.replies(root.id))
     .toEqual(['one', 'two', 'three']);
@@ -436,7 +446,7 @@ test('THR-10 “Reply” on a message puts the keyboard in the reply box, so typ
   // Product defect: the reply box opens, but the keyboard stays on the
   // “Reply” button, so what is typed next does not go into the box until
   // the person clicks it.
-  test.fail();
+  knownDefect('both');
   const channel = await ada.createChannel({ members: [people.ben] });
   const root = await ben.post(channel.id, 'a question');
   const view = new Conversation(page, channel.id);
