@@ -2,6 +2,7 @@ import {
   couldNotLoad,
   expectShown,
   findRow,
+  loseConnectionAt,
   openFromList,
   openOffline,
   readAndReturn,
@@ -56,9 +57,10 @@ test('OFF-01 a channel the person has read opens whole with no connection', asyn
   await expectShown(view, WHOLE);
   await startAfresh(page, elsewhere);
 
+  await loseConnectionAt(page, channel);
   // Defect, in some runs: the device says it cannot load the channel.
   await failsSometimes(async () => {
-    const offline = await openOffline(page, channel);
+    const offline = await openFromList(page, channel);
     await expectShown(offline, WHOLE);
   });
 });
@@ -128,10 +130,11 @@ test('OFF-04 messages read far back in a long channel can be scrolled through ag
   await view.readTo('history 001', 'back');
   await startAfresh(page, elsewhere);
 
+  await loseConnectionAt(page, history);
   // Defect, in some runs: the channel does not open, or scrolling back
   // jumps from the latest messages to the middle of the history.
   await failsSometimes(async () => {
-    const offline = await openOffline(page, history);
+    const offline = await openFromList(page, history);
     await offline.expectEndsWith(['history 229', 'history 230']);
     await offline.readTo('history 001', 'back');
     await expect(offline.message('history 001')).toBeVisible();
@@ -307,10 +310,11 @@ test('OFF-10 a message that arrived while the channel was open is there when the
   await expectShown(view, [...WHOLE, 'five']);
   await startAfresh(page, elsewhere);
 
+  await loseConnectionAt(page, channel);
   // Defect, in most runs on a busy machine: the message that arrived is
   // missing.
   await failsSometimes(async () => {
-    const offline = await openOffline(page, channel);
+    const offline = await openFromList(page, channel);
     await expectShown(offline, [...WHOLE, 'five']);
   });
 });
@@ -328,9 +332,10 @@ test('OFF-11 opening a held channel with no connection does not say that a new v
   await expectShown(view, WHOLE);
   await startAfresh(page, elsewhere);
 
+  await loseConnectionAt(page, channel);
   // Defect, in some runs: the notice shows, with or without the channel.
   await failsSometimes(async () => {
-    const offline = await openOffline(page, channel);
+    const offline = await openFromList(page, channel);
     await expectShown(offline, WHOLE);
     await offline.send('written offline');
     await expectShown(offline, [...WHOLE, 'written offline']);

@@ -92,6 +92,19 @@ export async function startAfresh(page: Page, elsewhere: Named): Promise<void> {
 }
 
 /**
+ * Loses the connection with the channel's row in view, so that the channel
+ * can then be opened from it. A check marked as failing sometimes takes this
+ * step outside the mark, so that only the opening is excused.
+ */
+export async function loseConnectionAt(
+  page: Page,
+  channel: Named
+): Promise<void> {
+  await findRow(page, channel);
+  await goOffline(page.context());
+}
+
+/**
  * Loses the connection with the channel's row in view, then opens the
  * channel from it.
  */
@@ -99,8 +112,7 @@ export async function openOffline(
   page: Page,
   channel: Named
 ): Promise<Conversation> {
-  await findRow(page, channel);
-  await goOffline(page.context());
+  await loseConnectionAt(page, channel);
   return openFromList(page, channel);
 }
 

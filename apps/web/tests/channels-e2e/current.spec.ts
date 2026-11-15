@@ -2,9 +2,9 @@ import type { Api, SentMessage } from './harness/api';
 import {
   expectShown,
   findRow,
+  loseConnectionAt,
   type Named,
   openFromList,
-  openOffline,
   readAndReturn,
   startAfresh,
 } from './harness/device';
@@ -218,10 +218,11 @@ test('SYN-05 what a device caught up on is what it shows the next time it opens 
   await expectShown(view, AFTER_EVERYTHING);
 
   await startAfresh(first, made.elsewhere);
+  await loseConnectionAt(first, made.channel);
   // Defect, in some runs on a busy machine: the device shows the channel
   // without the last changes it had caught up on.
   await failsSometimes(async () => {
-    const offline = await openOffline(first, made.channel);
+    const offline = await openFromList(first, made.channel);
     await expectShown(offline, AFTER_EVERYTHING);
   });
 });
@@ -237,8 +238,7 @@ test('SYN-06 a channel more than a thousand changes behind is right when it is o
   const made = await scene(ada, ben);
   const [one, , three, , five, six] = made.messages;
   const first = await pageFor('ben');
-  const view = new Conversation(first, made.channel.id);
-  await view.open();
+  const view = await readAndReturn(first, made.channel, made.elsewhere);
   await expectShown(view, AT_FIRST);
   const blank = await first.context().newPage();
   await first.close();
@@ -280,8 +280,7 @@ test('SYN-08 a person removed from a channel while away is not shown the message
 }) => {
   const made = await scene(ada, ben);
   const first = await pageFor('ben');
-  const view = new Conversation(first, made.channel.id);
-  await view.open();
+  const view = await readAndReturn(first, made.channel, made.elsewhere);
   await expectShown(view, AT_FIRST);
   const blank = await first.context().newPage();
   await first.close();
