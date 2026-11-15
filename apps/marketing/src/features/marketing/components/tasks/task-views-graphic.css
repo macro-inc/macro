@@ -14,13 +14,13 @@
 .task-views [data-tone=violet] { --tone: oklch(55% 0.25 303); }
 
 .task-views-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; }
-.task-views-bar > strong { margin-right: auto; font-size: 14px; font-weight: 600; }
+.task-views-bar > strong { margin-right: auto; font-size: 14px; font-weight: 500; }
 .task-views-pill, .task-views-layouts {
   display: flex; align-items: center; height: 30px; border-radius: 999px;
   background: var(--color-ui-button-secondary-bg); color: var(--color-ui-content-secondary);
 }
 .task-views-pill { gap: 8px; padding: 0 10px; font-size: 13px; }
-.task-views-filter b { display: grid; place-items: center; min-width: 16px; height: 16px; border-radius: 999px; background: var(--color-ui-accent); color: #000; font-size: 10px; font-weight: 600; }
+.task-views-filter b { display: grid; place-items: center; min-width: 16px; height: 16px; border-radius: 999px; background: var(--color-ui-accent); color: #000; font-size: 10px; font-weight: 500; }
 .task-views-caret { width: 11px !important; height: 11px !important; }
 /* One pill holding three icon buttons; the pressed one fills its slot. */
 .task-views-layouts { overflow: hidden; }
@@ -55,7 +55,7 @@
 .task-views-body[data-view=board] { display: flex; align-items: flex-start; gap: 10px; }
 .task-views-column { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; padding: 6px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--color-ui-border-secondary); }
 .task-views-column-head { display: flex; align-items: center; gap: 8px; padding: 7px 6px 5px; }
-.task-views-column-head strong { font-weight: 600; }
+.task-views-column-head strong { font-weight: 500; }
 .task-views-column-head span { margin-right: auto; color: var(--color-ui-content-tertiary); font-size: 11px; }
 .task-views-column-head svg:last-child { color: var(--color-ui-content-tertiary); }
 .task-views-card { display: flex; flex-direction: column; gap: 9px; padding: 10px; border-radius: 9px; background: var(--task-views-raised); }
@@ -65,7 +65,7 @@
 .task-views-card-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; padding-left: 22px; }
 
 .task-views-months { display: grid; grid-template-columns: 36% 1fr 1.4fr 1fr 1fr; align-items: center; height: 26px; margin-bottom: 4px; color: var(--color-ui-content-tertiary); font-size: 11.5px; }
-.task-views-months strong { color: var(--color-ui-content-primary); font-weight: 600; }
+.task-views-months strong { color: var(--color-ui-content-primary); font-weight: 500; }
 .task-views-lane { display: grid; grid-template-columns: 36% minmax(0, 1fr); align-items: center; height: 34px; }
 .task-views-lane-name { display: flex; align-items: center; gap: 8px; padding: 0 10px; }
 .task-views-track { position: relative; align-self: stretch; }

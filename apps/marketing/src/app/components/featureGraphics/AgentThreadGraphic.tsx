@@ -326,7 +326,7 @@ export function AgentThreadGraphic() {
           padding: 8px 8px 8px 16px;
           width: 100%;
         }
-        .atg-title { font-size: 10px; font-weight: 600; white-space: nowrap; }
+        .atg-title { font-size: 10px; font-weight: 500; white-space: nowrap; }
         .atg-tabs {
           align-items: flex-start;
           background: #000;
@@ -420,7 +420,7 @@ export function AgentThreadGraphic() {
           white-space: nowrap;
           width: 100%;
         }
-        .atg-who { font-weight: 600; }
+        .atg-who { font-weight: 500; }
         .atg-time, .atg-meta { color: #8b8b8b; font-weight: 400; }
         .atg-text { color: #fff; font-size: 10px; margin: 0; position: relative; }
         /* The @mention chip: a highlight behind the word rather than a pill

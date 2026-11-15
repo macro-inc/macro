@@ -25,6 +25,8 @@ export default defineConfig({
     dedupe: ['solid-js'],
     alias: { 'loro-crdt': 'loro-crdt/base64' },
   },
+  // Claude sign-in for an agent's computer sits behind the computers rollout.
+  define: { 'import.meta.env.VITE_ENABLE_MACRO_COMPUTERS': '"true"' },
   optimizeDeps: { esbuildOptions: { target: 'esnext' } },
   server: {
     host: '127.0.0.1',

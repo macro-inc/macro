@@ -23,7 +23,7 @@ export function AgentSession(props: {
     <>
       <ViewShell.TopBar class="agent-session-header">
         <ModelIcon model={model()} />
-        <h3 class="min-w-0 flex-1 truncate text-sm font-semibold">
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium">
           {props.title}
         </h3>
         <Button

@@ -5,11 +5,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   createAgent: vi.fn(),
+  startSignIn: vi.fn(),
+  completeSignIn: vi.fn(),
   flag: () => ({ enabled: false, loading: false }),
+  computersFlag: () => ({ enabled: false, loading: false }),
+  harnesses: (): unknown[] => [],
+  agents: (): unknown[] => [],
+  toastSuccess: vi.fn(),
+}));
+
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: mocks.toastSuccess, failure: vi.fn() },
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.flag(),
+  useFeatureFlag: (flag: { key: string }) => () =>
+    flag.key === 'enable-macro-computers'
+      ? mocks.computersFlag()
+      : mocks.flag(),
+}));
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return mocks.harnesses();
+    },
+  }),
+}));
+vi.mock('@queries/computers/claude', () => ({
+  useClaudeSignInMutation: () => ({ mutateAsync: mocks.startSignIn }),
+  useClaudeCompleteMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.completeSignIn,
+  }),
 }));
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
@@ -58,6 +86,12 @@ vi.mock('@queries/team-agents/team-agents', () => ({
     isPending: false,
     mutateAsync: mocks.createAgent,
   }),
+  useTeamAgentsQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return { agents: mocks.agents() };
+    },
+  }),
 }));
 
 vi.mock('@queries/team-agents/voices', () => ({
@@ -101,6 +135,12 @@ vi.mock('./TeamInviteLinkSection', () => ({
 import { InviteToTeamDialog } from './Team';
 
 const [flag, setFlag] = createSignal({ enabled: false, loading: false });
+const [computersFlag, setComputersFlag] = createSignal({
+  enabled: false,
+  loading: false,
+});
+const [harnesses, setHarnesses] = createSignal<unknown[]>([]);
+const [agents, setAgents] = createSignal<unknown[]>([]);
 
 class ResizeObserverStub {
   observe() {}
@@ -111,14 +151,25 @@ class ResizeObserverStub {
 beforeEach(() => {
   // The agent form's scrolling body measures itself.
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  // An invite error scrolls itself into view; jsdom has no layout.
+  Element.prototype.scrollIntoView = vi.fn();
   setFlag({ enabled: false, loading: false });
+  setComputersFlag({ enabled: false, loading: false });
+  setHarnesses([]);
+  setAgents([]);
   mocks.flag = flag;
+  mocks.computersFlag = computersFlag;
+  mocks.harnesses = harnesses;
+  mocks.agents = agents;
 });
 
 afterEach(() => {
   cleanup();
   mocks.mutate.mockReset();
   mocks.createAgent.mockReset();
+  mocks.startSignIn.mockReset();
+  mocks.completeSignIn.mockReset();
+  mocks.toastSuccess.mockReset();
 });
 
 function sendInvite(onClose: () => void = () => {}) {
@@ -274,5 +325,31 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: false, loading: false });
     expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
+  });
+
+  it('closes as soon as the agent is invited and says it is being set up', async () => {
+    setFlag({ enabled: true, loading: false });
+    setComputersFlag({ enabled: true, loading: false });
+    const onClose = vi.fn();
+    mocks.createAgent.mockResolvedValue({ name: 'Ada' });
+    openAsAdmin(onClose);
+    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Ada' },
+    });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Job description' }), {
+      target: { value: 'Triage support email.' },
+    });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Personality' }), {
+      target: { value: 'Warm and concise.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Invite agent/ }));
+
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Ada is being set up. We'll let you know when it's ready."
+    );
+    expect(screen.queryByText('Bring your AI to Ada')).toBeNull();
+    expect(mocks.startSignIn).not.toHaveBeenCalled();
   });
 });
