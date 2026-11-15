@@ -1,0 +1,28 @@
+apps/web/src/lib/i18n/locales/en/entity-actions.ts
+  s_9f8be70ed4d487::t_b7076c38f46ffc 207-211
+apps/web/src/features/next-soup/actions/graphql-done-operation.test.ts
+  s_9f8be70ed4d487::t_5643fbda2ae4ed 8-9,16-19,256-287,289-323
+  s_9f8be70ed4d487::t_71bb9f110b1644 288
+  s_9f8be70ed4d487::t_5ccae303332870 324
+apps/web/src/features/next-soup/actions/graphql-done-operation.ts
+  s_9f8be70ed4d487::t_43a2b6fa89fb89 2,7,49-53,132-135,141-150,210-237,302-303,309,312,314-326
+apps/web/src/features/next-soup/actions/make-mark-done-action.ts
+  s_9f8be70ed4d487::t_b7076c38f46ffc 187-207,210-212,279
+  s_9f8be70ed4d487::t_71bb9f110b1644 208-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bd0f5e4f14f978a7c23a4534e9536e2b943f7dc1",
+  "prompts": {},
+  "sessions": {
+    "s_9f8be70ed4d487": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7953f44-ba11-4c3b-8ea7-dad5a205e2c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
