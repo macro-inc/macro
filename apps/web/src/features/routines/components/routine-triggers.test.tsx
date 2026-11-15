@@ -24,7 +24,10 @@ const email: RoutineTriggerDraft = {
   condition: 'Is this about money?',
 };
 
-function renderRows(initial: RoutineTriggerDraft[]) {
+function renderRows(
+  initial: RoutineTriggerDraft[],
+  offer: { offerEvents?: boolean; offerWebhooks?: boolean } = {}
+) {
   const [triggers, setTriggers] = createSignal(initial);
   const onChange = vi.fn(setTriggers);
   const slots = {
@@ -57,6 +60,7 @@ function renderRows(initial: RoutineTriggerDraft[]) {
         triggers={triggers()}
         onChange={onChange}
         {...slots}
+        {...offer}
       />
     </>
   ));
@@ -133,6 +137,44 @@ describe('routine triggers on the routine page', () => {
     expect(triggers()).toMatchObject([
       { kind: 'event', events: ['task.created'] },
     ]);
+  });
+
+  it('adds a webhook trigger, which watches no items', () => {
+    const { triggers } = renderRows([]);
+    openAddTrigger();
+    press(item('Webhooks'), 'ArrowRight');
+    press(item(/^Webhook received/), 'Enter');
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(panel).getByText(/POSTs text to this routine’s secret URL/)
+    ).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    expect(triggers()).toEqual([
+      expect.objectContaining({ kind: 'event', events: ['webhook'] }),
+    ]);
+    expect(triggers()[0]).toMatchObject({ ids: undefined });
+    expect(
+      screen.getByRole('button', { name: 'Change Webhook received trigger' })
+    ).toBeTruthy();
+    expect(screen.queryByText('in')).toBeNull();
+  });
+
+  it('offers webhooks under their own flag, even without activity triggers', () => {
+    renderRows([], { offerEvents: false });
+    openAddTrigger();
+    expect(item('Webhooks')).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Email', hidden: true })
+    ).toBeNull();
+  });
+
+  it('hides webhooks when their flag is off', () => {
+    renderRows([], { offerWebhooks: false });
+    openAddTrigger();
+    expect(item('Email')).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Webhooks', hidden: true })
+    ).toBeNull();
   });
 
   it('switches a trigger’s event from its token, keeping its AI check', () => {

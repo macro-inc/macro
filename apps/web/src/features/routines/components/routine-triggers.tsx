@@ -67,6 +67,8 @@ type EventSlots = {
   ) => JSX.Element;
   /** False hides event triggers from the menu; existing ones stay editable. */
   offerEvents?: boolean;
+  /** False hides the Webhooks group, whatever `offerEvents` says. */
+  offerWebhooks?: boolean;
 };
 
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
@@ -78,6 +80,7 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
     .with('CALL_RECORD', () => 'Calls')
     .with('CHANNEL', () => 'Channels')
     .with('GITHUB', () => 'GitHub')
+    .with('WEBHOOK', () => 'Webhooks')
     .exhaustive();
 }
 
@@ -104,6 +107,7 @@ function scopeFieldLabel(trigger: EventTriggerDraft) {
     .with('CHANNEL', () => 'Which channels')
     .with('CALL_RECORD', () => 'Which calls')
     .with('GITHUB', () => 'Repositories')
+    .with('WEBHOOK', () => 'URL')
     .exhaustive();
 }
 
@@ -420,6 +424,7 @@ function AddTrigger(
         onSelect={setPending}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        offerWebhooks={props.offerWebhooks}
         triggerLabel="Add trigger"
         triggerVariant={props.variant}
         triggerSize={props.size}
@@ -532,6 +537,7 @@ function EventToken(
         current={eventTriggerLabel(props.trigger)}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        offerWebhooks={props.offerWebhooks}
         onSelect={(value) => {
           if (value.kind !== 'event') {
             setSchedule({ ...value, id: props.trigger.id });
@@ -923,6 +929,7 @@ export function RoutineTriggers(
     renderEventCondition: props.renderEventCondition,
     renderEventGroup: props.renderEventGroup,
     offerEvents: props.offerEvents,
+    offerWebhooks: props.offerWebhooks,
   });
   return (
     <Switch>

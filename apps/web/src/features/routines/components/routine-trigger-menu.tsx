@@ -16,6 +16,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   describeTrigger,
   isGlobalEvent,
@@ -110,6 +111,11 @@ const TRIGGER_TYPES: TriggerType[] = [
     icon: TRIGGER_GROUP_ICONS.GitHub,
     choices: eventChoices('GitHub'),
   },
+  {
+    label: 'Webhooks',
+    icon: TRIGGER_GROUP_ICONS.Webhooks,
+    choices: eventChoices('Webhooks'),
+  },
 ];
 
 /**
@@ -167,8 +173,13 @@ export function TriggerMenu(props: {
     group: RoutineEventGroup,
     options: () => JSX.Element
   ) => JSX.Element;
-  /** False offers only schedules; a saved event trigger still shows its own. */
+  /**
+   * False offers only schedules, and webhooks unless `offerWebhooks` is
+   * false; a saved event trigger still shows its own.
+   */
   offerEvents?: boolean;
+  /** False leaves out the Webhooks group. */
+  offerWebhooks?: boolean;
   /** For a saved trigger: offered at the bottom of the menu. */
   onRemove?: () => void;
   triggerLabel: string;
@@ -185,9 +196,12 @@ export function TriggerMenu(props: {
   const [search, setSearch] = createSignal('');
   const [drilled, setDrilled] = createSignal<TriggerType>();
   const types = () =>
-    props.offerEvents === false
-      ? TRIGGER_TYPES.filter((type) => type.label === 'Schedule')
-      : TRIGGER_TYPES;
+    TRIGGER_TYPES.filter((type) =>
+      match(type.label)
+        .with('Schedule', () => true)
+        .with('Webhooks', () => props.offerWebhooks !== false)
+        .otherwise(() => props.offerEvents !== false)
+    );
   /** On a phone: every type, or only the opened one above its events. */
   const shownTypes = () => {
     const type = drilled();

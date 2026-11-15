@@ -51,6 +51,7 @@ import type {
   DraftRoutineRequest,
   ExecutionRecordResponse,
   InProgressExecution,
+  MintedWebhookResponse,
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
@@ -58,6 +59,7 @@ import type {
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
   StartDraftJobRequest,
+  WebhookStatusResponse,
 } from './generated/schemas';
 
 const scheduledActionHost: string = SERVER_HOSTS['scheduled-action'];
@@ -275,4 +277,23 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /** The routine's webhook URL without its secret; `webhook` is absent when it has none. */
+  getWebhook: (scheduleId: string) =>
+    scheduledActionFetch<WebhookStatusResponse>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'GET' }
+    ),
+
+  /** A new webhook URL, replacing any the routine had; its secret is in this response only. */
+  mintWebhook: (scheduleId: string) =>
+    scheduledActionFetch<MintedWebhookResponse>(
+      `/scheduled-actions/${scheduleId}/webhook`,
+      { method: 'POST', cache: 'no-store' }
+    ),
+
+  removeWebhook: (scheduleId: string) =>
+    scheduledActionFetch(`/scheduled-actions/${scheduleId}/webhook`, {
+      method: 'DELETE',
+    }),
 };

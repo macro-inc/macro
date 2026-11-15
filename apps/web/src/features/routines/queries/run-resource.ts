@@ -87,12 +87,29 @@ const runSchema = z
           schedule: z.string(),
           timezone: z.string(),
         }),
-        z.object({
-          kind: z.literal('event'),
-          event: z.string(),
-          entity_id: z.string().nullish(),
-        }),
+        z
+          .object({
+            kind: z.literal('event'),
+            event: z.string(),
+            entity_id: z.string().nullish(),
+          })
+          .transform((start) => ({
+            kind: start.kind,
+            event: start.event,
+            entityId: start.entity_id ?? undefined,
+          })),
         z.object({ kind: z.literal('manual'), by: z.string() }),
+        z
+          .object({
+            kind: z.literal('webhook'),
+            body: z.string().nullish(),
+            content_type: z.string().nullish(),
+          })
+          .transform((start) => ({
+            kind: start.kind,
+            body: start.body ?? undefined,
+            contentType: start.content_type ?? undefined,
+          })),
       ]),
     }),
   })
@@ -102,14 +119,7 @@ const runSchema = z
       timezone: run.timezone,
       previousAt: run.previous_at,
       ...(run.code_acts_as ? { codeActsAs: run.code_acts_as } : {}),
-      start:
-        run.started_by.kind === 'event'
-          ? {
-              kind: 'event',
-              event: run.started_by.event,
-              entityId: run.started_by.entity_id ?? undefined,
-            }
-          : run.started_by,
+      start: run.started_by,
     })
   );
 const stepsSchema = z.object({ steps: z.array(stepSchema) });

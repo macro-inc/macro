@@ -12,6 +12,7 @@ import type {
   CodeActsAs,
   HistoryCall,
   HistoryRecord,
+  HistoryStart,
   HistoryStep,
 } from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
@@ -186,6 +187,37 @@ function RunStep(props: {
   );
 }
 
+type WebhookStart = Extract<HistoryStart, { kind: 'webhook' }>;
+
+function webhookStart(record: HistoryRecord): WebhookStart | undefined {
+  const start = record.run?.start;
+  return start?.kind === 'webhook' ? start : undefined;
+}
+
+/** What was POSTed to the webhook URL, as sent: plain text, never markup. */
+function WebhookBody(props: { start: WebhookStart }) {
+  return (
+    <section aria-label="Webhook body" class="grid min-w-0 gap-1.5">
+      <h3 class="flex flex-wrap items-baseline gap-x-2 text-xs font-medium text-ink-muted">
+        Webhook body
+        <Show when={props.start.contentType}>
+          {(type) => <span class="font-mono font-normal">{type()}</span>}
+        </Show>
+      </h3>
+      <Show
+        when={props.start.body}
+        fallback={<p class="text-xs text-ink-muted">Sent without a body.</p>}
+      >
+        {(body) => (
+          <pre class="max-h-64 min-w-0 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+            {body()}
+          </pre>
+        )}
+      </Show>
+    </section>
+  );
+}
+
 /** What one run of a routine with steps did, step by step. */
 export function RunDetail(props: {
   record: HistoryRecord;
@@ -251,6 +283,9 @@ export function RunDetail(props: {
           )}
         </Show>
       </header>
+      <Show when={webhookStart(props.record)}>
+        {(start) => <WebhookBody start={start()} />}
+      </Show>
       <ol aria-label="Steps" class="flex flex-col">
         <For each={steps()}>
           {(step, index) => (

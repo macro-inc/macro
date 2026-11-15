@@ -39,7 +39,9 @@ export type HistoryStart =
   | { kind: 'schedule'; schedule: string; timezone: string }
   | { kind: 'event'; event: string; entityId?: string }
   /** `by` is the person's user id. */
-  | { kind: 'manual'; by: string };
+  | { kind: 'manual'; by: string }
+  /** What was POSTed to the routine's webhook URL, as sent. Untrusted. */
+  | { kind: 'webhook'; body?: string; contentType?: string };
 /** Whose name a run's code steps wrote under. */
 export type CodeActsAs = 'agent' | 'owner';
 /** When a run counts as happening, what started it, and the run before it. */
