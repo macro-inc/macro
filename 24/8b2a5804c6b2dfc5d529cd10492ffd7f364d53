@@ -1,0 +1,33 @@
+tooling/xtask/crates/xtask_local/src/local/doctor.rs
+  s_52ea9be992ee30::t_77c5ca6ae33550 25-26
+docs/development/running-locally.md
+  s_52ea9be992ee30::t_77c5ca6ae33550 1001-1002
+nix/cloud-storage.nix
+  s_52ea9be992ee30::t_bfdefb69c66e06 1317-1318
+  s_52ea9be992ee30::t_34447c6acb332f 1065
+  s_52ea9be992ee30::t_c9723bc3145924 1063-1064,1066-1071,1075,1311-1316,1323-1325
+docs/development/rust.md
+  s_52ea9be992ee30::t_77c5ca6ae33550 54-62
+nix/kache-rustc-wrapper.sh
+  s_52ea9be992ee30::t_24d56484251f09 5-7
+  s_52ea9be992ee30::t_3fbc9115180d4b 3-4,15,22-27,29-32,35
+  s_52ea9be992ee30::t_eb17d14cbe16ff 1-2,8-14,16-21,28,33-34,36-42
+nix/_kache.nix
+  s_52ea9be992ee30::t_cbc6308ef2bcd1 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "248b2a5804c6b2dfc5d529cd10492ffd7f364d53",
+  "prompts": {},
+  "sessions": {
+    "s_52ea9be992ee30": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c0cff23-826d-44db-b3f2-7c9d8015eec1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
