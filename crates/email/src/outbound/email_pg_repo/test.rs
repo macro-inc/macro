@@ -1,14 +1,17 @@
 mod all_mail;
 mod attachment_filter;
 mod crm_scope_dynamic_query;
+mod crm_team_read;
 mod draft;
 mod dynamic_query;
 mod folders;
 mod importance_pagination;
+mod inbox_viewed_sort;
 mod labels;
 mod link;
 mod mail_tab_projection;
 mod message;
+mod owned_address_read;
 mod preview;
 mod project;
 mod project_scope_dynamic_query;

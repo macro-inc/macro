@@ -448,6 +448,7 @@ pub(super) async fn update_thread_project(
     thread_id: Uuid,
     project_id: Option<&str>,
 ) -> Result<bool, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
     let result = sqlx::query!(
         r#"
         UPDATE email_threads
@@ -457,10 +458,20 @@ pub(super) async fn update_thread_project(
         thread_id,
         project_id,
     )
-    .execute(pool)
+    .execute(transaction.as_mut())
     .await?;
-
-    Ok(result.rows_affected() > 0)
+    if result.rows_affected() == 0 {
+        return Ok(false);
+    }
+    entity_access_db_utils::project_grants::refuse_filing_in(
+        &mut transaction,
+        &thread_id,
+        model_entity::EntityType::EmailThread,
+        project_id,
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(true)
 }
 
 /// Get the current project_id for a thread.

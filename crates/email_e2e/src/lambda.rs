@@ -45,6 +45,15 @@ struct Runtime {
     outcome: Arc<Mutex<Option<oneshot::Sender<Outcome>>>>,
 }
 
+/// A task that ends with the value that holds it.
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 /// Runs the handler binary `name` for one scheduled event, with `env` and
 /// what the Lambda runtime needs on top, and fails when the handler does.
 pub(crate) async fn invoke_scheduled(
@@ -72,7 +81,10 @@ pub(crate) async fn invoke_scheduled(
         .route("/2018-06-01/runtime/invocation/{id}/error", post(failed))
         .route("/2018-06-01/runtime/init/error", post(failed))
         .with_state(runtime);
-    let server = tokio::spawn(async move { axum::serve(listener, app).await });
+    // Aborted when this call ends, however it ends.
+    let _server = AbortOnDrop(tokio::spawn(
+        async move { axum::serve(listener, app).await },
+    ));
 
     let mut env = env.clone();
     for (key, value) in [
@@ -102,7 +114,6 @@ pub(crate) async fn invoke_scheduled(
     })
     .await;
     process.stop().await;
-    server.abort();
 
     let log = || {
         format!(

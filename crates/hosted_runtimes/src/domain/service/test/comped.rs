@@ -127,7 +127,10 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
 async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
     for (no_subscription, yearly) in [(false, false), (false, true), (true, false)] {
         let service = ComputerService::new(
-            FakeRepo::default(),
+            FakeRepo {
+                sold_units: 9,
+                ..FakeRepo::default()
+            },
             FakeBilling {
                 no_subscription,
                 yearly,

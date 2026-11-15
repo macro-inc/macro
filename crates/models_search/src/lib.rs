@@ -54,6 +54,21 @@ pub enum MatchType {
     Query,
 }
 
+/// How a query of several terms matches document content.
+#[derive(
+    Serialize, Deserialize, Debug, ToSchema, Copy, Clone, PartialEq, Eq, Default, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum TermMatching {
+    /// Every term matches somewhere in the document.
+    #[default]
+    All,
+    /// A query of three or more terms matches a document when one passage
+    /// holds most of its terms; shorter queries behave as `all`. Honoured only
+    /// for callers the rollout flag is on for, and treated as `all` otherwise.
+    Dynamic,
+}
+
 /// A generic response item
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct SearchResponseItem<T, S> {

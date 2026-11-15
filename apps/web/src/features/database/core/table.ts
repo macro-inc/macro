@@ -15,6 +15,10 @@ import {
   isOptionColumn,
 } from './database-view';
 
+const monetaryFormat = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 6,
+});
+
 export type DatabaseRow = {
   rowId: string;
   cells: Record<string, DatabaseCellValue>;
@@ -57,7 +61,7 @@ export function cellTitle(
   const value = rowValue(row, column.id);
   if (value === null || value === '') return 'Unnamed';
   if (column.dataType === 'ENTITY' && !column.relation) return 'Linked record';
-  return formatCellValue(column, value) || 'Unnamed';
+  return formatCellValue(column, value, row.cells) || 'Unnamed';
 }
 
 export function rowTitle(
@@ -99,9 +103,11 @@ export function canEditCell(column: DatabaseViewColumn): boolean {
   );
 }
 
+/** Row context supplies monetary denominations; standalone values remain numbers. */
 export function formatCellValue(
   column: DatabaseViewColumn,
-  value: DatabaseCellValue
+  value: DatabaseCellValue,
+  cells?: Record<string, DatabaseCellValue>
 ): string {
   if (value === null || value === '') return '';
   if (column.relation)
@@ -126,8 +132,13 @@ export function formatCellValue(
     const range = cellTimeRange(value);
     if (range) return formatTimeRange(range);
   }
-  if (column.dataType === 'NUMBER' && typeof value === 'number')
+  if (column.dataType === 'NUMBER' && typeof value === 'number') {
+    if (column.currencyColumnId && cells) {
+      const currency = cells[column.currencyColumnId] ?? 'USD';
+      return `${currency} ${monetaryFormat.format(value)}`;
+    }
     return formatNumber(value);
+  }
   return String(value);
 }
 

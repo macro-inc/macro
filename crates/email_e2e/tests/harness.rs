@@ -1,7 +1,7 @@
 //! The harness's own levers, checked against the real services.
 
 use email_e2e::redis::AsyncCommands;
-use email_e2e::{DEFAULT_TIMEOUT, Report, Stack, eventually};
+use email_e2e::{DEFAULT_TIMEOUT, Report, Stack, StackOptions, eventually};
 
 /// A stand-in told to fail answers the error once, records the request, and
 /// answers normally afterwards.
@@ -14,9 +14,17 @@ async fn stand_in_answers_an_error_once() -> Result<(), Report> {
     let url = format!("{}/documents/import", stack.service_url("document-storage"));
     let refused = http.post(&url).json(&serde_json::json!({})).send().await?;
     assert_eq!(refused.status(), 404);
+
+    let code = serde_json::json!({ "code": "NOT_FOUND" });
+    stack.fail_next_service_request_with("document-storage", "POST", "/documents", 410, &code)?;
+    let refused = http.post(&url).json(&serde_json::json!({})).send().await?;
+    assert_eq!(refused.status(), 410);
+    assert_eq!(refused.json::<serde_json::Value>().await?, code);
+    let staff = stack.user_at("ada@macro.com").await?;
+    assert_eq!(staff.email(), "ada@macro.com");
     let answered = http.post(&url).json(&serde_json::json!({})).send().await?;
     assert_eq!(answered.status(), 200);
-    assert_eq!(stack.service_requests().len(), 2);
+    assert_eq!(stack.service_requests().len(), 3);
 
     stack.finish().await
 }
@@ -49,5 +57,24 @@ async fn scheduled_sweep_runs() -> Result<(), Report> {
     let stack = Stack::start().await?;
     stack.run_scheduled_sweep().await?;
     assert!(stack.take_queue_messages("scheduled").await?.is_empty());
+    stack.finish().await
+}
+
+/// A stack asked for it serves the GraphQL API on the scenario's data: a
+/// user reads their own id through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn graphql_answers_as_the_user() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        ..StackOptions::default()
+    })
+    .await?;
+    let ada = stack.user("ada").await?;
+
+    let data = ada
+        .graphql("query { user { id } }", &serde_json::json!({}))
+        .await?;
+    assert!(data["user"]["id"].is_string(), "{data}");
+
     stack.finish().await
 }

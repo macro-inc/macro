@@ -48,11 +48,19 @@ pub(crate) struct RedisDatabase {
     tracker: TaskTracker,
 }
 
+/// The URL of logical database `index` on the server at `server_url`. A
+/// database the address names itself is replaced.
+fn database_url(server_url: &str, index: u32) -> Result<String, Report> {
+    let mut url = reqwest::Url::parse(server_url)
+        .context("the Redis server address (EMAIL_E2E_REDIS_URL) is not a URL")?;
+    url.set_path(&format!("/{index}"));
+    Ok(url.into())
+}
+
 impl RedisDatabase {
     /// Leases a free logical database and empties it.
     pub(crate) async fn lease(server_url: &str) -> Result<Self, Report> {
-        let server = server_url.trim_end_matches('/');
-        let client = redis::Client::open(format!("{server}/0"))
+        let client = redis::Client::open(database_url(server_url, 0)?)
             .context("the Redis server address (EMAIL_E2E_REDIS_URL) is not a Redis URL")?;
         let mut registry = client
             .get_multiplexed_async_connection()
@@ -72,7 +80,7 @@ impl RedisDatabase {
 
         let owner = Uuid::now_v7().to_string();
         let index = lease_index(&mut registry, count, &owner).await?;
-        let url = format!("{server}/{index}");
+        let url = database_url(server_url, index)?;
 
         let mut database = redis::Client::open(url.as_str())?
             .get_multiplexed_async_connection()
@@ -192,6 +200,8 @@ async fn renew(
     lost: Arc<AtomicBool>,
     cancel: CancellationToken,
 ) {
+    // The lease runs from the last renewal the registry confirmed.
+    let mut confirmed = tokio::time::Instant::now();
     loop {
         tokio::select! {
             () = cancel.cancelled() => return,
@@ -208,9 +218,14 @@ async fn renew(
                 lost.store(true, Ordering::Relaxed);
                 return;
             }
-            Ok(_) => {}
+            Ok(_) => confirmed = tokio::time::Instant::now(),
             Err(error) => {
                 tracing::warn!(error = ?error, "could not renew the Redis database lease");
+                // Unrenewed for its whole length, the lease has run out.
+                if confirmed.elapsed() >= LEASE {
+                    lost.store(true, Ordering::Relaxed);
+                    return;
+                }
             }
         }
     }

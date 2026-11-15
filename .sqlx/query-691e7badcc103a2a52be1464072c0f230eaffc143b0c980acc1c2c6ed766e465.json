@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH old AS (\n                    SELECT jid, static_file_id FROM whatsapp_profile_picture\n                    WHERE account_id = $1 AND jid = ANY($2) FOR UPDATE)\n                UPDATE whatsapp_profile_picture p SET state = 'none', picture_id = NULL, static_file_id = NULL,\n                    staged = NULL, mime = NULL, checked_at = now(), attempts = 0,\n                    retry_at = now() + make_interval(days => $3) + random() * make_interval(days => $4)\n                FROM old WHERE p.account_id = $1 AND p.jid = old.jid\n                RETURNING old.static_file_id IS NOT NULL AS \"had_file!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "had_file!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "691e7badcc103a2a52be1464072c0f230eaffc143b0c980acc1c2c6ed766e465"
+}

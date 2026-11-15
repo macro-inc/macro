@@ -30,6 +30,7 @@ fn docker_computers_dial_the_stack_in_network() {
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "local-docker");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box:latest");
+    assert_eq!(env["COMPUTERS_AGENT_IMAGE"], "macro-box-agent:latest");
     assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
     assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
     assert_eq!(env["COMPUTERS_DOCKER_MEMORY_GB"], "32");
@@ -91,6 +92,10 @@ fn docker_computers_dial_the_stack_in_network() {
                 "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".to_string(),
                 "http://document-storage-service:8080".to_string(),
             ),
+            (
+                "OVERRIDE_AGENT_GIT_SERVICE_URL".to_string(),
+                "http://agent-harness-service:8080/agent-git".to_string(),
+            ),
         ])
     );
 }
@@ -106,6 +111,7 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
             &credentials(),
             &IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap(),
             "macro-box/2026-11-10",
+            "macro-box-agent/2026-11-10",
         )
         .unwrap();
 
@@ -113,6 +119,7 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "runtime-dev-1");
     assert_eq!(env["COMPUTERS_IMAGE"], "macro-box/2026-11-10");
+    assert_eq!(env["COMPUTERS_AGENT_IMAGE"], "macro-box-agent/2026-11-10");
     assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
     assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
     assert_eq!(env["COMPUTERS_INCUS_PROFILE"], "macro-box");
@@ -169,6 +176,10 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
     assert_eq!(
         overrides["OVERRIDE_MCP_SERVICE_URL"],
         devbox(Port::AgentHarness)
+    );
+    assert_eq!(
+        overrides["OVERRIDE_AGENT_GIT_SERVICE_URL"],
+        format!("{}/agent-git", devbox(Port::AgentHarness))
     );
     assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
@@ -270,6 +281,7 @@ fn incus_uses_the_discovered_devbox_address() {
             &credentials(),
             &network,
             "macro-box/2026-11-10",
+            "macro-box-agent/2026-11-10",
         )
         .unwrap();
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ADDRESS"], "100.104.105.106");
@@ -330,13 +342,19 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
         let base = local_env(&instance);
         let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
         let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
-            .incus_env(&base, &credentials(), &network, "macro-box/2026-11-10")
+            .incus_env(
+                &base,
+                &credentials(),
+                &network,
+                "macro-box/2026-11-10",
+                "macro-box-agent/2026-11-10",
+            )
             .unwrap();
         let overrides: BTreeMap<_, _> = env
             .into_iter()
             .filter(|(key, _)| key.starts_with("OVERRIDE_"))
             .collect();
-        assert_eq!(overrides.len(), 11);
+        assert_eq!(overrides.len(), 12);
         assert_eq!(
             overrides["OVERRIDE_APP_SERVICE_URL"],
             base["OVERRIDE_APP_SERVICE_URL"]
@@ -361,6 +379,12 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
                 "/scheduled-action",
             ),
             ("OVERRIDE_MCP_SERVICE_URL", Port::AgentHarness, "http", ""),
+            (
+                "OVERRIDE_AGENT_GIT_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+                "/agent-git",
+            ),
             (
                 "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
                 Port::AgentHarnessEgress,
@@ -438,6 +462,7 @@ fn incus_guest_ports_are_allowed_by_nix() {
                 &credentials(),
                 &network,
                 "macro-box/2026-11-10",
+                "macro-box-agent/2026-11-10",
             )
             .unwrap();
         let mut emitted_ports = std::collections::BTreeSet::new();

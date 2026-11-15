@@ -84,6 +84,14 @@ impl TlsFront {
     }
 }
 
+/// A listener dropped without `stop`, as when a stack fails to start, ends
+/// too.
+impl Drop for TlsFront {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+
 async fn accept(
     listener: TcpListener,
     acceptor: TlsAcceptor,
