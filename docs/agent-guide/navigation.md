@@ -1416,7 +1416,7 @@ example with a JSON body, and under **Keep the secret out of the URL** the
 bearer address and secret, each with **Copy**, show only until the panel
 closes. Afterwards it reads **Made <date>, last used <date>** with **New URL**
 (the old one stops working at once) and **Delete URL**. A POST
-(`/scheduled-action/hooks/<hook>/<secret>`, or `/hooks/<hook>` with
+(`/scheduled-action/hooks/<hook>/<secret>`, or `/scheduled-action/hooks/<hook>` with
 `Authorization: Bearer <secret>`) answers 202 `{"runId"}`, 200 `{"runId":
 null}` when the body fails the trigger's tests, 409 while the routine is
 paused, and 404 for any wrong, rotated or removed URL. Bodies are UTF-8 text

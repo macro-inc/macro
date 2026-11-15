@@ -2188,7 +2188,10 @@ export type ScheduledActionHealthResponses = {
 export type ScheduledActionHealthResponse = ScheduledActionHealthResponses[keyof ScheduledActionHealthResponses];
 
 export type DeliverRoutineWebhookWithBearerData = {
-    body: string;
+    /**
+     * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
+     */
+    body: unknown;
     headers?: {
         /**
          * Up to 255 visible ASCII characters
@@ -2221,7 +2224,10 @@ export type DeliverRoutineWebhookWithBearerResponses = {
 export type DeliverRoutineWebhookWithBearerResponse = DeliverRoutineWebhookWithBearerResponses[keyof DeliverRoutineWebhookWithBearerResponses];
 
 export type DeliverRoutineWebhookData = {
-    body: string;
+    /**
+     * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
+     */
+    body: unknown;
     headers?: {
         /**
          * Up to 255 visible ASCII characters

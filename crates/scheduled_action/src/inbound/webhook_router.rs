@@ -302,7 +302,10 @@ impl IntoResponse for WebhookManagementError {
         ("token" = String, Path, description = "The webhook's secret"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
     ),
-    request_body(content = String, content_type = "application/json"),
+    request_body(
+        description = "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
+        content((serde_json::Value = "application/json"), (String = "text/plain")),
+    ),
     responses(
         (status = 200, body = WebhookDeliveryResponse, description = "The body failed the trigger's payload tests: no run"),
         (status = 202, body = WebhookDeliveryResponse),
@@ -333,7 +336,10 @@ pub async fn deliver_in_path<W: RoutineWebhookService>(
         ("hook_id" = String, Path, description = "The webhook's public id"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
     ),
-    request_body(content = String, content_type = "application/json"),
+    request_body(
+        description = "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
+        content((serde_json::Value = "application/json"), (String = "text/plain")),
+    ),
     responses(
         (status = 200, body = WebhookDeliveryResponse),
         (status = 202, body = WebhookDeliveryResponse),

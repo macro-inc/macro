@@ -157,13 +157,12 @@ export const getDeliverRoutineWebhookWithBearerUrl = (hookId: string) => {
 
 export const deliverRoutineWebhookWithBearer = async (
   hookId: string,
-  deliverRoutineWebhookWithBearerBody: string,
+  deliverRoutineWebhookWithBearerBody: unknown | string,
   options?: RequestInit
 ): Promise<deliverRoutineWebhookWithBearerResponse> => {
   const res = await fetch(getDeliverRoutineWebhookWithBearerUrl(hookId), {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deliverRoutineWebhookWithBearerBody),
   });
 
@@ -244,13 +243,12 @@ export const getDeliverRoutineWebhookUrl = (hookId: string, token: string) => {
 export const deliverRoutineWebhook = async (
   hookId: string,
   token: string,
-  deliverRoutineWebhookBody: string,
+  deliverRoutineWebhookBody: unknown | string,
   options?: RequestInit
 ): Promise<deliverRoutineWebhookResponse> => {
   const res = await fetch(getDeliverRoutineWebhookUrl(hookId, token), {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deliverRoutineWebhookBody),
   });
 

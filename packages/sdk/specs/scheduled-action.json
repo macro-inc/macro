@@ -54,8 +54,12 @@
           }
         ],
         "requestBody": {
+          "description": "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
           "content": {
             "application/json": {
+              "schema": {}
+            },
+            "text/plain": {
               "schema": {
                 "type": "string"
               }
@@ -137,8 +141,12 @@
           }
         ],
         "requestBody": {
+          "description": "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
           "content": {
             "application/json": {
+              "schema": {}
+            },
+            "text/plain": {
               "schema": {
                 "type": "string"
               }
