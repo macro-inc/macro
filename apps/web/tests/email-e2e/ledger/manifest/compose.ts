@@ -922,8 +922,9 @@ export const compose = {
       fn: ['F-101'],
       action: 'edit the subject of a reply',
       trigger: 'type in the Subject input',
+      viewports: ['phone'],
       source: ['src/features/email-compose/views/reply-envelope.tsx'],
-      note: 'desktop shows the input only for a reopened draft; touch always shows it',
+      note: 'the phone reply always shows the input. On desktop a reply in a thread never does: it always answers a message',
     },
     {
       id: 'AC-319',
