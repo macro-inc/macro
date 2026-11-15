@@ -16,6 +16,13 @@ activity = { path = "../activity", default-features = false, features = ["outbou
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
 agent_correlation = { path = "../agent_correlation" }
+base64 = { workspace = true }
+ip_extractor = { path = "../ip_extractor" }
+rand = { workspace = true }
+rate_limit = { path = "../rate_limit" }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+zeroize = { workspace = true }
 async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
 call = { path = "../call", default-features = false, features = ["outbound"] }

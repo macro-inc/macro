@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"queued!\" FROM (\n                SELECT 1 FROM scheduled_action_event_run\n                WHERE action_id = $1 AND state = 'pending' LIMIT $2\n            ) waiting\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queued!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dfeed2e4769cfb9a8b309a1a1476405614642c014e23846d85663e3a7e7c7983"
+}

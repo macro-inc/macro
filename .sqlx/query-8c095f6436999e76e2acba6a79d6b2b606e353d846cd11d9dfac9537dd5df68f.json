@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id AS action_id, a.owner, a.enabled, a.configuration_revision,\n                   a.event_filters, a.event_activated_at,\n                   COALESCE(w.action_id IS NOT NULL\n                    AND jsonb_path_exists(a.trigger_config, '$.triggers[*] ? (@.type == \"webhook\")'), FALSE) AS \"webhook!\"\n            FROM scheduled_action a\n            LEFT JOIN scheduled_action_webhook w ON w.action_id = a.id\n            WHERE a.id = $1 AND (a.event_filters IS NOT NULL OR w.action_id IS NOT NULL)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_filters",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_activated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "webhook!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "8c095f6436999e76e2acba6a79d6b2b606e353d846cd11d9dfac9537dd5df68f"
+}

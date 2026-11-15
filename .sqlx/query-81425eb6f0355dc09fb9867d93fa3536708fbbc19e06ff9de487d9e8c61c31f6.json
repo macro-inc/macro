@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,\n                event_context = event_context #- '{github,payload}' #- '{webhook,body}'\n            WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "81425eb6f0355dc09fb9867d93fa3536708fbbc19e06ff9de487d9e8c61c31f6"
+}
