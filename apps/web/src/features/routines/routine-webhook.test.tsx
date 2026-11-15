@@ -2,6 +2,7 @@ import { queryClient } from '@queries/client';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RoutineWebhookUrl } from './components/routine-webhook-url';
 import { scheduledActionKeys } from './queries/keys';
@@ -69,6 +70,53 @@ it('makes a URL and shows it with its secret only until the panel closes', async
   expect(await screen.findByRole('button', { name: 'New URL' })).toBeTruthy();
   expect(screen.queryByRole('textbox', { name: 'Webhook URL' })).toBeNull();
   expect(screen.queryByText(/mrw_secret/)).toBeNull();
+});
+
+it('forgets a secret minted after its panel closed, while the routine stays open', async () => {
+  client.getWebhook.mockResolvedValue(ok({}));
+  let answer: (value: unknown) => void = () => {};
+  client.mintWebhook.mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve;
+    })
+  );
+  const [open, setOpen] = createSignal(true);
+  function Routine() {
+    const webhook = createRoutineWebhook(() => 'routine');
+    return (
+      <Show when={open()}>
+        <RoutineWebhookUrl state={webhook()} />
+      </Show>
+    );
+  }
+  render(() => (
+    <QueryClientProvider client={queryClient}>
+      <Routine />
+    </QueryClientProvider>
+  ));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Create URL' }));
+  setOpen(false);
+  answer(
+    ok({
+      hookId: 'hook-2',
+      url: URL,
+      bearerUrl: 'https://example.test/scheduled-action/hooks/hook-2',
+      secret: 'mrw_secret',
+      createdAt: '2026-11-15T09:00:00Z',
+    })
+  );
+  await waitFor(() =>
+    expect(
+      queryClient.getQueryData(
+        scheduledActionKeys.webhook({ scheduleId: 'routine' }).queryKey
+      )
+    ).toMatchObject({ hookId: 'hook-2' })
+  );
+
+  setOpen(true);
+  expect(await screen.findByRole('button', { name: 'New URL' })).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Webhook URL' })).toBeNull();
 });
 
 it('deletes the URL', async () => {

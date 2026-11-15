@@ -78,8 +78,11 @@ export function createRoutineWebhook(
     routineWebhookQueryOptions(scheduleId(), panels() > 0)
   );
   // The secret lives only here, while a panel shows it: closing the last
-  // panel forgets it, and the mutation keeps no copy (`gcTime: 0`, reset).
+  // panel forgets it, a mint answered after that is dropped (`closed` counts
+  // the times the last panel closed), and the mutation keeps no copy
+  // (`gcTime: 0`, reset).
   const [minted, setMinted] = createSignal<Minted>();
+  let closed = 0;
   const create = useMutation(() => ({ mutationFn: mintWebhook, gcTime: 0 }));
   const remove = useMutation(() => ({ mutationFn: removeWebhook }));
   return () => {
@@ -96,14 +99,17 @@ export function createRoutineWebhook(
       load: () => {
         setPanels((count) => count + 1);
         onCleanup(() => {
-          if (setPanels((count) => count - 1) === 0) setMinted(undefined);
+          if (setPanels((count) => count - 1) > 0) return;
+          closed += 1;
+          setMinted(undefined);
         });
       },
       create: () => {
         if (!id) return;
+        const asked = closed;
         create.mutate(id, {
           onSuccess: (fresh) => {
-            setMinted(fresh);
+            if (asked === closed) setMinted(fresh);
             create.reset();
           },
         });
