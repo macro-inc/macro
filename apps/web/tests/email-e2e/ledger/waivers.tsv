@@ -159,39 +159,9 @@ STL-062	-	backlog	not exercised itself: another way into, or state of, F-047, co
 STL-700	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
 STL-063	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
 STL-064	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-AC-013	-	backlog	not exercised: of F-099, F-100, not all covered (see their waivers)
-AC-014	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-AC-314	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-AC-316	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-AC-016	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-AC-017	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
-AC-019	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-AC-021	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-AC-023	-	backlog	not exercised itself: another way into, or state of, F-106, covered through other rows
-AC-304	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-AC-025	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-AC-027	-	backlog	not exercised itself: another way into, or state of, F-122, F-105, covered through other rows
-AC-041	-	backlog	not exercised itself: another way into, or state of, F-103, covered through other rows
-AC-043	-	backlog	not exercised itself: another way into, or state of, F-103, covered through other rows
-AC-307	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
-AC-306	-	backlog	not exercised itself: another way into, or state of, F-131, F-142, covered through other rows
-AC-058	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
-AC-305	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-AC-300	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
-AC-301	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
-AC-061	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
-AC-062	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-AC-315	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-AC-076	-	backlog	not exercised itself: another way into, or state of, F-099, covered through other rows
-AC-079	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+AC-014	-	bug	a tap on the folded recipients of a phone's new email does not open them (phone-recipient-summary-tap-ignored); its test is kept as a known bug
 AC-080	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
 AC-319	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-AC-083	-	backlog	not exercised itself: another way into, or state of, F-106, covered through other rows
-AC-312	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-AC-096	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-AC-097	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
-AC-100	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
-AC-103	-	backlog	not exercised itself: another way into, or state of, F-107, covered through other rows
 STC-004	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
 STC-005	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
 STC-313	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
