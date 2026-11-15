@@ -10,6 +10,7 @@ import { fetchCached } from '../../calendar/graphql/network';
 import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { channelCacheHost } from './flag';
+import { forgetPendingChannelPages } from './pages';
 import { channelActivityKey, channelMessageKey } from './sort-key';
 
 export type ChannelCatchUpHost = Pick<
@@ -225,6 +226,7 @@ export async function catchUpAndRefresh(
  * shows up as a gap and is recovered with it.
  */
 export function noteChannelPush(channelId: string, seq: number | string): void {
+  forgetPendingChannelPages(channelId);
   const host = channelCacheHost();
   if (!host) return;
   const state = stateOf(channelId);
