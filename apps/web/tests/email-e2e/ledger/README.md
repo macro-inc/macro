@@ -198,14 +198,19 @@ under "Manifest against the source":
   `manifest/network.ts`: a GraphQL operation named for email (`Email` or
   `Mail` in its name) or in an `email-*.graphql` document, and every call
   of the email service's client that is not to the calendar. The other
-  operations are not checked, listed or not: adding, renaming or removing
-  one has no meaning for email and must not fail this job. So the lines for
-  them (Soup, saved views, notifications) are kept by hand;
+  operations are not checked: adding, renaming or removing one has no
+  meaning for email and must not fail this job. Those the app makes
+  everywhere, email included (Soup, saved views, notifications), are listed
+  as `shared` and kept by hand; those no email code makes are not listed;
 - every hotkey the email code registers and every email hotkey token is on an
   action row;
 - every toast the email code raises is on a state row;
-- every source file a row names exists, ids are unique, rows are on a surface
-  of their group;
+- every source file a row names exists, when it is one of email's own: under
+  the email directories, or in `EMAIL_FILES_ELSEWHERE` in `derive.ts` (a file
+  elsewhere that holds only email; add a new one there). The difference names
+  the row and the manifest file to change. A file shared with the rest of the
+  app that is gone is listed and fails nothing;
+- ids are unique, rows are on a surface of their group;
 - every row belongs to a function of `functions.tsv`, and every function
   with a UI has a row, and a state row to see its result by.
 

@@ -8,6 +8,7 @@ import { type Enforced, fullStackOnly, violations } from './enforce';
 import {
   functionRows,
   functionTotals,
+  goneSources,
   networkDrift,
   restMatcher,
 } from './ledger';
@@ -398,7 +399,7 @@ describe('networkDrift', () => {
   const listed = [
     { id: 'SaveEmailDraft', kind: 'mutation', scope: 'email' },
     { id: 'Soup', kind: 'query', scope: 'shared' },
-    { id: 'Calendars', kind: 'query', scope: 'other' },
+    { id: 'Calendars', kind: 'query', scope: 'shared' },
   ] as const;
   const defined = [
     {
@@ -503,11 +504,60 @@ describe('networkDrift', () => {
         [],
         [
           { id: 'GET /email/email/threads/{}', kind: 'rest', scope: 'email' },
-          { id: 'GET /calendar/calendars', kind: 'rest', scope: 'other' },
+          { id: 'GET /calendar/calendars', kind: 'rest', scope: 'shared' },
         ]
       )[0].items
     ).toEqual([
       'GET /email/email/threads/{}: no longer in the source: remove or rename its line in REST in tests/email-e2e/ledger/manifest/network.ts',
+    ]);
+  });
+});
+
+describe('goneSources', () => {
+  const row = (id: string, source: string[]) => ({
+    id,
+    surface: 'SL-001',
+    label: id,
+    source,
+  });
+  const groups = [
+    {
+      name: 'list',
+      surfaces: [],
+      actions: [
+        row('AL-001', ['src/features/email-view/EmailView.tsx']),
+        row('AL-002', ['src/features/settings/Email.tsx']),
+      ],
+      states: [row('STL-001', ['src/components/app/Layout.tsx'])],
+    },
+  ] as unknown as Parameters<typeof goneSources>[0];
+
+  // When this fails, a refactor of code shared with the rest of the app
+  // fails the email job.
+  it('only reports a shared file that is gone', () => {
+    const drift = goneSources(
+      groups,
+      (file) => file !== 'src/components/app/Layout.tsx'
+    );
+    expect(drift).toHaveLength(1);
+    expect(drift[0].reported).toBe(true);
+    expect(drift[0].items).toEqual([
+      'STL-001: src/components/app/Layout.tsx is gone: name the file that holds it now in `source` of STL-001 in tests/email-e2e/ledger/manifest/list.ts',
+    ]);
+  });
+
+  // When this fails, a row can go on naming a file of email's that no
+  // longer exists, or the message does not say which row to change.
+  it("fails for a file of email's own, naming the row and its manifest", () => {
+    const drift = goneSources(
+      groups,
+      (file) => file === 'src/components/app/Layout.tsx'
+    );
+    expect(drift).toHaveLength(1);
+    expect(drift[0].reported).toBeUndefined();
+    expect(drift[0].items).toEqual([
+      'AL-001: src/features/email-view/EmailView.tsx is gone: name the file that holds it now in `source` of AL-001 in tests/email-e2e/ledger/manifest/list.ts',
+      'AL-002: src/features/settings/Email.tsx is gone: name the file that holds it now in `source` of AL-002 in tests/email-e2e/ledger/manifest/list.ts',
     ]);
   });
 });

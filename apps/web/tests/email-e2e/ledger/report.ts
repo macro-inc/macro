@@ -357,17 +357,15 @@ function render(
       'Layouts',
       'Times',
     ],
-    rows: ledger.operations
-      .filter((each) => each.scope !== 'other')
-      .map((each) => [
-        each.id,
-        each.kind,
-        each.scope,
-        each.status + (each.needs ? `: ${each.needs}` : ''),
-        each.providers.join(', '),
-        each.viewports.join(', '),
-        each.count,
-      ]),
+    rows: ledger.operations.map((each) => [
+      each.id,
+      each.kind,
+      each.scope,
+      each.status + (each.needs ? `: ${each.needs}` : ''),
+      each.providers.join(', '),
+      each.viewports.join(', '),
+      each.count,
+    ]),
   };
   const unlisted: Table = {
     head: ['Request', 'Answered by', 'Times'],
@@ -548,7 +546,7 @@ ${section(`Open rows (${open.length})`, groups.map((group) => folded(`${group} (
 ${section(`Covered in part (${partial.length})`, folded('Rows', html(rowTable(partial))))}
 ${section(`Deferred: needs a service no stack gives a test (${deferred.length})`, folded('Rows', html(rowTable(deferred))))}
 ${section(`Waived (${waived.length})`, folded('Rows', html(rowTable(waived))))}
-${section('Network operations', `<p>Email and shared operations; the ${ledger.operations.filter((each) => each.scope === 'other').length} that no email code makes are left out. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors. With every provider: with Gmail and with Outlook, or with the one provider the app makes it for. Network operations are reported only: nothing fails the job for one.</p>${html(operationsHeadline)}${html(operations)}${folded(`Requests the app made that the manifest does not list (${ledger.unlisted.length})`, html(unlisted))}`)}
+${section('Network operations', `<p>Email and shared operations. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors. With every provider: with Gmail and with Outlook, or with the one provider the app makes it for. Network operations are reported only: nothing fails the job for one.</p>${html(operationsHeadline)}${html(operations)}${folded(`Requests the app made that the manifest does not list (${ledger.unlisted.length})`, html(unlisted))}`)}
 ${section(`Manifest against the source (${driftCount} differences)`, driftCount ? driftList(true) : '<p>None.</p>')}
 ${section('Tests that passed only on a retry', tests.flaky.length ? html(flaky) : '<p>None.</p>')}
 </main></body></html>`;
@@ -614,9 +612,9 @@ function report(mode: Mode): void {
       : [
           'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',
         ]),
-    ...ledger.drift.flatMap((each) =>
-      each.items.map((item) => `${each.check}: ${item}`)
-    ),
+    ...ledger.drift
+      .filter((each) => !each.reported)
+      .flatMap((each) => each.items.map((item) => `${each.check}: ${item}`)),
   ];
   const { summary, page } = render(
     ledger,

@@ -20,6 +20,60 @@ export const EMAIL_SOURCE = [
   'src/lib/service-clients/service-email',
 ];
 
+/**
+ * Files outside those directories that hold nothing but email. A row that
+ * names one is held to it like a file of email's own; every other file a
+ * row names is shared with the rest of the app.
+ */
+export const EMAIL_FILES_ELSEWHERE = [
+  'src/components/app/mailtoComposerHandler.ts',
+  'src/features/auth/GmailReauthenticationPrompt.tsx',
+  'src/features/calendar-view/components/use-open-event-email.ts',
+  'src/features/crm/views/company-emails-section.tsx',
+  'src/features/crm/views/contact-emails-section.tsx',
+  'src/features/crm/views/email-privacy.tsx',
+  'src/features/entity/composed/list-entity/email.tsx',
+  'src/features/inbox/AddInboxDialog.tsx',
+  'src/features/inbox/AdminConsentRequiredDialog.tsx',
+  'src/features/inbox/ShareInboxConflictDialog.tsx',
+  'src/features/next-soup/actions/make-block-sender-action.ts',
+  'src/features/next-soup/actions/make-discard-draft-action.ts',
+  'src/features/next-soup/actions/make-sender-filter-action.ts',
+  'src/features/onboarding/views/email-step.tsx',
+  'src/features/reminders/components/email-reminder-form.tsx',
+  'src/features/reminders/email-reminder-status.tsx',
+  'src/features/reminders/views/email-reminder-composer.tsx',
+  'src/features/reminders/views/email-reminder-menu.tsx',
+  'src/features/reminders/views/email-row-schedule.tsx',
+  'src/features/settings/components/signature-form.tsx',
+  'src/features/settings/components/signature-workspace.tsx',
+  'src/features/settings/email-settings.tsx',
+  'src/features/settings/Email.tsx',
+  'src/features/settings/InboxSettingsOperations.tsx',
+  'src/features/settings/queries/inbox-settings-operations.ts',
+  'src/features/settings/SignatureEditor.tsx',
+  'src/features/settings/SignatureSection.tsx',
+  'src/features/universal-input/views/email-draft.tsx',
+  'src/lib/core/component/AI/component/tool/GetThread.tsx',
+  'src/lib/core/component/AI/component/tool/ListInboxes.tsx',
+  'src/lib/core/component/AI/component/tool/ListLabels.tsx',
+  'src/lib/core/component/AI/component/tool/ReadThread.tsx',
+  'src/lib/core/component/AI/component/tool/SendConfirmedEmail.tsx',
+  'src/lib/core/component/AI/component/tool/SendEmail.tsx',
+  'src/lib/core/component/AI/component/tool/UpdateThreadLabels.tsx',
+  'src/lib/core/component/EmailPermissionsBanner.tsx',
+  'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEmailSearchMention.ts',
+  'src/lib/core/util/interceptMailtoLinks.ts',
+];
+
+/** Whether a source file a row names holds only email. */
+export function emailOwnedFile(file: string): boolean {
+  return (
+    EMAIL_FILES_ELSEWHERE.includes(file) ||
+    EMAIL_SOURCE.some((root) => file === root || file.startsWith(`${root}/`))
+  );
+}
+
 /** Where the app's GraphQL documents are. */
 const GRAPHQL = 'src/lib/service-clients/service-storage/graphql';
 

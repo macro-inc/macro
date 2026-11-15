@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import {
   type DerivedOperation,
   emailOwned,
+  emailOwnedFile,
   graphqlOperations,
   hotkeys,
   restCalls,
@@ -270,6 +271,8 @@ export type Drift = {
   /** What it is about, as a heading. */
   check: string;
   items: string[];
+  /** Listed in the report and fails nothing. */
+  reported?: true;
 };
 
 export type Ledger = {
@@ -475,6 +478,49 @@ export function networkDrift(
   return drift;
 }
 
+/**
+ * The source files the rows name that are gone. One of email's own
+ * (`emailOwnedFile`) is a difference, and says which row to change where;
+ * one shared with the rest of the app is reported only: a refactor there
+ * has no meaning for email, and the row's test still fails when what it
+ * shows changes.
+ */
+export function goneSources(
+  groups: readonly Group[],
+  exists: (file: string) => boolean
+): Drift[] {
+  const own: string[] = [];
+  const shared: string[] = [];
+  for (const group of groups) {
+    const where = `tests/email-e2e/ledger/manifest/${group.name}.ts`;
+    for (const row of [...group.actions, ...group.states]) {
+      if (row.source.length === 0) {
+        own.push(
+          `${row.id}: names no source file: give ${row.id} a \`source\` in ${where}`
+        );
+      }
+      for (const file of row.source) {
+        if (exists(file)) continue;
+        const item = `${row.id}: ${file} is gone: name the file that holds it now in \`source\` of ${row.id} in ${where}`;
+        (emailOwnedFile(file) ? own : shared).push(item);
+      }
+    }
+  }
+  const drift: Drift[] = [];
+  if (own.length) {
+    drift.push({ check: 'Rows whose source file is gone', items: own });
+  }
+  if (shared.length) {
+    drift.push({
+      check:
+        'Rows whose source file, shared with the rest of the app, is gone (reported only)',
+      items: shared,
+      reported: true,
+    });
+  }
+  return drift;
+}
+
 function manifestDrift(): Drift[] {
   const drift: Drift[] = [];
   const ids = GROUPS.flatMap((group: Group) => [
@@ -486,7 +532,6 @@ function manifestDrift(): Drift[] {
   if (twice.length) drift.push({ check: 'Ids used twice', items: twice });
 
   const lost: string[] = [];
-  const gone: string[] = [];
   for (const group of GROUPS as readonly Group[]) {
     const surfaces = new Set(group.surfaces.map((surface) => surface.id));
     for (const row of [...group.actions, ...group.states]) {
@@ -495,20 +540,17 @@ function manifestDrift(): Drift[] {
           `${row.id}: ${row.surface} is not a surface of ${group.name}`
         );
       }
-      if (row.source.length === 0) gone.push(`${row.id}: names no source file`);
-      for (const file of row.source) {
-        const path = file.startsWith('src/')
-          ? `${WEB}${file}`
-          : `${REPOSITORY}${file}`;
-        if (!existsSync(path)) gone.push(`${row.id}: ${file}`);
-      }
     }
   }
   if (lost.length)
     drift.push({ check: 'Rows on an unknown surface', items: lost });
-  if (gone.length) {
-    drift.push({ check: 'Rows whose source file is gone', items: gone });
-  }
+  drift.push(
+    ...goneSources(GROUPS, (file) =>
+      existsSync(
+        file.startsWith('src/') ? `${WEB}${file}` : `${REPOSITORY}${file}`
+      )
+    )
+  );
 
   const actions = (GROUPS as readonly Group[]).flatMap(
     (group) => group.actions
