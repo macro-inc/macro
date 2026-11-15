@@ -23,7 +23,8 @@ type ReportSuite = { specs?: ReportSpec[]; suites?: ReportSuite[] };
 const LEDGER = dirname(fileURLToPath(import.meta.url));
 const SUITE = dirname(LEDGER);
 const TEST_ID = /^[A-Z]+-\d{2}$/;
-const TEST_TITLE = /^\s*test(?:\.fail|\.fixme|\.skip)?\(\s*['"`]([A-Z]+-\d{2}) /gm;
+const TEST_TITLE =
+  /^\s*test(?:\.fail|\.fixme|\.skip)?\(\s*['"`]([A-Z]+-\d{2}) /gm;
 
 function rows(file: string, columns: number): string[][] {
   return readFileSync(join(LEDGER, file), 'utf8')
@@ -120,7 +121,8 @@ if (reportAt !== -1) {
   for (const id of tests.keys()) {
     const status = ran.get(id);
     if (status === undefined) problems.push(`${id}: did not run`);
-    else if (status !== 'expected') problems.push(`${id}: ${status} in the run`);
+    else if (status !== 'expected')
+      problems.push(`${id}: ${status} in the run`);
   }
 }
 

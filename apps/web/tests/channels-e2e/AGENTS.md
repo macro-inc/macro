@@ -3,8 +3,8 @@
 ## What it is
 
 The end-to-end suite for channels (team chat): the built web app in Chromium
-against a whole local stack, with four seeded people in separate browser
-profiles. [README.md](README.md) has how to run and extend it.
+against a whole local stack, with four seeded people for each parallel worker,
+in separate browser profiles. [README.md](README.md) has how to run and extend it.
 
 ## Start here
 
@@ -33,6 +33,11 @@ profiles. [README.md](README.md) has how to run and extend it.
   suite exists to check.
 - The message list is virtualised: rows outside the window are not in the
   DOM, and a row is drawn a moment before its text.
+- Never write a person's email address or id in a test: each worker has
+  people of its own, so take them from the `people` fixture.
+- A row left by an earlier run (a direct message lasts for the life of the
+  stack) can make an assertion pass that fails for a new account; check that
+  a test passes for a cast that has never run it.
 - Posting hundreds of messages while tests run stalls every open page of
   their authors; make bulk history in `harness/history.ts`, before the run.
 - The mark on a link's target message lasts one second and toasts are

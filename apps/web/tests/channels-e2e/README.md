@@ -2,9 +2,11 @@
 
 Playwright tests of everything channels do for a person, on the built web app
 in Chromium against a whole local stack: its proxy, sign-in, services,
-gateway and database. Nothing is mocked. Four seeded people take part, each
+gateway and database. Nothing is mocked. Four seeded people take part in a test, each
 in a browser profile of their own, so what one does is checked on another's
-screen.
+screen. Every parallel worker has four people of its own: an open page hears
+of everything its person is part of, so tests that shared people would slow
+and disturb each other.
 
 The tests assert only what a person sees and does: which messages are on
 screen, in what order, how many, under whose name, which controls exist.
@@ -33,8 +35,9 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | --- | --- |
 | `CHANNELS_E2E_STACK_URL` | The stack's origin. Required. |
 | `CHANNELS_E2E_RUN_DIR` | Where the run keeps its sign-ins, the long history it made, its report and traces. Default `.run` here. Give two runs at once a directory each. |
-| `CHANNELS_E2E_PEOPLE` | JSON overriding the four people's email addresses, for a stack seeded with others. |
-| `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. |
+| `CHANNELS_E2E_PEOPLE` | Email addresses, comma separated, four for each worker (owner, two teammates, an outsider), for a stack seeded with others. |
+| `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. The seed scenario has people for six. |
+| `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
 
 The people sign in through the passwordless code flow of a local stack, so
@@ -43,8 +46,8 @@ environment.
 
 ## How it is put together
 
-- `harness/people.ts` signs the four people in once per run and keeps their
-  sessions. Ada owns the team and is the default `page`; Ben and Cy are her
+- `harness/people.ts` signs each worker's four people in once per run and
+  keeps their sessions. Ada owns the team and is the default `page`; Ben and Cy are her
   teammates; Dee is outside the team.
 - `harness/api.ts` is what a person can do through the services. Tests use
   it to set a scene and to play the other person; the action a test is about

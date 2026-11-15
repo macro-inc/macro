@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Api, type SentMessage } from './api';
-import { apiFor, readPeople } from './people';
+import { apiFor, cast, readPeople } from './people';
 import { runDirectory, stackUrl } from './stack';
 
 export const HISTORY_LENGTH = 230;
@@ -28,10 +28,10 @@ export function historyText(position: number): string {
   return `history ${String(position).padStart(3, '0')}`;
 }
 
-async function makeHistory(): Promise<History> {
-  const people = readPeople();
-  const adaHttp = await apiFor('ada');
-  const benHttp = await apiFor('ben');
+async function makeHistory(ofCast: number): Promise<History> {
+  const people = readPeople(ofCast);
+  const adaHttp = await apiFor('ada', ofCast);
+  const benHttp = await apiFor('ben', ofCast);
   const ada = new Api(people.ada, adaHttp);
   const ben = new Api(people.ben, benHttp);
 
@@ -67,14 +67,14 @@ async function makeHistory(): Promise<History> {
   return { ...channel, texts, messages, oldThread, recentThread };
 }
 
-function historyFile(): string {
-  return join(runDirectory(), 'history.json');
+function historyFile(ofCast: number): string {
+  return join(runDirectory(), `history-${ofCast}.json`);
 }
 
 type StoredHistory = { stack: string; history: History };
 
-async function stillThere(history: History): Promise<boolean> {
-  const http = await apiFor('ada');
+async function stillThere(history: History, ofCast: number): Promise<boolean> {
+  const http = await apiFor('ada', ofCast);
   const selection = JSON.stringify({ limit: 1, direction: 'older' });
   const response = await http.get(
     `/dss/messages/channel/${history.id}/timeline?selection=${encodeURIComponent(selection)}`
@@ -84,30 +84,33 @@ async function stillThere(history: History): Promise<boolean> {
 }
 
 /**
- * Makes the history before any test runs, or keeps the one an earlier run
+ * Makes a cast's history before any test runs, or keeps the one an earlier run
  * against the same stack made: nothing writes to it, so it stays what it
  * was. Making it while tests run would send every open page of Ada's and
  * Ben's hundreds of new messages a second, which no test means to measure.
  */
-export async function prepareHistory(): Promise<void> {
-  if (existsSync(historyFile())) {
+export async function prepareHistory(ofCast: number): Promise<void> {
+  if (existsSync(historyFile(ofCast))) {
     const stored = JSON.parse(
-      readFileSync(historyFile(), 'utf8')
+      readFileSync(historyFile(ofCast), 'utf8')
     ) as StoredHistory;
-    if (stored.stack === stackUrl() && (await stillThere(stored.history))) {
+    if (
+      stored.stack === stackUrl() &&
+      (await stillThere(stored.history, ofCast))
+    ) {
       return;
     }
   }
   const stored: StoredHistory = {
     stack: stackUrl(),
-    history: await makeHistory(),
+    history: await makeHistory(ofCast),
   };
-  writeFileSync(historyFile(), JSON.stringify(stored));
+  writeFileSync(historyFile(ofCast), JSON.stringify(stored));
 }
 
-export function readHistory(): History {
+export function readHistory(ofCast = cast()): History {
   const stored = JSON.parse(
-    readFileSync(historyFile(), 'utf8')
+    readFileSync(historyFile(ofCast), 'utf8')
   ) as StoredHistory;
   return stored.history;
 }
