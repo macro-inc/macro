@@ -95,6 +95,10 @@ A row's status:
   or a clock no stack gives a test yet;
 - **waived**: never seen, and its waiver is of another kind.
 
+A tested row is **proved** when `proofs.tsv` names the break that made its
+test fail at the row's own assertion. The report counts rows total, tested,
+proved and waived by kind beside the same numbers for functions.
+
 ## What fails the job
 
 Both CI jobs run the report with `--enforce`. It fails when
@@ -104,6 +108,8 @@ Both CI jobs run the report with `--enforce`. It fails when
   or on Outlook, and a new row or function that came without a test;
 - a passing test covers what `waivers.tsv` waives: remove the line;
 - a function waived on no provider has no line in `proofs.tsv`;
+- a row without a line in `waivers.tsv` has no line in `proofs.tsv`: a
+  new row comes with a test and with the break that made the test fail;
 - the tests tagged `@known-bug` were not run, or one of them passes:
   remove the tag, and the waiver that stood for the bug. A bug that shows only in some runs is also tagged
   `@sometimes`, and a pass of its test fails nothing: one run cannot tell
@@ -192,7 +198,14 @@ break alone. One break for each distinct handler or wiring is enough; its
 line in `proofs.tsv` is under the row it was run for and names the other
 rows that go through the same wiring. A state row is proved by a break in
 the code that shows the state (its text changed, or its rendering switched
-off), under the row's id. Rows need no proof to pass the check.
+off), under the row's id.
+
+Every row that is not waived needs its own line in `proofs.tsv`, and the
+check fails without it. A row that goes through another row's wiring or
+render site is run against that row's break, and its line says which break
+it shares and why the row goes through it. A test that passes with its row
+broken is weak: give it an assertion on what the row alone does or shows
+before recording a proof.
 
 A function whose work is the service's (the sync functions) is proved by a
 break in the service code instead: the same kind of guard on the process
