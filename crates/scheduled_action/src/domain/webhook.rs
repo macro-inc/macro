@@ -117,7 +117,7 @@ impl WebhookSecret {
         // Room for all of it up front, so no growth leaves an unwiped copy.
         let mut text = Zeroizing::new(String::with_capacity(SECRET_TEXT_CAPACITY));
         text.push_str(SECRET_PREFIX);
-        URL_SAFE_NO_PAD.encode_string(bytes.as_ref(), &mut *text);
+        URL_SAFE_NO_PAD.encode_string(bytes.as_ref(), &mut text);
         Self(text)
     }
 
