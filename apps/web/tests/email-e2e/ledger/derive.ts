@@ -112,6 +112,25 @@ export type DerivedOperation = {
   file: string;
 };
 
+/**
+ * Whether an operation the source defines is email's own, so that the
+ * manifest has to list it: one in an `email-*.graphql` document, or a call
+ * of the email service's `/email` paths. The app's other documents and the
+ * calendar calls of the same client change without email changing, and the
+ * check leaves them alone.
+ */
+export function emailOwned(operation: DerivedOperation): boolean {
+  if (operation.kind === 'rest') return /^[A-Z]+ \/email\//.test(operation.id);
+  return /(^|\/)email-[^/]*\.graphql$/.test(operation.file);
+}
+
+/** Whether a source file is part of the web app's email code. */
+export function emailSource(file: string): boolean {
+  return EMAIL_SOURCE.some(
+    (root) => file === root || file.startsWith(`${root}/`)
+  );
+}
+
 /** Every operation in the app's GraphQL documents. */
 export function graphqlOperations(): DerivedOperation[] {
   const found: DerivedOperation[] = [];

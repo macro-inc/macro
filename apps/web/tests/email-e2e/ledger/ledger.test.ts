@@ -5,7 +5,12 @@ import {
   socketMessages,
 } from '../harness/front';
 import { type Enforced, fullStackOnly, violations } from './enforce';
-import { functionRows, functionTotals, restMatcher } from './ledger';
+import {
+  functionRows,
+  functionTotals,
+  networkDrift,
+  restMatcher,
+} from './ledger';
 import {
   parseFullStackOnly,
   parseFunctions,
@@ -385,5 +390,109 @@ describe('fullStackOnly', () => {
         [{ id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' }]
       )
     ).toBe('id\ton\nF-002\tgmail\nSTL-001\t-\n');
+  });
+});
+
+describe('networkDrift', () => {
+  const GRAPHQL = 'src/lib/service-clients/service-storage/graphql';
+  const listed = [
+    { id: 'SaveEmailDraft', kind: 'mutation', scope: 'email' },
+    { id: 'Soup', kind: 'query', scope: 'shared' },
+    { id: 'Calendars', kind: 'query', scope: 'other' },
+  ] as const;
+  const defined = [
+    {
+      id: 'SaveEmailDraft',
+      kind: 'mutation',
+      file: `${GRAPHQL}/email-draft.graphql`,
+    },
+    { id: 'Soup', kind: 'query', file: `${GRAPHQL}/soup.graphql` },
+    { id: 'Calendars', kind: 'query', file: `${GRAPHQL}/calendar.graphql` },
+  ] as const;
+
+  it('passes when another part of the app adds or removes an operation', () => {
+    expect(
+      networkDrift(
+        'GraphQL operations',
+        'GRAPHQL',
+        [
+          ...defined.filter((each) => each.id !== 'Calendars'),
+          {
+            id: 'NotificationInboxClears',
+            kind: 'query',
+            file: `${GRAPHQL}/notification-inbox.graphql`,
+          },
+        ],
+        listed
+      )
+    ).toEqual([]);
+    expect(
+      networkDrift(
+        'Email service calls',
+        'REST',
+        [{ id: 'GET /calendar/rooms', kind: 'rest', file: 'client.ts' }],
+        []
+      )
+    ).toEqual([]);
+  });
+
+  it('fails on a new email operation and names the line to add', () => {
+    expect(
+      networkDrift(
+        'GraphQL operations',
+        'GRAPHQL',
+        [
+          ...defined,
+          {
+            id: 'SnoozeEmailThread',
+            kind: 'mutation',
+            file: `${GRAPHQL}/email-snooze.graphql`,
+          },
+        ],
+        listed
+      )
+    ).toEqual([
+      {
+        check:
+          "GraphQL operations: email's in the source, not in the network list",
+        items: [
+          `SnoozeEmailThread (${GRAPHQL}/email-snooze.graphql): add \`{ id: 'SnoozeEmailThread', kind: 'mutation', scope: 'email' },\` to GRAPHQL in tests/email-e2e/ledger/manifest/network.ts`,
+        ],
+      },
+    ]);
+    expect(
+      networkDrift(
+        'Email service calls',
+        'REST',
+        [
+          {
+            id: 'POST /email/email/threads/{}/pin',
+            kind: 'rest',
+            file: 'client.ts',
+          },
+        ],
+        []
+      )[0].items
+    ).toEqual([
+      "POST /email/email/threads/{}/pin (client.ts): add `{ id: 'POST /email/email/threads/{}/pin', kind: 'rest', scope: 'email' },` to REST in tests/email-e2e/ledger/manifest/network.ts",
+    ]);
+  });
+
+  it('fails when an operation email makes is gone from the source', () => {
+    expect(
+      networkDrift(
+        'GraphQL operations',
+        'GRAPHQL',
+        defined.filter((each) => each.id !== 'Soup'),
+        listed
+      )
+    ).toEqual([
+      {
+        check: 'GraphQL operations: in the network list, gone from the source',
+        items: [
+          'Soup: listed as shared, no longer in the source: remove or rename its line in GRAPHQL in tests/email-e2e/ledger/manifest/network.ts',
+        ],
+      },
+    ]);
   });
 });

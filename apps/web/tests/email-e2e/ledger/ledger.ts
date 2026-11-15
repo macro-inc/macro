@@ -2,7 +2,15 @@
 // manifest against what the source defines.
 
 import { existsSync } from 'node:fs';
-import { graphqlOperations, hotkeys, restCalls, toasts } from './derive';
+import {
+  type DerivedOperation,
+  emailOwned,
+  emailSource,
+  graphqlOperations,
+  hotkeys,
+  restCalls,
+  toasts,
+} from './derive';
 import type { RunResult, Test } from './evidence';
 import { GROUPS } from './manifest';
 import {
@@ -263,6 +271,11 @@ export type Drift = {
   /** What it is about, as a heading. */
   check: string;
   items: string[];
+  /**
+   * Reported and never fails the check: a difference that a change with no
+   * meaning for email can cause.
+   */
+  advisory?: true;
 };
 
 export type Ledger = {
@@ -423,6 +436,50 @@ function difference(
   return drift;
 }
 
+const NETWORK_LIST = 'tests/email-e2e/ledger/manifest/network.ts';
+
+/**
+ * The network list against the source, for email's own operations only: one
+ * that is email's and unlisted, and one listed as email's or shared that the
+ * source no longer defines. An operation of another part of the app is no
+ * difference, listed or not, so that adding one there cannot fail this check.
+ */
+export function networkDrift(
+  check: string,
+  list: 'GRAPHQL' | 'REST',
+  defined: readonly DerivedOperation[],
+  listed: readonly Operation[]
+): Drift[] {
+  const drift: Drift[] = [];
+  const known = new Set(listed.map((each) => each.id));
+  const missing = defined
+    .filter((each) => emailOwned(each) && !known.has(each.id))
+    .map(
+      (each) =>
+        `${each.id} (${each.file}): add \`{ id: '${each.id}', kind: '${each.kind}', scope: 'email' },\` to ${list} in ${NETWORK_LIST}`
+    );
+  if (missing.length) {
+    drift.push({
+      check: `${check}: email's in the source, not in the network list`,
+      items: missing,
+    });
+  }
+  const source = new Set(defined.map((each) => each.id));
+  const stale = listed
+    .filter((each) => each.scope !== 'other' && !source.has(each.id))
+    .map(
+      (each) =>
+        `${each.id}: listed as ${each.scope}, no longer in the source: remove or rename its line in ${list} in ${NETWORK_LIST}`
+    );
+  if (stale.length) {
+    drift.push({
+      check: `${check}: in the network list, gone from the source`,
+      items: stale,
+    });
+  }
+  return drift;
+}
+
 function manifestDrift(): Drift[] {
   const drift: Drift[] = [];
   const ids = GROUPS.flatMap((group: Group) => [
@@ -435,6 +492,7 @@ function manifestDrift(): Drift[] {
 
   const lost: string[] = [];
   const gone: string[] = [];
+  const goneElsewhere: string[] = [];
   for (const group of GROUPS as readonly Group[]) {
     const surfaces = new Set(group.surfaces.map((surface) => surface.id));
     for (const row of [...group.actions, ...group.states]) {
@@ -448,7 +506,10 @@ function manifestDrift(): Drift[] {
         const path = file.startsWith('src/')
           ? `${WEB}${file}`
           : `${REPOSITORY}${file}`;
-        if (!existsSync(path)) gone.push(`${row.id}: ${file}`);
+        if (existsSync(path)) continue;
+        // A file of another part of the app can be renamed with no change to
+        // email: the row's tests still say whether the element works.
+        (emailSource(file) ? gone : goneElsewhere).push(`${row.id}: ${file}`);
       }
     }
   }
@@ -456,6 +517,14 @@ function manifestDrift(): Drift[] {
     drift.push({ check: 'Rows on an unknown surface', items: lost });
   if (gone.length) {
     drift.push({ check: 'Rows whose source file is gone', items: gone });
+  }
+  if (goneElsewhere.length) {
+    drift.push({
+      check:
+        'Rows whose source file outside the email code is gone (reported, does not fail): name the new file',
+      items: goneElsewhere,
+      advisory: true,
+    });
   }
 
   const actions = (GROUPS as readonly Group[]).flatMap(
@@ -523,24 +592,13 @@ function manifestDrift(): Drift[] {
         stale: 'on a state row, no longer raised',
       }
     ),
-    ...difference(
+    ...networkDrift(
       'GraphQL operations',
-      graphqlOperations().map((each) => each.id),
-      GRAPHQL.map((each) => each.id),
-      {
-        missing: 'in a document, not in the network list',
-        stale: 'in the network list, in no document',
-      }
+      'GRAPHQL',
+      graphqlOperations(),
+      GRAPHQL
     ),
-    ...difference(
-      'Email service calls',
-      restCalls().map((each) => each.id),
-      REST.map((each) => each.id),
-      {
-        missing: 'in the client, not in the network list',
-        stale: 'in the network list, not in the client',
-      }
-    )
+    ...networkDrift('Email service calls', 'REST', restCalls(), REST)
   );
   return drift;
 }
