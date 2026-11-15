@@ -4,11 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateDatabaseRequestFirstTable } from './createDatabaseRequestFirstTable';
 
 /**
  * Request body for creating a database.
  */
 export interface CreateDatabaseRequest {
+  /** The first table's display name; "Table 1" when omitted. Name it when
+you are about to fill a table, and build into it rather than adding a
+second table beside an empty "Table 1". */
+  firstTable?: CreateDatabaseRequestFirstTable;
   /** Display name. */
   name: string;
 }

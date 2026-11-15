@@ -152,6 +152,8 @@ struct FakeDocumentService {
     team_slug_result: Mutex<Option<TeamSlugResult>>,
     get_document_calls: Mutex<Vec<String>>,
     get_text_calls: Mutex<Vec<String>>,
+    /// Whether each edit asked to change sharing.
+    edit_calls: Mutex<Vec<bool>>,
     document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
     created_documents: Mutex<Vec<CreatedDocumentCall>>,
@@ -456,9 +458,13 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         _document_context: DocumentBasic,
-        _args: EditDocumentServiceArgs,
+        args: EditDocumentServiceArgs,
     ) -> Result<(), DocumentError> {
-        panic!("unexpected edit_document call")
+        self.edit_calls
+            .lock()
+            .unwrap()
+            .push(args.share_permission.is_some());
+        Ok(())
     }
 
     async fn update_task_status(
@@ -2300,4 +2306,33 @@ async fn missing_email_attachment_is_a_coded_not_found() {
         body["code"],
         model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
     );
+}
+
+/// A scoped session edits a document but never changes who it's shared with:
+/// the path is the same either way, so the handler reads the body.
+#[tokio::test]
+async fn a_scoped_session_edits_a_document_but_not_its_sharing() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let (router, documents, _, _) = test_router();
+    let edit = |body: Value| {
+        with_jwt(Request::patch("/text-document"))
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    };
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let share = json!({"sharePermission": {"teamShareAccessLevel": "view"}});
+    let (status, _) = scope_attribution(no_send, send(&router, edit(share.clone()))).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let rename = json!({"documentName": "Renamed"});
+    let (status, _) = scope_attribution(no_send, send(&router, edit(rename))).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(&router, edit(share)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(*documents.edit_calls.lock().unwrap(), [false, true]);
 }

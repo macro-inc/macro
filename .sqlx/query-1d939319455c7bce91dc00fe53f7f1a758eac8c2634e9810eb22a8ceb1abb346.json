@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM stripe_events\n                WHERE object_id = $1\n                  AND type LIKE 'customer.subscription.%'\n                  AND (created_at, id) > ($2, $3)\n            ) AS \"newer!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "newer!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1d939319455c7bce91dc00fe53f7f1a758eac8c2634e9810eb22a8ceb1abb346"
+}

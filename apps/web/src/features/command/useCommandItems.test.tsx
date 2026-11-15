@@ -29,6 +29,7 @@ const fixtures = vi.hoisted(() => {
     projectFlag: (): boolean | undefined => undefined,
     requests: [] as Bucket[][],
     project,
+    projects: (): QuickAccessItem[] => [project],
   };
 });
 
@@ -55,7 +56,7 @@ vi.mock('@core/context/quickAccess', () => ({
       fixtures.requests.push([...options.buckets]);
       return {
         items: () =>
-          options.buckets.includes('initiative') ? [fixtures.project] : [],
+          options.buckets.includes('initiative') ? fixtures.projects() : [],
         isLoading: () => false,
         hasMore: () => false,
         isLoadingMore: () => false,
@@ -92,6 +93,7 @@ import { useCommandItems } from './useCommandItems';
 afterEach(() => {
   cleanup();
   fixtures.requests = [];
+  fixtures.projects = () => [fixtures.project];
   vi.mocked(rankCommandSearchItems).mockClear();
 });
 
@@ -169,4 +171,67 @@ it('ranks a short All query once when no command matches it', () => {
     'launch',
   ]);
   expect(rankCommandSearchItems).toHaveBeenCalledTimes(1);
+});
+
+it('ranks again only when a republished list holds different rows', () => {
+  fixtures.projectFlag = () => true;
+  fixtures.commands = [];
+  const [projects, setProjects] = createSignal<QuickAccessItem[]>([
+    fixtures.project,
+  ]);
+  fixtures.projects = projects;
+  let source!: ReturnType<typeof useCommandItems>;
+  render(() => {
+    source = useCommandItems(
+      () => 'launch',
+      () => 'all',
+      { searchActive: () => true }
+    );
+    return null;
+  });
+  const names = () =>
+    source
+      .items()
+      .flatMap((item) => (item.kind === 'entity' ? [item.data.name] : []));
+
+  expect(names()).toEqual(['Launch']);
+  expect(rankCommandSearchItems).toHaveBeenCalledTimes(1);
+
+  setProjects([
+    {
+      id: 'launch',
+      kind: 'entity',
+      bucket: 'initiative',
+      searchText: 'Launch',
+      sortTimestamp: 1,
+      timestamps: {},
+      data: {
+        id: 'launch',
+        type: 'initiative',
+        name: 'Launch',
+        ownerId: 'owner',
+      },
+    },
+  ]);
+  expect(names()).toEqual(['Launch']);
+  expect(rankCommandSearchItems).toHaveBeenCalledTimes(1);
+
+  setProjects([
+    {
+      id: 'launch',
+      kind: 'entity',
+      bucket: 'initiative',
+      searchText: 'Launch week',
+      sortTimestamp: 1,
+      timestamps: {},
+      data: {
+        id: 'launch',
+        type: 'initiative',
+        name: 'Launch week',
+        ownerId: 'owner',
+      },
+    },
+  ]);
+  expect(names()).toEqual(['Launch week']);
+  expect(rankCommandSearchItems).toHaveBeenCalledTimes(2);
 });

@@ -1,4 +1,5 @@
 use std::str::FromStr;
+mod agent;
 mod data_disk;
 mod redeploy;
 mod setup_notice;
@@ -375,6 +376,7 @@ async fn paid_computer(
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
                 provision_traceparent: None,
+                agent: None,
             },
             now(),
             now() + Duration::minutes(15),
@@ -416,6 +418,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 name: ComputerName::try_new("Ada").unwrap(),
                 deployment: crate::domain::fakes::deployment(),
                 traceparent: None,
+                agent: None,
             },
             true,
         )]
@@ -476,6 +479,32 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
             .default_agent_id,
         Some(DEFAULT_AGENT)
     );
+}
+
+#[tokio::test]
+async fn an_agent_teammates_computer_gets_no_default_coding_agent() {
+    let operator = operator(FakeFleet::default()).await;
+    let id = paid_computer(&operator).await;
+    operator.repo.agents.lock().unwrap().insert(
+        id,
+        macro_user_id::user_id::MacroUserIdStr::try_from("macro|ada-agent@macro.com".to_owned())
+            .unwrap(),
+    );
+    operator.run_fleet_effects().await.unwrap();
+
+    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+
+    assert!(operator.harnesses.default_agents.lock().unwrap().is_empty());
+    let ready = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(ready.state.phase, Phase::Running);
+    assert_eq!(ready.default_agent_id, None);
 }
 
 /// The agent is a convenience: failing to create it never holds up setup,

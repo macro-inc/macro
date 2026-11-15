@@ -10,9 +10,12 @@ Pulumi stacks; they do not host extra agent processes.
 
 ## Start here
 
-- `src/main.rs`: composition root — builds Postgres repositories, the
+- `src/lib.rs`: composition root (`run()`) — builds Postgres repositories, the
   container manager, channel/session services, and wires
-  `macro.channels`-derived triggers into `macro.agent_sessions`.
+  `macro.channels`-derived triggers into `macro.agent_sessions`. All modules
+  live in the library so the crate compiles once and caches; `src/main.rs` only
+  starts it (allocator, `MacroEntrypoint`, `run()`). Never add a `mod` to
+  `main.rs`.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
   crate's own router (`agent_session`, `agent_changes`, `agent_egress`,
@@ -53,6 +56,37 @@ Pulumi stacks; they do not host extra agent processes.
   only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
   not stop the read: the rest is drained (up to ten minutes) so its usage is
   still recorded. Span: `anthropic_gateway.messages`.
+  `/brain/anthropic/*` serves agent teammates' brains the same way, but
+  authenticates the agent's own Macro API key (`anthropic_gateway/brain.rs`)
+  and counts usage against the agent account, with no session entity. It
+  serves only agents with `enable-agent-teammates` on for their creator
+  (`BrainRollout` over `agent_credentials::rollout`; PostHog never targets an
+  agent's own account; a deleted creator falls back to the team owner; no
+  provider, no one to follow or a failed load refuses with
+  403). Agent git and agent MCP keys share the same check.
+- `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
+  `/brain/inference/tts` WebSockets on the egress listener, for agent
+  teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
+  `enable-agent-teammates` check and admission as `/brain/anthropic`; the upgrade query must be exactly
+  `model=deepgram/nova-3` (STT) or `model=deepgram/aura-2` (TTS). The gateway
+  opens LiveKit Inference with a 60-second `inference.perform` JWT signed with
+  `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` (both empty: speech is off; one
+  alone fails startup) and relays events. `protocol.rs` pins the session:
+  Nova-3 English STT on mono PCM16 16 kHz, Aura-2 TTS as PCM16 24 kHz with a
+  catalog voice; a second `session.create`, an unknown field or a changed
+  voice closes the socket. Forwarded PCM seconds and synthesized characters
+  are recorded once, when the socket closes, against the agent
+  (`livekit-inference-deepgram-*` pricing rows). Upstream error details stay
+  in logs. Span: `speech_gateway.session`; never record transcripts or text.
+- `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
+  team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
+  The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
+  fixed-line WAV sample per process, billed to the admin's team when it is
+  synthesized.
+- `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
+  every computer creation asks the auth service's internal
+  `/internal/team_agent_enrollment` route, so an agent computer never enrolls
+  without its agent.
 - `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects
@@ -63,7 +97,9 @@ Pulumi stacks; they do not host extra agent processes.
   unfinished leases. See hosted_runtimes' AGENTS.md for redeploy grace,
   bounded effect execution, and hard-kill recovery.
   `COMPUTERS_IMAGE` names the versioned image new computers are created
-  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
+  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag;
+  `COMPUTERS_AGENT_IMAGE` the agent-mode one agent teammates' computers get
+  (`macro-box-agent/2026-11-10`, `macro-box-agent:latest`). Each
   computer records its own image; updates go through hosted_runtimes' image
   update routes, never by changing this value for existing computers.
   HostedHarnesses pairing records the buyer as the harness owner, but the
@@ -122,6 +158,9 @@ Pulumi stacks; they do not host extra agent processes.
   `SetupNotices` port: sends the buyer `computer_setup` (ready, or failed with
   the status's failure reason; inbox, gateway, push) on the team entity, with
   an id derived from computer and outcome (plus `failed_at` for a failure).
+  An agent teammate's computer goes to the agent's inviter instead, with
+  `agent { userId, name }` read from `team_agents` (`PgTeamAgentsRepo`); a
+  removed agent, or one whose inviter is gone, sends nothing.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only
@@ -134,9 +173,14 @@ Pulumi stacks; they do not host extra agent processes.
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
-  Code execution's destination list in `src/code_mode.rs` also includes the
-  configured editing worker, whose comment-mark endpoint requires a scoped
-  document token; this does not grant permission to edit document content.
+  Code execution's destination list in `src/code_mode.rs` (`SdkHost`) also
+  includes the configured editing worker, whose comment-mark endpoint requires
+  a scoped document token; this does not grant permission to edit document
+  content. The test `every_sdk_host_holds_a_scoped_credential_to_its_scope`
+  fails for a host the SDK can reach (`code_mode_assets::HOSTS`) that isn't
+  an `SdkHost`, and records how each host's service holds a scoped session's
+  credential to its scope: `propagate`, `enforce_signed_scope`, or no Macro
+  credential accepted. A new host picks one before it ships.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
@@ -152,6 +196,9 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
+  A scoped hidden session's chat messages and structured completions take
+  no tools (`tool_selection::tools_refused_to_current_session`): tools run
+  with the person's full access, past the scope its credential carries.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
@@ -169,12 +216,26 @@ Pulumi stacks; they do not host extra agent processes.
   sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
   scheduler the code-mode invocation lookup so a routine an Ask AI step's
   session creates becomes its run's sub-routine. AI drafts routines
-  (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
-  in-process Macro agent on the person's Ask AI model, admitted and billed
-  as their agent session usage; `scheduling.rs` composes the drafter, its
-  `scheduled_action_draft` store, the check's code-mode invocation lookup
-  (`CorrelationSessions`), what a session created from its agent activity
-  (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  (`POST /scheduled-actions/drafts`) in a hidden session of the in-process
+  agent, which runs a background session given instructions at low effort
+  and delivers its replies unseen (`containers.rs`, `reply_delivery`).
+  Before the session starts, a fast call on the router names what the
+  words refer to (`src/scheduling/routine_drafting.rs`:
+  `RouterDraftModels` admits and bills it as the person's automation
+  usage), and `SearchNames` looks channel, folder, document and task
+  names up with the existing name search (document storage's
+  `/internal/search` and `/internal/search/channel/name`, exact match, as
+  the person, five-second timeout), comparing names exactly itself. A
+  name whose search fails, runs out of time, or has more hits than one
+  page (newest first) without two exact matches goes to the session,
+  which also looks up the other kinds. `routine_code.rs` gives the
+  session each SDK area it needs
+  (`area_reference`: the area's index, guidance and declarations, then
+  the generated types they import). `scheduling.rs` composes the drafter
+  after the service with its
+  `scheduled_action_draft` store, the session drafter's check lookup
+  (`CorrelationSessions`) and activity (`ActivityCreations`), and the
+  sweep of drafts a stopped process left.
   Background drafts (`/scheduled-actions/draft-jobs`, `DraftJobs`) run on
   the scheduling `workers` tracker under `stop_workers`, so shutdown fails
   the ones still drafting as interrupted within `SHUTDOWN_TIMEOUT`; they
@@ -196,6 +257,17 @@ Pulumi stacks; they do not host extra agent processes.
   `scheduling.rs` sweeps generation sessions a stopped process left open
   every minute and starts nightly generations every five minutes, once the
   process is ready.
+  Accepted background prompt suggestions run in hidden, billable sessions of the
+  in-process Macro agent (`SuggestionRunSessions` in `scheduling.rs`, which reads
+  every page of a session's activity for what it created, each item once). Runs
+  move from their sessions' lifecycle events and a reconcile sweep every five
+  minutes. Reply suggestions read who they wait on from their email thread or
+  channel message through `ItemReplyWaits` (`crates/suggestions`), built over
+  the email repository and the shared pool. The suggestions routes are served
+  here too, and `scheduling.rs` runs
+  suggestions' resolution consumer (group `suggestions-resolution`) and runs
+  consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
+  event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
@@ -207,6 +279,20 @@ Pulumi stacks; they do not host extra agent processes.
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
+- `src/agent_git.rs`: agent teammates' workspace repos (`crates/agent_git`)
+  under `/agent-git` (smart HTTP plus the internal create/ensure/delete API;
+  `AgentGitServiceUrl` points here), merged outside the gzip layer. Storage
+  is EFS at `REPO_STORAGE_ROOT` (`/data/agent-git`, the
+  `agent-harness-service` stack's file system and access point), chosen
+  because it is the simplest store git can use directly that both replicas
+  share. Each repo's push budget is a row in Postgres and each receive-pack
+  (and create/ensure/delete) holds a per-repo Postgres advisory lock, so the
+  replicas never interleave writes to one repo; git's lockfiles on EFS are
+  the second guard. Startup fails without git and `git-http-backend`, or
+  without the directory; shutdown drains running git processes for up to
+  8 s. Config: `REPO_STORAGE_ROOT`, `MAX_REPO_SIZE_BYTES`,
+  `PUSHES_PER_MINUTE` (required; locally the `agent_git_repos` compose
+  volume and 500 MiB / 30).
 - [Consolidation guide](../../docs/guides/consolidate-agent-services.md):
   Doppler migration, retirement order, OAuth provider cutover.
 
@@ -224,14 +310,14 @@ Pulumi stacks; they do not host extra agent processes.
 - Add a new agent-session route: the owning domain crate's `inbound::axum_router`
   → mount it in `src/api.rs`.
 - Add a new model/runtime provider: `src/model_providers/<provider>.rs` →
-  `src/model_providers/mod.rs` → wire into `src/main.rs`.
+  `src/model_providers/mod.rs` → wire into `src/lib.rs`.
 - Inspect a session's protocol log: `just session-log <channel_id>`.
 
 ## Tool contracts
 
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
 - An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
-- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
 - The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
 - Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
@@ -275,7 +361,7 @@ Read the stable identity from Doppler in deployed environments; local stacks
 explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
-An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
+An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_AGENT_IMAGE`, `COMPUTERS_HOST_NAME`,
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`. Docker additionally
 requires `COMPUTERS_DOCKER_MEMORY_GB`, network and enrollment directory. Incus
 requires its endpoint and mTLS material, `COMPUTERS_INCUS_PROFILE`,
@@ -317,7 +403,8 @@ is cognition's Secrets Manager reference; AI tools resolve the separate
 
 The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
 glibc malloc kept freed memory resident as fragmentation under this
-workload. Tests and the library keep the system allocator.
+workload. Tests and the library keep the system allocator, so the allocator
+stays in `main.rs` while everything else lives in `src/lib.rs`.
 
 `AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
 a session's command worker waits before it releases a quiet session from

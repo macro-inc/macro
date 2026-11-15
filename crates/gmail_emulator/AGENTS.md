@@ -37,7 +37,10 @@ a local stack, without Google accounts.
 - A meeting's guests who are users of the emulator hold their own copy on
   their primary calendar, as at Google: an answer travels to the organizer's
   copy and every other, and a guest changes only what the organizer's guest
-  switches allow.
+  switches allow. Google takes 15 to 30 seconds to carry a change to the
+  other copies; the emulator does it at once unless a test asks for the lag:
+  between `hold_event_copies` and `release_event_copies` a change shows only
+  on the calendar it was made on.
 - After `events.watch`, a change posts Google's header-only notification to
   the address the channel was opened with, first a `sync` one for the channel
   itself.
@@ -82,7 +85,9 @@ a local stack, without Google accounts.
 - Point a local `email_service` and `pubsub_workers` at it:
   `OVERRIDE_GMAIL_API_URL=<base>/gmail/v1`,
   `OVERRIDE_GOOGLE_PEOPLE_API_URL=<base>/people/v1`,
-  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`, and
+  `OVERRIDE_GOOGLE_OAUTH_CERTS_URL=<base>/oauth2/v3/certs`,
+  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL=<base>/oauth2/v3/tokeninfo` (on
+  `email_service` only), and
   `OVERRIDE_AUTH_SERVICE_URL=<base>/_emulator/authentication-service` to get
   access tokens without the authentication service. Start the emulator with
   `--push-endpoint http://<email_service>/gmail/webhook`.
@@ -109,6 +114,10 @@ a local stack, without Google accounts.
   answer: `POST …/events/{id}/responses`. An expired sync token:
   `POST …/calendars/{calendar}/sync-tokens/expire`, or a `gone` fault on
   `events.list`. What was pushed: `GET /_emulator/push/channel-deliveries`.
+  One calendar Google cannot list while the account's others are fine:
+  `POST …/calendars/{calendar}/failure` with `{"error": "internal"}`,
+  `DELETE` to end it. Google's lag before a change reaches a meeting's other copies:
+  `POST /_emulator/calendar/copies/hold`, then `…/copies/release`.
 - Sign in without a browser: `POST /o/oauth2/v2/auth` with the authorization
   request's parameters as a form, plus `user=<email>` and one `granted=<scope>`
   per scope to grant; the `Location` header carries the code.
@@ -116,6 +125,9 @@ a local stack, without Google accounts.
   Provider failure: `POST /_emulator/faults` (`inject_fault`) with a `route`
   such as `messages.get` and an `error` such as `rate_limit`. Time:
   `POST /_emulator/clock/advance`. What it received: `GET /_emulator/requests`.
+- The signature of a mailbox's primary address: `PUT
+  /_emulator/mailboxes/{email}/signature` with `{"signature": "<html>"}`
+  (`set_signature`); `settings.sendAs.list` answers it. It is empty until set.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
@@ -133,6 +145,8 @@ a local stack, without Google accounts.
 - Responses are Google's shapes, not ours: absent fields are omitted, not
   null, and carry fields `models_email` does not read. Don't build them from
   `models_email` types.
+- A `message/rfc822` part that is not an attachment (the original a bounce
+  returns) carries the wrapped message as its one child part, as at Gmail.
 - Push tokens are dated by the real clock, because the verifier reads the
   real clock; everything else follows the emulator's clock.
 - Scopes add to the grant a mailbox already holds, as at Google, and a
@@ -168,8 +182,10 @@ a local stack, without Google accounts.
 - Not emulated, because our code does not depend on it: invitation mail for
   `sendUpdates`, ACLs and calendars shared between users (each user's list
   holds its own calendars), free/busy, `updatedMin` and `q` on `events.list`,
-  `singleEvents` with a sync token, the `_R` ids of a split series, and the
-  seconds Google takes to carry a change to a guest's copy (it is immediate).
+  `singleEvents` with a sync token, and the `_R` ids of a split series.
+  A change reaches a guest's copy at once unless copies are held back; a
+  hold carries changes to one copy of a meeting, not a merge of changes made
+  to two of its copies.
 - Three answers are the emulator's reading, not checked against Google:
   patching a deleted event answers 400, `events.instances` of an event that
   does not repeat answers the event itself, and a guest's forbidden change

@@ -151,6 +151,8 @@ pub(crate) struct Mailbox {
     pub(crate) notified_history_id: u64,
     pub(crate) filters: Vec<(String, Value)>,
     pub(crate) send_as: Vec<SeedSendAs>,
+    /// The HTML signature of the primary address.
+    pub(crate) signature: String,
     /// Draft id to the id of the message holding its current revision.
     pub(crate) drafts: BTreeMap<String, String>,
     pub(crate) contacts: ContactBook,
@@ -193,6 +195,7 @@ impl Mailbox {
             notified_history_id: history_id,
             filters: Vec::new(),
             send_as: seed.send_as.clone(),
+            signature: String::new(),
             drafts: BTreeMap::new(),
             contacts: ContactBook::new("people/c", &seed.contacts),
             other_contacts: ContactBook::new("otherContacts/c", &seed.other_contacts),
