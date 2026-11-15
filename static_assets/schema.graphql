@@ -6816,7 +6816,8 @@ type GraphqlNotification {
 	"""
 	eventType: String!
 	"""
-	The Soup type of the associated entity.
+	The Soup type of the associated entity, or `OUTSIDE_SOUP` for entities
+	outside Soup such as routines.
 	"""
 	entityType: GraphqlSoupEntityType! @deprecated(reason: "Use targetEntityType, which also covers entities outside Soup. Remove after 2026-12-01.")
 	"""
@@ -10171,6 +10172,12 @@ enum GraphqlSoupEntityType {
 	A paired runtime, listed only by attention feeds.
 	"""
 	HARNESS
+	"""
+	An entity outside Soup, such as a routine. Only the deprecated
+	notification `entityType` returns it; read `targetEntityType` instead.
+	Rejected as input.
+	"""
+	OUTSIDE_SOUP @deprecated(reason: "Only returned by the deprecated notification entityType. Remove after 2026-12-15.")
 }
 
 """
