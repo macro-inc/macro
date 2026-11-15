@@ -58,7 +58,7 @@ AX-211	-	no-user-path	The button shows only with workNeedsReconnect, which no ca
 AX-045	-	native-only	MobileOnboarding is rendered only when isNativeMobilePlatform() is true.
 STX-017	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 STX-210	-	native-only	Both toasts are raised only on the Tauri link paths (native auth session and system-browser open).
-STX-029	-	needs	the calendar prompt is off unless the flag service turns it on, and the suite's bundle has no flag service
+STX-029	-	needs	the calendar prompt is off unless the flag service turns on enable-calendar-prompt-web (enable-calendar-prompt-mobile on a phone), and the suite's bundle has no flag service
 AX-049	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AX-050	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AX-307	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
@@ -84,4 +84,4 @@ STX-308	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
-STX-319	-	needs	the tour is off unless the flag service turns it on, and the suite's bundle has no flag service
+STX-319	-	needs	the tour is off unless the flag service turns on enable-in-app-tours, and the suite's bundle has no flag service

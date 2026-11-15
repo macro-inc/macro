@@ -96,7 +96,6 @@ test.describe('the signature of a Gmail inbox on a phone', () => {
     await expect(
       signatures.getByText('Update your signature on desktop.')
     ).toBeVisible();
-    saw('STX-018');
     await expect(signatureTabs(page, own)).toHaveCount(0);
     await expect(
       signatures.getByRole('button', { name: 'Save signature' })
@@ -104,5 +103,6 @@ test.describe('the signature of a Gmail inbox on a phone', () => {
     await expect(
       signatures.getByRole('button', { name: 'Import from Gmail' })
     ).toHaveCount(0);
+    saw('STX-018');
   });
 });

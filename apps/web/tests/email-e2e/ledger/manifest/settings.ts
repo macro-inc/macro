@@ -752,6 +752,7 @@ export const settings = {
       state: '"Loading accounts…"',
       trigger: 'links query pending',
       source: ['src/features/settings/email-settings.tsx'],
+      note: 'tested: the "Loading accounts…" of Read receipts, which reads the same list; the Accounts section shows its own only when the list was never read',
     },
     {
       id: 'STX-002',
@@ -819,6 +820,7 @@ export const settings = {
         'src/lib/queries/email/sync.ts',
       ],
       flag: 'ENABLE_INBOX_SYNC_STATUS',
+      note: 'tested on Gmail alone: the import of an Outlook inbox sends no progress, completion or failure over the gateway',
     },
     {
       id: 'STX-009',
@@ -837,6 +839,7 @@ export const settings = {
         'Connect rows hidden once an inbox is connected without enable-multi-inbox; Outlook row hidden when not offered',
       trigger: 'one inbox linked, flag off; providers endpoint without outlook',
       source: ['src/features/settings/Email.tsx'],
+      note: 'tested: the Outlook row hidden when not offered. The connect rows hidden without enable-multi-inbox are not: the bundle of the suite has that flag on',
     },
     {
       id: 'STX-201',
@@ -893,6 +896,7 @@ export const settings = {
       source: ['src/lib/queries/email/sync.ts'],
       toasts: ['src/lib/queries/email/sync.ts#Inbox synced'],
       flag: 'ENABLE_INBOX_SYNC_STATUS',
+      note: 'tested on Gmail alone: the import of an Outlook inbox sends no progress, completion or failure over the gateway',
     },
     {
       id: 'STX-203',
@@ -903,6 +907,7 @@ export const settings = {
       source: ['src/lib/queries/email/sync.ts'],
       toasts: ['src/lib/queries/email/sync.ts#Inbox sync failed'],
       flag: 'ENABLE_INBOX_SYNC_STATUS',
+      note: 'tested on Gmail alone: the import of an Outlook inbox sends no progress, completion or failure over the gateway',
     },
     {
       id: 'STX-204',

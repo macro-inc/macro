@@ -587,7 +587,7 @@ export const elsewhere = {
       trigger: 'Connect Google failed',
       source: ['src/features/universal-input/actions.ts'],
       flag: 'enable-universal-input',
-      note: 'tested: with a consent address the browser refuses to open, answered by the stand-in auth service',
+      note: 'tested: with a consent address the browser refuses to open, which the test answers in place of the auth service',
     },
     {
       id: 'STX-303',
@@ -739,6 +739,7 @@ export const elsewhere = {
         'src/lib/queries/email/quick-access.ts',
         'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/utils/mentionHandlers.ts',
       ],
+      note: 'tested: cached threads by subject and sender in the search of the phone dock, which reads the same quick access source. The mention menu, Cmd+K and the "No Subject" fallback are not',
     },
     {
       id: 'STX-968',
@@ -780,6 +781,7 @@ export const elsewhere = {
         'no own inbox / calendar permission missing / calendar turned off / re-auth needed',
       source: ['src/features/calendar-view/components/SetupStatus.tsx'],
       flag: 'enable-calendar-ui',
+      note: 'tested: the overlay on an empty grid. The pill shown over events is not',
     },
     {
       id: 'STX-035',
