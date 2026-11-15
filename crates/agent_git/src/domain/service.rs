@@ -1,5 +1,6 @@
 //! The agent git domain service.
 
+use agent_credentials::AgentCreators;
 use feature_flags::FeatureFlags;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,11 +13,11 @@ use crate::domain::models::{
 use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
 };
-use crate::domain::template::{PersonaSeed, WorkspaceTemplate};
+use crate::domain::template::{PersonaSeed, RenderError, WorkspaceTemplate};
 use crate::domain::voice::{VOICE_PATH, VoiceConfig};
 
 /// The adapters [`AgentGitServiceImpl`] runs on.
-pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags> {
+pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Creators, Flags> {
     /// Repo rows.
     pub repos: Repos,
     /// Bare repos on disk.
@@ -27,24 +28,26 @@ pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags> {
     pub limiter: Limiter,
     /// Smart-HTTP backend.
     pub backend: Backend,
-    /// The agent teammates rollout, checked for the repo's agent on every
-    /// clone and push. None, or a failed load, refuses (fail closed).
+    /// Who invited each agent: the rollout is its creator's.
+    pub creators: Creators,
+    /// The agent teammates rollout, checked for the repo's agent's creator on
+    /// every clone and push. None, or a failed load, refuses (fail closed).
     pub flags: Option<Flags>,
 }
 
 /// Implements [`AgentGitService`].
-pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags> {
-    adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags>,
+pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators, Flags> {
+    adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Creators, Flags>,
     limits: RepoLimits,
     template: WorkspaceTemplate,
 }
 
-impl<Repos, Store, Admins, Limiter, Backend, Flags>
-    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
+impl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
 {
     /// Build the service.
     pub fn new(
-        adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags>,
+        adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Creators, Flags>,
         limits: RepoLimits,
         template: WorkspaceTemplate,
     ) -> Self {
@@ -59,8 +62,8 @@ impl<Repos, Store, Admins, Limiter, Backend, Flags>
 /// Message of the commit a voice change makes.
 const VOICE_COMMIT_MESSAGE: &str = "Set call voice";
 
-impl<Repos: RepoRepository, Store, Admins, Limiter, Backend, Flags>
-    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
+impl<Repos: RepoRepository, Store, Admins, Limiter, Backend, Creators, Flags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
 {
     /// The agent's repo row, which must belong to `team_id`.
     async fn team_repo(
@@ -88,6 +91,15 @@ fn internal(error: impl std::error::Error + Send + Sync + 'static) -> AgentGitEr
     AgentGitError::Internal(rootcause::Report::new(error).into_dynamic())
 }
 
+/// A seed without a creator is the caller's mistake; other render failures
+/// are the template's.
+fn render_error(error: RenderError) -> AgentGitError {
+    match error {
+        RenderError::MissingCreator => AgentGitError::MissingCreator,
+        other => internal(other),
+    }
+}
+
 /// Fail the body once it carries more than `limit` bytes, so a single push
 /// cannot overshoot the size cap.
 fn limit_body(body: GitBody, limit: u64) -> GitBody {
@@ -105,30 +117,28 @@ fn limit_body(body: GitBody, limit: u64) -> GitBody {
     }))
 }
 
-impl<Repos, Store, Admins, Limiter, Backend, Flags: FeatureFlags>
-    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
+impl<Repos, Store, Admins, Limiter, Backend, Creators: AgentCreators, Flags: FeatureFlags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
 {
     async fn rollout_on(&self, agent_user_id: &MacroUserIdStr<'_>) -> bool {
-        let Some(flags) = &self.adapters.flags else {
-            return false;
-        };
-        let loaded = flags.load(agent_user_id).await;
-        #[cfg(any(feature = "inbound", feature = "outbound"))]
-        if let Err(error) = &loaded {
-            tracing::warn!(error = ?error, "could not load feature flags; the agent's repo stays closed");
-        }
-        loaded.is_ok_and(|snapshot| snapshot.is_enabled(agent_credentials::AGENT_TEAMMATES_FLAG))
+        agent_credentials::agent_teammates_enabled(
+            &self.adapters.creators,
+            self.adapters.flags.as_ref(),
+            agent_user_id,
+        )
+        .await
     }
 }
 
-impl<Repos, Store, Admins, Limiter, Backend, Flags> AgentGitService
-    for AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
+impl<Repos, Store, Admins, Limiter, Backend, Creators, Flags> AgentGitService
+    for AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
 where
     Repos: RepoRepository,
     Store: RepoStore,
     Admins: TeamAdmins,
     Limiter: PushRateLimiter,
     Backend: GitBackend,
+    Creators: AgentCreators + 'static,
     Flags: FeatureFlags + 'static,
 {
     async fn create_repo(
@@ -164,7 +174,7 @@ where
                 &self
                     .template
                     .render(&agent_user_id, seed)
-                    .map_err(internal)?,
+                    .map_err(render_error)?,
             )
             .await
             .map_err(internal)?;
@@ -228,7 +238,7 @@ where
                 &self
                     .template
                     .render(&agent_user_id, seed)
-                    .map_err(internal)?,
+                    .map_err(render_error)?,
             )
             .await
             .map_err(internal)?;
@@ -322,8 +332,8 @@ where
             .map_err(internal)?
             .ok_or(AgentGitError::InvalidToken)?;
 
-        // The kill switch: with the rollout off for the agent (as its brain
-        // checks it), its repo looks absent to every credential.
+        // The kill switch: with the rollout off for the agent's creator (as
+        // its brain checks it), its repo looks absent to every credential.
         if !self.rollout_on(agent_user_id).await {
             return Err(AgentGitError::NotFound);
         }

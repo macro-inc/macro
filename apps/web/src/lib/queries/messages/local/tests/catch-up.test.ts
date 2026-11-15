@@ -3,13 +3,16 @@ import {
   type ChannelChangesPage,
   catchUpAndRefresh,
   catchUpChannel,
+  noteChannelPush,
+  pushesStored,
   resetChannelSync,
 } from '../catch-up';
 import { channelActivityKey, channelMessageKey } from '../sort-key';
 import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
 
-const { invalidateQueries } = vi.hoisted(() => ({
+const { invalidateQueries, channelCacheHost } = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
+  channelCacheHost: vi.fn(),
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -18,6 +21,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: vi.fn(),
 }));
 vi.mock('../../../client', () => ({ queryClient: { invalidateQueries } }));
+vi.mock('../flag', () => ({ channelCacheHost }));
 
 const changes = (
   overrides: Partial<ChannelChangesPage> = {}
@@ -52,6 +56,8 @@ function sequencedHost(initial: string | null) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
+  channelCacheHost.mockReset();
   resetChannelSync();
   invalidateQueries.mockClear();
 });
@@ -147,5 +153,87 @@ describe('catchUpAndRefresh', () => {
       changes({ resetRequired: true })
     );
     expect(invalidateQueries).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('pushesStored', () => {
+  it('answers at once when the views hold no push the device lacks', async () => {
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+
+  it('waits for the device to be asked to take a pushed change', async () => {
+    vi.useFakeTimers();
+    const host = sequencedHost(null);
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    let stored: boolean | undefined;
+    const waiting = pushesStored(CHANNEL_ID).then((answer) => {
+      stored = answer;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(stored).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(200);
+    await waiting;
+    expect(stored).toBe(true);
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+
+  it('gives up on a push the device does not take in time', async () => {
+    vi.useFakeTimers();
+    const host = sequencedHost('7');
+    host.channelTimeline = () => new Promise(() => {});
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    const waiting = pushesStored(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(await waiting).toBe(false);
+  });
+
+  it('does not wait for a push the device page already holds', async () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost('8'));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    expect(await pushesStored(CHANNEL_ID, '8')).toBe(false);
+    expect(await pushesStored(CHANNEL_ID, '9')).toBe(false);
+  });
+
+  it('waits for a push newer than the device page', async () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost(null));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    let stored: boolean | undefined;
+    const waiting = (async () => {
+      stored = await pushesStored(CHANNEL_ID, '7');
+    })();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(stored).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(200);
+    await waiting;
+    expect(stored).toBe(true);
+  });
+
+  it('has a read made again that the device overtook meanwhile', async () => {
+    await catchUpAndRefresh(sequencedHost('7'), CHANNEL_ID, async () =>
+      changes({ seq: '9', messages: [graphqlMessage(1)] })
+    );
+
+    expect(await pushesStored(CHANNEL_ID, '7')).toBe(true);
+    expect(await pushesStored(CHANNEL_ID, '9')).toBe(false);
+  });
+
+  it('lets a waiting read go when the channels are reset', async () => {
+    vi.useFakeTimers();
+    channelCacheHost.mockReturnValue(sequencedHost('7'));
+    noteChannelPush(CHANNEL_ID, 8);
+
+    const waiting = pushesStored(CHANNEL_ID);
+    resetChannelSync();
+    expect(await waiting).toBe(true);
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
   });
 });

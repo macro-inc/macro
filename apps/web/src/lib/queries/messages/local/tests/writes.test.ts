@@ -14,9 +14,9 @@ import {
   type OperationResult,
   type OperationResultSource,
 } from '@urql/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelMessage } from '../map';
-import { rootSortKey } from '../sort-key';
+import { unplacedSortKey } from '../sort-key';
 import {
   type ChannelWriteHost,
   deleteChannelMessage,
@@ -25,6 +25,17 @@ import {
   sendChannelMessage,
 } from '../writes';
 import { CHANNEL_ID, fakeHost, graphqlMessage } from './fixtures';
+
+const { pageIsLeaving } = vi.hoisted(() => ({
+  pageIsLeaving: vi.fn(() => false),
+}));
+vi.mock('../unqueued-sends', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../unqueued-sends')>()),
+  pageIsLeaving,
+}));
+afterEach(() => {
+  pageIsLeaving.mockReturnValue(false);
+});
 
 const NOW = new Date('2026-11-01T10:00:07.000Z');
 const SENDER = 'macro|sender@example.test';
@@ -147,7 +158,7 @@ describe('queued channel writes', () => {
         id: stored.id,
         channelId: CHANNEL_ID,
         threadId: null,
-        sortKey: rootSortKey(NOW.toISOString(), stored.id),
+        sortKey: unplacedSortKey(NOW.toISOString(), stored.id, false),
         senderId: SENDER,
         content: 'hello',
         deletedAt: null,
@@ -178,7 +189,7 @@ describe('queued channel writes', () => {
     expect(calls[0].context.optimisticResponse).toMatchObject({
       sendChannelMessage: {
         threadId: root.id,
-        sortKey: `~-${rootSortKey(NOW.toISOString(), reply.id)}`,
+        sortKey: unplacedSortKey(NOW.toISOString(), reply.id, true),
         thread: null,
       },
     });
@@ -350,6 +361,46 @@ describe('queued channel writes', () => {
     expect((failure as ThrownResultError).errors[0].code).toBe(
       'SERVICE_UNAVAILABLE'
     );
+  });
+
+  it('keeps a send pending when it fails because the page is being left', async () => {
+    let leaving = false;
+    const { client } = fakeClient(() => {
+      // The mark lands after the failure, as it does when the cache host's
+      // listener runs first.
+      if (leaving) setTimeout(() => pageIsLeaving.mockReturnValue(true), 0);
+      return {
+        error: refused('SERVICE_UNAVAILABLE'),
+        disposition: { kind: 'permanently-failed' },
+      };
+    });
+    const send = () =>
+      sendChannelMessage(
+        writeHost().host,
+        {
+          channelId: CHANNEL_ID,
+          id: graphqlMessage(7).id,
+          senderId: SENDER,
+          message: { content: 'hello' },
+        },
+        { client, now: () => NOW }
+      );
+    await expect(send()).rejects.toBeInstanceOf(ThrownResultError);
+
+    leaving = true;
+    const settled = async () => {
+      try {
+        await send();
+      } catch {
+        // Settled either way.
+      }
+      return 'settled';
+    };
+    const outcome = await Promise.race([
+      settled(),
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 20)),
+    ]);
+    expect(outcome).toBe('pending');
   });
 
   it('patches only what an edit, a delete and a reaction change', async () => {

@@ -27,8 +27,10 @@ vi.mock('@service-storage/messages', async (importOriginal) => ({
 
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
+import { confirmQueuedReaction } from '../reactions';
 import {
   applyMessage,
+  applyQueuedWrite,
   applyThreadState,
   handleMessageEvent,
   handleTimelineActivity,
@@ -316,6 +318,56 @@ describe.each([
           .pages[0]
       )[0].thread.reply_count
     ).toBe(1);
+  });
+  it('keeps a reaction pushed since when the answer to a queued write arrives', () => {
+    testQueryClient.setQueryData<MessageThread>(threadKey(), {
+      state,
+      root: message(parent, 'root'),
+      replies: [],
+    });
+    const reply = message(parent, 'reply', 'root');
+    applyMessage(reply, 'posted');
+    const reactions = [{ emoji: '👍', users: ['macro|b@example.com'] }];
+    applyMessage({ ...reply, reactions }, 'reaction_changed');
+
+    // The edit's answer was read before the other person reacted.
+    applyQueuedWrite({ ...reply, content: 'new content' }, 'edited');
+
+    expect(
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+    ).toEqual([expect.objectContaining({ content: 'new content', reactions })]);
+  });
+  it("confirms only a person's own reaction over what was pushed since", () => {
+    testQueryClient.setQueryData<MessageThread>(threadKey(), {
+      state,
+      root: message(parent, 'root'),
+      replies: [],
+    });
+    const reply = message(parent, 'reply', 'root');
+    applyMessage(reply, 'posted');
+    const other = 'macro|b@example.com';
+    const me = 'macro|a@example.com';
+    const shown = () =>
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies[0]
+        .reactions;
+    const vars = {
+      parent,
+      messageId: 'reply',
+      threadId: 'root',
+      emoji: '👍',
+      userId: me,
+    };
+
+    // The other person reacted after this person's add was answered.
+    applyMessage(
+      { ...reply, reactions: [{ emoji: '👍', users: [other] }] },
+      'reaction_changed'
+    );
+    confirmQueuedReaction(vars, true);
+    expect(shown()).toEqual([{ emoji: '👍', users: [other, me] }]);
+
+    confirmQueuedReaction(vars, false);
+    expect(shown()).toEqual([{ emoji: '👍', users: [other] }]);
   });
   it('updates the canonical root when only a linked thread is cached', () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {

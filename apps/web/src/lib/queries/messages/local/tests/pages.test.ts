@@ -8,6 +8,7 @@ import { markChannelCacheAnswered } from '../flag';
 import {
   type ChannelServerPage,
   type FetchedChannelPage,
+  forgetPendingChannelPages,
   loadChannelPage,
   pageHasPendingWrites,
   resetPendingChannelPages,
@@ -251,6 +252,69 @@ describe('loadChannelPage', () => {
     start();
     expect(await loaded.stored).toBe('9');
     expect(host.commits).toHaveLength(1);
+  });
+
+  it('fetches again once a page still being written is forgotten', async () => {
+    const host = fakeHost([devicePage([], { covered: false, seq: null })]);
+    // The device never answers, so the server page stays "being written".
+    host.channelTimeline = () => new Promise(() => undefined);
+    const fetchPage = vi
+      .fn<() => Promise<FetchedChannelPage>>()
+      .mockResolvedValueOnce(fetched(serverPage({ entries: [] })))
+      .mockResolvedValueOnce(
+        fetched(serverPage({ entries: [graphqlMessage(1)], seq: '10' }))
+      );
+    const request = { channelId: CHANNEL_ID, limit: 50 };
+
+    await loadChannelPage(host, request, { fetchPage });
+    const reused = await loadChannelPage(host, request, { fetchPage });
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    if (typeof reused === 'string') throw new Error('expected a page');
+    expect(reused.page.entries).toHaveLength(0);
+
+    forgetPendingChannelPages('another-channel');
+    await loadChannelPage(host, request, { fetchPage });
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+
+    forgetPendingChannelPages(CHANNEL_ID);
+    const fresh = await loadChannelPage(host, request, { fetchPage });
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    if (typeof fresh === 'string') throw new Error('expected a page');
+    expect(fresh.page.entries).toHaveLength(1);
+  });
+
+  it('does not keep a server page a push arrived during the load of', async () => {
+    const host = fakeHost([devicePage([], { covered: false, seq: null })]);
+    host.channelTimeline = () => new Promise(() => undefined);
+    let answer: (page: FetchedChannelPage) => void = () => undefined;
+    const fetchPage = vi
+      .fn<() => Promise<FetchedChannelPage>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          })
+      )
+      .mockResolvedValue(
+        fetched(serverPage({ entries: [graphqlMessage(1)], seq: '10' }))
+      );
+    const request = { channelId: CHANNEL_ID, limit: 50 };
+
+    const first = loadChannelPage(host, request, { fetchPage });
+    forgetPendingChannelPages(CHANNEL_ID);
+    // A read made after the push does not share the load made before it.
+    const second = await loadChannelPage(host, request, { fetchPage });
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    if (typeof second === 'string') throw new Error('expected a page');
+    expect(second.page.entries).toHaveLength(1);
+
+    answer(fetched(serverPage({ entries: [] })));
+    const stale = await first;
+    if (typeof stale === 'string') throw new Error('expected a page');
+    expect(stale.page.entries).toHaveLength(0);
+    const third = await loadChannelPage(host, request, { fetchPage });
+    if (typeof third === 'string') throw new Error('expected a page');
+    expect(third.page.entries).toHaveLength(1);
   });
 
   it('prefers a held page from a device that answers before the server', async () => {

@@ -17,7 +17,7 @@ hydration and client reset policy remain in `crates/messages`.
 Run the harness with your dedicated local database role:
 
 ```sh
-python3 crates/messages/proofs/channel_change_plans.py \
+bun crates/messages/proofs/channel_change_plans.ts \
   --port <dedicated-port> --user <your-local-role>
 ```
 
@@ -54,7 +54,7 @@ Run each statistics mode on its own new, migrated scratch database; the script
 rolls back its fixture and mutations:
 
 ```sh
-python3 crates/messages/proofs/sync_append_plan_sql.py --check
+bun crates/messages/proofs/sync_append_plan_sql.ts --check
 psql <local-scratch-url> -v stale=false \
   -f crates/messages/proofs/channel_change_append_plans.sql
 psql <another-local-scratch-url> -v stale=true \
@@ -308,7 +308,7 @@ production methods and the ordinary benchmark baseline have no delay hook.
 Verify the copies before running the synthetic cases:
 
 ```sh
-python3 crates/messages/proofs/check_delayed_writers.py
+bun crates/messages/proofs/check_delayed_writers.ts
 ```
 
 This audit compares method arguments, return types and complete Rust body tokens,
@@ -384,7 +384,7 @@ After all three repetitions finish, validate and summarize one or more labeled
 release logs with:
 
 ```sh
-python3 crates/messages/proofs/summarize_pool_isolation.py /tmp/pool-baseline.log
+bun crates/messages/proofs/summarize_pool_isolation.ts /tmp/pool-baseline.log
 ```
 
 The script checks pool settings, case completeness, all error counts, and 150
@@ -439,7 +439,7 @@ Writes are not retried. The test prints all cases and then fails if any measured
 or warmup request failed. Summarize the completed release log with:
 
 ```sh
-python3 crates/messages/proofs/summarize_bounded_latency.py /tmp/deadline50ms-bounded.log \
+bun crates/messages/proofs/summarize_bounded_latency.ts /tmp/deadline50ms-bounded.log \
   --source-revision '<exact tested deadline head>'
 ```
 
@@ -462,7 +462,7 @@ statement budget; its complete results are retained separately below.
 Extract the ten completed rows without inventing the missing third new case:
 
 ```sh
-python3 crates/messages/proofs/summarize_pool_isolation.py \
+bun crates/messages/proofs/summarize_pool_isolation.ts \
   /tmp/channel-seq-pool-50ms.log --partial-counterexample
 ```
 
@@ -481,7 +481,7 @@ results:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_write_latency -- --ignored --nocapture' > /tmp/deadline-repository-writes.log 2>&1
-python3 crates/messages/proofs/summarize_deadline_write_latency.py \
+bun crates/messages/proofs/summarize_deadline_write_latency.ts \
   /tmp/deadline-repository-writes.log --source-revision '<exact tested deadline head>'
 ```
 
@@ -506,7 +506,7 @@ source uses the separate commands and output mode under **Admission proof**:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture' > /tmp/deadline-arrival-writes.log 2>&1
-python3 crates/messages/proofs/summarize_deadline_arrival_latency.py \
+bun crates/messages/proofs/summarize_deadline_arrival_latency.ts \
   /tmp/deadline-arrival-writes.log --source-revision '<exact tested deadline head>'
 ```
 
@@ -529,7 +529,7 @@ The recorded complete shared-pool comparison combines the pre-timeout,
 50 ms per-lock experiment stays in its separate artifact:
 
 ```sh
-python3 crates/messages/proofs/summarize_pool_isolation.py \
+bun crates/messages/proofs/summarize_pool_isolation.ts \
   /tmp/channel-seq-pool-baseline.log \
   /tmp/channel-seq-pool-bounded.log \
   /tmp/channel-seq-pool-deadline.log
@@ -555,7 +555,7 @@ after compilation and other database work are idle:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; CHANNEL_SEQUENCE_ADMISSION_LABEL=admission4 cargo test -p messages --all-features --release repository_admission_pool_isolation -- --ignored --nocapture' > /tmp/admission-pool.log 2>&1
-python3 crates/messages/proofs/summarize_admission_pool.py \
+bun crates/messages/proofs/summarize_admission_pool.ts \
   /tmp/admission-pool.log --source-revision '<exact tested admission head>'
 ```
 
@@ -589,7 +589,7 @@ The source-equivalence audit also checks that the delayed current copies
 acquire the same permit at the same point as production:
 
 ```sh
-python3 crates/messages/proofs/check_delayed_writers.py
+bun crates/messages/proofs/check_delayed_writers.ts
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features twenty_simultaneous_channel_posts_succeed_with_commit_holds'
 ```
 
@@ -603,10 +603,10 @@ admission revision, then select the separate admission output mode:
 
 ```sh
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_write_latency -- --ignored --nocapture' > /tmp/admission-writes.log 2>&1
-python3 crates/messages/proofs/summarize_deadline_write_latency.py \
+bun crates/messages/proofs/summarize_deadline_write_latency.ts \
   /tmp/admission-writes.log --implementation admission --source-revision '<exact tested admission head>'
 nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture' > /tmp/admission-arrival.log 2>&1
-python3 crates/messages/proofs/summarize_deadline_arrival_latency.py \
+bun crates/messages/proofs/summarize_deadline_arrival_latency.ts \
   /tmp/admission-arrival.log --implementation admission --source-revision '<exact tested admission head>'
 ```
 

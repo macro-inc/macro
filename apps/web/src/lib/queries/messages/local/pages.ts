@@ -119,6 +119,9 @@ const loadsInFlight = new Map<
   string,
   Promise<LoadedChannelPage | ChannelPageUnavailable>
 >();
+// How many pushes each channel has taken: a server page fetched before one
+// lacks its change and is not kept for the next reader.
+const channelPushes = new Map<string, number>();
 // Channels whose latest page the device is known to hold. Asking the device
 // costs a turn of a busy main thread, so the latest page of any other channel
 // is requested at the same time as it is looked up.
@@ -367,6 +370,7 @@ async function loadPage(
   span: Span
 ): Promise<LoadedChannelPage | ChannelPageUnavailable> {
   const cacheHost = host as CacheHost;
+  const pushesBefore = channelPushes.get(request.channelId);
   const pendingKey = JSON.stringify(cacheArgs(request));
   const latest =
     request.before === undefined &&
@@ -470,7 +474,10 @@ async function loadPage(
     serverSeq: server.seq,
     stored,
   };
-  pendingServerPages.set(pendingKey, loaded);
+  // Only this load's own readers get a page a push has since outdated.
+  if (channelPushes.get(request.channelId) === pushesBefore) {
+    pendingServerPages.set(pendingKey, loaded);
+  }
   const forget = () => {
     if (pendingServerPages.get(pendingKey) === loaded) {
       pendingServerPages.delete(pendingKey);
@@ -486,9 +493,26 @@ async function loadPage(
   return loaded;
 }
 
+/**
+ * Forgets the channel's server pages still being written and its loads still
+ * running. One fetched before a change that has since been pushed lacks it,
+ * and the read made again to recover that change must not be answered with
+ * the same page.
+ */
+export function forgetPendingChannelPages(channelId: string): void {
+  channelPushes.set(channelId, (channelPushes.get(channelId) ?? 0) + 1);
+  for (const pages of [pendingServerPages, loadsInFlight]) {
+    for (const key of pages.keys()) {
+      const args: ChannelTimelineCacheArgs = JSON.parse(key);
+      if (args.channelId === channelId) pages.delete(key);
+    }
+  }
+}
+
 /** Forgets pages still being written; for account changes and tests. */
 export function resetPendingChannelPages(): void {
   pendingServerPages.clear();
   loadsInFlight.clear();
+  channelPushes.clear();
   heldChannels.clear();
 }

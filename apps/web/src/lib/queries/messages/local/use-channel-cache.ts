@@ -11,6 +11,8 @@ import { channelCacheHost } from './flag';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
+import { holdUnqueuedSendsPage, resendUnqueuedSends } from './unqueued-sends';
+import { sendChannelMessage } from './writes';
 
 /** Leaves startup and the first screen alone. */
 const START_DELAY_MS = 5_000;
@@ -67,13 +69,15 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * While `active` and channels read from the device cache, the cross-tab
+ * While `userId` is signed in and channels read from the device cache, the cross-tab
  * leader keeps up to forty unread and the twenty most recently used channels
  * ready, one request at a time and only while the person leaves the app alone,
  * again after a reconnect or a replaced cache, and drops channels not opened
- * for thirty days.
+ * for thirty days. Each tab also sends the messages a page that is gone was
+ * still handing to the device queue.
  */
-export function useChannelCache(active: Accessor<boolean>): void {
+export function useChannelCache(userId: Accessor<string | undefined>): void {
+  const active = () => userId() !== undefined;
   const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal('graphql-channel-prewarm:v1');
   const [pass, setPass] = createSignal(0);
@@ -105,6 +109,24 @@ export function useChannelCache(active: Accessor<boolean>): void {
       resetChannelSync();
       resetPendingChannelPages();
     });
+  });
+
+  createEffect(() => {
+    const cacheHost = host();
+    const sender = userId();
+    if (!cacheHost || !sender) return;
+    holdUnqueuedSendsPage();
+    fireAndForget(
+      resendUnqueuedSends(cacheHost, sender, (send, createdAt) =>
+        fireAndForget(
+          sendChannelMessage(cacheHost, send, {
+            now: () => new Date(createdAt),
+          }),
+          'channel-local-sync'
+        )
+      ),
+      'channel-local-sync'
+    );
   });
 
   createEffect(() => {

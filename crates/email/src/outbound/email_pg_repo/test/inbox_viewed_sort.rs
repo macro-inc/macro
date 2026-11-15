@@ -106,6 +106,10 @@ async fn thread_rows_read(
     .fetch_one(&mut *transaction)
     .await?;
 
+    Ok(thread_rows_in_plan(&plan))
+}
+
+fn thread_rows_in_plan(plan: &serde_json::Value) -> u64 {
     let mut rows_read = 0;
     let mut nodes = vec![&plan[0]["Plan"]];
     while let Some(node) = nodes.pop() {
@@ -120,7 +124,7 @@ async fn thread_rows_read(
         }
     }
 
-    Ok(rows_read)
+    rows_read
 }
 
 #[sqlx::test(
@@ -268,5 +272,55 @@ async fn viewed_sorts_read_a_page_of_threads_not_the_inbox(
             "{sort} with no history read {rows_read} thread rows"
         );
     }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_inbox_viewed_sort"))
+)]
+async fn a_deep_recency_page_reads_a_page_of_threads_under_a_generic_plan(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query("ANALYZE email_threads, email_user_history")
+        .execute(&pool)
+        .await?;
+    let link_ids = viewed_sort_links()?;
+
+    // The cursor sits 200 rows into the two inboxes' 282.
+    let first_page = new_inbox_preview_cursor(
+        &pool,
+        &link_ids,
+        200,
+        &Query::new(None, SimpleSortMethod::UpdatedAt, ()),
+    )
+    .await?;
+    assert_eq!(first_page.len(), 200);
+    let cursor = &first_page[199];
+
+    // A reused statement can get a generic plan, built without the cursor's
+    // values. There the cursor has to be an index condition, or the scan
+    // starts at the top of each inbox and filters its way down to the cursor.
+    let mut transaction = pool.begin().await?;
+    sqlx::raw_sql(&format!(
+        "SET LOCAL enable_seqscan = off;
+         SET LOCAL plan_cache_mode = force_generic_plan;
+         PREPARE inbox_preview(uuid[], bigint, timestamptz, uuid, text) AS {INBOX_PREVIEW_SQL}"
+    ))
+    .execute(&mut *transaction)
+    .await?;
+    let plan: serde_json::Value = sqlx::query_scalar(&format!(
+        "EXPLAIN (ANALYZE, FORMAT JSON)
+         EXECUTE inbox_preview('{{{},{}}}', 5, '{}', '{}', 'updated_at')",
+        link_ids[0],
+        link_ids[1],
+        cursor.sort_ts.to_rfc3339(),
+        cursor.id,
+    ))
+    .fetch_one(&mut *transaction)
+    .await?;
+
+    let rows_read = thread_rows_in_plan(&plan);
+    assert!(rows_read <= 20, "read {rows_read} thread rows");
     Ok(())
 }
