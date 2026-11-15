@@ -42,6 +42,12 @@ releases fail on a Projects (classic) error before adding the label.
   is cancelled.
 - Draft PRs run too.
 - Other labels never start or cancel CI.
+- A stacked PR, whose base is another PR's branch, gets no run: `PR CI` only
+  listens to PRs into `main`, and the label stays on. Set its base to `main`
+  (`gh api -X PATCH repos/macro-inc/macro/pulls/<pr> -f base=main`), take the
+  label off and add it again, and set the base back when `CI gate` has its
+  result. The run tests the PR merged with `main`, so what `main` has gained
+  since the stack last merged it is part of what runs.
 - A label added within seconds of a push can reach GitHub before the push
   does. `Start` then fails within seconds and `CI gate` says to add the label
   again. To avoid it, add the label once `gh pr view <pr> --json headRefOid`
