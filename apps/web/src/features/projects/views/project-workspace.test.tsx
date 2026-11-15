@@ -31,9 +31,18 @@ vi.mock('@property/side-panel/properties/EntityPropertiesSection', () => ({
   EntityPropertiesSection: () => null,
 }));
 vi.mock('./add-project-tasks', () => ({ AddProjectTasks: () => null }));
-vi.mock('./project-tasks-list', () => ({ ProjectTasksList: () => null }));
+const tasksList = vi.hoisted(() => vi.fn());
+vi.mock('./project-tasks-list', () => ({
+  ProjectTasksList: (props: unknown) => {
+    tasksList(props);
+    return null;
+  },
+}));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  tasksList.mockClear();
+});
 
 const priority = (value: string) =>
   ({
@@ -93,4 +102,38 @@ it('keeps a focused pill through each fresh emission of the project source', () 
 
   expect(document.activeElement).toBe(pill);
   expect(pill.textContent).toBe('Priority: high');
+});
+
+it("hands the tasks section the page's project read", () => {
+  const context = {
+    createPropertyDefinitionsSource: () => ({
+      properties: () => [],
+      loading: () => false,
+      error: () => undefined,
+    }),
+  } as unknown as Parameters<typeof ProjectsProvider>[0]['context'];
+  const source = {
+    project: () => project,
+    properties: () => [],
+    loading: () => false,
+    error: () => undefined,
+    refresh: async () => {},
+  };
+  render(() => (
+    <ProjectsProvider context={context}>
+      <ProjectWorkspace
+        project={project}
+        source={source}
+        commands={{} as Parameters<typeof ProjectWorkspace>[0]['commands']}
+        section="tasks"
+        onOpenTask={() => true}
+        onCreateTask={() => {}}
+        discussion={null}
+        description={null}
+      />
+    </ProjectsProvider>
+  ));
+  expect(tasksList).toHaveBeenCalledWith(
+    expect.objectContaining({ projectId: 'launch', source })
+  );
 });

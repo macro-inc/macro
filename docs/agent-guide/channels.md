@@ -142,9 +142,9 @@ Chat offers separate **New channel** and **New direct message** actions with
 either sidebar layout. **New channel** and the global Create menu use this
 three-step flow:
 
-1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
-2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
-3. For a team channel, click `Create`. For a private channel, select `Private — only specific people` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears.
+1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused. Below the name, the optional `Channel picture` row offers `Upload`; a chosen image previews in its tile, and the row then offers `Change` and `Remove`. The tile opens the same file picker. Nothing is uploaded yet.
+2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility` as two cards, `Team` (selected by default) and `Private`, each with a radio and a description; a click anywhere on a card selects it. Team channels are always discoverable to teammates. The chosen picture replaces the channel icon beside the name in this step's and the next step's headers.
+3. For a team channel, click `Create`. For a private channel, select `Private` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears. A chosen picture then uploads in the background and shows `Channel picture updated` when it is saved; a failed upload shows an error toast and leaves the channel without a picture.
 4. Step 3 of 3 is an optional invite dialog for either channel type. The recipient combobox searches people and saved agents by name; it also accepts complete email addresses. Select a suggestion or press **Enter** to tokenize it. An unknown complete email appears as **Invite** with a paper airplane icon. Raw text left in the input is not submitted. Click `Add` when recipients are selected, or `Skip for now` to finish without invitees. Selected agents are added through the channel's agent membership endpoint. For team channels, `Automatically add teammates` defaults on; turning it off leaves the channel discoverable without automatically adding current or future teammates. The switch choice is applied when the invite dialog is finished or closed.
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
@@ -1343,6 +1343,11 @@ and funnel icons match desktop.
 Search uses the existing dock Search; Chat has no separate search button or
 in-list search field. Opening conversations retains latest-message navigation,
 top-level read marking, incoming-call actions, and pull-to-refresh.
+Already-resolved section members stay visible and openable while the remaining
+members load or refresh; the initial spinner appears only when no matching rows
+are available. A failed member lookup keeps available rows and offers Retry.
+For a large name-matched section, verify that selecting it, switching back to All,
+and refreshing membership keep the section pills and app navigation responsive.
 
 Long-press a custom section pill to open its settings without changing the selected
 section. A short tap selects it; scrolling cancels the hold. There is no separate
@@ -1709,9 +1714,8 @@ conversation still refreshes its unread notifications. The split's own title
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and
-transcripts in this channel; queries shorter than 3 characters are not sent.
+transcripts in this channel, from the first character.
 Empty copy: `No calls in this channel`. No matches: `No results for "…"`.
-Shorter queries: `Keep typing to search`.
 
 Leaving from the channel's call controls switches to `Messages` immediately.
 Disconnect and server cleanup continue after that switch; slow or failed RTC
@@ -1814,8 +1818,10 @@ iPhone run with the app's native memory diagnostics.
 Channels and group chats can have a custom picture. Anyone who can `Rename` a
 channel can also set its picture: any active participant of a named channel,
 from the channel's rail context menu, the Chat title ellipsis, or the split's
-own title `...` menu. Direct messages can be neither renamed nor given a
-picture. Choose `Set channel picture` to add or replace a picture. Select a PNG,
+own title `...` menu. The create channel dialog also offers one on its first
+step (see [Create a channel](#create-a-channel)). Direct messages can be neither
+renamed nor given a picture. Choose `Set channel picture` to add or replace a
+picture. Select a PNG,
 JPG, WebP, or GIF up to 16 MB. The upload must finish before the picture is
 saved; the server accepts only supported images uploaded by the person setting
 the picture. An error leaves the previous picture in place. When a picture is

@@ -696,8 +696,12 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Home's agent input also restores unsent text, under a
-  separate key from the Agents page composer. Check the Home path explicitly:
+  when switching channels. The phone Agents list's composer and the desktop
+  list views' AI input hold that same draft and attachments, so an edit in one
+  shows in the other at once: type on the composer page, go Back to the list,
+  edit there, and return; neither should show an older version. Home's agent
+  input also restores unsent text, under a separate key from the Agents page
+  composer. Check the Home path explicitly:
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
@@ -939,19 +943,23 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
-The draft runs in an ordinary hidden agent session of the in-process Macro
-agent, as the person, with its usual tools, on the model their Ask AI steps
-use, billed as agent session usage. It never appears in Home or the Agents list, notifies nobody,
-and is deleted when the draft comes back. It finds the channels, people,
-folders, labels, tags and agents the description names itself, paging and
-refining searches, and leaves out a name that matches nothing or several
-items, so the review shows the normal picker for it. It creates only what the
-routine must reference (such as a database "a new database called Bug log"
-asks for) and never does the routine's own work now ("every Monday make a
-task" makes no task). It hands the routine back by checking it with
-`macro.routines.check` (`POST /scheduled-actions/check`: saving's checks,
-including the type check of its code steps together, with nothing saved),
-naming what it created, and fixes what the check reports. The last check is
+First a fast call, billed as the person's automation usage, names the
+channels, people, folders, labels, tags, agents and other items the
+description refers to; document storage looks those names up as the person
+(`POST /search/names`) and settles each on the one item with that name, or
+leaves out a name that matches nothing or several items, so the review shows
+the normal picker for it. The routine is then written in a hidden agent
+session of the in-process Macro agent, as the person, on the model their Ask
+AI steps use, billed as agent session usage. It never appears in Home or the
+Agents list, notifies nobody, and is deleted when the draft comes back. It is
+given the items found and the SDK reference it needs, so it searches for
+nothing and writes one program. It creates only what the routine must
+reference (such as a database "a new database called Bug log" asks for) and
+never does the routine's own work now ("every Monday make a task" makes no
+task). It hands the routine back by checking it with `macro.routines.check`
+(`POST /scheduled-actions/check`: saving's checks, including the type check
+of its code steps together, with nothing saved), naming what it created, and
+fixes what the check reports. The last passing check (else the last check) is
 the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
@@ -962,19 +970,24 @@ message in the dialog instead of "Couldn’t draft that routine".
 
 With `enable-routine-background-drafts` (PostHog, on in development builds),
 Draft it starts the same draft in the background instead
-(`POST /scheduled-actions/draft-jobs`), answered once its session is admitted.
-The box gives way to the request, three milestones (**Read your request** or
-**Found what it names**, **Writing the steps**, **Check that it runs**, with
-**Fixing a problem the check found** while it fixes one) and **Cancel draft**,
-which puts the request back in the box. **Close this anytime**: the draft
+(`POST /scheduled-actions/draft-jobs`), answered once its AI usage is admitted.
+The box gives way to the request, three milestones, each with a detail line
+under it, and **Cancel draft**: **Looking up what it names**, then what it
+found by name (**Found #engineering and your Finance label**, with a line
+for any name left for the person, such as "No channel is called #marketing,
+so you'll pick one"); **Writing the steps**, then **Wrote 2 steps** with
+their titles; **Checking that it runs**, with **Fixing a problem the check
+found** while it fixes one. **Cancel draft** puts the request back in the
+box. **Close this anytime**: the draft
 carries on. While New routine is closed, a **Drafting routine** pill sits at
 the bottom right (above the dock on phones) with the current stage, and opens
 New routine. A finished draft gets a toast: **Routine draft ready** with
 **Review**, or **Couldn’t draft that routine** with the reason and **Edit
 request**, which reopens New routine with the request back in the box and the
 reason under it. A ready draft waits until it is opened or discarded, also
-across reloads and devices: New routine shows **Your draft is ready** with
-**Discard** and **Review**, and closing its toast only closes the toast.
+across reloads and devices, and one left unopened for 7 days is deleted. While
+one waits, New routine shows **Your draft is ready** with **Discard** and
+**Review**, and closing its toast only closes the toast.
 Reloading mid-draft brings the pill back. Off, the dialog waits on the
 blocking request as before; older clients keep using it.
 

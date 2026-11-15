@@ -404,13 +404,20 @@ name = "agent_credentials"
 version = "0.1.0"
 dependencies = [
  "constant_time_eq 0.3.1",
+ "feature_flags",
  "hex",
  "lazy-regex",
+ "macro_db_migrator",
+ "macro_user_id",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "user_api_key",
  "workspace-hack",
  "zeroize",
@@ -575,6 +582,7 @@ dependencies = [
  "genai_telemetry",
  "github",
  "harness_id",
+ "harnesses",
  "jev",
  "lexical_client",
  "macro_authorization",
@@ -689,6 +697,7 @@ dependencies = [
  "databases",
  "databases_sql",
  "document_storage_service_client",
+ "document_sub_type",
  "documents",
  "doppler-config",
  "email",
@@ -758,6 +767,8 @@ dependencies = [
  "models_ai_projection",
  "models_dcs",
  "models_permissions",
+ "models_search",
+ "nom 8.0.0",
  "non_empty",
  "notification",
  "onboarding",
@@ -817,6 +828,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -1301,6 +1313,8 @@ dependencies = [
  "forms",
  "frecency",
  "github_pull_requests",
+ "harnesses",
+ "hosted_runtimes",
  "image_generation",
  "import",
  "import_jira",
@@ -2294,6 +2308,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_credentials",
  "agent_git",
  "ai_billing",
  "ai_usage",
@@ -2341,6 +2356,7 @@ dependencies = [
  "github",
  "github_pull_requests",
  "gtm_invite",
+ "harnesses",
  "hmac 0.12.1",
  "hosted_runtimes",
  "http-body-util",
@@ -2369,7 +2385,6 @@ dependencies = [
  "maud",
  "mention_utils",
  "messages",
- "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",
  "model",
@@ -2402,6 +2417,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "static_file_service_client",
+ "stripe_inbox",
  "strum 0.27.2",
  "system_status",
  "team_agents",
@@ -3677,6 +3693,7 @@ dependencies = [
  "entity_access",
  "entity_registry",
  "harness_id",
+ "harnesses",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
@@ -4054,6 +4071,7 @@ dependencies = [
  "macro_aws_config",
  "macro_config",
  "macro_cors",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -5604,6 +5622,7 @@ dependencies = [
  "opentelemetry",
  "properties",
  "rdkafka",
+ "readonly_pool",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -6807,6 +6826,7 @@ dependencies = [
  "graphql_soup",
  "harnesses",
  "hex",
+ "hosted_runtimes",
  "http-body-util",
  "hyper 1.9.0",
  "hyper-util",
@@ -7974,6 +7994,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -9422,7 +9443,6 @@ dependencies = [
  "rootcause",
  "serde",
  "tokio",
- "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -9570,6 +9590,7 @@ dependencies = [
  "soup",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -9628,6 +9649,7 @@ dependencies = [
  "model-entity",
  "rootcause",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -10378,6 +10400,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -11313,6 +11336,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "http-body-util",
+ "log",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -11337,6 +11361,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "unicode-segmentation",
  "utoipa",
  "uuid",
@@ -12948,6 +12973,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "http 1.4.0",
+ "nom 8.0.0",
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry_sdk",
@@ -18321,6 +18347,7 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_tower_layers",
  "models_search",
  "reqwest 0.13.4",
  "workspace-hack",
@@ -20112,6 +20139,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
 dependencies = [
  "vte 0.10.1",
+]
+
+[[package]]
+name = "stripe_inbox"
+version = "0.1.0"
+dependencies = [
+ "async-stripe",
+ "chrono",
+ "futures",
+ "macro_db_migrator",
+ "macro_user_id",
+ "opentelemetry",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-opentelemetry",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -22883,6 +22935,7 @@ dependencies = [
  "macro_env",
  "macro_service_urls",
  "nom 8.0.0",
+ "reqwest 0.13.4",
  "rootcause",
  "rustls",
  "serde",

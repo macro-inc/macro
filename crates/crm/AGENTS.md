@@ -9,6 +9,12 @@ tools/HTTP/GraphQL surfaces over them.
 ## Start here
 
 - `src/domain/service.rs`, `src/domain/pipelines.rs`: core use cases.
+- `src/domain/pipeline_commercial.rs`: protected Outcome and amount/currency
+  identities, insert defaults and write validation, for pipelines that track a
+  record; `apply_ops` runs it before stage-requirement validation. A generic
+  pipeline, or one from a writer older than the migration, has no such fields.
+  See the [outcome/currency design](../../docs/design/crm-outcome-currency.md)
+  for migration assumptions.
 - `src/domain/pipelines/requirements.rs`: stage-entry rules keyed by column and
   option IDs. `apply_ops` validates every pipeline write under the pipeline write
   guard; agent/CSV workflows use the same service. Deletions cascade rules.
@@ -73,9 +79,18 @@ tools/HTTP/GraphQL surfaces over them.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
-  column. Don't pass one to `referencing_rows`: its SQL reads primary cells as
-  reference arrays. Don't add `ON DELETE` actions touching the pipeline row: they
-  wait on the row lock the write guard holds, and the request hangs.
+  column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
+  actions touching the pipeline row: they wait on the row lock the write guard
+  holds, and the request hangs.
+- The Pipelines card (`entries`) starts from the records: `referencing_rows`
+  reaches primary cells through `idx_ep_database_row_references_gin` (keep its
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
+  covers every pipeline while `storage_tables_rows` reads their columns and
+  cells. Never start it from the viewer's pipelines or lock them one at a time:
+  that cost grew with every pipeline the viewer can see.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
@@ -86,6 +101,20 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+  `activity_property_edges` returns the items whose Companies or Contacts
+  property names a record of the same scope: it reads only the scope's visible
+  company and contact ids and probes each property's partial GIN index once
+  per id, so its cost follows the scope's records (about 2.6 us and 2.4
+  buffers each warm: 38 ms for 4k companies and 10k contacts), never other
+  teams' property rows. Keep each probe a fenced lateral: as a plain join, a
+  selective kind filter flipped the plan into testing every record against
+  every property row (1.8 s). Revisit if a team's records near 40k (100 ms).
+  Keep its visibility rules identical to the Activity arm's. It reads the
+  pool `with_activity_edges_replica` names, the replica for DSS's list Soup,
+  so it lags like the rest of a list: a record hidden or a member removed
+  moments ago can still match, and a record just added may not yet. Each item
+  still passes its own source's access check. Every other CRM read and write
+  stays on the primary.
 - An archived call links to the companies whose domain a participant's address
   is at, and separately to every visible contact of the team holding the
   address as any of its addresses, with or without a company, together with
