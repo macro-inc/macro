@@ -1,0 +1,21 @@
+apps/web/src/features/settings/route-views.test.tsx
+  s_762b5b6ea59f2c::t_d4eeb16c4ef2f4 1-18
+apps/web/src/features/settings/route-views.tsx
+  s_762b5b6ea59f2c::t_7ef8721434a1ff 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "759377adfee6584839a63d19d385c36bc73ac8dd",
+  "prompts": {},
+  "sessions": {
+    "s_762b5b6ea59f2c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ae75195-de9b-48bd-9ed9-ab9f2c76c6b3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
