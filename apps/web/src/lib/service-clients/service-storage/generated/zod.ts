@@ -8388,11 +8388,11 @@ export const getContactByEmailResponse = zod
   .describe('Response from looking up a CRM contact by email.');
 
 /**
- * @summary Fetch a single CRM contact by id. Access is enforced by
-[`CrmContactAccessLevelExtractor`]: the user must be on the team that
-owns the contact's parent company, and hidden contacts are invisible
-to plain members. Admin/owner callers see hidden contacts so they can
-render the right unhide UI.
+ * @summary Fetch a single CRM contact by id, with its company's name and
+visibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:
+the user must be on the team that owns the contact, and hidden
+contacts are invisible to plain members. Admin/owner callers see
+hidden contacts so they can render the right unhide UI.
  */
 export const getContactParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact to fetch'),
@@ -8461,6 +8461,42 @@ export const getContactResponse = zod
   })
   .describe(
     'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  )
+  .and(
+    zod.object({
+      company: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              domain: zod
+                .string()
+                .nullish()
+                .describe(
+                  "The company's oldest domain, which clients show when it has no\nname."
+                ),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden. Only admin\/owner callers can see a\nhidden company.'
+                ),
+              id: zod
+                .uuid()
+                .describe(
+                  "The id of the company; equal to the contact's `companyId`."
+                ),
+              name: zod
+                .string()
+                .nullish()
+                .describe("The company's display name, if it has one."),
+            })
+            .describe("The name and visibility of a contact's company."),
+        ])
+        .optional(),
+    })
+  )
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/contacts\/{contact_id}`: the\ncontact, with what its page shows of its company.'
   );
 
 /**
@@ -16537,6 +16573,82 @@ export const getCrmPipelineViewPositionsResponse = zod.array(
 );
 
 /**
+ * @summary Title many CRM company and contact chips at once. Each record answers as
+its own read (`GET /crm/companies/{company_id}`,
+`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,
+or that does not exist, is left out of the response.
+ */
+export const previewCrmRecordsBody = zod
+  .object({
+    companyIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Companies to preview, at most 100.'),
+    contactIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Contacts to preview, at most 100.'),
+  })
+  .describe('The CRM records whose chips to title.');
+
+export const previewCrmRecordsResponse = zod
+  .object({
+    companies: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('The company.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe(
+                "The team's name override, else the primary domain's directory name."
+              ),
+            primaryDomain: zod
+              .string()
+              .nullish()
+              .describe(
+                "The company's first domain, which titles a company with no name."
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe(
+                "The company's last interaction, as the company read's `updatedAt`."
+              ),
+          })
+          .describe(
+            'What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.'
+          )
+      )
+      .describe('Company previews, in no particular order.'),
+    contacts: zod
+      .array(
+        zod
+          .object({
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email, which titles a contact with no name."
+              ),
+            id: zod.uuid().describe('The contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe("The contact's display name."),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record last changed.'),
+          })
+          .describe('What a contact chip shows.')
+      )
+      .describe('Contact previews, in no particular order.'),
+  })
+  .describe(
+    'The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.'
+  );
+
+/**
  * @summary Read the caller's team CRM configuration. Any team member may read;
 teams without a settings row get the defaults.
  */
@@ -16875,11 +16987,17 @@ export const listDatabasesResponseItem = zod
 export const listDatabasesResponse = zod.array(listDatabasesResponseItem);
 
 /**
- * @summary Create a database owned by the caller; its first table, "Table 1", holds a
-"Name" text column.
+ * @summary Create a database owned by the caller; its first table, "Table 1" unless
+`firstTable` names it, holds a "Name" text column.
  */
 export const createDatabaseBody = zod
   .object({
+    firstTable: zod
+      .string()
+      .nullish()
+      .describe(
+        'The first table\'s display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\".'
+      ),
     name: zod.string().describe('Display name.'),
   })
   .describe('Request body for creating a database.');

@@ -66,6 +66,11 @@ From `infra/`:
   abandoned` (authentication-service) and `computer needs an operator`
   (agent-harness-service) that `crates/hosted_runtimes` writes; its header is
   the message and field contract. Renaming either message silences its monitor.
+- `monitors/stripe-inbox.ts` reads the logs `stripe inbox cursor
+  dead-lettered`, `stripe inbox dead cursors`, `stripe inbox backlog` and
+  `stripe audit mismatch` that
+  `crates/stripe_inbox` writes from authentication-service; its header is the
+  message and field contract.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
   `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
