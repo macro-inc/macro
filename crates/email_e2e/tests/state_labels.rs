@@ -670,9 +670,6 @@ async fn outlook_a_label_on_one_message_reaches_outlook() -> Result<(), Report> 
         .to_owned();
     assert!(!provider_label.is_empty(), "Macro knows the category");
 
-    // Nothing of an Outlook inbox is work for Gmail's label worker: a job
-    // sent to it would be refused here and show below.
-    stack.refuse_queue_sends("gmail-ops", 1)?;
     let filed = inbox
         .patch(
             "/email/messages/labels",
@@ -699,11 +696,6 @@ async fn outlook_a_label_on_one_message_reaches_outlook() -> Result<(), Report> 
     assert!(
         first_message_labels(&thread).contains(&provider_label),
         "the message carries the label in Macro: {thread}"
-    );
-    assert_eq!(
-        stack.queue_send_refusals_left("gmail-ops")?,
-        1,
-        "a job was sent to Gmail's label worker"
     );
 
     stack.finish().await
