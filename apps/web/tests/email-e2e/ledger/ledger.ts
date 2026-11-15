@@ -4,6 +4,7 @@
 import { existsSync } from 'node:fs';
 import {
   type DerivedOperation,
+  EMAIL_FILES_ELSEWHERE,
   emailOwned,
   emailOwnedFile,
   graphqlOperations,
@@ -436,11 +437,13 @@ function difference(
 const NETWORK_LIST = 'tests/email-e2e/ledger/manifest/network.ts';
 
 /**
- * The network list against the source, for email's own operations only
- * (`emailOwned`): one the source defines that is not listed, and one listed
- * that the source no longer defines. An operation of another part of the
- * app is no difference, listed or not, so that adding, renaming or removing
- * one there cannot fail this check.
+ * The network list against the source, for email's own operations only:
+ * one the source defines as email's (`emailOwned`) that is not listed, one
+ * listed as email's (`scope: 'email'`) that the source no longer defines,
+ * and one whose scope in the list is not what the source says. An
+ * operation of another part of the app is no difference, listed (as
+ * `shared`) or not, so that adding, renaming or removing one there cannot
+ * fail this check.
  */
 export function networkDrift(
   check: string,
@@ -462,9 +465,9 @@ export function networkDrift(
       items: missing,
     });
   }
-  const source = new Set(defined.map((each) => each.id));
+  const source = new Map(defined.map((each) => [each.id, each]));
   const stale = listed
-    .filter((each) => emailOwned(each) && !source.has(each.id))
+    .filter((each) => each.scope === 'email' && !source.has(each.id))
     .map(
       (each) =>
         `${each.id}: no longer in the source: remove or rename its line in ${list} in ${NETWORK_LIST}`
@@ -473,6 +476,21 @@ export function networkDrift(
     drift.push({
       check: `${check}: email's in the network list, gone from the source`,
       items: stale,
+    });
+  }
+  const scoped = listed.flatMap((each) => {
+    const found = source.get(each.id);
+    if (!found) return [];
+    const scope = emailOwned(found) ? 'email' : 'shared';
+    if (scope === each.scope) return [];
+    return [
+      `${each.id} (${found.file}): ${scope === 'email' ? "is email's own" : "is not email's own"}: give its line \`scope: '${scope}'\` in ${list} in ${NETWORK_LIST}`,
+    ];
+  });
+  if (scoped.length) {
+    drift.push({
+      check: `${check}: listed under the wrong scope`,
+      items: scoped,
     });
   }
   return drift;
@@ -502,7 +520,11 @@ export function goneSources(
       for (const file of row.source) {
         if (exists(file)) continue;
         const item = `${row.id}: ${file} is gone: name the file that holds it now in \`source\` of ${row.id} in ${where}`;
-        (emailOwnedFile(file) ? own : shared).push(item);
+        if (EMAIL_FILES_ELSEWHERE.includes(file)) {
+          own.push(
+            `${item}, and in EMAIL_FILES_ELSEWHERE in tests/email-e2e/ledger/derive.ts`
+          );
+        } else (emailOwnedFile(file) ? own : shared).push(item);
       }
     }
   }

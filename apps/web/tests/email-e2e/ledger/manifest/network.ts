@@ -1,8 +1,9 @@
-// The requests the web app's email code can make. The first two lists hold
-// every operation of email's own that the source defines (`emailOwned` in
-// `../derive.ts`; the check fails when the two differ) and the operations
-// the app makes everywhere, email included (`shared`), which are kept by
-// hand; the third is kept by hand. What no email code makes is not listed.
+// The requests the web app's email pages can make. The first two lists hold
+// every operation of email's own that the source defines (`scope: 'email'`,
+// `emailOwned` in `../derive.ts`; the check fails when the two differ) and
+// the operations of other parts of the app that an email page makes too
+// (`shared`), which are kept by hand; the third is kept by hand. What no
+// email page makes is not listed.
 
 import type { Operation } from './types';
 
@@ -132,14 +133,14 @@ export const GRAPHQL: readonly Operation[] = [
   { id: 'CancelEmailSend', kind: 'mutation', scope: 'email' },
   { id: 'ClearNotificationInbox', kind: 'mutation', scope: 'shared' },
   { id: 'ContactDirectoryBackfill', kind: 'query', scope: 'shared' },
-  { id: 'ContactDirectoryByEmails', kind: 'query', scope: 'email' },
+  { id: 'ContactDirectoryByEmails', kind: 'query', scope: 'shared' },
   { id: 'ContactDirectoryByUserIds', kind: 'query', scope: 'shared' },
   { id: 'ContactDirectoryIdentity', kind: 'query', scope: 'shared' },
   { id: 'ContactDirectoryPage', kind: 'query', scope: 'shared' },
-  { id: 'CreateSavedView', kind: 'mutation', scope: 'email' },
+  { id: 'CreateSavedView', kind: 'mutation', scope: 'shared' },
   { id: 'DeleteEmailDraft', kind: 'mutation', scope: 'email' },
   { id: 'DeleteEntityProperty', kind: 'mutation', scope: 'shared' },
-  { id: 'DeleteSavedView', kind: 'mutation', scope: 'email' },
+  { id: 'DeleteSavedView', kind: 'mutation', scope: 'shared' },
   { id: 'EmailFocus', kind: 'query', scope: 'email' },
   { id: 'EmailSendAttempt', kind: 'query', scope: 'email' },
   { id: 'EmailThreadPage', kind: 'query', scope: 'email' },
@@ -168,10 +169,10 @@ export const GRAPHQL: readonly Operation[] = [
   { id: 'NotificationUpdates', kind: 'subscription', scope: 'shared' },
   { id: 'PendingEmailSends', kind: 'query', scope: 'email' },
   { id: 'ReorderFavorites', kind: 'mutation', scope: 'shared' },
-  { id: 'ReorderSavedViews', kind: 'mutation', scope: 'email' },
+  { id: 'ReorderSavedViews', kind: 'mutation', scope: 'shared' },
   { id: 'RespondToCalendarEvent', kind: 'mutation', scope: 'shared' },
-  { id: 'SavedView', kind: 'query', scope: 'email' },
-  { id: 'SavedViews', kind: 'query', scope: 'email' },
+  { id: 'SavedView', kind: 'query', scope: 'shared' },
+  { id: 'SavedViews', kind: 'query', scope: 'shared' },
   { id: 'SaveEmailDraft', kind: 'mutation', scope: 'email' },
   { id: 'SendEmailMessage', kind: 'mutation', scope: 'email' },
   { id: 'SetEmailThreadArchived', kind: 'mutation', scope: 'email' },
@@ -179,19 +180,23 @@ export const GRAPHQL: readonly Operation[] = [
   { id: 'SetEntityFavorite', kind: 'mutation', scope: 'shared' },
   { id: 'SetEntityProperty', kind: 'mutation', scope: 'shared' },
   { id: 'SetFavorite', kind: 'mutation', scope: 'shared' },
-  { id: 'Soup', kind: 'query', scope: 'email' },
+  { id: 'Soup', kind: 'query', scope: 'shared' },
   { id: 'SoupBackfill', kind: 'query', scope: 'shared' },
   { id: 'SoupMailBackfill', kind: 'query', scope: 'email' },
   { id: 'SoupMembership', kind: 'query', scope: 'shared' },
   { id: 'SoupNotifications', kind: 'query', scope: 'shared' },
   { id: 'SoupSharedMailBackfill', kind: 'query', scope: 'email' },
-  { id: 'SoupUpdates', kind: 'subscription', scope: 'email' },
+  { id: 'SoupUpdates', kind: 'subscription', scope: 'shared' },
   { id: 'UndoNotificationInboxRowsDone', kind: 'mutation', scope: 'shared' },
   { id: 'UpdateEntityPropertyOptions', kind: 'mutation', scope: 'shared' },
   { id: 'UpdateEntitySharePolicies', kind: 'mutation', scope: 'shared' },
   { id: 'UpdateNotifications', kind: 'mutation', scope: 'shared' },
   { id: 'UpdateNotificationsForEntity', kind: 'mutation', scope: 'shared' },
-  { id: 'UpdateSavedView', kind: 'mutation', scope: 'email' },
+  { id: 'UpdateSavedView', kind: 'mutation', scope: 'shared' },
+  { id: 'CalendarChanges', kind: 'query', scope: 'shared' },
+  { id: 'CalendarOccurrences', kind: 'query', scope: 'shared' },
+  { id: 'Calendars', kind: 'query', scope: 'shared' },
+  { id: 'EntityActivity', kind: 'query', scope: 'shared' },
 ];
 
 /** What email surfaces ask of other services, as the front sees the path. */

@@ -417,12 +417,18 @@ describe('networkDrift', () => {
         'GraphQL operations',
         'GRAPHQL',
         [
-          // Soup is listed as shared and Calendars as other: both gone.
+          // Soup and Calendars are listed as shared: both gone.
           ...defined.filter((each) => each.id === 'SaveEmailDraft'),
           {
             id: 'NotificationInboxClears',
             kind: 'query',
             file: `${GRAPHQL}/notification-inbox.graphql`,
+          },
+          // Its name alone does not make it email's.
+          {
+            id: 'InviteByEmail',
+            kind: 'mutation',
+            file: `${GRAPHQL}/team.graphql`,
           },
         ],
         listed
@@ -513,6 +519,41 @@ describe('networkDrift', () => {
   });
 });
 
+describe('networkDrift on scopes', () => {
+  const GRAPHQL = 'src/lib/service-clients/service-storage/graphql';
+
+  // When this fails, a line can say an operation is email's while the
+  // check does not hold it, or the reverse.
+  it('fails when a line has the scope the source does not give it', () => {
+    expect(
+      networkDrift(
+        'GraphQL operations',
+        'GRAPHQL',
+        [
+          { id: 'Soup', kind: 'query', file: `${GRAPHQL}/soup.graphql` },
+          {
+            id: 'MailAccounts',
+            kind: 'query',
+            file: `${GRAPHQL}/soup.graphql`,
+          },
+        ],
+        [
+          { id: 'Soup', kind: 'query', scope: 'email' },
+          { id: 'MailAccounts', kind: 'query', scope: 'shared' },
+        ]
+      )
+    ).toEqual([
+      {
+        check: 'GraphQL operations: listed under the wrong scope',
+        items: [
+          `Soup (${GRAPHQL}/soup.graphql): is not email's own: give its line \`scope: 'shared'\` in GRAPHQL in tests/email-e2e/ledger/manifest/network.ts`,
+          `MailAccounts (${GRAPHQL}/soup.graphql): is email's own: give its line \`scope: 'email'\` in GRAPHQL in tests/email-e2e/ledger/manifest/network.ts`,
+        ],
+      },
+    ]);
+  });
+});
+
 describe('goneSources', () => {
   const row = (id: string, source: string[]) => ({
     id,
@@ -557,7 +598,7 @@ describe('goneSources', () => {
     expect(drift[0].reported).toBeUndefined();
     expect(drift[0].items).toEqual([
       'AL-001: src/features/email-view/EmailView.tsx is gone: name the file that holds it now in `source` of AL-001 in tests/email-e2e/ledger/manifest/list.ts',
-      'AL-002: src/features/settings/Email.tsx is gone: name the file that holds it now in `source` of AL-002 in tests/email-e2e/ledger/manifest/list.ts',
+      'AL-002: src/features/settings/Email.tsx is gone: name the file that holds it now in `source` of AL-002 in tests/email-e2e/ledger/manifest/list.ts, and in EMAIL_FILES_ELSEWHERE in tests/email-e2e/ledger/derive.ts',
     ]);
   });
 });

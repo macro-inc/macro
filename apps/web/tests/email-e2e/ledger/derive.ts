@@ -57,7 +57,6 @@ export const EMAIL_FILES_ELSEWHERE = [
   'src/lib/core/component/AI/component/tool/GetThread.tsx',
   'src/lib/core/component/AI/component/tool/ListInboxes.tsx',
   'src/lib/core/component/AI/component/tool/ListLabels.tsx',
-  'src/lib/core/component/AI/component/tool/ReadThread.tsx',
   'src/lib/core/component/AI/component/tool/SendConfirmedEmail.tsx',
   'src/lib/core/component/AI/component/tool/SendEmail.tsx',
   'src/lib/core/component/AI/component/tool/UpdateThreadLabels.tsx',
@@ -166,26 +165,28 @@ export type DerivedOperation = {
   file: string;
 };
 
+/** The GraphQL operations of email's own outside the `email-*.graphql` documents. */
+export const EMAIL_OPERATIONS_ELSEWHERE = [
+  'MailAccounts',
+  'SoupMailBackfill',
+  'SoupSharedMailBackfill',
+];
+
 /**
- * Whether an operation is email's own, so that the manifest and the source
- * have to agree on it. A GraphQL operation is when its name says so (`Email`
- * or `Mail`) or its document does (`email-*.graphql`); a call of the email
- * service's client is unless it goes to the calendar. Every other operation
- * can come and go with no change to email, and the check leaves it alone.
- * The name is what a line of the manifest still has once the operation is
- * gone from the source, so the rule can be asked of both.
+ * Whether an operation the source defines is email's own, so that the
+ * manifest has to list it. A GraphQL operation is when it is in an
+ * `email-*.graphql` document or in `EMAIL_OPERATIONS_ELSEWHERE`; a call of
+ * the email service's client is unless it goes to the calendar. Every
+ * other operation can come and go with no change to email, whatever its
+ * name, and the check leaves it alone.
  */
-export function emailOwned(operation: {
-  id: string;
-  kind: DerivedOperation['kind'];
-  file?: string;
-}): boolean {
+export function emailOwned(operation: DerivedOperation): boolean {
   if (operation.kind === 'rest') {
     return !/^[A-Z]+ \/calendar(\/|$)/.test(operation.id);
   }
   return (
-    /Email|Mail/.test(operation.id) ||
-    /(^|\/)email-[^/]*\.graphql$/.test(operation.file ?? '')
+    /(^|\/)email-[^/]*\.graphql$/.test(operation.file) ||
+    EMAIL_OPERATIONS_ELSEWHERE.includes(operation.id)
   );
 }
 

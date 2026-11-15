@@ -80,8 +80,9 @@ export type Operation = {
   id: string;
   kind: 'rest' | 'query' | 'mutation' | 'subscription';
   /**
-   * `email`: email code makes it. `shared`: the app makes it everywhere,
-   * email included. What no email code makes is not listed.
+   * `email`: email's own, held to the source (`emailOwned` in
+   * `../derive.ts`). `shared`: of another part of the app and made by an
+   * email page too; kept by hand. What no email page makes is not listed.
    */
   scope: 'email' | 'shared';
   /**
