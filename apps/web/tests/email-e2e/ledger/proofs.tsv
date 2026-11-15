@@ -150,6 +150,7 @@ AL-008	pressing Escape does not go back to the Signal tab
 AL-009	The list's z hotkey handler in use-email-view-hotkeys.ts consumes the key and returns before calling undo.undo.
 AL-010	The desktop sidebar's New email button (SidebarCreateButton under ViewSidebar.Primary in EmailSidebar.tsx) no longer calls composeEmail; the touch sidebar's button is unchanged.
 AL-011	the header's New email opens no new email
+AL-013	The / hotkey's handler in use-email-search-hotkeys.ts returns before focusing the list's search field.
 AL-014	pressing / beside an open thread leaves the thread open instead of showing the list
 AL-015	pressing Ctrl+F does not focus the search field
 AL-017	The list header search field's Escape handler (onEscape in ListHeader.tsx) returns before closing the search.
@@ -169,6 +170,7 @@ AL-030	the phone's Open email filters opens no drawer
 AL-031	a facet checkbox in the phone's filter drawer filters nothing
 AL-032	the phone filter drawer's Clear all leaves the filters on
 AL-033	The Clear filters button on the filtered empty list in EmailEmptyState.tsx gets a handler that does nothing instead of clearFilters.
+AL-034	The "Sort Focus" menu in EmailControls.tsx ignores the order picked instead of calling setFocusSort.
 AL-035	The header's reading pane button in EmailControls.tsx calls a setReadingPane that does nothing, so the button no longer turns the pane on; the reading-pane hotkey is left alone.
 AL-036	pressing Shift+V does not hide or show the reading pane
 AL-037	a list width dragged at the divider is shown but not kept
@@ -202,6 +204,7 @@ AL-066	The mark-unread hotkey (u) handler in use-entity-action-hotkeys.ts consum
 AL-067	The mark-read hotkey (Shift+U) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the mark-read action.
 AL-068	The email-selection Trash hotkey (#, Delete, Backspace) registration in use-entity-action-hotkeys.ts consumes the key instead of calling runDelete; the non-email delete registration is left alone.
 AL-069	the discard keys on a draft row do not discard the draft
+AL-071	The list's h hotkey handler (Remind me in use-entity-action-hotkeys.ts) returns before opening the reminder menu.
 AL-072	The copy-link hotkey (Mod+Shift+C) handler in use-entity-action-hotkeys.ts consumes the key and returns before running the copy-link action.
 AL-073	The list's t hotkey handler (Assign tags in use-entity-action-hotkeys.ts) returns before opening the tag picker.
 AL-075	picking Share in the command menu opens no Share dialog
@@ -628,6 +631,7 @@ STC-016	not shown as the row says (Unable to find linked email account. Select a
 STC-017	The subject-length hint in subject-limit.ts says "Subject is too long." instead of naming the subject's length and Outlook's limit.
 STC-018	The reply composer's notice for a person mentioned in the body, "<email> added to CC", reads "<email> copied" instead, in reply-composer.ts (the reply editor's handleUserMention; the new-message composer's toast in editor-adapter.ts is left alone).
 STC-020	the title of the notice of a mentioned document that could not be made viewable is changed in src/features/email-compose/make-attachment-public.ts
+STC-021	The oversize offer dialog's title reads "Attachments too large" instead of "Attachments exceed N MB" in attachment-links.ts.
 STC-022	not shown as the row says (You're offline — Attachments can't be added while you're offline. Reconnect and try again.): its rendering is switched off or changed in src/features/email-compose/primitives/attachment-persistence.ts
 STC-023	The forward's cloud-attachment notice loses its opening words "Linked cloud attachments are available in the original Outlook" in reply-input.tsx.
 STC-024	The Undo toast of an online send reads "Delivering…" instead of "Sending…" in queued-send-notice.ts (offerUndo, both the first offer and the one renewed on acceptance).
@@ -784,6 +788,7 @@ STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-003	The failed list's message "Email couldn’t be loaded." is emptied in EmailList.tsx; its Try again button stays.
 STL-004	not shown as the row says (Connect your email + button "Connect email"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-007	The no-match state's title (No results for "<query>") is emptied in EmailEmptyState.tsx.
 STL-008	The filtered empty list's title "No email matching the filters" is emptied in EmailEmptyState.tsx.
 STL-009	not shown as the row says (Inbox zero): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-010	the empty list's title "No noise" is changed in src/features/email-view/components/EmailEmptyState.tsx
@@ -957,6 +962,7 @@ STL-922	The Inbox view tabs show Signal as selected while Noise is open in Email
 STL-923	The same break as STL-904: the Sent tab asks the service for the drafts view instead of the sent view (`emailViewForTab` in email-query.ts), and the Sent tab across every linked inbox is chosen through that one mapping.
 STL-924	The mail list's row selection in use-email-query.ts drops every row on the Trash tab, so Trash does not list the trashed thread.
 STL-925	The Shared tab's slice in email-query.ts asks for the user's own mail (shared excluded) instead of the threads shared with them, so Shared does not list the thread another person shared.
+STL-926	The Focus list's Importance order (`selectFocusEmails` in use-focus-email-source.ts) sorts by recency instead, so picking Importance leaves the list newest first.
 STL-927	The mail list (`listEntities` in use-email-query.ts) keeps showing only the threads of its first render, so a refresh does not bring the mail that arrived since into the list.
 STL-928	Keyboard stops on a message in the thread's navigation cannot be applied, so the arrow keys no longer move focus between messages, in thread-navigation.ts.
 STL-929	List rows show the Unread mark whatever the thread's read state, so an opened thread's row keeps it, in ListEntity.tsx.
@@ -1050,6 +1056,7 @@ STX-317	The "Email" section of Settings > Keyboard shortcuts (Shortcuts.tsx) is 
 STX-318	The deep-link target loader in thread-navigation.ts no longer expands the linked message, so a link to a message opens the thread with that message still folded.
 STX-920	The sync status of an inbox row in Settings › Email stays on "Reconnect to resume sync" whatever the inbox's state in Email.tsx.
 STX-921	The Email settings page (settings/Email.tsx) keeps drawing the disabled primary row ("Primary", "Disabled", "Sync disabled", Enable) even once the primary inbox is enabled again.
+STX-943	The "New email" switch in Settings, Notifications (Notifications.tsx) always renders checked, whatever the service keeps, so it never shows the chosen setting.
 STX-949	An email mention chip in DocumentMention.tsx renders collapsed, its icon without the thread's subject, so a pasted thread link becomes a chip that does not name the thread.
 STX-963	A removed inbox's row stays in Settings › Email: the remove mutation keeps it in the cached links (link.ts) and the link_removed event no longer refetches them (sync.ts).
 STX-964	The read receipts switch of an inbox always shows on, whatever the inbox's setting, in email-settings.tsx.
