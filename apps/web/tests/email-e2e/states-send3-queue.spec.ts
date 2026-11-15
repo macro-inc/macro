@@ -68,6 +68,12 @@ test.describe('an Undo whose outcome this browser cannot read back, in a Gmail i
   // and then the read of the send's status, which Undo needs before it calls
   // the send cancelled, did not get through. Undo then says nothing, or that
   // the send was cancelled on a confirmation it never read.
+  //
+  // Which of two things the browser does first decides what Undo finds: when
+  // it reads the journal while the send is still there, marked cancelled, it
+  // needs no status and says "Send cancelled" (about one run in seven on a
+  // loaded machine). The draft is then back in the composer, so the test
+  // sends it and takes it back again, up to four times.
   test('an Undo the service confirms and this browser cannot read back says it failed', async ({
     page,
     mailbox,
@@ -77,21 +83,36 @@ test.describe('an Undo whose outcome this browser cannot read back, in a Gmail i
       subject: 'Take it back',
       body: 'The numbers are in.',
     });
-    const accepted = answered(page, 'SendEmailMessage');
-    await page.getByRole('button', { name: 'Send email' }).click();
-    await accepted;
-
     // From Undo on, every read of the send's status is lost on the way.
     let undoing = false;
     await failOperation(page, 'EmailSendAttempt', () => undoing);
-    const cancelled = answered(page, 'CancelEmailSend');
-    undoing = true;
-    await notice(page, 'Sending…')
-      .last()
-      .getByRole('button', { name: 'Undo' })
-      .click();
-    await cancelled;
-    await expect(notice(page, 'Failed to undo send')).toBeVisible();
+    const failed = notice(page, 'Failed to undo send');
+    const send = page.getByRole('button', { name: 'Send email' });
+    for (let attempt = 0; attempt < 4; attempt++) {
+      undoing = false;
+      const accepted = answered(page, 'SendEmailMessage');
+      await send.click();
+      await accepted;
+      const cancelled = answered(page, 'CancelEmailSend');
+      undoing = true;
+      await notice(page, 'Sending…')
+        .last()
+        .getByRole('button', { name: 'Undo' })
+        .click();
+      await cancelled;
+      // Undo says how it ended as soon as "Cancelling send…" goes.
+      await expect(notice(page, 'Cancelling send…')).toHaveCount(0);
+      const saidFailed = await failed
+        .waitFor({ state: 'visible', timeout: 3_000 })
+        .then(
+          () => true,
+          () => false
+        );
+      if (saidFailed) break;
+      // It said the send was cancelled: the draft is back, to send again.
+      await expect(send).toBeVisible();
+    }
+    await expect(failed).toBeVisible();
     saw('STC-032');
     // The service did cancel it.
     expect(await openSendAttempts(mailbox)).toBe(0);
