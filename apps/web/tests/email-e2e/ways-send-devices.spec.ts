@@ -6,7 +6,12 @@
 // elsewhere. For a Gmail and an Outlook inbox.
 
 import type { Page } from '@playwright/test';
-import { composeNew, draftThreads, loadAppSteadily } from './harness/drafts';
+import {
+  composeNew,
+  draftThreads,
+  graphqlOperation,
+  loadAppSteadily,
+} from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { sentMessages } from './harness/send';
@@ -66,6 +71,19 @@ for (const provider of PROVIDERS) {
           .filter({ hasText: 'Delivery unconfirmed.' });
         await expect(unconfirmed).toBeVisible();
 
+        // The panel also asks the service by itself, every ten seconds at
+        // its fastest and anew after each answer. One such answer first, so
+        // that what the row says in the next five seconds is the button's.
+        const answered = other.page.waitForResponse(
+          (response) =>
+            graphqlOperation(response.request()) === 'PendingEmailSends'
+        );
+        await other.page.evaluate(() =>
+          window.dispatchEvent(new Event('online'))
+        );
+        await answered;
+        await expect(unconfirmed).toBeVisible();
+
         // The service holds it as waiting for its time again.
         await setSendUnconfirmed(mailbox, false);
         await there
@@ -74,7 +92,7 @@ for (const provider of PROVIDERS) {
         did('AC-109');
         await expect(
           there.getByRole('status').filter({ hasText: /^Scheduled/ })
-        ).toBeVisible();
+        ).toBeVisible({ timeout: 5_000 });
         await expect(unconfirmed).toHaveCount(0);
 
         await there
