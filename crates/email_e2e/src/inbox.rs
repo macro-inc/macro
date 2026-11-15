@@ -283,24 +283,37 @@ impl Inbox {
     /// This inbox's thread previews in a view (`inbox`, `sent`, `drafts`,
     /// `starred`, `all`, `spam`, `trash`, …), as the thread list shows them.
     pub async fn previews(&self, view: &str) -> Result<Vec<Value>, Report> {
-        let listed = self
-            .user
-            .get(&format!(
-                "/email/threads/previews/cursor/{view}?limit={PREVIEW_PAGE}"
-            ))
-            .await?
-            .ok()?;
         let link_id = self.link_id.to_string();
-        Ok(listed["items"]
-            .as_array()
-            .map(|items| {
+        let mut previews = Vec::new();
+        let mut cursor: Option<String> = None;
+        // The list is of all the user's inboxes, so this one's threads may be
+        // on any page.
+        loop {
+            let after = cursor
+                .as_deref()
+                .map(|cursor| format!("&cursor={}", urlencoding::encode(cursor)))
+                .unwrap_or_default();
+            let listed = self
+                .user
+                .get(&format!(
+                    "/email/threads/previews/cursor/{view}?limit={PREVIEW_PAGE}{after}"
+                ))
+                .await?
+                .ok()?;
+            let Some(items) = listed["items"].as_array() else {
+                bail!("the {view} view answered without a list of threads: {listed}");
+            };
+            previews.extend(
                 items
                     .iter()
                     .filter(|item| item["linkId"] == link_id.as_str())
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default())
+                    .cloned(),
+            );
+            cursor = listed["next_cursor"].as_str().map(str::to_owned);
+            if cursor.is_none() {
+                return Ok(previews);
+            }
+        }
     }
 
     /// Waits until a thread with this subject shows in a view, and returns
