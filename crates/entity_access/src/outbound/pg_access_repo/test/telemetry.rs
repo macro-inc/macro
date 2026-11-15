@@ -1,4 +1,4 @@
-//! A document check and its query are traced, without the viewer's user id.
+//! Access checks and their queries are traced, without the viewer's user id.
 
 use super::*;
 use std::fmt::Debug;
@@ -93,6 +93,45 @@ async fn document_check_is_traced_without_the_user_id(pool: PgPool) -> anyhow::R
     assert!(
         leaked.is_empty(),
         "spans recorded the viewer's email: {leaked:?}"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_team"))
+)]
+async fn pipelines_check_records_its_count_and_no_ids(pool: PgPool) -> anyhow::Result<()> {
+    let viewer = user_id(TEAM_MEMBER);
+    let repo = PgAccessRepository::new(pool);
+    let pipelines = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+
+    let values = SpanValues::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(values.clone()));
+    // Register the callsites, then recompute interest on this thread, as above.
+    repo.get_pipelines_access(&pipelines, &viewer).await?;
+    tracing::callsite::rebuild_interest_cache();
+    values.0.lock().unwrap().clear();
+    repo.get_pipelines_access(&pipelines, &viewer).await?;
+
+    let values = values.0.lock().unwrap().clone();
+    assert!(
+        values.contains(&"get_pipelines_access.pipeline_count=i64:3".to_owned()),
+        "{values:?}"
+    );
+    let leaked: Vec<_> = values
+        .iter()
+        .filter(|value| {
+            value.contains(viewer.email_str())
+                || pipelines
+                    .iter()
+                    .any(|pipeline| value.contains(&pipeline.to_string()))
+        })
+        .collect();
+    assert!(
+        leaked.is_empty(),
+        "spans recorded the viewer's email or the pipeline ids: {leaked:?}"
     );
     Ok(())
 }

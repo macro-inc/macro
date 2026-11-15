@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { setInterfaceLanguage } from '@app/lib/i18n';
+import { afterEach, describe, expect, it } from 'vitest';
 import { referenceList, resultCell, resultCellText } from './answer-cell';
 
 describe('result cells from the engine’s typed cells', () => {
@@ -266,5 +267,31 @@ describe('names instead of counts', () => {
     expect(
       resultCellText({ kind: 'mentions', entityType: 'USER', ids: ['u'] })
     ).toBe('1 person');
+  });
+});
+
+describe('dates and numbers in the interface language', () => {
+  afterEach(() => setInterfaceLanguage('en'));
+
+  it('writes a date and a number for the reader’s locale', () => {
+    const day = resultCell(
+      { type: 'date', value: '2025-12-31T00:00:00Z' },
+      { name: 'Due', kind: 'date' }
+    );
+    const total = resultCell(
+      { type: 'number', value: 1234.5 },
+      { name: 'Total', kind: 'number' }
+    );
+    expect(resultCellText(day)).toBe('Dec 31, 2025');
+    expect(resultCellText(total)).toBe('1,234.5');
+    setInterfaceLanguage('de');
+    expect(resultCellText(day)).toBe(
+      new Intl.DateTimeFormat('de', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(new Date(2025, 11, 31))
+    );
+    expect(resultCellText(total)).toBe('1.234,5');
   });
 });

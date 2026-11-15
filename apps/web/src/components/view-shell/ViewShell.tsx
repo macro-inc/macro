@@ -96,6 +96,11 @@ type ViewShellInternal = ViewShellLayout & {
 
 const RESIZE_GUTTER = 1;
 
+/** Where a shell with `asidePreferenceKey` saves whether its navigation is hidden. */
+export function asideCollapsedPreferenceKey(app: string) {
+  return `macro:pref:view-sidebar:collapsed:${app}`;
+}
+
 const ViewShellContext = createContext<ViewShellInternal>();
 
 function useViewShellInternal(): ViewShellInternal {
@@ -212,10 +217,9 @@ function Root(props: ViewShellRootProps) {
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
     ? (panel?.navigationCollapsed ?? createSignal(true))
     : local.asidePreferenceKey
-      ? usePreference(
-          `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
-          { default: false }
-        )
+      ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
+          default: false,
+        })
       : createSignal(false);
   // A width the user dragged to wins over the configured default.
   const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey

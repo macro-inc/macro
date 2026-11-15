@@ -1026,6 +1026,43 @@ pub(super) async fn get_pipeline_access(
     super::database_access::highest_access_level(&levels)
 }
 
+/// The batched pipeline check as main had it at baf4161aac.
+/// Highest grant on each of `ids`, reading only those pipelines' grants.
+/// Pipelines without a grant are left out.
+pub(super) async fn get_pipelines_access(
+    pool: &PgPool,
+    ids: &[Uuid],
+    sources: &SourceIds,
+) -> Result<HashMap<Uuid, AccessLevel>, sqlx::Error> {
+    // Probes each pipeline's few grants, fenced so a generic plan doesn't
+    // start from the caller's sources instead: a member of many channels has
+    // hundreds of them.
+    let rows = sqlx::query!(
+        r#"SELECT grant_row.entity_id AS "entity_id!",
+                  grant_row.access_level AS "access_level!: AccessLevel"
+           FROM UNNEST($1::uuid[]) AS pipeline(id)
+           CROSS JOIN LATERAL (
+               SELECT ea.entity_id, ea.access_level, ea.source_id
+               FROM entity_access ea
+               WHERE ea.entity_id = pipeline.id AND ea.entity_type = 'crm_pipeline'
+               OFFSET 0
+           ) AS grant_row
+           WHERE grant_row.source_id = ANY($2)"#,
+        ids,
+        &sources.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut grants = HashMap::<Uuid, AccessLevel>::new();
+    for row in rows {
+        grants
+            .entry(row.entity_id)
+            .and_modify(|level| *level = (*level).max(row.access_level))
+            .or_insert(row.access_level);
+    }
+    Ok(grants)
+}
+
 // ---- database_access
 
 /// The highest access level `source_ids` hold on a database: its own grants,

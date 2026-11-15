@@ -388,6 +388,23 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::pipeline_access::list_pipeline_access(&self.pool, user_id).await?)
     }
 
+    #[tracing::instrument(err, skip_all, fields(pipeline_count = span_count(ids.len())))]
+    async fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        Ok(queries::pipeline_access::get_pipelines_access(
+            &self.pool,
+            ids,
+            Viewer::from_user(Some(user_id)),
+        )
+        .await?)
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_access(
         &self,

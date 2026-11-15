@@ -42,3 +42,29 @@ async fn pipeline_access_matches_the_source_list_form(pool: PgPool) -> anyhow::R
     })
     .await
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../fixtures",
+        scripts("viewer_matrix", "typed_owner_team", "viewer_matrix_pipeline")
+    )
+)]
+async fn pipelines_access_matches_the_source_list_form(pool: PgPool) -> anyhow::Result<()> {
+    let viewers = matrix_viewers(&pool).await?;
+    let mut pipelines = sqlx::query_scalar!(r#"SELECT id FROM crm_pipeline_entities ORDER BY id"#)
+        .fetch_all(&pool)
+        .await?;
+    // An id without a pipeline or grants is left out by both forms.
+    pipelines.push(Uuid::nil());
+
+    assert_matrix_agrees(&viewers, &["every pipeline at once"], async |viewer, _| {
+        let old = source_list_oracle::get_pipelines_access(&pool, &pipelines, &viewer.sources).await?;
+        let new = get_pipelines_access(&pool, &pipelines, viewer.viewer()).await?;
+        Ok((
+            old.into_iter().collect::<BTreeMap<_, _>>(),
+            new.into_iter().collect::<BTreeMap<_, _>>(),
+        ))
+    })
+    .await
+}
