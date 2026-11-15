@@ -37,8 +37,8 @@ open or edit it; its id is derived from its slug.
 - `cargo test -p system_skills`
 - If you change Compose Routines: `cargo test -p agent_code_mode`, and its
   example step's type check, with the pinned Deno on `PATH`:
-  `cargo test -p agent_harness_service --bin agent_harness_service --
-  --include-ignored every_catalog_routine_and_example_step_type_checks`.
+  `cargo test -p agent_harness_service --lib -- --include-ignored
+  every_catalog_routine_and_example_step_type_checks`.
 
 ## Gotchas
 
