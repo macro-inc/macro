@@ -155,7 +155,27 @@ quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="
 
 `nixos/local-report.json` holds the queries for the `Macro run_local` dashboard
 (`/d/macro-run-local`) and for `scripts/ci-report.ts --spec local`. Both
-dashboards build their Loki panels with `nixos/loki-report-panels.nix`.
+dashboards build their Loki panels with `nixos/loki-report-panels.nix`. Every
+filter names the machine (`machine`, else `host_name`, else `host`, for events
+recorded before `machine` existed), and the dashboard narrows each filter to
+its `Machine` variable, which lists Tempo's `span.machine` values. Its rows:
+
+- **Time to ready**: runs, percentiles, and the step with the biggest share of
+  fresh and resumed bring-ups' critical path.
+- **One bring-up as a trace**: the latest fresh start and resume that got
+  ready, picked from Tempo's `span.bring_up` values (the Tempo data source
+  reads tag values over 7 days, `timeRangeForTags`), and recent bring-ups whose
+  trace ids open their trace.
+- **Bottleneck**: a Gantt chart of each top-level step's median start
+  (`offset_in_run`) and length, and the critical path: the `main` lane's
+  top-level steps, which the bring-up waits on in order, by share.
+- **Machines**: per machine percentiles, ready share, build time, sccache hits,
+  CPUs and memory, and each step's median by machine.
+- **Inside the steps**: every step, nested steps, the slowest crates, services,
+  builds and actions.
+
+Older events have no lanes or offsets, so the Gantt chart and critical path
+cover only runs recorded since; the other panels cover every event.
 
 ### Local stacks' own telemetry
 
@@ -170,8 +190,7 @@ and `deployment.environment="local"`; services add `macro.local.instance`,
 which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
 them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
-under `deployment_environment="local"`. The `Macro run_local` dashboard's
-`Machine` variable lists `host_name` from those metrics, and its last row
+under `deployment_environment="local"`. The `Macro run_local` dashboard's last row
 (`nixos/local-dashboard.nix`, not the shared report spec) shows bring-ups,
 stacks, sampled traces, error logs and logs by machine.
 
