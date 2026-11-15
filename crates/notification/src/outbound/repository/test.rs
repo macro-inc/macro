@@ -647,6 +647,7 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
         .await
         .unwrap();
 
+    pool.mark_notifications_seen(&user, &[first]).await.unwrap();
     let rows = pool
         .mark_notifications_done(&user, &[second, other_only, first], true)
         .await
@@ -665,6 +666,25 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
     assert!(
         rows.iter()
             .all(|notification| notification.state == NotificationState::Done)
+    );
+
+    // Reopening restores the state each had before its done: `first` was
+    // seen, `second` unseen. Only done notifications reopen.
+    let reopened = pool
+        .reopen_notifications(&user, &[first, second], &[second])
+        .await
+        .unwrap();
+    let states: std::collections::HashMap<_, _> = reopened
+        .iter()
+        .map(|row| (row.notification_id, row.state))
+        .collect();
+    assert_eq!(states.get(&first), Some(&NotificationState::Seen));
+    assert_eq!(states.get(&second), Some(&NotificationState::Unseen));
+    assert!(
+        pool.reopen_notifications(&user, &[first, second], &[second])
+            .await
+            .unwrap()
+            .is_empty()
     );
 }
 

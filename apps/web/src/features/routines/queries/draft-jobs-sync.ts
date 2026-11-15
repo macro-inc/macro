@@ -22,8 +22,8 @@ const updateSchema = z.object({
 });
 
 /**
- * Jobs this page discarded. A read that started before the discard can still
- * list one, and must not bring it back.
+ * Jobs this page discarded, or heard were removed elsewhere. A read that
+ * started before can still list one, and must not bring it back.
  */
 const discarded: string[] = [];
 
@@ -63,11 +63,7 @@ export function applyDraftUpdate(data: unknown): void {
   if (!parsed.success) return;
   const update = parsed.data;
   if (update.state === 'removed') {
-    queryClient.setQueryData(
-      scheduledActionKeys.draftJobs.queryKey,
-      (current: DraftJob[] | undefined) =>
-        current?.filter((job) => job.id !== update.draftId)
-    );
+    removeDraftJob(update.draftId);
     return;
   }
   if (isDiscarded(update.draftId)) return;

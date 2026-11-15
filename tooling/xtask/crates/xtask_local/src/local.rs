@@ -286,7 +286,7 @@ pub(crate) fn bring_up(
     }
     let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
         let instance = instance.clone();
-        let stage = stage.background();
+        let stage = stage.background(telemetry::FRONTEND_LANE);
         let static_bundle = plan.static_bundle;
         std::thread::spawn(move || {
             if static_bundle {
@@ -1173,7 +1173,7 @@ fn bring_up_infra(
             fa.arg(microsoft_emulator::SERVICE);
         }
         fa.arg("fusionauth");
-        let stage = stage.background();
+        let stage = stage.background(telemetry::FUSIONAUTH_LANE);
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
     // LocalStack is ready within seconds, long before OpenSearch: poll its API
@@ -1184,7 +1184,7 @@ fn bring_up_infra(
     let (infra_done, infra_done_rx) = std::sync::mpsc::channel::<()>();
     let localstack_lane = {
         let instance = instance.clone();
-        let stage = stage.background();
+        let stage = stage.background(telemetry::LOCALSTACK_LANE);
         std::thread::spawn(move || {
             let health = format!(
                 "http://localhost:{}/_localstack/health",

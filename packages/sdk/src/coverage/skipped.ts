@@ -460,6 +460,9 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
+  // Chip titles for a page of CRM records, a web-app batch preview; the SDK
+  // reads companies and contacts by handle.
+  'previewCrmRecords',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
