@@ -61,7 +61,12 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
-import { applyMessage, applyRootDeletion, applyThreadState } from './sync';
+import {
+  applyMessage,
+  applyQueuedWrite,
+  applyRootDeletion,
+  applyThreadState,
+} from './sync';
 import { getMessageTimelineQueryKeyPrefix } from './timeline';
 import { SEND_MESSAGE_MUTATION_KEY } from './unsent';
 
@@ -563,7 +568,11 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          applyMessage(data, 'posted');
+          if (variables.parent.type === 'channel' && channelCacheHost()) {
+            applyQueuedWrite(data, 'posted');
+          } else {
+            applyMessage(data, 'posted');
+          }
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -761,8 +770,12 @@ export function usePatchMessageMutation(
             attachments_to_add: vars.attachmentsToAdd,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'edited');
+        onSuccess(data, vars) {
+          if (vars.parent.type === 'channel' && channelCacheHost()) {
+            applyQueuedWrite(data, 'edited');
+          } else {
+            applyMessage(data, 'edited');
+          }
           // An edit can add or remove a CRM record reference.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },

@@ -17,6 +17,7 @@ import {
   whenOnline,
 } from './local/writes';
 import {
+  getTargetMessage,
   type MessageTarget,
   patchTargetMessage,
   resolveMessageTarget,
@@ -199,6 +200,27 @@ type ReactionParams = {
 
 type ReactionMutationContext = ReactionContext | undefined;
 
+/**
+ * Confirms this person's own reaction once the device queue has delivered it.
+ * The answer passes through the device before it reaches the views, which may
+ * by then show a reaction someone else made since: the answer predates it, so
+ * only this person's change is laid over what is on screen.
+ */
+function confirmQueuedReaction(vars: ReactionParams, add: boolean): void {
+  const target = resolveMessageTarget({
+    parent: vars.parent,
+    messageId: vars.messageId,
+    threadId: vars.threadId,
+  });
+  const shown = getTargetMessage(vars.parent, target);
+  if (!shown) return;
+  const change = add
+    ? addUserReaction(shown.reactions, vars.emoji, vars.userId)
+    : removeUserReaction(shown.reactions, vars.emoji, vars.userId);
+  if (!change.didChange) return;
+  patchTargetMessage(vars.parent, target, { reactions: change.reactions });
+}
+
 const addReactionNonce = createMutationNonce<ReactionParams>(
   MessageNonceKeys.REACTION,
   (v) => `add:${v.parent.type}:${v.parent.id}:${v.messageId}:${v.emoji}`
@@ -269,8 +291,12 @@ export function useAddReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (vars.parent.type === 'channel' && channelCacheHost()) {
+            confirmQueuedReaction(vars, true);
+          } else {
+            applyMessage(data, 'reaction_changed');
+          }
         },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
@@ -356,8 +382,12 @@ export function useRemoveReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (vars.parent.type === 'channel' && channelCacheHost()) {
+            confirmQueuedReaction(vars, false);
+          } else {
+            applyMessage(data, 'reaction_changed');
+          }
         },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);

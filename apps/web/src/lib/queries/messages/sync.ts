@@ -101,6 +101,30 @@ function noteCommittedChannelChange(
   }
 }
 
+/**
+ * Applies the answer to this person's own send or edit that went through the
+ * device queue. That answer passes through the device before it reaches the
+ * views, which may by then show a reaction someone else made since: the
+ * answer predates it, so the reactions on screen stay.
+ */
+export function applyQueuedWrite(
+  message: Message,
+  change: 'posted' | 'edited'
+) {
+  const shown = getTargetMessage(
+    message.parent,
+    resolveMessageTarget({
+      parent: message.parent,
+      messageId: message.id,
+      threadId: message.thread_id ?? undefined,
+    })
+  );
+  applyMessage(
+    shown ? { ...message, reactions: shown.reactions } : message,
+    change
+  );
+}
+
 /** Committed timeline activity, delivered whole so loaded history needs no re-read. */
 export function handleTimelineActivity(event: {
   parent: MessageParent;

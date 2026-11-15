@@ -29,6 +29,7 @@ import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
 import {
   applyMessage,
+  applyQueuedWrite,
   applyThreadState,
   handleMessageEvent,
   handleTimelineActivity,
@@ -316,6 +317,24 @@ describe.each([
           .pages[0]
       )[0].thread.reply_count
     ).toBe(1);
+  });
+  it('keeps a reaction pushed since when the answer to a queued write arrives', () => {
+    testQueryClient.setQueryData<MessageThread>(threadKey(), {
+      state,
+      root: message(parent, 'root'),
+      replies: [],
+    });
+    const reply = message(parent, 'reply', 'root');
+    applyMessage(reply, 'posted');
+    const reactions = [{ emoji: '👍', users: ['macro|b@example.com'] }];
+    applyMessage({ ...reply, reactions }, 'reaction_changed');
+
+    // The edit's answer was read before the other person reacted.
+    applyQueuedWrite({ ...reply, content: 'new content' }, 'edited');
+
+    expect(
+      testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+    ).toEqual([expect.objectContaining({ content: 'new content', reactions })]);
   });
   it('updates the canonical root when only a linked thread is cached', () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {
