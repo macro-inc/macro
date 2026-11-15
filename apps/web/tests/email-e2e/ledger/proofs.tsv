@@ -33,6 +33,7 @@ AC-075	the Bcc button of a reply's open recipient fields does not show the Bcc f
 AC-076	on a phone, the caret beside a reply's To does not show or hide Cc and Bcc
 AC-078	a recipient chip dragged between the rows of a reply does not move
 AC-079	an inbox picked in a reply's From menu does not become the sender
+AC-080	a subject typed in the phone reply's Subject: field is not the subject the reply is sent with
 AC-083	a document mentioned in a reply is not made viewable through its link
 AC-084	a file picked from a reply's paperclip, or its phone header's Attach, is not attached
 AC-085	a file dropped on a reply is not attached
@@ -391,3 +392,114 @@ F-190	the steps a program of the assistant took are not listed in the conversati
 F-191	a pasted thread link stays a plain link
 F-192	adding a domain to a CRM blacklist in Settings does nothing
 F-196	unblocking a sender does nothing
+STC-001	not shown as the row says (Loading draft…): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx, src/features/email-compose/views/reply-input.tsx
+STC-002	not shown as the row says (Unable to load this draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
+STC-003	not shown as the row says (Unable to load local draft. Retry): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-004	not shown as the row says (header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip): its rendering is switched off or changed in src/features/email-compose/views/email-compose.tsx
+STC-005	not shown as the row says (Macro users or email addresses): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-006	not shown as the row says (From control reads Select sending inbox): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STC-007	not shown as the row says (Use `@` to reference files): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-008	not shown as the row says (Reply — @mention to share or cc people / Forward — @mention to share or cc people): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-009	not shown as the row says (Subject:): its rendering is switched off or changed in src/features/email-compose/views/reply-envelope.tsx
+STC-010	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-011	not shown as the row says (<filename> — upload unfinished): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-012	not shown as the row says (toast: Unable to open this attachment): its rendering is switched off or changed in src/features/email-compose/components/attachment-viewer.tsx
+STC-013	not shown as the row says (Please select at least one recipient): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-014	not shown as the row says (Please enter a message): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
+STC-015	not shown as the row says (Please enter a subject): its rendering is switched off or changed in src/features/email-compose/views/compose-subject.tsx
+STC-016	not shown as the row says (Unable to find linked email account. Select a sending inbox.): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
+STC-022	not shown as the row says (You're offline — Attachments can't be added while you're offline. Reconnect and try again.): its rendering is switched off or changed in src/features/email-compose/primitives/attachment-persistence.ts
+STC-027	not shown as the row says (toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/primitives/queued-send-notice.ts
+STC-029	not shown as the row says (toast: Cancellation pending — Waiting for confirmation): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-030	not shown as the row says (toast: Too late to undo — Delivery has already started): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-033	not shown as the row says (toast: Failed to send email — Reconnect to send this email.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-034	not shown as the row says (toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-035	not shown as the row says (toast: Failed to send email — Draft not saved): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-036	not shown as the row says (toast: Failed to send email — Attachment not uploaded): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-037	not shown as the row says (toast: Failed to send email (no subtext)): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-038	not shown as the row says (toast: Loading email sender addresses...): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-039	not shown as the row says (toast: Email failed to send. No recipients provided): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-044	not shown as the row says (toast: Failed to restore thread to inbox): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts, src/features/email-compose/primitives/reply-composer.ts
+STC-045	not shown as the row says (send button disabled, tooltip: Queued to send. Cancel the send before editing.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-048	not shown as the row says (send button tooltip while busy: Scheduling email… / Updating schedule… / Cancelling schedule… / Sending… / Uploading files to share…): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-049	not shown as the row says (primary button label: Send email / Schedule send / Update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-050	not shown as the row says (clock button: tooltip Schedule send time, aria-label Choose send time): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-052	not shown as the row says (open picker: input placeholder Select date, preset options, Custom date... (Pick from calendar), hint Use queries like 3d, 1w, feb 17, or tomorrow): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
+STC-053	not shown as the row says (Scheduled send: <MMM d at h:mm a ZONE> with Cancel): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-054	not shown as the row says (Scheduled for <time> with Cancel): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-055	not shown as the row says (Scheduled for <time> — Update to <time>; original remains active until Update succeeds — Cancel change): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-056	not shown as the row says (Sending — Delivery has started. Cancellation is no longer available. — Check status): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-058	not shown as the row says (Cancelling… (bar action, disabled)): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-061	not shown as the row says (toast: That send time has passed. Choose a future time.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-062	not shown as the row says (toast: Failed to schedule email): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-063	not shown as the row says (toast: Failed to schedule email (or Failed to update schedule) — Draft is not ready to schedule. Resolve any save or connection errors and try again): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-064	not shown as the row says (toast: Email scheduled, but unable to mark thread done): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-065	not shown as the row says (toast: Schedule cancelled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-066	not shown as the row says (toast: Schedule cancelled, but the draft could not be reopened. Check Drafts.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-067	not shown as the row says (toast: This email was already sent and can no longer be unscheduled.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-068	not shown as the row says (toast: Failed to undo scheduled send): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-069	not shown as the row says (toast: Failed to cancel schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-071	not shown as the row says (toast: Could not check delivery status. Try again when you have service.): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-072	not shown as the row says (toast: Email scheduled for <time>. Cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-073	not shown as the row says (toast: Cancel the schedule before deleting this draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-074	not shown as the row says (toast: This email was scheduled in another tab. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-075	not shown as the row says (toast: Scheduled email sent): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-078	not shown as the row says (toast: <reason> with action Retry inbox change (Could not change inbox. Retry the same inbox to recover. when there is no reason)): its rendering is switched off or changed in src/lib/queries/email/draft.ts
+STC-079	not shown as the row says (toast: Retry the previous inbox change before choosing another inbox.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-080	not shown as the row says (toast: Previously saved attachments could not be copied to the new draft. Please attach those files again.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-081	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until you are back online.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-083	not shown as the row says (Changes could not be saved on this device — Keep this editor open until saving succeeds. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-084	not shown as the row says (Draft could not be synced — Discard could not be confirmed. (Retry discard / Keep editing)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-085	not shown as the row says (Draft synchronization unavailable (Saved on this device; waiting to sync when a local copy exists) — Queued changes are preserved. Update or reload Macro to recover local storage. (Reload)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-086	not shown as the row says (Unable to read local draft status. — Retry to check the saved draft. (Retry)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-088	not shown as the row says (persistent toast: Draft could not be saved on this device — <error>): its rendering is switched off or changed in src/features/email-compose/primitives/draft-save-notice.ts
+STC-089	not shown as the row says (Draft could not be saved on this device — … This draft changed while saving. Reopen it to use the latest version.): its rendering is switched off or changed in src/lib/queries/email/local-draft-store.ts
+STC-090	not shown as the row says (toast: Failed to save draft): its rendering is switched off or changed in src/lib/queries/email/draft-queue.ts
+STC-091	not shown as the row says (Draft options sheet: Delete Draft / Save Draft): its rendering is switched off or changed in src/features/email-compose/components/draft-back-menu.tsx
+STC-096	not shown as the row says (trash tooltip: Discard / Delete draft): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-097	not shown as the row says (recipient summary: <name>, <name> & N more…): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-098	not shown as the row says (Cc/Bcc, From: <address> (or Select sending inbox)): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-101	not shown as the row says (Send cancelled (Restore draft)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-102	not shown as the row says (Cancellation pending (Cancel disabled)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-103	not shown as the row says (Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically. (Check status, no Cancel)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-106	not shown as the row says (Delivery unconfirmed. Check sent mail; we will not resend automatically. (Check status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-107	not shown as the row says (alert under a row: the failure's message (else Unable to cancel the send / Unable to check send status / Could not update delivery status)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-108	not shown as the row says ((No subject) as the row title): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-111	not shown as the row says (notice above the composer: the operation description with its resolution buttons, or The mailbox version is ready. Reload the draft to continue editing. with Reload draft): its rendering is switched off or changed in src/features/email-message/core/message-operation.ts, src/features/email-message/views/message-operation-recovery.tsx
+STC-306	not shown as the row says (From shows the address as plain text, no dropdown): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STC-308	not shown as the row says (Cc:, Bcc: and From: rows fold back into the combined row): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
+STC-309	not shown as the row says (subject shown as one truncated line): its rendering is switched off or changed in src/features/email-compose/components/compose-subject-field.tsx
+STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
+STC-315	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
+STC-316	not shown as the row says (no trash button in the toolbar): its rendering is switched off or changed in src/features/email-compose/views/compose-toolbar.tsx
+STC-400	not shown as the row says (loading toast: Cancelling send…): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-401	not shown as the row says (toast: Delivery unconfirmed; check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-403	not shown as the row says (toast: Failed to send email — Files are still uploading): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-405	not shown as the row says (toast: Failed to update schedule): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts
+STC-406	not shown as the row says (toast: This email is scheduled for <time>. Choose a new time to update it, or cancel the schedule to edit.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-407	not shown as the row says (toast: These attachments exceed the destination inbox’s size limit.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-408	not shown as the row says (toast: Reconnect and let the draft finish saving before changing inboxes.): its rendering is switched off or changed in src/features/email-compose/primitives/draft-transfer.ts
+STC-409	not shown as the row says (toast: The draft changed elsewhere. Your newer text was kept as a new draft.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-412	not shown as the row says (toast: This draft is no longer available.): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-413	not shown as the row says (toast: Draft could not be synced): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
+STC-415	not shown as the row says (No dates match "<query>"): its rendering is switched off or changed in src/features/email-compose/components/date-selector.tsx
+STC-416	not shown as the row says (clock button accented, aria-label Send time set to <date>. Open to change it.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-417	not shown as the row says (clock button aria-label Scheduled for <date>. Open to propose a new time. (phones: … or cancel the schedule.)): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-418	not shown as the row says (clock button aria-label Proposed send time <date>. The email remains scheduled for <date> until you choose Update schedule.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-419	not shown as the row says (Scheduled: <date> row, footer Cancel the schedule before editing the message. with Cancel schedule): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-420	not shown as the row says (Proposed: <date> row with Discard proposed time, footer The original schedule stays active until Update schedule succeeds.): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-421	not shown as the row says (Cancelling schedule… (footer button, disabled)): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-422	not shown as the row says (Clear time button at the top of the picker): its rendering is switched off or changed in src/features/email-compose/components/email-date-selector.tsx
+STC-423	not shown as the row says (Delivery unconfirmed — This email may already have been sent. Check Sent. We will not resend automatically. — Check status): its rendering is switched off or changed in src/features/email-compose/components/email-schedule-summary.tsx
+STC-424	not shown as the row says (Checking server acceptance): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-427	not shown as the row says (Load more sends button): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-428	not shown as the row says (Reconnect your email account, then check status to resume. (Cancel, Check status)): its rendering is switched off or changed in src/lib/queries/email/email-send-dispatcher.ts
+STC-429	not shown as the row says (Scheduled · <time> with Cancel and restore): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
+STC-430	not shown as the row says (A saved email needs recovery. Its contents are preserved on this device. Contact support before clearing storage.): its rendering is switched off or changed in src/lib/queries/email/send-intent.ts
+STC-431	not shown as the row says (Could not refresh server delivery status. Previously confirmed sends are preserved.): its rendering is switched off or changed in src/lib/queries/email/server-sends.ts
+STC-432	not shown as the row says (dialog body: Pending sends remain saved for this account and resume when you sign in again. Sends already accepted by the server may still be delivered; signing out does not cancel them.): its rendering is switched off or changed in src/lib/core/auth/logout.ts
+STC-433	not shown as the row says (dialog body: Draft storage could not be checked. Signing out removes unsubmitted drafts and their pending attachments. …): its rendering is switched off or changed in src/lib/core/auth/logout.ts
+STC-434	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-435	not shown as the row says (the banner's detail line replaced by the failed action's error): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
+STC-938	not shown as the row says (result: the draft is saved: Drafts lists it with its text): its rendering is switched off or changed in src/features/email-compose/components/draft-back-menu.tsx
+STC-960	not shown as the row says (result: From shows the chosen address): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx

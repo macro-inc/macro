@@ -1238,6 +1238,7 @@ export const compose = {
         'header label (subject, else Draft email) with badge draft / scheduled / sent / missing and its tooltip',
       trigger: 'draft lifecycle state; desktop header only',
       source: ['src/features/email-compose/views/email-compose.tsx'],
+      note: 'tested: on a touch tablet, the label and the draft badge; tooltips are off on touch, and the Mail page on a desktop shows no such header, so the tooltip and the other badges are not asserted',
     },
     {
       id: 'STC-005',
@@ -1256,6 +1257,7 @@ export const compose = {
         'suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.',
       trigger: 'suggestion window loading, failed, partial or empty',
       source: ['src/lib/core/component/RecipientSourceControls.tsx'],
+      note: 'tested: the "No matches" variant only',
     },
     {
       id: 'STC-314',
@@ -1496,6 +1498,7 @@ export const compose = {
         'src/features/email-compose/primitives/email-composer.ts',
         'src/features/email-compose/primitives/reply-composer.ts',
       ],
+      note: 'tested: every label but "Sending…", which is gone before a test can read it',
     },
     {
       id: 'STC-049',
@@ -1615,7 +1618,7 @@ export const compose = {
       id: 'STC-312',
       surface: 'SC-04',
       fn: ['F-113'],
-      state: 'no Send button in the touch reply header',
+      state: 'Send disabled in the touch reply header',
       trigger: 'reply body empty (a forward always shows Send)',
       source: ['src/features/email-compose/views/reply-input.tsx'],
     },

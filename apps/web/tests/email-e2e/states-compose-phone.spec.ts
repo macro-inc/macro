@@ -35,7 +35,8 @@ test.describe('the phone composer', () => {
     page,
     mailbox,
   }) => {
-    const subject = 'A rather long subject line for a phone';
+    const subject =
+      'A rather long subject line for a phone, longer than one line of it can hold';
     await openPhoneComposer(page, mailbox);
     const folded = page.getByRole('button', {
       name: `Cc/Bcc, From: ${mailbox.inbox.email}`,
@@ -66,6 +67,13 @@ test.describe('the phone composer', () => {
     const foldedSubject = page.getByRole('button', { name: subject });
     await expect(foldedSubject).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Subject' })).toHaveCount(0);
+    // One line, cut short: the text is wider than the row that shows it.
+    const line = foldedSubject.locator('span');
+    await expect(line).toHaveCSS('text-overflow', 'ellipsis');
+    await expect(line).toHaveCSS('white-space', 'nowrap');
+    expect(await line.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+      true
+    );
     saw('STC-309');
 
     await folded.tap();

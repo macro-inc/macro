@@ -138,140 +138,23 @@ STL-700	-	backlog	not exercised itself: another way into, or state of, F-047, co
 STL-063	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
 STL-064	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
 AC-014	-	bug	a tap on the folded recipients of a phone's new email does not open them (phone-recipient-summary-tap-ignored); its test is kept as a known bug
-AC-080	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-AC-319	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-STC-004	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-005	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
-STC-313	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
-STC-314	-	backlog	not exercised itself: another way into, or state of, F-097, covered through other rows
-STC-006	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-306	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-007	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
-STC-008	-	backlog	not exercised itself: another way into, or state of, F-102, covered through other rows
-STC-009	-	backlog	not exercised itself: another way into, or state of, F-101, covered through other rows
-STC-010	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STC-315	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STC-011	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STC-012	-	backlog	not exercised itself: another way into, or state of, F-185, covered through other rows
-STC-013	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
-STC-014	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
-STC-015	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
-STC-016	-	backlog	not exercised itself: another way into, or state of, F-131, covered through other rows
-STC-316	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-STC-022	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STC-045	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-046	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-047	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-048	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-049	-	backlog	not exercised itself: another way into, or state of, F-131, F-142, F-143, covered through other rows
-STC-091	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-096	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-STC-097	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-098	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-308	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-309	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-312	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
-STC-938	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
-STC-960	-	backlog	not exercised: of F-100, not all covered (see their waivers)
+AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
+STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
+STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere closes in the same step that sets this state: the reply composer hides itself, and the standalone one is replaced by the thread
+STC-047	-	bug	a draft deleted in one browser stays editable in another that has it open (deleted-draft-open-elsewhere-stays-editable); its test is kept as a known bug
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
-AC-110	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
 AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
-STC-001	-	backlog	not exercised itself: another way into, or state of, F-116, F-117, F-118, covered through other rows
-STC-002	-	backlog	not exercised itself: another way into, or state of, F-116, covered through other rows
-STC-003	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
-STC-020	-	backlog	not exercised itself: another way into, or state of, F-106, F-125, covered through other rows
-STC-027	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-400	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
-STC-029	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
-STC-030	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
+STC-020	-	needs	needs document storage: the file is made public by the storage service, which the browser stack does not run, and no test on the full-stack tier does it yet
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
-STC-032	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
-STC-401	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
-STC-033	-	backlog	not exercised itself: another way into, or state of, F-139, covered through other rows
-STC-034	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-035	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-036	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-403	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-037	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-038	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
-STC-039	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
-STC-040	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
-STC-041	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
-STC-042	-	backlog	not exercised itself: another way into, or state of, F-132, covered through other rows
-STC-043	-	backlog	not exercised itself: another way into, or state of, F-133, covered through other rows
-STC-044	-	backlog	not exercised itself: another way into, or state of, F-134, F-144, covered through other rows
-STC-050	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-416	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-417	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-418	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-052	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-415	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-422	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-419	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-420	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-421	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-054	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-055	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-056	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
-STC-423	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
-STC-058	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-060	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-061	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-062	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-405	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-063	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
-STC-064	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-066	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-067	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-068	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-069	-	backlog	not exercised itself: another way into, or state of, F-144, covered through other rows
-STC-071	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
-STC-072	-	backlog	not exercised itself: another way into, or state of, F-142, F-143, covered through other rows
-STC-406	-	backlog	not exercised itself: another way into, or state of, F-143, covered through other rows
-STC-073	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-STC-074	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-075	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
-STC-076	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
-STC-410	-	backlog	not exercised itself: another way into, or state of, F-120, F-146, covered through other rows
-STC-411	-	backlog	not exercised itself: another way into, or state of, F-120, F-137, covered through other rows
-STC-409	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-412	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-080	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-077	-	backlog	not exercised itself: another way into, or state of, F-134, covered through other rows
-STC-078	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-079	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-407	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-408	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-STC-081	-	backlog	not exercised itself: another way into, or state of, F-118, covered through other rows
-STC-434	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-083	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-084	-	backlog	not exercised itself: another way into, or state of, F-119, F-120, covered through other rows
-STC-085	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-086	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-435	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-087	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-088	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-089	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-413	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-090	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STC-099	-	backlog	not exercised itself: another way into, or state of, F-135, F-139, covered through other rows
-STC-100	-	backlog	not exercised itself: another way into, or state of, F-146, covered through other rows
-STC-424	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-425	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-101	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-STC-102	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-STC-103	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-428	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-STC-106	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-429	-	backlog	not exercised itself: another way into, or state of, F-142, covered through other rows
-STC-107	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-STC-108	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-427	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-430	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-STC-431	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STC-432	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
-STC-433	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
-STC-111	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+STC-043	-	no-user-path	the code that raises this wraps only a call that cannot fail on the spot: every way marking done after a send can fail comes later, and shows as the thread's own notice (STL-075)
+STC-060	-	no-user-path	every way of picking a send time (a preset, the calendar, a typed query) hands over a valid date, so the check that raises this cannot fail
+STC-076	-	bug	text written after the draft was sent elsewhere is dropped, not kept as a new draft (sent-elsewhere-drops-newer-text); its test is kept as a known bug
+STC-410	-	no-user-path	both composers refuse edits while a schedule is pending or confirmed, and only become scheduled with nothing unsaved, so a scheduled draft never has a save to refuse
+STC-411	-	bug	a save refused because the email already went out resets the composer without saying so (sent-elsewhere-drops-newer-text); its test is kept as a known bug
+STC-077	-	bug	undo of a sent or scheduled reply refuses, or wrongly claims, a newer reply (undo-send-refuses-newer-reply, undo-schedule-claims-newer-reply); its test is kept as a known bug
+STC-087	-	needs	the draft identity notice is behind a flag that is off unless the flag service turns it on, and the suite's bundle has no flag service
+STC-100	-	no-user-path	a send queued on this device never carries a send time (scheduling is a separate request), its own Sending rows are hidden, and the server's rows leave sending ones out
+STC-425	-	no-user-path	a send queued on this device has no send time and its accepted row is hidden; the Scheduled row the panel does show is another device's, with Cancel and restore (a different row)
 AX-200	-	needs	needs the Pipedream connections flag off, and a development-mode bundle, which the suite serves, forces it on; the Manage button that replaces it there is AX-327
 AX-019	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 AX-040	-	needs	needs enable-calendar-prompt-web, off unless the flag service turns it on, and the suite's bundle has no flag service: only a bundle built with it on shows the prompt, over every other test

@@ -18,7 +18,7 @@ import {
 import { expect, test } from './harness/fixtures';
 import { notice } from './harness/send';
 import { backfilled, refuseOperation, savedNew } from './harness/states-send2';
-import { did, saw } from './ledger/record';
+import { saw } from './ledger/record';
 
 /** The banner above the composer, by its first line. */
 function banner(page: Page, message: string) {
@@ -181,7 +181,6 @@ test('a draft whose discard the service refused says so in its composer', async 
     .poll(async () => (await draftThreads(mailbox)).map((t) => t.name))
     .toEqual([subject]);
   await discardButton(page).click();
-  did('AC-400', 'F-119');
   // The refused discard leaves the draft open in its composer.
   await expect(page.getByPlaceholder(/subject/i)).toHaveValue(subject);
   const unconfirmed = banner(page, 'Draft could not be synced');

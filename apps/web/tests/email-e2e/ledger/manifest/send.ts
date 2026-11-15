@@ -833,6 +833,7 @@ export const send = {
       trigger: 'picker open',
       source: ['src/features/email-compose/components/date-selector.tsx'],
       flag: SCHEDULE_FLAG,
+      note: 'tested: the placeholder, Custom date... and the hint; the preset options are not asserted',
     },
     {
       id: 'STC-415',
@@ -1040,6 +1041,7 @@ export const send = {
       trigger: 'schedule while the draft has no saved id',
       source: ['src/features/email-compose/primitives/email-send-schedule.ts'],
       flag: SCHEDULE_FLAG,
+      note: 'tested for scheduling (F-142); for rescheduling (F-143) no user reaches it: a confirmed schedule always carries its draft',
     },
     {
       id: 'STC-064',
@@ -1289,7 +1291,9 @@ export const send = {
       fn: ['F-100'],
       state:
         'toast: Retry the previous inbox change before choosing another inbox.',
-      trigger: 'choosing a third inbox while a transfer is pending',
+      trigger:
+        'choosing a third inbox, or Retry of a move to one, while a transfer is pending',
+      note: 'tested: through Retry inbox change on the older notice',
       source: ['src/features/email-compose/primitives/draft-transfer.ts'],
     },
     {
@@ -1327,6 +1331,7 @@ export const send = {
         'Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)',
       trigger: 'local draft storage has been restarting for over 15 seconds',
       source: ['src/features/email-compose/primitives/draft-sync-status.ts'],
+      note: 'tested: the notice and its text; its Retry is not asserted',
     },
     {
       id: 'STC-082',

@@ -65,7 +65,7 @@ test.describe('a Gmail inbox', () => {
     );
     saw('STC-081');
     await chooseFrom(page, WORK);
-    did('AC-021', 'F-100');
+    did('AC-020', 'F-100');
     const unsaved = notice(
       page,
       'Reconnect and let the draft finish saving before changing inboxes.'
@@ -112,6 +112,7 @@ test.describe('a Gmail inbox', () => {
     await toWork.getByRole('button', { name: 'Dismiss' }).click();
     await expect(toWork).toHaveCount(0);
     await retryHome.click();
+    did('AC-021', 'F-100');
     await expect(
       notice(
         page,
@@ -152,7 +153,7 @@ test.describe('an Outlook inbox', () => {
       page.getByRole('button', { name: 'Remove numbers.bin' })
     ).toBeVisible();
     await chooseFrom(page, WORK);
-    did('AC-021', 'F-100');
+    did('AC-020', 'F-100');
     await expect(
       notice(
         page,
