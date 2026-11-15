@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { sleep } from '@core/util/sleep';
 import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -39,12 +40,16 @@ const MAX_CHANGE_PAGES = 6;
 /** Pushes inside this window share one request for their changes. */
 const PUSH_SETTLE_MS = 250;
 const MAX_PUSH_RERUNS = 3;
+/** How long a device read waits for the device to take a push. */
+const PUSH_STORE_WAIT_MS = 2_000;
 
 interface ChannelSyncState {
   /** Sequence numbers pushed since the last catch-up. */
   pushed: Set<string>;
   running?: Promise<ChannelCatchUp>;
   timer?: ReturnType<typeof setTimeout>;
+  /** Settled once the device has been asked to take the pushes noted so far. */
+  storing?: { promise: Promise<void>; done: () => void };
 }
 
 const channels = new Map<string, ChannelSyncState>();
@@ -217,14 +222,55 @@ export function noteChannelPush(channelId: string, seq: number | string): void {
   const state = stateOf(channelId);
   state.pushed.add(String(seq));
   if (state.timer !== undefined) return;
+  let done = () => {};
+  const promise = new Promise<void>((resolve) => {
+    done = resolve;
+  });
+  const storing = { promise, done };
+  state.storing = storing;
   state.timer = setTimeout(() => {
     state.timer = undefined;
-    fireAndForget(catchUpAndRefresh(host, channelId), 'channel-local-sync');
+    fireAndForget(
+      storePushes(host, channelId, state, storing),
+      'channel-local-sync'
+    );
   }, PUSH_SETTLE_MS);
+}
+
+async function storePushes(
+  host: ChannelCatchUpHost,
+  channelId: string,
+  state: ChannelSyncState,
+  storing: NonNullable<ChannelSyncState['storing']>
+): Promise<void> {
+  try {
+    await catchUpAndRefresh(host, channelId);
+  } finally {
+    // A push noted during the run has its own wait.
+    if (state.storing === storing) state.storing = undefined;
+    storing.done();
+  }
+}
+
+/**
+ * Waits until the device holds what the open views were pushed. The device
+ * takes a push a moment after the views do, from the server's log, so what it
+ * answers meanwhile is older than what is on screen. Resolves true when there
+ * was such a push: a device read made before this resolved is to be made
+ * again, not shown.
+ */
+export async function pushesStored(channelId: string): Promise<boolean> {
+  const storing = channels.get(channelId)?.storing;
+  if (!storing) return false;
+  await Promise.race([storing.promise, sleep(PUSH_STORE_WAIT_MS)]);
+  return true;
 }
 
 /** Forgets every channel's sync state; for account changes and tests. */
 export function resetChannelSync(): void {
-  for (const state of channels.values()) clearTimeout(state.timer);
+  for (const state of channels.values()) {
+    clearTimeout(state.timer);
+    state.storing?.done();
+  }
   channels.clear();
 }

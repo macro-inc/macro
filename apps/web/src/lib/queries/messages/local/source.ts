@@ -10,6 +10,7 @@ import { onlineManager } from '@tanstack/solid-query';
 import {
   catchUpAndRefresh,
   catchUpChannel,
+  pushesStored,
   refreshChannelViews,
 } from './catch-up';
 import { channelCacheAnswered, channelCacheHost } from './flag';
@@ -118,10 +119,15 @@ export async function loadLocalChannelTimelinePage(
         reportFallback(error, read.signal);
       }
     }
-    const loaded = await loadChannelPage(host, request, {
+    let loaded = await loadChannelPage(host, request, {
       signal: read.signal,
     });
     if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
+    // The views may already show a push this device page is older than.
+    if (loaded.source === 'device' && (await pushesStored(read.channelId))) {
+      loaded = await loadChannelPage(host, request, { signal: read.signal });
+      if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
+    }
     if (!anchored && loaded.source === 'device') {
       // Opening from the device counts as use, which eviction goes by; a
       // server page records it with its coverage.
@@ -157,7 +163,10 @@ export async function loadLocalChannelThread(
   // A host still starting would hold the open up; REST answers meanwhile.
   if (!host || !channelCacheAnswered(host)) return undefined;
   try {
-    const loaded = await loadChannelThread(host, channelId, rootId);
+    let loaded = await loadChannelThread(host, channelId, rootId);
+    if (loaded?.source === 'device' && (await pushesStored(channelId))) {
+      loaded = await loadChannelThread(host, channelId, rootId);
+    }
     if (loaded?.source === 'device') {
       fireAndForget(catchUpAndRefresh(host, channelId), SYNC_SURFACE);
     }

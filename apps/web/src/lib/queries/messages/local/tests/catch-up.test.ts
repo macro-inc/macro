@@ -3,13 +3,16 @@ import {
   type ChannelChangesPage,
   catchUpAndRefresh,
   catchUpChannel,
+  noteChannelPush,
+  pushesStored,
   resetChannelSync,
 } from '../catch-up';
 import { channelActivityKey, channelMessageKey } from '../sort-key';
 import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
 
-const { invalidateQueries } = vi.hoisted(() => ({
+const { invalidateQueries, channelCacheHost } = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
+  channelCacheHost: vi.fn(),
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -18,6 +21,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
   graphqlCacheEnabled: vi.fn(),
 }));
 vi.mock('../../../client', () => ({ queryClient: { invalidateQueries } }));
+vi.mock('../flag', () => ({ channelCacheHost }));
 
 const changes = (
   overrides: Partial<ChannelChangesPage> = {}
@@ -52,6 +56,8 @@ function sequencedHost(initial: string | null) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
+  channelCacheHost.mockReset();
   resetChannelSync();
   invalidateQueries.mockClear();
 });
@@ -147,5 +153,42 @@ describe('catchUpAndRefresh', () => {
       changes({ resetRequired: true })
     );
     expect(invalidateQueries).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('pushesStored', () => {
+  it('answers at once when the views hold no push the device lacks', async () => {
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+
+  it('waits for the device to be asked to take a pushed change', async () => {
+    vi.useFakeTimers();
+    const host = sequencedHost(null);
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    let stored: boolean | undefined;
+    const waiting = pushesStored(CHANNEL_ID).then((answer) => {
+      stored = answer;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(stored).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(200);
+    await waiting;
+    expect(stored).toBe(true);
+    expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+
+  it('stops waiting when the device does not take the push', async () => {
+    vi.useFakeTimers();
+    const host = sequencedHost('7');
+    host.channelTimeline = () => new Promise(() => {});
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    const waiting = pushesStored(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(await waiting).toBe(true);
   });
 });
