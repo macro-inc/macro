@@ -23,6 +23,7 @@ import {
 } from './pages';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
+import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
 
@@ -105,6 +106,7 @@ export async function loadLocalChannelTimelinePage(
 ): Promise<MessageTimelinePage | undefined> {
   const host = channelCacheHost();
   if (!host) return undefined;
+  watchWaitingWrites();
   const request = pageRequest(read);
   if (!request) return undefined;
   const anchored = request.before !== undefined || request.after !== undefined;

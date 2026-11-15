@@ -23,6 +23,7 @@ import {
   editChannelMessage,
   reactToChannelMessage,
   sendChannelMessage,
+  WAITING_ANNOUNCE_MS,
 } from '../writes';
 import { CHANNEL_ID, fakeHost, graphqlMessage } from './fixtures';
 
@@ -33,8 +34,13 @@ vi.mock('../unqueued-sends', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../unqueued-sends')>()),
   pageIsLeaving,
 }));
+const { announceWaitingWrite } = vi.hoisted(() => ({
+  announceWaitingWrite: vi.fn(),
+}));
+vi.mock('../waiting-writes', () => ({ announceWaitingWrite }));
 afterEach(() => {
   pageIsLeaving.mockReturnValue(false);
+  announceWaitingWrite.mockClear();
 });
 
 const NOW = new Date('2026-11-01T10:00:07.000Z');
@@ -223,6 +229,42 @@ describe('queued channel writes', () => {
     settle({ transactionId: '4', status: 'committed' });
     expect(await sending).toEqual(mapChannelMessage(stored));
     expect(listeners.size).toBe(0);
+  });
+
+  it("tells the device's other windows of a write the queue still holds after a moment", async () => {
+    vi.useFakeTimers();
+    try {
+      const { client } = fakeClient(() => ({
+        disposition: { kind: 'queued', transactionId: '4' },
+      }));
+      const { host, settle } = writeHost([graphqlMessage(7)]);
+      const send = () =>
+        sendChannelMessage(
+          host,
+          {
+            channelId: CHANNEL_ID,
+            id: graphqlMessage(7).id,
+            senderId: SENDER,
+            message: { content: 'hello' },
+          },
+          { client }
+        );
+
+      const delivered = send();
+      await vi.advanceTimersByTimeAsync(WAITING_ANNOUNCE_MS - 1);
+      settle({ transactionId: '4', status: 'committed' });
+      await delivered;
+      await vi.advanceTimersByTimeAsync(WAITING_ANNOUNCE_MS);
+      expect(announceWaitingWrite).not.toHaveBeenCalled();
+
+      const held = send();
+      await vi.advanceTimersByTimeAsync(WAITING_ANNOUNCE_MS);
+      expect(announceWaitingWrite).toHaveBeenCalledExactlyOnceWith(CHANNEL_ID);
+      settle({ transactionId: '4', status: 'committed' });
+      await held;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('answers with the row it sent when a delivered send cannot be read back', async () => {
