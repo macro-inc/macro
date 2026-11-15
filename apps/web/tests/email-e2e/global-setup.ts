@@ -7,7 +7,11 @@ import { rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { LocalStack, localStackAddresses } from './harness/local-stack';
+import {
+  checkStandIns,
+  LocalStack,
+  localStackAddresses,
+} from './harness/local-stack';
 import { checkSignUpCounter } from './harness/sign-up-limit';
 import { currentRun, runPaths } from './ledger/paths';
 
@@ -26,6 +30,8 @@ export default async function globalSetup(): Promise<
   // The local stack is already running, and so is a named stack server.
   const local = localStackAddresses();
   if (local) {
+    // Before anything signs up: the stack must not hold real keys.
+    await checkStandIns(local);
     // Its tests each sign up a user, more of them than one address may:
     // prove the counter is where the harness clears it before they start.
     const stack = new LocalStack(local);

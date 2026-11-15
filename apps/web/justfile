@@ -269,6 +269,14 @@ test-email-e2e-full-stack instance *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     status=$(cd ../.. && just run_local status --json --instance "{{instance}}")
+    # A stack started with Doppler's config holds real Google, model and
+    # payment keys: its sign-ups and its assistant would reach those
+    # services. The tier runs only on a stack that was started without.
+    state="../../infra/local/generated/{{instance}}/stack.json"
+    if [ "$(jq -r '.no_doppler' "$state" 2>/dev/null)" != "true" ]; then
+        echo "The instance {{instance}} was not started with --no-doppler ($state): the full-stack tier does not run on it. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
     # Assigned before they are exported: `export X=$(...)` hides a failure.
     project=$(jq -er .project <<<"$status")
     port() { docker compose -p "$project" port "$1" "$2" | sed 's/.*://'; }
@@ -278,16 +286,18 @@ test-email-e2e-full-stack instance *ARGS:
     gmail=$(port gmail_emulator 8080)
     outlook=$(port outlook_emulator 8080)
     queues=$(jq -er .localstack_url <<<"$status")
-    # Only a stack without a real model key runs the stand-in; the tests of
-    # the assistant say so when it is missing.
-    model=$(port model_emulator 8080 2>/dev/null || true)
+    # A stack runs the three stand-ins only when its config holds no real
+    # key for what they stand for: without one of them, it would call the
+    # real service.
+    model=$(port model_emulator 8080)
     export EMAIL_E2E_STACK_PROXY_URL="$proxy"
     export EMAIL_E2E_STACK_DATABASE_URL="$database"
     export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"
     export EMAIL_E2E_STACK_GMAIL_URL="http://localhost:$gmail"
     export EMAIL_E2E_STACK_OUTLOOK_URL="http://localhost:$outlook"
     export EMAIL_E2E_STACK_SQS_URL="$queues"
-    if [ -n "$model" ]; then export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"; fi
+    export EMAIL_E2E_STACK_MODEL_URL="http://localhost:$model"
+    export EMAIL_E2E_STACK_NO_DOPPLER=true
     env -u LD_LIBRARY_PATH bunx playwright test --config tests/email-e2e/playwright.config.ts {{ARGS}}
 
 # The coverage ledger of the email UI, from the last run of the browser suite

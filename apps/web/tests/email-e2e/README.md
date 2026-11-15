@@ -101,6 +101,13 @@ nix develop -c just email-e2e-full-stack            # starts the instance `email
 nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only the run, on a running instance
 ```
 
+- The tier runs only on an instance started with `--no-doppler`. Doppler's
+  config holds real Google, model and payment keys: with them the stack
+  starts no stand-ins, and its sign-ups and its assistant reach the real
+  services. The recipe reads how the instance was started, and
+  `checkStandIns` (`harness/local-stack.ts`) asks the Gmail and Outlook
+  emulators and the model stand-in for an answer; either stops the run
+  before a test signs up a user.
 - A test runs there when it is tagged: `@any-stack` (on both backends) or
   `@full-stack` (only there). Untagged tests need a stack of their own: they
   break, watch or drive services, which a shared stack cannot give them.

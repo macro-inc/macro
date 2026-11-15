@@ -60,6 +60,42 @@ export function localStackAddresses(): LocalStackAddresses | undefined {
   };
 }
 
+/**
+ * Refuses a stack whose tests could reach a real service: one started with
+ * Doppler's config (real Google, model and payment keys), or one where a
+ * stand-in does not answer. Called before the first sign-up.
+ */
+export async function checkStandIns(
+  addresses: LocalStackAddresses
+): Promise<void> {
+  if (process.env.EMAIL_E2E_STACK_NO_DOPPLER !== 'true') {
+    throw new Error(
+      'The full-stack tier runs only on a stack started with --no-doppler, and EMAIL_E2E_STACK_NO_DOPPLER=true says it was: run it with `just email-e2e-full-stack`, which checks.'
+    );
+  }
+  const model = process.env.EMAIL_E2E_STACK_MODEL_URL?.replace(/\/$/, '');
+  if (!model) {
+    throw new Error(
+      'EMAIL_E2E_STACK_MODEL_URL is not set: a stack without the model stand-in calls the real model.'
+    );
+  }
+  const standIns = [
+    ['the Gmail emulator', `${addresses.gmailUrl}/_emulator/health`],
+    ['the Outlook emulator', `${addresses.outlookUrl}/_emulator/health`],
+    ['the model stand-in', `${model}/_emulator/requests`],
+  ];
+  for (const [name, url] of standIns) {
+    const answer = await fetch(url).catch((error: unknown) => error);
+    if (!(answer instanceof Response) || !answer.ok) {
+      const why =
+        answer instanceof Response ? `answered ${answer.status}` : String(answer);
+      throw new Error(
+        `${name} does not answer at ${url} (${why}): the stack would call the real service in its place. No test was run.`
+      );
+    }
+  }
+}
+
 function needsOwnStack(what: string): never {
   throw new Error(
     `${what} needs a stack of the test's own: the local stack is shared`
