@@ -295,13 +295,13 @@ async fn a_contact_has_the_photo_its_seed_gives_and_no_other() {
             .unwrap()
             .is_none()
     );
-    let refused = emulator
+    let statuses = emulator
         .requests()
         .into_iter()
         .filter(|request| request.route == Some(crate::Route::ContactsPhoto))
         .map(|request| request.status)
         .collect::<Vec<_>>();
-    assert_eq!(refused, [200, 404]);
+    assert_eq!(statuses, [200, 404]);
 
     // A photo given later is served; a contact saved again without one has
     // none.

@@ -1,7 +1,6 @@
 //! What the maintenance Lambdas do: the daily sweep of unfinished sign-ins,
-//! the daily cleanup of stored attachment files, and the recording of
-//! bounces and complaints about mail Macro sent, and the hourly link
-//! maintenance.
+//! the daily cleanup of stored attachment files, the recording of bounces
+//! and complaints about mail Macro sent, and the hourly link maintenance.
 
 #![expect(
     clippy::disallowed_methods,
@@ -529,6 +528,30 @@ async fn outlook_bounced_and_reported_addresses_are_suppressed() -> Result<(), R
     bounced_and_reported_addresses_are_suppressed(Provider::Outlook).await
 }
 
+/// Marks the next token Google serves the mailbox: a fault that fails
+/// nothing and is used up by that one request. Answers its id.
+fn mark_next_token(stack: &Stack, inbox: &Inbox) -> u64 {
+    stack
+        .gmail()
+        .inject_fault(email_e2e::gmail_emulator::Fault {
+            mailbox: Some(inbox.email().to_owned()),
+            route: Some(email_e2e::gmail_emulator::Route::OauthToken),
+            delay_ms: Some(1),
+            times: Some(1),
+            ..email_e2e::gmail_emulator::Fault::default()
+        })
+}
+
+/// Waits until Google has served the mailbox a token since
+/// [`mark_next_token`] answered `mark`.
+async fn token_served(stack: &Stack, mark: u64, what: &str) -> Result<(), Report> {
+    eventually(what, DEFAULT_TIMEOUT, async || {
+        let pending = stack.gmail().faults().iter().any(|(id, _)| *id == mark);
+        Ok((!pending).then_some(()))
+    })
+    .await
+}
+
 /// The hourly link maintenance finds a Gmail grant the user revoked at
 /// Google without any mail arriving: the inbox asks to be reconnected. An
 /// inbox whose grant is fine is checked and left as it is.
@@ -553,16 +576,20 @@ async fn gmail_hourly_maintenance_finds_a_revoked_grant() -> Result<(), Report> 
     let inbox = ada.link_gmail().await?;
     let side = ada.link(Provider::Gmail, "ada.work@example.com").await?;
 
-    // Nothing is wrong: the check changes nothing.
+    // Nothing is wrong: each inbox is asked for a new token and left alone.
+    let marks = [&inbox, &side].map(|healthy| (healthy, mark_next_token(&stack, healthy)));
     stack.run_refresh().await?;
-    handled(&stack).await?;
-    for healthy in [&inbox, &side] {
+    for (healthy, mark) in marks {
+        token_served(&stack, mark, "the maintenance to check a healthy inbox").await?;
         let link = healthy.link().await?;
         assert_eq!(link["needs_reauth"], false, "{link}");
     }
+    handled(&stack).await?;
 
     inbox.revoke_grant()?;
+    let mark = mark_next_token(&stack, &side);
     stack.run_refresh().await?;
+    token_served(&stack, mark, "the maintenance to check the other inbox").await?;
     let link = inbox
         .wait_for_link("the maintenance to ask for a reconnect", |link| {
             link["needs_reauth"] == true

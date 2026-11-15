@@ -750,7 +750,9 @@ impl Stack {
     /// for those whose hour it is. The handler runs with a health interval
     /// of one hour, so every syncing Gmail inbox is due a health check on
     /// each run; which inboxes are refreshed depends on the hour and the
-    /// link's id, so a scenario cannot count on a refresh. Returns when the
+    /// link's id, so a scenario cannot count on a refresh. The daily
+    /// deletion of unused and inactive inboxes runs in production only, so
+    /// never on a stack, whatever its two settings say. Returns when the
     /// handler has finished; the workers then carry out what it enqueued.
     pub async fn run_refresh(&self) -> Result<(), Report> {
         self.run_lambda_with(
@@ -758,8 +760,8 @@ impl Stack {
             None,
             &[
                 ("INBOX_HEALTH_POLL_INTERVAL_HOURS", "1"),
-                ("DELETE_UNUSED_AFTER_DAYS", "30"),
-                ("DELETE_INACTIVE_AFTER_DAYS", "90"),
+                ("DELETE_UNUSED_AFTER_DAYS", "7"),
+                ("DELETE_INACTIVE_AFTER_DAYS", "60"),
             ],
         )
         .await
