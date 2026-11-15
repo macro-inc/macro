@@ -6,6 +6,7 @@ use ai_billing::AiAdmissionError;
 use chrono::DateTime;
 use serde_json::json;
 
+use super::super::finding::test::never_answering;
 use super::super::test::{
     BUG_REPORTS, Gate, JobRow, Rows, Sessions, add, agent_step, code_step, configuration, context,
     drafts, message_posted, owner, plain, routine,
@@ -303,12 +304,31 @@ impl Replica {
         Self::publishing(rows, sessions, &Arc::new(Published::default()))
     }
 
+    /// A replica that finds its drafts' items first, whose fast model never
+    /// answers.
+    fn finding(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> Self {
+        Self::drafting(
+            rows,
+            drafts(rows, sessions).with_finding(never_answering()),
+            &Arc::new(Published::default()),
+        )
+    }
+
     /// A replica whose updates reach `published`.
     fn publishing(rows: &Arc<Rows>, sessions: &Arc<Sessions>, published: &Arc<Published>) -> Self {
+        Self::drafting(rows, drafts(rows, sessions), published)
+    }
+
+    /// A replica drafting with `drafts`, whose updates reach `published`.
+    fn drafting(
+        rows: &Arc<Rows>,
+        drafts: RoutineDrafts<Checker, Sessions>,
+        published: &Arc<Published>,
+    ) -> Self {
         let (tasks, shutdown) = (TaskTracker::new(), CancellationToken::new());
         Self {
             jobs: DraftJobs::new(
-                Arc::new(drafts(rows, sessions)),
+                Arc::new(drafts),
                 Arc::clone(rows) as Arc<dyn DraftJobStore>,
                 Arc::clone(published),
                 tasks.clone(),
@@ -526,6 +546,28 @@ async fn a_ready_draft_is_readable_until_its_owner_discards_it() {
     );
     // Gone: discarding again finds nothing.
     assert!(replica.jobs.discard(owner(), job.id).await.is_err());
+}
+
+/// A finished draft whose session won't stop deletes the session, so it
+/// works on no further, and is still ready.
+#[tokio::test(start_paused = true)]
+async fn a_finished_draft_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let ready = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(ready.state, DraftJobState::Ready { .. }),
+        "{ready:?}"
+    );
 }
 
 /// A start whose request is dropped once its row is written, before it
@@ -830,6 +872,34 @@ async fn a_drafter_that_never_ends_is_failed_at_its_limit() {
     assert!(sessions.deleted.lock().unwrap().is_empty());
 }
 
+/// A drafter cut off at [`JOB_LIMIT`] whose session won't stop deletes the
+/// session, so it works on no further, and its job still fails as timed out.
+#[tokio::test(start_paused = true)]
+async fn a_drafter_cut_off_whose_session_wont_stop_deletes_it() {
+    let rows = Arc::new(Rows {
+        stalls: true.into(),
+        ..Rows::default()
+    });
+    let mut sessions = hangs(&rows);
+    Arc::get_mut(&mut sessions).unwrap().unstoppable = true;
+    let replica = Replica::new(&rows, &sessions);
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    // The cut-off drafter cleans up on a task of its own.
+    tokio::time::timeout(POLL, sessions.deletes.notified())
+        .await
+        .expect("the session that won't stop was never deleted");
+    let session = AgentSessionId::new_from_uuid(job.id);
+    assert!(sessions.cancelled.lock().unwrap().is_empty());
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    let timed_out = replica.jobs.job(owner(), job.id).await.unwrap();
+    assert!(
+        matches!(&timed_out.state, DraftJobState::Failed { message, .. } if message == TIMED_OUT),
+        "{timed_out:?}"
+    );
+}
+
 /// A host that stops ends its drafts within the shutdown's time, failed as
 /// interrupted, which its owner reads from any replica.
 #[tokio::test(start_paused = true)]
@@ -957,6 +1027,57 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
     assert_eq!(Arc::new(drafts(&rows, &sessions)).sweep().await.unwrap(), 1);
     assert_eq!(rows.phase(unopened), Some(DraftJobPhase::Ready));
     assert_eq!(rows.phase(died), Some(DraftJobPhase::Failed));
+}
+
+/// A draft that finds its items answers its start once its usage is
+/// admitted, before the fast model has named anything or a session started;
+/// a find that never answers is given up, and the session drafts without it.
+#[tokio::test(start_paused = true)]
+async fn a_draft_that_finds_its_items_answers_its_start_once_admitted() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::finding(&rows, &sessions);
+
+    let started = tokio::time::Instant::now();
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+
+    assert!(started.elapsed() < POLL, "{:?}", started.elapsed());
+    assert_eq!(job.state, DraftJobState::Drafting);
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    replica.settled().await;
+    assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
+    assert!(matches!(
+        replica.jobs.job(owner(), job.id).await.unwrap().state,
+        DraftJobState::Failed { .. }
+    ));
+}
+
+/// A cancel while the draft still finds its items stops it at its next read
+/// of the row, before any session starts, and leaves nothing.
+#[tokio::test(start_paused = true)]
+async fn a_cancel_while_finding_stops_the_drafter_before_its_session() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::finding(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let cancelled_at = tokio::time::Instant::now();
+    replica.jobs.discard(owner(), job.id).await.unwrap();
+    replica.settled().await;
+
+    assert!(
+        cancelled_at.elapsed() <= POLL,
+        "{:?}",
+        cancelled_at.elapsed()
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+    assert!(rows.drafts.lock().unwrap().is_empty());
+    assert!(rows.jobs.lock().unwrap().is_empty());
+    assert_eq!(
+        replica.published.of(job.id).last().unwrap().state,
+        DraftUpdateState::Removed
+    );
 }
 
 /// A refused admission is the blocking route's error, and leaves nothing.

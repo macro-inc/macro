@@ -94,3 +94,75 @@ it('authoritatively refreshes a successful save when editable fields changed dur
   unsubscribe();
   client.clear();
 });
+
+it("names the company from the detail's summary without reading the company", async () => {
+  const client = new QueryClient();
+  const key = crmKeys.contact(before.id).queryKey;
+  const detail = {
+    ...before,
+    companyId: 'company-1',
+    company: {
+      id: 'company-1',
+      name: 'Example company',
+      domain: 'example.com',
+      hidden: false,
+    },
+  };
+  client.setQueryData(key, detail);
+  const saved = {
+    ...before,
+    companyId: 'company-1',
+    email: 'second@example.com',
+    updatedAt: '2026-10-02',
+  };
+  const getCompany = vi.fn(async () => ok({ name: 'Read company' }));
+  const deps = {
+    client,
+    storage: { getCompany },
+  } as unknown as CrmRecordDependencies;
+  await editContact(deps, detail, 'email', async () => ok(saved));
+  expect(getCompany).not.toHaveBeenCalled();
+  expect(mocks.commit).toHaveBeenCalledExactlyOnceWith(
+    saved,
+    'Example company'
+  );
+  client.clear();
+});
+
+it("names the company from the primary read's summary when recovering", async () => {
+  const client = new QueryClient();
+  const key = crmKeys.contact(before.id).queryKey;
+  const company = {
+    id: 'company-1',
+    name: 'Example company',
+    domain: 'example.com',
+    hidden: false,
+  };
+  // A conflicting edit landed meanwhile, so the save recovers from a primary read.
+  client.setQueryData(key, {
+    ...before,
+    email: 'second@example.com',
+    updatedAt: '2026-10-03',
+  });
+  const committed = {
+    ...before,
+    companyId: 'company-1',
+    email: 'third@example.com',
+    updatedAt: '2026-10-02',
+  };
+  const getCompany = vi.fn(async () => ok({ name: 'Read company' }));
+  const deps = {
+    client,
+    storage: {
+      getContact: vi.fn(async () => ok({ ...committed, company })),
+      getCompany,
+    },
+  } as unknown as CrmRecordDependencies;
+  await editContact(deps, before, 'company', async () => ok(committed));
+  expect(getCompany).not.toHaveBeenCalled();
+  expect(mocks.commit).toHaveBeenCalledExactlyOnceWith(
+    { ...committed, company },
+    'Example company'
+  );
+  client.clear();
+});

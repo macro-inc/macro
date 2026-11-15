@@ -65,10 +65,6 @@ vi.mock('@ui', async (importOriginal) => ({
   ),
 }));
 
-vi.mock('@core/util/useCopyLink', () => ({
-  useCopyLink: () => async () => true,
-}));
-
 vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));

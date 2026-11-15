@@ -1,4 +1,5 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
+import { t } from '@app/lib/i18n';
 import type { AgentProvider } from '@service-notification/generated/schemas';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
@@ -122,13 +123,15 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
       .with('runtime_access_removed', () => 'removed your access to')
-      // The computer is the actor: "<computer> is ready".
+      // The computer, or the agent teammate it runs, is the actor:
+      // "<computer> is ready", "<agent> couldn't be set up".
       .with('computer_setup', () => {
         const meta = n.notification_metadata;
-        return meta.tag === 'computer_setup' &&
-          meta.content.outcome.kind === 'failed'
-          ? 'could not be set up'
-          : 'is ready';
+        if (meta.tag !== 'computer_setup') return 'is ready';
+        if (meta.content.outcome.kind !== 'failed') return 'is ready';
+        return meta.content.agent
+          ? "couldn't be set up"
+          : 'could not be set up';
       })
       .exhaustive(() => 'notified you about')
   );
@@ -299,6 +302,19 @@ export function getNotificationContent(
       })
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
+      )
+      // An agent teammate's: what to do with the agent, not its computer.
+      .with({ tag: 'computer_setup', content: { agent: P.nonNullable } }, (m) =>
+        match(m.content.outcome)
+          .with({ kind: 'ready' }, () =>
+            t('teamAgents.readyNoticeBody', { name: m.content.agent.name })
+          )
+          .with(
+            { kind: 'failed' },
+            ({ failureReason }) =>
+              `${failureReason} ${t('teamAgents.failedNoticeBody', { name: m.content.agent.name })}`
+          )
+          .exhaustive()
       )
       .with({ tag: 'computer_setup' }, (m) =>
         match(m.content.outcome)

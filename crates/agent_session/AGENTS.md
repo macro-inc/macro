@@ -229,4 +229,7 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+- No session opens for a bot bound to an agent teammate's computer
+  (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
+  external create refuse it with `TeamAgentComputer` (409).
 - `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.
