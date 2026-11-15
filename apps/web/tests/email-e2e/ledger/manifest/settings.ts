@@ -726,6 +726,7 @@ export const settings = {
       action: 'Confirm sign out and remove local drafts',
       trigger: 'dialog button "Sign out"',
       source: ['src/lib/core/auth/logout.ts'],
+      note: 'the one button of the one dialog: it was also listed with the send surfaces, as AC-111',
     },
     {
       id: 'AX-216',

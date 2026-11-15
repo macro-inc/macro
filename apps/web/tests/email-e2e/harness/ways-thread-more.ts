@@ -1,7 +1,8 @@
 // More of what the tests of the other ways into a thread's functions share,
-// beside the frozen `ways-thread.ts`: the phone's thread address and header.
+// beside the frozen `ways-thread.ts`: the phone's thread address and header,
+// and the reads of a thread still on their way.
 
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Request } from '@playwright/test';
 
 /** The address of a thread opened on a phone, where it opens as a block. */
 export function openedOnPhone(threadId: string): RegExp {
@@ -32,4 +33,26 @@ export function phoneHeaderSubject(page: Page, subject: string): Locator {
     .filter({ hasText: subject })
     .last();
   return header.getByText(subject, { exact: true });
+}
+
+/**
+ * Counts the page's reads of a thread's messages, and its mark-read writes,
+ * that are still on their way. An open thread takes a scroll to its top only
+ * once those are done: one made while it still reads its messages loads no
+ * older ones, and nothing asks again.
+ */
+export function threadReadsInFlight(page: Page): () => number {
+  const inFlight = new Set<Request>();
+  page.on('request', (request) => {
+    if (request.method() !== 'POST') return;
+    const body = request.postData() ?? '';
+    if (
+      body.includes('"EmailThreadPage"') ||
+      body.includes('"MarkEmailThreadSeen"')
+    )
+      inFlight.add(request);
+  });
+  page.on('requestfinished', (request) => inFlight.delete(request));
+  page.on('requestfailed', (request) => inFlight.delete(request));
+  return () => inFlight.size;
 }

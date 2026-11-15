@@ -395,14 +395,6 @@ export const send = {
       ],
     },
     {
-      id: 'AC-111',
-      surface: 'SC-24',
-      fn: ['F-121'],
-      action: 'confirm sign-out when local drafts / pending sends exist',
-      trigger: "Sign out, then the dialog's Sign out",
-      source: ['src/lib/core/auth/logout.ts'],
-    },
-    {
       id: 'AC-401',
       surface: 'SC-24',
       fn: ['F-121'],

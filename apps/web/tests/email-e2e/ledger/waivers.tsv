@@ -46,34 +46,13 @@ STL-110	-	backlog	not exercised itself: another way into, or state of, F-034, co
 STL-405	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
 STL-402	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
 STL-410	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
-AL-122	-	backlog	not exercised itself: another way into, or state of, F-177, covered through other rows
-AL-134	-	backlog	not exercised itself: another way into, or state of, F-109, covered through other rows
-AL-135	-	backlog	not exercised itself: another way into, or state of, F-110, covered through other rows
-AL-138	-	backlog	not exercised itself: another way into, or state of, F-072, covered through other rows
-AL-139	-	backlog	not exercised itself: another way into, or state of, F-069, covered through other rows
-AL-140	-	backlog	not exercised itself: another way into, or state of, F-068, covered through other rows
-AL-143	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
-AL-144	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
-AL-500	-	backlog	not exercised itself: another way into, or state of, F-079, covered through other rows
-AL-145	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
-AL-146	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-AL-147	-	backlog	not exercised itself: another way into, or state of, F-080, F-081, covered through other rows
-AL-502	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
-AL-165	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
+AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
+AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
+AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
-AL-504	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
-AL-506	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
-AL-175	-	backlog	not exercised itself: another way into, or state of, F-117, covered through other rows
-AL-173	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
-AL-174	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
 AL-176	-	backlog	not exercised itself: another way into, or state of, F-126, covered through other rows
-AL-508	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
-AL-510	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
-AL-181	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
-AL-190	-	backlog	not exercised: of F-120, F-136, F-140, not all covered (see their waivers)
-AL-515	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
-AL-516	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
+AL-181	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 STL-067	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
 STL-068	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
 STL-087	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
@@ -195,21 +174,12 @@ STC-309	-	backlog	not exercised itself: another way into, or state of, F-113, co
 STC-312	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
 STC-938	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
 STC-960	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-AC-054	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
 AC-063	-	backlog	not exercised itself: another way into, or state of, F-116, F-118, covered through other rows
-AC-400	-	backlog	not exercised itself: another way into, or state of, F-119, F-120, covered through other rows
 AC-065	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-AC-066	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-AC-067	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
+AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
 AC-102	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
-AC-105	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-AC-106	-	backlog	not exercised: of F-136, not all covered (see their waivers)
-AC-108	-	backlog	not exercised: of F-136, F-144, F-147, not all covered (see their waivers)
-AC-109	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
 AC-110	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-AC-402	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-AC-111	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
-AC-915	-	backlog	not exercised itself: another way into, or state of, F-147, covered through other rows
+AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-001	-	backlog	not exercised itself: another way into, or state of, F-116, F-117, F-118, covered through other rows
 STC-002	-	backlog	not exercised itself: another way into, or state of, F-116, covered through other rows
 STC-003	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
@@ -338,9 +308,9 @@ STX-211	-	backlog	not exercised itself: another way into, or state of, F-001, F-
 STX-212	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
 STX-029	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
 STX-030	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-AX-049	-	backlog	not exercised: of F-166, not all covered (see their waivers)
-AX-050	-	backlog	not exercised: of F-166, not all covered (see their waivers)
-AX-307	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+AX-049	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
+AX-050	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
+AX-307	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AX-053	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-055	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-308	-	needs	needs the AI service, and no test on the full-stack tier does it yet
@@ -352,9 +322,9 @@ AX-313	-	needs	needs the AI service, and no test on the full-stack tier does it 
 AX-316	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
 AX-317	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
 AX-318	-	needs	needs the search service, and no test on the full-stack tier does it yet
-AX-323	-	backlog	not exercised itself: another way into, or state of, F-096, covered through other rows
+AX-323	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AX-062	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AX-325	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+AX-325	-	needs	needs enable-in-app-tours, off by default and read only at build time: a bundle built with it starts a tour by itself over each view a new user opens, in every other test
 STX-033	-	backlog	not exercised: of F-166, not all covered (see their waivers)
 STX-301	-	backlog	not exercised: of F-166, not all covered (see their waivers)
 STX-302	-	backlog	not exercised: of F-166, not all covered (see their waivers)
