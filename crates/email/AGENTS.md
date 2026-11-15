@@ -153,9 +153,14 @@ tools — hexagonal, heavily feature-gated.
   hydration by id with an address template) is read in page order by `OwnedRead`
   (`dynamic/query/owned_scope.rs`): a capped probe counts the address
   superset, then either the sorted superset or each inbox's newest threads
-  stream into the preview pick until LIMIT, the superset stream finishing a
-  page the inbox window left short unless the window reached the inboxes'
-  end. A filter with any other top-level message term (a subject, an address
+  stream into the preview pick until LIMIT. A page that the inbox stream's
+  first window (10 threads per row, at most 1,000) leaves short goes on below
+  the last walked thread in rounds: the next, four times larger window while
+  the walk finds rows at the page's rate, else a probe with a cap that grows
+  fourfold and the superset below once it fits. Keep every statement capped:
+  a walked thread the addresses miss costs a read of each of its messages, so
+  a cold window of addresses gone quiet costs several times their superset.
+  A filter with any other top-level message term (a subject, an address
   under `NOT`) goes to the general builder: the pick could drop most of the
   window and the read would end up slower. A domain or partial address lists
   a thread only through the queried inboxes' own contacts, as
@@ -163,8 +168,8 @@ tools — hexagonal, heavily feature-gated.
   contact (`ContactScope`). Keep the `OFFSET 0`
   fence and the stream's `ORDER BY`, or the planner joins the whole stream to
   its facts. The read runs in one repeatable-read, read-only transaction (a
-  short page and its window count see one snapshot) and, like the general
-  builder's owned requests, has no `statement_timeout`.
+  page's rounds see one snapshot, so their rows concatenate) and, like the
+  general builder's owned requests, has no `statement_timeout`.
   `test/owned_address_read.rs` compares every tuning's pages with the general
   builder; extend it when the read covers a new filter. A repeated inbox id
   reads as one in every builder (`distinct_links`).

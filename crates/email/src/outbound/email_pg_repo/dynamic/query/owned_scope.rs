@@ -15,23 +15,41 @@
 //!   indexes list (`matching_threads`, without mailbox facts), which is cheap
 //!   when the addresses are rare in the mail. The *inbox* stream merges each
 //!   inbox's newest threads from `idx_email_threads_non_spam_link_ts_id`, up
-//!   to a window of `limit × window_per_row` threads (at most
-//!   [`MAX_WINDOW`]), which is cheap when they are common.
+//!   to a window of threads, which is cheap when they are common.
 //! - Each streamed thread then gets the general builder's preview pick, its
 //!   latest message the view and the filter accept, in order, until the page
 //!   fills; a thread with none drops out. The pick is the general builder's
 //!   message match, so the page holds its threads, order and previews.
 //!
 //! A probe counts the superset up to `superset_limit` to choose the stream.
-//! The inbox stream's page is final when it filled the page, or when its
-//! window held every thread left in the inboxes (a list's last page);
-//! otherwise the superset stream reads it.
+//! Past it, the inbox stream reads a first window of `limit ×
+//! window_per_row` threads (at most [`MAX_WINDOW`]). The page is final when
+//! that window filled it, or held every thread left in the inboxes (a list's
+//! last page). Otherwise the page goes on below the last walked thread in
+//! rounds, each with a window [`GROWTH`] times the last:
+//!
+//! - When the threads walked so far yielded enough rows that, at that rate,
+//!   the round's window would fill the page, the inbox stream walks it.
+//! - Otherwise a probe first counts the superset up to the round's cap, and
+//!   when it fits, the superset stream finishes the page below the last
+//!   walked thread. When it doesn't, the cap grows [`GROWTH`]-fold and the
+//!   inbox stream walks the round's window.
+//!
+//! A walked thread whose messages miss the addresses costs the pick a read of
+//! each of them, so on a cold cache a window of addresses gone quiet costs
+//! several times their superset; the rounds keep that walk to the first
+//! window unless the walk is finding rows. Every statement reads a bounded
+//! number of rows, and the walks and the probes grow geometrically, so a page
+//! costs a small multiple of the cheaper of walking to its last row and
+//! reading the superset. All the page's statements read one snapshot, and
+//! each lists only threads below the previous one's, so their rows
+//! concatenate in page order.
 //!
 //! The address tree must be the filter's only top-level term with a message
 //! literal. Another one (a subject, or an address under `NOT`) can drop most
 //! of the inbox window in the pick, so the window comes up short and the
-//! superset stream reads the page again, slower than the general builder,
-//! which reads those requests.
+//! read pays for rounds the general builder doesn't, which reads those
+//! requests.
 //!
 //! The general builder lists a thread only when it matches through the queried
 //! inboxes' own contacts (`matching_threads`), while its preview pick matches a
@@ -41,6 +59,7 @@
 //! lists its thread in either stream only if `matching_threads`' condition
 //! holds for it ([`ContactScope`]).
 
+use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
@@ -67,41 +86,61 @@ pub(crate) struct OwnedReadTuning {
     /// The most superset rows the superset stream reads first. Past it the
     /// inbox stream reads first.
     pub(crate) superset_limit: i64,
-    /// The inbox stream's window, in threads per page row.
+    /// The inbox stream's first window, in threads per page row.
     pub(crate) window_per_row: i64,
+    /// The most superset rows the first probe of the rounds reads the
+    /// superset for.
+    pub(crate) round_superset_cap: i64,
 }
 
 impl OwnedReadTuning {
     /// Chosen on a production-size mailbox: the superset stream reads all its
     /// rows before the first thread, and at 5,000 rows that stays well under
     /// the inbox stream's cost for addresses that rare. Past it the
-    /// addresses usually fill a page within 100 threads per row of the
-    /// inboxes.
+    /// addresses that fill pages fill one within 10 threads per row of the
+    /// inboxes. The rounds' first cap reads a superset ten times that size,
+    /// which on a cold cache costs less than walking the 4,000 threads of the
+    /// round's window.
     pub(crate) const DEFAULT: Self = Self {
         superset_limit: 5_000,
-        window_per_row: 100,
+        window_per_row: 10,
+        round_superset_cap: 50_000,
     };
 }
 
-/// The most threads the inbox stream reads for one page: a Sales Email page
-/// of 100 at 100 per row. Past it the superset stream finishes the page, so
-/// a larger limit (Soup allows 500) doesn't stretch a window that the
+/// The most threads the inbox stream's first window reads: a Sales Email
+/// page of 100 at 10 per row. Past it the rounds finish the page, so a
+/// larger limit (Soup allows 500) doesn't stretch a window that the
 /// addresses fill slowly.
-const MAX_WINDOW: i64 = 10_000;
+const MAX_WINDOW: i64 = 1_000;
 
-/// The inbox stream's window for a page of `query_limit` rows: `window_per_row`
-/// threads per row, at most [`MAX_WINDOW`].
+/// How much each round's window and each probe's cap grow over the last.
+const GROWTH: i64 = 4;
+
+/// The inbox stream's first window for a page of `query_limit` rows:
+/// `window_per_row` threads per row, at least one and at most
+/// [`MAX_WINDOW`].
 pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
-    query_limit.saturating_mul(window_per_row).min(MAX_WINDOW)
+    query_limit
+        .saturating_mul(window_per_row)
+        .clamp(1, MAX_WINDOW)
 }
 
-/// The stream a page reads its threads from, in page order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The stream a statement reads its threads from, in page order.
+#[derive(Clone, Copy, Debug)]
 enum Stream {
     /// The threads the address indexes list, sorted.
     Superset,
-    /// Each inbox's newest threads, merged, up to a window.
-    Inboxes,
+    /// Each inbox's newest threads, merged, up to `window` threads.
+    Inboxes { window: i64 },
+}
+
+/// A thread's place in the streams' order. A round lists only the threads
+/// after it, the older ones.
+#[derive(Clone, Copy, Debug)]
+struct Below {
+    effective_ts: DateTime<Utc>,
+    id: Uuid,
 }
 
 /// The streams that read an owned page, in the order they ran.
@@ -112,13 +151,35 @@ pub(crate) enum OwnedStreams {
     Empty,
     /// The superset was small enough to read first.
     Superset,
-    /// The inbox stream filled the page.
+    /// The inbox stream's first window filled the page.
     Inboxes,
-    /// The inbox stream came up short of a page, but its window held every
-    /// thread left in the inboxes, so the page is final.
+    /// The inbox stream's first window came up short of a page, but held
+    /// every thread left in the inboxes, so the page is final.
     InboxesToEnd,
-    /// The inbox stream came up short of a page, so the superset read it.
+    /// The first window came up short, and the rounds' windows below it
+    /// filled the page or reached the end of the inboxes.
+    InboxesThenInboxes,
+    /// The windows came up short, and the superset, within a round's cap,
+    /// finished the page below them.
     InboxesThenSuperset,
+}
+
+/// A page and how [`OwnedRead`] took it.
+struct Taken {
+    streams: OwnedStreams,
+    /// The rounds below the first window.
+    rounds: u32,
+    rows: Vec<ThreadPreviewCursorDbRow>,
+}
+
+impl Taken {
+    fn new(streams: OwnedStreams, rounds: u32, rows: Vec<ThreadPreviewCursorDbRow>) -> Self {
+        Self {
+            streams,
+            rounds,
+            rows,
+        }
+    }
 }
 
 /// An owned All Mail page for one OR-tree of addresses. See the module docs.
@@ -203,6 +264,7 @@ impl<'a> OwnedRead<'a> {
             inboxes = self.inboxes.len(),
             superset_rows = Empty,
             streams = Empty,
+            rounds = Empty,
             rows = Empty,
         ),
         err
@@ -212,87 +274,127 @@ impl<'a> OwnedRead<'a> {
         connection: &mut PgConnection,
     ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
         let span = tracing::Span::current();
-        let (streams, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
-            (OwnedStreams::Empty, Vec::new())
+        let taken = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
+            Taken {
+                streams: OwnedStreams::Empty,
+                rounds: 0,
+                rows: Vec::new(),
+            }
         } else {
-            let superset_rows: i64 = self
-                .probe()
-                .build_query_scalar()
-                .persistent(false)
-                .fetch_one(&mut *connection)
+            let superset_rows = self
+                .superset_rows(connection, self.tuning.superset_limit)
                 .await?;
             span.record("superset_rows", superset_rows);
             self.read(connection, superset_rows).await?
         };
-        span.record("streams", <&str>::from(streams));
-        span.record("rows", rows.len());
-        Ok((streams, rows))
+        span.record("streams", <&str>::from(taken.streams));
+        span.record("rounds", taken.rounds);
+        span.record("rows", taken.rows.len());
+        Ok((taken.streams, taken.rows))
     }
 
-    /// The page and the streams that read it.
+    /// The page, the streams that read it and how many rounds ran.
     async fn read(
         &self,
         connection: &mut PgConnection,
         superset_rows: i64,
-    ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+    ) -> Result<Taken, sqlx::Error> {
+        let limit = self.params.query_limit;
         if superset_rows <= self.tuning.superset_limit {
-            let rows = self.page(connection, Stream::Superset).await?;
-            return Ok((OwnedStreams::Superset, rows));
+            let rows = self.page(connection, Stream::Superset, None, limit).await?;
+            return Ok(Taken::new(OwnedStreams::Superset, 0, rows));
         }
-        let rows = self.page(connection, Stream::Inboxes).await?;
-        if rows.len() as i64 >= self.params.query_limit {
-            return Ok((OwnedStreams::Inboxes, rows));
-        }
-        // The superset costs a dense list's whole address set, so a short
-        // page skips it when the window read every thread there is.
-        let window_threads: i64 = self
-            .window_count()
-            .build_query_scalar()
-            .persistent(false)
-            .fetch_one(&mut *connection)
+        let mut window = inbox_window(limit, self.tuning.window_per_row);
+        let mut rows = self
+            .page(connection, Stream::Inboxes { window }, None, limit)
             .await?;
-        if window_threads < self.window() {
-            return Ok((OwnedStreams::InboxesToEnd, rows));
+        if rows.len() as i64 >= limit {
+            return Ok(Taken::new(OwnedStreams::Inboxes, 0, rows));
         }
-        let rows = self.page(connection, Stream::Superset).await?;
-        Ok((OwnedStreams::InboxesThenSuperset, rows))
+        // A short page is final when the window read every thread there is.
+        let Some(mut below) = self.window_end(connection, None, window).await? else {
+            return Ok(Taken::new(OwnedStreams::InboxesToEnd, 0, rows));
+        };
+        let mut walked = window;
+        let mut cap = self.tuning.round_superset_cap;
+        let mut rounds = 0;
+        loop {
+            rounds += 1;
+            window = window.saturating_mul(GROWTH);
+            let found = rows.len() as i64;
+            let left = limit - found;
+            // At the rate the walk found rows so far, the page needs
+            // `left × walked / found` more threads.
+            if left.saturating_mul(walked) > found.saturating_mul(window) {
+                if self.superset_rows(connection, cap).await? <= cap {
+                    rows.extend(
+                        self.page(connection, Stream::Superset, Some(below), left)
+                            .await?,
+                    );
+                    return Ok(Taken::new(OwnedStreams::InboxesThenSuperset, rounds, rows));
+                }
+                cap = cap.saturating_mul(GROWTH);
+            }
+            rows.extend(
+                self.page(connection, Stream::Inboxes { window }, Some(below), left)
+                    .await?,
+            );
+            if rows.len() as i64 >= limit {
+                return Ok(Taken::new(OwnedStreams::InboxesThenInboxes, rounds, rows));
+            }
+            let Some(end) = self.window_end(connection, Some(below), window).await? else {
+                return Ok(Taken::new(OwnedStreams::InboxesThenInboxes, rounds, rows));
+            };
+            below = end;
+            walked = walked.saturating_add(window);
+        }
     }
 
-    /// The inbox stream's window for this page ([`inbox_window`]).
-    fn window(&self) -> i64 {
-        inbox_window(self.params.query_limit, self.tuning.window_per_row)
-    }
-
-    /// Counts the threads in the inbox stream's window, stopping at the
-    /// window: fewer means the stream read every thread left in the inboxes.
-    /// Each inbox's walk is the stream's, so the count reads its index.
-    fn window_count(&self) -> QueryBuilder<'static, Postgres> {
+    /// The last thread of the inbox stream's `window` threads below `below`
+    /// (or the cursor), or `None` when the inboxes hold fewer: then the
+    /// stream read every thread left. Each inbox's walk is the stream's, so
+    /// this reads the index entries the stream just read.
+    async fn window_end(
+        &self,
+        connection: &mut PgConnection,
+        below: Option<Below>,
+        window: i64,
+    ) -> Result<Option<Below>, sqlx::Error> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
-        let window = self.window();
-        let mut builder = QueryBuilder::new("SELECT count(*) FROM (SELECT 1 FROM (");
+        let mut builder = QueryBuilder::new("SELECT effective_ts, id FROM (");
         for (index, inbox) in self.inboxes.iter().enumerate() {
             if index > 0 {
                 builder.push("\n            UNION ALL");
             }
-            builder.push("\n            (SELECT 1 FROM email_threads t WHERE t.link_id = ");
+            builder.push(format!(
+                "\n            (SELECT {sort_ts_field} AS effective_ts, t.id \
+                 FROM email_threads t WHERE t.link_id = "
+            ));
             builder.push_bind(*inbox);
-            self.push_stream_filters(&mut builder, sort_ts_field);
+            self.push_stream_filters(&mut builder, sort_ts_field, below);
             builder.push(format!(" ORDER BY {sort_ts_field} DESC, t.id DESC LIMIT "));
             builder.push_bind(window);
             builder.push(")");
         }
-        builder.push("\n        ) AS inbox_threads LIMIT ");
-        builder.push_bind(window);
-        builder.push(") AS window_threads");
-        builder
+        builder.push("\n        ) AS inbox_threads ORDER BY effective_ts DESC, id DESC OFFSET ");
+        builder.push_bind(window.saturating_sub(1).max(0));
+        builder.push(" LIMIT 1");
+        let end: Option<(DateTime<Utc>, Uuid)> = builder
+            .build_query_as()
+            .persistent(false)
+            .fetch_optional(&mut *connection)
+            .await?;
+        Ok(end.map(|(effective_ts, id)| Below { effective_ts, id }))
     }
 
     async fn page(
         &self,
         connection: &mut PgConnection,
         stream: Stream,
+        below: Option<Below>,
+        limit: i64,
     ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-        let mut builder = self.build_page(stream);
+        let mut builder = self.build_page(stream, below, limit);
         builder
             .build()
             .persistent(false)
@@ -302,16 +404,24 @@ impl<'a> OwnedRead<'a> {
     }
 
     /// Counts the superset's rows (a thread once per message that lists
-    /// it), stopping one past `superset_limit`.
-    fn probe(&self) -> QueryBuilder<'static, Postgres> {
+    /// it), stopping one past `cap`.
+    async fn superset_rows(
+        &self,
+        connection: &mut PgConnection,
+        cap: i64,
+    ) -> Result<i64, sqlx::Error> {
         let mut builder = QueryBuilder::new("");
         self.push_contact_ctes(&mut builder, "WITH ");
         builder.push("\n        SELECT count(*) FROM (SELECT 1 FROM (\n            ");
         self.push_branches(&mut builder, "UNION ALL");
         builder.push("\n        ) AS superset LIMIT ");
-        builder.push_bind(self.tuning.superset_limit.saturating_add(1));
+        builder.push_bind(cap.saturating_add(1).max(0));
         builder.push(") AS capped");
         builder
+            .build_query_scalar()
+            .persistent(false)
+            .fetch_one(&mut *connection)
+            .await
     }
 
     /// The hoisted contact CTEs the branches read, the first after `lead`.
@@ -334,10 +444,17 @@ impl<'a> OwnedRead<'a> {
         }
     }
 
-    fn build_page(&self, stream: Stream) -> QueryBuilder<'static, Postgres> {
+    /// A statement reading `limit` rows of `stream` below `below` (or the
+    /// cursor).
+    fn build_page(
+        &self,
+        stream: Stream,
+        below: Option<Below>,
+        limit: i64,
+    ) -> QueryBuilder<'static, Postgres> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
         let mut builder = QueryBuilder::new("");
-        if stream == Stream::Superset {
+        if matches!(stream, Stream::Superset) {
             self.push_contact_ctes(&mut builder, "\n        WITH ");
             let separator = if self.superset.contact_ctes.is_empty() {
                 "\n        WITH "
@@ -361,7 +478,7 @@ impl<'a> OwnedRead<'a> {
             SELECT t.*, lmp.subject, lmp.snippet, lmp.from_contact_id, lmp.from_name, lmp.is_draft
             FROM ("#,
         );
-        self.push_stream(&mut builder, stream, sort_ts_field);
+        self.push_stream(&mut builder, stream, below, sort_ts_field);
         builder.push(
             r#"
             ) AS t
@@ -395,7 +512,7 @@ impl<'a> OwnedRead<'a> {
             ORDER BY t.effective_ts DESC, t.id DESC
             LIMIT "#,
         );
-        builder.push_bind(self.params.query_limit);
+        builder.push_bind(limit);
         push_page_tail(
             &mut builder,
             self.view,
@@ -410,6 +527,7 @@ impl<'a> OwnedRead<'a> {
         &self,
         builder: &mut QueryBuilder<'static, Postgres>,
         stream: Stream,
+        below: Option<Below>,
         sort_ts_field: &str,
     ) {
         match stream {
@@ -418,18 +536,17 @@ impl<'a> OwnedRead<'a> {
                 builder.push("t.link_id = ANY(");
                 builder.push_bind(self.inboxes.clone());
                 builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
-                self.push_stream_filters(builder, sort_ts_field);
+                self.push_stream_filters(builder, sort_ts_field, below);
                 builder.push(
                     r#"
                     ORDER BY effective_ts DESC, id DESC
                     OFFSET 0"#,
                 );
             }
-            Stream::Inboxes => {
+            Stream::Inboxes { window } => {
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
-                let window = self.window();
                 builder.push("\n                    SELECT * FROM (");
                 for (index, inbox) in self.inboxes.iter().enumerate() {
                     if index > 0 {
@@ -439,7 +556,7 @@ impl<'a> OwnedRead<'a> {
                     self.push_stream_select(builder, sort_ts_field);
                     builder.push("t.link_id = ");
                     builder.push_bind(*inbox);
-                    self.push_stream_filters(builder, sort_ts_field);
+                    self.push_stream_filters(builder, sort_ts_field, below);
                     builder.push(" ORDER BY effective_ts DESC, id DESC LIMIT ");
                     builder.push_bind(window);
                     builder.push(")");
@@ -468,13 +585,26 @@ impl<'a> OwnedRead<'a> {
         ));
     }
 
-    /// The thread-level terms and, after the first page, the cursor: both
-    /// index conditions of the stream's walk.
-    fn push_stream_filters(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+    /// The thread-level terms and the stream's start, both index conditions
+    /// of its walk: `below` in a round, else the cursor after the first page.
+    /// A round's `below` is a thread the cursor's condition already listed,
+    /// so it replaces the cursor.
+    fn push_stream_filters(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        ts: &str,
+        below: Option<Below>,
+    ) {
         self.thread_terms
             .clone()
             .push_into(builder, &self.params.user_id);
-        if let Some(cursor_timestamp) = self.params.cursor_timestamp {
+        if let Some(Below { effective_ts, id }) = below {
+            builder.push(format!(" AND ({ts}, t.id) < ("));
+            builder.push_bind(effective_ts);
+            builder.push("::timestamptz, ");
+            builder.push_bind(id);
+            builder.push("::uuid)");
+        } else if let Some(cursor_timestamp) = self.params.cursor_timestamp {
             builder.push(format!(" AND ({ts}, t.id) < ("));
             builder.push_bind(cursor_timestamp);
             builder.push("::timestamptz, ");

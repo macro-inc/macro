@@ -27,13 +27,14 @@ fn link(i: u8) -> Uuid {
 }
 
 /// Every way the owned read takes a page, by name.
-const READS: [(&str, OwnedReadTuning); 5] = [
+const READS: [(&str, OwnedReadTuning); 6] = [
     ("default", OwnedReadTuning::DEFAULT),
     (
         "superset",
         OwnedReadTuning {
             superset_limit: i64::MAX,
             window_per_row: 20,
+            round_superset_cap: i64::MAX,
         },
     ),
     (
@@ -41,20 +42,35 @@ const READS: [(&str, OwnedReadTuning); 5] = [
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1_000,
+            round_superset_cap: -1,
         },
     ),
+    // Rounds that only walk.
     (
         "inboxes_tight",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 3,
+            round_superset_cap: -1,
         },
     ),
+    // The superset finishes a page whenever the walk finds rows too slowly.
     (
         "inboxes_then_superset",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1,
+            round_superset_cap: i64::MAX,
+        },
+    ),
+    // Probes that come up over their cap until it outgrows the superset: the
+    // fixture's sparse company has 26 superset rows.
+    (
+        "rounds",
+        OwnedReadTuning {
+            superset_limit: -1,
+            window_per_row: 1,
+            round_superset_cap: 10,
         },
     ),
 ];
@@ -934,8 +950,9 @@ async fn streams(
 )]
 async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let dense = company(&["dense.test"]);
+    let sparse = company(&["sparse.test"]);
     let both = [link(0), link(1)];
-    let [default, superset, inboxes, _, fallback] = READS.map(|(_, tuning)| tuning);
+    let [default, superset, inboxes, tight, fallback, rounds] = READS.map(|(_, tuning)| tuning);
     // The fixture's superset is small, so the default reads it first.
     let read = streams(&pool, &both, &dense, 7, default).await?;
     assert!(read.iter().all(|name| *name == "superset"), "{read:?}");
@@ -951,9 +968,20 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
         "{read:?}"
     );
     assert_eq!(*last, "inboxes_to_end");
-    // A window of one thread per row seldom fills a page.
+    // Rounds that only walk fill the pages a small first window leaves short.
+    let read = streams(&pool, &both, &dense, 7, tight).await?;
+    assert!(read.contains(&"inboxes_then_inboxes"), "{read:?}");
+    assert!(!read.contains(&"inboxes_then_superset"), "{read:?}");
+    // A first window that finds rows at the page's rate walks on; one that
+    // finds too few leaves the page to the superset.
     let read = streams(&pool, &both, &dense, 7, fallback).await?;
+    assert!(read.contains(&"inboxes_then_inboxes"), "{read:?}");
+    assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
+    let read = streams(&pool, &both, &sparse, 7, fallback).await?;
     assert_eq!(read.first(), Some(&"inboxes_then_superset"), "{read:?}");
+    // Probes over their cap walk on, until the cap outgrows the superset.
+    let read = streams(&pool, &both, &sparse, 7, rounds).await?;
+    assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
     // An Owner term outside the caller's inboxes leaves nothing to read.
     let elsewhere = and(dense.clone(), EmailLiteral::Owner(link(2)));
     assert_eq!(
@@ -984,8 +1012,9 @@ async fn reads_share_one_snapshot(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
 #[test]
 fn window_grows_with_the_page_up_to_its_cap() {
-    assert_eq!(inbox_window(20, 100), 2_000);
-    assert_eq!(inbox_window(100, 100), 10_000);
-    assert_eq!(inbox_window(500, 100), 10_000);
-    assert_eq!(inbox_window(i64::MAX, 2), 10_000);
+    assert_eq!(inbox_window(20, 10), 200);
+    assert_eq!(inbox_window(100, 10), 1_000);
+    assert_eq!(inbox_window(500, 10), 1_000);
+    assert_eq!(inbox_window(i64::MAX, 2), 1_000);
+    assert_eq!(inbox_window(7, 0), 1);
 }
