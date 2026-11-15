@@ -249,6 +249,9 @@ pub(crate) struct MicrosoftCredentials {
 /// Parse a configured Stripe price id, rejecting anything but `price_` and a safe suffix.
 ///
 /// `stripe::PriceId` accepts any string, so malformed configuration fails here instead.
+/// The local stack's stubs are checked against the same pattern
+/// (`xtask_local`'s `stripe_price_id_stubs_are_valid_price_ids`); change both
+/// together.
 pub fn configured_price_id(value: &str) -> anyhow::Result<stripe::PriceId> {
     anyhow::ensure!(
         lazy_regex::regex_is_match!(r"^price_[A-Za-z0-9_]{1,64}$", value),
