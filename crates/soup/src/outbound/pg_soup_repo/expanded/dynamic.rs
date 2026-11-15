@@ -58,6 +58,7 @@ use crate::domain::models::{
     DynamicSort, SoupDocumentServerFacts, SoupProjectionHydration, SoupSortDirection,
     grouping::ItemGroupingInfo,
 };
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_order_expr, group_select_expr,
     property_date_expression, property_value_sql,
@@ -1312,7 +1313,9 @@ fn document_literal_sql(literal: DocumentLiteral) -> String {
         }
         DocumentLiteral::CreatedAt(lit) => date_predicate(r#"d."createdAt""#, &lit),
         DocumentLiteral::UpdatedAt(lit) => date_predicate(r#"d."updatedAt""#, &lit),
-        DocumentLiteral::Property(lit) => property_literal_predicate(&lit, "d.id"),
+        DocumentLiteral::Property(lit) => {
+            property_literal_predicate(&lit, "d.id", PropertyProbe::Planned)
+        }
         DocumentLiteral::EmailAttachmentParticipant(email) => {
             email_attachment_participant_predicate(&email, "d.id")
         }
@@ -1514,10 +1517,39 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     ast: Option<&Expr<PropertiesLiteral>>,
     entity_id_sql: &str,
 ) -> String {
+    build_probed_properties_filter(ast, entity_id_sql, PropertyProbe::Planned)
+}
+
+/// How a property `EXISTS` reaches `entity_properties`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PropertyProbe {
+    /// Postgres may turn the `EXISTS` into a semi-join, such as a bitmap over
+    /// every row the property's partial index holds, which suits a broad arm.
+    Planned,
+    /// One lookup per candidate, behind an `OFFSET` fence: for an id-bounded
+    /// arm, whose candidates are far fewer than the property's rows.
+    PerCandidate,
+}
+
+impl PropertyProbe {
+    /// Ends the `EXISTS` subquery: nothing, or the fence.
+    fn fence(self) -> String {
+        match self {
+            Self::Planned => String::new(),
+            Self::PerCandidate => format!(" {PER_CANDIDATE}"),
+        }
+    }
+}
+
+fn build_probed_properties_filter(
+    ast: Option<&Expr<PropertiesLiteral>>,
+    entity_id_sql: &str,
+    probe: PropertyProbe,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
-    let formatting = property_filter::predicate(expr, entity_id_sql);
+    let formatting = property_filter::predicate(expr, entity_id_sql, probe);
     if formatting.is_empty() {
         String::new()
     } else {
@@ -1527,7 +1559,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
 
 /// An EXISTS check that the entity identified by `entity_id_sql` has a
 /// property value matching `literal`.
-fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) -> String {
+fn property_literal_predicate(
+    literal: &PropertiesLiteral,
+    entity_id_sql: &str,
+    probe: PropertyProbe,
+) -> String {
     let PropertiesLiteral {
         property_definition_id,
         entity_type,
@@ -1570,8 +1606,9 @@ fn property_literal_predicate(literal: &PropertiesLiteral, entity_id_sql: &str) 
             WHERE ep_prop.entity_id = {entity_id_sql}
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{property_definition_id}'
-            AND {value_predicate}
-        )"#
+            AND {value_predicate}{fence}
+        )"#,
+        fence = probe.fence(),
     )
 }
 
@@ -1802,18 +1839,125 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod, source_ids: usize) -> String {
+/// Lowercase canonical uuid text: the only ids whose `::uuid` cast prints back
+/// unchanged, so a cast id equals `entity_access.entity_id` exactly when
+/// `entity_access.entity_id::text` equals the id.
+const CANONICAL_UUID_PATTERN: &str =
+    "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+/// Whether the document filter admits only documents it names by id (a
+/// resolved CRM association, or ids passed in), so the arm's candidates are
+/// that id list rather than the caller's whole accessible set.
+fn document_filter_is_id_bounded(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+    ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(DocumentLiteral::Id(_)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
+
+/// How a document arm gates access. A broad arm keeps the flattenable
+/// [`bound_access_semi_join`], so Postgres can hash the caller's grants. An
+/// id-bounded arm reads its candidates and their own filters behind an
+/// `OFFSET` fence and probes `entity_access` once per survivor afterwards
+/// ([`bounded_access_probe`]): Postgres otherwise checks access first, on
+/// every listed id, and pays a grant lookup for each document the sub-type,
+/// file-type and property filters then reject.
+#[derive(Clone, Copy)]
+enum DocumentArmAccess {
+    Joined,
+    AfterFilters,
+}
+
+impl DocumentArmAccess {
+    fn new(document_filter: Option<&Expr<DocumentLiteral>>) -> Self {
+        if document_filter_is_id_bounded(document_filter) {
+            Self::AfterFilters
+        } else {
+            Self::Joined
+        }
+    }
+
+    fn property_probe(self) -> PropertyProbe {
+        match self {
+            Self::Joined => PropertyProbe::Planned,
+            Self::AfterFilters => PropertyProbe::PerCandidate,
+        }
+    }
+
+    /// Opens the arm, before its top clause.
+    fn open(self) -> &'static str {
+        match self {
+            Self::Joined => "",
+            Self::AfterFilters => "SELECT * FROM (",
+        }
+    }
+
+    /// Closes the arm, after its filters. `order_by` orders the fenced
+    /// candidates as the page does, so a flat page stops probing access at its
+    /// `LIMIT`; grouped pages count every candidate and pass `None`.
+    fn close(self, order_by: Option<&str>, source_ids: usize) -> String {
+        match self {
+            Self::Joined => String::new(),
+            Self::AfterFilters => format!(
+                "{} {PER_CANDIDATE}) bounded_documents WHERE {}\n",
+                order_by
+                    .map(|order| format!(" ORDER BY {order}"))
+                    .unwrap_or_default(),
+                bounded_access_probe("bounded_documents.id", "document", source_ids)
+            ),
+        }
+    }
+}
+
+/// The access check for one candidate of an id-bounded arm: does any grant of
+/// the bound sources name it. It compares the uuid column, not
+/// `entity_id::text`, so the two partial unique indexes answer it from the
+/// index alone; the text expression index needs a heap read per probe. Ids
+/// that are not canonical uuids match no grant either way.
+fn bounded_access_probe(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+    let entity_id =
+        format!("(CASE WHEN {id_sql} ~ '{CANONICAL_UUID_PATTERN}' THEN {id_sql} END)::uuid");
+    let probe = |project: &str| {
+        format!(
+            r#"EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    WHERE ea.entity_id = {entity_id}
+                        AND ea.entity_type = '{entity_type}'
+                        AND ea.source_id = ANY(${source_ids}::text[])
+                        AND ea.granted_from_project_id {project}
+                    {PER_CANDIDATE}
+                )"#
+        )
+    };
+    format!("({} OR {})", probe("IS NULL"), probe("IS NOT NULL"))
+}
+
+fn document_top_where_clause(
+    sort_method: SimpleSortMethod,
+    access: DocumentArmAccess,
+    source_ids: usize,
+) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
     } else {
         ""
     };
+    let access_clause = match access {
+        DocumentArmAccess::Joined => format!(
+            "\n                AND {}",
+            bound_access_semi_join("d.id", "document", source_ids)
+        ),
+        DocumentArmAccess::AfterFilters => String::new(),
+    };
     format!(
-        r#"{user_history_join}                WHERE d."deletedAt" IS NULL
-                AND {}
-"#,
-        bound_access_semi_join("d.id", "document", source_ids)
+        r#"{user_history_join}                WHERE d."deletedAt" IS NULL{access_clause}
+"#
     )
 }
 
@@ -1942,6 +2086,8 @@ fn build_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        let access = DocumentArmAccess::new(document_filter);
+        builder.push(access.open());
         builder.push(document_top_clause(
             sort_method,
             needs_task_property_joins,
@@ -1955,12 +2101,16 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, source_ids));
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
-        builder.push(build_properties_filter(
+        builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
+            access.property_probe(),
         ));
+        // The page's own order, so the access probes stop at its LIMIT.
+        let page_order = (!property_sort && !name_sort).then_some("sort_ts DESC, id DESC");
+        builder.push(access.close(page_order, source_ids));
     }
 
     if include_chats {
@@ -2790,6 +2940,8 @@ fn build_grouped_query<'a>(
         push_union_separator(&mut builder, &mut needs_separator);
         let document_filter = filter_ast.document_filter.as_deref();
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
+        let access = DocumentArmAccess::new(document_filter);
+        builder.push(access.open());
         builder.push(grouped_document_top_clause(
             sort_method,
             needs_task_property_joins,
@@ -2799,15 +2951,15 @@ fn build_grouped_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, source_ids));
-        builder.push(build_document_filter(
-            filter_ast.document_filter.as_deref(),
-            Some(document_ids),
-        ));
-        builder.push(build_properties_filter(
+        builder.push(document_top_where_clause(sort_method, access, source_ids));
+        builder.push(build_document_filter(document_filter, Some(document_ids)));
+        builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
+            access.property_probe(),
         ));
+        // Group totals count every candidate, so no early stop to order for.
+        builder.push(access.close(None, source_ids));
     }
 
     if include_chats {
