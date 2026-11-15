@@ -335,6 +335,7 @@ function readFiring(trigger: Element): Firing {
         destination: undefined,
       };
     })
+    .with('webhook', () => ({ tail: '· webhook', destination: undefined }))
     .otherwise(() => ({ tail: undefined, destination: undefined }));
 }
 
