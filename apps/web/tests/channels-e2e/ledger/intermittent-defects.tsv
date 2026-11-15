@@ -6,3 +6,6 @@ KEY-05	On a busy page the composer takes the keyboard back just after ArrowUp se
 THR-08	A reply from someone else to a closed thread sometimes does not raise its count on an open page (seen in 1 whole-suite run in 15)
 UNR-04	With VITE_ENABLE_GRAPHQL_SOUP the "1 unread ... below" notice sometimes never appears (about 1 run in 10)
 CHN-15	With VITE_ENABLE_GRAPHQL_SOUP a channel deleted elsewhere sometimes stays open on its owner's page (1 of 3 runs); without it, always (known-defects.tsv)
+CHN-02	A team channel someone else makes is sometimes missing from a teammate's open list, or goes when opened, until reload: the list is read again before the channel is in it (with VITE_ENABLE_GRAPHQL_SOUP every run on one machine and none in CI; without it the reverse)
+ACC-06	With VITE_ENABLE_GRAPHQL_SOUP, after a teammate joins a team channel found by name its row sometimes stays under "Not joined" with a Join button until reload; the join itself works (every run on one machine, none in CI)
+CHN-08	With VITE_ENABLE_GRAPHQL_SOUP a deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on the local-index branch); without it, always (known-defects.tsv)

@@ -10,6 +10,4 @@ MEM-03	off	A person removed from a channel keeps it open, with a composer, until
 UNR-05	both	A mention of me shows only the plain unread mark on the channel's row, never a count of mentions
 UNR-09	both	The first message in a new channel leaves the other member's row unmarked; the second marks it
 DM-06	off	New direct message offers nobody for a typed name (Options unavailable); only a whole email address is accepted
-ACC-06	on	After a teammate joins a team channel found by name, its row stays under "Not joined" with a Join button until reload; the join itself works
-CHN-02	on	A team channel someone else makes does not appear in a teammate's open list until reload
 UNR-10	on	A row shown while the list is being searched is not marked unread when a message arrives, until the search is closed
