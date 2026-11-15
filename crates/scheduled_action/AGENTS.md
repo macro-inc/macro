@@ -322,6 +322,8 @@ each run.
   hook id is no longer the routine's (rotated or removed) is superseded.
   Code reads `trigger.item.webhook.json` (or `.body` when not JSON); the run
   page keeps the body as sent; the queue row drops it when the run ends. The
+  claim checks the hook again (`FOR SHARE`), so a rotation or removal that
+  returned never lets an earlier delivery start. The
   secret is never logged or traced (`the_secret_is_never_traced`); the
   request spans record route placeholders, not paths.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task

@@ -353,6 +353,24 @@ impl EventRunRepository for PgEventRunRepo {
             tx.rollback().await?;
             return Ok(None);
         }
+        // A delivery starts only while its URL is still the routine's. The
+        // share lock makes a rotation or removal wait for this claim, so none
+        // that has returned lets an earlier delivery start; the next poll
+        // supersedes the run instead.
+        if let Some(delivery) = pending.event.webhook_delivery() {
+            let current = sqlx::query_scalar!(
+                r#"SELECT 1 AS "current!" FROM scheduled_action_webhook
+                WHERE action_id = $1 AND hook_id = $2 FOR SHARE"#,
+                key.action_id,
+                delivery.hook_id.as_uuid(),
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+            if current.is_none() {
+                tx.rollback().await?;
+                return Ok(None);
+            }
+        }
         let action = ScheduledAction {
             id: Some(action.id),
             owner: Owner::from_principal_str(&action.owner)?,

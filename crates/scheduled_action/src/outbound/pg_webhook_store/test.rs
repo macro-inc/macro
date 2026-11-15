@@ -46,7 +46,7 @@ fn webhook_and_cron(cron: &ScheduledAction, filter: Value) -> ActionTrigger {
     let schedule = match &cron.trigger {
         ActionTrigger::Cron { schedule, timezone } => RoutineTrigger::Cron {
             schedule: schedule.clone(),
-            timezone: timezone.clone(),
+            timezone: *timezone,
         },
         ActionTrigger::Multiple { triggers } => triggers.as_slice()[0].clone(),
         ActionTrigger::Events { .. } | ActionTrigger::Once { .. } => {
@@ -435,6 +435,26 @@ async fn removing_and_deleting_revoke_the_url(pool: PgPool) {
         current.check_pending(&pending),
         Err(crate::domain::event_runs::CancellationReason::Superseded)
     ));
+    // Nor does a dispatcher that read the configuration before the removal
+    // start it: the claim checks the URL again.
+    let now = Utc::now();
+    assert!(
+        events
+            .claim(
+                AuthorizedEventRun {
+                    pending: pending.clone(),
+                    access: EventAccessCapability::Webhook {
+                        owner: MacroUserIdStr::parse_from_str(USER_A).unwrap(),
+                    },
+                },
+                ClaimToken::try_from(Uuid::from(pending.event.event_id())).unwrap(),
+                now,
+                now + MAX_ACTION_TIME,
+            )
+            .await
+            .unwrap()
+            .is_none()
+    );
     fixture.post(&minted, "{}", None).await.unwrap();
     fixture.repo.delete_action(&fixture.id()).await.unwrap();
     assert_eq!(fixture.hooks().await, 0);
