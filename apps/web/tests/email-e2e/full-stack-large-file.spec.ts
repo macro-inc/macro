@@ -74,7 +74,11 @@ for (const provider of PROVIDERS) {
       ).toBeVisible();
 
       await page.getByRole('button', { name: 'Send email' }).click();
-      await expect(notice(page, 'Email sent')).toBeVisible();
+      // The notice comes when the service has delivered the message, after
+      // the time it holds a send for Undo: on a busy stack, over 20 seconds.
+      await expect(notice(page, 'Email sent')).toBeVisible({
+        timeout: 90_000,
+      });
       const received = async () =>
         (await readMailbox(mailbox, zed)).filter(
           (message) => message.subject === 'Survey'
