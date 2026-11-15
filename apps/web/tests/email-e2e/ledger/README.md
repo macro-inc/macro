@@ -202,18 +202,28 @@ that one variable in `crates/email_e2e/src/process.rs`.
 under "Manifest against the source":
 
 - the operations of email's own are the same in the source and in
-  `manifest/network.ts`: a GraphQL operation named for email (`Email` or
-  `Mail` in its name) or in an `email-*.graphql` document, and every call
-  of the email service's client that is not to the calendar. The other
-  operations are not checked, listed or not: adding, renaming or removing
-  one has no meaning for email and must not fail this job. So the lines for
-  them (Soup, saved views, notifications) are kept by hand;
+  `manifest/network.ts`, where they have `scope: 'email'`: a GraphQL
+  operation in an `email-*.graphql` document or in
+  `EMAIL_OPERATIONS_ELSEWHERE` in `derive.ts`, and every call of the email
+  service's client that is not to the calendar. The other operations are
+  not checked, whatever their name: adding, renaming or removing one has no
+  meaning for email and must not fail this job. Those an email page makes
+  all the same (Soup, saved views, notifications, the calendar's
+  occurrences) are listed as `shared` and kept by hand; the rest are not
+  listed;
 - every hotkey the email code registers and every email hotkey token is on an
   action row;
 - every toast the email code raises is on a state row;
-- every source file a row names exists, ids are unique, rows are on a surface
-  of their group;
+- every source file a row names exists, when it is one of email's own: under
+  the email directories, or in `EMAIL_FILES_ELSEWHERE` in `derive.ts` (a file
+  elsewhere that holds only email; add a new one there). The difference names
+  the row and the manifest file to change. A file shared with the rest of the
+  app that is gone is listed as reported only: it is not counted and fails
+  nothing;
+- ids are unique, rows are on a surface of their group;
 - every row belongs to a function of `functions.tsv`, and every function
   with a UI has a row, and a state row to see its result by.
 
-Requests the app made that the manifest does not list are reported too.
+Requests made in a run that the manifest does not list are reported too:
+those of the rest of the app that an email page also makes, and any of
+email's that lacks its line.

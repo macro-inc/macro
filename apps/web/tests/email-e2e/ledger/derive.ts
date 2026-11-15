@@ -20,6 +20,59 @@ export const EMAIL_SOURCE = [
   'src/lib/service-clients/service-email',
 ];
 
+/**
+ * Files outside those directories that hold nothing but email. A row that
+ * names one is held to it like a file of email's own; every other file a
+ * row names is shared with the rest of the app.
+ */
+export const EMAIL_FILES_ELSEWHERE = [
+  'src/components/app/mailtoComposerHandler.ts',
+  'src/features/auth/GmailReauthenticationPrompt.tsx',
+  'src/features/calendar-view/components/use-open-event-email.ts',
+  'src/features/crm/views/company-emails-section.tsx',
+  'src/features/crm/views/contact-emails-section.tsx',
+  'src/features/crm/views/email-privacy.tsx',
+  'src/features/entity/composed/list-entity/email.tsx',
+  'src/features/inbox/AddInboxDialog.tsx',
+  'src/features/inbox/AdminConsentRequiredDialog.tsx',
+  'src/features/inbox/ShareInboxConflictDialog.tsx',
+  'src/features/next-soup/actions/make-block-sender-action.ts',
+  'src/features/next-soup/actions/make-discard-draft-action.ts',
+  'src/features/next-soup/actions/make-sender-filter-action.ts',
+  'src/features/onboarding/views/email-step.tsx',
+  'src/features/reminders/components/email-reminder-form.tsx',
+  'src/features/reminders/email-reminder-status.tsx',
+  'src/features/reminders/views/email-reminder-composer.tsx',
+  'src/features/reminders/views/email-reminder-menu.tsx',
+  'src/features/reminders/views/email-row-schedule.tsx',
+  'src/features/settings/components/signature-form.tsx',
+  'src/features/settings/components/signature-workspace.tsx',
+  'src/features/settings/email-settings.tsx',
+  'src/features/settings/Email.tsx',
+  'src/features/settings/InboxSettingsOperations.tsx',
+  'src/features/settings/queries/inbox-settings-operations.ts',
+  'src/features/settings/SignatureEditor.tsx',
+  'src/features/settings/SignatureSection.tsx',
+  'src/features/universal-input/views/email-draft.tsx',
+  'src/lib/core/component/AI/component/tool/GetThread.tsx',
+  'src/lib/core/component/AI/component/tool/ListInboxes.tsx',
+  'src/lib/core/component/AI/component/tool/ListLabels.tsx',
+  'src/lib/core/component/AI/component/tool/SendConfirmedEmail.tsx',
+  'src/lib/core/component/AI/component/tool/SendEmail.tsx',
+  'src/lib/core/component/AI/component/tool/UpdateThreadLabels.tsx',
+  'src/lib/core/component/EmailPermissionsBanner.tsx',
+  'src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEmailSearchMention.ts',
+  'src/lib/core/util/interceptMailtoLinks.ts',
+];
+
+/** Whether a source file a row names holds only email. */
+export function emailOwnedFile(file: string): boolean {
+  return (
+    EMAIL_FILES_ELSEWHERE.includes(file) ||
+    EMAIL_SOURCE.some((root) => file === root || file.startsWith(`${root}/`))
+  );
+}
+
 /** Where the app's GraphQL documents are. */
 const GRAPHQL = 'src/lib/service-clients/service-storage/graphql';
 
@@ -112,26 +165,28 @@ export type DerivedOperation = {
   file: string;
 };
 
+/** The GraphQL operations of email's own outside the `email-*.graphql` documents. */
+export const EMAIL_OPERATIONS_ELSEWHERE = [
+  'MailAccounts',
+  'SoupMailBackfill',
+  'SoupSharedMailBackfill',
+];
+
 /**
- * Whether an operation is email's own, so that the manifest and the source
- * have to agree on it. A GraphQL operation is when its name says so (`Email`
- * or `Mail`) or its document does (`email-*.graphql`); a call of the email
- * service's client is unless it goes to the calendar. Every other operation
- * can come and go with no change to email, and the check leaves it alone.
- * The name is what a line of the manifest still has once the operation is
- * gone from the source, so the rule can be asked of both.
+ * Whether an operation the source defines is email's own, so that the
+ * manifest has to list it. A GraphQL operation is when it is in an
+ * `email-*.graphql` document or in `EMAIL_OPERATIONS_ELSEWHERE`; a call of
+ * the email service's client is unless it goes to the calendar. Every
+ * other operation can come and go with no change to email, whatever its
+ * name, and the check leaves it alone.
  */
-export function emailOwned(operation: {
-  id: string;
-  kind: DerivedOperation['kind'];
-  file?: string;
-}): boolean {
+export function emailOwned(operation: DerivedOperation): boolean {
   if (operation.kind === 'rest') {
     return !/^[A-Z]+ \/calendar(\/|$)/.test(operation.id);
   }
   return (
-    /Email|Mail/.test(operation.id) ||
-    /(^|\/)email-[^/]*\.graphql$/.test(operation.file ?? '')
+    /(^|\/)email-[^/]*\.graphql$/.test(operation.file) ||
+    EMAIL_OPERATIONS_ELSEWHERE.includes(operation.id)
   );
 }
 
