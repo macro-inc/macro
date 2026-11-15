@@ -18,10 +18,12 @@ use macro_authorization::{
 use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
+mod routine_drafting;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::finding::DraftFinding;
 use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
@@ -286,6 +288,7 @@ where
                     by: action.owner.clone(),
                 },
                 billing: agent_session::domain::model::SessionBilling::Billable,
+                instructions: None,
             })
             .await
             .map_err(|error| RunStartError::NotStarted(rootcause::report!("{error:?}")))?;
@@ -471,6 +474,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
+    search: search_service_client::SearchServiceClient,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -694,17 +698,49 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
-    // AI drafts routines in hidden sessions of the in-process Macro agent on
-    // the model the person's Ask AI steps use, admitted and billed as their
-    // agent session usage. A draft's session hands its routine back by checking
-    // it; the check is kept on the draft's row, so any replica can read it.
+    let suggestion_code = Arc::clone(&code);
+    let draft_code = Arc::clone(&code);
+    // A draft's row: the check a session drafter hands back, and a
+    // background draft's state, so any replica can read either.
     let draft_rows = Arc::new(PgDraftHandBacks::new(db.clone()));
     let hand_backs: Arc<dyn DraftHandBacks> = Arc::clone(&draft_rows) as _;
+    // Which agent session a code-mode request came from, for drafts' checks
+    // and suggestion sessions' suggestions.
+    let correlation_sessions = Arc::new(CorrelationSessions(
+        agent_correlation::outbound::PgCorrelationRepository(db.clone()),
+    ));
+    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
+    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
+    let service = Arc::new(
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            service_executor,
+            dispatcher_tx,
+            access.clone(),
+        )
+        .with_event_routines(event_routines)
+        .with_conditions_enabled(conditions_enabled)
+        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_draft_hand_backs(Arc::clone(&hand_backs), Arc::clone(&request_sessions))
+        .with_run_sessions(Arc::clone(&request_sessions))
+        .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
+            &suggestion_repo,
+        ))))
+        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
+        .with_code(code, upgrades),
+    );
+    // AI drafts routines in a hidden session of the in-process Macro agent.
+    // Before it starts, a fast call names the items the request refers to and
+    // the SDK areas it needs, and the existing name search finds those of
+    // the kinds it covers, so the session is given them and the reference
+    // it needs and writes one program that ends with the check; it looks up
+    // names of other kinds itself. The fast call is admitted
+    // and billed as the person's automation usage.
     let drafts = Arc::new(
         RoutineDrafts::new(
-            Arc::clone(&code),
+            draft_code,
             Arc::clone(&sessions),
-            Arc::clone(&hand_backs),
+            hand_backs,
             DraftAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
                 // Generated from the SDK at build time, so it is always there.
@@ -714,7 +750,19 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_session_creations(Arc::new(ActivityCreations(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
-        .with_conditions_enabled(conditions_enabled),
+        .with_conditions_enabled(conditions_enabled)
+        .with_finding(DraftFinding {
+            model: Arc::new(routine_drafting::RouterDraftModels {
+                admission: Arc::clone(&ai_admission),
+                recorder: ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            }),
+            names: Arc::new(routine_drafting::SearchNames::new(search)),
+        }),
     );
     // Background drafts run here, on the replica they were started on, and
     // keep their state on the same row, so a reload or any replica reads
@@ -746,32 +794,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             }
         });
     }
-    let suggestion_code = Arc::clone(&code);
-    // Which agent session a code-mode request came from, for drafts' checks
-    // and suggestion sessions' suggestions.
-    let correlation_sessions = Arc::new(CorrelationSessions(
-        agent_correlation::outbound::PgCorrelationRepository(db.clone()),
-    ));
-    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
-    let suggestion_repo = Arc::new(PgRoutineSuggestionRepo::new(db.clone()));
-    let service = Arc::new(
-        ScheduledActionServiceImpl::new(
-            Arc::clone(&repo),
-            service_executor,
-            dispatcher_tx,
-            access.clone(),
-        )
-        .with_event_routines(event_routines)
-        .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
-        .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
-        .with_run_sessions(Arc::clone(&request_sessions))
-        .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
-            &suggestion_repo,
-        ))))
-        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
-        .with_code(code, upgrades),
-    );
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
