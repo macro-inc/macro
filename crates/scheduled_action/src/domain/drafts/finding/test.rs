@@ -530,7 +530,7 @@ async fn names_that_couldnt_be_looked_up_go_to_the_session() {
     draft(&drafts, routine(BUG_REPORTS)).await;
 
     let (_, prompt) = briefs(&sessions);
-    assert!(prompt.contains("Not looked up:\n- \"bug-reports\" (channel)"));
+    assert!(prompt.contains("Not looked up (look each up yourself before you write the routine):\n- \"bug-reports\" (channel)"));
     assert!(!prompt.contains("Left for the owner"));
 }
 
@@ -579,7 +579,7 @@ async fn names_of_kinds_the_lookup_doesnt_search_go_to_the_session_unreported() 
             .contains(&format!("the channel named \"bug-reports\", id {channel}"))
     );
     assert!(brief.prompt.contains(
-        "Not looked up:\n- \"Jordan\" (person)\n- \"Finance\" (email label or channel)\n- \"eng\" (channel or person)\n"
+        "Not looked up (look each up yourself before you write the routine):\n- \"Jordan\" (person)\n- \"Finance\" (email label or channel)\n- \"eng\" (channel or person)\n"
     ));
     // With the reference of the areas that find them, after the ones the
     // routine uses.

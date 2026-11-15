@@ -344,7 +344,7 @@ impl Lookup {
             }
         }
         if !self.unsearched.is_empty() {
-            text.push_str("Not looked up:\n");
+            text.push_str("Not looked up (look each up yourself before you write the routine):\n");
             for asked in &self.unsearched {
                 let kinds: Vec<&str> = asked.kinds.iter().map(|kind| kind_words(*kind)).collect();
                 if kinds.is_empty() {
