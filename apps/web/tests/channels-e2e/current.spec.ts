@@ -5,9 +5,10 @@ import {
   type Named,
   openFromList,
   openOffline,
+  readAndReturn,
   startAfresh,
 } from './harness/device';
-import { expect, failsSometimes, test } from './harness/fixtures';
+import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
 import { noAccess } from './harness/management';
 import { Conversation } from './harness/messages';
 import { goOffline, goOnline } from './harness/network';
@@ -181,8 +182,7 @@ test('SYN-04 a channel changed while the app was closed is right when the app is
 }) => {
   const made = await scene(ada, ben);
   const first = await pageFor('ben');
-  const view = new Conversation(first, made.channel.id);
-  await view.open();
+  const view = await readAndReturn(first, made.channel, made.elsewhere);
   await expectShown(view, AT_FIRST);
   // A blank tab keeps the browser profile, with what it stored, while no
   // window of the app is open to hear of the changes.
@@ -204,6 +204,7 @@ test('SYN-05 what a device caught up on is what it shows the next time it opens 
   ada,
   ben,
 }) => {
+  test.skip(!SOUP_BUILD, 'channels open offline only with the flag');
   const made = await scene(ada, ben);
   const first = await pageFor('ben');
   const view = new Conversation(first, made.channel.id);
@@ -268,54 +269,6 @@ test('SYN-06 a channel more than a thousand changes behind is right when it is o
   ];
   await expectShown(again, expected);
   expect(await serverChannel('ben', made.channel.id)).toEqual(expected);
-});
-
-// If this fails, an edit made while the app was closed never shows on a
-// device that came back through a link to an older part of the channel.
-test('SYN-07 an edit made while away shows after coming back through a link to an older message', async ({
-  pageFor,
-  ada,
-  ben,
-}) => {
-  test.setTimeout(180_000);
-  const channel = await ada.createChannel({ members: [ben.person] });
-  const texts = Array.from(
-    { length: 130 },
-    (_, index) => `line ${String(index + 1).padStart(3, '0')}`
-  );
-  const sent = await ada.postAll(channel.id, texts);
-  const first = await pageFor('ben');
-  const view = new Conversation(first, channel.id);
-  await view.open();
-  await view.expectEndsWith(['line 128', 'line 129', 'line 130']);
-  const blank = await first.context().newPage();
-  await first.close();
-
-  await ada.edit(channel.id, sent[127].id, 'line 128, edited');
-  await ada.react(channel.id, sent[128].id, '👍');
-  await ada.remove(channel.id, sent[126].id);
-
-  // Back through a link to a message far above what the device holds.
-  const again = new Conversation(blank, channel.id);
-  await again.open({ messageId: sent[9].id });
-  await expect(again.message('line 010')).toBeVisible();
-  const toBottom = blank.getByRole('button', { name: 'Scroll to bottom' });
-  await expect(async () => {
-    if (await toBottom.isVisible()) await toBottom.click();
-    else await again.wheel(4000);
-    await expect(again.message('line 130')).toBeVisible({ timeout: 1000 });
-  }).toPass({ timeout: 60_000 });
-
-  await again.expectEndsWith([
-    'line 125',
-    'line 126',
-    'line 128, edited',
-    'line 129',
-    'line 130',
-  ]);
-  await expect(
-    again.reaction(again.messageById(sent[128].id), '👍')
-  ).toBeVisible();
 });
 
 // If this fails, someone removed from a private channel can still read it

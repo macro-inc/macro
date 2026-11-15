@@ -1,0 +1,14 @@
+diff --git a/apps/web/src/lib/queries/messages/local/writes.ts b/apps/web/src/lib/queries/messages/local/writes.ts
+index 2294951302..1c162289b2 100644
+--- a/apps/web/src/lib/queries/messages/local/writes.ts
++++ b/apps/web/src/lib/queries/messages/local/writes.ts
+@@ -244,6 +244,9 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
+       await settlements.committed(disposition.transactionId);
+       return await deliveredMessage(host, write);
+     }
++    if (result.error && write.predicted) {
++      return mapChannelMessage(write.predicted);
++    }
+     if (result.error) throw refusalOf(result.error);
+     if (!result.data) throw refusal(undefined, 'empty response');
+     return mapChannelMessage(write.written(result.data));

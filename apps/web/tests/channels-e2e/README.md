@@ -57,6 +57,15 @@ environment.
   it to set a scene and to play the other person; the action a test is about
   goes through the page.
 - `harness/channel.ts` is the page object for an open channel.
+- `harness/network.ts` puts a device in the conditions a connection can be
+  in: offline, one window cut off, a very slow link, message writes that
+  never reach the services, and writes whose answers are lost.
+- `harness/device.ts` reads a channel off the screen as lines of text
+  (`shown`), and has the steps that leave a channel on a device and open it
+  again with no connection. `harness/server.ts` reads the same lines from the
+  services (`serverChannel`). The tests of a device that keeps channels
+  (`current`, `offline`, `writes`, `prewarm`) end on three things that must
+  agree: the lines the test expects, the screen, and the services.
 - `harness/history.ts` makes one long channel (230 messages, a 30-reply
   thread far back) before the first test and keeps it for later runs against
   the same stack. Tests only read it.
@@ -86,6 +95,13 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
 - Title: an id (`MSG-03`) then a sentence a person would say. Above it, a
   comment that starts `If this fails,` and says what a person would suffer.
 - Assert what is on screen with literals. No sleeps, no waiting on requests.
+  The one timed wait is `leaveAlone` in `harness/device.ts`: a device
+  fetches channels ahead only while its person does nothing, so doing
+  nothing for a while is the step under test (PRE-01).
+- A test of what only a build with `VITE_ENABLE_GRAPHQL_SOUP` does (channels
+  kept on the device, writes that wait there) skips itself on other builds
+  with `test.skip(!SOUP_BUILD, ...)`, and its proof is run on a build with
+  the flag.
 - Add the id to `ledger/inventory.tsv`, then prove the test can fail: break
   the product where the behaviour lives, build the bundle, watch the test
   fail, and record the break in `ledger/proofs.tsv` and `ledger/breaks/`.

@@ -1,0 +1,28 @@
+diff --git a/apps/web/src/lib/queries/messages/local/catch-up.ts b/apps/web/src/lib/queries/messages/local/catch-up.ts
+index 23884c8e1c..db9e778bd2 100644
+--- a/apps/web/src/lib/queries/messages/local/catch-up.ts
++++ b/apps/web/src/lib/queries/messages/local/catch-up.ts
+@@ -87,6 +87,7 @@ async function runCatchUp(
+       span.setAttr('catch_up.outcome', 'not-held');
+       return { kind: 'not-held' };
+     }
++    return { kind: 'current', seq: from };
+     let after = from;
+     let changes = 0;
+     for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
+diff --git a/apps/web/src/lib/queries/messages/local/pages.ts b/apps/web/src/lib/queries/messages/local/pages.ts
+index c12d043867..0292acae5b 100644
+--- a/apps/web/src/lib/queries/messages/local/pages.ts
++++ b/apps/web/src/lib/queries/messages/local/pages.ts
+@@ -388,10 +388,7 @@ async function loadPage(
+   const read = readDeviceChannelPage(host, request);
+   let device: DeviceRead | undefined;
+   let fetched: FetchedChannelPage | undefined;
+-  if (
+-    answered &&
+-    (options.background || !latest || heldChannels.has(request.channelId))
+-  ) {
++  if (true) {
+     device = await read;
+   } else if (options.background) {
+     const early = await withinCacheHeadStart(read, CHANNEL_CACHE_HEAD_START_MS);

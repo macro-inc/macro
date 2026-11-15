@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/lib/queries/messages/local/flag.ts b/apps/web/src/lib/queries/messages/local/flag.ts
+index 789f968a12..925866f76f 100644
+--- a/apps/web/src/lib/queries/messages/local/flag.ts
++++ b/apps/web/src/lib/queries/messages/local/flag.ts
+@@ -39,6 +39,7 @@ export function channelCacheAnswered(host: CacheHost): boolean {
+  * native engine cannot serve channel timelines.
+  */
+ export function channelCacheHost(): CacheHost | undefined {
++  return undefined;
+   // No host is the common REST case and needs no flag read.
+   const host = getGraphqlSoupCacheHost();
+   if (!host || host.disabled || unsupportedHosts.has(host)) return undefined;

@@ -11,3 +11,6 @@ UNR-05	both	A mention of me shows only the plain unread mark on the channel's ro
 UNR-09	both	The first message in a new channel leaves the other member's row unmarked; the second marks it
 DM-06	off	New direct message offers nobody for a typed name (Options unavailable); only a whole email address is accepted
 UNR-10	on	A row shown while the list is being searched is not marked unread when a message arrives, until the search is closed
+WRT-04	on	Messages blocked from being sent are often gone after a reload, the first back in the composer and the second lost (4 of 6 probes); when kept they are sent only some five minutes after the services can be reached (failed 10 of 10 runs)
+WRT-11	on	A waiting message written right after another of the same person is never marked as not sent (10 of 10 runs)
+WRT-14	on	A message written offline in one window does not show in another window of the same device until it is sent (10 of 10 runs)

@@ -59,3 +59,10 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   loads may not be sent on a build that queues writes on the device: a test
   that is not about that waits for the other person's page to show it before
   reloading.
+- A channel opened once and left at once is not on the device yet (OFF-09):
+  a test about something else that needs it held offline gets it there with
+  `readAndReturn` from `harness/device.ts`.
+- Typing in a window that is not in front goes nowhere: with two windows of
+  one profile, `bringToFront()` the one about to be typed in.
+- `blockWrites` and `loseWriteAnswers` match the four message mutations by
+  name; a broader match also stops the read-marker writes a page makes.
