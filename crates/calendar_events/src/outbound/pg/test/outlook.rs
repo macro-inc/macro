@@ -1891,12 +1891,24 @@ async fn a_clean_outlook_round_logs_a_cleared_badge_once(pool: PgPool) {
     .await;
     let before = counter(&pool, link).await;
 
+    let stored_kind = || async {
+        sqlx::query_scalar!(
+            "SELECT last_sync_error_kind FROM calendars WHERE id = $1",
+            calendar_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(stored_kind().await.as_deref(), Some("permanent"));
+
     clean_round(&repo, &lease).await;
     assert_eq!(
         ops_after(&pool, link, before).await,
         vec![CalendarChangeOp::UpsertCalendar(calendar_id)],
         "the round that clears a shown badge logs it"
     );
+    assert_eq!(stored_kind().await, None);
 
     let lease = reclaim(&pool, &repo, lease.id).await;
     clean_round(&repo, &lease).await;

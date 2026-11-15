@@ -139,7 +139,10 @@ pub async fn handler(
             tracing::error!(error=?e, "relocate_inbox_grant: failed to read shared user links");
             server_error("unable to read shared user links")
         })?;
-    if shared_links.iter().any(|l| l.display_name == email) {
+    if shared_links
+        .iter()
+        .any(|l| l.display_name.eq_ignore_ascii_case(&email))
+    {
         ensure_deactivated(shared_user_id.clone()).await;
         return Ok((
             StatusCode::OK,
@@ -174,7 +177,10 @@ pub async fn handler(
             tracing::error!(error=?e, "relocate_inbox_grant: failed to read owner links");
             server_error("unable to read owner links")
         })?;
-    let Some(owner_link) = owner_links.into_iter().find(|l| l.display_name == email) else {
+    let Some(owner_link) = owner_links
+        .into_iter()
+        .find(|l| l.display_name.eq_ignore_ascii_case(&email))
+    else {
         tracing::error!(
             email = %email,
             owner = %owner_fusionauth_user_id,

@@ -365,7 +365,10 @@ const rig = (message?: Partial<Order>) => {
   return { files, rows, noCall, opened, locks, ports };
 };
 
-const asking = { channel: 'c', id: 'm' };
+const asking = {
+  channel: '0190a3c4-0000-7000-8000-00000000000c',
+  id: '0190a3c4-0000-7000-8000-00000000000a',
+};
 
 test('placeCall queues with who asked and why, and the next one to the same person is refused and logged', async () => {
   const { rows, ports, locks } = rig();
@@ -577,4 +580,67 @@ test("no answer: a post that hangs or fails doesn't keep the agent from leaving"
     placed()
   );
   expect(waits).toEqual([4000]);
+});
+
+test("placeCall: a failure says so in a line for people; Macro's error is only in the ledger", async () => {
+  const { rows, ports } = rig();
+  const outcome = await placeCall(
+    { target: cy, reason: 'x', asked: said(owner) },
+    {
+      ...ports,
+      target: () =>
+        Promise.reject(
+          new Error('MacroApiError: Macro API error 400: Invalid URL')
+        ),
+    }
+  );
+  expect(outcome).toMatchObject({ ok: false, rule: 'error' });
+  expect(outcome.ok ? '' : outcome.why).not.toContain('Macro API error');
+  expect((await rows.read()).at(-1)).toMatchObject({
+    event: 'refused',
+    why: expect.stringContaining('Macro API error 400'),
+  });
+});
+
+test("placeCall: a message id that isn't one is refused before Macro is asked", async () => {
+  const { rows, ports } = rig();
+  let asked = 0;
+  const outcome = await placeCall(
+    {
+      target: cy,
+      reason: 'x',
+      message: { channel: '0190a3c4-0000-7000-8000-000000000001', id: '{id}' },
+    },
+    {
+      ...ports,
+      message: async () => {
+        asked++;
+        throw new Error('asked Macro');
+      },
+    }
+  );
+  expect(outcome).toMatchObject({ ok: false, rule: 'message-id' });
+  expect(asked).toBe(0);
+  expect((await rows.read()).at(-1)).toMatchObject({
+    event: 'refused',
+    rule: 'message-id',
+  });
+});
+
+test("placeCall: a who that's neither a person nor a channel id is refused before Macro is asked", async () => {
+  const { rows, ports } = rig();
+  let looked = 0;
+  const outcome = await placeCall(
+    { target: '{id}', reason: 'x', asked: said(owner) },
+    {
+      ...ports,
+      target: async () => {
+        looked++;
+        throw new Error('asked Macro');
+      },
+    }
+  );
+  expect(outcome).toMatchObject({ ok: false, rule: 'who' });
+  expect(looked).toBe(0);
+  expect((await rows.read()).at(-1)).toMatchObject({ rule: 'who' });
 });

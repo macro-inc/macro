@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::ports::HarnessAgentDeletion;
 
-impl<R: BotRepo, B: MacroEventBroker, C: McpAppCatalog> HarnessAgentDeletion
-    for BotServiceImpl<R, B, C>
+impl<R: BotRepo, B: MacroEventBroker, T: HarnessTeamAgents, C: McpAppCatalog> HarnessAgentDeletion
+    for BotServiceImpl<R, B, T, C>
 {
     async fn delete_harness_agents(
         &self,

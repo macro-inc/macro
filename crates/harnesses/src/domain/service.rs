@@ -22,8 +22,8 @@ use super::{
         SetHarnessTeamAccessRequest,
     },
     ports::{
-        HarnessChanges, HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness,
-        NewPairing,
+        ComputerTeamAgents, HarnessChanges, HarnessError, HarnessRepo, HarnessService,
+        HarnessTeamAgents, HostedPairingUpsert, NewHarness, NewPairing,
     },
     tokens,
 };
@@ -56,21 +56,65 @@ fn validated_name(name: &str) -> Result<String, HarnessError> {
 
 /// Harness service backed by a repository.
 #[derive(Debug, Clone)]
-pub struct HarnessServiceImpl<R> {
+pub struct HarnessServiceImpl<R, TeamAgents> {
     repo: R,
+    team_agents: TeamAgents,
 }
 
-impl<R> HarnessServiceImpl<R> {
-    /// Create a harness service backed by the supplied repository.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+impl<R, TeamAgents> HarnessServiceImpl<R, TeamAgents> {
+    /// Create a harness service over the repository and the computers'
+    /// agent teammates.
+    pub fn new(repo: R, team_agents: TeamAgents) -> Self {
+        Self { repo, team_agents }
     }
 }
 
-impl<R> HarnessServiceImpl<R>
+impl<R, TeamAgents> HarnessServiceImpl<R, TeamAgents>
 where
     R: HarnessRepo,
+    TeamAgents: ComputerTeamAgents,
 {
+    /// Mark each agent teammate's computer with its agent, with one lookup
+    /// for the whole list, so clients keep it out of everything that starts
+    /// agents on a runtime.
+    async fn with_team_agents(
+        &self,
+        mut harnesses: Vec<Harness>,
+    ) -> Result<Vec<Harness>, HarnessError> {
+        let computers: Vec<ComputerId> = harnesses
+            .iter()
+            .filter_map(|harness| harness.computer_id)
+            .collect();
+        if computers.is_empty() {
+            return Ok(harnesses);
+        }
+
+        let mut agents = self
+            .team_agents
+            .team_agents_of(&computers)
+            .await
+            .map_err(Into::into)?;
+        for harness in &mut harnesses {
+            harness.team_agent_user_id = harness
+                .computer_id
+                .and_then(|computer_id| agents.remove(&computer_id));
+        }
+        Ok(harnesses)
+    }
+
+    /// [`Self::with_team_agents`] for one harness.
+    async fn with_team_agent(&self, mut harness: Harness) -> Result<Harness, HarnessError> {
+        if let Some(computer_id) = harness.computer_id {
+            harness.team_agent_user_id = self
+                .team_agents
+                .team_agents_of(&[computer_id])
+                .await
+                .map_err(Into::into)?
+                .remove(&computer_id);
+        }
+        Ok(harness)
+    }
+
     async fn ensure_may_manage(
         &self,
         caller: &MacroUserIdStr<'static>,
@@ -111,9 +155,10 @@ where
     }
 }
 
-impl<R> HarnessService for HarnessServiceImpl<R>
+impl<R, TeamAgents> HarnessService for HarnessServiceImpl<R, TeamAgents>
 where
     R: HarnessRepo,
+    TeamAgents: ComputerTeamAgents,
 {
     #[tracing::instrument(skip_all, err)]
     async fn create_pairing(
@@ -318,11 +363,12 @@ where
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, HarnessError> {
-        Ok(self
+        let harnesses = self
             .repo
             .list_usable_harnesses(caller)
             .await
-            .map_err(Into::into)?)
+            .map_err(Into::into)?;
+        self.with_team_agents(harnesses).await
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -330,11 +376,12 @@ where
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, HarnessError> {
-        Ok(self
+        let harnesses = self
             .repo
             .list_directory_harnesses(caller)
             .await
-            .map_err(Into::into)?)
+            .map_err(Into::into)?;
+        self.with_team_agents(harnesses).await
     }
 
     #[tracing::instrument(skip(self, req), fields(caller = %caller, team_id = %req.team_id, enabled = req.enabled), err)]
@@ -424,17 +471,16 @@ where
             allow_permission_bypass: req.allow_permission_bypass,
         };
         if changes == HarnessChanges::default() {
-            return Ok(harness);
+            return self.with_team_agent(harness).await;
         }
-        self.repo
+        let mut updated = self
+            .repo
             .update_harness(harness_id, changes)
             .await
             .map_err(Into::into)?
-            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
-            .map(|mut updated| {
-                updated.access = access;
-                updated
-            })
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        updated.access = access;
+        self.with_team_agent(updated).await
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -696,5 +742,32 @@ where
             .await
             .map_err(Into::<anyhow::Error>::into)?;
         Ok(login)
+    }
+}
+
+impl<R, TeamAgents> HarnessTeamAgents for HarnessServiceImpl<R, TeamAgents>
+where
+    R: HarnessRepo,
+    TeamAgents: ComputerTeamAgents,
+{
+    #[tracing::instrument(skip(self), err)]
+    async fn harness_team_agent(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, HarnessError> {
+        let Some(computer_id) = self
+            .repo
+            .harness_computer(harness_id)
+            .await
+            .map_err(Into::into)?
+        else {
+            return Ok(None);
+        };
+        Ok(self
+            .team_agents
+            .team_agents_of(&[computer_id])
+            .await
+            .map_err(Into::into)?
+            .remove(&computer_id))
     }
 }

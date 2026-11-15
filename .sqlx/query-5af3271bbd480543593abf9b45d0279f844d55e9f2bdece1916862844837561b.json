@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_profile_picture (account_id, jid, state)\n        SELECT a.id, $2, 'due' FROM whatsapp_linked_account a\n        WHERE a.user_id = $1\n          AND NOT EXISTS (SELECT 1 FROM whatsapp_profile_picture p WHERE p.account_id = a.id AND p.jid = ANY($3))\n        ON CONFLICT (account_id, jid) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5af3271bbd480543593abf9b45d0279f844d55e9f2bdece1916862844837561b"
+}

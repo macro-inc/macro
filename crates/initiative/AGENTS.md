@@ -9,7 +9,8 @@ properties, and activity.
 ## Start here
 
 - `src/domain/service.rs` + `src/domain/service/reads.rs`: lifecycle and read
-  logic.
+  logic. Reads check a project's tasks together through
+  `InitiativeResources::view_documents`, never one task at a time.
 - `src/domain/models.rs`: `Initiative`, `InitiativeError`.
 - `src/domain/assignees.rs`, `src/domain/history.rs`, `src/domain/activity.rs`:
   assignment policy, change history, and activity recording.
