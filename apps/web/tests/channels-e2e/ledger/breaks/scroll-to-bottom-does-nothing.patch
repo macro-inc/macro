@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/features/channel/Channel/Channel.tsx b/apps/web/src/features/channel/Channel/Channel.tsx
+index ac0e2982cd..3916e89524 100644
+--- a/apps/web/src/features/channel/Channel/Channel.tsx
++++ b/apps/web/src/features/channel/Channel/Channel.tsx
+@@ -719,6 +719,7 @@ export function Channel(props: ChannelProps) {
+   };
+ 
+   const goToLatest: ChannelHandle['goToLatest'] = async (behavior) => {
++    if (behavior !== 'instant') return;
+     const request: NonNullable<typeof pendingLatest> = {
+       phase: 'loading',
+       behavior,

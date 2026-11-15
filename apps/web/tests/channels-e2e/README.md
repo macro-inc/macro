@@ -1,0 +1,84 @@
+# Channels end-to-end suite
+
+Playwright tests of everything channels do for a person, on the built web app
+in Chromium against a whole local stack: its proxy, sign-in, services,
+gateway and database. Nothing is mocked. Four seeded people take part, each
+in a browser profile of their own, so what one does is checked on another's
+screen.
+
+The tests assert only what a person sees and does: which messages are on
+screen, in what order, how many, under whose name, which controls exist.
+None looks at a request, a cache or the app's state, so the same tests hold
+for any implementation of how messages are fetched, stored and synced, and
+the suite can be run unchanged against a rewrite of those.
+
+## Run it
+
+Against a stack instance started with `just stack up --instance <name>`:
+
+```sh
+just seed-scenario --instance <name> apply --file seed/scenarios/channels-e2e.json
+cd apps/web && just test-channels-e2e <name>            # everything
+cd apps/web && just test-channels-e2e <name> -g MSG-03  # one test
+```
+
+Against any address that serves the app with the scenario's people seeded:
+
+```sh
+CHANNELS_E2E_STACK_URL=https://localhost:22609 \
+  bunx playwright test --config tests/channels-e2e/playwright.config.ts
+```
+
+| Variable | Meaning |
+| --- | --- |
+| `CHANNELS_E2E_STACK_URL` | The stack's origin. Required. |
+| `CHANNELS_E2E_RUN_DIR` | Where the run keeps its sign-ins, the long history it made, its report and traces. Default `.run` here. Give two runs at once a directory each. |
+| `CHANNELS_E2E_PEOPLE` | JSON overriding the four people's email addresses, for a stack seeded with others. |
+| `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. |
+| `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
+
+The people sign in through the passwordless code flow of a local stack, so
+the suite needs a stack that offers it; it does not run against a deployed
+environment.
+
+## How it is put together
+
+- `harness/people.ts` signs the four people in once per run and keeps their
+  sessions. Ada owns the team and is the default `page`; Ben and Cy are her
+  teammates; Dee is outside the team.
+- `harness/api.ts` is what a person can do through the services. Tests use
+  it to set a scene and to play the other person; the action a test is about
+  goes through the page.
+- `harness/channel.ts` is the page object for an open channel.
+- `harness/history.ts` makes one long channel (230 messages, a 30-reply
+  thread far back) before the first test and keeps it for later runs against
+  the same stack. Tests only read it.
+- Every other test makes the channels it needs, with unique names, so tests
+  run in parallel in any order.
+
+## The ledger
+
+`ledger/inventory.tsv` lists what channels do, and for each thing the tests
+that cover it or the reason none does. `ledger/proofs.tsv` names, for each
+test, a deliberate break of the product that made it fail, and
+`ledger/breaks/` holds those breaks as patches. `ledger/known-defects.tsv`
+lists the tests that assert behaviour the product does not have yet; they
+are marked `test.fail()` and fail the run the day the defect is fixed, so
+the mark gets removed.
+
+```sh
+bun tests/channels-e2e/ledger/check.ts                      # ledger against the tests
+bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
+```
+
+## Writing a test
+
+- Title: an id (`MSG-03`) then a sentence a person would say. Above it, a
+  comment that starts `If this fails,` and says what a person would suffer.
+- Assert what is on screen with literals. No sleeps, no waiting on requests.
+- Add the id to `ledger/inventory.tsv`, then prove the test can fail: break
+  the product where the behaviour lives, build the bundle, watch the test
+  fail, and record the break in `ledger/proofs.tsv` and `ledger/breaks/`.
+- A test that fails because the product is wrong keeps asserting the right
+  behaviour, marked `test.fail()` with the defect in a comment and a row in
+  `ledger/known-defects.tsv`.
