@@ -169,7 +169,10 @@ tests (non-gating) and the coverage check.
 CI: the `Email end-to-end (browser)` workflow (`xtask_workflows`'
 `email_e2e_browser.rs`) runs on pushes to `main` that change the web app or
 backend code and, within `PR CI`, on pull requests that touch email or
-calendar code on either side.
+calendar code on either side. It splits the suite over three machines
+(Playwright's `--shard`, `SHARDS` in that file); each uploads what it
+recorded, and the job `Email end-to-end (browser) coverage` reads all of it
+as one run. Raise `SHARDS` when a shard passes about fifteen minutes.
 
 ## What the suite covers
 
@@ -179,8 +182,8 @@ functions it did and checked, the requests the app made) under
 a report: first the functions of email (draft, send, mark done, star...)
 covered on Gmail and on Outlook, then the actions, states and network
 operations under them, by provider and layout, what no test covers, and
-where the manifest differs from the code. CI appends it to the job summary and uploads it as the
-`email-e2e-browser-coverage` artifact, and fails the job when a function or
+where the manifest differs from the code. CI's coverage job appends it to its summary and uploads it as the
+`email-e2e-browser-coverage` artifact, and fails when a function or
 a row has neither a passing test nor a line in `ledger/waivers.tsv`. See
 `ledger/README.md`.
 

@@ -14,8 +14,13 @@ just apps/web/email-e2e-ledger --record     # rewrite full-stack-only.tsv from a
 
 The report is written to `../ledger-results/report/`: `index.html`,
 `summary.md` (the CI job summary) and `ledger.json`. In CI it is the
-`email-e2e-browser-coverage` artifact of the `Email end-to-end (browser)` job
-and the `email-e2e-full-stack-coverage` artifact of the tier's.
+`email-e2e-browser-coverage` artifact of the `Email end-to-end (browser)
+coverage` job and the `email-e2e-full-stack-coverage` artifact of the tier's.
+
+A run split over machines (`EMAIL_E2E_SHARD`, "2/3") writes
+`playwright-2.json` instead of `playwright.json`; the report reads every
+such file in a run's directory, so the shards' `ledger-results/` laid over
+each other are one run.
 
 ## Functions
 

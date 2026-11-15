@@ -3,7 +3,7 @@
 // neither skipped nor kept for a known bug.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { GATING_RUNS, type Run, runPaths } from './paths';
+import { GATING_RUNS, type Run, runPaths, runReports } from './paths';
 import type { Evidence } from './record';
 
 type JsonResult = {
@@ -47,12 +47,15 @@ export type RunResult = {
 
 export function readRun(run: Run): RunResult {
   const paths = runPaths(run);
-  if (!existsSync(paths.playwright)) {
+  const reports = runReports(run);
+  if (reports.length === 0) {
     return { found: false, tests: [], evidence: [], dropped: [] };
   }
-  const report = JSON.parse(readFileSync(paths.playwright, 'utf8')) as {
-    suites: JsonSuite[];
-  };
+  const suites = reports.flatMap(
+    (report) =>
+      (JSON.parse(readFileSync(report, 'utf8')) as { suites: JsonSuite[] })
+        .suites
+  );
   const tests = new Map<string, Test>();
   const visit = (suite: JsonSuite, titles: string[]) => {
     for (const spec of suite.specs ?? []) {
@@ -78,7 +81,7 @@ export function readRun(run: Run): RunResult {
     }
   };
   // The outermost suites are the files.
-  for (const file of report.suites) visit(file, []);
+  for (const file of suites) visit(file, []);
 
   const evidence: Evidence[] = [];
   const dropped: RunResult['dropped'] = [];

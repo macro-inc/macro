@@ -28,9 +28,10 @@ env:
   workflow_dispatch: {}
 jobs:
   email-e2e-browser:
-    name: Email end-to-end (browser)
+    name: Email end-to-end (browser) (${{ matrix.shard }}/3)
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
+      EMAIL_E2E_SHARD: ${{ matrix.shard }}/3
       CARGO_PROFILE_DEV_DEBUG: '0'
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
@@ -79,6 +80,13 @@ jobs:
         ports:
         - '9092:9092'
         options: '--health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1" --health-interval 2s --health-start-period 60s --health-timeout 10s --health-retries 20'
+    strategy:
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+      fail-fast: false
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -242,11 +250,17 @@ jobs:
 
         # The bundle builds beside the services, and the fixture suites, which need
         # the bundle's wasm packages but no service, start as soon as it is built.
+        # The suite is split over machines (EMAIL_E2E_SHARD, "2/3"); the fixture
+        # suites run on the first only.
         (
           cd apps/web
           just build-email-e2e > "$bundle_log" 2>&1 || exit 90
           touch "$bundle_built"
-          just test-email-fixtures-browser > "$fixtures_log" 2>&1
+          if [ "${EMAIL_E2E_SHARD%%/*}" = 1 ]; then
+            just test-email-fixtures-browser > "$fixtures_log" 2>&1
+          else
+            echo "the fixture suites run on the first shard" > "$fixtures_log"
+          fi
         ) &
         web=$!
         # A service that does not compile ends the step: say what the web side was
@@ -272,8 +286,8 @@ jobs:
 
         failed=0
         started=$(date +%s)
-        (cd apps/web && just test-email-e2e-browser) || failed=1
-        echo "Email browser suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+        (cd apps/web && just test-email-e2e-browser --shard "$EMAIL_E2E_SHARD") || failed=1
+        echo "Email browser suite, shard $EMAIL_E2E_SHARD: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
         echo "::group::fixture suites"
         if wait "$web"; then
@@ -297,11 +311,76 @@ jobs:
         WASM_PKG_HTTP_CACHE: '1'
     - name: report tests for known bugs
       if: '!cancelled()'
-      run: just test-email-e2e-browser --pass-with-no-tests --retries 0 --output tests/email-e2e/test-results/known-bugs
+      run: just test-email-e2e-browser --pass-with-no-tests --retries 0 --shard "$EMAIL_E2E_SHARD" --output tests/email-e2e/test-results/known-bugs
       env:
         EMAIL_E2E_KNOWN_BUGS: '1'
       continue-on-error: true
       working-directory: apps/web
+    - name: Upload email-e2e-browser-recorded-${{ matrix.shard }} artifact
+      if: '!cancelled()'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-browser-recorded-${{ matrix.shard }}
+        path: apps/web/tests/email-e2e/ledger-results
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: Upload email-e2e-browser-logs-${{ matrix.shard }} artifact
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-browser-logs-${{ matrix.shard }}
+        path: target/debug/email-e2e
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: Upload email-e2e-browser-traces-${{ matrix.shard }} artifact
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: email-e2e-browser-traces-${{ matrix.shard }}
+        path: apps/web/tests/email-e2e/test-results
+        if-no-files-found: ignore
+        retention-days: '7'
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  email-e2e-browser-coverage:
+    needs:
+    - email-e2e-browser
+    if: '!cancelled()'
+    name: Email end-to-end (browser) coverage
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+    - name: Download what the shards recorded
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: email-e2e-browser-recorded-*
+        path: apps/web/tests/email-e2e/ledger-results
+        merge-multiple: 'true'
     - name: check the coverage of the email UI
       if: '!cancelled()'
       run: just email-e2e-ledger --enforce
@@ -314,25 +393,6 @@ jobs:
         path: apps/web/tests/email-e2e/ledger-results/report
         if-no-files-found: ignore
         retention-days: '30'
-    - name: Upload email-e2e-browser-logs artifact
-      if: failure()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-      with:
-        name: email-e2e-browser-logs
-        path: target/debug/email-e2e
-        if-no-files-found: ignore
-        retention-days: '7'
-    - name: Upload email-e2e-browser-traces artifact
-      if: failure()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-      with:
-        name: email-e2e-browser-traces
-        path: apps/web/tests/email-e2e/test-results
-        if-no-files-found: ignore
-        retention-days: '7'
-    - name: show sccache stats
-      if: always()
-      run: sccache --show-stats || true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

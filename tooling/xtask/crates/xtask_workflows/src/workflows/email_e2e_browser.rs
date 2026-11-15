@@ -9,7 +9,7 @@
 //! red run on the merge commit; nothing is reverted or blocked by it.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Push, Run, Step, Use, Workflow, WorkflowCall,
+    Concurrency, Event, Expression, Job, Push, Run, Step, Strategy, Use, Workflow, WorkflowCall,
     WorkflowDispatch,
 };
 use xtask_paths::RepoGlob;
@@ -77,6 +77,19 @@ const TRACES: xtask_paths::RuntimePath<'static> =
 const LEDGER: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("apps/web/tests/email-e2e/ledger-results/report");
 
+/// What a run records for the coverage report: Playwright's report and what
+/// each test did. Each shard uploads its own, and the coverage job lays them
+/// over each other here.
+const RECORDED: xtask_paths::RuntimePath<'static> =
+    xtask_paths::runtime_path!("apps/web/tests/email-e2e/ledger-results");
+
+/// The machines the suite is split over. One ran it in ten minutes at 373
+/// tests, behind five of building; raise this when a shard passes fifteen.
+const SHARDS: u32 = 3;
+
+/// The job that runs a shard of the suite.
+const SUITE_JOB: &str = "email-e2e-browser";
+
 /// Build the workflow.
 pub fn email_e2e_browser() -> Workflow {
     let push = MAIN_PATHS
@@ -92,7 +105,8 @@ pub fn email_e2e_browser() -> Workflow {
             .workflow_call(WorkflowCall::default()))
         .concurrency(concurrency())
         .map(vars::with_global_env)
-        .add_job("email-e2e-browser", suite())
+        .add_job(SUITE_JOB, suite())
+        .add_job("email-e2e-browser-coverage", coverage())
 }
 
 /// As the Rust suite: every commit on `main` keeps its own result.
@@ -103,12 +117,26 @@ fn concurrency() -> Concurrency {
     .cancel_in_progress(true)
 }
 
-/// Build the services and the web bundle, then run the browser tests against
-/// Postgres, Redis, an SQS-compatible server and a Kafka broker.
+/// Build the services and the web bundle, then run a shard of the browser
+/// tests against Postgres, Redis, an SQS-compatible server and a Kafka
+/// broker. A failed shard does not stop the others: the coverage job reads
+/// what all of them recorded.
 fn suite() -> Job {
+    let shards: Vec<u32> = (1..=SHARDS).collect();
     Job::default()
-        .name("Email end-to-end (browser)")
+        .name(format!(
+            "Email end-to-end (browser) (${{{{ matrix.shard }}}}/{SHARDS})"
+        ))
         .timeout_minutes(30u32)
+        .strategy(
+            Strategy::default()
+                .fail_fast(false)
+                .matrix(serde_json::json!({ "shard": shards })),
+        )
+        .add_env((
+            "EMAIL_E2E_SHARD",
+            format!("${{{{ matrix.shard }}}}/{SHARDS}"),
+        ))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .map(code_check_cloud_storage::with_test_compile_env)
         .add_env(("SQLX_OFFLINE", "true"))
@@ -136,6 +164,40 @@ fn suite() -> Job {
         .add_step(code_check_cloud_storage::configure_postgres())
         .add_step(run_suite())
         .add_step(known_bugs())
+        .add_step(
+            steps::upload_artifact("email-e2e-browser-recorded-${{ matrix.shard }}", RECORDED)
+                .add_with(("if-no-files-found", "ignore"))
+                .add_with(("retention-days", 7))
+                .if_condition(Expression::new("!cancelled()")),
+        )
+        .add_step(upload(
+            "email-e2e-browser-logs-${{ matrix.shard }}",
+            SERVICE_LOGS,
+        ))
+        .add_step(upload(
+            "email-e2e-browser-traces-${{ matrix.shard }}",
+            TRACES,
+        ))
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// What the shards recorded, as one run: the coverage check of the email UI
+/// (`ledger()`). It runs when a shard failed too, and then says what the
+/// tests that passed cover; a shard that recorded nothing leaves its rows
+/// uncovered, which fails the check.
+fn coverage() -> Job {
+    Job::default()
+        .name("Email end-to-end (browser) coverage")
+        .needs(vec![SUITE_JOB.to_string()])
+        .cond(Expression::new("!cancelled()"))
+        .timeout_minutes(15u32)
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_step(steps::checkout(false, false))
+        .add_step(steps::mount_cache_volume())
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(download_recorded())
         .add_step(ledger())
         .add_step(
             steps::upload_artifact("email-e2e-browser-coverage", LEDGER)
@@ -143,10 +205,21 @@ fn suite() -> Job {
                 .add_with(("retention-days", 30))
                 .if_condition(Expression::new("!cancelled()")),
         )
-        .add_step(upload("email-e2e-browser-logs", SERVICE_LOGS))
-        .add_step(upload("email-e2e-browser-traces", TRACES))
-        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Every shard's recorded results, laid over each other: the reports have a
+/// name per shard and the evidence files a name per test result.
+fn download_recorded() -> Step<Use> {
+    Step::new("Download what the shards recorded")
+        .uses(
+            "actions",
+            "download-artifact",
+            "634f93cb2916e3fdff6788551b99b062d0335ce0",
+        ) // v5
+        .add_with(("pattern", "email-e2e-browser-recorded-*"))
+        .add_with(("path", RECORDED.as_str()))
+        .add_with(("merge-multiple", true))
 }
 
 /// The built app against the stack and, beside it, the fixture tests of the
@@ -167,7 +240,7 @@ fn known_bugs() -> Step<Run> {
     Step::new("report tests for known bugs")
         .run(
             "just test-email-e2e-browser --pass-with-no-tests --retries 0 \
-             --output tests/email-e2e/test-results/known-bugs",
+             --shard \"$EMAIL_E2E_SHARD\" --output tests/email-e2e/test-results/known-bugs",
         )
         .add_env(("EMAIL_E2E_KNOWN_BUGS", "1"))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
@@ -175,8 +248,8 @@ fn known_bugs() -> Step<Run> {
         .if_condition(Expression::new("!cancelled()"))
 }
 
-/// What the suite covers of the email UI, from what the two runs above
-/// recorded: the job summary and the `email-e2e-browser-coverage` artifact.
+/// What the suite covers of the email UI, from what the two runs of every
+/// shard recorded: the job summary and the `email-e2e-browser-coverage` artifact.
 /// It fails the job when a function or a row of the manifest has neither a
 /// passing test on this stack nor a waiver, when a waived one is covered, and
 /// when a test for a known bug passes (`ledger/README.md`). It runs after a

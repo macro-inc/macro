@@ -12,7 +12,6 @@
 import {
   appendFileSync,
   copyFileSync,
-  existsSync,
   mkdirSync,
   writeFileSync,
 } from 'node:fs';
@@ -37,7 +36,7 @@ import {
   WAIVERS,
   type Waiver,
 } from './manifest/functions';
-import { GATING_RUNS, REPORT, type Run, runPaths } from './paths';
+import { GATING_RUNS, REPORT, type Run, runReports } from './paths';
 
 const percent = (part: number, whole: number) =>
   whole === 0 ? '–' : `${((100 * part) / whole).toFixed(1)}%`;
@@ -648,9 +647,10 @@ function report(mode: Mode): void {
   writeFileSync(`${REPORT}/summary.md`, summary);
   writeFileSync(`${REPORT}/index.html`, page);
   for (const run of ['gating', 'full-stack', 'known-bugs'] satisfies Run[]) {
-    const from = runPaths(run).playwright;
-    if (existsSync(from))
-      copyFileSync(from, `${REPORT}/playwright-${run}.json`);
+    for (const from of runReports(run)) {
+      const part = from.match(/playwright(-\d+)?\.json$/)?.[1] ?? '';
+      copyFileSync(from, `${REPORT}/playwright-${run}${part}.json`);
+    }
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);

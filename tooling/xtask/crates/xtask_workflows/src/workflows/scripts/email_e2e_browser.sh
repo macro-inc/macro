@@ -6,11 +6,17 @@ bundle_built="$RUNNER_TEMP/email-e2e-bundle.built"
 
 # The bundle builds beside the services, and the fixture suites, which need
 # the bundle's wasm packages but no service, start as soon as it is built.
+# The suite is split over machines (EMAIL_E2E_SHARD, "2/3"); the fixture
+# suites run on the first only.
 (
   cd apps/web
   just build-email-e2e > "$bundle_log" 2>&1 || exit 90
   touch "$bundle_built"
-  just test-email-fixtures-browser > "$fixtures_log" 2>&1
+  if [ "${EMAIL_E2E_SHARD%%/*}" = 1 ]; then
+    just test-email-fixtures-browser > "$fixtures_log" 2>&1
+  else
+    echo "the fixture suites run on the first shard" > "$fixtures_log"
+  fi
 ) &
 web=$!
 # A service that does not compile ends the step: say what the web side was
@@ -36,8 +42,8 @@ tail -n 5 "$bundle_log"
 
 failed=0
 started=$(date +%s)
-(cd apps/web && just test-email-e2e-browser) || failed=1
-echo "Email browser suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
+(cd apps/web && just test-email-e2e-browser --shard "$EMAIL_E2E_SHARD") || failed=1
+echo "Email browser suite, shard $EMAIL_E2E_SHARD: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
 echo "::group::fixture suites"
 if wait "$web"; then
