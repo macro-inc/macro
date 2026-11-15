@@ -532,6 +532,8 @@ jobs:
             - 'crates/email/**'
             - 'crates/email_*/**'
             - 'crates/graphql_email/**'
+            - 'services/calendar_service/**'
+            - 'crates/calendar_*/**'
             - 'crates/gmail_*/**'
             - 'crates/outlook_*/**'
             - 'services/search_processing_service/**'

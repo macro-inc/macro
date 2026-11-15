@@ -3,6 +3,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
+import {
+  queryAccountSession,
+  queryAccountSessionPending,
+} from '@queries/auth/account-scope';
 import { queryClient } from '@queries/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type { DraftJob } from '@service-scheduled-action/generated/schemas';
@@ -28,6 +32,7 @@ import { scheduledActionKeys } from './keys';
 
 const TOO_MANY =
   'Too many routines are drafting. Wait for one to finish, or cancel one.';
+const SIGNED_IN_AGAIN = 'You signed in again while this draft was starting.';
 
 /**
  * The caller's routine drafts: the background drafts New routine started,
@@ -74,31 +79,58 @@ async function fetchDraftJobs(): Promise<DraftJob[]> {
   );
 }
 
-/** The caller's routine drafts; empty until they're read or while `enabled` is false. */
+/**
+ * The caller's routine drafts; empty until they're read or while `enabled`
+ * is false. A read again that fails keeps the list it had. A login that
+ * replaces the session forgets them (`resetQueryAccountSession`), and they
+ * are read again once the new session is confirmed.
+ */
 export function useDraftJobs(enabled: Accessor<boolean>) {
   const query = useQuery(() => ({
     ...routineDraftJobsQueryOptions(),
-    enabled: enabled(),
+    enabled: enabled() && !queryAccountSessionPending(),
   }));
   return {
-    jobs: (): DraftJob[] => (query.isSuccess ? query.data : []),
-    loaded: () => query.isSuccess,
+    jobs: (): DraftJob[] => (query.isPending ? [] : (query.data ?? [])),
+    /** Whether a read succeeded: a first read that failed listed nothing. */
+    loaded: () => !query.isPending && query.data !== undefined,
   };
 }
 
 /**
- * Put a job just started at the top of the list. A read already under way
- * may have missed it and would write over it, so that one is read again.
+ * Put a job at the top of the list. A read already under way may have
+ * missed it and would write over it, so that one is read again. One
+ * removed elsewhere meanwhile stays out. Nothing is listed across a login
+ * that replaced the session, nor while it waits to be confirmed: listed,
+ * it would stand for the new login's list, which then isn't read.
  */
 async function listDraftJob(job: DraftJob) {
+  const login = queryAccountSession();
   const queryKey = scheduledActionKeys.draftJobs.queryKey;
   const reading = queryClient.isFetching({ queryKey }) > 0;
   if (reading) await queryClient.cancelQueries({ queryKey });
-  queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) => [
-    job,
-    ...(current ?? []).filter((each) => each.id !== job.id),
-  ]);
+  const listable =
+    queryAccountSession() === login &&
+    !queryAccountSessionPending() &&
+    !isDiscarded(job.id);
+  if (listable) {
+    queryClient.setQueryData(queryKey, (current: DraftJob[] | undefined) =>
+      withDraftJob(current ?? [], job)
+    );
+  }
   if (reading) queryClient.invalidateQueries({ queryKey });
+}
+
+/**
+ * The list with `job` at the top, unless it lists that job further along:
+ * its updates can arrive before the answer that started it.
+ */
+function withDraftJob(jobs: DraftJob[], job: DraftJob): DraftJob[] {
+  const listed = jobs.find((each) => each.id === job.id);
+  const further =
+    listed && (listed.state !== 'drafting' || job.state === 'drafting');
+  if (further) return jobs;
+  return [job, ...jobs.filter((each) => each.id !== job.id)];
 }
 
 /**
@@ -116,6 +148,7 @@ export async function startDraftJob(
   return await Telemetry.span('routine.draft', async (span) => {
     span.setAttr('routine.draft.kind', 'routine');
     span.setAttr('routine.draft.background', true);
+    const login = queryAccountSession();
     const body = {
       clientId: crypto.randomUUID(),
       draft: { type: 'routine' as const, description },
@@ -129,6 +162,12 @@ export async function startDraftJob(
     let attempts = 1;
     if (response.isErr() && unanswered(response.error)) {
       await sleep(RETRY_DELAY_MS);
+      // Sent now, it would start the draft as the login that replaced this one.
+      if (queryAccountSession() !== login) {
+        span.setAttr('routine.draft.attempts', attempts);
+        span.setAttr('routine.draft.outcome', 'login_replaced');
+        return SIGNED_IN_AGAIN;
+      }
       response = await send();
       attempts = 2;
     }
@@ -145,12 +184,26 @@ export async function startDraftJob(
     }
     const job = response.value;
     span.setAttr('routine.draft.id', job.id);
+    // The job is the previous login's: this one may be another account's.
+    if (queryAccountSession() !== login) {
+      span.setAttr('routine.draft.outcome', 'login_replaced');
+      return SIGNED_IN_AGAIN;
+    }
     span.setAttr('routine.draft.outcome', job.state);
     // One that finished already (refused at once, or a resend of a start
-    // that ran) goes to the caller only, so nothing else reports it.
+    // that ran) goes to the caller only, so nothing else reports it; a
+    // caller that can't show it any more hands it on (`reportDraftJob`).
     if (job.state === 'drafting') await listDraftJob(job);
     return job;
   });
+}
+
+/**
+ * Hand a finished draft the caller can no longer show to the app's pill and
+ * toasts, by listing it.
+ */
+export async function reportDraftJob(job: DraftJob): Promise<void> {
+  await listDraftJob(job);
 }
 
 /**

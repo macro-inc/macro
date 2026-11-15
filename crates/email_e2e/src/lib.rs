@@ -12,7 +12,9 @@
 
 mod api;
 mod aws;
+mod calendar;
 mod email_tools;
+pub mod events;
 mod inbox;
 mod infra;
 mod lambda;
@@ -26,6 +28,9 @@ mod wait;
 
 pub use api::ApiResponse;
 pub use aws::StoredObject;
+pub use calendar::Calendar;
+/// Dates and times, for calendar scenarios.
+pub use chrono;
 pub use email_tools::EmailTools;
 /// The Gmail emulator's own API, for what the inbox methods do not cover.
 pub use gmail_emulator;
@@ -37,6 +42,6 @@ pub use outlook_emulator;
 pub use redis;
 /// The error type every harness method returns.
 pub use rootcause::Report;
-pub use stack::{Stack, StackOptions};
+pub use stack::{CalendarSignal, Stack, StackOptions};
 pub use user::User;
 pub use wait::{DEFAULT_TIMEOUT, eventually};
