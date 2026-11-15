@@ -96,7 +96,6 @@ export function pageIsLeaving(): boolean {
 
 function watchPageLeaving(): void {
   if (typeof addEventListener !== 'function') return;
-  // Capture, so this runs before the cache host fails its requests.
   addEventListener(
     'pagehide',
     () => {

@@ -1,4 +1,5 @@
 import { ThrownResultError } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import {
   executeOptimisticMutation,
   type OptimisticResponse,
@@ -366,6 +367,9 @@ async function unlessPageLeft(write: Promise<Message>): Promise<Message> {
   try {
     return await write;
   } catch (error) {
+    // The listener that fails the request can run before the one that marks
+    // the page as left; both have run by the next task, if there is one.
+    await sleep(0);
     if (pageIsLeaving()) return new Promise<never>(() => {});
     throw error;
   }
