@@ -304,6 +304,8 @@ describe('violations', () => {
     proofs: new Map([
       ['F-001', 'a break'],
       ['F-002', 'a break'],
+      ['AL-001', 'a break of one way in'],
+      ['STL-001', 'a break of what shows it'],
     ]),
     waivers: [{ id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' }],
     fullStackOnly: ['F-002 gmail', 'F-002 outlook', 'STL-001'],
@@ -346,6 +348,7 @@ describe('violations', () => {
 
   it('fails a row with neither a test nor a waiver', () => {
     expect(violations(input({ waivers: [] }))).toEqual([
+      "AL-002 is not proved: proofs.tsv names no break that makes its test fail at the row's own assertion",
       'AL-002 has no passing test on the per-test stack and no waiver',
     ]);
   });
@@ -372,6 +375,7 @@ describe('violations', () => {
           proofs: new Map([
             ['F-001', 'a break'],
             ['AL-001', 'a break of one way in'],
+            ['STL-001', 'a break of what shows it'],
             ['AL-008', 'a break of a row that is gone'],
           ]),
           waivers: [
@@ -384,6 +388,22 @@ describe('violations', () => {
       'waivers.tsv: AL-009 is not a row, or not a function with a UI on that provider',
       'proofs.tsv: AL-008 is not a row of the manifest',
       'F-002 is not proved: proofs.tsv names no break that makes its tests fail',
+    ]);
+  });
+
+  it('fails a row without a proof unless it is waived', () => {
+    expect(
+      violations(
+        input({
+          proofs: new Map([
+            ['F-001', 'a break'],
+            ['F-002', 'a break'],
+            ['AL-001', 'a break of one way in'],
+          ]),
+        })
+      )
+    ).toEqual([
+      "STL-001 is not proved: proofs.tsv names no break that makes its test fail at the row's own assertion",
     ]);
   });
 });

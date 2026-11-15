@@ -69,6 +69,7 @@ const TOTALS_HEAD = [
   'Total',
   'Covered',
   '%',
+  'Proved',
   'Both providers',
   'Gmail',
   'Outlook',
@@ -85,6 +86,7 @@ function totalsRow(name: string, of: Totals): (string | number)[] {
     of.total,
     of.covered,
     percent(of.covered, of.total - of.waived),
+    of.proved,
     of.bothProviders,
     of.gmail,
     of.outlook,
@@ -186,7 +188,7 @@ const WAIVER_KINDS: Record<Waiver['kind'], string> = {
 };
 
 const ENFORCED =
-  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
 
 function waiverTable(): Table {
   return {
@@ -248,7 +250,16 @@ function functionTable(functions: FunctionRow[], rows: Row[]): Table {
 
 function rowTable(rows: Row[]): Table {
   return {
-    head: ['Id', 'Surface', 'What', 'How', 'Applies to', 'Seen on', 'Missing'],
+    head: [
+      'Id',
+      'Surface',
+      'What',
+      'How',
+      'Applies to',
+      'Seen on',
+      'Proved by',
+      'Missing',
+    ],
     rows: rows.map((row) => [
       row.id,
       `${row.surface} ${row.surfaceName}`,
@@ -257,8 +268,68 @@ function rowTable(rows: Row[]): Table {
       `${row.providers.join(', ')}; ${row.viewports.join(', ')}`,
       row.cells.join(', ') +
         (row.knownBugOnly ? ' (a known-bug test only)' : ''),
+      row.proof ?? (row.cells.length > 0 ? 'not proved' : ''),
       row.reason ?? row.missing.join(', '),
     ]),
+  };
+}
+
+const KINDS = Object.keys(WAIVER_KINDS) as Waiver['kind'][];
+
+/** Functions and rows side by side: what is tested, proved and waived. */
+function provedTable(ledger: Ledger): Table {
+  const ft = functionTotals(ledger.functions);
+  const waivedFunctions = (kind: Waiver['kind']) =>
+    new Set(
+      WAIVERS.filter((each) => each.kind === kind && each.on !== '-').map(
+        (each) => each.id
+      )
+    ).size;
+  const line = (name: string, rows: readonly Row[]) => {
+    const of = totals(rows);
+    const untested = rows.filter((row) => row.cells.length === 0);
+    return [
+      name,
+      of.total,
+      of.covered,
+      of.proved,
+      of.covered - of.proved,
+      untested.filter((row) => !row.waiver).length,
+      ...KINDS.map(
+        (kind) => untested.filter((row) => row.waiver === kind).length
+      ),
+    ];
+  };
+  return {
+    head: [
+      '',
+      'Total',
+      'Tested',
+      'Proved',
+      'Tested, not proved',
+      'Not tested, not waived',
+      ...KINDS.map((kind) => `Waived: ${kind}`),
+    ],
+    rows: [
+      [
+        'Functions with a UI',
+        ft.total,
+        ft.covered,
+        ft.proved,
+        ft.covered - ft.proved,
+        ft.partial + ft.open,
+        ...KINDS.map(waivedFunctions),
+      ],
+      line('Rows', ledger.rows),
+      line(
+        'Rows: actions',
+        ledger.rows.filter((row) => row.kind === 'action')
+      ),
+      line(
+        'Rows: states',
+        ledger.rows.filter((row) => row.kind === 'state')
+      ),
+    ],
   };
 }
 
@@ -295,8 +366,15 @@ function render(
     rows: [
       totalsRow('Actions', totals(actions)),
       totalsRow('States', totals(states)),
+      totalsRow('All rows', totals(ledger.rows)),
     ],
   };
+  const rt = totals(ledger.rows);
+  const rowsUntested = ledger.rows.filter((row) => row.cells.length === 0);
+  const rowsLine = `${rt.total} rows (the ways to do each function, and what the app shows): ${rt.covered} have a passing test, ${rt.proved} of them proved by a break that made the test fail at the row's own assertion and ${rt.covered - rt.proved} not proved; ${rowsUntested.filter((row) => row.waiver).length} are waived (${KINDS.map((kind) => `${rowsUntested.filter((row) => row.waiver === kind).length} ${kind}`).join(', ')}) and ${rowsUntested.filter((row) => !row.waiver).length} have neither a test nor a waiver.`;
+  const proved = provedTable(ledger);
+  const provedNote =
+    'Tested: a passing, gating test covers it (a function on Gmail and on Outlook; a row at all). Proved: proofs.tsv names the break that was put into the product for it and made its test fail. For a function, a function with a partial test counts as not tested here; the waived columns count the functions with a line of that kind in waivers.tsv on either provider.';
   const operationsHeadline: Table = {
     head: OPERATIONS_HEAD,
     rows: [
@@ -445,11 +523,19 @@ function render(
       )
     ),
     '',
+    '### Functions and rows: tested, proved, waived',
+    '',
+    markdown(proved),
+    '',
+    provedNote,
+    '',
     '### Rows: the ways to do each function, and what the app shows',
+    '',
+    rowsLine,
     '',
     markdown(headline),
     '',
-    `Covered: a passing, gating test did it at all. Complete: on every provider and every layout the row applies to. ${open.length} rows are open, ${partial.length} are covered in part, ${deferred.length} wait for a service no stack gives a test, ${waived.length} are waived.`,
+    `Covered: a passing, gating test did it at all. Proved: covered, and proofs.tsv names the break that made its test fail at the row's own assertion. Complete: on every provider and every layout the row applies to. ${open.length} rows are open, ${partial.length} are covered in part, ${deferred.length} wait for a service no stack gives a test, ${waived.length} are waived.`,
     '',
     markdown(operationsHeadline),
     '',
@@ -535,9 +621,13 @@ ${areas
   )
   .join('')}
 ${folded(`Functions without a UI (${backend.length})`, html({ head: ['Id', 'Area', 'Function'], rows: backend.map((fn) => [fn.id, fn.area, fn.name]) }))}
+<h2>Functions and rows: tested, proved, waived</h2>
+${html(proved)}
+<p>${escapeHtml(provedNote)}</p>
 <h2>Rows: the ways to do each function, and what the app shows</h2>
+<p>${escapeHtml(rowsLine)}</p>
 ${html(headline)}
-<p><b>Covered</b>: a passing, gating test did it at all. <b>Both providers</b>: on Gmail and on Outlook. <b>Complete</b>: on every provider and every layout the row applies to. <b>Deferred</b>: needs a service or a clock no stack gives a test. <b>Open</b>: no test does it; each has a line in <code>waivers.tsv</code> of the kind <code>backlog</code>, or fails the job. Percentages leave out waived rows.</p>
+<p><b>Covered</b>: a passing, gating test did it at all. <b>Proved</b>: covered, and <code>proofs.tsv</code> names the break that made its test fail at the row's own assertion. <b>Both providers</b>: on Gmail and on Outlook. <b>Complete</b>: on every provider and every layout the row applies to. <b>Deferred</b>: needs a service or a clock no stack gives a test. <b>Open</b>: no test does it; each has a line in <code>waivers.tsv</code> of the kind <code>backlog</code>, or fails the job. Percentages leave out waived rows.</p>
 ${section('What fails the job', `<p>${escapeHtml(ENFORCED)}</p>${failures.length ? `<p><b>${failures.length} of them now:</b></p><ul>${failures.map((each) => `<li>${escapeHtml(each)}</li>`).join('')}</ul>` : '<p>Nothing does in this run.</p>'}${html(waiverTable())}`)}
 ${section('By group', html(byGroup))}
 ${section('By surface', html(bySurface))}

@@ -64,6 +64,13 @@ export type Row = {
   tests: string[];
   /** Only a test kept for a known bug touches it. */
   knownBugOnly: boolean;
+  /** The kind of its line in `waivers.tsv`, when it has one. */
+  waiver?: Waiver['kind'];
+  /**
+   * The break put into the product that made its test fail at the row's
+   * own assertion (`proofs.tsv`).
+   */
+  proof?: string;
 };
 
 /** What the counted tests on one provider showed of a function. */
@@ -236,6 +243,8 @@ export type Totals = {
   deferred: number;
   /** A counted test ran it at all. */
   covered: number;
+  /** Covered, and its test shown to fail when the row is broken. */
+  proved: number;
   /** On every provider and layout it applies to. */
   complete: number;
   bothProviders: number;
@@ -255,6 +264,7 @@ export function totals(rows: readonly Row[]): Totals {
     waived: rows.filter((row) => row.status === 'waived').length,
     deferred: rows.filter((row) => row.status === 'deferred').length,
     covered: rows.filter((row) => row.cells.length > 0).length,
+    proved: rows.filter((row) => row.cells.length > 0 && row.proof).length,
     complete: rows.filter((row) => row.status === 'covered').length,
     bothProviders: rows.filter((row) =>
       BOTH_PROVIDERS.every((provider) =>
@@ -302,7 +312,8 @@ function rowsOf(
   cells: Map<string, Set<string>>,
   tests: Map<string, Set<string>>,
   knownBugRows: Set<string>,
-  waivers: ReadonlyMap<string, Waiver>
+  waivers: ReadonlyMap<string, Waiver>,
+  proofs: ReadonlyMap<string, string>
 ): Row[] {
   const surfaces = new Map<string, Surface>(
     group.surfaces.map((surface) => [surface.id, surface])
@@ -370,6 +381,8 @@ function rowsOf(
       missing: seen.length > 0 ? missing : [],
       tests: [...(tests.get(row.id) ?? [])].sort(),
       knownBugOnly: seen.length === 0 && knownBugRows.has(row.id),
+      waiver: waiver?.kind,
+      proof: proofs.get(row.id),
     };
   };
   return [
@@ -660,7 +673,8 @@ function manifestDrift(): Drift[] {
 export function buildLedger(
   gating: RunResult,
   knownBugs: RunResult,
-  waived: readonly Waiver[] = WAIVERS
+  waived: readonly Waiver[] = WAIVERS,
+  proofs: ReadonlyMap<string, string> = PROOFS
 ): Ledger {
   const waivers = new Map(waived.map((waiver) => [waiver.id, waiver]));
   // Rows.
@@ -676,7 +690,7 @@ export function buildLedger(
   }
   const knownBugRows = new Set(knownBugs.evidence.flatMap((each) => each.rows));
   const rows = (GROUPS as readonly Group[]).flatMap((group) =>
-    rowsOf(group, cells, tests, knownBugRows, waivers)
+    rowsOf(group, cells, tests, knownBugRows, waivers, proofs)
   );
 
   const drift = manifestDrift();
@@ -782,7 +796,7 @@ export function buildLedger(
     WORST.find((status) => runs.some((test) => test.status === status));
   const counted = runsOf.flat();
   return {
-    functions: functionRows(FUNCTIONS, gating.evidence, rows, PROOFS, LIMITS),
+    functions: functionRows(FUNCTIONS, gating.evidence, rows, proofs, LIMITS),
     rows,
     operations,
     unlisted: [...unlisted.entries()]

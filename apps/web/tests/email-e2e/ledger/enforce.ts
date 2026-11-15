@@ -106,6 +106,13 @@ export function violations(input: Enforced): string[] {
         `${fn.id} is not proved: proofs.tsv names no break that makes its tests fail`
       );
   }
+  // A row passes with a test only when that test was seen to fail for it.
+  for (const id of input.rows) {
+    if (!waived.has(id) && !input.proofs.has(id))
+      found.push(
+        `${id} is not proved: proofs.tsv names no break that makes its test fail at the row's own assertion`
+      );
+  }
 
   // Each run that was made against what it is to cover.
   const runs = Object.entries(input.covered) as [
