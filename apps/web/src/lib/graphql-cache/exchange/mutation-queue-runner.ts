@@ -804,7 +804,11 @@ export function createMutationQueueRunner(
       resolveLiveOperationsAsQueued();
       return;
     }
-    if (drainRunning) return;
+    if (drainRunning) {
+      // The running drain may already be past its claim: run once more after.
+      drainRequested = true;
+      return;
+    }
     drainRunning = true;
     drainRequested = false;
     try {

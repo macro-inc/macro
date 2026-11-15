@@ -447,3 +447,34 @@ it('claims nothing before its owner is registered as alive', async () => {
   expect(claims).toHaveBeenCalledOnce();
   expect(runner.ownerRegistration()).toBeUndefined();
 });
+
+it('claims again when a write settles while a lease check is waiting', async () => {
+  const { runner, host, forwarded } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async () => true }
+  );
+  let inspected!: (mutations: never[]) => void;
+  host.inspectMutations = () =>
+    new Promise((resolve) => {
+      inspected = resolve;
+    });
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  // The head this runner was sending settles before the check answers.
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  inspected([]);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledTimes(2);
+});
