@@ -88,6 +88,9 @@ pub struct LoadAgentModelsResponse {
     pub current_model: Option<String>,
     /// Ordered model catalog.
     pub models: Vec<AgentModelDto>,
+    /// When a paired runtime that is off or unreachable last reported this
+    /// catalog; null when it was probed live.
+    pub cached_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Model-selection availability returned over HTTP.
@@ -119,6 +122,7 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     supports_images: model.supports_images,
                 })
                 .collect(),
+            cached_at: value.cached_at,
         }
     }
 }

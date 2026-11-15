@@ -191,6 +191,38 @@ pub struct CrmContact {
     pub created_at: DateTime<Utc>,
     /// When the contact record was last updated
     pub updated_at: DateTime<Utc>,
+    /// Every address the contact is known by, lowercased: the primary
+    /// (`email`) first, then the rest oldest first
+    pub emails: Vec<String>,
+    /// The addresses on a domain of the contact's company. A contact with
+    /// any is a company-domain contact: it cannot be unlinked or moved, and
+    /// the last of these addresses cannot be removed
+    pub company_domain_emails: Vec<String>,
+}
+
+/// The name and visibility of a contact's company, which the contact's page
+/// shows without reading the whole company.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CrmCompanySummary {
+    /// The id of the company
+    pub id: uuid::Uuid,
+    /// The team's name for the company, else its primary domain's
+    /// directory name, as the company read resolves it
+    pub name: Option<String>,
+    /// The company's oldest domain, which stands in for a missing name
+    pub domain: Option<String>,
+    /// Whether the company is hidden for the owning team
+    pub hidden: bool,
+}
+
+/// A contact with a summary of its company.
+#[derive(Debug, Clone)]
+pub struct CrmContactDetail {
+    /// The contact
+    pub contact: CrmContact,
+    /// Its company; `None` for a contact without one, or one the caller
+    /// may not see
+    pub company: Option<CrmCompanySummary>,
 }
 
 /// What a depopulate teardown actually removed. Every field is `false` on

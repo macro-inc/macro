@@ -184,6 +184,17 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
+  /**
+   * An agent's `macro.ui.open` reached this tab: `opened` a new pane,
+   * `shown` one already open, `no_room`, `cancelled`, or
+   * `not_allowed_route` (refused here). `route` is the route id, never the path.
+   */
+  agent_ui_command: { kind: 'open'; outcome: string; route?: string };
+  /**
+   * The person pressed Undo on a pane an agent opened: `undone`, or `kept`
+   * when a leave guard (unsaved edits) or a newer navigation kept the pane.
+   */
+  agent_ui_command_undone: { route: string; outcome: 'undone' | 'kept' };
   /** `side` is where a split opened beside another; absent, it opened at the end. */
   split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 

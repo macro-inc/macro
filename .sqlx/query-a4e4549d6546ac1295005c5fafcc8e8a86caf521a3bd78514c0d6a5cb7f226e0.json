@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE routine_suggestion\n           SET state = $3, dismissed_at = COALESCE($4, dismissed_at), retired_at = COALESCE($5, retired_at)\n           WHERE id = $1 AND state = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4e4549d6546ac1295005c5fafcc8e8a86caf521a3bd78514c0d6a5cb7f226e0"
+}

@@ -11,9 +11,10 @@ mod email_privacy;
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
-        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts,
-        CrmContact, CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
+        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanySummary,
+        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmDomain, CrmDomainStatus, CrmError,
+        CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
+        DepopulateContactOutcome, DomainMetadata,
     },
     stages::TeamSettingsStore,
 };
@@ -55,6 +56,9 @@ struct DepopulateTarget {
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
     pool: PgPool,
+    /// Where the activity edges are read: `pool` unless
+    /// [`Self::with_activity_edges_replica`] names a replica.
+    activity_edges_pool: PgPool,
     #[cfg(test)]
     after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]
@@ -67,6 +71,7 @@ impl CompaniesRepositoryImpl {
     /// Creates a new instance of CompaniesRepositoryImpl
     pub fn new(pool: PgPool) -> Self {
         Self {
+            activity_edges_pool: pool.clone(),
             pool,
             #[cfg(test)]
             after_depopulate_source: None,
@@ -75,6 +80,17 @@ impl CompaniesRepositoryImpl {
             #[cfg(test)]
             after_eligible_scan: None,
         }
+    }
+
+    /// Read the activity edges (`activity_property_edges`, the Sales views'
+    /// per-record probes) from `replica`, off the primary. They then follow
+    /// the replica's lag: a record hidden or a member removed a moment ago can
+    /// still match, and a record just added may not yet. Every item still
+    /// passes its own source's access check. Every other read and write stays
+    /// on the primary.
+    pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
+        self.activity_edges_pool = replica.0;
+        self
     }
 
     /// The transaction behind `populate_contact`, after its no-op precheck.
@@ -126,6 +142,61 @@ impl CompaniesRepositoryImpl {
 
         // Only currently eligible mailbox history may update CRM records.
         let existing = Self::find_company_by_domain(&mut tx, team_id, &normalized_domain).await?;
+
+        // The upsert below finds a contact by its company and primary address.
+        // A contact that holds this address as a further one is not found that
+        // way, so look for it first: mail from any of a contact's addresses
+        // refreshes that contact instead of filing a second one. An address
+        // repeats only across manually created duplicates, hence the cap.
+        let holders = sqlx::query!(
+            r#"SELECT ct.id, ct.company_id,
+                      (LOWER(BTRIM(ct.email)) = ce.email) IS TRUE AS "is_primary!"
+               FROM crm_contact_emails ce
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               WHERE ce.email = $2 AND ct.team_id = $1
+               ORDER BY ct.id
+               LIMIT 20"#,
+            team_id,
+            normalized_email,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let domain_company = existing.map(|(id, _)| id);
+        let filed_under_domain = domain_company.is_some_and(|company_id| {
+            holders
+                .iter()
+                .any(|holder| holder.is_primary && holder.company_id == Some(company_id))
+        });
+        let mut further_holders = holders.iter().filter(|holder| !holder.is_primary);
+        if !filed_under_domain
+            && let (Some(holder), None) = (further_holders.next(), further_holders.next())
+        {
+            let refreshed = self
+                .refresh_existing_contact(
+                    &mut tx,
+                    team_id,
+                    holder.id,
+                    holder.company_id,
+                    &normalized_email,
+                    name,
+                    &interaction,
+                )
+                .await?;
+            if refreshed {
+                Self::record_contact_source(&mut tx, holder.id, link_id).await?;
+            }
+            if let Some(company_id) = domain_company.filter(|_| refreshed)
+                && holder.company_id == Some(company_id)
+            {
+                Self::merge_company_interactions(&mut tx, &company_id, first_at, last_at, is_sent)
+                    .await?;
+            }
+            return tx
+                .commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()));
+        }
 
         // Track the company's current hidden state alongside its id so
         // new contacts inherit it on INSERT.
@@ -213,6 +284,86 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        Self::record_contact_source(&mut tx, contact_id, link_id).await?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(())
+    }
+
+    /// Refresh the contact that already holds `normalized_email` from one
+    /// mailbox's eligible history. Returns whether it was refreshed, and so
+    /// whether the mailbox is now one of its sources: a contact under a company with
+    /// email sync disabled keeps its identity and takes no email-derived data.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one population's identifiers and interaction range"
+    )]
+    async fn refresh_existing_contact(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        contact_id: uuid::Uuid,
+        company_id: Option<uuid::Uuid>,
+        normalized_email: &str,
+        name: Option<&str>,
+        interaction: &email_privacy::EligibleInteractions,
+    ) -> Result<bool, CrmError> {
+        if let Some(company_id) = company_id {
+            // Match hide, edit and teardown lock order. Sync does not
+            // change company settings, the relation or archive state.
+            let parent = sqlx::query!(
+                "SELECT email_sync FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE",
+                company_id,
+                team_id
+            )
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            if !parent.is_some_and(|parent| parent.email_sync) {
+                // Manual association/identity survives; a disabled parent
+                // cannot admit email-derived metadata or new sources.
+                return Ok(false);
+            }
+        }
+        #[cfg(test)]
+        if let Some(gate) = &self.after_personal_company {
+            gate.entered.notify_one();
+            gate.resume.notified().await;
+        }
+
+        let refreshed = sqlx::query_scalar!(
+            r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
+                first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
+                last_interaction = GREATEST(last_interaction, $5)
+               WHERE id = $1 AND team_id = $2
+                 AND EXISTS (
+                     SELECT 1 FROM crm_contact_emails ce
+                     WHERE ce.contact_id = crm_contacts.id AND ce.email = $7
+                 )
+               RETURNING id"#,
+            contact_id,
+            team_id,
+            name,
+            interaction.first_at,
+            interaction.last_at,
+            interaction.is_sent,
+            normalized_email,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(refreshed.is_some())
+    }
+
+    /// Record that `link_id` contributed to a contact.
+    async fn record_contact_source(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        contact_id: uuid::Uuid,
+        link_id: &uuid::Uuid,
+    ) -> Result<(), CrmError> {
         sqlx::query!(
             r#"
             INSERT INTO crm_contact_sources (contact_id, link_id)
@@ -222,14 +373,9 @@ impl CompaniesRepositoryImpl {
             contact_id,
             link_id,
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
         Ok(())
     }
 
@@ -287,39 +433,34 @@ impl CompaniesRepositoryImpl {
         }
 
         // A personal email identifies a contact independently of its manually
-        // selected company. Count archived matches too; ambiguity never creates
-        // another identity or assigns a source to an arbitrary contact.
+        // selected company, whichever of the contact's addresses it is. Count
+        // archived matches too; ambiguity never creates another identity or
+        // assigns a source to an arbitrary contact.
         let matches = sqlx::query!(
-            "SELECT id, company_id FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2 LIMIT 2",
-            team_id, normalized_email,
-        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            r#"SELECT ct.id, ct.company_id
+               FROM crm_contact_emails ce
+               JOIN crm_contacts ct ON ct.id = ce.contact_id
+               WHERE ce.email = $2 AND ct.team_id = $1
+               LIMIT 2"#,
+            team_id,
+            normalized_email,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let contact_id = match matches.as_slice() {
-            [existing] => {
-                if let Some(company_id) = existing.company_id {
-                    // Match hide, edit and teardown lock order. Sync does not
-                    // change company settings, the relation or archive state.
-                    let parent = sqlx::query!("SELECT email_sync FROM crm_companies WHERE id = $1 AND team_id = $2 FOR UPDATE", company_id, team_id)
-                        .fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
-                    if !parent.is_some_and(|parent| parent.email_sync) {
-                        // Manual association/identity survives; a disabled parent
-                        // cannot admit email-derived metadata or new sources.
-                        return Ok(());
-                    }
-                }
-                #[cfg(test)]
-                if let Some(gate) = &self.after_personal_company {
-                    gate.entered.notify_one();
-                    gate.resume.notified().await;
-                }
-                sqlx::query_scalar!(
-                    r#"UPDATE crm_contacts SET name = COALESCE(name, $3),
-                        first_interaction = CASE WHEN $6 THEN LEAST(first_interaction, $4) ELSE first_interaction END,
-                        last_interaction = GREATEST(last_interaction, $5)
-                       WHERE id = $1 AND team_id = $2 AND LOWER(email) = $7
-                       RETURNING id"#,
-                    existing.id, team_id, name, first_at, last_at, is_sent, normalized_email,
-                ).fetch_optional(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?
-            }
+            [existing] => self
+                .refresh_existing_contact(
+                    &mut tx,
+                    team_id,
+                    existing.id,
+                    existing.company_id,
+                    normalized_email,
+                    name,
+                    &interaction,
+                )
+                .await?
+                .then_some(existing.id),
             [] if is_sent => Some(sqlx::query_scalar!(
                 r#"INSERT INTO crm_contacts (team_id, company_id, email, name, first_interaction, last_interaction)
                    VALUES ($1, NULL, $2, $3, $4, $5) RETURNING id"#,
@@ -334,18 +475,7 @@ impl CompaniesRepositoryImpl {
         tracing::Span::current().record("filed", contact_id.is_some());
 
         if let Some(contact_id) = contact_id {
-            sqlx::query!(
-                r#"
-                INSERT INTO crm_contact_sources (contact_id, link_id)
-                VALUES ($1, $2)
-                ON CONFLICT (contact_id, link_id) DO NOTHING
-                "#,
-                contact_id,
-                link_id,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            Self::record_contact_source(&mut tx, contact_id, link_id).await?;
         }
 
         tx.commit()
@@ -468,10 +598,11 @@ impl CompaniesRepositoryImpl {
                 co.id AS "company_id?",
                 COALESCE(co.email_sync, TRUE) AS "email_sync!",
                 COALESCE(co.manually_created, FALSE) AS "company_manually_created!"
-            FROM crm_contacts ct
+            FROM crm_contact_emails ce
+            JOIN crm_contacts ct ON ct.id = ce.contact_id
             LEFT JOIN crm_companies co ON co.id = ct.company_id
-            WHERE ct.team_id = $1
-              AND LOWER(ct.email) = $2
+            WHERE ce.email = $2
+              AND ct.team_id = $1
               AND (
                   -- Company-less contacts are the personal-email ones
                   -- email sync files on their own.
@@ -480,10 +611,16 @@ impl CompaniesRepositoryImpl {
                       SELECT 1 FROM crm_domains d
                       WHERE d.company_id = ct.company_id AND LOWER(d.domain) = $3
                   )
+                  -- A further address is one somebody attached to this
+                  -- contact, whatever company its domain belongs to.
+                  OR LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email
               )
-              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contacts other
-                   WHERE other.team_id = $1 AND LOWER(other.email) = $2) = 1)
-            ORDER BY ct.company_id IS NULL, ct.id
+              AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contact_emails other_email
+                   JOIN crm_contacts other ON other.id = other_email.contact_id
+                   WHERE other_email.email = $2 AND other.team_id = $1) = 1)
+            -- The contact sync files this address under comes before one that
+            -- holds it as a further address.
+            ORDER BY LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email, ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
             team_id,
@@ -492,6 +629,97 @@ impl CompaniesRepositoryImpl {
             crate::domain::generic_email_domains::is_personal_email_domain(normalized_domain),
         )
         .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    /// One contact of a team with every address it holds. `include_hidden =
+    /// false` treats a hidden contact, or one under a hidden company, as
+    /// absent.
+    async fn read_contact(
+        executor: impl sqlx::PgExecutor<'_>,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        sqlx::query_as!(
+            CrmContact,
+            r#"
+            SELECT
+                ct.id,
+                ct.company_id,
+                ct.email,
+                ct.name,
+                ct.hidden,
+                ct.first_interaction,
+                ct.last_interaction,
+                ct.created_at,
+                ct.updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!"
+            FROM crm_contacts ct
+            LEFT JOIN crm_companies co ON co.id = ct.company_id
+            WHERE ct.id = $1
+              AND ct.team_id = $2
+              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
+            "#,
+            contact_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(executor)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    /// The addresses a contact holds besides `normalized_email`.
+    async fn other_addresses(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        contact_id: uuid::Uuid,
+        normalized_email: &str,
+    ) -> Result<Vec<String>, CrmError> {
+        sqlx::query_scalar!(
+            "SELECT email FROM crm_contact_emails WHERE contact_id = $1 AND email <> $2",
+            contact_id,
+            normalized_email,
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    /// Whether a mailbox has a message, sent to or received from, any of
+    /// `addresses`. The same test the email service runs for the address it
+    /// asks to tear down.
+    async fn mailbox_has_mail_with(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        link_id: &uuid::Uuid,
+        addresses: &[String],
+    ) -> Result<bool, CrmError> {
+        if addresses.is_empty() {
+            return Ok(false);
+        }
+
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/other_address_mail.sql",
+            link_id,
+            addresses,
+        )
+        .fetch_one(&mut **tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
@@ -634,7 +862,8 @@ impl CompaniesRepositoryImpl {
 
     /// Whether `populate_contact` would leave every row as it is: a
     /// received message from a domain with no company, or a contact whose
-    /// company, contact and source rows already cover this interaction.
+    /// company, contact and source rows already cover this interaction,
+    /// whichever of the contact's addresses the message used.
     /// A mailbox backfill enqueues a populate per message, so most repeat a
     /// contact the CRM already has; checking before the `(team, domain)`
     /// lock keeps them from queueing behind one another on a busy domain.
@@ -666,17 +895,27 @@ impl CompaniesRepositoryImpl {
                     WHERE c.team_id = $1
                       AND d.team_id = $1
                       AND LOWER(d.domain) = $3
+                ) AND NOT EXISTS (
+                    -- A contact elsewhere in the team that took this
+                    -- address as a further one is refreshed by it.
+                    SELECT 1
+                    FROM crm_contact_emails ce
+                    JOIN crm_contacts ct ON ct.id = ce.contact_id
+                    WHERE ce.email = $4
+                      AND ct.team_id = $1
+                      AND LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email
                 ))
                 OR EXISTS (
                     SELECT 1
-                    FROM crm_companies c
+                    FROM crm_contact_emails ce
+                    JOIN crm_contacts ct ON ct.id = ce.contact_id
+                    JOIN crm_companies c ON c.id = ct.company_id
                     JOIN crm_domains d ON d.company_id = c.id
-                    JOIN crm_contacts ct ON ct.company_id = c.id
                     JOIN crm_contact_sources s ON s.contact_id = ct.id
                     WHERE c.team_id = $1
                       AND d.team_id = $1
                       AND LOWER(d.domain) = $3
-                      AND ct.email = $4
+                      AND ce.email = $4
                       AND s.link_id = $2
                       AND (ct.name IS NOT NULL OR $5::text IS NULL)
                       AND c.last_interaction >= $7
@@ -843,6 +1082,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
+    async fn activity_property_edges(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        self.query_activity_property_edges(scope, entity_types)
+            .await
+    }
+
     #[tracing::instrument(skip_all, fields(%team_id, %link_id, skipped = tracing::field::Empty), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
@@ -946,8 +1194,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 (team_id, company_id, email, name, first_interaction, last_interaction, manually_created)
             VALUES ($1, NULL, $2, $3, $4, $4, TRUE)
             ON CONFLICT (team_id, LOWER(email)) WHERE company_id IS NULL DO NOTHING
-            RETURNING id, company_id, email, name, hidden,
-                      first_interaction, last_interaction, created_at, updated_at
+            RETURNING id
             "#,
             team_id,
             normalized_email,
@@ -962,21 +1209,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::ContactAlreadyExistsForCompany);
         };
 
+        // Read back through the shared query: the address rows are written
+        // by a trigger, after the insert's own RETURNING is computed.
+        let contact = Self::read_contact(&mut *tx, team_id, &row.id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
+
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        Ok(CrmContact {
-            id: row.id,
-            company_id: row.company_id,
-            email: row.email,
-            name: row.name,
-            hidden: row.hidden,
-            first_interaction: row.first_interaction,
-            last_interaction: row.last_interaction,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        })
+        Ok(contact)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1145,8 +1388,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 (company_id, email, name, first_interaction, last_interaction, hidden, manually_created, team_id)
             VALUES ($1, $2, $3, $4, $4, $5, TRUE, $6)
             ON CONFLICT (company_id, email) DO NOTHING
-            RETURNING id, company_id, email, name, hidden,
-                      first_interaction, last_interaction, created_at, updated_at
+            RETURNING id
             "#,
             company_id,
             normalized_email,
@@ -1163,21 +1405,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::ContactAlreadyExistsForCompany);
         };
 
+        // Read back through the shared query: the address rows are written
+        // by a trigger, after the insert's own RETURNING is computed.
+        let contact = Self::read_contact(&mut *tx, team_id, &row.id, true)
+            .await?
+            .ok_or(CrmError::ContactNotFoundForTeam)?;
+
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        Ok(CrmContact {
-            id: row.id,
-            company_id: row.company_id,
-            email: row.email,
-            name: row.name,
-            hidden: row.hidden,
-            first_interaction: row.first_interaction,
-            last_interaction: row.last_interaction,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        })
+        Ok(contact)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1198,10 +1436,33 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        // Address edits hold this lock exclusively, so the addresses read
+        // below are committed ones. Same order as population.
+        Self::lock_email_privacy(&mut tx, *team_id, false).await?;
         // A population of this address from this mailbox holds the contact
         // lock from its mailbox scan to its commit; wait it out so the scan's
         // snapshot can't re-add what this teardown removes.
         Self::lock_contact_source(&mut tx, team_id, link_id, &normalized_email).await?;
+
+        // A source stands for the whole contact, not one address: keep it
+        // while this mailbox still has mail with another of its addresses.
+        // Like population's mailbox scan, this runs before the domain lock,
+        // so other writers of the domain don't wait on it.
+        let mut checked_addresses = Vec::new();
+        if let Some(target) =
+            Self::find_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
+        {
+            checked_addresses =
+                Self::other_addresses(&mut tx, target.contact_id, &normalized_email).await?;
+            if Self::mailbox_has_mail_with(&mut tx, link_id, &checked_addresses).await? {
+                tx.commit()
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                return Ok(outcome);
+            }
+        }
+
         let Some(row) =
             Self::lock_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
                 .await?
@@ -1233,6 +1494,21 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
             return Ok(outcome);
         };
+
+        // An address the contact gained since the check above ran is rare
+        // enough to check here, under the locks.
+        let unchecked: Vec<String> =
+            Self::other_addresses(&mut tx, row.contact_id, &normalized_email)
+                .await?
+                .into_iter()
+                .filter(|address| !checked_addresses.contains(address))
+                .collect();
+        if Self::mailbox_has_mail_with(&mut tx, link_id, &unchecked).await? {
+            tx.commit()
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            return Ok(outcome);
+        }
 
         // 1. Drop the per-link source row.
         let source_result = sqlx::query!(
@@ -1385,11 +1661,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         let rows = sqlx::query!(
             r#"
-            SELECT cs.link_id AS "link_id!", LOWER(ct.email) AS "email!"
-            FROM crm_contact_sources cs
-            JOIN crm_contacts ct ON ct.id = cs.contact_id
-            JOIN UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
-              ON p.link_id = cs.link_id AND p.email = LOWER(ct.email)
+            SELECT DISTINCT cs.link_id AS "link_id!", ce.email AS "email!"
+            FROM UNNEST($1::uuid[], $2::text[]) AS p(link_id, email)
+            JOIN crm_contact_emails ce ON ce.email = p.email
+            JOIN crm_contact_sources cs
+              ON cs.contact_id = ce.contact_id AND cs.link_id = p.link_id
             "#,
             &link_ids,
             &emails,
@@ -2086,14 +2362,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 FROM UNNEST($2::text[]) WITH ORDINALITY AS input(address, ord)
                 LEFT JOIN (
                     SELECT
-                        ct.email AS email,
+                        ce.email AS email,
                         BOOL_OR(ct.hidden) AS contact_hidden,
                         BOOL_OR(COALESCE(c.hidden, FALSE)) AS company_hidden,
                         BOOL_AND(COALESCE(c.email_sync, TRUE)) AS email_sync
-                    FROM crm_contacts ct
+                    FROM crm_contact_emails ce
+                    JOIN crm_contacts ct ON ct.id = ce.contact_id
                     LEFT JOIN crm_companies c ON c.id = ct.company_id
-                    WHERE ct.team_id = $1 AND ct.email = ANY($2::text[])
-                    GROUP BY ct.email
+                    WHERE ce.email = ANY($2::text[]) AND ct.team_id = $1
+                    GROUP BY ce.email
                 ) m ON m.email = input.address
                 ORDER BY input.ord
                 "#,
@@ -2121,7 +2398,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
@@ -2248,8 +2525,24 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 first_interaction,
                 last_interaction,
                 created_at,
-                updated_at
-            FROM crm_contacts
+                updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!"
+            FROM crm_contacts ct
             WHERE company_id = $1
               AND ($2 OR hidden = FALSE)
             ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC
@@ -2273,6 +2566,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 last_interaction: row.last_interaction,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                emails: row.emails,
+                company_domain_emails: row.company_domain_emails,
             })
             .collect())
     }
@@ -2290,7 +2585,23 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // treated as "not found" so existence doesn't leak. For
         // admin/owner (`include_hidden = true`) every owned contact is
         // reachable so the admin can see and unhide it.
-        let row = sqlx::query!(
+        Self::read_contact(&self.pool, team_id, contact_id, include_hidden).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
+        // `read_contact` with its company's summary in the same statement.
+        // Visibility is `read_contact`'s: a member never reaches a contact
+        // under a hidden company, so a summary is hidden only for admins.
+        // The name resolves as `get_company_for_team` resolves it: the
+        // team's override, else the directory name of the oldest domain,
+        // which is also the domain shown when the company has no name.
+        let Some(row) = sqlx::query!(
             r#"
             SELECT
                 ct.id,
@@ -2301,9 +2612,41 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ct.first_interaction,
                 ct.last_interaction,
                 ct.created_at,
-                ct.updated_at
+                ct.updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!",
+                CASE WHEN co.team_id = ct.team_id THEN co.id END AS "summary_id?",
+                COALESCE(co.custom_name, primary_domain.name) AS "summary_name?",
+                primary_domain.domain AS "summary_domain?",
+                co.hidden AS "summary_hidden?"
             FROM crm_contacts ct
             LEFT JOIN crm_companies co ON co.id = ct.company_id
+            LEFT JOIN LATERAL (
+                SELECT d.domain, dd.name
+                FROM (
+                    SELECT d.domain
+                    FROM crm_domains d
+                    WHERE d.company_id = co.id
+                    ORDER BY d.created_at ASC NULLS LAST, d.id
+                    LIMIT 1
+                ) d
+                LEFT JOIN crm_domain_directory dd
+                    ON LOWER(dd.domain) = LOWER(d.domain)
+            ) primary_domain ON TRUE
             WHERE ct.id = $1
               AND ct.team_id = $2
               AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
@@ -2314,18 +2657,31 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        Ok(row.map(|row| CrmContact {
-            id: row.id,
-            company_id: row.company_id,
-            email: row.email,
-            name: row.name,
-            hidden: row.hidden,
-            first_interaction: row.first_interaction,
-            last_interaction: row.last_interaction,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        else {
+            return Ok(None);
+        };
+        let company = row.summary_id.map(|id| CrmCompanySummary {
+            id,
+            name: row.summary_name,
+            domain: row.summary_domain,
+            hidden: row.summary_hidden.unwrap_or_default(),
+        });
+        Ok(Some(CrmContactDetail {
+            contact: CrmContact {
+                id: row.id,
+                company_id: row.company_id,
+                email: row.email,
+                name: row.name,
+                hidden: row.hidden,
+                first_interaction: row.first_interaction,
+                last_interaction: row.last_interaction,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                emails: row.emails,
+                company_domain_emails: row.company_domain_emails,
+            },
+            company,
         }))
     }
 
@@ -2350,7 +2706,23 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ct.first_interaction,
                 ct.last_interaction,
                 ct.created_at,
-                ct.updated_at
+                ct.updated_at,
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT ce.email FROM crm_contact_emails ce
+                    WHERE ce.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY ce.created_at, ce.email
+                ) AS "company_domain_emails!"
             FROM crm_contacts ct
             LEFT JOIN crm_companies co ON co.id = ct.company_id
             WHERE ct.team_id = $1
@@ -2383,6 +2755,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 last_interaction: row.last_interaction,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                emails: row.emails,
+                company_domain_emails: row.company_domain_emails,
             })
             .collect())
     }
@@ -2394,9 +2768,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         email: &str,
         include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
-        // Contacts are normalized to lowercase on every write path, so
-        // lowercasing the input preserves use of crm_contacts_email_idx. Team
-        // scope and hidden-row semantics mirror get_contact_for_team.
+        // Matches any of a contact's addresses, which are stored lowercased.
+        // Team scope and hidden-row semantics mirror get_contact_for_team.
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -2408,10 +2781,27 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ct.first_interaction,
                 ct.last_interaction,
                 ct.created_at,
-                ct.updated_at
-            FROM crm_contacts ct
+                ct.updated_at,
+                ARRAY(
+                    SELECT held.email FROM crm_contact_emails held
+                    WHERE held.contact_id = ct.id
+                    ORDER BY held.email <> LOWER(BTRIM(ct.email)), held.created_at, held.email
+                ) AS "emails!",
+                ARRAY(
+                    SELECT held.email FROM crm_contact_emails held
+                    WHERE held.contact_id = ct.id
+                      AND EXISTS (
+                          SELECT 1 FROM crm_domains d
+                          WHERE d.team_id = ct.team_id
+                            AND LOWER(d.domain) = split_part(held.email, '@', 2)
+                            AND d.company_id = ct.company_id
+                      )
+                    ORDER BY held.created_at, held.email
+                ) AS "company_domain_emails!"
+            FROM crm_contact_emails ce
+            JOIN crm_contacts ct ON ct.id = ce.contact_id
             LEFT JOIN crm_companies co ON co.id = ct.company_id
-            WHERE ct.email = LOWER($1)
+            WHERE ce.email = LOWER($1)
               AND ct.team_id = $2
               AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))
             LIMIT 2
@@ -2440,6 +2830,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             last_interaction: row.last_interaction,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            emails: row.emails,
+            company_domain_emails: row.company_domain_emails,
         }))
     }
 

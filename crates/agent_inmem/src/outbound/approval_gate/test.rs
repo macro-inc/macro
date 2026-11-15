@@ -15,6 +15,7 @@ use super::*;
 #[derive(Clone, Default)]
 struct Heard {
     requested: Arc<tokio::sync::Notify>,
+    resolved: Arc<tokio::sync::Notify>,
     statuses: Arc<Mutex<Vec<ToolApprovalStatus>>>,
 }
 
@@ -26,6 +27,7 @@ impl ToolApprovalAnnouncer for Heard {
 
     async fn resolved(&self, approval: &ToolApproval) {
         self.statuses.lock().unwrap().push(approval.status);
+        self.resolved.notify_one();
     }
 }
 
@@ -79,6 +81,7 @@ async fn prompted_by(rig: &Rig, user: Option<MacroUserIdStr<'static>>) {
                 kind: agent_session::domain::model::PrompterKind::User,
                 action_id: AgentActionId::mint(),
                 user,
+                client: None,
             },
         )
         .await
@@ -200,6 +203,7 @@ async fn missing_actor_and_system_requester_are_refused_without_using_owner_acce
                 kind: agent_session::domain::model::PrompterKind::System,
                 action_id: AgentActionId::mint(),
                 user: Some(owner()),
+                client: None,
             },
         )
         .await
@@ -260,4 +264,30 @@ async fn code_execution_cannot_resolve_the_requester_of_a_replacement_turn() {
         .await;
     assert_eq!(verdict, NativeToolVerdict::RunAs(requester));
     assert!(rig.heard.statuses.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn abandoning_a_held_call_cancels_its_approval_and_a_later_approval_is_refused() {
+    let rig = rig();
+    prompted_by(
+        &rig,
+        Some(MacroUserIdStr::try_from_email("asker@example.com").unwrap()),
+    )
+    .await;
+    let arguments = serde_json::json!({"acting_as":"owner"});
+    let check = rig.gate.check(rig.session, "SendEmail", &arguments);
+    tokio::select! {
+        _ = check => panic!("the call is held until the owner answers"),
+        () = rig.heard.requested.notified() => {}
+    }
+
+    rig.heard.resolved.notified().await;
+    let held = rig.store.all().remove(0);
+    assert_eq!(held.status, ToolApprovalStatus::Cancelled);
+    assert!(matches!(
+        rig.approvals
+            .answer(rig.session, held.id, ApprovalAnswer::Approve, &owner())
+            .await,
+        Err(agent_egress::domain::approval::ToolApprovalError::NotPending)
+    ));
 }

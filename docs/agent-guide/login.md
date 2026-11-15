@@ -26,6 +26,40 @@ completion without submitting that consumed code again. Queued edits stay preser
 and the app opens only after cleanup succeeds. Changing the email, going back or
 requesting another code starts a new attempt that must verify with the server.
 
+## Google sign-in on a local stack
+
+A local stack without real Google keys runs the Gmail emulator in Google's
+place (see [running locally](../development/running-locally.md#google-sign-in-and-gmail-without-a-google-account)).
+
+1. On `/app/welcome`, click `Continue with Google`. The browser goes through
+   FusionAuth to the emulator's page, titled `Choose an account`, at
+   `http://localhost:<gmail_emulator port>/o/oauth2/v2/auth`.
+2. Click the button of a seeded user, such as `Ada Example`. The scope
+   checkboxes below the list can stay checked.
+3. A first sign-in lands on onboarding at `/app/welcome`; its work email step
+   already shows `Work email connected` with the user's address. `Connect
+   personal email` on the next step opens the emulator's page again: pick
+   another seeded user to add that mailbox. A returning user lands in the app.
+4. `/app/mail` lists the seeded mail of every connected mailbox once the
+   backfill finishes, a few seconds after connecting.
+
+## Microsoft sign-in on a local stack
+
+A local stack without a real Microsoft client runs the Outlook emulator in
+Microsoft's place (see [running locally](../development/running-locally.md#microsoft-sign-in-and-outlook-without-a-microsoft-account)).
+
+1. On `/app/welcome`, click `Continue with Microsoft`. The browser goes through
+   FusionAuth to the emulator's page, titled `Pick an account`, at
+   `http://localhost:<outlook_emulator port>/common/oauth2/v2.0/authorize`.
+2. Click the button of a seeded user, such as `Ada Example`. `Cancel` and
+   `Need admin approval` return what Microsoft returns for a declined consent
+   and for a directory that requires an administrator.
+3. A first sign-in lands on onboarding at `/app/welcome`. Its work email step
+   opens the emulator's page again for the Outlook consent: pick the same user
+   to connect their mailbox. A returning user lands in the app.
+4. `/app/mail` lists the mailbox's seeded mail once the backfill finishes, a
+   few seconds after connecting.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
@@ -86,14 +120,15 @@ works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 
-## Temporary open signup in Develop
+## Signup in Develop
 
-Once the temporary authentication-service override is deployed, Develop accepts
-new accounts with any email address regardless of signup allowlist membership or
-the configured bypass flag. Verify with an authorized test account outside
-`macro.com` that is absent from the allowlist. Email verification and provider
-sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
-for restoring allowlist enforcement.
+With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
+accounts only for `@macro.com` addresses and the addresses on the Develop signup
+allowlist; turning the bypass on admits every address. With the bypass off, a
+code request for any other new address gets a
+generic `403`, and FusionAuth aborts any other provider sign-up. Existing
+accounts still sign in. See the
+[authentication-service configuration guide](../../services/authentication_service/README.md#development-signup-allowlist).
 
 ## GraphQL cache session lifecycle
 
@@ -142,6 +177,8 @@ sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
 `is_mobile=true` to request the session-code handoff. The `original_url`
 remains the browser destination (including its query and hash). Returning
 from the provider redeems the session code to establish cookies locally.
+A code redeems once: a second redemption, or a reload of a page still
+carrying `?token=`, answers 400.
 This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.

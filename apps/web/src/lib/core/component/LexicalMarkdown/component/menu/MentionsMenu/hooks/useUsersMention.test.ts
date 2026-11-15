@@ -218,3 +218,26 @@ it('keeps @here out of composers that do not post to a channel', () => {
     dispose();
   });
 });
+
+it('lists people before @here for a partial alias and @here first once it is typed in full', () => {
+  createRoot((dispose) => {
+    const helen: IUser = {
+      id: 'macro|helen@macro.com',
+      name: 'Helen Park',
+      email: 'helen@macro.com',
+    };
+    const [searchTerm, setSearchTerm] = createSignal('he');
+    const mention = useUsersMention({
+      searchTerm,
+      users: () => [helen, sean],
+      isChannelBlock: true,
+    });
+    expect(mention.usersAndGroups().map((item) => item.id)).toEqual([
+      helen.id,
+      'here',
+    ]);
+    setSearchTerm('here');
+    expect(mention.usersAndGroups()[0].id).toBe('here');
+    dispose();
+  });
+});

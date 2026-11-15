@@ -167,6 +167,8 @@ export function TriggerMenu(props: {
     group: RoutineEventGroup,
     options: () => JSX.Element
   ) => JSX.Element;
+  /** False offers only schedules; a saved event trigger still shows its own. */
+  offerEvents?: boolean;
   /** For a saved trigger: offered at the bottom of the menu. */
   onRemove?: () => void;
   triggerLabel: string;
@@ -182,10 +184,14 @@ export function TriggerMenu(props: {
   let content: HTMLElement | undefined;
   const [search, setSearch] = createSignal('');
   const [drilled, setDrilled] = createSignal<TriggerType>();
+  const types = () =>
+    props.offerEvents === false
+      ? TRIGGER_TYPES.filter((type) => type.label === 'Schedule')
+      : TRIGGER_TYPES;
   /** On a phone: every type, or only the opened one above its events. */
   const shownTypes = () => {
     const type = drilled();
-    return type ? [type] : TRIGGER_TYPES;
+    return type ? [type] : types();
   };
   /**
    * Typing is how most people find a trigger, so the menu starts in its
@@ -218,7 +224,7 @@ export function TriggerMenu(props: {
       : undefined;
   });
   const results = () =>
-    TRIGGER_TYPES.flatMap((type) =>
+    types().flatMap((type) =>
       type.choices
         .filter((choice) =>
           `${type.label} ${choice.label} ${choice.description}`
@@ -310,7 +316,7 @@ export function TriggerMenu(props: {
               when={isMobile()}
               fallback={
                 <Dropdown.Group>
-                  <For each={TRIGGER_TYPES}>
+                  <For each={types()}>
                     {(type) => (
                       <Dropdown.Sub>
                         <Dropdown.SubTrigger>
@@ -421,7 +427,7 @@ export function TriggerMenu(props: {
               )}
             </Show>
             <For
-              each={TRIGGER_TYPES.filter((type) =>
+              each={types().filter((type) =>
                 results().some((result) => result.type === type)
               )}
             >

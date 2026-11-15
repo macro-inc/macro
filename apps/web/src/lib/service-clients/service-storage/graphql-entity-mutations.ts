@@ -22,7 +22,8 @@ import { getEntityGraphqlClient } from './graphql-soup';
 const isEffectsError = (error: GraphQLError) =>
   error.path?.[1] === 'results' && error.path[3] === 'effects';
 
-/** These operations require an authoritative result, not a queued prediction.
+/** Moves resolve with their cache prediction once durably queued; the other
+ * operations have no resolver and wait for the server's result.
  * Never retry a failed/ambiguous GraphQL write through the REST transport. */
 async function mutateEntity<Data, Variables extends AnyVariables>(
   operation: string,

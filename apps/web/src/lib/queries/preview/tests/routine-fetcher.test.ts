@@ -25,6 +25,7 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
       name: 'Daily standup',
       owner: 'macro|wolf@macro.com',
       updated_at: '2026-10-01T09:00:00Z',
+      appearance: { icon: null, color: 'blue' },
     })
   );
   const readable = await fetchRestPreviewBatch([
@@ -40,6 +41,7 @@ it('previews a routine the viewer can read, a deleted one as gone, and a hidden 
     name: 'Daily standup',
     owner: 'macro|wolf@macro.com',
     updatedAt: '2026-10-01T09:00:00Z',
+    appearance: { icon: null, color: 'blue' },
   });
 
   getRoutine.mockReturnValueOnce(

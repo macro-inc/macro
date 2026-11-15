@@ -26,6 +26,7 @@ struct StubRepo {
     association_calls: Arc<Mutex<Vec<Option<(uuid::Uuid, bool)>>>>,
     association: Option<crate::domain::association::CrmRecordAssociation>,
     created_contact_emails: Arc<Mutex<Vec<String>>>,
+    contact_detail_calls: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, bool)>>>,
 }
 
 impl EmailPrivacyRepository for StubRepo {
@@ -114,6 +115,14 @@ impl CompaniesRepository for StubRepo {
         self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
             .await
             .map(Option::unwrap_or_default)
+    }
+
+    async fn activity_property_edges(
+        &self,
+        scope: CrmContactListScope<'_>,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<crate::domain::association::CrmActivityEdge>, CrmError> {
+        self.resolve_activity(scope).await.map(|_| Vec::new())
     }
 
     async fn resolve_association(
@@ -372,6 +381,19 @@ impl CompaniesRepository for StubRepo {
         _include_hidden: bool,
     ) -> Result<Option<CrmContact>, CrmError> {
         unimplemented!()
+    }
+
+    async fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<crate::domain::model::CrmContactDetail>, CrmError> {
+        self.contact_detail_calls
+            .lock()
+            .unwrap()
+            .push((*team_id, *contact_id, include_hidden));
+        Ok(None)
     }
 
     async fn search_contacts_for_team(
@@ -811,6 +833,34 @@ async fn association_uses_the_viewer_scope_and_reports_invisible_records() {
 }
 
 #[tokio::test]
+async fn activity_edges_use_the_scope_resolve_association_uses() {
+    use models_properties::EntityType;
+    let found = service();
+    let types = [EntityType::Task];
+    found
+        .activity_property_edges("macro|user@example.com", None, &types)
+        .await
+        .unwrap();
+    let team_id = uuid::Uuid::from_u128(42);
+    let bot = bot_receipt(team_id, BotReceiptScope::Team { team_id }, TeamRole::Member);
+    found
+        .activity_property_edges("bot-viewer", Some(&bot), &types)
+        .await
+        .unwrap();
+    assert_eq!(
+        *found.companies_repository.association_calls.lock().unwrap(),
+        vec![None, Some((team_id, false))]
+    );
+    let member = receipt_with_role(TeamRole::Member);
+    assert!(matches!(
+        found
+            .activity_property_edges("macro|other@example.com", Some(&member), &types)
+            .await,
+        Err(CrmError::InvalidRequest(_))
+    ));
+}
+
+#[tokio::test]
 async fn member_can_update_team_views_and_default() {
     let access = receipt_with_role(TeamRole::Member);
     let patch = CrmTeamSettingsPatch {
@@ -1162,4 +1212,43 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
     }
+}
+
+#[tokio::test]
+async fn contact_detail_reads_with_the_receipts_team_and_hidden_scope() {
+    let service = service();
+    let team_id = uuid::Uuid::from_u128(42);
+    let contact_id = uuid::Uuid::from_u128(7);
+    for role in [TeamRole::Member, TeamRole::Admin] {
+        let user = MacroUserIdStr::parse_from_str("macro|user@example.com")
+            .unwrap()
+            .into_owned();
+        let receipt = EntityAccessReceipt::<ViewAccessLevel>::try_new_authenticated_user(
+            user,
+            Entity {
+                entity_id: contact_id.to_string(),
+                entity_type: EntityType::CrmContact,
+            },
+            EntityPermission::AccessLevel {
+                access_level: entity_access::domain::models::AccessLevel::View,
+            },
+        )
+        .unwrap();
+        let access = CrmContactReceipt::new(receipt, team_id, role);
+        assert!(
+            service
+                .get_contact_for_team(&access)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert_eq!(
+        *service
+            .companies_repository
+            .contact_detail_calls
+            .lock()
+            .unwrap(),
+        vec![(team_id, contact_id, false), (team_id, contact_id, true)]
+    );
 }

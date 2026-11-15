@@ -25,6 +25,7 @@ export type MobileDockNavId =
   | 'reviews'
   | 'booking-links'
   | 'external'
+  | 'passwords'
   | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {

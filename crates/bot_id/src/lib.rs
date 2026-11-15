@@ -17,7 +17,8 @@ pub use cowlike;
 #[cfg(test)]
 mod test;
 
-const BOT_STORAGE_PREFIX: &str = "bot";
+/// The prefix of a bot's stored principal id, `bot|<uuid>`.
+pub const BOT_STORAGE_PREFIX: &str = "bot";
 const UUID_HYPHENATED_LEN: usize = 36;
 
 fn uuid_literal(input: &str) -> IResult<&str, BotId> {

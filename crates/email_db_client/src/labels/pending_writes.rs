@@ -1,10 +1,6 @@
-#[cfg(test)]
-mod test;
-
 use models_email::email::service::label::system_labels;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgConnection, Postgres};
-use std::collections::HashMap;
 
 /// Makes label writes that stage or undo a change on the same threads take
 /// turns until the transaction ends, so each reads the state the one before
@@ -35,7 +31,6 @@ pub async fn lock_thread_label_writes(
 /// until Gmail confirms it. Rows stop applying after 12 hours, longer than an
 /// operation is redelivered through the gmail_ops queues, so only operations
 /// that are dead-lettered or lost fall back to Gmail's labels.
-#[tracing::instrument(skip(executor, message_ids), err)]
 pub async fn mark_pending_label_writes<'e, E>(
     executor: E,
     link_id: Uuid,
@@ -47,10 +42,6 @@ pub async fn mark_pending_label_writes<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    if message_ids.is_empty() {
-        return Ok(());
-    }
-
     sqlx::query!(
         r#"
         INSERT INTO email_gmail_pending_label_writes
@@ -73,35 +64,36 @@ where
     Ok(())
 }
 
-/// What a write's operation does with one of its messages now.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LabelWriteTurn {
-    /// The write is the newest on every label: send it to Gmail.
-    Send,
-    /// A newer write on the message is still on its way. Its outcome decides
-    /// whether this one still has to send, so try again later.
-    Wait,
-    /// A newer write was confirmed, or gave up on waiting for this one:
-    /// nothing left to send.
-    Superseded,
+/// Facts returned for one requested message/label pair.
+#[derive(Debug)]
+pub struct LabelWriteFacts {
+    pub message_id: Uuid,
+    pub claimed: bool,
+    pub has_newer: bool,
+    pub waits: bool,
 }
 
-/// The turn of `write_id` on each of `message_ids` for `provider_label_ids`.
-/// A write waits for every newer write whose row hasn't expired, whatever its
-/// id: requests can stage in another order than they drew their ids. Bulk
-/// writes can each be the newer one on a different message, so an operation
-/// sends the messages it is newest on before it waits for the rest.
-#[tracing::instrument(skip(executor, message_ids), err)]
-pub async fn label_write_turns<'e, E>(
+/// State selected atomically when removing a pending write.
+#[derive(Debug)]
+pub struct LabelRestore {
+    pub message_id: Uuid,
+    pub provider_label_id: String,
+    pub label_present: bool,
+}
+
+/// Read claim, newer-row, and live-newer-row facts for each requested pair.
+/// The caller interprets these facts and combines them across labels.
+pub async fn label_write_facts<'e, E>(
     executor: E,
     message_ids: &[Uuid],
     provider_label_ids: &[String],
     write_id: Uuid,
-) -> Result<HashMap<Uuid, LabelWriteTurn>, sqlx::Error>
+) -> Result<Vec<LabelWriteFacts>, sqlx::Error>
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let rows = sqlx::query!(
+    sqlx::query_as!(
+        LabelWriteFacts,
         r#"
         SELECT
             m.id AS "message_id!",
@@ -126,47 +118,18 @@ where
         provider_label_ids,
     )
     .fetch_all(executor)
-    .await?;
-
-    let mut turns = HashMap::new();
-    for row in rows {
-        let turn = if !row.claimed {
-            LabelWriteTurn::Superseded
-        } else if row.waits {
-            LabelWriteTurn::Wait
-        } else if row.has_newer {
-            LabelWriteTurn::Superseded
-        } else {
-            LabelWriteTurn::Send
-        };
-        turns
-            .entry(row.message_id)
-            .and_modify(|current: &mut LabelWriteTurn| {
-                *current = match (*current, turn) {
-                    (LabelWriteTurn::Wait, _) | (_, LabelWriteTurn::Wait) => LabelWriteTurn::Wait,
-                    (LabelWriteTurn::Send, LabelWriteTurn::Send) => LabelWriteTurn::Send,
-                    _ => LabelWriteTurn::Superseded,
-                }
-            })
-            .or_insert(turn);
-    }
-    Ok(turns)
+    .await
 }
 
 /// Gmail applied `write_id` on `message_ids`: removes its rows and those of
 /// every older write on the same labels, which Gmail no longer needs. A
 /// newer write's row now falls back to this write's state. Callers hold
 /// `lock_thread_label_writes` for the messages' threads.
-#[tracing::instrument(skip(tx, message_ids), err)]
 pub async fn confirm_pending_label_writes(
     tx: &mut PgConnection,
     message_ids: &[Uuid],
     write_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    if message_ids.is_empty() {
-        return Ok(());
-    }
-
     sqlx::query!(
         r#"
         WITH mine AS (
@@ -200,26 +163,15 @@ pub async fn confirm_pending_label_writes(
     Ok(())
 }
 
-/// Gives up `write_id`'s rows on `message_ids` because Gmail will never apply
-/// them, and puts each label the write was the newest on back in the state
-/// Gmail will end up with: that of the newest older write still on its way,
-/// or the one before this write, which older writes given up pass on. An
-/// older write whose row expired is presumed lost and no longer counts.
-/// Labels a newer write changed keep that write's state. Returns the messages
-/// whose labels were put back. Callers hold `lock_thread_label_writes` for
-/// the messages' threads.
-#[tracing::instrument(skip(tx, message_ids), err)]
-pub async fn abandon_pending_label_writes(
+/// Remove a pending write and atomically select any fallback label states.
+/// The caller holds the thread locks and applies the returned states.
+pub async fn remove_pending_label_write(
     tx: &mut PgConnection,
-    link_id: Uuid,
     message_ids: &[Uuid],
     write_id: Uuid,
-) -> Result<Vec<Uuid>, sqlx::Error> {
-    if message_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let restored = sqlx::query!(
+) -> Result<Vec<LabelRestore>, sqlx::Error> {
+    sqlx::query_as!(
+        LabelRestore,
         r#"
         WITH mine AS (
             SELECT c.message_id, c.provider_label_id, c.seq, c.label_present_before,
@@ -256,23 +208,16 @@ pub async fn abandon_pending_label_writes(
         write_id,
     )
     .fetch_all(&mut *tx)
-    .await?;
-    if restored.is_empty() {
-        return Ok(Vec::new());
-    }
+    .await
+}
 
-    let (present, absent): (Vec<_>, Vec<_>) =
-        restored.iter().partition(|restore| restore.label_present);
-    let present_ids: Vec<Uuid> = present.iter().map(|restore| restore.message_id).collect();
-    let present_labels: Vec<String> = present
-        .iter()
-        .map(|restore| restore.provider_label_id.clone())
-        .collect();
-    let absent_ids: Vec<Uuid> = absent.iter().map(|restore| restore.message_id).collect();
-    let absent_labels: Vec<String> = absent
-        .iter()
-        .map(|restore| restore.provider_label_id.clone())
-        .collect();
+/// Insert the supplied message/provider-label pairs.
+pub async fn restore_present_labels(
+    tx: &mut PgConnection,
+    link_id: Uuid,
+    present_ids: &[Uuid],
+    present_labels: &[String],
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         INSERT INTO email_message_labels (message_id, label_id)
@@ -287,6 +232,16 @@ pub async fn abandon_pending_label_writes(
     )
     .execute(&mut *tx)
     .await?;
+    Ok(())
+}
+
+/// Delete the supplied message/provider-label pairs.
+pub async fn restore_absent_labels(
+    tx: &mut PgConnection,
+    link_id: Uuid,
+    absent_ids: &[Uuid],
+    absent_labels: &[String],
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         DELETE FROM email_message_labels ml
@@ -301,9 +256,14 @@ pub async fn abandon_pending_label_writes(
     .execute(&mut *tx)
     .await?;
 
-    let mut restored_ids: Vec<Uuid> = restored.iter().map(|restore| restore.message_id).collect();
-    restored_ids.sort_unstable();
-    restored_ids.dedup();
+    Ok(())
+}
+
+/// Refresh flags for exactly the supplied restored messages.
+pub async fn refresh_restored_flags(
+    tx: &mut PgConnection,
+    restored_ids: &[Uuid],
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
         UPDATE email_messages m
@@ -326,7 +286,7 @@ pub async fn abandon_pending_label_writes(
     .execute(&mut *tx)
     .await?;
 
-    Ok(restored_ids)
+    Ok(())
 }
 
 /// Provider label ids on the message with a local change Gmail has not

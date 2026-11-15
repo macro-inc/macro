@@ -12,6 +12,7 @@ import {
 
 export type HomepageMessage = {
   person: HomepagePersonId;
+  side?: 'self' | 'peer';
   text: JSX.Element;
   reaction?: { emoji: string; label: string };
   reply?: JSX.Element;
@@ -44,14 +45,13 @@ export function HomepagePersonAvatar(props: { person: HomepagePersonId }) {
 function Message(props: { message: HomepageMessage }) {
   const person = () => homepagePeople[props.message.person];
   const [reacted, setReacted] = createSignal(false);
+  const side = () =>
+    props.message.side ?? (props.message.person === 'jacob' ? 'self' : 'peer');
 
   return (
-    <li
-      class="homepage-message homepage-enter"
-      data-side={props.message.person === 'jacob' ? 'self' : 'peer'}
-    >
+    <li class="homepage-message homepage-enter" data-side={side()}>
       <span class="homepage-message-name">
-        {person().shortName}
+        {person().name}
         <Show
           when={
             props.message.person === 'claude' ||
@@ -87,9 +87,7 @@ function Message(props: { message: HomepageMessage }) {
         }
       />
       <div class="homepage-message-body">
-        <UserMessageBubble
-          class={props.message.person === 'jacob' ? undefined : 'glass'}
-        >
+        <UserMessageBubble class={side() === 'self' ? undefined : 'glass'}>
           <p class="m-0">{props.message.text}</p>
         </UserMessageBubble>
       </div>
@@ -100,7 +98,7 @@ function Message(props: { message: HomepageMessage }) {
             size="sm"
             variant="outline"
             class="homepage-message-reaction gap-1.5 rounded-full px-2.5 text-xs"
-            aria-label={`${reaction().label} reaction to ${person().shortName}'s message`}
+            aria-label={`${reaction().label} reaction to ${person().name}'s message`}
             aria-pressed={reacted()}
             onClick={() => setReacted((previous) => !previous)}
           >

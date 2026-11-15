@@ -67,7 +67,8 @@ use super::model::{
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, FoldedSessionLog, LogAppended,
     MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
     SandboxSize, SessionClaim, SessionLog, SessionManagement, SessionPreviewCandidate,
-    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, cursor_run_checkpoint,
+    SessionRelease, StoredAgentSessionLog, StoredQueuedAction, ThreadSession,
+    cursor_run_checkpoint,
 };
 use super::model::{SessionBot, SessionSource, SessionVisibility, TurnPrompter};
 use super::ports::{
@@ -306,6 +307,16 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// it does not touch anything durable. A session with no active transport
     /// is already in the state this asks for, so it succeeds.
     fn close_session(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Stop the session's idle actor without a trace: no log frame, no
+    /// turn-observer callback (so no lifecycle event), nothing published. Its
+    /// claim is given back under its own fence. The actor refuses with
+    /// [`SessionRelease::Busy`] while it has work open. A later attach
+    /// rebuilds it from the log as after a restart.
+    fn release_session(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionRelease>> + Send;
 
     /// Persist that a session disconnected before a live actor could report it.
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
@@ -586,6 +597,13 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn replica_id(&self) -> ReplicaId {
         self.replica
+    }
+
+    /// How many sessions have a live actor (or one being attached) on this
+    /// service right now.
+    #[must_use]
+    pub fn active_sessions(&self) -> usize {
+        self.active.len()
     }
 
     /// Stop active actors and wait for their tasks to release their transports.
@@ -1085,6 +1103,39 @@ where
             Arc::ptr_eq(&active.marker, &marker) && !active.deleting
         });
         Ok(())
+    }
+
+    async fn release_session(&self, id: AgentSessionId) -> Result<SessionRelease> {
+        let (commands, stopped, marker) = {
+            let Some(active) = self.active.get(&id) else {
+                return Ok(SessionRelease::NotAttached);
+            };
+            let Some(commands) = active.commands.clone().filter(|_| !active.stopping) else {
+                return Ok(SessionRelease::NotAttached);
+            };
+            (commands, active.stopped.clone(), active.marker.clone())
+        };
+        let (completed, released) = oneshot::channel();
+        if commands
+            .send(SessionMessage::Release(completed))
+            .await
+            .is_err()
+        {
+            return Ok(SessionRelease::NotAttached);
+        }
+        drop(commands);
+        let Ok(outcome) = released.await else {
+            // The actor stopped for its own reasons before answering.
+            return Ok(SessionRelease::NotAttached);
+        };
+        if outcome? == SessionRelease::Released {
+            Self::wait_stopped(stopped).await;
+            self.active.remove_if(&id, |_, active| {
+                Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+            });
+            return Ok(SessionRelease::Released);
+        }
+        Ok(SessionRelease::Busy)
     }
 
     async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
@@ -2480,6 +2531,9 @@ async fn run_session<Connector, Logs, Ownership>(
     }
     // Last, after the registry entry is gone: whatever the observer does with
     // the fact - clear a busy flag, dispatch nothing - it sees a session that
-    // really has no actor anymore.
-    turn_observer.session_stopped(id, stop_reason);
+    // really has no actor anymore. A silent release is not a stop to anyone
+    // outside this process, so the observer never hears of it.
+    if stop_reason != SessionStopReason::Closed(CloseReason::Released) {
+        turn_observer.session_stopped(id, stop_reason);
+    }
 }

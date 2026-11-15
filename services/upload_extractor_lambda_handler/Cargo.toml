@@ -28,8 +28,6 @@ sha2 = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client" }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
 walkdir = "2.3.2"
 zip = { workspace = true }

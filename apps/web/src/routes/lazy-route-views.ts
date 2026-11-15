@@ -10,6 +10,18 @@ export const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
 );
+export const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
+export const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+export const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
+);
 export const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
   'AgentsRouteView'
@@ -100,7 +112,7 @@ export const SearchRouteView = lazyNamed(
   'SearchRouteView'
 );
 export const ReviewsPrDetailRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
+  () => import('@app/features/reviews-view/components/ReviewsPrDetail'),
   'ReviewsPrDetailRouteView'
 );
 export const ReviewsRouteView = lazyNamed(
@@ -131,6 +143,10 @@ export const FormRespondRoutePage = lazyNamed(
   () => import('./pages'),
   'FormRespondRoutePage'
 );
+export const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
 export const NotFound = lazy(
   () => import('@core/component/AccessErrorViews/NotFound')
 );
@@ -150,4 +166,35 @@ export const LIKELY_NEXT_VIEWS = [
   TasksRouteView,
   AgentsRouteView,
   CalendarRouteView,
+];
+
+/**
+ * The app's other views. The native apps read chunks from their own bundle, so
+ * they warm these too, after the likely ones: nothing downloads, and a view
+ * nobody warmed shows its skeleton while its code loads.
+ */
+export const OTHER_APP_VIEWS = [
+  SearchRouteView,
+  NotificationsRouteView,
+  NotificationsCalendarRouteView,
+  RecentRouteView,
+  FoldersRouteView,
+  CallsRouteView,
+  CallsCallDetail,
+  CallDetailRouteView,
+  TasksDetailRouteView,
+  ProjectDetailRouteView,
+  ProjectTaskRouteView,
+  EmailComposeRouteView,
+  DriveCallRouteView,
+  ReviewsRouteView,
+  ReviewsPrDetailRouteView,
+  PrDetailRouteView,
+  ActivityRouteView,
+  CompaniesRouteView,
+  SettingsRouteView,
+  BookingLinksRouteView,
+  ExternalRouteView,
+  ExternalChatRouteView,
+  PasswordsRouteView,
 ];

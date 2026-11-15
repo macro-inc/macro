@@ -1,5 +1,5 @@
-import Caret from '@phosphor/caret-right.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
+import Caret from '@icon/system/regular/caret-right.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
 import { Button, Tabs } from '@ui';
 import { TabsInset } from '@ui/components/TabsInset';
 import { type JSX, Show } from 'solid-js';

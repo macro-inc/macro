@@ -170,9 +170,6 @@ describe('stacking margin threads', () => {
         previous.calculatedYPos + threads[i - 1].height + MIN_THREAD_GAP
       );
     }
-    for (const layout of layouts) {
-      expect(layout.layout.calculatedYPos).toBeGreaterThanOrEqual(0);
-    }
   };
 
   it('keeps each thread beside its mark when they fit', () => {
@@ -187,16 +184,28 @@ describe('stacking margin threads', () => {
     expectNoOverlap(threads, layouts);
   });
 
-  it('never stacks a thread above the top of a short page', () => {
-    // A long active thread low on a short page: fitting it inside the page
-    // would push the thread above it out the top, out of reach.
+  it('keeps the active thread beside its text in a crowded margin', () => {
+    // Twelve comments on consecutive lines: the cards above the active one
+    // cannot fit between the top of the page and its text, so they pass the
+    // top instead of pushing the active card away from its text.
+    const threads = Array.from({ length: 12 }, (_, i) =>
+      thread(String(i), 100 + i * 24, 90)
+    );
+    const layouts = stackMarginThreads(threads, 10, 2000);
+    expect(tops(layouts)[10]).toBe(340);
+    expect(tops(layouts)[0]).toBeLessThan(0);
+    expect(layouts[0].layout.overflow).toBe('top');
+    expectNoOverlap(threads, layouts);
+  });
+
+  it('never moves the active thread above the top of a short page', () => {
     const threads = [
       thread('above', 230, 400),
       thread('active', 350, 1300),
       thread('below', 600, 500),
     ];
     const layouts = stackMarginThreads(threads, 1, 750);
-    expect(tops(layouts)[0]).toBe(0);
+    expect(tops(layouts)[1]).toBe(0);
     expectNoOverlap(threads, layouts);
   });
 
@@ -204,5 +213,63 @@ describe('stacking margin threads', () => {
     const threads = [thread('a', 50, 40), thread('active', 700, 200)];
     const layouts = stackMarginThreads(threads, 1, 800);
     expect(tops(layouts)).toEqual([50, 600]);
+  });
+});
+
+describe('anchoring the margin on the active thread', () => {
+  it('re-anchors when a thread is selected without changing height', () => {
+    const notebook = document.createElement('div');
+    const margin = document.createElement('div');
+    vi.spyOn(margin, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(800, 0, 320, 2000)
+    );
+    const mark = (id: string, top: number): MarkStore[string] => {
+      const element = document.createElement('mark');
+      vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, top, 100, 20)
+      );
+      return {
+        id,
+        markNodes: { [id]: element },
+        existsOnServer: true,
+        owner: 'user',
+        isDraft: false,
+        thread: {
+          threadId: `thread-${id}`,
+          rootId: `thread-${id}`,
+          anchorId: id,
+          comments: [],
+          isResolved: false,
+        },
+      };
+    };
+    const [fixtureState, setFixtureState] = createStore({
+      editor: {
+        md: { notebook, commentMargin: margin, editor: createEditor() },
+      },
+      comments: {
+        marks: { first: mark('first', 100), second: mark('second', 120) },
+        activeMarkIds: [] as string[],
+      },
+    });
+    state = fixtureState;
+    let layout!: ReturnType<typeof createCommentLayout>;
+    render(() => {
+      layout = createCommentLayout();
+      return null;
+    });
+    layout.setThreadHeights({ 'thread-first': 200, 'thread-second': 200 });
+    const top = (id: string) =>
+      layout.threadPositions[id]!.layout.calculatedYPos;
+    expect([top('first'), top('second')]).toEqual([
+      100,
+      100 + 200 + MIN_THREAD_GAP,
+    ]);
+
+    setFixtureState('comments', 'activeMarkIds', ['second']);
+    expect([top('first'), top('second')]).toEqual([
+      120 - 200 - MIN_THREAD_GAP,
+      120,
+    ]);
   });
 });

@@ -3,8 +3,8 @@
 use std::{future::Future, pin::Pin, time::Duration};
 
 use super::models::{
-    EmailCodeRequest, RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamLogin,
-    UpstreamTokens,
+    AccessToken, EmailCodeRequest, RefreshToken, RefreshTokenBinding, RegisteredClient,
+    UpstreamLogin, UpstreamTokens,
 };
 
 /// Boxed future returning a token grant from the upstream provider.
@@ -122,6 +122,35 @@ pub trait OAuthProvider: Send + Sync {
         &'a self,
         refresh_token: &'a RefreshToken,
     ) -> UpstreamRevocationFuture<'a>;
+}
+
+/// Boxed future returning an access token the broker minted.
+pub type MintedAccessTokenFuture<'a> =
+    Pin<Box<dyn Future<Output = anyhow::Result<MintedAccessToken>> + Send + 'a>>;
+
+/// A minted access token and how long it is valid, which a signer may cap
+/// below the lifetime it was asked for.
+pub struct MintedAccessToken {
+    /// The signed token.
+    pub token: AccessToken,
+    /// How long it is valid for.
+    pub lifetime: Duration,
+}
+
+/// Mints the token a resource that hands its bearer straight to Macro's APIs
+/// gets in place of the upstream access token. Those APIs cannot look up which
+/// client a token went to, so the token carries the attribution, signed.
+pub trait MacroApiTokenMinter: Send + Sync {
+    /// A Macro API token for the user `upstream` names, valid for at most
+    /// `lifetime`,
+    /// acting as the Macro bot via the client named `client_name` (`None` when
+    /// its registration has lapsed).
+    fn mint<'a>(
+        &'a self,
+        upstream: &'a AccessToken,
+        client_name: Option<&'a str>,
+        lifetime: Duration,
+    ) -> MintedAccessTokenFuture<'a>;
 }
 
 /// Boxed future returning the upstream's answer to an emailed code request.

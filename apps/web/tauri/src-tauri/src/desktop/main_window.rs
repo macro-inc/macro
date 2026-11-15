@@ -34,11 +34,14 @@ impl StartupWindows {
     }
 }
 
-/// Builds every startup window, at launch.
+/// Builds every startup window, at launch, after installing the macOS app
+/// menu they share.
 pub(crate) fn create_all(
     app: &AppHandle<AppRuntime>,
     windows: &StartupWindows,
 ) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    super::app_menu::install(app)?;
     for config in &windows.configs {
         build(app, windows, config)?;
     }

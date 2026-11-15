@@ -6,6 +6,7 @@
  */
 import type { TakenIdOneOf } from './takenIdOneOf';
 import type { TakenIdOneOfFive } from './takenIdOneOfFive';
+import type { TakenIdOneOfNine } from './takenIdOneOfNine';
 import type { TakenIdOneOfSeven } from './takenIdOneOfSeven';
 import type { TakenIdOneOfThree } from './takenIdOneOfThree';
 
@@ -18,4 +19,5 @@ export type TakenId =
   | TakenIdOneOf
   | TakenIdOneOfThree
   | TakenIdOneOfFive
-  | TakenIdOneOfSeven;
+  | TakenIdOneOfSeven
+  | TakenIdOneOfNine;

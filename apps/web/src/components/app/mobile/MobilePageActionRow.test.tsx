@@ -77,8 +77,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
-vi.mock('@app/features/chat/SoupChatInput', () => ({
-  SoupChatInput: () => {
+vi.mock('@app/features/agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => {
     mocks.mountComposer();
     onCleanup(mocks.unmountComposer);
     return (
@@ -132,15 +132,23 @@ beforeEach(() => {
   });
 });
 
+/** The composer mounts a task after the frame that follows the navigation. */
+const composerDraft = () =>
+  screen.findByRole<HTMLTextAreaElement>('textbox', { name: 'Chat draft' });
+
+/** Past the point a deferred composer would have mounted. */
+const deferralElapsed = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => setTimeout(() => setTimeout(resolve)))
+  );
+
 describe('Mobile page action row', () => {
   it.each(['input', 'textarea', 'contenteditable'] as const)(
     'hides while an outside %s is focused and preserves the AI draft',
-    (kind) => {
+    async (kind) => {
       mocks.view = 'agents';
       render(() => <MobilePageActionRow />);
-      const draft = screen.getByRole('textbox', {
-        name: 'Chat draft',
-      }) as HTMLTextAreaElement;
+      const draft = await composerDraft();
       draft.value = 'Keep this draft';
       draft.focus();
       setVirtualKeyboardVisible(true);
@@ -176,7 +184,7 @@ describe('Mobile page action row', () => {
     }
   );
 
-  it('starts hidden when another field is already focused and returns for a non-editable control', () => {
+  it('starts hidden when another field is already focused and returns for a non-editable control', async () => {
     mocks.view = 'agents';
     render(() => (
       <>
@@ -186,16 +194,17 @@ describe('Mobile page action row', () => {
     ));
     screen.getByRole('textbox', { name: 'Email subject' }).focus();
     render(() => <MobilePageActionRow />);
+    await waitFor(() => expect(mocks.mountComposer).toHaveBeenCalledOnce());
     expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
     screen.getByRole('button', { name: 'Email options' }).focus();
-    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    expect(await composerDraft()).toBeTruthy();
     expect(mocks.mountComposer).toHaveBeenCalledOnce();
   });
 
-  it('starts compact and yields to screen-specific controls, then returns', () => {
+  it('starts compact and yields to screen-specific controls, then returns', async () => {
     mocks.view = 'agents';
     const page = render(() => <MobilePageActionRow />);
-    const draft = screen.getByRole('textbox', { name: 'Chat draft' });
+    const draft = await composerDraft();
     fireEvent.input(draft, { target: { value: 'Keep this draft' } });
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
     const reply = render(() => (
@@ -306,15 +315,17 @@ describe('Mobile page action row', () => {
     expect(mocks.send).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
   });
-  it('shows only the AI composer on Agents, without a redundant create button', () => {
+  it('shows only the AI composer on Agents, without a redundant create button', async () => {
     mocks.view = 'agents';
     render(() => <MobilePageActionRow />);
+    await composerDraft();
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
   });
-  it('opens company creation from CRM without the AI composer', () => {
+  it('opens company creation from CRM without the AI composer', async () => {
     mocks.view = 'companies';
     render(() => <MobilePageActionRow />);
+    await deferralElapsed();
     const createButton = screen.getByRole('button', { name: 'New company' });
     expect(createButton.textContent).toBe('Company');
     fireEvent.click(createButton);
@@ -409,8 +420,9 @@ describe('Mobile page action row', () => {
     }
   );
 
-  it('hides the non-AI page action while the keyboard is visible', () => {
+  it('hides the non-AI page action while the keyboard is visible', async () => {
     render(() => <MobilePageActionRow />);
+    await deferralElapsed();
     expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
     setVirtualKeyboardVisible(true);
     expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
@@ -423,23 +435,37 @@ describe('Mobile page action row', () => {
   it.each([
     ...MOBILE_NAV_VIEW_IDS.filter((view) => view !== 'agents'),
     undefined,
-  ])('does not mount a floating AI composer on %s', (view) => {
+  ])('does not mount a floating AI composer on %s', async (view) => {
     mocks.view = view;
     render(() => <MobilePageActionRow />);
+    await deferralElapsed();
     expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
     expect(mocks.mountComposer).not.toHaveBeenCalled();
   });
 
-  it('reacts to navigation into and out of Agents', () => {
+  it('reacts to navigation into and out of Agents', async () => {
     const [view, setView] = createSignal<MobileNavViewId>('home');
     mocks.viewAccessor = view;
     render(() => <MobilePageActionRow />);
     expect(mocks.mountComposer).not.toHaveBeenCalled();
     setView('agents');
-    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    // The tap is answered by the view; the composer follows its first paint.
+    expect(mocks.mountComposer).not.toHaveBeenCalled();
+    expect(await composerDraft()).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
     setView('mail');
     expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
+  });
+
+  it('never mounts the composer for a view left before it was due', async () => {
+    const [view, setView] = createSignal<MobileNavViewId>('home');
+    mocks.viewAccessor = view;
+    render(() => <MobilePageActionRow />);
+    setView('agents');
+    setView('mail');
+    await deferralElapsed();
+    expect(mocks.mountComposer).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'New email' })).toBeTruthy();
   });
 });

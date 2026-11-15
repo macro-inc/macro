@@ -237,6 +237,8 @@ impl<T: super::model_load::HarnessModelAccess> HarnessCapabilityAccess for T {
         caller: &MacroUserIdStr<'static>,
         harness: HarnessId,
     ) -> Result<bool, String> {
-        super::model_load::HarnessModelAccess::can_use(self, caller, harness).await
+        super::model_load::HarnessModelAccess::reach(self, caller, harness)
+            .await
+            .map(|reach| reach != super::model_load::HarnessModelReach::Forbidden)
     }
 }

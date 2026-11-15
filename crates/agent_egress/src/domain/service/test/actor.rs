@@ -388,6 +388,43 @@ async fn an_in_process_owner_call_in_the_owners_turn_is_not_held() {
 }
 
 #[tokio::test]
+async fn an_in_process_drive_write_in_the_owners_turn_runs_only_once_they_approve() {
+    let transport = Arc::new(ActorTransport::default());
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing())
+        .with_actor_mcp(transport.clone());
+    let grant = service.session_grant(AgentSessionId::new()).await.unwrap();
+    let drive = McpDestination::Connected(McpServerSlug::parse("google_drive").unwrap());
+    let call = |name: &str| json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":name,"arguments":{"fileId":"f"}}});
+
+    let refused = service
+        .exchange_as(&grant, &owner(), &drive, call("update_file"))
+        .await
+        .unwrap();
+    assert_eq!(refused["isError"], true, "nobody approved it in time");
+    assert!(
+        transport.0.lock().unwrap().is_empty(),
+        "nothing reached Drive"
+    );
+
+    *service.approvals.answer.lock().unwrap() =
+        Some(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Approved);
+    service
+        .exchange_as(&grant, &owner(), &drive, call("update_file"))
+        .await
+        .unwrap();
+    service
+        .exchange_as(&grant, &owner(), &drive, call("read_file_content"))
+        .await
+        .unwrap();
+
+    let held = service.approvals.held_in_process.lock().unwrap();
+    assert_eq!(held.len(), 2, "both writes asked, the read did not");
+    assert!(held.iter().all(|call| call.tool_name == "update_file"));
+    assert_eq!(held[0].prompter.acting_user(), Some(&owner()));
+    assert_eq!(transport.0.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn an_in_process_owner_call_in_someone_elses_turn_runs_once_the_owner_approves() {
     let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
     let transport = Arc::new(ActorTransport::default());

@@ -114,5 +114,19 @@ export function createMeetingSessionOwner() {
     for (const entry of sessions) remove(entry, 'provider_cleanup');
     sessions.clear();
   });
-  return { acquire };
+  function forCall(callId: string | null) {
+    if (!callId) return undefined;
+    const entry = [...sessions].find(
+      (entry) =>
+        entry.session.joinedCallId() === callId &&
+        entry.capabilities.isInCall() &&
+        entry.capabilities.activeCallId() === callId
+    );
+    if (!entry) return undefined;
+    return {
+      shareToken: entry.capabilities.shareToken(),
+      leave: entry.session.leave,
+    };
+  }
+  return { acquire, forCall };
 }

@@ -12,19 +12,31 @@ export class AccountManagerNamespace {
     return AccountManagerGrant.byId(this.client, id);
   }
 
-  /** List the approved and active managers of the caller's account. */
+  /**
+   * List the approved and active managers of the caller's account.
+   *
+   * @readonly
+   */
   async list(): Promise<AccountManagerGrant[]> {
     return unwrap(await this.client.storage.listAccountManagers()).grants.map(
       (record) => AccountManagerGrant.from(this.client, record),
     );
   }
 
-  /** Ask to manage `user`'s account, in your DM. The caller must be an agent account and `user` a person. */
+  /**
+   * Ask to manage `user`'s account, in your DM. The caller must be an agent account and `user` a person.
+   *
+   * @write
+   */
   async askToManage(user: User): Promise<AccountManagerGrant> {
     return this.request(user, 'manager');
   }
 
-  /** Ask `user`, an agent account, to manage the caller's account, in your DM. The caller must be a person. */
+  /**
+   * Ask `user`, an agent account, to manage the caller's account, in your DM. The caller must be a person.
+   *
+   * @write
+   */
   async askToBeManagedBy(user: User): Promise<AccountManagerGrant> {
     return this.request(user, 'managed');
   }

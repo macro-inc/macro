@@ -11,8 +11,9 @@ use crate::domain::{
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
-        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
+        CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
+        DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -43,6 +44,18 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: Option<&CrmTeamReceipt<MemberTeamRole>>,
         record: super::association::CrmAssociation,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
+    /// The items of `entity_types` whose Companies or Contacts property names
+    /// a record of the viewer's activity scope (see [`Self::resolve_association`]
+    /// for [`super::association::CrmAssociation::Activity`]), in one statement
+    /// that reads only the scope's record ids. Not authorized: each item
+    /// reaches the caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Contribute eligible stored history from an explicitly consented mailbox.
     /// Team and personal exclusions (including mixed-thread participants) apply
@@ -257,8 +270,28 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         name: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Add a missing email without merging identities; an identical retry is safe.
+    /// Make an address the contact's primary, adding it when the contact does
+    /// not hold it yet. Never merges identities; an identical retry is safe.
     fn set_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Add a further address the contact is known by. It must not belong to
+    /// another contact in the team, and becomes the primary only when the
+    /// contact has none. An identical retry is safe.
+    fn add_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Remove one of the contact's addresses. Nothing else is deleted: the
+    /// contact stops matching that address's mail. Removing the primary
+    /// promotes the oldest address left. The last address on a domain of the
+    /// contact's company cannot be removed while the contact is linked to it.
+    fn remove_contact_email(
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
         email: &str,
@@ -269,6 +302,13 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         &self,
         access: &CrmContactReceipt<EditAccessLevel>,
         company_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// Remove the contact's company link. A contact with an address on one
+    /// of its company's domains cannot be unlinked.
+    fn unlink_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. See
@@ -311,13 +351,13 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
     /// Fetch the contact addressed by `access`, scoped to its owning
-    /// team. The receipt's role decides whether a hidden contact (or one
-    /// under a hidden company) is revealed. See
-    /// [`CompaniesRepository::get_contact_for_team`].
+    /// team, with its company's name and visibility. The receipt's role
+    /// decides whether a hidden contact (or one under a hidden company) is
+    /// revealed. See [`CompaniesRepository::get_contact_for_team`].
     fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Search the caller's team's contacts by email or name, most recently
     /// interacted first. The caller's role decides whether hidden contacts
@@ -1007,6 +1047,55 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn add_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::AddEmail(email),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn remove_contact_email(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+        email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::RemoveEmail(email),
+                access.include_hidden(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn unlink_contact_company(
+        &self,
+        access: &CrmContactReceipt<EditAccessLevel>,
+    ) -> Result<CrmContact, CrmError> {
+        self.companies_repository
+            .update_contact(
+                &access.team_id(),
+                &access.contact_id()?,
+                &super::contact_update::ContactFieldUpdate::NoCompany,
+                access.include_hidden(),
+            )
+            .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn crm_scope_precheck(
         &self,
@@ -1057,7 +1146,20 @@ where
             })
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip(self, access, user_id), err)]
+    async fn activity_property_edges(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        let scope = viewer_scope(user_id, access)?;
+        self.companies_repository
+            .activity_property_edges(scope, entity_types)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
@@ -1095,12 +1197,12 @@ where
     async fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         let team_id = access.team_id();
         let contact_id = access.contact_id()?;
         let include_hidden = access.include_hidden();
         self.companies_repository
-            .get_contact_for_team(&team_id, &contact_id, include_hidden)
+            .get_contact_detail_for_team(&team_id, &contact_id, include_hidden)
             .await
     }
 
@@ -1298,6 +1400,17 @@ impl CrmService for NoOpCrmService {
         })
     }
 
+    async fn activity_property_edges(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        _entity_types: &[models_properties::EntityType],
+    ) -> Result<Vec<super::association::CrmActivityEdge>, CrmError> {
+        Err(CrmError::InvalidRequest(
+            "activity scope unavailable".into(),
+        ))
+    }
+
     async fn populate_contact(
         &self,
         _team_id: &uuid::Uuid,
@@ -1422,6 +1535,29 @@ impl CrmService for NoOpCrmService {
         Err(CrmError::CrmDisabledForTeam)
     }
 
+    async fn add_contact_email(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn remove_contact_email(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _email: &str,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn unlink_contact_company(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+    ) -> Result<CrmContact, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
     async fn crm_scope_precheck(
         &self,
         _team_id: &uuid::Uuid,
@@ -1455,7 +1591,7 @@ impl CrmService for NoOpCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         Ok(None)
     }
 

@@ -6,7 +6,7 @@ use calendar_events::domain::{
         CalendarChangeQueryService, CalendarChangesPage, CalendarEventChange, CalendarWatermark,
         EventOccurrence,
     },
-    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
+    meeting_links::{MacroCallEventError, MeetingLinkError},
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
         CalendarEventPatch, ConferenceChange, EventTime, EventVisibility,
@@ -183,7 +183,7 @@ impl CalendarMacroCallService for FakeMutations {
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
-    ) -> Result<CalendarEvent, CreateEventWithMacroCallError> {
+    ) -> Result<CalendarEvent, MacroCallEventError> {
         if let Some(error) = self.meeting_failure.lock().unwrap().take() {
             return Err(error.into());
         }
@@ -192,6 +192,17 @@ impl CalendarMacroCallService for FakeMutations {
             Call::CreateWithMeeting(email_link_id, calendar_id, draft),
         )?;
         Ok(series_event())
+    }
+
+    async fn update_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _patch: CalendarEventPatch,
+        _scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, MacroCallEventError> {
+        unreachable!("GraphQL updates carry no Macro call")
     }
 }
 

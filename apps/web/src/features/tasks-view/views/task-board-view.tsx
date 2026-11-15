@@ -79,12 +79,15 @@ export function TaskBoardView(props: {
   });
   const [readError, setReadError] = createSignal<string>();
   const loading = source.boardLoading ?? source.isLoading;
-  const sortLabel = () =>
-    state.search.trim()
-      ? 'search order'
-      : (TASK_SORT_OPTIONS.find(
-          (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
-        )?.label ?? 'Updated');
+  const dropLabel = () => {
+    if (state.search.trim()) return 'Move here';
+
+    const sort =
+      TASK_SORT_OPTIONS.find(
+        (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
+      )?.label ?? 'Updated';
+    return `Board sorted by ${sort}`;
+  };
   const cardPropertyIds = () =>
     CARD_PROPERTY_IDS.filter((id) => {
       if (
@@ -291,9 +294,7 @@ export function TaskBoardView(props: {
                   </div>
                 </Show>
               </TaskBoard.Header>
-              <TaskBoard.DropOverlay>
-                Board sorted by {sortLabel()}
-              </TaskBoard.DropOverlay>
+              <TaskBoard.DropOverlay>{dropLabel()}</TaskBoard.DropOverlay>
               <TaskBoard.Cards
                 empty={
                   <p class="px-2 py-6 text-center text-xs text-ink-extra-muted">
