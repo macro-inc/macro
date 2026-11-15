@@ -6,8 +6,14 @@ import {
   noteChannelPush,
   pushesStored,
   resetChannelSync,
+  storeUnstoredPushes,
 } from '../catch-up';
 import { channelActivityKey, channelMessageKey } from '../sort-key';
+import {
+  noteUnstoredPush,
+  resetUnstoredPushes,
+  unstoredPushChannels,
+} from '../unstored-pushes';
 import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
 
 const { invalidateQueries, channelCacheHost } = vi.hoisted(() => ({
@@ -235,5 +241,48 @@ describe('pushesStored', () => {
     resetChannelSync();
     expect(await waiting).toBe(true);
     expect(await pushesStored(CHANNEL_ID)).toBe(false);
+  });
+});
+
+describe('pushes a page that is gone left unstored', () => {
+  afterEach(() => {
+    resetUnstoredPushes();
+    localStorage.clear();
+  });
+
+  it('notes a pushed channel until the device has taken the push', async () => {
+    const host = sequencedHost('7');
+    channelCacheHost.mockReturnValue(host);
+    const fetchChanges = vi.fn(async () => changes({ seq: '8' }));
+
+    noteChannelPush(CHANNEL_ID, 8);
+    noteChannelPush(CHANNEL_ID, 9);
+    expect(unstoredPushChannels()).toEqual([CHANNEL_ID]);
+
+    // The log has only the first of the two so far.
+    await catchUpAndRefresh(host, CHANNEL_ID, fetchChanges);
+    expect(unstoredPushChannels()).toEqual([CHANNEL_ID]);
+
+    fetchChanges.mockResolvedValue(changes({ seq: '9' }));
+    await catchUpAndRefresh(host, CHANNEL_ID, fetchChanges);
+    expect(unstoredPushChannels()).toEqual([]);
+  });
+
+  it('catches up what the page before left noted, and keeps what fails', async () => {
+    const host = sequencedHost('7');
+    channelCacheHost.mockReturnValue(host);
+    // The page before was reloaded before the device took these.
+    noteUnstoredPush(CHANNEL_ID);
+    noteUnstoredPush('another-channel');
+    resetUnstoredPushes();
+    const fetchChanges = vi.fn(async (channelId: string) => {
+      if (channelId !== CHANNEL_ID) throw new Error('offline');
+      return changes({ seq: '8' });
+    });
+
+    await storeUnstoredPushes(host, fetchChanges);
+
+    expect(fetchChanges).toHaveBeenCalledWith(CHANNEL_ID, '7');
+    expect(unstoredPushChannels()).toEqual(['another-channel']);
   });
 });

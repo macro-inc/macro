@@ -2,6 +2,7 @@ vi.mock('@queries/messages/subscription', () => ({
   useMessageSubscription: () => {},
 }));
 
+import { fireAndForget } from '@core/util/fireAndForget';
 /** @vitest-environment jsdom */
 import type {
   Message,
@@ -12,8 +13,16 @@ import type {
 import { QueryObserver } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SEND_MESSAGE_MUTATION_KEY } from '../unsent';
 
 let testQueryClient: QueryClient;
+const { channelCacheHost } = vi.hoisted(() => ({
+  channelCacheHost: vi.fn(),
+}));
+vi.mock('../local/flag', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../local/flag')>()),
+  channelCacheHost,
+}));
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
@@ -336,6 +345,110 @@ describe.each([
     expect(
       testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
     ).toEqual([expect.objectContaining({ content: 'new content', reactions })]);
+  });
+  it('moves a delivered send below messages the server placed before it', () => {
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [{ type: 'message', message: item(parent) }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
+    });
+    const shown = () =>
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      ).map((row) => row.id);
+    // Written offline, so shown with the time it was written.
+    const mine = message(parent, 'mine');
+    applyMessage({ ...mine, created_at: '2026-09-09T00:00:01Z' }, 'posted');
+    // Pushed on reconnecting: the server took it while this device was away.
+    applyMessage(
+      { ...message(parent, 'theirs'), created_at: '2026-09-09T00:00:02Z' },
+      'posted'
+    );
+    expect(shown()).toEqual(['theirs', 'mine', 'root']);
+
+    applyQueuedWrite({ ...mine, created_at: '2026-09-09T00:00:03Z' }, 'posted');
+
+    expect(shown()).toEqual(['mine', 'theirs', 'root']);
+  });
+  it.runIf(parent.type === 'channel')(
+    "moves another window's waiting message when its delivery is pushed",
+    () => {
+      channelCacheHost.mockReturnValue({});
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          {
+            entries: [{ type: 'message', message: item(parent) }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
+      });
+      const shown = () =>
+        timelineMessages(
+          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0]
+        ).map((row) => row.id);
+      const waiting = message(parent, 'waiting');
+      applyMessage(
+        { ...waiting, created_at: '2026-09-09T00:00:01Z' },
+        'posted'
+      );
+      applyMessage(
+        { ...message(parent, 'theirs'), created_at: '2026-09-09T00:00:02Z' },
+        'posted'
+      );
+
+      applyMessage(
+        { ...waiting, created_at: '2026-09-09T00:00:03Z' },
+        'posted'
+      );
+
+      expect(shown()).toEqual(['waiting', 'theirs', 'root']);
+      channelCacheHost.mockReset();
+    }
+  );
+  it('keeps sends still waiting after a delivered one, in the order written', () => {
+    testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [{ type: 'message', message: item(parent) }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
+    });
+    const shown = () =>
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0]
+      ).map((row) => row.id);
+    const first = message(parent, 'first');
+    applyMessage({ ...first, created_at: '2026-09-09T00:00:01Z' }, 'posted');
+    applyMessage(
+      { ...message(parent, 'second'), created_at: '2026-09-09T00:00:02Z' },
+      'posted'
+    );
+    const sending = testQueryClient.getMutationCache().build(testQueryClient, {
+      mutationKey: SEND_MESSAGE_MUTATION_KEY,
+      mutationFn: () => new Promise<void>(() => {}),
+    });
+    fireAndForget(sending.execute({ optimisticId: 'second' }), 'test');
+
+    // The server took the first later than the second was written.
+    applyQueuedWrite(
+      { ...first, created_at: '2026-09-09T00:00:03Z' },
+      'posted'
+    );
+
+    expect(shown()).toEqual(['second', 'first', 'root']);
   });
   it("confirms only a person's own reaction over what was pushed since", () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {

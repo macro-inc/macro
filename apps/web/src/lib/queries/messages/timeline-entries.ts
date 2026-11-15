@@ -20,7 +20,7 @@ export function timelineEntryKey(entry: KeyedEntry): string {
     .exhaustive((unknown) => JSON.stringify(unknown));
 }
 
-function timelineEntryPosition(entry: MessageTimelineEntry) {
+export function timelineEntryPosition(entry: MessageTimelineEntry) {
   return match(entry)
     .with({ type: 'message' }, { type: 'call' }, ({ message }) => ({
       id: message.id,

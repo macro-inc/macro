@@ -16,11 +16,12 @@ const mocks = vi.hoisted(() => ({
   loadChannelThread: vi.fn(),
   pushesStored: vi.fn(),
   catchUpAndRefresh: vi.fn(async () => {}),
+  channelCacheAnswered: vi.fn(() => true),
 }));
 
 vi.mock('../flag', () => ({
   channelCacheHost: mocks.channelCacheHost,
-  channelCacheAnswered: () => true,
+  channelCacheAnswered: mocks.channelCacheAnswered,
 }));
 vi.mock('../pages', () => ({
   loadChannelPage: mocks.loadChannelPage,
@@ -54,6 +55,7 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.channelCacheHost.mockReturnValue(host);
   mocks.catchUpAndRefresh.mockResolvedValue(undefined);
+  mocks.channelCacheAnswered.mockReturnValue(true);
 });
 
 describe('loadLocalChannelTimelinePage', () => {
@@ -146,5 +148,20 @@ describe('loadLocalChannelThread', () => {
       thread('server')
     );
     expect(mocks.pushesStored).not.toHaveBeenCalled();
+  });
+
+  it('leaves a thread to REST while the host starts, and has the device hold it too', async () => {
+    mocks.channelCacheAnswered.mockReturnValue(false);
+    mocks.loadChannelThread.mockResolvedValue({
+      thread: thread('server'),
+      source: 'server',
+    });
+
+    expect(await loadLocalChannelThread(CHANNEL_ID, 'root')).toBeUndefined();
+    expect(mocks.loadChannelThread).toHaveBeenCalledExactlyOnceWith(
+      host,
+      CHANNEL_ID,
+      'root'
+    );
   });
 });

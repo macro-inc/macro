@@ -23,6 +23,7 @@ import {
 } from './pages';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
+import { watchWaitingWrites } from './waiting-writes';
 
 const SYNC_SURFACE = 'channel-local-sync';
 
@@ -105,6 +106,7 @@ export async function loadLocalChannelTimelinePage(
 ): Promise<MessageTimelinePage | undefined> {
   const host = channelCacheHost();
   if (!host) return undefined;
+  watchWaitingWrites();
   const request = pageRequest(read);
   if (!request) return undefined;
   const anchored = request.before !== undefined || request.after !== undefined;
@@ -161,14 +163,41 @@ export async function loadLocalChannelTimelinePage(
   }
 }
 
+/** Threads being given to the device, so one read twice is fetched once. */
+const threadsBeingHeld = new Set<string>();
+
+/** Has the device hold a thread the views were answered over REST. */
+async function holdChannelThread(
+  host: CacheHost,
+  channelId: string,
+  rootId: string
+): Promise<void> {
+  const key = `${channelId}:${rootId}`;
+  if (threadsBeingHeld.has(key)) return;
+  threadsBeingHeld.add(key);
+  try {
+    await loadChannelThread(host, channelId, rootId);
+  } catch (error) {
+    reportDeviceFault(error);
+  } finally {
+    threadsBeingHeld.delete(key);
+  }
+}
+
 /** A channel thread through the device cache; undefined to read over REST. */
 export async function loadLocalChannelThread(
   channelId: string,
   rootId: string
 ): Promise<MessageThread | undefined> {
   const host = channelCacheHost();
-  // A host still starting would hold the open up; REST answers meanwhile.
-  if (!host || !channelCacheAnswered(host)) return undefined;
+  if (!host) return undefined;
+  if (!channelCacheAnswered(host)) {
+    // A host still starting would hold the open up; REST answers meanwhile.
+    // The views keep that answer, so the device is given the thread as well,
+    // or it would not hold a thread the person read.
+    fireAndForget(holdChannelThread(host, channelId, rootId), SYNC_SURFACE);
+    return undefined;
+  }
   try {
     let loaded = await loadChannelThread(host, channelId, rootId);
     // The views may already show a push this device thread is older than.

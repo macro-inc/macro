@@ -6,7 +6,7 @@ import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import { resetChannelSync } from './catch-up';
+import { resetChannelSync, storeUnstoredPushes } from './catch-up';
 import { channelCacheHost } from './flag';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
@@ -74,7 +74,8 @@ async function runPass(host: CacheHost, signal: AbortSignal): Promise<void> {
  * ready, one request at a time and only while the person leaves the app alone,
  * again after a reconnect or a replaced cache, and drops channels not opened
  * for thirty days. Each tab also sends the messages a page that is gone was
- * still handing to the device queue.
+ * still handing to the device queue, and stores the pushed changes such a
+ * page had shown but the device had not taken.
  */
 export function useChannelCache(userId: Accessor<string | undefined>): void {
   const active = () => userId() !== undefined;
@@ -127,6 +128,14 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
       ),
       'channel-local-sync'
     );
+  });
+
+  createEffect(() => {
+    const cacheHost = host();
+    if (!cacheHost || !active()) return;
+    // Again after a reconnect: offline, the catch-up fails and stays noted.
+    pass();
+    fireAndForget(storeUnstoredPushes(cacheHost), 'channel-local-sync');
   });
 
   createEffect(() => {

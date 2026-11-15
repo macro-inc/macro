@@ -33,6 +33,7 @@ import { mapChannelMessage } from './map';
 import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
 import { noteUnqueuedSend, pageIsLeaving } from './unqueued-sends';
+import { announceWaitingWrite } from './waiting-writes';
 
 /**
  * Channel message hooks run their `mutationFn` while offline when the device
@@ -239,7 +240,21 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
     });
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
-      await settlements.committed(disposition.transactionId);
+      // A write delivered at once reaches the other windows as its push.
+      let announced = false;
+      const waiting = setTimeout(() => {
+        announced = true;
+        announceWaitingWrite(write.channelId);
+      }, WAITING_ANNOUNCE_MS);
+      try {
+        await settlements.committed(disposition.transactionId);
+      } catch (error) {
+        // The device rolled the row back; the windows told of it read again.
+        if (announced) announceWaitingWrite(write.channelId);
+        throw error;
+      } finally {
+        clearTimeout(waiting);
+      }
       return await deliveredMessage(host, write);
     }
     if (result.error) throw refusalOf(result.error);
@@ -249,6 +264,9 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
     settlements.stop();
   }
 }
+
+/** How long the queue holds a write before the device's other windows are told. */
+export const WAITING_ANNOUNCE_MS = 1_000;
 
 /**
  * The row the device shows until the server's copy replaces it. It sorts after

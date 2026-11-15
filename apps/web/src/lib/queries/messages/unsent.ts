@@ -28,7 +28,7 @@ export function useMessageUnsent(messageId: () => string): () => boolean {
   return deferredGate(() => sending().length > 0, UNSENT_AFTER_MS);
 }
 
-function optimisticIdOf(variables: unknown): string | undefined {
+export function optimisticIdOf(variables: unknown): string | undefined {
   if (typeof variables !== 'object' || variables === null) return undefined;
   if (!('optimisticId' in variables)) return undefined;
   return typeof variables.optimisticId === 'string'

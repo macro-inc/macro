@@ -12,6 +12,11 @@ import { messageKeys } from '../keys';
 import { channelCacheHost } from './flag';
 import { forgetPendingChannelPages } from './pages';
 import { channelActivityKey, channelMessageKey } from './sort-key';
+import {
+  forgetUnstoredPush,
+  noteUnstoredPush,
+  unstoredPushChannels,
+} from './unstored-pushes';
 
 export type ChannelCatchUpHost = Pick<
   CacheHost,
@@ -216,6 +221,8 @@ export async function catchUpAndRefresh(
     if (state.pushed.size === 0) break;
     outcome = await catchUpChannel(host, channelId, fetchChanges);
   }
+  // A reload from here on finds the device holding all the views were pushed.
+  if (state.pushed.size === 0) forgetUnstoredPush(channelId);
   if (refresh) refreshChannelViews(channelId);
   return outcome;
 }
@@ -231,6 +238,7 @@ export function noteChannelPush(channelId: string, seq: number | string): void {
   if (!host) return;
   const state = stateOf(channelId);
   state.pushed.add(String(seq));
+  noteUnstoredPush(channelId);
   if (state.timer !== undefined) return;
   let done = () => {};
   const promise = new Promise<void>((resolve) => {
@@ -298,6 +306,23 @@ async function settled(storing: Promise<void>): Promise<boolean> {
 async function gaveUp(): Promise<boolean> {
   await sleep(PUSH_STORE_WAIT_MS);
   return false;
+}
+
+/**
+ * Catches up the channels a page that is gone was pushed a change for and did
+ * not see the device store.
+ */
+export async function storeUnstoredPushes(
+  host: ChannelCatchUpHost,
+  fetchChanges?: FetchChannelChanges
+): Promise<void> {
+  for (const channelId of unstoredPushChannels()) {
+    try {
+      await catchUpAndRefresh(host, channelId, fetchChanges);
+    } catch {
+      // Offline or a failed request: it stays noted for the next try.
+    }
+  }
 }
 
 /** Forgets every channel's sync state; for account changes and tests. */
