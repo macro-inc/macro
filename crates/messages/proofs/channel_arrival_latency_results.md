@@ -104,6 +104,6 @@ Reproduce the historical commands from the pre-timeout source/harness checkout
 (see [README.md](README.md)), then run:
 
 ```sh
-python3 crates/messages/proofs/summarize_arrival_latency.py \
+bun crates/messages/proofs/summarize_arrival_latency.ts \
   /tmp/open-loop.log /tmp/commit-delay.log
 ```
