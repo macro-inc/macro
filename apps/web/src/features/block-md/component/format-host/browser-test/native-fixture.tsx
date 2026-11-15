@@ -369,6 +369,11 @@ function NativeFormattingFixture() {
     </AnalyticsContextProvider>
   );
 }
-const app = document.getElementById('app');
-if (!app) throw new Error('Missing native formatting fixture mount');
-render(NativeFormattingFixture, app);
+// ?caret: the C-TOUCH-CARET-MODE-01 native caret page, in its own module.
+if (new URLSearchParams(location.search).has('caret')) {
+  await import('./caret-native');
+} else {
+  const app = document.getElementById('app');
+  if (!app) throw new Error('Missing native formatting fixture mount');
+  render(NativeFormattingFixture, app);
+}

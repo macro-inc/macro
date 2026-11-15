@@ -229,6 +229,11 @@ function FormattingFixture() {
   );
 }
 
-const app = document.getElementById('app');
-if (!app) throw new Error('Missing formatting component mount');
-render(FormattingFixture, app);
+// ?caret: the C-TOUCH-CARET-MODE-01 Source caret page, in its own module.
+if (new URLSearchParams(location.search).has('caret')) {
+  await import('./caret-source');
+} else {
+  const app = document.getElementById('app');
+  if (!app) throw new Error('Missing formatting component mount');
+  render(FormattingFixture, app);
+}

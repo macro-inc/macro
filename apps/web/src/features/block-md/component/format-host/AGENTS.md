@@ -20,6 +20,10 @@ matched artifact. Verify package and actually served compiled-map integrity.
 Run TypeScript, focused tests and scoped `just check`; retain native refusals and
 missing capabilities explicitly. Do not change the table semantic ledger.
 
+The touch caret-mode browser rows (browser-test/caret-mode.caret-e2e.ts, the `?caret` pages caret-source.tsx and caret-native.tsx over caret-seed.ts) run once per engine build through caret.playwright.config.ts with CARET_ENGINE=source|native; the per-engine asserts are not parity on their own, so compare the two runs' attached caret-facts (toolbar boxes, pills, hide counts, resolved points).
+
+Named difference C-SOURCE-CARET-LOCATION-LOG-01: Source's MarkdownPopup reads the selection location whenever its popup takes a selection, so locationPlugin.ts logs `Currently location plugin only suppotys range selections.` (console only, no user-visible effect) each time the touch caret toolbar opens on a collapsed caret; native does not. The Source rows admit exactly that message from the Source build's MarkdownPopup asset and count it per row (more than zero exactly when the toolbar opened); native admits none.
+
 Install the actual Source restoreFocusPlugin in app-equivalent fixtures before qualifying focus-dependent dropdown controls; direct-button controls alone do not prove More-menu restoration. Defer native dropdown-close refocus until Kobalte finishes restoring its trigger, then recheck the captured host/root and current interaction policy before focusing its current published range.
 
 Capture all native formatting query results inside the construction-time latestPublished observer and expose only those data snapshots to reactive UI. Retire presentation without native receivers; terminal key handles stay with the actual view owner until its existing close fence. Ordinary component cleanup still unregisters its actual listeners while admission permits.
