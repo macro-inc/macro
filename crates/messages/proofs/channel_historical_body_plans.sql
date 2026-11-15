@@ -1,6 +1,6 @@
 -- Supplemental proof of the unchanged historical body guard from baseline
 -- 354da677b5. Run only against an existing disposable fixture produced by
--- channel_change_plans.py, never an application database. This script creates
+-- channel_change_plans.ts, never an application database. This script creates
 -- no schema or seed; metadata changes and every measured UPDATE roll back.
 \set ON_ERROR_STOP on
 \pset format unaligned
@@ -22,7 +22,7 @@ BEGIN
           AND edited_at IS NULL AND deleted_at IS NULL
           AND updated_at = created_at
     ) THEN
-        RAISE EXCEPTION 'Requires the untouched disposable channel_change_plans.py fixture';
+        RAISE EXCEPTION 'Requires the untouched disposable channel_change_plans.ts fixture';
     END IF;
 END $$;
 UPDATE comms_messages SET import_metadata='{"slack_import_job":"00000000-0000-0000-0000-00000000007b","body_version":1}'::jsonb WHERE id='00000000-0000-0000-0000-000000989681';

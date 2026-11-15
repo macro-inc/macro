@@ -108,7 +108,7 @@ Values below are first / repeated execution time in milliseconds and shared hit+
 
 The two channel-write hydration cases were measured in a follow-up on the same fixtures and with the same planner settings. The present-message query seeks one message through `comms_messages_parent_identity`; each attachment, reaction, and mention aggregate is bounded by that message ID. Missing messages return zero rows without executing the aggregates. PostgreSQL 14.23 took 0.010–0.290 ms with at most 38 total shared buffers; PostgreSQL 18.4 took 0.011–0.267 ms with at most 22. Full follow-up plans are in `/tmp/channel-write-hydration-{fresh14,stale14,fresh18,stale18}.log`; normalized results are in `/tmp/channel-write-hydration-plan-summary.json`.
 
-Reproduction: `crates/messages/proofs/channel_change_plans.py` extracts the exact current Rust SQL and creates fresh disposable databases without changing existing ones. Read `crates/messages/proofs/README.md`.
+Reproduction: `crates/messages/proofs/channel_change_plans.ts` extracts the exact current Rust SQL and creates fresh disposable databases without changing existing ones. Read `crates/messages/proofs/README.md`.
 
 Evidence paths: `/tmp/channel_seq_read_plans/summary.json` (PostgreSQL 18.4) and `/tmp/channel_seq_read_plans_pg14/summary.json` (PostgreSQL 14.23); full plans are `*_*.json.txt` in the same directories.
 
@@ -270,7 +270,7 @@ All 176 rows, including the unchanged historical phases, are retained in
 [channel_change_append_plan_runs.csv](channel_change_append_plan_runs.csv).
 Current full plans are `/tmp/channel-seq-guard5s-append-{18,14}-{fresh,stale}-20261112_080250.log`;
 the normalized artifact is `/tmp/channel-seq-guard5s-append-summary.json`.
-`sync_append_plan_sql.py --check` verifies both current statements byte for byte.
+`sync_append_plan_sql.ts --check` verifies both current statements byte for byte.
 
 The call-owned metadata lookup was measured separately on 1,100,000 `call_entities` rows: 100,000 in the selected channel and ten times that across other channels. Its 48 runs cover PostgreSQL 14.23 and 18.4, fresh/stale statistics, custom/generic plans, and first/repeated executions for channel-thread, legacy-chat, and missing identities. Every run used `call_entities_pkey` to inspect at most one call; discussion and channel predicates filter that single row. Across the matrix the lookup took 0.002–0.034 ms and at most four shared buffers. The measured statement timeout was 15 seconds; the seed and all mutations rolled back.
 
