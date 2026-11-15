@@ -132,6 +132,30 @@ it('deletes the URL', async () => {
   expect(client.removeWebhook).toHaveBeenCalledWith('routine');
 });
 
+it('a read that began before the delete never brings the URL back', async () => {
+  client.getWebhook.mockResolvedValueOnce(ok({ webhook: WEBHOOK }));
+  client.removeWebhook.mockResolvedValue(ok(undefined));
+  mount();
+  await screen.findByRole('button', { name: 'Delete URL' });
+
+  let late: (value: unknown) => void = () => {};
+  client.getWebhook.mockReturnValue(
+    new Promise((resolve) => {
+      late = resolve;
+    })
+  );
+  const refetch = queryClient.refetchQueries({
+    queryKey: scheduledActionKeys.webhook({ scheduleId: 'routine' }).queryKey,
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Delete URL' }));
+  await screen.findByRole('button', { name: 'Create URL' });
+  late(ok({ webhook: WEBHOOK }));
+  await refetch;
+
+  expect(screen.getByRole('button', { name: 'Create URL' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Delete URL' })).toBeNull();
+});
+
 it('keeps the URL on screen when a refetch fails', async () => {
   client.getWebhook.mockResolvedValueOnce(ok({ webhook: WEBHOOK }));
   mount();

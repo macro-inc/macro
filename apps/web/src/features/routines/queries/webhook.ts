@@ -34,11 +34,11 @@ export function routineWebhookQueryOptions(
   });
 }
 
-function setWebhook(scheduleId: string, webhook: WebhookInfo | null) {
-  queryClient.setQueryData(
-    scheduledActionKeys.webhook({ scheduleId }).queryKey,
-    webhook
-  );
+/** A read still in flight began before this write, so it is cancelled first. */
+async function setWebhook(scheduleId: string, webhook: WebhookInfo | null) {
+  const { queryKey } = scheduledActionKeys.webhook({ scheduleId });
+  await queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData(queryKey, webhook);
 }
 
 async function mintWebhook(scheduleId: string): Promise<Minted> {
@@ -48,7 +48,7 @@ async function mintWebhook(scheduleId: string): Promise<Minted> {
       scheduledActionClient.mintWebhook(scheduleId)
     );
     span.setAttr('routine.webhook.hook_id', minted.hookId);
-    setWebhook(scheduleId, {
+    await setWebhook(scheduleId, {
       hookId: minted.hookId,
       createdAt: minted.createdAt,
     });
@@ -60,7 +60,7 @@ async function removeWebhook(scheduleId: string) {
   return Telemetry.span('routine.webhook.delete', async (span) => {
     span.setAttr('routine.id', scheduleId);
     await throwOnErr(() => scheduledActionClient.removeWebhook(scheduleId));
-    setWebhook(scheduleId, null);
+    await setWebhook(scheduleId, null);
   });
 }
 
