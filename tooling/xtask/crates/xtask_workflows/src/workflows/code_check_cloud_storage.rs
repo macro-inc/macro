@@ -205,7 +205,7 @@ fn test() -> Job {
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay
 /// identical.
-fn with_test_compile_env(job: Job) -> Job {
+pub(crate) fn with_test_compile_env(job: Job) -> Job {
     // Debug info is most of what test builds write and link. Panic locations
     // don't depend on it; only backtrace frames lose their file and line.
     job.add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
