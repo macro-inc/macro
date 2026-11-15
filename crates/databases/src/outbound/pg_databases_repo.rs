@@ -605,6 +605,36 @@ where
             .collect::<Result<_, PositionError>>()?)
     }
 
+    #[tracing::instrument(err, skip_all, fields(tables = table_ids.len(), rows = row_ids.len()))]
+    async fn rows_in_tables(
+        &self,
+        table_ids: &[TableId],
+        row_ids: &[RowId],
+    ) -> Result<Vec<(TableId, RowRef)>, Self::Error> {
+        if table_ids.is_empty() || row_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query!(
+            "SELECT id, table_id, position FROM database_rows WHERE id = ANY($1) AND table_id = ANY($2) ORDER BY table_id, position, id",
+            &uuids(row_ids),
+            &uuids(table_ids),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                Ok((
+                    TableId::from_uuid(row.table_id),
+                    RowRef {
+                        id: RowId::from_uuid(row.id),
+                        position: row.position.parse()?,
+                    },
+                ))
+            })
+            .collect::<Result<_, PositionError>>()?)
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn databases_by_ids(&self, ids: &[DatabaseId]) -> Result<Vec<Database>, Self::Error> {
         Ok(sqlx::query_as!(

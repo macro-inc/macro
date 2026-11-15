@@ -22,7 +22,7 @@ use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSessionId, SandboxSize, SessionManagement};
+use agent_session::domain::model::{AgentSession, AgentSessionId, SandboxSize, SessionManagement};
 use agent_session::domain::service::AgentSessionService;
 
 #[cfg(test)]
@@ -85,6 +85,22 @@ pub struct RoutedContainers<Sessions> {
     sessions: Sessions,
 }
 
+/// How an in-process session's replies reach whoever reads them. Nobody
+/// reads a background session whose opener gave it instructions of its own (a
+/// routine draft); an accepted suggestion's run is a background session too,
+/// opened without any, and people open it to read the result. A thread's
+/// reply is one message, rewritten only as each passage finishes; an opening
+/// line lands with what follows it.
+fn reply_delivery(row: &AgentSession) -> ReplyDelivery {
+    if row.is_background() && row.instructions.is_some() {
+        ReplyDelivery::Unseen
+    } else if row.thread_id.is_some() {
+        ReplyDelivery::Whole
+    } else {
+        ReplyDelivery::Streamed
+    }
+}
+
 #[derive(Debug)]
 enum Route {
     Sandbox,
@@ -137,17 +153,12 @@ where
                 .session_billing(session)
                 .await
                 .map_err(HarnessError::Session)?;
+            let delivery = reply_delivery(&row);
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 billing,
-                // A thread's reply is one message, rewritten only as each
-                // passage finishes; an opening line lands with what follows it.
-                delivery: if row.thread_id.is_some() {
-                    ReplyDelivery::Whole
-                } else {
-                    ReplyDelivery::Streamed
-                },
+                delivery,
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,
