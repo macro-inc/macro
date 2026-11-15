@@ -48,6 +48,8 @@
 
 @container savings-tools (max-width: 270px) {
   .pricing-savings-tools > li { grid-template-columns: minmax(0, 1fr); }
+  .pricing-savings-plans { margin-left: 4px; }
+  .pricing-savings-plans button { padding-inline: 10px; }
   .pricing-savings-price { grid-area: 3 / 1; justify-self: start; margin-left: 34px; }
 }
 
