@@ -112,10 +112,15 @@ providers or layouts counts as tested; the report shows it as partial.
 `waivers.tsv` is the one list of what is not tested, a line each: `id`
 (`F-020` or a row's id), `on` (`gmail`, `outlook` or `both` for a
 function, `-` for a row), `kind` and `reason`. The kinds: `bug` (the app
-is wrong; a `@known-bug` test waits for the fix), `needs` (a service or a
-clock no stack gives a test), `native-only`, `no-user-path`, and `backlog`
-(could be tested and is not yet; shown as open). A new line is a decision a
-reviewer reads: say why, not that.
+is wrong; a `@known-bug` test waits for the fix), `needs` (a service, a
+clock or a feature flag no stack gives a test), `native-only`,
+`no-user-path`, and `backlog` (could be tested and is not yet; shown as
+open). A new line is a decision a reviewer reads: say why, not that.
+
+Two rows that describe one element (the same button listed under two
+surfaces) are not waived: delete one and name it in the other's `note`. A
+menu entry and a button that call the same function are two elements and
+stay two rows.
 
 `full-stack-only.tsv` lists what only the full-stack tier's tests cover.
 Each job is held to its own part: the tier's job to that list, the browser
