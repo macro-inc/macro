@@ -279,12 +279,20 @@ const KINDS = Object.keys(WAIVER_KINDS) as Waiver['kind'][];
 /** Functions and rows side by side: what is tested, proved and waived. */
 function provedTable(ledger: Ledger): Table {
   const ft = functionTotals(ledger.functions);
+  // Each function that is not covered is counted once: under the kind of
+  // its own waiver, else of the waiver of one of its rows, else as not waived.
+  const rowWaivers = new Map(ledger.rows.map((row) => [row.id, row.waiver]));
+  const uncovered = ledger.functions
+    .filter((fn) => fn.status !== 'backend' && fn.status !== 'covered')
+    .map(
+      (fn) =>
+        FUNCTION_WAIVERS.get(fn.id)?.kind ??
+        [...fn.variants, ...fn.states]
+          .map((id) => rowWaivers.get(id))
+          .find((kind) => kind !== undefined)
+    );
   const waivedFunctions = (kind: Waiver['kind']) =>
-    new Set(
-      WAIVERS.filter((each) => each.kind === kind && each.on !== '-').map(
-        (each) => each.id
-      )
-    ).size;
+    uncovered.filter((each) => each === kind).length;
   const line = (name: string, rows: readonly Row[]) => {
     const of = totals(rows);
     const untested = rows.filter((row) => row.cells.length === 0);
@@ -317,7 +325,7 @@ function provedTable(ledger: Ledger): Table {
         ft.covered,
         ft.proved,
         ft.covered - ft.proved,
-        ft.partial + ft.open,
+        uncovered.filter((each) => each === undefined).length,
         ...KINDS.map(waivedFunctions),
       ],
       line('Rows', ledger.rows),

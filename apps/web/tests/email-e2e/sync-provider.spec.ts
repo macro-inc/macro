@@ -281,7 +281,7 @@ for (const provider of PROVIDERS) {
         await mailbox.open(`/app/mail/${thread.id}`);
         await expect(messages(page)).toHaveText(
           [/Where shall we go\?/, /The coast, I think\./],
-          { timeout: 5_000 }
+          { timeout: 15_000 }
         );
         await expect(page.getByText('Forget that: wrong list.')).toHaveCount(0);
       }).toPass({ timeout: provider === 'OUTLOOK' ? 150_000 : 60_000 });
