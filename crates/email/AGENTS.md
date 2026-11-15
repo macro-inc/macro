@@ -228,7 +228,10 @@ tools — hexagonal, heavily feature-gated.
   page order from the record's address superset or from each contributing
   inbox's newest threads, and each gets the message match and the privacy rule
   until the page fills. Keep its `OFFSET 0` fences, or the planner checks the
-  whole stream before the LIMIT. `ALLOWED` restates `crm_email_thread_allowed`
+  whole stream before the LIMIT, and keep the superset stream's lookup by id
+  (`= ANY(ARRAY(…))`): as a semi-join the planner reads every thread of the
+  inboxes. `team_blocked` relies on `crm_companies_email_sync_off_idx`, or it
+  scans every company. `ALLOWED` restates `crm_email_thread_allowed`
   set-based, and the contributing inboxes in `dynamic/resolve.rs` restate its
   mailbox conditions (`allowed_restates_the_privacy_function` and
   `contributing_inboxes_restate_the_privacy_function` compare them); change
