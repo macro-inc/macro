@@ -176,29 +176,6 @@ export async function pick(
     .click();
 }
 
-/**
- * Opens a page that lists the inboxes and waits until the list has been read
- * a second time. The app probes the inboxes' health as it starts and then
- * reads the list again, which rebuilds each inbox's row: a signature editor
- * opened before that is closed again by it.
- */
-export async function openSettled(
-  page: Page,
-  mailbox: Mailbox,
-  path: string = SETTINGS
-): Promise<void> {
-  const probed = page.waitForResponse((response) =>
-    response.url().includes('/email/links/health-check')
-  );
-  await mailbox.open(path);
-  await probed;
-  await page.waitForResponse(
-    (response) =>
-      response.request().method() === 'GET' &&
-      new URL(response.url()).pathname.endsWith('/email/links')
-  );
-}
-
 // A one-pixel PNG.
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',

@@ -162,7 +162,7 @@ for (const provider of PROVIDERS) {
       await expect.poll(() => favorites(mailbox)).toEqual([]);
 
       await toolbarButton(page, CLEAR).click();
-      did('AL-056');
+      did('AL-407');
       await expect(selected).toHaveCount(0);
       await expect(
         row(page, ids.Minutes).getByRole('checkbox', { name: 'Select item' })

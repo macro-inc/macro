@@ -72,11 +72,17 @@ test.describe('onboarding without a connected inbox', () => {
   }) => {
     await removeInbox(mailbox);
     becomeFirstRun(mailbox);
+    // The page's timers are the test's to stop: see below.
+    await page.clock.install();
     let failing = true;
+    let reads = 0;
     await page.route(/\/email\/email\/links(\?|$)/, async (route) => {
-      if (failing && route.request().method() === 'GET') {
-        await route.fulfill({ status: 500, json: {} });
-        return;
+      if (route.request().method() === 'GET') {
+        reads += 1;
+        if (failing) {
+          await route.fulfill({ status: 500, json: {} });
+          return;
+        }
       }
       await route.fallback();
     });
@@ -87,27 +93,23 @@ test.describe('onboarding without a connected inbox', () => {
       .filter({ hasText: "Couldn't load your connected accounts." });
     await expect(failed).toBeVisible({ timeout: 45_000 });
 
-    // The load starts working at the click, not before it. The step also
-    // reads the accounts again every few seconds on its own, so a Try again
-    // that did nothing would still pass here once it was clicked.
-    await page.exposeFunction('emailE2eLoadsAgain', () => {
-      failing = false;
-    });
-    await page.evaluate(() =>
-      document.addEventListener(
-        'click',
-        (event) => {
-          const button = (event.target as Element).closest('button');
-          if (button?.textContent?.trim() !== 'Try again') return;
-          (
-            window as unknown as { emailE2eLoadsAgain(): void }
-          ).emailE2eLoadsAgain();
-        },
-        { capture: true }
-      )
-    );
+    // The step also reads the accounts again every few seconds on its own,
+    // and a failed read is tried again after a wait. With the page's clock
+    // stopped neither happens, so a read after the click is the button's.
+    await page.clock.pauseAt(new Date(Date.now() + 1_000));
+    await expect
+      .poll(async () => {
+        const before = reads;
+        await page.evaluate(() => 0);
+        return reads === before;
+      })
+      .toBe(true);
+    const before = reads;
+    failing = false;
     await failed.getByRole('button', { name: 'Try again' }).click();
     did('AX-044');
+    await expect.poll(() => reads).toBeGreaterThan(before);
+    await page.clock.resume();
     await expect(failed).toBeHidden();
     await expect(
       page.getByRole('button', { name: 'Connect work email' })

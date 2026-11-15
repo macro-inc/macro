@@ -99,14 +99,18 @@ export async function expectReminder(
     .toMatchObject({ state: 'pending', condition: 'if_no_reply' });
 }
 
-/** What the clipboard holds, once it holds anything. */
+/** What the clipboard holds, once it holds what is expected. */
 export async function expectClipboard(
   page: Page,
   expected: string | RegExp
 ): Promise<void> {
-  await expect
-    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toMatch(expected);
+  // A string is the whole clipboard: what an earlier copy left there may
+  // contain it.
+  const read = expect.poll(() =>
+    page.evaluate(() => navigator.clipboard.readText())
+  );
+  if (typeof expected === 'string') await read.toBe(expected);
+  else await read.toMatch(expected);
 }
 
 /** A string matched as itself in a regular expression. */

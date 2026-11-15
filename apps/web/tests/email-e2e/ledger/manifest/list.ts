@@ -493,8 +493,8 @@ export const list = {
       id: 'AL-027',
       surface: 'SL-19',
       fn: ['F-034'],
-      action: 'set Received filter (last 1/7/30/90 days, Any)',
-      trigger: 'filter menu "Received" item',
+      action: 'set Latest activity filter (last 1/7/30/90 days, Any)',
+      trigger: 'filter menu "Latest activity" item',
       source: [
         'src/features/email-view/filters/use-email-filters.tsx',
         'src/features/email-view/filters/email-saved-view.ts',
@@ -654,7 +654,8 @@ export const list = {
       surface: 'SL-21',
       fn: ['F-033'],
       action: 'select alias (address filter)',
-      trigger: 'dropdown row tagged "Alias"',
+      trigger:
+        'dropdown row tagged "Alias"; on a phone the same row in the filter drawer',
       source: ['src/features/email-view/components/EmailInboxSelector.tsx'],
       note: 'aliases are the send-as addresses of a linked inbox (Gmail)',
     },

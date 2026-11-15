@@ -37,8 +37,8 @@ async function backfillAnnounced(mailbox: Mailbox): Promise<boolean> {
  * So for Gmail the page opens only after that announcement went out, which
  * the page, not connected yet, never hears; an Outlook inbox announces none.
  *
- * Copied from `openSettled` in `harness/ways-settings.ts`, which waited for
- * a second read of the list that an Outlook inbox never causes.
+ * Waiting for a second read of the list instead would wait for one an
+ * Outlook inbox never causes.
  */
 export async function openSettled(
   page: Page,
@@ -326,16 +326,8 @@ export const test = base.extend<{
   },
 });
 
+export { connectedInboxes } from './ways-settings';
 export { expect };
-
-/** The inboxes the signed-in user has connected, by address. */
-export async function connectedInboxes(mailbox: Mailbox): Promise<string[]> {
-  const response = await mailbox.api('/email/email/links');
-  const { links } = (await response.json()) as {
-    links: { email_address: string }[];
-  };
-  return links.map((link) => link.email_address).sort();
-}
 
 /**
  * On Google's consent page, withholds the mail permission and picks the

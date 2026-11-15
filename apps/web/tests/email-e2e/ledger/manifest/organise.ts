@@ -347,7 +347,8 @@ export const organise = {
       surface: 'SL-26',
       fn: ['F-039'],
       action: 'clear selection',
-      trigger: 'toolbar X button / "Clear" button',
+      trigger: 'toolbar X button',
+      note: 'the toolbar\'s "Clear" button is AL-407',
       source: [
         'src/features/entity/EntitySelectionToolbar.tsx',
         'src/features/email-view/components/EmailList.tsx',
