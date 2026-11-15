@@ -64,18 +64,21 @@ each run.
   might have (for a name of no likely kind, any kind it couldn't search,
   unless two items already have it), and every name when the lookup
   fails. Names the lookup would refuse (empty past a leading `#`/`@`, over
-  200 characters) are never asked. A failed find still drafts, with
-  nothing found. A background draft cancelled while its items are found
-  stops before its session starts (`RoutineDrafts::cancelled`). The
-  session is then given instructions (`finding/instructions.md`,
-  built by `FindingPrompts`): drafting's rules, how to use found and left
-  items (`finding/items.md`: a trigger filter by id, a code step's text
-  knob by exact name, Ask AI instructions or a condition by name and id;
-  a new item the request asks for is created once and used by id), the
-  code-step guide, Macro's catalog code routines as examples, and the
-  reference of the routines and `ai` areas. They are the same for every
-  draft on one model with the same mix of code and conditions, so the
-  agent puts them in its cached prompt prefix
+  200 characters) are never asked. A find that fails, times out or gives
+  no answer to read still drafts: the prompt lists every item the request
+  names as not looked up (`Lookup::unread`, `routine.draft.find_failed`),
+  with the areas that find the commonest items (`LOOKUP_FALLBACK_AREAS`),
+  as for a name of no known kind. A background draft cancelled while its
+  items are found stops before its session starts
+  (`RoutineDrafts::cancelled`). The session is then given instructions
+  (`finding/instructions.md`, built by `FindingPrompts`): drafting's rules,
+  how to use found and left items (`finding/items.md`: a trigger filter by
+  id, a code step's text knob by exact name, Ask AI instructions or a
+  condition by name and id; a new item the request asks for is created
+  once and used by id), the code-step guide, Macro's catalog code
+  routines as examples, and the reference of the routines and `ai` areas.
+  They are the same for every draft on one model with the same mix of
+  code and conditions, so the agent puts them in its cached prompt prefix
   (`PrepareRoutineSession::instructions`). A code step never messages or
   emails the routine's owner (Macro refuses a message to oneself): telling
   the owner something is an Ask AI step's job. The prompt carries only the
@@ -86,7 +89,9 @@ each run.
   likeliest kind first, as the budget allows
   (`RoutineCode::area_reference`). A draft that may not write code
   (`code_available` is false: it needs the SDK, and `DraftContext::code` or
-  a request changing a code step) is told to use an Ask AI step instead.
+  a request changing a code step) is told to use an Ask AI step instead,
+  and its prompt carries only the areas that find the names not looked up:
+  it still looks them up.
   Progress reports the admission (`DraftMilestone::Admitted`, which answers
   a background start before anything is looked up) and what was found and
   left by name (`DraftMilestone::Found`). Without finding (tests), the

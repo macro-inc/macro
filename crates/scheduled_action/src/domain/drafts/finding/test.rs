@@ -166,6 +166,7 @@ const SDK_AREAS: &[&str] = &[
     "email",
     "databases",
     "users",
+    "documents",
 ];
 
 impl RoutineCode for Areas {
@@ -482,21 +483,107 @@ async fn without_code_the_prompt_carries_no_area_reference() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_failed_find_still_drafts_with_nothing_found() {
-    let channel = Uuid::now_v7();
-    let model = Arc::new(Model::default());
-    let (drafts, sessions, _) = finding(
-        &model,
-        &Arc::new(Names::default()),
-        checks_bug_tasks(channel),
-    );
+async fn without_code_the_prompt_carries_the_areas_that_find_names_not_looked_up() {
+    let model = Arc::new(Model::finding(named(&[("Jordan", &["person"])])));
+    let names = Arc::new(Names {
+        searched: Some(vec![ItemKind::Channel]),
+        ..Names::default()
+    });
+    let (drafts, sessions, _) = finding(&model, &names, Box::new(|_| Vec::new()));
 
-    drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
+    drafts
+        .draft(
+            owner(),
+            routine(BUG_REPORTS),
+            DraftContext {
+                code: false,
+                ..context()
+            },
+        )
+        .await
+        .unwrap();
 
+    // Only the area that finds the person, not the ones a code step would use.
     let (_, prompt) = briefs(&sessions);
+    assert!(prompt.contains("- \"Jordan\" (person)"));
+    assert!(prompt.contains("<sdk>\nthe reference of users\n</sdk>"));
+}
+
+/// The prompt of a draft whose find call `model` answers, looked up among
+/// channels only, with or without `code`.
+async fn prompt_after_find(model: Model, code: bool) -> String {
+    let names = Names {
+        searched: Some(vec![ItemKind::Channel]),
+        ..Names::default()
+    };
+    let (drafts, sessions, _) = finding(
+        &Arc::new(model),
+        &Arc::new(names),
+        checks_bug_tasks(Uuid::now_v7()),
+    );
+    drafts
+        .draft(
+            owner(),
+            routine(BUG_REPORTS),
+            DraftContext { code, ..context() },
+        )
+        .await
+        .unwrap();
+    briefs(&sessions).1
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_find_has_the_session_look_up_every_item_named() {
+    let failing = Model::default;
+    let unreadable = || Model {
+        find: Some("No items here.".into()),
+        ..Model::default()
+    };
+    let hanging = || Model {
+        hangs: true,
+        ..Model::default()
+    };
+    for (model, code, areas) in [
+        (failing(), true, "channels, tasks, email, users, documents"),
+        (
+            unreadable(),
+            true,
+            "channels, tasks, email, users, documents",
+        ),
+        (hanging(), true, "channels, tasks, email, users, documents"),
+        (failing(), false, "channels, users, documents"),
+        (unreadable(), false, "channels, users, documents"),
+    ] {
+        let prompt = prompt_after_find(model, code).await;
+
+        assert!(prompt.contains(
+            "Not looked up (look each up yourself before you write the routine):\n- every item the request names, each by its name alone"
+        ));
+        assert!(!prompt.contains("The request names no item to look up."));
+        // The commonest areas, and the ones that find the commonest items.
+        assert!(
+            prompt.contains(&format!("<sdk>\nthe reference of {areas}\n</sdk>")),
+            "{prompt}"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_name_of_no_known_kind_gets_the_areas_that_find_the_commonest_items() {
+    let prompt = prompt_after_find(Model::finding(named(&[("Finance", &[])])), false).await;
+
+    assert!(prompt.contains(
+        "Not looked up (look each up yourself before you write the routine):\n- \"Finance\"\n"
+    ));
+    assert!(prompt.contains("<sdk>\nthe reference of channels, users, documents\n</sdk>"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_find_naming_nothing_has_nothing_looked_up() {
+    let prompt = prompt_after_find(Model::finding(named(&[])), true).await;
+
     assert!(prompt.contains("The request names no item to look up."));
-    // No area named: the commonest ones.
-    assert!(prompt.contains("the reference of channels, tasks, email"));
+    assert!(!prompt.contains("Not looked up"));
 }
 
 #[tokio::test(start_paused = true)]

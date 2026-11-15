@@ -58,6 +58,9 @@ const AI_AREA: &str = "ai";
 const ROUTINES_AREA: &str = "routines";
 /// The areas the prompt carries when the fast call named none the SDK has.
 const FALLBACK_AREAS: &[&str] = &["channels", "tasks", "email"];
+/// The areas that find the commonest items named, for names of no known kind
+/// or a find call that failed.
+const LOOKUP_FALLBACK_AREAS: &[&str] = &["channels", "users", "documents"];
 
 /// A kind of item a request can name.
 #[derive(
@@ -287,6 +290,9 @@ pub(super) struct Lookup {
     /// Names not looked up, with the kinds they may be: of a kind the lookup
     /// doesn't search, or it failed. The session looks them up itself.
     unsearched: Vec<NameAsked>,
+    /// The find call failed, so no name was read from the request: the
+    /// session looks up every item it names.
+    unread: bool,
 }
 
 impl Lookup {
@@ -343,8 +349,13 @@ impl Lookup {
                 text.push_str(&format!("- \"{}\" ({kind}): {why}\n", left.name));
             }
         }
-        if !self.unsearched.is_empty() {
+        if !self.unsearched.is_empty() || self.unread {
             text.push_str("Not looked up (look each up yourself before you write the routine):\n");
+            if self.unread {
+                text.push_str(
+                    "- every item the request names, each by its name alone (no kind word, no leading # or @), but not the owner's own things (\"my tasks\"), dates, or what a routine being changed already uses\n",
+                );
+            }
             for asked in &self.unsearched {
                 let kinds: Vec<&str> = asked.kinds.iter().map(|kind| kind_words(*kind)).collect();
                 if kinds.is_empty() {
@@ -504,14 +515,17 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
         let named = self
             .find(&finding.drafting, &finding.prompts, owner, request)
             .await;
-        let lookup = self.look_up(&finding.drafting, owner, &named).await;
+        let lookup = match &named {
+            Some(named) => self.look_up(&finding.drafting, owner, named).await,
+            None => Lookup {
+                unread: true,
+                ..Lookup::default()
+            },
+        };
+        span.record("routine.draft.find_failed", named.is_none());
         lookup.record(&span);
         progress.report(DraftMilestone::Found(lookup.names()));
-        let areas = if code {
-            self.areas_reference(&named, &lookup)
-        } else {
-            String::new()
-        };
+        let areas = self.areas_reference(code, named.as_ref(), &lookup);
         Ok(Ok(Brief {
             instructions: Some(finding.prompts.instructions(
                 code,
@@ -522,24 +536,34 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
         }))
     }
 
-    /// The reference of the areas the fast call named, past the ones the
-    /// instructions carry, or of the commonest ones when the SDK has none of
-    /// them; then of the areas that find the names not looked up, as the
-    /// budget allows.
-    fn areas_reference(&self, named: &Named, lookup: &Lookup) -> String {
-        let mut areas: Vec<String> = named
-            .sdk
-            .iter()
-            .map(|area| area.trim().to_owned())
-            .filter(|area| !area.is_empty() && area != AI_AREA && area != ROUTINES_AREA)
-            .take(MAX_AREAS)
-            .collect();
-        if self.code.area_reference(&areas).trim().is_empty() {
-            areas = FALLBACK_AREAS
+    /// With `code`, the reference of the areas the fast call named, past the
+    /// ones the instructions carry, or of the commonest ones when the SDK has
+    /// none of them. Without `code` the session writes no code step but still
+    /// looks names up, so it gets only the areas for that. Then, either way,
+    /// the areas that find the names not looked up, as the budget allows: by
+    /// each name's kinds, or the ones that find the commonest items when the
+    /// find call failed or a name has no known kind.
+    fn areas_reference(&self, code: bool, named: Option<&Named>, lookup: &Lookup) -> String {
+        let mut areas: Vec<String> = if code {
+            let named: Vec<String> = named
+                .map(|named| named.sdk.as_slice())
+                .unwrap_or_default()
                 .iter()
-                .map(|area| (*area).to_owned())
+                .map(|area| area.trim().to_owned())
+                .filter(|area| !area.is_empty() && area != AI_AREA && area != ROUTINES_AREA)
+                .take(MAX_AREAS)
                 .collect();
-        }
+            if self.code.area_reference(&named).trim().is_empty() {
+                FALLBACK_AREAS
+                    .iter()
+                    .map(|area| (*area).to_owned())
+                    .collect()
+            } else {
+                named
+            }
+        } else {
+            Vec::new()
+        };
         // After the areas the routine uses, so they keep the budget first:
         // every name's likeliest kind, then its next likeliest, and so on.
         let mut added = 0;
@@ -561,18 +585,28 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
                 }
             }
         }
+        if lookup.unread || lookup.unsearched.iter().any(|asked| asked.kinds.is_empty()) {
+            for area in LOOKUP_FALLBACK_AREAS {
+                if !areas.iter().any(|seen| seen == area) {
+                    areas.push((*area).to_owned());
+                }
+            }
+        }
+        if areas.is_empty() {
+            return String::new();
+        }
         self.code.area_reference(&areas)
     }
 
-    /// The items and SDK areas the words name, from the fast model; none
-    /// when it couldn't say in time.
+    /// The items and SDK areas the words name, from the fast model; `None`
+    /// when it failed, couldn't say in time, or gave no answer to read.
     async fn find(
         &self,
         finding: &DraftFinding,
         prompts: &FindingPrompts,
         owner: &MacroUserIdStr<'static>,
         request: &DraftRequest,
-    ) -> Named {
+    ) -> Option<Named> {
         let mut words = format!("<request>\n{}\n</request>", request.text().trim());
         if let DraftRequest::AddStep { routine, .. } | DraftRequest::ChangeStep { routine, .. } =
             request
@@ -597,17 +631,20 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
                     Ok(Ok(answer)) => answer,
                     Ok(Err(error)) => {
                         tracing::warn!(error = %error, "a routine draft's find call failed");
-                        return Named::default();
+                        return None;
                     }
                     Err(_) => {
                         tracing::warn!("a routine draft's find call timed out");
-                        return Named::default();
+                        return None;
                     }
                 };
             tracing::Span::current().record("routine.draft.answer_chars", answer.len());
-            json_answer(&answer)
-                .and_then(|value| serde_json::from_value::<Named>(value).ok())
-                .unwrap_or_default()
+            let named =
+                json_answer(&answer).and_then(|value| serde_json::from_value::<Named>(value).ok());
+            if named.is_none() {
+                tracing::warn!("a routine draft's find call gave no answer to read");
+            }
+            named
         }
         .instrument(span)
         .await
