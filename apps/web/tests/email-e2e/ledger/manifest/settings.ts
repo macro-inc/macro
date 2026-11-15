@@ -247,6 +247,14 @@ export const settings = {
       source: ['src/features/settings/IntegrationsPage.tsx'],
     },
     {
+      id: 'AX-327',
+      surface: 'SX-101',
+      fn: ['F-189'],
+      action: 'Open Email settings from the row of a connected provider',
+      trigger: 'button "Manage" on the Gmail or Outlook row of Integrations',
+      source: ['src/features/settings/connections/integration-items.tsx'],
+    },
+    {
       id: 'AX-011',
       surface: 'SX-02',
       fn: ['F-009'],
