@@ -44,6 +44,7 @@ import {
   pageIndexForEntry,
   reconcileTimelineEntries,
   timelineEntryKey,
+  timelineEntryPosition,
   timelineMessages,
 } from './timeline-entries';
 
@@ -569,19 +570,12 @@ export function placeTopLevelMessageInMessageTimeline(
   );
   const moved = newestPage.entries[from];
   if (moved?.type !== 'message') return data;
-  const position = {
-    id: moved.message.id,
-    createdAt: moved.message.created_at,
-  };
+  const position = timelineEntryPosition(moved);
   const others = newestPage.entries.filter((_, index) => index !== from);
-  // Entries run newest first: the message goes above the first older message.
+  // Entries run newest first: the message goes above the first older entry.
   const older = others.findIndex(
     (entry) =>
-      entry.type === 'message' &&
-      compareTimelinePositions(
-        { id: entry.message.id, createdAt: entry.message.created_at },
-        position
-      ) < 0
+      compareTimelinePositions(timelineEntryPosition(entry), position) < 0
   );
   const to = older === -1 ? others.length : older;
   if (to === from) return data;

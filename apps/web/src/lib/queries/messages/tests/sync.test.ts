@@ -14,6 +14,13 @@ import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
+const { channelCacheHost } = vi.hoisted(() => ({
+  channelCacheHost: vi.fn(),
+}));
+vi.mock('../local/flag', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../local/flag')>()),
+  channelCacheHost,
+}));
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
@@ -367,6 +374,44 @@ describe.each([
 
     expect(shown()).toEqual(['mine', 'theirs', 'root']);
   });
+  it.runIf(parent.type === 'channel')(
+    "moves another window's waiting message when its delivery is pushed",
+    () => {
+      channelCacheHost.mockReturnValue({});
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          {
+            entries: [{ type: 'message', message: item(parent) }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
+      });
+      const shown = () =>
+        timelineMessages(
+          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0]
+        ).map((row) => row.id);
+      const waiting = message(parent, 'waiting');
+      applyMessage(
+        { ...waiting, created_at: '2026-09-09T00:00:01Z' },
+        'posted'
+      );
+      applyMessage(
+        { ...message(parent, 'theirs'), created_at: '2026-09-09T00:00:02Z' },
+        'posted'
+      );
+
+      applyMessage(
+        { ...waiting, created_at: '2026-09-09T00:00:03Z' },
+        'posted'
+      );
+
+      expect(shown()).toEqual(['waiting', 'theirs', 'root']);
+      channelCacheHost.mockReset();
+    }
+  );
   it("confirms only a person's own reaction over what was pushed since", () => {
     testQueryClient.setQueryData<MessageThread>(threadKey(), {
       state,

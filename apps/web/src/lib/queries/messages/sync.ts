@@ -219,16 +219,22 @@ export function applyMessage(
         thread: { reply_count: 0, preview: [], latest_reply_at: null },
       };
       insertMessageIntoTargetCaches(parent, target, item);
-      // With the device queue a person's own message can wait above this one
-      // with a later time, or the server can have placed this one earlier.
-      if (parent.type === 'channel' && channelCacheHost()) {
-        setMessageTimelineData(parent, (data) =>
-          placeTopLevelMessageInMessageTimeline(data, message.id)
-        );
-      }
     }
   } else {
     patchTargetMessage(parent, target, normalized);
+  }
+  // With the device queue a person's own message can wait above a pushed one
+  // with a later time, and a waiting row another window wrote is given the
+  // server's time by the push of its delivery.
+  if (
+    change === 'posted' &&
+    target.kind !== 'thread_reply' &&
+    parent.type === 'channel' &&
+    channelCacheHost()
+  ) {
+    setMessageTimelineData(parent, (data) =>
+      placeTopLevelMessageInMessageTimeline(data, message.id)
+    );
   }
   softInvalidateTargetCaches(parent, target);
   fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');

@@ -29,7 +29,8 @@ const waitingWrites = createCrossTabBus<WaitingWrite>({
       )
       .otherwise(() => null),
   // Both transports deliver one announcement.
-  getMessageKey: (message) => `${message.windowId}:${message.sentAt}`,
+  getMessageKey: (message) =>
+    `${message.windowId}:${message.channelId}:${message.sentAt}`,
 });
 
 let stopWatching: (() => void) | undefined;

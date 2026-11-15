@@ -251,13 +251,20 @@ describe('pushes a page that is gone left unstored', () => {
   });
 
   it('notes a pushed channel until the device has taken the push', async () => {
-    vi.useFakeTimers();
-    channelCacheHost.mockReturnValue(sequencedHost(null));
+    const host = sequencedHost('7');
+    channelCacheHost.mockReturnValue(host);
+    const fetchChanges = vi.fn(async () => changes({ seq: '8' }));
 
     noteChannelPush(CHANNEL_ID, 8);
+    noteChannelPush(CHANNEL_ID, 9);
     expect(unstoredPushChannels()).toEqual([CHANNEL_ID]);
 
-    await vi.advanceTimersByTimeAsync(300);
+    // The log has only the first of the two so far.
+    await catchUpAndRefresh(host, CHANNEL_ID, fetchChanges);
+    expect(unstoredPushChannels()).toEqual([CHANNEL_ID]);
+
+    fetchChanges.mockResolvedValue(changes({ seq: '9' }));
+    await catchUpAndRefresh(host, CHANNEL_ID, fetchChanges);
     expect(unstoredPushChannels()).toEqual([]);
   });
 

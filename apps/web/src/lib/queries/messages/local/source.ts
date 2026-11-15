@@ -163,16 +163,24 @@ export async function loadLocalChannelTimelinePage(
   }
 }
 
+/** Threads being given to the device, so one read twice is fetched once. */
+const threadsBeingHeld = new Set<string>();
+
 /** Has the device hold a thread the views were answered over REST. */
 async function holdChannelThread(
   host: CacheHost,
   channelId: string,
   rootId: string
 ): Promise<void> {
+  const key = `${channelId}:${rootId}`;
+  if (threadsBeingHeld.has(key)) return;
+  threadsBeingHeld.add(key);
   try {
     await loadChannelThread(host, channelId, rootId);
   } catch (error) {
     reportDeviceFault(error);
+  } finally {
+    threadsBeingHeld.delete(key);
   }
 }
 

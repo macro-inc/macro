@@ -241,12 +241,17 @@ async function queuedWrite<TData, TVariables extends AnyVariables>(
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
       // A write delivered at once reaches the other windows as its push.
-      const waiting = setTimeout(
-        () => announceWaitingWrite(write.channelId),
-        WAITING_ANNOUNCE_MS
-      );
+      let announced = false;
+      const waiting = setTimeout(() => {
+        announced = true;
+        announceWaitingWrite(write.channelId);
+      }, WAITING_ANNOUNCE_MS);
       try {
         await settlements.committed(disposition.transactionId);
+      } catch (error) {
+        // The device rolled the row back; the windows told of it read again.
+        if (announced) announceWaitingWrite(write.channelId);
+        throw error;
       } finally {
         clearTimeout(waiting);
       }
