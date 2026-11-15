@@ -29,15 +29,18 @@
 //! rounds, each with a window [`GROWTH`] times the last, up to
 //! [`MAX_ROUND_WINDOW`]:
 //!
-//! - When the threads walked so far yielded enough rows that, at that rate,
-//!   the round's window would fill the page, the inbox stream walks it.
-//! - Otherwise a probe first counts the superset up to the round's cap
+//! - When the last window found rows fast enough that, at its rate, the
+//!   round's window would fill the page, the inbox stream walks it. The rate
+//!   is the last window's, not the page's: a page that found most of its
+//!   rows early would otherwise keep walking far below the last of them.
+//! - Otherwise, and always after a window that found none, a probe first
+//!   counts the superset up to the round's cap
 //!   ([`OwnedReadTuning::round_cap`]), which follows the walk the page still
 //!   needs at that rate and the walk so far. When the superset fits, the
 //!   superset stream finishes the page below the last walked thread; when it
 //!   doesn't, the inbox stream walks the round's window. A round probes only
 //!   with a cap [`GROWTH`] times the last one the superset outgrew, or once
-//!   at [`MAX_SUPERSET_CAP`] ([`probes_again`]).
+//!   at [`MAX_SUPERSET_CAP`] ([`OwnedReadTuning::probes_again`]).
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
@@ -45,7 +48,7 @@
 //! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
 //! and the walks and the probes grow geometrically, so a page costs a small
 //! multiple of the cheaper of walking to its last row and reading the
-//! superset. The rounds have no fixed count: a superset past
+//! superset. The request as a whole has no bound: a superset past
 //! [`MAX_SUPERSET_CAP`] rows leaves only the walk, which goes on to the
 //! page's last row or the end of the inboxes, about what reading that
 //! superset would cost. A page never comes up short to save rounds, so it
@@ -102,6 +105,10 @@ pub(crate) struct OwnedReadTuning {
     /// The most a round's cap reaches, in superset rows per thread walked so
     /// far.
     pub(crate) superset_per_walked: i64,
+    /// The most threads a round's window reads: [`MAX_ROUND_WINDOW`].
+    pub(crate) max_round_window: i64,
+    /// The most superset rows a round's probe counts: [`MAX_SUPERSET_CAP`].
+    pub(crate) max_superset_cap: i64,
 }
 
 impl OwnedReadTuning {
@@ -119,18 +126,43 @@ impl OwnedReadTuning {
         window_per_row: 10,
         superset_per_need: 3,
         superset_per_walked: 50,
+        max_round_window: MAX_ROUND_WINDOW,
+        max_superset_cap: MAX_SUPERSET_CAP,
     };
 
     /// The most superset rows a round reads the superset for, after the walk
-    /// found `found` rows in `walked` threads and the page needs `left` more:
-    /// `superset_per_need` per thread the walk would still read at that rate
-    /// (as if it found one row when it found none), at most
-    /// `superset_per_walked` per thread walked and [`MAX_SUPERSET_CAP`].
-    pub(crate) fn round_cap(&self, walked: i64, found: i64, left: i64) -> i64 {
-        let need = left.saturating_mul(walked) / found.max(1);
-        need.saturating_mul(self.superset_per_need)
-            .min(walked.saturating_mul(self.superset_per_walked))
-            .min(MAX_SUPERSET_CAP)
+    /// read `walked` threads, the last `last_window` of which held
+    /// `last_found` rows, and the page needs `left` more:
+    /// `superset_per_need` per thread the walk would still read at that
+    /// window's rate, at most `superset_per_walked` per thread walked and
+    /// `max_superset_cap`. A window that found no rows gives no rate, so
+    /// only the walk so far bounds the cap.
+    pub(crate) fn round_cap(
+        &self,
+        walked: i64,
+        last_window: i64,
+        last_found: i64,
+        left: i64,
+    ) -> i64 {
+        let most = walked
+            .saturating_mul(self.superset_per_walked)
+            .min(self.max_superset_cap);
+        if last_found <= 0 {
+            return most;
+        }
+        let need = left.saturating_mul(last_window) / last_found;
+        need.saturating_mul(self.superset_per_need).min(most)
+    }
+
+    /// Whether a round probes the superset at `cap` after a probe at `over`
+    /// came up short: only with a cap [`GROWTH`] times `over`, since a
+    /// smaller one would recount most of what that probe counted, or once at
+    /// `max_superset_cap`, which no cap grows past. Without that last probe,
+    /// once a probe over a quarter of it came up short, a superset under it
+    /// would never be read and the walk would go on to the end of the
+    /// inboxes.
+    pub(crate) fn probes_again(&self, cap: i64, over: i64) -> bool {
+        cap >= over.max(1).saturating_mul(GROWTH) || (cap == self.max_superset_cap && cap > over)
     }
 }
 
@@ -159,16 +191,6 @@ pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
     query_limit
         .saturating_mul(window_per_row)
         .clamp(1, MAX_WINDOW)
-}
-
-/// Whether a round probes the superset at `cap` after a probe at `over`
-/// came up short: only with a cap [`GROWTH`] times `over`, since a smaller
-/// one would recount most of what that probe counted, or once at
-/// [`MAX_SUPERSET_CAP`], which no cap grows past. Without that last probe,
-/// once a probe over a quarter of it came up short, a superset under it
-/// would never be read and the walk would go on to the end of the inboxes.
-pub(crate) fn probes_again(cap: i64, over: i64) -> bool {
-    cap >= over.max(1).saturating_mul(GROWTH) || (cap == MAX_SUPERSET_CAP && cap > over)
 }
 
 /// The stream a statement reads its threads from, in page order.
@@ -209,23 +231,30 @@ pub(crate) enum OwnedStreams {
     InboxesThenSuperset,
 }
 
-/// A page and how [`OwnedRead`] took it.
-struct Taken {
-    streams: OwnedStreams,
+/// How [`OwnedRead`] took a page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct OwnedReadStats {
+    pub(crate) streams: OwnedStreams,
     /// The rounds below the first window.
-    rounds: u32,
-    rows: Vec<ThreadPreviewCursorDbRow>,
+    pub(crate) rounds: u32,
+    /// The superset counts that ran, the first one's included.
+    pub(crate) probes: u32,
+    /// The last count's cap, when one ran.
+    pub(crate) probe_cap: Option<i64>,
+    /// The threads the inbox stream's windows reached. The last window
+    /// stops early when it fills the page.
+    pub(crate) walked: i64,
 }
 
-impl Taken {
-    fn new(streams: OwnedStreams, rounds: u32, rows: Vec<ThreadPreviewCursorDbRow>) -> Self {
-        Self {
-            streams,
-            rounds,
-            rows,
-        }
+impl OwnedReadStats {
+    /// The streams that read the page, set when the read returns it.
+    fn with(self, streams: OwnedStreams) -> Self {
+        Self { streams, ..self }
     }
 }
+
+/// A page and how [`OwnedRead`] took it.
+type Taken = (OwnedReadStats, Vec<ThreadPreviewCursorDbRow>);
 
 /// An owned All Mail page for one OR-tree of addresses. See the module docs.
 pub(super) struct OwnedRead<'a> {
@@ -310,21 +339,24 @@ impl<'a> OwnedRead<'a> {
             superset_rows = Empty,
             streams = Empty,
             rounds = Empty,
+            probes = Empty,
+            probe_cap = Empty,
+            walked = Empty,
             rows = Empty,
         ),
         err
     )]
-    pub(super) async fn fetch(
-        self,
-        connection: &mut PgConnection,
-    ) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+    pub(super) async fn fetch(self, connection: &mut PgConnection) -> Result<Taken, sqlx::Error> {
         let span = tracing::Span::current();
-        let taken = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
-            Taken {
+        let (stats, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
+            let stats = OwnedReadStats {
                 streams: OwnedStreams::Empty,
                 rounds: 0,
-                rows: Vec::new(),
-            }
+                probes: 0,
+                probe_cap: None,
+                walked: 0,
+            };
+            (stats, Vec::new())
         } else {
             let superset_rows = self
                 .superset_rows(connection, self.tuning.superset_limit)
@@ -332,70 +364,92 @@ impl<'a> OwnedRead<'a> {
             span.record("superset_rows", superset_rows);
             self.read(connection, superset_rows).await?
         };
-        span.record("streams", <&str>::from(taken.streams));
-        span.record("rounds", taken.rounds);
-        span.record("rows", taken.rows.len());
-        Ok((taken.streams, taken.rows))
+        span.record("streams", <&str>::from(stats.streams));
+        span.record("rounds", stats.rounds);
+        span.record("probes", stats.probes);
+        if let Some(cap) = stats.probe_cap {
+            span.record("probe_cap", cap);
+        }
+        span.record("walked", stats.walked);
+        span.record("rows", rows.len());
+        Ok((stats, rows))
     }
 
-    /// The page, the streams that read it and how many rounds ran.
+    /// The page and how it was read, after the first probe counted
+    /// `superset_rows`.
     async fn read(
         &self,
         connection: &mut PgConnection,
         superset_rows: i64,
     ) -> Result<Taken, sqlx::Error> {
         let limit = self.params.query_limit;
+        let mut stats = OwnedReadStats {
+            streams: OwnedStreams::Superset,
+            rounds: 0,
+            probes: 1,
+            probe_cap: Some(self.tuning.superset_limit),
+            walked: 0,
+        };
         if superset_rows <= self.tuning.superset_limit {
             let rows = self.page(connection, Stream::Superset, None, limit).await?;
-            return Ok(Taken::new(OwnedStreams::Superset, 0, rows));
+            return Ok((stats, rows));
         }
         let mut window = inbox_window(limit, self.tuning.window_per_row);
         let mut rows = self
             .page(connection, Stream::Inboxes { window }, None, limit)
             .await?;
+        stats.walked = window;
         if rows.len() as i64 >= limit {
-            return Ok(Taken::new(OwnedStreams::Inboxes, 0, rows));
+            return Ok((stats.with(OwnedStreams::Inboxes), rows));
         }
         // A short page is final when the window read every thread there is.
         let Some(mut below) = self.window_end(connection, None, window).await? else {
-            return Ok(Taken::new(OwnedStreams::InboxesToEnd, 0, rows));
+            return Ok((stats.with(OwnedStreams::InboxesToEnd), rows));
         };
-        let mut walked = window;
+        // The rows the last window found, all of whose threads it read.
+        let mut last_found = rows.len() as i64;
         // The superset holds more rows than this.
         let mut over = self.tuning.superset_limit;
-        let mut rounds = 0;
         loop {
-            rounds += 1;
-            window = window.saturating_mul(GROWTH).min(MAX_ROUND_WINDOW);
-            let found = rows.len() as i64;
-            let left = limit - found;
-            // At the rate the walk found rows so far, the page needs
-            // `left × walked / found` more threads.
-            if left.saturating_mul(walked) > found.saturating_mul(window) {
-                let cap = self.tuning.round_cap(walked, found, left);
-                if probes_again(cap, over) {
+            stats.rounds += 1;
+            let last_window = window;
+            window = window
+                .saturating_mul(GROWTH)
+                .min(self.tuning.max_round_window);
+            let left = limit - rows.len() as i64;
+            // At the last window's rate, the page needs `left × last_window
+            // / last_found` more threads; a window that found none never
+            // fills it.
+            if left.saturating_mul(last_window) > last_found.saturating_mul(window) {
+                let cap = self
+                    .tuning
+                    .round_cap(stats.walked, last_window, last_found, left);
+                if self.tuning.probes_again(cap, over) {
+                    stats.probes += 1;
+                    stats.probe_cap = Some(cap);
                     if self.superset_rows(connection, cap).await? <= cap {
                         rows.extend(
                             self.page(connection, Stream::Superset, Some(below), left)
                                 .await?,
                         );
-                        return Ok(Taken::new(OwnedStreams::InboxesThenSuperset, rounds, rows));
+                        return Ok((stats.with(OwnedStreams::InboxesThenSuperset), rows));
                     }
                     over = cap;
                 }
             }
-            rows.extend(
-                self.page(connection, Stream::Inboxes { window }, Some(below), left)
-                    .await?,
-            );
+            let found = self
+                .page(connection, Stream::Inboxes { window }, Some(below), left)
+                .await?;
+            stats.walked = stats.walked.saturating_add(window);
+            last_found = found.len() as i64;
+            rows.extend(found);
             if rows.len() as i64 >= limit {
-                return Ok(Taken::new(OwnedStreams::InboxesThenInboxes, rounds, rows));
+                return Ok((stats.with(OwnedStreams::InboxesThenInboxes), rows));
             }
             let Some(end) = self.window_end(connection, Some(below), window).await? else {
-                return Ok(Taken::new(OwnedStreams::InboxesThenInboxes, rounds, rows));
+                return Ok((stats.with(OwnedStreams::InboxesThenInboxes), rows));
             };
             below = end;
-            walked = walked.saturating_add(window);
         }
     }
 

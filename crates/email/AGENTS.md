@@ -156,9 +156,12 @@ tools — hexagonal, heavily feature-gated.
   stream into the preview pick until LIMIT. A page that the inbox stream's
   first window (10 threads per row, at most 1,000) leaves short goes on below
   the last walked thread in rounds: the next, four times larger window (at
-  most 16,000) while the walk finds rows at the page's rate, else first a
-  probe capped by the walk the page still needs (`round_cap`, at most
-  800,000 rows) and the superset below once it fits. Keep every statement
+  most 16,000) while the last window found rows fast enough to fill the page
+  in it, else (and always after a window without rows) first a probe capped
+  by the walk the page still needs at that rate (`round_cap`, at most
+  800,000 rows) and the superset below once it fits. Judge by the last
+  window, not the page: a page that found most of its rows early would walk
+  on far below the last of them. Keep every statement
   capped: a walked thread the addresses miss costs a read of each of its
   messages, so a cold window of addresses gone quiet costs several times
   their superset.

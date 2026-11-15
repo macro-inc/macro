@@ -14,9 +14,9 @@ use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use owned_scope::OwnedRead;
-pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
+pub(crate) use owned_scope::{OwnedReadStats, OwnedReadTuning};
 #[cfg(test)]
-pub(crate) use owned_scope::{inbox_window, probes_again};
+pub(crate) use owned_scope::{OwnedStreams, inbox_window};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};
@@ -1296,8 +1296,8 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
 
 /// [`dynamic_email_thread_cursor`] with the owned address read's switch
 /// points given, or with `owned_read: None`, owned address filters read by
-/// the general builder, as the parity tests compare. Also returns the
-/// streams that read the page when the owned address read took it.
+/// the general builder, as the parity tests compare. Also returns how
+/// the owned address read took the page, when it did.
 #[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
@@ -1312,7 +1312,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
     user_id: &str,
     team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
     read_page(
         pool,
         link_ids,
@@ -1336,7 +1336,7 @@ struct Reads {
     owned: Option<OwnedReadTuning>,
 }
 
-/// A page, and the owned address read's streams when it read the page.
+/// A page, and how the owned address read took it when it did.
 #[expect(
     clippy::too_many_arguments,
     reason = "the entry point's arguments plus the reads' tunings"
@@ -1350,7 +1350,7 @@ async fn read_page(
     user_id: &str,
     team_id: Option<Uuid>,
     reads: Reads,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedStreams>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
     // A repeated inbox would list its threads twice.
     let link_ids = distinct_links(link_ids);
     let link_ids = link_ids.as_slice();
@@ -1421,8 +1421,8 @@ async fn read_page(
     let params = match reads.owned {
         Some(tuning) => match OwnedRead::new(view, email_filter, params, tuning) {
             Ok(read) => {
-                let (streams, rows) = read_owned_page(pool, read).await?;
-                return Ok((rows, Some(streams)));
+                let (stats, rows) = read_owned_page(pool, read).await?;
+                return Ok((rows, Some(stats)));
             }
             Err(params) => *params,
         },
@@ -1514,7 +1514,7 @@ fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
 async fn read_owned_page(
     pool: &PgPool,
     read: OwnedRead<'_>,
-) -> Result<(OwnedStreams, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+) -> Result<(OwnedReadStats, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
     let mut transaction = begin_snapshot(pool).await?;
     let page = read.fetch(&mut transaction).await?;
     transaction.commit().await?;
