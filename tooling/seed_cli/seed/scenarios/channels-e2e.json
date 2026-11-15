@@ -1,0 +1,39 @@
+{
+  "scenario": "channels-e2e",
+  "description": "People for the channels end-to-end suite (apps/web/tests/channels-e2e): Ada owns the team, Ben and Cy are members, Dee is outside it. The suite creates its own channels and messages through the app's API, so nothing else is seeded.",
+  "users": {
+    "ada": {
+      "email": "ada@channels-e2e.seed.macro.local",
+      "first_name": "Ada",
+      "last_name": "Owner",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "ben": {
+      "email": "ben@channels-e2e.seed.macro.local",
+      "first_name": "Ben",
+      "last_name": "Member",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "cy": {
+      "email": "cy@channels-e2e.seed.macro.local",
+      "first_name": "Cy",
+      "last_name": "Teammate",
+      "roles": ["team_subscriber", "sub_opus"]
+    },
+    "dee": {
+      "email": "dee@channels-e2e.seed.macro.local",
+      "first_name": "Dee",
+      "last_name": "Outsider"
+    }
+  },
+  "teams": {
+    "channels-e2e": {
+      "name": "Channels E2E",
+      "owner": "ada",
+      "members": {
+        "ben": "member",
+        "cy": "member"
+      }
+    }
+  }
+}
