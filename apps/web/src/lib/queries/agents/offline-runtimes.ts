@@ -45,9 +45,11 @@ export function offlineAgentBotIds(
  * every surface that calls this rides the harness list's existing poll rather
  * than adding one.
  */
-export function useOfflineAgentBotIds(): Accessor<ReadonlySet<string>> {
-  const agentsQuery = useAgentsQuery();
-  const harnessesQuery = useRunnableHarnessDirectoryQuery();
+export function useOfflineAgentBotIds(
+  enabled: Accessor<boolean> = () => true
+): Accessor<ReadonlySet<string>> {
+  const agentsQuery = useAgentsQuery(enabled);
+  const harnessesQuery = useRunnableHarnessDirectoryQuery(enabled);
   return createMemo(() => {
     // Until the runtimes are known, nothing is offline. Treating a pending
     // list as empty would flash "Offline" across a healthy roster on load.

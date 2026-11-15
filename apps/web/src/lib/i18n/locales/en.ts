@@ -14,6 +14,7 @@ import common from './en/common';
 import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
+import databaseAnswers from './en/database-answers';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
@@ -59,6 +60,7 @@ export default {
   computers,
   create,
   crm,
+  databaseAnswers,
   emailThread,
   emailViews,
   entityActions,

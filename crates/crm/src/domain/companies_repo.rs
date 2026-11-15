@@ -1,8 +1,8 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-    CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
+    CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     DomainMetadata,
 };
 use chrono::{DateTime, Utc};
@@ -74,6 +74,16 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         &self,
         scope: super::contact_listing::CrmContactListScope<'_>,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
+    /// The items of `entity_types` whose Companies property names a company,
+    /// or whose Contacts property names a contact, of the activity scope that
+    /// [`Self::resolve_activity`] reads. Not authorized: each item reaches a
+    /// caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Idempotently ingest eligible stored mailbox history for a contact.
     /// The transaction rechecks current team membership, explicit consent for
@@ -584,6 +594,18 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// [`Self::get_contact_for_team`] with the contact's company summary,
+    /// in one statement. The summary's name and domain resolve as
+    /// [`Self::get_company_for_team`] resolves them; it is `None` when the
+    /// contact has no company. Visibility is the contact read's: a member
+    /// never reaches a contact under a hidden company.
+    fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Searches the team's contacts whose email or name contains `query`
     /// (case-insensitive), most recently interacted first, at most `limit`
