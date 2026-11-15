@@ -390,7 +390,7 @@ describe('destination adapters', () => {
           }),
         })
       )
-    ).rejects.toThrow('Add at least 3 search characters');
+    ).rejects.toThrow('Add search text to search by sender or speaker');
     expect(mocks.replace).not.toHaveBeenCalled();
   });
   it('saves the visible event description through the existing calendar API', async () => {

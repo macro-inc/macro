@@ -137,7 +137,7 @@ fn compute_next_cursor(
 
 use crate::api::search::terms::{
     drop_wordless_terms, record_term_counts, resolve_document_term_matching, split_search_terms,
-    term_matching_for_cursor,
+    term_matching_for_cursor, trimmed_query,
 };
 
 /// Per-request cap on whitespace-delimited search terms. Each term expands
@@ -314,10 +314,7 @@ async fn search_unified_sources(
         return Err(SearchError::InvalidPageSize);
     }
 
-    let query = req.query.trim().to_string();
-    if query.len() < 3 {
-        return Err(SearchError::InvalidQuerySize);
-    }
+    let query = trimmed_query(&req.query)?.to_string();
     let terms: Vec<String> = vec![query];
     let match_type = req.match_type;
     let split_terms = split_search_terms(&terms);

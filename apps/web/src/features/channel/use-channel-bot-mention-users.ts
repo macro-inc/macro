@@ -60,16 +60,20 @@ export function availableBotMentionUsers(
  * persisted mentions render as "@BotName", and `id` uses the canonical
  * `bot|<uuid>` principal form so mentions are re-tagged as bot mentions at
  * send time (see `authoredMentions`).
+ *
+ * `load` defers the agent and runtime lists, for a composer mounted on every
+ * record and document but written in on few of them.
  */
 export function useMessageBotMentionUsers(
-  parent: Accessor<MessageParent>
+  parent: Accessor<MessageParent>,
+  load: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
   const channelBots = useChannelBotsQuery(() =>
     parent().type === 'channel' ? parent().id : ''
   );
-  const agents = useAgentsQuery();
+  const agents = useAgentsQuery(load);
   const canUseCursor = useCursorAgentsAccess();
-  const offlineBotIds = useOfflineAgentBotIds();
+  const offlineBotIds = useOfflineAgentBotIds(load);
 
   return createMemo(() =>
     availableBotMentionUsers(
