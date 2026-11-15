@@ -56,9 +56,11 @@ Local shells also cache compiled crates with [kache](https://github.com/kunobi-n
 cache is shared by every worktree on the machine, so a new worktree or a build
 after `target/` was deleted reuses what others compiled. A workspace crate
 rebuilt in a `target/` that already built it keeps incremental state instead,
-so the edit loop stays incremental. `kache stats` shows hit rates;
-`kache clean` frees space. To build without it, `export RUSTC_WRAPPER=` (or
-point it at `sccache`, which CI uses) after entering the shell.
+so the edit loop stays incremental. `kache stats` shows hit rates and
+`kache clean --cache` empties the cache (a bare `kache clean` offers to delete
+idle `target/` directories instead). kache also deletes the `target/` of a
+worktree that no longer exists. To build without it, `export RUSTC_WRAPPER=`
+(or point it at `sccache`, which CI uses) after entering the shell.
 
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
