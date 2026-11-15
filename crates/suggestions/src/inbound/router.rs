@@ -1,27 +1,31 @@
-//! The suggestions routes: the person's feed and what they do with a suggestion, and
-//! the tools generation sessions call from code mode.
+//! The suggestions routes: the person's feed and what they, or their own agent,
+//! do with a suggestion, and the tools generation sessions call from code mode.
 
 use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    MacroUserAuthentication, UserOnly,
 };
 use macro_uuid::Uuid;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError, SuggestionFeed,
-    SuggestionWriteOutcome, SuggestionsReview,
+    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    SuggestionCaller, SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
+
+#[cfg(test)]
+mod test;
 
 /// What the suggestions routes share.
 pub struct SuggestionRouterState<S, Auth> {
@@ -68,6 +72,10 @@ where
         )
         .route("/suggestions/review", get(review_suggestions::<S, Auth>))
         .route(
+            "/suggestions/viewed",
+            post(record_suggestions_viewed::<S, Auth>),
+        )
+        .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),
         )
@@ -76,12 +84,20 @@ where
             post(retire_suggestion::<S, Auth>),
         )
         .route(
+            "/suggestions/{id}/draft",
+            put(attach_suggestion_draft::<S, Auth>),
+        )
+        .route(
             "/suggestions/{id}/accept",
             post(accept_suggestion::<S, Auth>),
         )
         .route(
             "/suggestions/{id}/dismiss",
             post(dismiss_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/restore",
+            post(restore_suggestion::<S, Auth>),
         )
         .with_state(state)
 }
@@ -110,8 +126,28 @@ impl IntoResponse for SuggestionApiError {
             Self::Service(error @ SuggestionError::NotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
-            Self::Service(error @ SuggestionError::NotGenerating) => {
-                (StatusCode::FORBIDDEN, error.to_string()).into_response()
+            Self::Service(error @ SuggestionError::RoutineNotAccepted) => {
+                (StatusCode::BAD_REQUEST, error.to_string()).into_response()
+            }
+            Self::Service(error @ SuggestionError::NotRestorable) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
+            Self::Service(
+                error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
+            ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
+            Self::Service(error @ SuggestionError::Changed(_)) => {
+                let message = error.to_string();
+                let SuggestionError::Changed(suggestion) = error else {
+                    unreachable!("matched above")
+                };
+                (
+                    StatusCode::CONFLICT,
+                    Json(SuggestionChanged {
+                        message,
+                        suggestion: *suggestion,
+                    }),
+                )
+                    .into_response()
             }
             Self::Service(SuggestionError::Internal(report)) => {
                 tracing::error!(error = ?report, "suggestions call failed");
@@ -121,7 +157,44 @@ impl IntoResponse for SuggestionApiError {
     }
 }
 
-/// The reader's time zone.
+/// The suggestion changed since the caller read it, or can't run until its
+/// last run settles.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct SuggestionChanged {
+    /// What happened.
+    pub message: String,
+    /// The suggestion as it is now, to show before acting on it again.
+    pub suggestion: crate::domain::model::Suggestion,
+}
+
+/// Acting on a suggestion, as the caller's copy of it shows it.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptSuggestionRequest {
+    /// The suggestion's `updatedAt` as the caller read it. A background suggestion runs
+    /// only if it is unchanged since and no run of it is still settling;
+    /// otherwise the answer is 409.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Who is at the feed. Only the person's own session in the app, with no
+/// program's marks (a code-mode invocation, the code-execution header), is
+/// the person; any other credential (an agent's, an API token, a program)
+/// acts for them. When it can't be told, it is someone acting for them.
+fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> SuggestionCaller {
+    // Validated against its session at the router's boundary.
+    let correlation = agent_correlation::context::current();
+    if correlation.is_none()
+        && user.is_human_session()
+        && !headers.contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    {
+        SuggestionCaller::User
+    } else {
+        SuggestionCaller::Agent { correlation }
+    }
+}
+
+/// The reader's time zone, and how much of the feed to read.
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct FeedQuery {
@@ -130,6 +203,11 @@ pub struct FeedQuery {
     #[param(value_type = Option<String>)]
     #[serde(default)]
     pub timezone: Option<chrono_tz::Tz>,
+    /// Most open suggestions to return, best first; all when unset. With a
+    /// limit the feed leaves out `done`; `counts` always counts every one.
+    #[param(value_type = Option<u16>, minimum = 1)]
+    #[serde(default)]
+    pub limit: Option<std::num::NonZeroU16>,
 }
 
 #[utoipa::path(
@@ -139,28 +217,68 @@ pub struct FeedQuery {
     operation_id = "list_suggestions",
     params(FeedQuery),
     responses(
-        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions they can open every item of, best first"),
+        (status = 200, body = SuggestionFeed, description = "The caller's open suggestions, best first, and their done ones, latest first: only those they can open every item of"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not read the feed"),
         (status = 404, body = String, description = "Suggestions are off for the caller"),
         (status = 500, body = String),
     )
 )]
-/// The caller's feed.
+/// The caller's feed, for them or their own agent.
 pub async fn list_suggestions<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Query(query): Query<FeedQuery>,
 ) -> Result<Json<SuggestionFeed>, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     Ok(Json(
         state
             .service
-            .feed(&user.authorization.macro_user_id, query.timezone)
+            .feed(
+                &user.authorization.macro_user_id,
+                caller,
+                query.timezone,
+                query.limit.map(|limit| usize::from(limit.get())),
+            )
             .await?,
     ))
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/viewed",
+    tag = "suggestions",
+    operation_id = "record_suggestions_viewed",
+    responses(
+        (status = 204, description = "Recorded: suggestions proposed until now are no longer new in the feed"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not record a visit"),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller opened their feed: what it showed as new no longer is. The app
+/// sends it once the feed is on screen.
+pub async fn record_suggestions_viewed<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .viewed(&user.authorization.macro_user_id, caller)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -169,28 +287,42 @@ where
     tag = "suggestions",
     operation_id = "accept_suggestion",
     params(("id" = String, Path, description = "ID of the suggestion")),
+    request_body = AcceptSuggestionRequest,
     responses(
-        (status = 204, description = "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"),
+        (status = 204, description = "Accepted: a background prompt suggestion starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other suggestion is done; accepting a done suggestion again changes nothing"),
+        (status = 400, body = String, description = "A routine suggestion: the person saves its routine in the app instead"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not accept"),
+        (status = 409, body = SuggestionChanged, description = "The suggestion changed since the caller read it, or a run of it is still settling: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller acts on a suggestion: a background prompt suggestion is taken on; any
-/// other is done once they act on it (open its item, the composer, the
-/// routine), and shows in the feed's `done`.
+/// The caller, or someone acting for them, acts on a suggestion: a background
+/// prompt suggestion starts its run when the person accepts it in the app (anyone
+/// else only takes it on); a note or prompt is done once they act on it (open its
+/// item or the composer), and shows in the feed's `done`. A routine suggestion is
+/// refused: the person saves its routine in the app, which makes it done.
 pub async fn accept_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
+    body: Result<Json<AcceptSuggestionRequest>, JsonRejection>,
 ) -> Result<StatusCode, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let caller = caller(&user.authorization, &headers);
+    let accept = Accept {
+        shown_updated_at: request.updated_at,
+        by_person: caller == SuggestionCaller::User,
+    };
     state
         .service
-        .accept(&user.authorization.macro_user_id, id)
+        .accept(&user.authorization.macro_user_id, caller, id, accept)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -204,23 +336,61 @@ where
     responses(
         (status = 204, description = "Dismissed; generation sessions see when"),
         (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not dismiss"),
         (status = 404, body = String, description = "No open suggestion with this id for the caller, or suggestions are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller isn't interested in an open suggestion.
+/// The caller, or their own agent, isn't interested in an open suggestion.
 pub async fn dismiss_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, SuggestionApiError>
 where
     S: SuggestionApi,
     Auth: MacroAuthorizationService,
 {
+    let caller = caller(&user.authorization, &headers);
     state
         .service
-        .dismiss(&user.authorization.macro_user_id, id)
+        .dismiss(&user.authorization.macro_user_id, caller, id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/{id}/restore",
+    tag = "suggestions",
+    operation_id = "restore_suggestion",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    responses(
+        (status = 204, description = "Open again, as proposed; a run the dismissal stopped stays stopped"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not restore"),
+        (status = 404, body = String, description = "No suggestion with this id for the caller, or suggestions are off"),
+        (status = 409, body = String, description = "Not dismissed in the last five minutes, or a routine suggestion"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller, or their own agent, takes back dismissing a suggestion, within
+/// five minutes of it.
+pub async fn restore_suggestion<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .restore(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -359,6 +529,44 @@ where
         state
             .service
             .retire(&principal, correlation, id, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/{id}/draft",
+    tag = "suggestions",
+    operation_id = "attach_suggestion_draft",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    request_body = AttachDraft,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the draft is now the suggestion's, replacing its old one, and what to fix when it isn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestions generation session may attach a draft"),
+        (status = 404, body = String, description = "No such suggestion for the user, or suggestions are off"),
+        (status = 500, body = String),
+    )
+)]
+/// Make a reply draft a suggestions generation session wrote the draft of an
+/// open reply suggestion. Nothing is sent.
+pub async fn attach_suggestion_draft<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<AttachDraft>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .attach_draft(&principal, correlation, id, request)
             .await?,
     ))
 }

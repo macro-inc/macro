@@ -39,9 +39,6 @@ export default {
     'This change is unavailable. Check the value and try again.',
 
   navigation: 'CRM navigation',
-  collapseSidebar: 'Collapse CRM sidebar',
-  expandSidebar: 'Expand CRM sidebar',
-  showNavigation: 'Show CRM navigation',
   records: 'Records',
   recordsNavigation: 'CRM records',
   viewsNavigation: 'CRM views',
@@ -56,6 +53,22 @@ export default {
   searchSalesNotes: 'Search sales notes',
   searchSalesCalls: 'Search sales calls',
   pipelines: 'Pipelines',
+  pipelineEntryPrivate: 'Private pipeline',
+  pipelineEntryOpen: 'Open {{name}}',
+  pipelineEntryShowMore: {
+    one: 'Show {{count}} more',
+    other: 'Show {{count}} more',
+  },
+  pipelineEntryShowLess: 'Show less',
+  pipelineEntryEmptyFields: {
+    one: '{{count}} empty field',
+    other: '{{count}} empty fields',
+  },
+  pipelineEntryEmptyFieldsLabel: {
+    one: '{{count}} empty field: {{names}}',
+    other: '{{count}} empty fields: {{names}}',
+  },
+  pipelineEntryEmpty: 'Empty',
   pipelinesNavigation: 'CRM pipelines',
   newPipeline: 'New pipeline',
   pipelineTeam: 'Team',

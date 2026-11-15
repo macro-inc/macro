@@ -1,5 +1,7 @@
 use crate::api::search::simple::{SearchError, simple_channel};
-use crate::api::search::terms::{drop_wordless_terms, record_term_counts, split_search_terms};
+use crate::api::search::terms::{
+    drop_wordless_terms, record_term_counts, split_search_terms, trimmed_query,
+};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -326,10 +328,7 @@ pub async fn name_handler(
         .user_context
         .clone();
 
-    let query = req.query.trim();
-    if query.len() < 3 {
-        return Err(SearchError::InvalidQuerySize);
-    }
+    let query = trimmed_query(&req.query)?;
     let page_size = query_params.page_size.unwrap_or(10);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);
@@ -436,11 +435,8 @@ pub async fn handler(
         terms.len(),
         split_count - terms.len(),
     );
-    if terms.is_empty() {
+    if terms.is_empty() || terms.iter().any(|term| term.trim().is_empty()) {
         return Err(SearchError::NoQueryOrTermsProvided);
-    }
-    if terms.iter().any(|t| t.len() < 3) {
-        return Err(SearchError::InvalidQuerySize);
     }
 
     let cursor = query_params

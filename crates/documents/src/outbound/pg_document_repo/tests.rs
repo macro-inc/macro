@@ -3735,3 +3735,202 @@ async fn skill_descriptions_are_stored_replaced_and_read_by_id(pool: Pool<Postgr
         "Use when drafting release notes; not changelogs"
     );
 }
+
+const SHARED_PROJECT_ID: &str = "d0000000-0000-0000-0000-100000000001";
+
+fn assert_refused<T: std::fmt::Debug, E: std::fmt::Debug>(outcome: Result<T, E>) {
+    let error = format!("{:?}", outcome.expect_err("a sharing refusal"));
+    assert!(
+        error.contains(agent_correlation::context::SharingRefused::MESSAGE),
+        "expected a sharing refusal, got {error}"
+    );
+}
+
+async fn document_count(pool: &Pool<Postgres>) -> i64 {
+    sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM "Document""#)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// Under a scope that may not share, a document can't be created shared with
+/// its team, or created in or moved into a folder whose grants would reach
+/// someone new, and a refused write leaves nothing behind. A folder only the
+/// owner can open still takes new documents.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn a_scoped_session_cant_share_a_document_through_creation_or_a_folder(pool: Pool<Postgres>) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let project = uuid::Uuid::parse_str(SHARED_PROJECT_ID).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'project', $2, 'user', 'owner'), ($1, 'project', $3, 'team', 'view')"#,
+        project,
+        TEST_DOCUMENT_OWNER_ID,
+        TEST_TEAM_ID.to_string(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = test_repo(pool.clone());
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let in_project = || {
+        let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+        args.document.project_id = Some(project);
+        args
+    };
+    let documents_before = document_count(&pool).await;
+
+    scope_attribution(no_send, async {
+        let mut shared_task =
+            create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(TEST_TEAM_ID));
+        shared_task.document.share_with_team = true;
+        assert_refused(
+            repo.create_document(shared_task, md_share_permission())
+                .await,
+        );
+        assert_refused(
+            repo.create_document(in_project(), md_share_permission())
+                .await,
+        );
+        assert_refused(
+            repo.edit_document(EditDocumentRepoArgs {
+                document_id: TEST_DOCUMENT_ID.to_string(),
+                document_name: None,
+                project_id: Some(SHARED_PROJECT_ID.to_string()),
+                share_permission: None,
+                team_share: None,
+                revoke_non_owner_user_access: false,
+                file_type: None,
+            })
+            .await,
+        );
+    })
+    .await;
+    assert_eq!(document_count(&pool).await, documents_before);
+    let project_of_document = sqlx::query_scalar!(
+        r#"SELECT "projectId" FROM "Document" WHERE id = $1"#,
+        TEST_DOCUMENT_ID,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(project_of_document, None);
+
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND source_type = 'team'",
+        project,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    scope_attribution(
+        no_send,
+        repo.create_document(in_project(), md_share_permission()),
+    )
+    .await
+    .unwrap();
+}
+
+const UNREGISTERED_DOCUMENT_ID: &str = "unregistered-document";
+
+fn move_args(document_id: &str, project_id: &str) -> EditDocumentRepoArgs {
+    EditDocumentRepoArgs {
+        document_id: document_id.to_string(),
+        document_name: Some("renamed".to_string()),
+        project_id: Some(project_id.to_string()),
+        share_permission: None,
+        team_share: None,
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    }
+}
+
+/// A document whose id isn't a UUID has no grant rows and reads its folders'
+/// grants. Under a scope that may not share, it can't be moved into a folder
+/// that reaches someone new; a folder only its owner reaches takes it, and an
+/// edit that keeps it where it is stays allowed once that folder is shared.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn a_scoped_session_cant_file_an_unregistered_document_in_a_shared_folder(
+    pool: Pool<Postgres>,
+) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let project = uuid::Uuid::parse_str(SHARED_PROJECT_ID).unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "Document" ("id", "name", "fileType", "owner") VALUES ($1, 'unregistered', 'pdf', $2)"#,
+        UNREGISTERED_DOCUMENT_ID,
+        TEST_DOCUMENT_OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let share_project_with_team = || {
+        sqlx::query!(
+            r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'project', $2, 'team', 'view')"#,
+            project,
+            TEST_TEAM_ID.to_string(),
+        )
+        .execute(&pool)
+    };
+    share_project_with_team().await.unwrap();
+    let repo = test_repo(pool.clone());
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let folder_of_document = || {
+        sqlx::query_scalar!(
+            r#"SELECT "projectId" FROM "Document" WHERE id = $1"#,
+            UNREGISTERED_DOCUMENT_ID,
+        )
+        .fetch_one(&pool)
+    };
+
+    assert_refused(
+        scope_attribution(
+            no_send,
+            repo.edit_document(move_args(UNREGISTERED_DOCUMENT_ID, SHARED_PROJECT_ID)),
+        )
+        .await,
+    );
+    assert_eq!(folder_of_document().await.unwrap(), None);
+
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND source_type = 'team'",
+        project,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    scope_attribution(
+        no_send,
+        repo.edit_document(move_args(UNREGISTERED_DOCUMENT_ID, SHARED_PROJECT_ID)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        folder_of_document().await.unwrap().as_deref(),
+        Some(SHARED_PROJECT_ID)
+    );
+
+    share_project_with_team().await.unwrap();
+    scope_attribution(
+        no_send,
+        repo.edit_document(move_args(UNREGISTERED_DOCUMENT_ID, SHARED_PROJECT_ID)),
+    )
+    .await
+    .unwrap();
+}

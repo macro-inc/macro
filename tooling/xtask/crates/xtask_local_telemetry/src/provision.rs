@@ -154,7 +154,7 @@ pub(crate) fn provision(
             return None;
         }
     }
-    let config = match write_settings(&paths.config, &source.endpoint, &token, rejected.is_some()) {
+    let config = match write_settings(&paths.config, &source.endpoint, &token, rejected) {
         Ok(()) => load_on(&paths.config),
         // Another run linked its file first; it is just as good.
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => load_on(&paths.config),
@@ -296,20 +296,40 @@ pub(crate) fn token_is_valid(token: &str) -> bool {
             .all(|byte| byte.is_ascii_graphic() && byte != b'"' && byte != b'\\')
 }
 
-fn write_settings(path: &Path, endpoint: &str, token: &str, replace: bool) -> std::io::Result<()> {
+/// Write the settings file. `replacing` is the provisioned config being
+/// replaced: its `services` and `machine` choices carry over.
+fn write_settings(
+    path: &Path,
+    endpoint: &str,
+    token: &str,
+    replacing: Option<&Config>,
+) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
     remove_stale_staging(path);
-    let text = format!(
+    let mut text = format!(
         "# Written by `just run_local` from Doppler (observability/lcl).\n\
          # Edit freely, but delete `provisioned = true` so it is never replaced.\n\
-         # `enabled = false` turns local telemetry off: docs/development/running-locally.md\n\
+         # `enabled = false` turns local telemetry off, and `services = true` also\n\
+         # sends your local stacks' traces, logs and metrics: docs/development/running-locally.md\n\
          endpoint = {}\n\
          token = {}\n\
          provisioned = true\n",
         toml::Value::from(endpoint),
         toml::Value::from(token),
     );
+    if let Some(old) = replacing {
+        if old.services() {
+            text.push_str("services = true\n");
+        }
+        if let Some(machine) = old.machine() {
+            text.push_str(&format!(
+                "machine = {}\n",
+                toml::Value::from(machine.as_str())
+            ));
+        }
+    }
+    let replace = replacing.is_some();
     // Unique per attempt: two senders in one process must not share it.
     let staging = sibling(
         path,

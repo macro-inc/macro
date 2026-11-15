@@ -188,6 +188,7 @@ impl IntoResponse for DocumentError {
                 StatusCode::NOT_FOUND
             }
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
+            DocumentError::Forbidden(_) => StatusCode::FORBIDDEN,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
             DocumentError::BadRequest(_) => StatusCode::BAD_REQUEST,

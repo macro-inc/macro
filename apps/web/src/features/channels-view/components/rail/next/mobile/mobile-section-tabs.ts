@@ -43,7 +43,8 @@ export function channelsForMobileSection(options: {
   const label = options.labels.find(
     (label) => `label:${label.id}` === options.tab
   );
-  return options.channels.filter((channel) =>
-    label?.channelIds.includes(channel.id)
-  );
+  // Index once: scanning a reactive member array for every row multiplies
+  // both the work and Solid subscriptions for large name-matched sections.
+  const memberIds = new Set(label?.channelIds);
+  return options.channels.filter((channel) => memberIds.has(channel.id));
 }

@@ -57,6 +57,7 @@ export default defineConfig({
         if (importer?.includes('/tasks-view/')) {
           if (
             source === '../tasks-view-context' ||
+            source === '../../tasks-view-context' ||
             source === '../views/task-saved-views'
           )
             return `${directory}/task-filter-adapters.tsx`;

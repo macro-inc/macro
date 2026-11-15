@@ -23,6 +23,9 @@ Components, styling, and interaction conventions.
   `apps/web/src/index.css`, so classes like `text-red-500` silently render
   nothing. Enforced by ast-grep `tsx-no-raw-tailwind-palette`, CI error.
   Use existing semantic surface tokens instead of component-local color mixes.
+- **FE-72** Shift a surface's lightness with `oklab(from X calc(l ± n) a b)`,
+  not `oklch(from X … c h)`: Chrome drops the hue of a near-neutral sRGB color
+  (a theme's `color-mix(in srgb, …)` surface) and `h` then paints it pink.
 - Keep runtime theme tokens together in `apps/web/src/index.css`: one
   `:root, [data-theme-light]` block for dark defaults, followed by one
   `[data-theme-light='true']` override block. Keep any narrower root/device

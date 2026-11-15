@@ -4,6 +4,8 @@ mod access;
 mod history;
 #[cfg(feature = "resources")]
 mod initial_properties;
+#[cfg(feature = "resources")]
+mod task_access;
 #[cfg(feature = "toolset")]
 mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -570,6 +572,82 @@ async fn update_member_diff_grants_and_revokes_initiative_access(
     assert_eq!(initiative_access(&pool, created.id, MEMBER).await?, None);
     assert_eq!(initiative_access(&pool, created.id, TEAMMATE).await?, edit);
     assert_eq!(initiative_access(&pool, created.id, STRANGER).await?, edit);
+    Ok(())
+}
+
+/// A session that may not share neither creates an initiative with members
+/// nor adds or removes one, and writes nothing when refused.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_scoped_session_gives_no_member_access(pool: PgPool) -> anyhow::Result<()> {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    insert_user(&pool, OWNER).await?;
+    insert_user(&pool, MEMBER).await?;
+    insert_user(&pool, STRANGER).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Members", &[MEMBER]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+
+    let added = scope_attribution(
+        no_send,
+        repo.update(UpdateInitiativeRepoArgs {
+            name: Some("Renamed".to_string()),
+            member_ids_added: vec![user(STRANGER)],
+            ..update_args(created.id)
+        }),
+    )
+    .await;
+    assert!(added.is_err());
+    assert_eq!(initiative_access(&pool, created.id, STRANGER).await?, None);
+    assert_eq!(
+        repo.get_basic(created.id).await?.expect("initiative").name,
+        "Members"
+    );
+
+    let with_members = create_args(OWNER, "Scoped", &[MEMBER]);
+    let refused_id = with_members.id;
+    let created_with_members = scope_attribution(
+        no_send,
+        repo.create(with_members, share_off(), TeamShareCreation::Unshared),
+    )
+    .await;
+    assert!(created_with_members.is_err());
+    assert!(repo.get_basic(refused_id).await?.is_none());
+
+    scope_attribution(
+        no_send,
+        repo.create(
+            create_args(OWNER, "Alone", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        ),
+    )
+    .await?;
+    let member_access = initiative_access(&pool, created.id, MEMBER).await?;
+    let removed = scope_attribution(
+        no_send,
+        repo.update(UpdateInitiativeRepoArgs {
+            member_ids_removed: vec![user(MEMBER)],
+            ..update_args(created.id)
+        }),
+    )
+    .await;
+    assert!(removed.is_err());
+    assert!(member_access.is_some());
+    assert_eq!(
+        initiative_access(&pool, created.id, MEMBER).await?,
+        member_access
+    );
     Ok(())
 }
 
