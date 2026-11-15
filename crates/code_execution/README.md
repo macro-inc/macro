@@ -64,10 +64,12 @@ get around it can still write with the owner's permissions.
 
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
-without running it, plus an ambient declaration module the host supplies (the
-type of `main`'s argument). `check_files` checks several modules together (up
-to 40), so one can import another's types, and attributes each diagnostic to
-its file. An import map sends every file URL outside the
+without running it, plus a module of `declare global` types the host supplies
+(the type of `main`'s argument). It skips checking declaration files
+(`skipLibCheck`), which took about 40% of every check; a test checks the SDK's
+declarations under the pinned Deno instead. `check_files` checks several
+modules together (up to 40), so one can import another's types, and attributes
+each diagnostic to its file. An import map sends every file URL outside the
 check and the declarations to a root that doesn't exist, so a program can't
 make the checker read, or quote, another file. `sdk_fingerprint()` is the
 SDK version plus a hash of those declarations: code that checked under one

@@ -46,7 +46,7 @@ fn parse_uuid(entity_id: &str, message: &'static str) -> Result<Uuid, AccessErro
 }
 
 impl ExplainAccessRepository for PgExplainAccessRepository {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn list_access_grants(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,

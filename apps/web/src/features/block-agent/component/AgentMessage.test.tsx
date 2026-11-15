@@ -319,6 +319,32 @@ describe('Message tool grouping', () => {
     ]);
   });
 
+  it('keeps one group across blank lines and thoughts between its calls', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          text('Looking.'),
+          tool('read'),
+          text('\n'),
+          { kind: 'thought', text: 'Next file.' },
+          text('\n\n'),
+          tool('edit'),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(group.dataset.count).toBe('2');
+    // The thought is inside the fold, not a visible row between two groups.
+    expect(group.contains(view.getByTestId('thought'))).toBe(true);
+    expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
+      'Looking.',
+      'Done.',
+    ]);
+  });
+
   it('tells each call whether a later call of the turn saves the query', () => {
     const view = render(() => (
       <Message
@@ -685,6 +711,45 @@ describe('Message tool runs', () => {
       'read',
       'second',
     ]);
+  });
+
+  it('folds programs and the thoughts between them before their records load', () => {
+    const thought = (value: string): MessagePart => ({
+      kind: 'thought',
+      text: value,
+    });
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            text('Looking.'),
+            program('find'),
+            thought('Found the thread.'),
+            program('read'),
+            text('\n'),
+            thought('Now the draft.'),
+            program('draft', 'completed'),
+            text('Done.'),
+          ],
+          { kind: 'end_turn' },
+          [
+            row('find:0', 'Search email'),
+            row('read:0', 'Read email thread'),
+            row('read:1', 'Read attachment'),
+            row('draft', 'Workspace step failed', 'failed'),
+          ]
+        )}
+        inFlight={false}
+      />
+    ));
+    // No saved record yet: the fold's receipt rows stand for each program.
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('4');
+    expect(group.dataset.failed).toBe('1');
+    expect(
+      view.getAllByTestId('thought').every((row) => group.contains(row))
+    ).toBe(true);
   });
 
   it("names a running program's observed operations ahead of its receipt", () => {

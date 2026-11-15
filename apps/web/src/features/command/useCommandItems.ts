@@ -24,6 +24,7 @@ import {
   newProjectCommand,
 } from './project-items';
 import { useEntitySearch } from './queries/entity-search';
+import { sameRankInput } from './rank-command-search-items';
 import { getCommandLastUsedAt } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter, DisplayHotkeyStep } from './types';
@@ -412,6 +413,9 @@ export function useCommandItems(
         : []),
     ];
   };
+  const rankInput = createMemo(categoryItems, undefined, {
+    equals: sameRankInput,
+  });
   const rankItems = entities.rankItems;
 
   const shouldShowSearchRow = (q: string) => {
@@ -424,8 +428,7 @@ export function useCommandItems(
 
   const filteredItems = createMemo(() => {
     const q = query();
-    const items = categoryItems();
-    const ranked = rankItems(items, q);
+    const ranked = rankItems(rankInput(), q);
 
     if (
       q.trim().length <= 3 &&

@@ -33,6 +33,7 @@ pub fn code_check_infra() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_step(checkout(false))
@@ -41,6 +42,7 @@ fn path_check() -> Job {
 
 fn biome_check() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .name("Biome Check")
         .runs_on(infra_runner())
         .add_step(checkout(true))
@@ -53,6 +55,7 @@ fn biome_check() -> Job {
 
 fn check() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))
         .add_step(steps::mount_web_cache_volume(false))
@@ -67,6 +70,7 @@ fn check() -> Job {
 /// stable because branch protection references it.
 fn status_check() -> Job {
     Job::default()
+        .timeout_minutes(5u32)
         .name("Infra Status Check")
         .cond(Expression::new("always()"))
         .needs(vec![
@@ -134,13 +138,17 @@ fn check_job_results() -> Step<Run> {
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "check: ${{ needs.check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.check.result }}" == "failure" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
-        fi
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "✅ All jobs passed or were skipped"
     "#})

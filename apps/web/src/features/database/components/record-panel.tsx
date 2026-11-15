@@ -7,7 +7,7 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, buttonClasses } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
-import { type Accessor, type JSX, Show } from 'solid-js';
+import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type {
   GridCellControl,
@@ -44,10 +44,12 @@ type RecordPanelProps = {
 };
 
 export function RecordPanel(props: RecordPanelProps) {
+  const [dialog, setDialog] = createSignal<HTMLElement>();
   let focusTitle: (() => void) | undefined;
   return (
     <Dialog
       open
+      contentRef={setDialog}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -130,6 +132,7 @@ export function RecordPanel(props: RecordPanelProps) {
               row={row()}
               columns={props.columns}
               canEdit={props.canEdit}
+              popupMount={dialog()}
               outsideViewReason={props.outsideViewReason}
               renderCell={props.renderCell}
               onFocusReady={(focus) => {
@@ -178,6 +181,7 @@ function RecordFields(
     RecordPanelProps,
     'row' | 'columns' | 'canEdit' | 'outsideViewReason' | 'renderCell'
   > & {
+    popupMount?: HTMLElement;
     onFocusReady: (focus: () => void) => void;
   }
 ) {
@@ -198,6 +202,9 @@ function RecordFields(
     column: Accessor<DatabaseViewColumn>
   ): GridCellEditorOptions {
     return {
+      get popupMount() {
+        return props.popupMount;
+      },
       get initialEdit() {
         return column().id === initialEditColumnId;
       },

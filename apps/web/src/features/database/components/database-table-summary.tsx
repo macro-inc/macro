@@ -5,6 +5,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   type ColumnCalculation,
   summarizeColumn,
+  summarizeMoney,
 } from '../core/column-summary';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
@@ -87,6 +88,17 @@ function SummaryCell(props: {
       calculation().value
     )
   );
+  const displayed = () => {
+    if (props.column.currencyColumnId && calculation().numeric) {
+      return (
+        summarizeMoney(props.column, props.rows, calculation().value)
+          .map(({ currency, value }) => `${currency} ${format.format(value)}`)
+          .join(' · ') || '—'
+      );
+    }
+    const current = value();
+    return current === null ? '—' : format.format(current);
+  };
   return (
     <div
       role="gridcell"
@@ -108,8 +120,8 @@ function SummaryCell(props: {
               </>
             }
           >
-            <span class="tabular-nums text-ink">
-              {value() === null ? '—' : format.format(value()!)}
+            <span class="truncate tabular-nums text-ink" title={displayed()}>
+              {displayed()}
             </span>
             <span class="truncate lowercase">{calculation().label}</span>
           </Show>

@@ -54,6 +54,10 @@ export type PredicateQueryStatus =
   | 'ready'
   | 'unsupported'
   | 'error';
+
+// A busy or stale cache must release cache-first readers to network hydration.
+const MAX_STALE_READS = 3;
+
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -108,9 +112,11 @@ export function createPredicateQuery<T extends object>(options: {
       });
       setStatus('loading');
 
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
       const run = async () => {
         if (running || !active) return;
         running = true;
+        let staleReads = 0;
         try {
           while (pending && active) {
             pending = false;
@@ -120,10 +126,14 @@ export function createPredicateQuery<T extends object>(options: {
             let upserts = 0;
             let patches = 0;
             let removed = 0;
+            let retries = 0;
             const startedAt = performance.now();
             try {
               const result = await host.entityFilter(args());
-              if (!active || epoch !== observedEpoch) continue;
+              if (!active || epoch !== observedEpoch) {
+                staleReads = 0;
+                continue;
+              }
               if (result.kind !== 'live-query') {
                 outcome = 'unsupported';
                 unsupported = true;
@@ -136,9 +146,26 @@ export function createPredicateQuery<T extends object>(options: {
               removed = result.removed.length;
               const revision = parseCacheRevision(result.revision);
               if (latest !== undefined && BigInt(revision) < BigInt(latest)) {
+                staleReads += 1;
+                if (staleReads >= MAX_STALE_READS) {
+                  // Preserve an invalidation that arrived during this read, but
+                  // yield before starting another bounded attempt.
+                  if (pending) {
+                    retryTimer = setTimeout(() => {
+                      retryTimer = undefined;
+                      deferral.request();
+                    }, 0);
+                  }
+                  pending = false;
+                  throw new Error(
+                    'Cache predicate repeatedly returned a stale revision'
+                  );
+                }
+                retries = 1;
                 pending = true;
                 continue;
               }
+              staleReads = 0;
               if (result.reset && result.keys === undefined)
                 throw new Error('live query reset omitted its keys');
               // Check row envelopes and patch bases before updating reactive state.
@@ -216,7 +243,10 @@ export function createPredicateQuery<T extends object>(options: {
               );
               outcome = 'success';
             } catch (cause) {
-              if (!active || epoch !== observedEpoch) continue;
+              if (!active || epoch !== observedEpoch) {
+                staleReads = 0;
+                continue;
+              }
               outcome = 'error';
               setError(() => cause);
               setStatus('error');
@@ -227,6 +257,7 @@ export function createPredicateQuery<T extends object>(options: {
                 upserts,
                 patches,
                 removed,
+                retries,
                 error: outcome === 'error',
                 discarded: outcome === 'discarded',
                 incomplete: outcome === 'unsupported',
@@ -238,6 +269,8 @@ export function createPredicateQuery<T extends object>(options: {
         }
       };
       const refresh = () => {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
         if (unsupported) return;
         pending = true;
         if (!running) runPromise = run();
@@ -267,6 +300,7 @@ export function createPredicateQuery<T extends object>(options: {
       refresh();
       onCleanup(() => {
         active = false;
+        clearTimeout(retryTimer);
         deferral.dispose();
         unsubscribeChanges();
         unsubscribeGeneration();

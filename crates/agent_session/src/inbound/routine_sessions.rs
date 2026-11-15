@@ -119,7 +119,8 @@ impl IntoResponse for ApiError {
             RoutineSessionError::RuntimeUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             RoutineSessionError::SessionMismatch
             | RoutineSessionError::ModelMismatch
-            | RoutineSessionError::Conflict => StatusCode::CONFLICT,
+            | RoutineSessionError::Conflict
+            | RoutineSessionError::TeamAgentComputer => StatusCode::CONFLICT,
             RoutineSessionError::PromptDeliveryUnknown => StatusCode::BAD_GATEWAY,
             RoutineSessionError::OperationFailed => StatusCode::INTERNAL_SERVER_ERROR,
         };

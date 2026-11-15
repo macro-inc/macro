@@ -128,10 +128,13 @@ async fn entity_updates_skip_noops_and_retries(pool: Pool<Postgres>) -> Result<(
             .get_notification_ids_for_entities(&user, std::slice::from_ref(&entity), &status)
             .await?;
         assert_eq!(ids.iter().copied().collect::<HashSet<_>>(), expected);
-        let updated = match status {
+        let updated = match &status {
             NotificationStatus::Seen => pool.mark_notifications_seen(&user, &ids).await?,
             NotificationStatus::Done(done) => {
-                pool.mark_notifications_done(&user, &ids, done).await?
+                pool.mark_notifications_done(&user, &ids, *done).await?
+            }
+            NotificationStatus::Reopen { unseen } => {
+                pool.reopen_notifications(&user, &ids, unseen).await?
             }
         };
         assert_eq!(updated.len(), expected.len());

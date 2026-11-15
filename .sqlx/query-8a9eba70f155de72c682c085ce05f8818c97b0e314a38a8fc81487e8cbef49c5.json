@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT purchase_key, awake, enrollment_generation FROM hosted_runtime WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "purchase_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "awake",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "enrollment_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8a9eba70f155de72c682c085ce05f8818c97b0e314a38a8fc81487e8cbef49c5"
+}
