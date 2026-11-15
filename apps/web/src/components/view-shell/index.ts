@@ -45,6 +45,7 @@ export {
   type ViewBreadcrumbsSeparatorState,
 } from './ViewBreadcrumbs';
 export {
+  asideCollapsedPreferenceKey,
   useViewShell,
   ViewNavigationControls,
   ViewShell,

@@ -6,9 +6,9 @@ use item_filters::ast::email::Email;
 use uuid::Uuid;
 
 use super::{
-    AddressKind, AddressKinds, ResolvedFilters, SqlFragment, build_address_predicate_on_m,
-    contacts_recipient_branch, contacts_sender_branch, escape_like_pattern, link_scope_fragment,
-    matching_contacts_cte_body, push_contact_group,
+    AddressKind, AddressKinds, BranchFacts, ResolvedFilters, SqlFragment,
+    build_address_predicate_on_m, contacts_recipient_branch, contacts_sender_branch,
+    escape_like_pattern, link_scope_fragment, matching_contacts_cte_body, push_contact_group,
 };
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -79,6 +79,7 @@ fn group<'a>(literals: Vec<(AddressKind, &'a Email)>, resolved: &'a ResolvedFilt
 pub(super) fn build(
     literals: Vec<(AddressKind, &Email)>,
     resolved: &ResolvedFilters,
+    facts: BranchFacts,
     link_scope: Option<&[Uuid]>,
 ) -> (Vec<(String, SqlFragment)>, Vec<SqlFragment>) {
     let Groups {
@@ -95,7 +96,7 @@ pub(super) fn build(
                 link_scope,
             ),
             &kinds,
-            resolved,
+            facts,
             link_scope,
             &mut contact_ctes,
             &mut branches,
@@ -107,13 +108,13 @@ pub(super) fn build(
     for (kinds, members) in memberships {
         if !members.contact_ids.is_empty() {
             if kinds.sender {
-                branches.push(contacts_sender_branch(&members.contact_ids, resolved));
+                branches.push(contacts_sender_branch(&members.contact_ids, facts));
             }
             if kinds.any_recipient() {
                 branches.push(contacts_recipient_branch(
                     &members.contact_ids,
                     &kinds,
-                    resolved,
+                    facts,
                 ));
             }
         }
@@ -122,7 +123,7 @@ pub(super) fn build(
             push_contact_group(
                 contact_query,
                 &kinds,
-                resolved,
+                facts,
                 link_scope,
                 &mut contact_ctes,
                 &mut branches,
@@ -194,10 +195,18 @@ pub(super) fn message_predicate(
         }
         if !members.domains.is_empty() {
             if kinds.sender {
-                predicates.push(message_domains(&members.domains, None));
+                predicates.push(message_domains(
+                    &members.domains,
+                    None,
+                    resolved.text_match_links(),
+                ));
             }
             if kinds.any_recipient() {
-                predicates.push(message_domains(&members.domains, Some(kinds)));
+                predicates.push(message_domains(
+                    &members.domains,
+                    Some(kinds),
+                    resolved.text_match_links(),
+                ));
             }
         }
     }
@@ -207,7 +216,11 @@ pub(super) fn message_predicate(
         .unwrap_or_else(|| SqlFragment::raw("FALSE"))
 }
 
-fn message_domains(domains: &[String], recipients: Option<AddressKinds>) -> SqlFragment {
+fn message_domains(
+    domains: &[String],
+    recipients: Option<AddressKinds>,
+    link_scope: Option<&[Uuid]>,
+) -> SqlFragment {
     let mut predicate = match recipients {
         None => SqlFragment::raw(
             "EXISTS (SELECT 1 FROM email_contacts c WHERE c.id = m.from_contact_id AND ",
@@ -219,6 +232,8 @@ fn message_domains(domains: &[String], recipients: Option<AddressKinds>) -> SqlF
     };
     predicate.push_raw("LOWER(SPLIT_PART(c.email_address, '@', 2)) = ANY(");
     predicate.extend(SqlFragment::bind_string_array(domains.to_vec()));
-    predicate.push_raw("))");
+    predicate.push_raw(")");
+    predicate.extend(link_scope_fragment("c", link_scope));
+    predicate.push_raw(")");
     predicate
 }

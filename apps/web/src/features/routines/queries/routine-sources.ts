@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
+import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { readEntityAppearance } from '../../entity-appearance/core/appearance';
@@ -7,6 +8,7 @@ import type {
   RoutineCreatorSource,
   RoutineDetailSource,
   RoutineListSource,
+  RoutineRowOperations,
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
@@ -24,6 +26,7 @@ import {
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
+  fetchChildren,
   invalidateSchedules,
   useChildrenQuery,
   useCodeUpgradesQuery,
@@ -251,5 +254,95 @@ export function createRoutineListSource(
     pendingId: () =>
       toggle.isPending ? toggle.variables?.scheduleId : undefined,
     setEnabled: (id, enabled) => toggle.mutate({ scheduleId: id, enabled }),
+  };
+}
+
+type RowOperationCallbacks = {
+  /** Which operation failed, for the host to say so. */
+  onError(operation: 'run' | 'duplicate' | 'keep', error: unknown): void;
+  onRunStarted(): void;
+  onDuplicated(id: string): void;
+  /** The sub-routine became the owner's own routine. */
+  onKept(): void;
+};
+
+/**
+ * One request per routine at a time, for several routines at once: a mutation's
+ * own `isPending` and `variables` cover only its latest call.
+ */
+function createPerRoutineMutation(mutate: (id: string) => Promise<unknown>) {
+  const [pending, setPending] = createSignal<readonly string[]>([]);
+  const settle = async (id: string) => {
+    // The mutation's own callbacks report how it went.
+    await ResultAsync.fromPromise(mutate(id), (error) => error);
+    setPending((ids) => ids.filter((other) => other !== id));
+  };
+  return {
+    start(id: string) {
+      if (pending().includes(id)) return;
+      setPending((ids) => [...ids, id]);
+      fireAndForget(settle(id), 'routines');
+    },
+    pending: (id: string) => pending().includes(id),
+  };
+}
+
+/**
+ * What the list's row menus do, over the list's own queries: routines and
+ * sub-routines both, since either can be a row.
+ */
+export function createRoutineRowOperations(
+  callbacks: RowOperationCallbacks
+): RoutineRowOperations {
+  const list = useSchedulesQuery(() => true);
+  const children = useSubRoutinesQuery(() => true);
+  const find = (id: string) =>
+    (list.isSuccess || list.isError ? list.data : undefined)?.find(
+      (item) => item.id === id
+    ) ??
+    (children.isSuccess || children.isError ? children.data : undefined)?.find(
+      (item) => item.id === id
+    );
+  const run = useRunScheduleNowMutation({
+    onSuccess: () => callbacks.onRunStarted(),
+    onError: (error) => callbacks.onError('run', error),
+  });
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) => callbacks.onError('duplicate', error),
+    },
+    'duplicate'
+  );
+  const keep = useDetachScheduleMutation({
+    onSuccess: () => callbacks.onKept(),
+    onError: (error) => callbacks.onError('keep', error),
+  });
+  const running = createPerRoutineMutation((id) =>
+    run.mutateAsync({ scheduleId: id })
+  );
+  const duplicating = createPerRoutineMutation(async (id) => {
+    const schedule = find(id);
+    const body = schedule && scheduleToDuplicateBody(schedule);
+    if (body) await duplicate.mutateAsync({ body });
+  });
+  const keeping = createPerRoutineMutation((id) =>
+    keep.mutateAsync({ scheduleId: id })
+  );
+  return {
+    entity(id) {
+      const schedule = find(id);
+      return schedule ? scheduleToEntity(schedule) : undefined;
+    },
+    run: running.start,
+    runPending: running.pending,
+    duplicate: duplicating.start,
+    keepAsOwn: keeping.start,
+    async createdCount(id) {
+      const created = await fetchChildren(id);
+      return created.isOk() ? created.value.length : undefined;
+    },
   };
 }

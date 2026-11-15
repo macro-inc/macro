@@ -269,3 +269,18 @@ pub struct ItemGroupingInfo<T = (), Bin = String> {
     /// The Soup item.
     pub item: SoupItem<T>,
 }
+
+impl<T, Bin> ItemGroupingInfo<T, Bin> {
+    /// The same placement with the item's extra fields replaced.
+    pub fn map_extra<U>(self, f: impl FnOnce(T) -> U) -> ItemGroupingInfo<U, Bin> {
+        ItemGroupingInfo {
+            key: self.key,
+            total_group_count: self.total_group_count,
+            index_in_group: self.index_in_group,
+            sort_key: self.sort_key,
+            display_order: self.display_order,
+            document_server_facts: self.document_server_facts,
+            item: self.item.map_extra(f),
+        }
+    }
+}

@@ -138,6 +138,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 
+    /// Highest grant on each of `ids` for the caller's current sharing
+    /// sources, reading only those pipelines' grants. Pipelines without a
+    /// grant are left out.
+    fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a database.
     fn get_database_access(
         &self,
@@ -832,6 +841,13 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+    /// Highest effective grant on each of `ids` the user can access, without
+    /// reading their other pipelines.
+    fn pipelines_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 }
 
 /// Resolves the current users of many entities of one type at once.
