@@ -123,7 +123,7 @@ export default function HomepageCrm(props: { paused?: boolean } = {}) {
     <div class="homepage-crm workspace-demo">
       <DocsGraphicFrame>
         <div class="homepage-crm-header">
-          <span class="homepage-crm-title">Deal pipeline</span>
+          <span class="homepage-crm-title">Deals</span>
           <div
             class="homepage-crm-controls"
             role="img"

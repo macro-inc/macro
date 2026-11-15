@@ -2,6 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
+- `bun run test` keeps a module cache in `.cache/vitest-modules` that keeps resolved import paths across a rename: delete that directory when tests fail with `Cannot find module` naming a file's old path.
 - `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
@@ -216,9 +217,18 @@ During iterative visual tweaks, use focused browser verification; defer full typ
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Give browser fixtures the app's viewport metadata and assert the CSS viewport width when verifying phone layouts; mobile device emulation can otherwise retain a desktop layout viewport.
+
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+
+A project's Tasks header keeps search, filters, Add existing tasks and New task on
+screen at 320–430px phone widths, with search closed and open, by collapsing both
+actions to icons and narrowing the open search on phones only; tablet and desktop
+keep the labels. Its backend-free regression renders the real row with a stand-in
+for the task filters (the real phone filter trigger, one button on desktop):
+`bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
@@ -281,8 +291,18 @@ Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body
 reserved from `previewData.poll.optionCount`, keeps that height through load,
-and never scrolls or clips inside:
+and never scrolls or clips inside. With the real form block held suspended,
+the card shows the form's loading skeleton (`FormBlockLoading`, which needs no
+effect to appear), then after ten seconds "Couldn’t load this form." with
+Reload; that state also logs `form.card.stalled`, which the test doesn't check:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
+
+Contact mention chips (`<m-contact-mention>`, which agents write) are one
+unbreakable box, so a long address truncates at the message width instead of
+scrolling the channel sideways, and the hover card wraps it whole. The
+backend-free regression mounts the real message body on desktop, a narrow
+split, and phone:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts contact-mention.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
@@ -352,6 +372,11 @@ react, and edit or delete their own messages.
 Signed-out meeting guests get initial avatars in tiles and the roster; do not
 mount account profile-picture queries for them.
 
+A channel's request-to-join row keeps the height it mounted at through loading
+and every answer, on desktop and phone, and wraps from the requester name stored on
+the event (backend-free):
+`bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
+
 Channel history keeps the message being read in place when a split opens or
 closes beside the channel (the pane rewraps every message); the backend-free
 regression over the production `ThreadList` is
@@ -361,10 +386,13 @@ Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
 Inviting an agent teammate from Team → Members (People | Agent in Invite to
-Team, behind `enable-agent-teammates`), Bring your AI for its new computer
-(skipped, and signed in), its row's Setting up → Running status, its row's
-Claude sign-in and switch back to credits, and its removal have a backend-free browser regression at desktop 1440 and
-phone 390 over a scripted auth service. It launches Chromium with
+Team, behind `enable-agent-teammates`): the dialog closing with its notice, a
+refused invite's error in view, its row's Setting up step → Running and failed
+Retry, the ready and failed notifications (Message, Bring your AI for admins
+only, Retry), Bring your AI with Close, its row's Claude sign-in and switch
+back to credits, the DM status banner, and its removal have a backend-free
+browser regression at desktop 1440 and phone 390 over a scripted auth
+service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It launches Chromium with
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
@@ -668,6 +696,13 @@ The backend-free desktop/phone/tablet regression is
 `bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 
 ## Development Patterns
+
+CRM pipeline schema adapters supply `currencyColumnId`, `fixedOptions` and
+`defaultValue` to the shared database editor. Pass the complete row to cell
+formatting and group monetary calculations by currency; CSV keeps amounts and
+currency codes in separate columns. See the [outcome/currency design](../../docs/design/crm-outcome-currency.md).
+Keep locale-aware money input separate from strict first-entry inference, and
+exclude non-nullable fields from bulk clearing.
 
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
@@ -978,8 +1013,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
   Tasks, and Projects headers: title, filters, view options, New, expandable Search.
   Render project collection titles with `ViewSidebar.Title caret={false}`; keep
-  individual project names and touch pickers unchanged. Put sidebar search in
-  `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
+  individual project names and touch pickers unchanged. Give a sidebar a
+  search field only when the sidebar is the list it searches (Home, Chat, Agents),
+  in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
+  New; a view with a list header searches from `ListHeaderSearch` alone.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1048,7 +1085,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
-- Keep call layout in desktop `CallMoreMenu`; mirror participant visibility on the shared-screen edge, omit that edge toggle in Grid, and reset visibility when sharing ends. Desktop tile pins take Speaker placement unless Sidebar is selected, without changing saved Layout; keep every participant and share track mounted when moving tiles and clear stale pins when their source disappears. Phones stay on Auto; reserve phone pinning for long-press, not taps.
+- Keep call layout in desktop `CallMoreMenu`; mirror participant visibility on the shared-screen edge, omit that edge toggle in Grid, and reset visibility when sharing ends. Desktop tile pins take Speaker placement unless Sidebar is selected, without changing saved Layout; keep every participant and share track mounted when moving tiles and clear stale pins when their source disappears. Share the call-owned pin with the desktop mini-player regardless of Layout; unpinning or losing its source restores automatic selection immediately. Phones stay on Auto; reserve phone pinning for long-press, not taps.
 - Keep `CallWaveform` static except for the current call's desktop chat-sidebar row, channel-header duration pill and app-rail item; pass `live` and the matching room identity only there. Live marks follow speech and reduced motion; phones stay static. Preserve AvatarGroup separator rings with inset speaking outlines and keep phone icons for call actions.
 - Keep call full screen scoped to its call root; mount call menus locally and keep tooltips in their owning fullscreen element.
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
@@ -1115,13 +1152,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Compile each by-ID batch's filter once per membership change and reuse it through loading and notification updates.
   Keep legacy `/channel-labels` and flagged `/channel-sections` queries in separate account-scoped caches; invalidate both after shared-storage writes and refetch authoritative memberships rather than patching explicit picks as effective membership.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
   Create flagged sections in the shared section dialog after the initiating menu closes, append them before All channels without re-sorting existing sections, and reveal the new heading; use the same dialog for Edit section instead of separate rename and rule editors. Keep Only me/current-team visibility as exclusive checkbox choices. Pass the verified current team ID to desktop and phone sharing even when the team has no sections. Preserve the original dialogs when the sidebar flag is off, section identity during scope changes, complete membership eligibility checks, and one unsharing confirmation.
   Offer Add channels on editable manual custom-section headers and empty states through a height-bounded anchored picker with a full-width top search, scrollable results, and no visible title or description; retain joined-channel eligibility. Give empty sections a short explanation and adjacent primary/secondary actions, hiding editing actions without verified access. On phones, stack the shared selection body in `PickerSheet`, keep search focus while choosing, and apply only on Done.
   Combine section name and name-rule editing in Edit section on desktop and phone; show Name contains, a live match preview and count, and dimmed unjoined matches. Warn before replacing existing hand-picked channels and label the save action Replace channel list. Keep manual picks and name rules exclusive, block manual additions to rule sections, and keep preview queries reactive to the selected scope without reporting pending matches as empty.
-  Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
+  Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section. Memoize the mobile section result and index effective member IDs once per evaluation; never scan the reactive member array for every conversation.
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged. Retain pointer hit-testing coordinates until the drag sensor finishes so intervening scroll updates cannot discard a valid drop.
   Share section click and context menu controls with menu-local loading boundaries; use DropdownMenu.Content for click-menu roots and keep Mark all as read scoped to complete membership. Hide unavailable section edits and scope transfers. Name the personal filter submenu Display, retain trailing sort checks, and keep Unread only and default-on Unread when collapsed switches open when toggled. Supplement off-page unread rows only in collapsed groups whose Unread when collapsed preference is enabled; preserve expanded groups' page order.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
@@ -1164,6 +1202,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+  Keep predicate failure recovery generic: bound stale reads, retain same-scope rows, hydrate only missing identities, and preserve revision/generation fences; projection selection must not change recovery policy.
 - Reconcile cached Mail pages with same-query server membership; missing local
   previews are unknown, not proof that a fetched email left the inbox. Keep
   local pagination cursors independent of retained server rows. Preserve live

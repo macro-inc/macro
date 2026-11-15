@@ -234,7 +234,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
           const x1 =
             ((left ? a.right + 14 : a.left - 14) - bounds.left) * scale;
           const y1 = (a.top + a.height / 2 - bounds.top) * scale;
-          const x2 = ((left ? b.left - 8 : b.right + 8) - bounds.left) * scale;
+          const x2 = ((left ? b.left - 8 : b.right + 10) - bounds.left) * scale;
           const y2 = (b.top + b.height / 2 - bounds.top) * scale;
           const firstBend = x1 + (x2 - x1) * 0.25;
           const secondBend = x1 + (x2 - x1) * 0.75;
@@ -492,9 +492,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
             {(pointer) => (
               <g data-highlighted={highlighted() === pointer().id}>
                 <path d={pointer().path} pathLength="1" />
-                <polygon
-                  points={`${pointer().x},${pointer().y - 3} ${pointer().x + 3},${pointer().y} ${pointer().x},${pointer().y + 3} ${pointer().x - 3},${pointer().y}`}
-                />
+                <circle cx={pointer().x} cy={pointer().y} r={2.55} />
               </g>
             )}
           </Index>

@@ -170,9 +170,11 @@ read their code, and follow that pattern rather than inventing a new one.
 - Suspense wraps content, never the router or chrome, with `ContentLoading`
   as the fallback; otherwise phones go blank.
 - Keep mobile views minimal: a control appears on mobile only when the
-  mobile view adds it. A detail header is Back, the title with its menu, and
-  Info; put other actions in the title menu or a sheet so they stay
-  reachable. Drop a feature on phones only when it is desk work (API keys).
+  mobile view adds it. A new detail header is Back, the title with its menu,
+  and Info; put other actions in the title menu or a sheet so they stay
+  reachable. A header split from a shared one keeps the islands it had,
+  listed in its mobile view, until someone decides to remove them. Drop a
+  feature on phones only when it is desk work (API keys).
 
 ## Platform pitfalls
 

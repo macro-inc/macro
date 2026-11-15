@@ -56,6 +56,8 @@ export function ClaudeSignInFlow(props: {
   title?: string;
   /** Guided setup's step header and progress, above the title. */
   header?: JSX.Element;
+  /** Closes the host dialog; absent where the host has its own way out. */
+  onClose?: () => void;
 }) {
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
@@ -225,6 +227,13 @@ export function ClaudeSignInFlow(props: {
         </Show>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
+        <Show when={props.onClose}>
+          {(close) => (
+            <Button type="button" variant="ghost" onClick={close()}>
+              {t('common.close')}
+            </Button>
+          )}
+        </Show>
         {/* Offered at every step, failed ones too; not while a pasted code is
             being checked, which may still sign the computer in. */}
         <Show when={props.onUseCredits}>

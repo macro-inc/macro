@@ -27,3 +27,12 @@
   .macro-home-hero .homepage-open-source-badges { min-height: 206.25px; }
   .macro-home-hero .homepage-open-source-badges span { font-size: 8px; }
 }
+
+/* Keep equal visual clearance from the centered mobile connector. */
+@media (max-width: 699px) {
+  .macro-home-hero .homepage-open-source-badges { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; }
+  .macro-home-hero .homepage-open-source-backing { justify-self: end; }
+  .macro-home-hero .homepage-open-source-security { justify-self: start; }
+  .macro-home-hero .homepage-open-source-backing > svg { align-self: flex-end; }
+  .macro-home-hero .homepage-open-source-security > div { align-self: flex-start; }
+}

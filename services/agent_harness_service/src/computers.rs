@@ -26,10 +26,11 @@ use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
 use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
-use hosted_runtimes::outbound::pg::PgComputerRepo;
+use hosted_runtimes::outbound::pg::{PgComputerAgents, PgComputerRepo};
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -57,6 +58,19 @@ const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// sign-in or sign-out made on the computer itself.
 const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
+/// The harness service over the harness table, marking agent teammates'
+/// computers from the computer table.
+pub type PgHarnessService =
+    HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo, PgComputerAgents>;
+
+/// [`PgHarnessService`] over `pool`.
+pub fn harness_service(pool: &PgPool) -> PgHarnessService {
+    HarnessServiceImpl::new(
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+        PgComputerAgents::new(pool.clone()),
+    )
+}
+
 /// The notification ingress the operator's setup notices go through.
 pub type SetupNotifications =
     notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
@@ -66,7 +80,7 @@ pub type Operator = ComputerOperator<
     ConfiguredFleet,
     HostedHarnesses,
     SystemClock,
-    setup_notice::IngressSetupNotices<SetupNotifications>,
+    setup_notice::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
 
 /// Build the operator from explicit config, or `None` when this deployment
@@ -159,7 +173,7 @@ pub(crate) async fn operator(
             service: harnesses,
             default_agents,
         },
-        setup_notice::IngressSetupNotices::new(notifications),
+        setup_notice::IngressSetupNotices::new(notifications, PgTeamAgentsRepo::new(pool.clone())),
         SystemClock,
         Arc::new(ServiceDeployment),
     )
@@ -253,8 +267,7 @@ pub struct ClaudeSignInWatch<Ingress> {
 }
 
 /// [`harnessd::Harnessd`] over the harness table.
-pub type HostedHarnessd =
-    harnessd::Harnessd<HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+pub type HostedHarnessd = harnessd::Harnessd<PgHarnessService>;
 
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
@@ -534,11 +547,7 @@ pub struct ComputerPresence<Inner> {
 }
 
 /// [`sign_in_ahead::SignInAhead`] over the harness table.
-pub type SignInAheadHandle = Arc<
-    sign_in_ahead::SignInAhead<
-        HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>,
-    >,
->;
+pub type SignInAheadHandle = Arc<sign_in_ahead::SignInAhead<PgHarnessService>>;
 
 impl<Inner> ComputerPresence<Inner> {
     pub fn new(

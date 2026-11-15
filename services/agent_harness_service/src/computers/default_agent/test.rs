@@ -6,8 +6,6 @@ use bots::domain::service::BotServiceImpl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::HarnessService;
-use harnesses::domain::service::HarnessServiceImpl;
-use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use hosted_runtimes::domain::ids::{ComputerId, HostId};
 use hosted_runtimes::domain::lifecycle::ComputerState;
 use hosted_runtimes::domain::models::{Computer, ComputerName};
@@ -79,7 +77,7 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     .unwrap();
 
     let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
-    HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))
+    crate::computers::harness_service(&pool)
         .create_hosted_pairing(CreateHostedPairing {
             team_id,
             name: "Ada".to_owned(),
@@ -128,8 +126,14 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     (computer_id, HarnessId::new_from_uuid(harness))
 }
 
-fn bots(pool: &PgPool) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker> {
-    BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
+fn bots(
+    pool: &PgPool,
+) -> BotServiceImpl<PgBotsRepo, NoopMacroEventBroker, crate::computers::PgHarnessService> {
+    BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::computers::harness_service(pool),
+    )
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -304,7 +308,7 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         image: None,
     };
     let harnesses = HostedHarnesses {
-        service: Arc::new(HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))),
+        service: Arc::new(crate::computers::harness_service(&pool)),
         default_agents: Arc::new(agents),
     };
     let computers = PgComputerRepo::new(
@@ -391,7 +395,7 @@ async fn any_teammate_can_run_agents_on_a_team_computer(pool: PgPool) {
     let (_, harness_id) = team_computer(&pool, team_id).await;
     let teammate = MacroUserIdStr::try_from(TEAMMATE.to_owned()).unwrap();
 
-    let usable = HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))
+    let usable = crate::computers::harness_service(&pool)
         .list_harnesses(teammate.clone())
         .await
         .unwrap();

@@ -63,6 +63,10 @@ machine name, and writes the forwarder's token file; `xtask_local`'s
 - Fields are structured metadata, not labels: only `service_name` and
   `deployment_environment` index the stream. Group metadata quantiles with an
   explicit `by (...)` (see `infra/stacks/observability/README.md`).
+- A run's trace id is its `run_id` (dashboards open a run's trace from it),
+  and span ids are derived from it, so resends make the same spans. A span key
+  (`Event::span`) must be unique within its run; `Event::under` names a parent
+  by that key.
 
 ## Related
 

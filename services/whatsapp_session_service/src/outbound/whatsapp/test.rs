@@ -130,7 +130,8 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
                 whatsapp.dialer(),
                 Some(whatsapp.media_base_url()),
                 Duration::from_secs(10),
-            ),
+            )
+            .unwrap(),
             copies,
         },
         AccountConfig {
@@ -139,6 +140,11 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
             tick_every: Duration::from_secs(600),
             groups_refresh_interval: crate::domain::account::GROUPS_REFRESH_INTERVAL,
             backfill_timeout: crate::domain::account::BACKFILL_TIMEOUT,
+            pictures: crate::domain::pictures::PicturePacing {
+                spacing: Duration::from_secs(3),
+                warmup: Duration::from_secs(600),
+                backoff: Duration::from_secs(900),
+            },
         },
     ));
     let (_signals, signal_receiver) = mpsc::channel(8);
@@ -264,7 +270,8 @@ async fn attachments_travel_both_ways_with_a_sealed_locator(pool: PgPool) {
         whatsapp.dialer(),
         Some(whatsapp.media_base_url()),
         Duration::from_secs(10),
-    );
+    )
+    .unwrap();
     let (inbound, mut received) = mpsc::unbounded_channel();
     let (session, mut events) = connector
         .open(scope, false, Arc::new(RecordingSink(inbound)))
@@ -486,6 +493,7 @@ async fn a_fresh_device_replaces_one_whose_data_key_kms_lost(pool: PgPool) {
             Some(whatsapp.media_base_url()),
             Duration::from_secs(10),
         )
+        .unwrap()
     };
     let (sink, _received) = mpsc::unbounded_channel();
     let sink: Arc<dyn InboundSink> = Arc::new(RecordingSink(sink));

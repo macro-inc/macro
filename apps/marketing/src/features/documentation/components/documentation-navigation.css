@@ -1,3 +1,4 @@
+:root { --documentation-nav-width: 241px; }
 .site-documentation-header { --doc-nav-background: #000; }
 .site-header.site-documentation-header { left: 20px; }
 html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f5f1e8; }
@@ -12,7 +13,7 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
 .site-documentation-header .site-menu::after { display: none; }
 .documentation-navigation {
   --nav-muted: color-mix(in srgb, var(--nav-ink) 60%, var(--doc-nav-background));
-  position: fixed; inset: 0 auto 0 0; width: 241px; z-index: 1;
+  position: fixed; inset: 0 auto 0 0; width: var(--documentation-nav-width); z-index: 1;
   padding: 0; box-sizing: border-box;
   background: var(--doc-nav-background); border: 0; border-right: 1px solid color-mix(in srgb, var(--nav-ink) 7%, transparent);
   opacity: 0; visibility: hidden; transform: translateX(-100%); pointer-events: none;
@@ -51,9 +52,9 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
   #app-scroll-root { transition: padding-left 440ms cubic-bezier(.22,1,.36,1); }
   .macro-homepage > .macro-home-scroll,
   .onboarding-flow > [data-onboarding-scroll] { margin-left: 0; width: 100%; transition: margin-left 440ms cubic-bezier(.22,1,.36,1), width 440ms cubic-bezier(.22,1,.36,1); }
-  #app-scroll-root:has(.site-documentation-header) { padding-left: calc(241px / var(--site-scale, 1)); }
+  #app-scroll-root:has(.site-documentation-header) { padding-left: calc(var(--documentation-nav-width) / var(--site-scale, 1)); }
   .macro-homepage:has(.site-documentation-header) > .macro-home-scroll,
-  .onboarding-flow:has(.site-documentation-header) > [data-onboarding-scroll] { margin-left: 241px; width: calc(100% - 241px); }
+  .onboarding-flow:has(.site-documentation-header) > [data-onboarding-scroll] { margin-left: var(--documentation-nav-width); width: calc(100% - var(--documentation-nav-width)); }
 }
 @media (prefers-reduced-motion:reduce) {
   .documentation-navigation, #app-scroll-root, .macro-homepage > .macro-home-scroll, .onboarding-flow > [data-onboarding-scroll] { transition: none; }
@@ -89,3 +90,8 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
 .doc-nav-group > a, .doc-nav-products > a { margin: 0 0 0 8px; padding-left: 12px; border-left: 1px solid color-mix(in srgb, var(--nav-ink) 10%, transparent); }
 .doc-nav-group > a:hover, .doc-nav-products > a:hover { border-left-color: var(--nav-muted); }
 .doc-nav-group > a[aria-current=page], .doc-nav-products > a[aria-current=page] { border-left-color: var(--nav-ink); }
+
+@media (min-width: 768px) and (max-width: 1439px) {
+  :root { --documentation-nav-width: 200px; }
+  .doc-nav-scroll { padding-inline: 16px 12px; }
+}

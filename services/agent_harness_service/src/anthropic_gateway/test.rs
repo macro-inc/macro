@@ -499,6 +499,7 @@ mod brain_route {
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
     const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
+    const CREATOR: &str = "macro|admin@macro.com";
     const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 
     /// Knows exactly one agent key.
@@ -515,24 +516,38 @@ mod brain_route {
         }
     }
 
-    /// Agent teammates on for [`AGENT`].
-    fn agent_teammates_on() -> BrainRollout {
+    /// Agent teammates on or off for [`CREATOR`], who invited [`AGENT`], and
+    /// the other way round for the agent's own account.
+    fn rollout_for_creator(on: bool) -> BrainRollout {
+        let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+        let creator = MacroUserIdStr::parse_from_str(CREATOR)
+            .unwrap()
+            .into_owned();
+        let mut creators = agent_credentials::FakeAgentCreators::default();
+        creators.set(agent.clone(), creator.clone());
         let mut flags = FakeFeatureFlags::default();
         flags.set(
-            MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
+            creator,
             Ok(FlagSnapshot::new([(
                 agent_credentials::AGENT_TEAMMATES_FLAG.into(),
-                FlagValue::Boolean(true),
+                FlagValue::Boolean(on),
             )])),
         );
-        BrainRollout::new(flags)
+        flags.set(
+            agent,
+            Ok(FlagSnapshot::new([(
+                agent_credentials::AGENT_TEAMMATES_FLAG.into(),
+                FlagValue::Boolean(!on),
+            )])),
+        );
+        BrainRollout::new(creators, flags)
     }
 
     async fn brain_gateway(
         upstream_url: &str,
         brains: Option<Arc<dyn BrainAuthenticator>>,
     ) -> (Router, Arc<RecordingUsage>) {
-        brain_gateway_with(upstream_url, brains, agent_teammates_on()).await
+        brain_gateway_with(upstream_url, brains, rollout_for_creator(true)).await
     }
 
     async fn brain_gateway_with(
@@ -586,12 +601,12 @@ mod brain_route {
     }
 
     #[tokio::test]
-    async fn with_agent_teammates_off_for_the_agent_its_brain_is_refused() {
+    async fn with_agent_teammates_off_for_its_creator_an_agents_brain_is_refused() {
         let (upstream_url, seen) = fake_anthropic().await;
         let (app, usage) = brain_gateway_with(
             &upstream_url,
             Some(Arc::new(OneAgent)),
-            BrainRollout::new(FakeFeatureFlags::default()),
+            rollout_for_creator(false),
         )
         .await;
 

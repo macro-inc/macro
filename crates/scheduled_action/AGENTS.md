@@ -79,9 +79,12 @@ each run.
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send. `bench/`
-  times drafting on a local stack against the live model, phase by phase,
-  and checks the drafts (see its README); rerun it when changing the brief
-  or the wait.
+  is the drafting eval: 20 requests on a seeded workspace, drafted by Draft
+  it and by a bare agent session on a local stack against the live model,
+  timed phase by phase and checked three ways (the draft's shape, one run of
+  the routine, a blind judge); `compare` says win, loss or noise against a
+  baseline (see its README). Run it before and after a change to the brief,
+  the wait or anything else on the drafting path.
 - `src/domain/drafts/jobs.rs` + `src/inbound/draft_job_router.rs`:
   background drafts, the same drafter without the waiting request. `POST
   /scheduled-actions/draft-jobs` validates the request and waits only for

@@ -833,7 +833,12 @@ pub async fn run() -> anyhow::Result<()> {
         public_code_mode,
         feature_flags
             .clone()
-            .map(anthropic_gateway::brain::BrainRollout::new)
+            .map(|flags| {
+                anthropic_gateway::brain::BrainRollout::new(
+                    agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                    flags,
+                )
+            })
             .unwrap_or_default(),
     )
     .await
@@ -1044,7 +1049,6 @@ pub async fn run() -> anyhow::Result<()> {
     let inmem_model_access: Arc<dyn agent_inmem::domain::model_access::InMemModelAccess> = Arc::new(
         agent_inmem::domain::model_access::PermissionModelAccess::new(
             roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-                permissions_repo.clone(),
                 permissions_repo,
             ),
         ),
@@ -1387,13 +1391,12 @@ pub async fn run() -> anyhow::Result<()> {
         &config,
         computer_fleet,
         &pool,
-        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
-            PgHarnessRepo::new(pool.clone()),
-        )),
+        Arc::new(computers::harness_service(&pool)),
         Arc::new(computers::default_agent::BotDefaultAgents::new(
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 broker.clone(),
+                computers::harness_service(&pool),
             ),
             PgBotsRepo::new(pool.clone()),
             pool.clone(),
@@ -1404,10 +1407,16 @@ pub async fn run() -> anyhow::Result<()> {
     let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
         anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
     );
-    // Both brain routes serve only agents with agent teammates on.
+    // Both brain routes serve only agents with agent teammates on for their
+    // creator.
     let brain_rollout = feature_flags
         .clone()
-        .map(anthropic_gateway::brain::BrainRollout::new)
+        .map(|flags| {
+            anthropic_gateway::brain::BrainRollout::new(
+                agent_credentials::rollout::PgAgentCreators::new(pool.clone()),
+                flags,
+            )
+        })
         .unwrap_or_default();
     let speech = Arc::new(speech_gateway::SpeechGateway::new(
         brains.clone(),
@@ -1451,9 +1460,7 @@ pub async fn run() -> anyhow::Result<()> {
             None => Arc::new(computers::harnessd::NoFleet),
         },
         Arc::new(computers::harnessd::PgComputerLocks::new(&pool)),
-        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
-            PgHarnessRepo::new(pool.clone()),
-        )),
+        Arc::new(computers::harness_service(&pool)),
     );
     if let Some(operator) = &computer_operator {
         // Only fails if set twice, which this one startup never does.
@@ -1550,6 +1557,7 @@ pub async fn run() -> anyhow::Result<()> {
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
+                computers::harness_service(&pool),
             ),
             PgBotsRepo::new(pool.clone()),
             session_repo.clone(),
@@ -1784,7 +1792,7 @@ pub async fn run() -> anyhow::Result<()> {
         agent_harness::inbound::capability_discovery::AgentCapabilitiesRouterState::new(
             Arc::new(
                 agent_harness::domain::capability_discovery::AgentCapabilitiesServiceImpl::new(
-                    VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+                    VisibleHarnessAccess::new(computers::harness_service(&pool)),
                     InMemoryModels::new(
                         Some(Arc::clone(&inmem_model_engine)),
                         config.inmem_model.clone(),
@@ -1799,7 +1807,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let model_service = Arc::new(AgentModelsServiceImpl::new(
-        VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+        VisibleHarnessAccess::new(computers::harness_service(&pool)),
         InMemoryModels::new(
             Some(inmem_model_engine),
             config.inmem_model.clone(),
@@ -1848,7 +1856,10 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
+    let bots_directory = Arc::new(PgBotDirectory::new(
+        PgBotsRepo::new(pool.clone()),
+        computers::harness_service(&pool),
+    ));
     let create_state = CreateSessionState::new(
         harness.clone(),
         bots_directory.clone(),
@@ -1880,6 +1891,7 @@ pub async fn run() -> anyhow::Result<()> {
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 broker.clone(),
+                computers::harness_service(&pool),
             ),
             PgHarnessRepo::new(pool.clone()),
             pool.clone(),
@@ -1902,9 +1914,7 @@ pub async fn run() -> anyhow::Result<()> {
     );
     let computer_claude = computers::claude::router(
         harnessd.clone(),
-        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
-            PgHarnessRepo::new(pool.clone()),
-        )),
+        Arc::new(computers::harness_service(&pool)),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         feature_flags
             .clone()

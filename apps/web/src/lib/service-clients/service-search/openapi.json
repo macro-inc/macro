@@ -4799,7 +4799,7 @@
           },
           "query": {
             "type": "string",
-            "description": "The search query string. Must be at least 3 characters."
+            "description": "The search query string. Must not be empty; one character is enough."
           },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",

@@ -59,6 +59,8 @@ fragment CrmPipelineEntryFields on GraphqlCrmPipelineEntry {
       isMultiSelect
       specificEntityType
       writable
+      currencyColumnId
+      systemDefault
       options {
         __typename
         id

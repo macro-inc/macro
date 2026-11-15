@@ -9,7 +9,6 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsivePermissionsBadge,
-  ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
 import {
   BlockSplitFileMenu,
@@ -27,6 +26,7 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
+import { ToolButton } from '@components/app/tool-button';
 import { useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,

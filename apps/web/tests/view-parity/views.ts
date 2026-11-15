@@ -8,7 +8,14 @@ export type ParityView = {
   /** Resolves once the view shows its content. */
   ready: (page: Page) => Promise<void>;
   /** States captured after the first, each compared too. */
-  states: { name: string; go: (page: Page) => Promise<void> }[];
+  states: ParityState[];
+};
+
+export type ParityState = {
+  name: string;
+  /** Set for a step only a touch device can take, such as tapping the title. */
+  only?: 'touch';
+  go: (page: Page) => Promise<void>;
 };
 
 /** Presses as the device would: a tap on touch, a click otherwise. */
@@ -22,6 +29,33 @@ async function press(page: Page, target: Locator) {
 
 const firstRow = (page: Page) =>
   page.locator('[data-entity-id]').filter({ visible: true }).first();
+
+/** A list row by its visible name, from the seeded persona's starter content. */
+const rowNamed = (page: Page, name: string) =>
+  page
+    .locator('[data-entity-id]')
+    .filter({ hasText: name })
+    .filter({ visible: true })
+    .first();
+
+/** Opens a document or task from its list and waits for its editor. */
+const openDocument = (name: string) => async (page: Page) => {
+  // The name, not the row's centre, where a phone row has a tag or a date.
+  await press(page, rowNamed(page, name).getByText(name, { exact: true }));
+  // Any value: a document the person can only read has an editor that is off.
+  await expect(
+    page.locator('[contenteditable]').filter({ visible: true }).first()
+  ).toBeVisible();
+};
+
+/** Opens the title menu the way a touch header does: a tap on the title. */
+const openTitleMenu = (name: string) => async (page: Page) => {
+  const title = page.locator('[data-header-island]').filter({ hasText: name });
+  await press(page, title.first());
+  await expect(
+    page.getByRole('dialog').filter({ visible: true }).first()
+  ).toBeVisible();
+};
 
 /**
  * Add a view here when you split it. Steps use what a person would press, so
@@ -48,6 +82,45 @@ export const PARITY_VIEWS: ParityView[] = [
               .first()
           ).toBeVisible();
         },
+      },
+    ],
+  },
+  {
+    // Desktop opens the document in the Drive view; touch opens its block.
+    id: 'document',
+    path: '/drive',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Macro how to guide')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Macro how to guide') },
+      { name: 'menu', only: 'touch', go: openTitleMenu('Macro how to guide') },
+    ],
+  },
+  {
+    id: 'task',
+    path: '/tasks',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Intro to tasks')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Intro to tasks') },
+      { name: 'menu', only: 'touch', go: openTitleMenu('Intro to tasks') },
+    ],
+  },
+  {
+    // Another person's task, so the header carries the access badge.
+    id: 'shared-task',
+    path: '/tasks',
+    ready: async (page) => {
+      await expect(rowNamed(page, 'Fix the perms edge case')).toBeVisible();
+    },
+    states: [
+      { name: 'detail', go: openDocument('Fix the perms edge case') },
+      {
+        name: 'menu',
+        only: 'touch',
+        go: openTitleMenu('Fix the perms edge case'),
       },
     ],
   },

@@ -4,7 +4,7 @@ import { RuntimeAccessAction } from '@app/features/runtime-sharing/components/Ru
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { OwnerLabel } from '@entity/owner/owner-display';
-import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -26,7 +26,7 @@ export function TeammateRuntimesSection(props: {
   onRemove: (harness: RegisteredHarness) => void;
 }) {
   const userId = useUserId();
-  const directory = useHarnessDirectoryQuery();
+  const directory = useRunnableHarnessDirectoryQuery();
   const theirs = () =>
     directory.isSuccess
       ? directory.data.filter((harness) => {

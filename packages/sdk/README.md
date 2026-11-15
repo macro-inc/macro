@@ -664,6 +664,14 @@ atomic database operation contract, including batch-local UUIDs, like
 `Database.applyOps`. Table and column reads share a schema cache invalidated by
 successful batches. Call `row.refresh()` to reload a row after a batch changes it.
 
+A pipeline that tracks companies or contacts has an **Outcome** field (`Open`,
+`Won` or `Lost`, independent of Stage) and a currency field beside each
+monetary field, such as `Revenue currency`; new entries default to `Open` and
+`USD`, and neither field can be emptied. `listWithFields()` and `find()` name
+each monetary field's `currencyField`, `find()` returns one total per
+`currency` for it, never converted or combined, and an update's changes carry
+`beforeCurrency` and `afterCurrency` for a monetary field.
+
 `macro.initiatives.create/byId` groups tasks and members. Relations return user
 and task handles; `initiative.update({ name, members, sharePermission })` and
 `delete()` manage it. `initiatives.list({ query, status, priority, assignee,

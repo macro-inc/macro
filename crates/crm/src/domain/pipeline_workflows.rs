@@ -41,15 +41,16 @@ use super::{
 
 pub use fields::{FieldInput, FieldKind, FieldValue, NewFieldKind, PipelineField};
 pub use models::{
-    AddedEntries, EntryAddition, EntryQuery, EntryTarget, EntryUpdate, FieldChange, FoundEntries,
-    MAX_SCANNED_ROWS, NewField, NewPipeline, OptionCounts, PipelineEdit, PipelineEntryView,
-    PipelineOverview, RecordEntries, RecordTarget, RemovedEntries, UpdatedEntries, UpdatedEntry,
-    WorkflowError,
+    AddedEntries, EntryAddition, EntryQuery, EntryTarget, EntryUpdate, FieldChange, FieldTotal,
+    FoundEntries, MAX_SCANNED_ROWS, NewField, NewPipeline, OptionCounts, PipelineEdit,
+    PipelineEntryView, PipelineOverview, RecordEntries, RecordTarget, RemovedEntries,
+    UpdatedEntries, UpdatedEntry, WorkflowError,
 };
 pub use records::PipelineRecord;
 
 use entries::{
-    entry_view, field_values, matches_search, option_counts, record_id, totals, value_of,
+    currencies, entry_view, field_values, matches_search, option_counts, record_id, totals,
+    value_of,
 };
 use ops::{STAGE_FIELD, add_field, add_options, cells, select_field};
 
@@ -675,6 +676,7 @@ where
                             .unwrap_or_else(|| PipelineRecord::unnamed(entry.record_id)),
                     ),
                     fields: field_values(&fields, &entry.cells),
+                    currencies: currencies(&pipeline, &fields, &entry.cells),
                 };
                 match found
                     .iter_mut()
@@ -841,6 +843,10 @@ where
                         .unwrap_or_default()
                 };
                 let (old, new) = (cells_of(&before), cells_of(&after));
+                let old_currencies =
+                    currencies(&overview.pipeline.pipeline, &overview.fields, &old);
+                let new_currencies =
+                    currencies(&overview.pipeline.pipeline, &overview.fields, &new);
                 let record = overview.record_field().map(|field| {
                     record_id(new.get(&field.id))
                         .map(|id| {
@@ -856,6 +862,8 @@ where
                     .iter()
                     .filter_map(|(name, _)| overview.field(name).ok())
                     .map(|field| FieldChange {
+                        before_currency: old_currencies.get(&field.name).cloned(),
+                        after_currency: new_currencies.get(&field.name).cloned(),
                         field: field.name.clone(),
                         before: old
                             .get(&field.id)
