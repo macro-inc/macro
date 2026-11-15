@@ -14,9 +14,9 @@ use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use owned_scope::OwnedRead;
-#[cfg(test)]
-pub(crate) use owned_scope::inbox_window;
 pub(crate) use owned_scope::{OwnedReadTuning, OwnedStreams};
+#[cfg(test)]
+pub(crate) use owned_scope::{inbox_window, probes_again};
 use recursion::CollapsibleExt;
 use sqlx::postgres::PgRow;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction};

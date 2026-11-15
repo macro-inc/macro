@@ -15,6 +15,7 @@ pub(crate) use query::dynamic_email_thread_cursor;
 pub(crate) use query::{
     OwnedReadTuning, OwnedStreams, TeamReadTuning, begin_snapshot,
     dynamic_email_thread_cursor_owned_with, dynamic_email_thread_cursor_with, inbox_window,
+    probes_again,
 };
 
 // Re-export filter internals so tests.rs can reach them via `use super::*`

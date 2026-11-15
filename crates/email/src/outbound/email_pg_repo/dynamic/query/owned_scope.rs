@@ -36,7 +36,8 @@
 //!   needs at that rate and the walk so far. When the superset fits, the
 //!   superset stream finishes the page below the last walked thread; when it
 //!   doesn't, the inbox stream walks the round's window. A round probes only
-//!   with a cap [`GROWTH`] times the last one the superset outgrew.
+//!   with a cap [`GROWTH`] times the last one the superset outgrew, or once
+//!   at [`MAX_SUPERSET_CAP`] ([`probes_again`]).
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
@@ -158,6 +159,16 @@ pub(crate) fn inbox_window(query_limit: i64, window_per_row: i64) -> i64 {
     query_limit
         .saturating_mul(window_per_row)
         .clamp(1, MAX_WINDOW)
+}
+
+/// Whether a round probes the superset at `cap` after a probe at `over`
+/// came up short: only with a cap [`GROWTH`] times `over`, since a smaller
+/// one would recount most of what that probe counted, or once at
+/// [`MAX_SUPERSET_CAP`], which no cap grows past. Without that last probe,
+/// once a probe over a quarter of it came up short, a superset under it
+/// would never be read and the walk would go on to the end of the inboxes.
+pub(crate) fn probes_again(cap: i64, over: i64) -> bool {
+    cap >= over.max(1).saturating_mul(GROWTH) || (cap == MAX_SUPERSET_CAP && cap > over)
 }
 
 /// The stream a statement reads its threads from, in page order.
@@ -362,9 +373,7 @@ impl<'a> OwnedRead<'a> {
             // `left × walked / found` more threads.
             if left.saturating_mul(walked) > found.saturating_mul(window) {
                 let cap = self.tuning.round_cap(walked, found, left);
-                // A smaller cap would recount most of what the last probe
-                // counted.
-                if cap >= over.max(1).saturating_mul(GROWTH) {
+                if probes_again(cap, over) {
                     if self.superset_rows(connection, cap).await? <= cap {
                         rows.extend(
                             self.page(connection, Stream::Superset, Some(below), left)

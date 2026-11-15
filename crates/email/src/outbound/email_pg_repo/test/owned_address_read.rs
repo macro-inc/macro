@@ -11,7 +11,7 @@
 use super::*;
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::{
-    OwnedReadTuning, OwnedStreams, begin_snapshot, inbox_window,
+    OwnedReadTuning, OwnedStreams, begin_snapshot, inbox_window, probes_again,
 };
 use item_filters::NotificationState;
 use item_filters::SharedEmailFilter;
@@ -1035,4 +1035,18 @@ fn round_cap_follows_the_walk_left() {
     assert_eq!(tuning.round_cap(100, 0, 100), 5_000);
     assert_eq!(tuning.round_cap(1_000_000, 0, 100), 800_000);
     assert_eq!(tuning.round_cap(i64::MAX, 0, i64::MAX), 800_000);
+}
+
+#[test]
+fn probes_grow_and_end_at_the_most() {
+    // The first round probe needs four times the 5,000-row probe.
+    assert!(!probes_again(19_999, 5_000));
+    assert!(probes_again(20_000, 5_000));
+    // Without rows the caps go 50,000 and 250,000; past a short probe at
+    // 250,000 only the most is left.
+    assert!(probes_again(250_000, 50_000));
+    assert!(!probes_again(799_999, 250_000));
+    assert!(probes_again(800_000, 250_000));
+    // Once the most came up short, nothing probes again.
+    assert!(!probes_again(800_000, 800_000));
 }
