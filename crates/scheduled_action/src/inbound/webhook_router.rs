@@ -43,7 +43,7 @@ pub struct WebhookRouterState<W, Svc, Auth> {
     pub service: Arc<W>,
     pub access_service: Arc<Svc>,
     pub authorization_state: MacroAuthorizationState<Auth>,
-    /// Where the public route is served, such as
+    /// Where senders off Macro's network reach the public route, such as
     /// `https://gateway.macro.com/scheduled-action`; a URL is this, then
     /// `/hooks/{hook_id}/{secret}`.
     pub public_base: Arc<str>,

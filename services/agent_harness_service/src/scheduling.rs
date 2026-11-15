@@ -15,9 +15,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{
-    ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl, ScheduledActionServiceUrl,
-};
+use macro_service_urls::{ApiGatewayUrl, ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_drafting;
@@ -1054,7 +1052,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: Arc::clone(&webhooks),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
-        public_base: ScheduledActionServiceUrl::new()?.to_string().into(),
+        // The URL is for senders off Macro's network, so it uses the public
+        // gateway origin (the stack's proxy locally), not the in-network address.
+        public_base: format!(
+            "{}/scheduled-action",
+            ApiGatewayUrl::new()?.as_ref().trim_end_matches('/')
+        )
+        .into(),
     };
     let state = ScheduledActionRouterState {
         service,
