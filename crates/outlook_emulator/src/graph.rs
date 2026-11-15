@@ -490,13 +490,16 @@ fn route(ctx: &mut Ctx<'_>) -> Handled {
             ctx.enter(R::ContactsDelta)?;
             people::contacts_delta(ctx, folder)
         }
-        ["contactFolders", _, "contacts", _, "photo", "$value"] if method == Method::GET => {
+        [
+            "contactFolders",
+            folder,
+            "contacts",
+            contact,
+            "photo",
+            "$value",
+        ] if method == Method::GET => {
             ctx.enter(R::ContactsPhoto)?;
-            Err(GraphError::server(
-                404,
-                "ErrorItemNotFound",
-                "The specified object was not found in the store., The contact has no photo.",
-            ))
+            people::contact_photo(ctx, folder, contact)
         }
 
         other => Err(unknown(other)),

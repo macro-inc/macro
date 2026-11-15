@@ -118,9 +118,10 @@ local stack, without Microsoft accounts.
 ## Recipes
 
 - A mailbox has a profile photo (`GET /me/photo/$value`) only when its seed
-  gives one (`SeedMailbox.photo`, a `SeedPhoto`); a contact photo is always
-  404. A request body may be up to 4 MB, so one range of an upload session
-  fits.
+  gives one (`SeedMailbox.photo`, a `SeedPhoto`), and a contact has one
+  (`GET /me/contactFolders/{id}/contacts/{id}/photo/$value`) only when
+  `SeedContact.photo` gives it; without, either is 404. A request body may
+  be up to 4 MB, so one range of an upload session fits.
 - In a test: `OutlookEmulator::start(Seed::parse(yaml)?)`, then
   `OutlookApiClientRepository::for_graph_url(&MicrosoftGraphUrl::from(emulator.graph_url()))`
   and `emulator.access_token("a@example.com")`.

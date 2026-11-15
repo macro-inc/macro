@@ -514,7 +514,8 @@ impl OutlookEmulator {
     }
 
     /// Adds a contact to the default contacts folder, or changes the one
-    /// with this id. Answers its id.
+    /// with this id. The contact has the photo given here, or none.
+    /// Answers its id.
     pub fn upsert_contact(
         &self,
         email: &str,
@@ -522,8 +523,20 @@ impl OutlookEmulator {
         contact: &SeedContact,
     ) -> Result<String, EmulatorError> {
         self.with_state(|state| {
+            let photo = contact
+                .photo
+                .as_ref()
+                .map(crate::mailbox::Mailbox::seeded_photo)
+                .transpose()?;
             let mailbox = state.mailbox(email)?;
-            Ok(mailbox.upsert_contact(id, contact.name.clone(), vec![contact.email.clone()]))
+            Ok(
+                mailbox.upsert_contact(
+                    id,
+                    contact.name.clone(),
+                    vec![contact.email.clone()],
+                    photo,
+                ),
+            )
         })
     }
 

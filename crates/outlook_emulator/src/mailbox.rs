@@ -246,6 +246,8 @@ pub(crate) struct Contact {
     pub(crate) id: String,
     pub(crate) name: Option<String>,
     pub(crate) emails: Vec<String>,
+    /// The content type and bytes of the contact's photo.
+    pub(crate) photo: Option<(String, Vec<u8>)>,
     pub(crate) changed_seq: u64,
 }
 
@@ -320,11 +322,13 @@ pub(crate) struct Mailbox {
 }
 
 impl Mailbox {
-    /// The content type and bytes of a seeded profile photo.
-    fn seeded_photo(photo: &crate::seed::SeedPhoto) -> Result<(String, Vec<u8>), EmulatorError> {
-        let bytes = STANDARD.decode(&photo.base64).map_err(|_| {
-            EmulatorError::InvalidMessage("the profile photo is not base64".to_string())
-        })?;
+    /// The content type and bytes of a seeded photo.
+    pub(crate) fn seeded_photo(
+        photo: &crate::seed::SeedPhoto,
+    ) -> Result<(String, Vec<u8>), EmulatorError> {
+        let bytes = STANDARD
+            .decode(&photo.base64)
+            .map_err(|_| EmulatorError::InvalidMessage("the photo is not base64".to_string()))?;
         let content_type = photo
             .mime_type
             .clone()
@@ -421,7 +425,13 @@ impl Mailbox {
             mailbox.add_category(name, "preset0");
         }
         for contact in &seed.contacts {
-            mailbox.upsert_contact(None, contact.name.clone(), vec![contact.email.clone()]);
+            let photo = contact.photo.as_ref().map(Self::seeded_photo).transpose()?;
+            mailbox.upsert_contact(
+                None,
+                contact.name.clone(),
+                vec![contact.email.clone()],
+                photo,
+            );
         }
         for message in &seed.messages {
             mailbox.add_message(message, now)?;
@@ -737,6 +747,7 @@ impl Mailbox {
         id: Option<String>,
         name: Option<String>,
         emails: Vec<String>,
+        photo: Option<(String, Vec<u8>)>,
     ) -> String {
         let id = id.unwrap_or_else(|| self.new_id("contact"));
         let changed_seq = self.next_seq();
@@ -746,6 +757,7 @@ impl Mailbox {
                 id: id.clone(),
                 name,
                 emails,
+                photo,
                 changed_seq,
             },
         );

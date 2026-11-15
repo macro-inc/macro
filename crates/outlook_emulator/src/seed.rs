@@ -184,7 +184,7 @@ pub struct SeedCalendar {
 #[serde(transparent)]
 pub struct NewEvent(pub serde_json::Map<String, serde_json::Value>);
 
-/// A profile photo.
+/// A photo: a mailbox owner's profile photo, or a contact's.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SeedPhoto {
@@ -204,6 +204,9 @@ pub struct SeedContact {
     /// Their display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Their photo. A contact has none unless one is given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub photo: Option<SeedPhoto>,
 }
 
 /// A message to put in a mailbox: seeded, or delivered later.
