@@ -22,5 +22,4 @@ export const usePropertyEntityDisplay = (id: () => string) => display(id());
 export const useActivityContext = () => ({
   entityDisplay: (id: () => string) => display(id()),
 });
-export const useCopyLink = () => async () => true;
 export const openEntityInSplit = () => {};
