@@ -985,7 +985,7 @@ STL-962	A saved reply draft on the thread's last message no longer reopens its e
 STL-965	The wide mail row (`EmailWideContent` in list-entity/email.tsx) leaves out the thread's subject between the sender and the snippet.
 STL-966	The email list column is rendered only the first time the view has no thread open, so it does not come back when a thread is closed, in email-view.tsx.
 STL-967	The mail list's data source input (`listInput.inboxIds`) ignores the chosen inboxes in email-view-context.tsx, so the list keeps every inbox's threads.
-STL-968	Drive's list (the final row filter in drive-data-source.ts) drops email threads, so a folder does not list the thread moved into it.
+STL-968	The list of files (the final row filter in drive-data-source.ts) drops email threads, so a folder does not list the thread moved into it.
 STL-969	Discarding a draft in email-composer.ts (`deleteDraftAndReset`) no longer calls the host's goBack, so the composer stays open after its draft is discarded.
 STL-971	The reply composer's attachment row leaves out the pills of forwarded attachments, in reply-input.tsx.
 STL-972	The Favorites tab's client filter in use-email-query.ts drops every row, so the starred thread is not listed.
