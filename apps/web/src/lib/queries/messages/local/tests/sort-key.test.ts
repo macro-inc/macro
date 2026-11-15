@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   cursorFromSortKey,
-  unplacedSortKey,
   rootSortKey,
   sortKeyFromCursor,
+  unplacedSortKey,
 } from '../sort-key';
 
 const ID = '0198c0de-0000-7000-8000-00000000000a';
