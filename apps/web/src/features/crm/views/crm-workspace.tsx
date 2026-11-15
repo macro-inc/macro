@@ -564,7 +564,13 @@ export function CrmWorkspaceView(props: {
             </>
           }
         >
-          <Show when={isTouchDevice() && !recordOpen() && !itemOpen()}>
+          <Show
+            when={
+              isTouchDevice() &&
+              ((!recordOpen() && !itemOpen()) ||
+                (!canAccess() && (!pipelineId() || recordOpen())))
+            }
+          >
             <ViewShell.Header>
               <CrmMobileTabs
                 canAccess={canAccess()}

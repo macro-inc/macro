@@ -296,19 +296,27 @@ function setup(
   const [records, setRecords] = createSignal<
     readonly { type: 'company' | 'contact'; id: string; name: string }[]
   >([]);
+  const [item, setItem] = createSignal<{
+    itemType: string;
+    itemId: string;
+  }>();
   const record = {
     records,
     section: () => undefined,
     commentTarget: () => undefined,
-    item: () => undefined,
-    openItem: vi.fn(),
-    closeItem: vi.fn(),
+    item,
+    openItem: vi.fn(setItem),
+    closeItem: vi.fn(() => setItem(undefined)),
     open: vi.fn(setRecords),
     setSection: vi.fn(),
-    close: vi.fn(() => setRecords([])),
+    close: vi.fn(() => {
+      setRecords([]);
+      setItem(undefined);
+    }),
   };
   const setActiveTab = (tab: string) => {
     setRecords([]);
+    setItem(undefined);
     setTab(tab);
   };
   const captureEntryState = vi.fn();
@@ -633,3 +641,38 @@ it('preserves a saved list route through an initial denial and later grant', () 
   expect(activeTab()).toBe('list:favorites');
   expect(screen.getByText('Record list')).toBeTruthy();
 });
+
+it.each([
+  { tab: 'active', detail: 'record', canNavigate: true },
+  { tab: 'pipeline:sales', detail: 'record', canNavigate: true },
+  { tab: 'active', detail: 'item', canNavigate: true },
+  { tab: 'pipeline:sales', detail: 'item', canNavigate: false },
+])(
+  'preserves mobile navigation after revoking an open $detail on $tab',
+  ({ tab, detail, canNavigate }) => {
+    const [allowed, setAllowed] = createSignal(true);
+    fixture.canAccess = allowed;
+    const { activeTab, record } = setup(tab);
+    if (detail === 'record')
+      record.open([{ type: 'company', id: 'company', name: '' }]);
+    else record.openItem({ itemType: 'document', itemId: 'shared-note' });
+    expect(screen.queryByRole('navigation', { name: 'CRM views' })).toBeNull();
+
+    setAllowed(false);
+    const navigation = screen.queryByRole('navigation', {
+      name: 'CRM views',
+    });
+    if (!canNavigate) {
+      expect(navigation).toBeNull();
+      return;
+    }
+    const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+    expect(tabs.queryByRole('button', { name: 'Companies' })).toBeNull();
+    expect(tabs.queryByRole('button', { name: 'Favorites' })).toBeNull();
+    fireEvent.click(tabs.getByRole('button', { name: 'Sales' }));
+    expect(activeTab()).toBe('pipeline:sales');
+    expect(record.records()).toEqual([]);
+    expect(record.item()).toBeUndefined();
+    expect(screen.getByText('Sales table')).toBeTruthy();
+  }
+);

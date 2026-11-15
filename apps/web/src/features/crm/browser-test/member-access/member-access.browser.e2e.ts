@@ -67,6 +67,31 @@ test('revokes open tabs, retains an individual pipeline, denies record navigatio
       path: `${directory}/record-denied-${info.project.name}.png`,
       fullPage: true,
     });
+  const recordNavigation =
+    info.project.name === 'phone'
+      ? pipeline.getByRole('navigation', { name: 'CRM views' })
+      : pipeline.locator('aside');
+  await expect(
+    recordNavigation.getByRole('button', { name: 'Companies', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    recordNavigation.getByRole('button', {
+      name: 'Private collection',
+      exact: true,
+    })
+  ).toHaveCount(0);
+  await recordNavigation
+    .getByRole('button', { name: 'Shared pipeline', exact: true })
+    .click();
+  await expect(
+    pipeline.getByRole('heading', { name: 'Shared pipeline' })
+  ).toBeVisible();
+  await pipeline
+    .getByRole('button', { name: 'Open referenced record' })
+    .click();
+  await expect(
+    pipeline.getByText("You don't have access to CRM")
+  ).toBeVisible();
   allowed = true;
   await page.getByRole('button', { name: 'Check access', exact: true }).click();
   await pipeline

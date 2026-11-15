@@ -207,7 +207,9 @@ header island that opens the shared bottom drawer with the current section
 checked under **Switch view**. A collapsed host keeps the section icon and
 accessible label; embedded phone headers put the switcher below the breadcrumb
 and action row. Keep the
-workspace's mobile view strip separate. Copy-link islands
+workspace's mobile view strip separate. Restore that strip when access loss
+denies an open CRM record, including one opened from a shared pipeline; keep
+independently accessible pipeline items' detail headers unchanged. Copy-link islands
 are square on touch, with a 24px glyph and the standard 40px icon control.
 On touch, record list search has space below the header and fills the row beside
 any filter button. Email filters use the shared filter drawer. Each section's

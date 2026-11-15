@@ -729,7 +729,9 @@ pipelines retain their own values and opaque company/contact IDs, but resolving
 record names or opening records requires separate CRM access. Text previously
 copied into a pipeline cell remains visible as pipeline content.
 The denied records screen keeps navigation to these pipelines available on
-desktop and phone. A saved list route stays selected through denial and regrant.
+desktop and phone, including when access is revoked while a record is open.
+Independently shared pipeline items retain their normal detail headers.
+A saved list route stays selected through denial and regrant.
 
 Delivered CRM discussion notifications retain their text, and a queued one can
 still arrive under the existing notification policy. Opening the record requires
