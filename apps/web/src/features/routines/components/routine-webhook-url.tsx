@@ -56,7 +56,7 @@ function CopyRow(props: { label: string; value: string }) {
  * full only right after it is made, then replaced or deleted.
  */
 export function RoutineWebhookUrl(props: {
-  /** Undefined until the routine is saved. */
+  /** Undefined until the routine is saved with a webhook trigger. */
   state: RoutineWebhookState | undefined;
 }) {
   // Loads once per saved panel: the state changes with every read, but
@@ -72,7 +72,9 @@ export function RoutineWebhookUrl(props: {
       <span class="text-xs font-medium text-ink-muted">Webhook URL</span>
       <Switch>
         <Match when={!props.state}>
-          <p class="text-xs text-ink-muted">Save the routine to get its URL.</p>
+          <p class="text-xs text-ink-muted">
+            Add this trigger and save the routine to get its URL.
+          </p>
         </Match>
         <Match when={props.state?.created}>
           {(created) => (

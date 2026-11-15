@@ -6,6 +6,7 @@ import { RoutineTriggers } from '../components/routine-triggers';
 import { RoutineWebhookUrl } from '../components/routine-webhook-url';
 import {
   eventScopeKind,
+  hasWebhookTrigger,
   type RoutineTriggerDraft,
 } from '../core/routine-triggers';
 import type { RoutineWebhookState } from '../core/webhook';
@@ -55,7 +56,9 @@ function Fixture() {
     ) =>
       eventScopeKind(trigger()) === 'WEBHOOK' ? (
         <>
-          <RoutineWebhookUrl state={state()} />
+          <RoutineWebhookUrl
+            state={hasWebhookTrigger(triggers()) ? state() : undefined}
+          />
           <RoutinePayloadTests
             subject="JSON body"
             pathPlaceholder="status"

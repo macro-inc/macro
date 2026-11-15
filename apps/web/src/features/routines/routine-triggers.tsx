@@ -14,6 +14,7 @@ import { RoutineWebhookUrl } from './components/routine-webhook-url';
 import {
   type EventTriggerDraft,
   eventScopeKind,
+  hasWebhookTrigger,
   type RoutineTriggerDraft,
   taskTriggerProperty,
   withPropertyValues,
@@ -50,7 +51,7 @@ export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
   layout?: 'rows' | 'add' | 'inline';
-  /** The saved routine's id; a new routine gets its webhook URL once saved. */
+  /** The saved routine's id; its webhook URL is made once a webhook trigger is saved. */
   routineId?: string;
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
@@ -154,7 +155,11 @@ export function RoutineTriggers(props: {
             </Show>
             <Show when={eventScopeKind(trigger()) === 'WEBHOOK'}>
               <RoutineWebhookUrl
-                state={props.routineId ? webhook() : undefined}
+                state={
+                  props.routineId && hasWebhookTrigger(props.triggers)
+                    ? webhook()
+                    : undefined
+                }
               />
               <RoutinePayloadTests
                 subject="JSON body"

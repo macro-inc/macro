@@ -444,6 +444,16 @@ export type EventScopeKind =
   | 'GITHUB'
   | 'WEBHOOK';
 
+/**
+ * Whether the routine itself has a webhook trigger, not one still being added:
+ * the server makes a URL only for a routine saved with one.
+ */
+export function hasWebhookTrigger(triggers: readonly RoutineTriggerDraft[]) {
+  return triggers.some(
+    (trigger) => trigger.kind === 'event' && trigger.events.includes('webhook')
+  );
+}
+
 export function eventScopeKind(trigger: EventTriggerDraft): EventScopeKind {
   if (trigger.events.includes('github')) return 'GITHUB';
   if (trigger.events.includes('webhook')) return 'WEBHOOK';

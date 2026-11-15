@@ -1408,9 +1408,10 @@ is on (on by default in development), whatever `enable-event-routines` says:
 the server serves webhook routines without either flag. A saved webhook trigger
 reads **Webhook received at its URL**, where **its URL** reopens its panel;
 the panel shows **Webhook URL** and **Only when the JSON
-body…** rows (the GitHub payload rows, over the POSTed JSON). Before the
-routine is saved it says **Save the routine to get its URL.**; then **Create
-URL** mints one (routine owner with edit access, in a person's own session;
+body…** rows (the GitHub payload rows, over the POSTed JSON). Until the
+routine is saved with the trigger (in the **Add trigger** panel too) it says
+**Add this trigger and save the routine to get its URL.**; then **Create
+URL** in the saved trigger's panel mints one (routine owner with edit access, in a person's own session;
 the server answers 409 until a webhook trigger is saved). The URL, a curl
 example with a JSON body, and under **Keep the secret out of the URL** the
 bearer address and secret, each with **Copy**, show only until the panel

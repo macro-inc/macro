@@ -37,20 +37,14 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
     panel.getByText(/POSTs text to this routine’s secret URL/)
   ).toBeVisible();
   await expect(panel.getByText('Only when the JSON body')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Create URL' })).toBeVisible();
-  await shot(page, 'panel-new');
-  await panel.getByRole('button', { name: 'Create URL' }).click();
-  const url = panel.getByRole('textbox', { name: 'Webhook URL' });
-  await expect(url).toHaveValue(/\/scheduled-action\/hooks\/whk_\w+\/mrw_/);
-  await expect(panel.getByText(/won’t be shown again/)).toBeVisible();
-  await expect(panel.getByText(/curl -X POST/)).toBeVisible();
-  await expect(panel.getByText(/application\/json/)).toBeVisible();
-  // Nothing on the panel runs past a phone's width.
-  const overflow = await panel.evaluate(
-    (element) => element.scrollWidth - element.clientWidth
+  // The server makes a URL only for a routine saved with the trigger.
+  await expect(
+    panel.getByText(/Add this trigger and save the routine/)
+  ).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Create URL' })).toHaveCount(
+    0
   );
-  expect(overflow).toBeLessThanOrEqual(0);
-  await shot(page, 'panel-created');
+  await shot(page, 'panel-new');
 
   await panel.getByRole('button', { name: 'Add trigger' }).click();
   await expect(
@@ -58,9 +52,21 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
   ).toBeVisible();
   await shot(page, 'list');
 
-  // The saved trigger reopens its panel, where its URL is replaced or deleted.
+  // The saved trigger reopens its panel, where its URL is made, replaced or
+  // deleted.
   await page.getByRole('button', { name: 'URL for Webhook received' }).click();
   const saved = page.getByRole('dialog', { name: 'Edit trigger' });
-  await expect(saved.getByText('Webhook URL', { exact: true })).toBeVisible();
   await expect(saved.getByText('Only when the JSON body')).toBeVisible();
+  await saved.getByRole('button', { name: 'Create URL' }).click();
+  const url = saved.getByRole('textbox', { name: 'Webhook URL' });
+  await expect(url).toHaveValue(/\/scheduled-action\/hooks\/whk_\w+\/mrw_/);
+  await expect(saved.getByText(/won’t be shown again/)).toBeVisible();
+  await expect(saved.getByText(/curl -X POST/)).toBeVisible();
+  await expect(saved.getByText(/application\/json/)).toBeVisible();
+  // Nothing on the panel runs past a phone's width.
+  const overflow = await saved.evaluate(
+    (element) => element.scrollWidth - element.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+  await shot(page, 'panel-created');
 });
