@@ -1839,12 +1839,6 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
     )
 }
 
-/// Lowercase canonical uuid text: the only ids whose `::uuid` cast prints back
-/// unchanged, so a cast id equals `entity_access.entity_id` exactly when
-/// `entity_access.entity_id::text` equals the id.
-const CANONICAL_UUID_PATTERN: &str =
-    "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
-
 /// The most named ids an arm checks access for after its filters. Each
 /// survivor costs a few index probes, so the per-candidate form grows with
 /// the list while the planned semi-join and property bitmaps do not. CRM
@@ -1950,11 +1944,12 @@ impl DocumentArmAccess {
 /// The access check for one candidate of an id-bounded arm: does any grant of
 /// the bound sources name it. It compares the uuid column, not
 /// `entity_id::text`, so the two partial unique indexes answer it from the
-/// index alone; the text expression index needs a heap read per probe. Ids
-/// that are not canonical uuids match no grant either way.
+/// index alone; the text expression index needs a heap read per probe. The
+/// cast is exact: every candidate matched a [`DocumentLiteral::Id`], whose
+/// text is a lowercase canonical uuid, and the fence keeps the probe from
+/// running before that filter.
 fn bounded_access_probe(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
-    let entity_id =
-        format!("(CASE WHEN {id_sql} ~ '{CANONICAL_UUID_PATTERN}' THEN {id_sql} END)::uuid");
+    let entity_id = format!("{id_sql}::uuid");
     let probe = |project: &str| {
         format!(
             r#"EXISTS (
