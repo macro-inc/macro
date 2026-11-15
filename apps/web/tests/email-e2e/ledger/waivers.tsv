@@ -144,15 +144,14 @@ STC-046	-	no-user-path	a composer that learns its draft was sent elsewhere close
 STC-047	-	bug	a draft deleted in one browser stays editable in another that has it open (deleted-draft-open-elsewhere-stays-editable); its test is kept as a known bug
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
 AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
-STC-020	-	needs	needs document storage: the file is made public by the storage service, which the browser stack does not run, and no test on the full-stack tier does it yet
 STC-031	-	no-user-path	Every composer send goes through the send journal and carries an attempt id, so the legacy unschedule path that raises this never runs.
 STC-043	-	no-user-path	the code that raises this wraps only a call that cannot fail on the spot: every way marking done after a send can fail comes later, and shows as the thread's own notice (STL-075)
 STC-060	-	no-user-path	every way of picking a send time (a preset, the calendar, a typed query) hands over a valid date, so the check that raises this cannot fail
-STC-076	-	bug	text written after the draft was sent elsewhere is dropped, not kept as a new draft (sent-elsewhere-drops-newer-text); its test is kept as a known bug
+STC-076	-	bug	a save refused because the email already went out resets the composer without saying so (sent-elsewhere-drops-newer-text); its test is kept as a known bug
 STC-410	-	no-user-path	both composers refuse edits while a schedule is pending or confirmed, and only become scheduled with nothing unsaved, so a scheduled draft never has a save to refuse
-STC-411	-	bug	a save refused because the email already went out resets the composer without saying so (sent-elsewhere-drops-newer-text); its test is kept as a known bug
+STC-411	-	bug	text written after the draft was sent elsewhere is dropped, not kept as a new draft (sent-elsewhere-drops-newer-text); its test is kept as a known bug
 STC-077	-	bug	undo of a sent or scheduled reply refuses, or wrongly claims, a newer reply (undo-send-refuses-newer-reply, undo-schedule-claims-newer-reply); its test is kept as a known bug
-STC-087	-	needs	the draft identity notice is behind a flag that is off unless the flag service turns it on, and the suite's bundle has no flag service
+STC-087	-	needs	shown only when the GraphQL list flag turns on while a composer is open (from the start, the sync banner shows instead); the suite's bundle has the flag on from the start and no flag service to switch it
 STC-100	-	no-user-path	a send queued on this device never carries a send time (scheduling is a separate request), its own Sending rows are hidden, and the server's rows leave sending ones out
 STC-425	-	no-user-path	a send queued on this device has no send time and its accepted row is hidden; the Scheduled row the panel does show is another device's, with Cancel and restore (a different row)
 AX-200	-	needs	needs the Pipedream connections flag off, and a development-mode bundle, which the suite serves, forces it on; the Manage button that replaces it there is AX-327

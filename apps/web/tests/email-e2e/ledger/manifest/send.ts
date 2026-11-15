@@ -281,7 +281,7 @@ export const send = {
       action: 'save rejected draft content as a new draft',
       trigger: 'toast action Save as new draft',
       source: ['src/features/email-compose/primitives/draft-identity.ts'],
-      note: 'only while the GraphQL draft queue is off (enable-graphql-soup off); with it on the sync banner recovers instead',
+      note: 'only when enable-graphql-soup turns on while the composer is open; with it on from the start the sync banner recovers instead',
     },
     {
       id: 'AC-098',
@@ -1397,7 +1397,7 @@ export const send = {
         'persistent toast: Draft could not be saved — Your edits are still in this editor. Save them as a new draft before closing. (Save as new draft)',
       trigger: 'server rejected the queued draft save',
       source: ['src/features/email-compose/primitives/draft-identity.ts'],
-      note: 'only while the GraphQL draft queue is off (enable-graphql-soup off); with it on the sync banner recovers instead',
+      note: 'only when enable-graphql-soup turns on while the composer is open; with it on from the start the sync banner recovers instead',
     },
     {
       id: 'STC-088',

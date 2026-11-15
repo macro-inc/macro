@@ -182,7 +182,9 @@ proved the same way, with the row's id as the name of the guard, in the
 wiring of that way in rather than in what it calls: the point is that it can
 break alone. One break for each distinct handler or wiring is enough; its
 line in `proofs.tsv` is under the row it was run for and names the other
-rows that go through the same wiring. Rows need no proof to pass the check.
+rows that go through the same wiring. A state row is proved by a break in
+the code that shows the state (its text changed, or its rendering switched
+off), under the row's id. Rows need no proof to pass the check.
 
 A function whose work is the service's (the sync functions) is proved by a
 break in the service code instead: the same kind of guard on the process

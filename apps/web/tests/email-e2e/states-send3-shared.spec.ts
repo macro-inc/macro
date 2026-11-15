@@ -3,9 +3,11 @@
 // own): the reader has none, their inboxes could not be read, or they are
 // still loading.
 //
-// Sharing with a person is sent through the channels service, which the
-// stack does not run, so the grant a share at Edit makes is written to the
-// database here, as `harness/sharing.ts` does for View.
+// The Share dialog shares an email with a person by granting Edit to their
+// direct-message channel, through the channels service, which the stack does
+// not run. A grant at Edit to the person themselves, written to the database
+// as `harness/sharing.ts` does for View, stands in for it: access that comes
+// through channel membership is not tested here.
 
 import type { Page } from '@playwright/test';
 import { graphqlOperation, loadAppSteadily } from './harness/drafts';
@@ -21,8 +23,8 @@ import { saw } from './ledger/record';
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
 /**
- * A thread of bob's own inbox, shared with the signed-in user at Edit, as
- * the owner's Share dialog does. Answers its id once the user may open it.
+ * A thread of bob's own inbox, with Edit granted to the signed-in user (see
+ * the top of the file). Answers its id once the user may open it.
  */
 async function sharedAtEdit(
   mailbox: Mailbox,
@@ -62,34 +64,37 @@ async function writeReply(
  * kept body is HTML in base64, as the composer saves it.
  */
 async function keptOnThisDevice(page: Page): Promise<string> {
-  const bodies = await page.evaluate(
-    () =>
-      new Promise<string[]>((resolve, reject) => {
-        const open = indexedDB.open('macro-email-working-copies-v1');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const db = open.result;
-          if (!db.objectStoreNames.contains('drafts')) {
-            db.close();
-            resolve([]);
-            return;
-          }
-          const all = db
-            .transaction('drafts', 'readonly')
-            .objectStore('drafts')
-            .getAll();
-          all.onerror = () => reject(all.error);
-          all.onsuccess = () => {
-            db.close();
-            resolve(
-              (all.result as { content?: { body_html?: string | null } }[]).map(
-                (draft) => draft.content?.body_html ?? ''
-              )
-            );
-          };
+  const bodies = await page.evaluate(async () => {
+    const name = 'macro-email-working-copies-v1';
+    // Never create the store: the app does, once it has something to keep.
+    const databases = await indexedDB.databases();
+    if (!databases.some((database) => database.name === name)) return [];
+    return new Promise<string[]>((resolve, reject) => {
+      const open = indexedDB.open(name);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        if (!db.objectStoreNames.contains('drafts')) {
+          db.close();
+          resolve([]);
+          return;
+        }
+        const all = db
+          .transaction('drafts', 'readonly')
+          .objectStore('drafts')
+          .getAll();
+        all.onerror = () => reject(all.error);
+        all.onsuccess = () => {
+          db.close();
+          resolve(
+            (all.result as { content?: { body_html?: string | null } }[]).map(
+              (draft) => draft.content?.body_html ?? ''
+            )
+          );
         };
-      })
-  );
+      };
+    });
+  });
   return bodies
     .map((body) => Buffer.from(body, 'base64').toString('utf8'))
     .join('\n');
