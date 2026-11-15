@@ -196,9 +196,11 @@ test.describe('a reload just after a thread was opened, in an Outlook inbox', ()
   // marking it read, and the next action waits behind that cut-off write:
   // Mark done takes the row out of Macro's list, but the provider keeps the
   // thread in the inbox (handoff mutation-queue-lease-after-reload). Waiting
-  // for the read to reach the provider before the reload avoids it.
+  // for the read to reach the provider before the reload avoids it. The
+  // read sometimes finishes before the reload on a faster machine, and the
+  // test then passes: `@sometimes`, one pass does not say the bug is gone.
   test('known bug: mutation-queue-lease-after-reload: Mark done after a reload reaches the provider @known-bug', {
-    tag: '@known-bug',
+    tag: ['@known-bug', '@sometimes'],
   }, async ({ page, mailbox }) => {
     const ids = await deliverEach(mailbox, ['Later', 'Done', 'Stays']);
     await mailbox.open();
