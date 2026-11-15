@@ -44,14 +44,14 @@ for (const provider of PROVIDERS) {
       await openRichText(page, own);
       const editor = richText(page, own);
 
+      const save = page.getByRole('button', { name: 'Save signature' });
+      await expect(save).toBeDisabled();
       await editor.click();
       await page.keyboard.type('Ada Lovelace');
       did('AX-017');
       await expect(editor).toHaveText('Ada Lovelace');
       // The words reached the signature to be saved, not only the page.
-      await expect(
-        page.getByRole('button', { name: 'Save signature' })
-      ).toBeEnabled();
+      await expect(save).toBeEnabled();
 
       // Each button changes the selected words, and Clear formatting undoes it.
       await page.keyboard.press('Shift+Home');

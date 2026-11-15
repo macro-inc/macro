@@ -111,6 +111,10 @@ test.describe('an Undo whose outcome this browser cannot read back, in a Gmail i
       if (saidFailed) break;
       // It said the send was cancelled: the draft is back, to send again.
       await expect(send).toBeVisible();
+      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
+        'Take it back'
+      );
+      await expect(page.getByText('grace@example.com').first()).toBeVisible();
     }
     await expect(failed).toBeVisible();
     saw('STC-032');
