@@ -10,6 +10,7 @@ import { Dropdown } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
+import { PropertiesProvider } from '../../context/PropertiesContext';
 import {
   PropertyRootContext,
   type PropertyRootContextValue,
@@ -182,22 +183,40 @@ function setup(
   Editor = EntityEditor
 ) {
   const onSave = vi.fn(async () => undefined);
+  const [currentValue, setCurrentValue] = createSignal(value);
   const [editorOpen, setEditorOpen] = createSignal(true);
+  const changeEditorOpen = (open: boolean) => setEditorOpen(open);
   const context: PropertyRootContextValue = {
-    property: () => value,
+    property: currentValue,
     pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
-    openEditor: () => setEditorOpen(true),
-    closeEditor: () => setEditorOpen(false),
+    openEditor: () => changeEditorOpen(true),
+    closeEditor: () => changeEditorOpen(false),
     onSave,
   };
   render(() => (
-    <PropertyRootContext.Provider value={context}>
-      <Editor selfFilter={selfFilter} />
-    </PropertyRootContext.Provider>
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => [currentValue()]}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{
+        saveProperty: async () => {},
+        saveDate: async () => {},
+      }}
+    >
+      <PropertyRootContext.Provider value={context}>
+        <Editor selfFilter={selfFilter} />
+      </PropertyRootContext.Provider>
+    </PropertiesProvider>
   ));
-  return onSave;
+  return Object.assign(onSave, {
+    setProperty: setCurrentValue,
+    setEditorOpen: changeEditorOpen,
+  });
 }
 
 beforeAll(() => {
@@ -457,6 +476,73 @@ describe('team-first assignees', () => {
       expect(onSave).not.toHaveBeenCalled();
     }
   );
+
+  it.each([EntityEditor, EntitySheetEditor])(
+    'keeps a removed assignee searchable after closing and reopening',
+    async (Editor) => {
+      const assigned: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: 'macro|outside@example.com', entity_type: 'USER' },
+        ],
+      };
+      const onSave = setup(undefined, assigned, Editor);
+      fireEvent.click(screen.getByText('Outside'));
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledWith(
+          assigned,
+          { valueType: 'ENTITY', refs: null },
+          new Map([['macro|outside@example.com', 'Outside']])
+        )
+      );
+      onSave.setProperty({
+        ...assigned,
+        propertyId: 'assignees-property-removed',
+        value: [],
+      });
+      onSave.setEditorOpen(true);
+
+      const input = screen.getByRole('textbox');
+      fireEvent.input(input, { target: { value: 'outside' } });
+      const option = await screen.findByText('Outside');
+      fireEvent.click(option);
+      expect(
+        option.closest('[data-entity-index]')?.querySelector('input')
+      ).toHaveProperty('checked', true);
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      await waitFor(() =>
+        expect(onSave).toHaveBeenCalledWith(
+          { ...assigned, propertyId: 'assignees-property-removed', value: [] },
+          { valueType: 'ENTITY', refs: assigned.value },
+          new Map([['macro|outside@example.com', 'Outside']])
+        )
+      );
+    }
+  );
+
+  it('does not retain outsiders selected in custom people fields', async () => {
+    const customPeople: EntityProperty = {
+      ...property,
+      propertyDefinitionId: 'custom-people',
+      displayName: 'Participants',
+      value: [{ entity_id: 'macro|outside@example.com', entity_type: 'USER' }],
+    };
+    const onSave = setup(undefined, customPeople);
+    onSave.setEditorOpen(false);
+    onSave.setProperty({ ...property, propertyId: 'saved-assignees' });
+    onSave.setEditorOpen(true);
+
+    fireEvent.input(screen.getByRole('textbox'), {
+      target: { value: 'outside@example.com' },
+    });
+    await screen.findByText('No users found');
+    expect(screen.queryByText('Outside')).toBeNull();
+  });
 
   it.each([EntityEditor, EntitySheetEditor])(
     'does not assign a non-team contact through search or Enter',

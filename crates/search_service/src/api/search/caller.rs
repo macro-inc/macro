@@ -9,6 +9,7 @@ pub(in crate::api::search) fn caller_label(user: &MacroUserAuthentication) -> &'
     match user.origin {
         CredentialOrigin::Session => "session",
         CredentialOrigin::MacroApiJwt => "macro_api_jwt",
+        CredentialOrigin::ScopedMacroApiJwt => "scoped_macro_api_jwt",
         CredentialOrigin::UserApiKey => "user_api_key",
         CredentialOrigin::AccountManager(_) => "account_manager",
         CredentialOrigin::Bot => "bot",

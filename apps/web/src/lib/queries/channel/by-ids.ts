@@ -65,17 +65,17 @@ export function useChannelsByIdsQuery(
   channelIds: Accessor<readonly string[]>,
   options: Accessor<{ cacheFirst?: boolean }> = () => ({})
 ) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-      graphqlCacheFirstEntities: options().cacheFirst
-        ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-        : undefined,
-    })
-  );
+  // Soup reads its arguments from multiple reactive computations. Compile the
+  // ID filter once per membership change, not again for every status update.
+  const args = createMemo(() => channelsByIdsQueryArgs(channelIds()));
+  const query = useSoupAstItemsQuery(args, () => ({
+    enabled: channelIds().length > 0,
+    staleTime: 30_000,
+    graphqlProjection: 'channel-list',
+    graphqlCacheFirstEntities: options().cacheFirst
+      ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
+      : undefined,
+  }));
   registerChannelListNotificationRefresh(query);
   createEffect(() => {
     if (

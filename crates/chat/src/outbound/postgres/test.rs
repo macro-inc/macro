@@ -1436,3 +1436,95 @@ async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
     assert_eq!(permission.link_share, Some(LinkShare::Team));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
 }
+
+const SHARED_PROJECT_ID: &str = "00000000-0000-0000-0000-0000000005c0";
+const PROJECT_TEAM_ID: &str = "00000000-0000-0000-0000-0000000007ea";
+
+fn assert_refused<T: std::fmt::Debug>(outcome: Result<T, ChatErr>) {
+    let error = format!("{:?}", outcome.expect_err("a sharing refusal"));
+    assert!(
+        error.contains(agent_correlation::context::SharingRefused::MESSAGE),
+        "expected a sharing refusal, got {error}"
+    );
+}
+
+/// Under a scope that may not share, a chat can't be created in or moved
+/// into a folder shared with a team, and a refused write leaves nothing.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn a_scoped_session_cant_file_a_chat_in_a_shared_folder(pool: Pool<Postgres>) {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Shared', 'macro|test@example.com')"#,
+        SHARED_PROJECT_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1::text::uuid, 'project', 'macro|test@example.com', 'user', 'owner'),
+               ($1::text::uuid, 'project', $2, 'team', 'view')"#,
+        SHARED_PROJECT_ID,
+        PROJECT_TEAM_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = test_repo(pool.clone());
+    let chat_id = create_test_chat(&repo, "Unfiled").await;
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    let chats = || async {
+        sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM "Chat""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+    let chats_before = chats().await;
+
+    scope_attribution(no_send, async {
+        assert_refused(
+            repo.create(
+                Owner::User(user_id.clone()),
+                CreateChatArgs {
+                    name: "Filed".to_string(),
+                    project_id: Some(SHARED_PROJECT_ID.to_string()),
+                },
+                default_share_permission(),
+            )
+            .await,
+        );
+        assert_refused(
+            repo.patch(
+                user_id.clone(),
+                &chat_id,
+                PatchChatRepoArgs {
+                    name: None,
+                    project_id: Some(SHARED_PROJECT_ID.to_string()),
+                    share_permission: None,
+                    team_share: None,
+                },
+            )
+            .await,
+        );
+    })
+    .await;
+
+    assert_eq!(chats().await, chats_before);
+    let project_of_chat =
+        sqlx::query_scalar!(r#"SELECT "projectId" FROM "Chat" WHERE id = $1"#, chat_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(project_of_chat, None);
+}

@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use shown_text::{is_invisible, line, personal_detail};
 
-use super::model::{Category, KindName, NewKind, NewSuggestion, Target};
+use super::model::{Category, KindName, NewKind, NewSuggestion, SuggestionKind, Target};
 
 #[cfg(test)]
 mod test;
@@ -26,6 +26,8 @@ pub const MAX_SUMMARY_CHARS: usize = 400;
 pub const MAX_PROMPT_CHARS: usize = 2000;
 /// Longest change-log reason, in characters.
 pub const MAX_REASON_CHARS: usize = 300;
+/// Most characters in what a background run posts or sends.
+pub const MAX_SENDS_CHARS: usize = 200;
 /// Most items one suggestion is about.
 pub const MAX_TARGETS: usize = 5;
 /// Longest item or part id, in characters.
@@ -171,6 +173,30 @@ pub fn targets(targets: Vec<Target>, problems: &mut Vec<String>) -> Option<Vec<T
         }
     }
     Some(checked)
+}
+
+/// Whether `about` names the item `draft` is in: a reply draft belongs to
+/// the thread its suggestion is about.
+pub fn draft_is_about(draft: &Target, about: &[Target]) -> bool {
+    about
+        .iter()
+        .any(|item| item.entity_type == draft.entity_type && item.entity_id == draft.entity_id)
+}
+
+/// New items for `kind`'s suggestion keep the item its draft is in.
+pub fn keeps_draft(kind: &SuggestionKind, about: &[Target], problems: &mut Vec<String>) {
+    if let SuggestionKind::Entity {
+        draft: Some(draft), ..
+    } = kind
+        && !draft_is_about(&draft.target, about)
+    {
+        problems.push(format!(
+            "this suggestion's draft is in {} `{}`, so `about` keeps it; for another item, retire \
+             this suggestion and suggest a new one",
+            draft.target.entity_type.as_ref(),
+            draft.target.entity_id
+        ));
+    }
 }
 
 /// `text` when it names no personal detail.

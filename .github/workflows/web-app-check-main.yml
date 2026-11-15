@@ -13,6 +13,7 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+    timeout-minutes: 10
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -50,6 +51,9 @@ jobs:
             - 'services/ai-editing-worker/**'
             - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
+            - 'packages/muppet/**'
+            - 'packages/starter-agent/**'
+            - 'tooling/scripts/starter-agent-lock.sh'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
           web_artifact_changed:
@@ -132,6 +136,7 @@ jobs:
       contents: read
       pull-requests: read
       statuses: read
+    timeout-minutes: 10
     steps:
     - name: Checkout PR merge commit
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -333,6 +338,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -352,6 +358,9 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - name: Build SDK
+      run: bun run build
       working-directory: packages/sdk
     - name: Run checks
       run: |
@@ -378,6 +387,8 @@ jobs:
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
         check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
         check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
+        check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
+        check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
         failed=0
         for index in "${!names[@]}"; do
           status=0
@@ -403,7 +414,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -567,6 +578,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -600,6 +612,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     strategy:
       matrix:
         shard:
@@ -692,6 +705,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -778,6 +792,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Browser Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 20
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -871,6 +886,7 @@ jobs:
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    timeout-minutes: 15
     steps:
     - name: Checkout
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -903,6 +919,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 15
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -1041,6 +1058,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    timeout-minutes: 10
     steps:
     - id: checkout
       name: Checkout Repo
@@ -1417,6 +1435,7 @@ jobs:
     if: always()
     name: Web App Status Check
     runs-on: namespace-profile-linux-tiny-no-cache
+    timeout-minutes: 5
     steps:
     - name: Check job results
       run: |
@@ -1432,24 +1451,28 @@ jobs:
         echo "build: ${{ needs.build.result }}"
         echo "ios-native-check: ${{ needs.ios-native-check.result }}"
 
-        # Fail if any job failed (skipped and success are both OK). The iOS
-        # gate is the merge gate, so a cancelled gate is not OK either. The same
-        # goes for generated code: a job that hits its timeout reports cancelled.
-        if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
-           [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.typescript.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
-           [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \
-           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]] || \
-           [[ "${{ needs.functional.result }}" == "failure" ]] || \
-           [[ "${{ needs.browser.result }}" == "failure" ]] || \
-           [[ "${{ needs.cycles.result }}" == "failure" ]] || \
-           [[ "${{ needs.build.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ios-native-check.result }}" == "cancelled" ]]; then
-          echo "One or more jobs failed"
+        # The Android check always runs, so it must succeed. For the rest only
+        # success and skipped are OK: a job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        if [[ "${{ needs.android-native-check.result }}" != "success" ]]; then
+          echo "Android Native Check did not succeed"
           exit 1
         fi
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.typescript.result }}" \
+          "${{ needs.generated-code.result }}" \
+          "${{ needs.biome-check.result }}" \
+          "${{ needs.test.result }}" \
+          "${{ needs.functional.result }}" \
+          "${{ needs.browser.result }}" \
+          "${{ needs.cycles.result }}" \
+          "${{ needs.build.result }}" \
+          "${{ needs.ios-native-check.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "All jobs passed or were skipped"

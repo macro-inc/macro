@@ -60,6 +60,7 @@ fn an_insert_with_client_row_ids_still_names_its_primary_records() {
         user_id: "macro|owner@example.com".to_owned(),
         name: "Renewals".to_owned(),
         record_type: Some(PipelineRecordType::Company),
+        commercial_fields: Default::default(),
         database_id: DatabaseId::from_uuid(Uuid::nil()),
         table_id: TableId::from_uuid(Uuid::from_u128(1)),
         primary_column_id: ColumnId::from_uuid(Uuid::from_u128(2)),

@@ -2,7 +2,10 @@
 //! the service that applies them.
 
 pub mod check;
+pub mod lifecycle;
 pub mod model;
 pub mod ports;
 pub mod prompt;
+pub mod resolution;
+pub mod run;
 pub mod service;

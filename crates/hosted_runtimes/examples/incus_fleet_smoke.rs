@@ -9,15 +9,17 @@
 //!   --client-cert ~/.config/macro-computers/dev-client.crt \
 //!   --client-key ~/.config/macro-computers/dev-client.key \
 //!   --server-cert server.crt \
-//!   --image macro-box/2026-11-10 --profile macro-box --storage-pool default \
+//!   --image macro-box/2026-11-10 --agent-image macro-box-agent/2026-11-10 \
+//!   --profile macro-box --storage-pool default \
 //!   --reserve-gb 4 --oversell-factor 3 \
 //!   --request-timeout-secs 90 --connect-timeout-secs 10 \
 //!   --operation-wait-secs 60 --operation-waits 15 \
 //!   --state-change-timeout-secs 60 --shutdown-grace-secs 60
 //! ```
 //!
-//! Without `--image-server` the image is the host's local `--image` alias,
-//! e.g. `macro-box/2026-11-10`.
+//! Without `--image-server` the images are the host's local `--image` and
+//! `--agent-image` aliases, e.g. `macro-box/2026-11-10`. The smoke computer
+//! runs no agent, so it is created from `--image`.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -25,6 +27,7 @@ use std::time::Instant;
 use chrono::Utc;
 use clap::Parser;
 use hosted_runtimes::domain::enrollment::Enrollment;
+use hosted_runtimes::domain::image::GuestImages;
 use hosted_runtimes::domain::lifecycle::{Billing, BillingPolicy, Context, provision};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
@@ -54,6 +57,9 @@ struct Args {
     server_cert: PathBuf,
     #[arg(long)]
     image: String,
+    /// The agent-mode image beside `--image`, from the same server.
+    #[arg(long)]
+    agent_image: String,
     /// A simplestreams server to fetch `--image` from, e.g.
     /// `https://images.linuxcontainers.org` with `--image ubuntu/24.04`.
     #[arg(long)]
@@ -97,13 +103,19 @@ async fn main() -> Result<(), rootcause::Report> {
         server_cert_pem: std::fs::read_to_string(&args.server_cert)?,
     };
     let config = IncusFleetConfig {
-        image: ImageSource {
-            reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&args.image)?),
-            remote: args.image_server.map(|server| ImageRemote {
-                server,
-                protocol: ImageProtocol::Simplestreams,
-            }),
-        },
+        images: GuestImages {
+            regular: args.image.as_str(),
+            agent: args.agent_image.as_str(),
+        }
+        .try_map(|alias| {
+            Ok::<_, incus_client::InvalidName>(ImageSource {
+                reference: ImageReference::Alias(incus_client::ImageAlias::try_new(alias)?),
+                remote: args.image_server.clone().map(|server| ImageRemote {
+                    server,
+                    protocol: ImageProtocol::Simplestreams,
+                }),
+            })
+        })?,
         profile: incus_client::ProfileName::try_new(&args.profile)?,
         endpoint,
         host_name: "smoke".to_owned(),
@@ -173,6 +185,7 @@ async fn main() -> Result<(), rootcause::Report> {
             egress_url: "https://dev-gateway.macro.com/agent-harness-egress".parse()?,
         },
         traceparent: None,
+        agent: None,
     };
     let id = computer.id;
     println!("instance {}", instance_name(id));

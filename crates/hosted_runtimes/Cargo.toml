@@ -58,6 +58,7 @@ zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+incus_client = { path = "../incus_client", features = ["test-support"] }
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing", "trace"] }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
@@ -67,6 +68,7 @@ proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+wiremock = { workspace = true }
 
 [[example]]
 name = "incus_fleet_smoke"

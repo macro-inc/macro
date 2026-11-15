@@ -13,7 +13,9 @@ hex = { workspace = true }
 gmail_emulator = { path = "../gmail_emulator" }
 macro_aws_config = { path = "../macro_aws_config", features = ["sqs"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_event_topics = { path = "../macro_event_topics" }
 outlook_emulator = { path = "../outlook_emulator" }
+rdkafka = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

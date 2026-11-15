@@ -1,11 +1,13 @@
-//! The route onboarding starts a person's generation with.
+//! The generation routes: onboarding starts a person's generation, the web app
+//! records app loads, reads the person's generations and asks for fresh
+//! suggestions.
 
 use std::sync::Arc;
 
 use axum::extract::{FromRef, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
@@ -16,7 +18,11 @@ use utoipa::IntoParams;
 
 use scheduled_action::domain::suggestions::model::RoutineSuggestions;
 
-use crate::domain::model::{GenerationError, GenerationStarted};
+use crate::domain::generation::GenerationOverview;
+use crate::domain::model::{
+    GenerationError, GenerationStarted, RegenerationCooldown, RegenerationRefusal,
+    RegenerationRunning, StartOutcome,
+};
 
 #[cfg(test)]
 mod test;
@@ -29,6 +35,19 @@ pub trait StartGeneration: Send + Sync + 'static {
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<bool, GenerationError>> + Send;
+
+    /// Start the fresh suggestions the person asked for.
+    fn regenerate(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> impl Future<Output = Result<(), GenerationError>> + Send;
+
+    /// The person's generations now.
+    fn overview(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<GenerationOverview, GenerationError>> + Send;
 
     /// The person loaded the app in `timezone`.
     fn seen(
@@ -68,7 +87,7 @@ impl<S, Auth> FromRef<GenerationRouterState<S, Auth>> for MacroAuthorizationStat
     }
 }
 
-/// The generation route.
+/// The generation routes.
 pub fn generation_router<S, Auth, St>(state: GenerationRouterState<S, Auth>) -> Router<St>
 where
     S: StartGeneration,
@@ -78,6 +97,8 @@ where
     Router::new()
         .route("/suggestions/generate", post(start_generation::<S, Auth>))
         .route("/suggestions/seen", post(seen::<S, Auth>))
+        .route("/suggestions/generation", get(overview::<S, Auth>))
+        .route("/suggestions/regenerate", post(regenerate::<S, Auth>))
         // Web and app bundles from before the unified generation still
         // call this. Remove once none does.
         .route(
@@ -105,8 +126,24 @@ impl IntoResponse for GenerationApiError {
             error @ GenerationError::NotFound => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
+            GenerationError::Running => (
+                StatusCode::CONFLICT,
+                Json(RegenerationRunning {
+                    reason: RegenerationRefusal::Running,
+                }),
+            )
+                .into_response(),
+            GenerationError::Cooldown { available_at } => {
+                let wait = (available_at - chrono::Utc::now()).num_seconds().max(1);
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [(axum::http::header::RETRY_AFTER, wait.to_string())],
+                    Json(RegenerationCooldown { available_at }),
+                )
+                    .into_response()
+            }
             GenerationError::Internal(report) => {
-                tracing::error!(error = ?report, "could not start a generation");
+                tracing::error!(error = ?report, "a generation call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
         }
@@ -158,8 +195,25 @@ where
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
         timezone: chrono_tz::Tz,
     ) -> Result<bool, GenerationError> {
-        self.start(user, GenerationTrigger::Onboarding, timezone)
-            .await
+        let outcome = self
+            .start(user, GenerationTrigger::Onboarding, timezone)
+            .await?;
+        Ok(outcome == StartOutcome::Started)
+    }
+
+    async fn regenerate(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> Result<(), GenerationError> {
+        self.regenerate(user, timezone).await
+    }
+
+    async fn overview(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<GenerationOverview, GenerationError> {
+        self.overview(user).await
     }
 
     async fn seen(
@@ -206,6 +260,72 @@ where
         .await
         .map_err(GenerationApiError)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    get,
+    path = "/suggestions/generation",
+    tag = "suggestions",
+    operation_id = "get_suggestion_generation",
+    responses(
+        (status = 200, body = GenerationOverview, description = "The caller's generations now: whether one is running (poll while it is), how the last one ended, and when they may next ask for fresh suggestions"),
+        (status = 401, body = String),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller's suggestion generations now.
+pub async fn overview<S, Auth>(
+    State(state): State<GenerationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Result<Json<GenerationOverview>, GenerationApiError>
+where
+    S: StartGeneration,
+    Auth: MacroAuthorizationService,
+{
+    let overview = state
+        .service
+        .overview(&user.authorization.macro_user_id)
+        .await
+        .map_err(GenerationApiError)?;
+    Ok(Json(overview))
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/regenerate",
+    tag = "suggestions",
+    operation_id = "regenerate_suggestions",
+    params(GenerateQuery),
+    responses(
+        (status = 202, body = GenerationStarted, description = "Fresh suggestions started in the background: the caller's whole workspace researched again and their feed brought up to date, with routine suggestions when the week's are due. Poll `GET /suggestions/generation` until it is idle"),
+        (status = 401, body = String),
+        (status = 404, body = String, description = "Suggestions are off for the caller"),
+        (status = 409, body = RegenerationRunning, description = "One of the caller's generations is running"),
+        (status = 429, body = RegenerationCooldown, description = "The caller asked within the hour; `Retry-After` says in how many seconds they may ask again"),
+        (status = 500, body = String),
+    )
+)]
+/// Start fresh suggestions for the caller: at most once an hour, and not
+/// while one of their generations runs.
+pub async fn regenerate<S, Auth>(
+    State(state): State<GenerationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<GenerateQuery>,
+) -> Result<(StatusCode, Json<GenerationStarted>), GenerationApiError>
+where
+    S: StartGeneration,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .regenerate(&user.authorization.macro_user_id, query.timezone)
+        .await
+        .map_err(GenerationApiError)?;
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(GenerationStarted { started: true }),
+    ))
 }
 
 /// The retired `POST /scheduled-actions/suggestions/generate`: start the
