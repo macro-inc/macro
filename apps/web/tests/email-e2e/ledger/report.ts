@@ -356,17 +356,15 @@ function render(
       'Layouts',
       'Times',
     ],
-    rows: ledger.operations
-      .filter((each) => each.scope !== 'other')
-      .map((each) => [
-        each.id,
-        each.kind,
-        each.scope,
-        each.status + (each.needs ? `: ${each.needs}` : ''),
-        each.providers.join(', '),
-        each.viewports.join(', '),
-        each.count,
-      ]),
+    rows: ledger.operations.map((each) => [
+      each.id,
+      each.kind,
+      each.scope,
+      each.status + (each.needs ? `: ${each.needs}` : ''),
+      each.providers.join(', '),
+      each.viewports.join(', '),
+      each.count,
+    ]),
   };
   const unlisted: Table = {
     head: ['Request', 'Answered by', 'Times'],
@@ -395,10 +393,10 @@ function render(
     runs.length > 1
       ? `Counted from the runs on ${runs.join(' and ')}.`
       : `Counted from the run on ${runs[0]} alone: what only the other stack's tests cover shows here as not covered, and is held to that stack's own run.`;
-  const driftCount = ledger.drift.reduce(
-    (sum, each) => sum + each.items.length,
-    0
-  );
+  // What is reported only is listed with the differences and not counted.
+  const driftCount = ledger.drift
+    .filter((each) => !each.reported)
+    .reduce((sum, each) => sum + each.items.length, 0);
   const limits = ledger.functions.filter((fn) => fn.limit);
   const limitTable: Table = {
     head: ['Id', 'Function', 'Its tests do not prove'],
@@ -480,7 +478,7 @@ function render(
     '',
     `### Manifest against the source: ${driftCount} differences`,
     '',
-    driftCount ? details('The differences', driftList(false)) : '',
+    ledger.drift.length ? details('The differences', driftList(false)) : '',
     '',
     details('Rows by group', markdown(byGroup)),
     '',
@@ -547,8 +545,8 @@ ${section(`Open rows (${open.length})`, groups.map((group) => folded(`${group} (
 ${section(`Covered in part (${partial.length})`, folded('Rows', html(rowTable(partial))))}
 ${section(`Deferred: needs a service no stack gives a test (${deferred.length})`, folded('Rows', html(rowTable(deferred))))}
 ${section(`Waived (${waived.length})`, folded('Rows', html(rowTable(waived))))}
-${section('Network operations', `<p>Email and shared operations; the ${ledger.operations.filter((each) => each.scope === 'other').length} that no email code makes are left out. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors. With every provider: with Gmail and with Outlook, or with the one provider the app makes it for. Network operations are reported only: nothing fails the job for one.</p>${html(operationsHeadline)}${html(operations)}${folded(`Requests the app made that the manifest does not list (${ledger.unlisted.length})`, html(unlisted))}`)}
-${section(`Manifest against the source (${driftCount} differences)`, driftCount ? driftList(true) : '<p>None.</p>')}
+${section('Network operations', `<p>Email and shared operations. Covered: a real service answered it without an error. Stubbed: only a stand-in answered. Failed: a service answered only with errors. With every provider: with Gmail and with Outlook, or with the one provider the app makes it for. Network operations are reported only: nothing fails the job for one.</p>${html(operationsHeadline)}${html(operations)}${folded(`Requests made in the run that the manifest does not list: the rest of the app's, and any of email's that lacks its line (${ledger.unlisted.length})`, html(unlisted))}`)}
+${section(`Manifest against the source (${driftCount} differences)`, ledger.drift.length ? driftList(true) : '<p>None.</p>')}
 ${section('Tests that passed only on a retry', tests.flaky.length ? html(flaky) : '<p>None.</p>')}
 </main></body></html>`;
   return { summary, page };
@@ -616,9 +614,9 @@ function report(mode: Mode): void {
       : [
           'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',
         ]),
-    ...ledger.drift.flatMap((each) =>
-      each.items.map((item) => `${each.check}: ${item}`)
-    ),
+    ...ledger.drift
+      .filter((each) => !each.reported)
+      .flatMap((each) => each.items.map((item) => `${each.check}: ${item}`)),
   ];
   const { summary, page } = render(
     ledger,
