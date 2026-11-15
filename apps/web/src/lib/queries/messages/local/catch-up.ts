@@ -52,6 +52,8 @@ interface ChannelSyncState {
   timer?: ReturnType<typeof setTimeout>;
   /** Settled once the device has been asked to take the pushes noted so far. */
   storing?: { promise: Promise<void>; done: () => void };
+  /** The sequence the device was last caught up through. */
+  stored?: bigint;
 }
 
 const channels = new Map<string, ChannelSyncState>();
@@ -168,6 +170,7 @@ function allPushed(state: ChannelSyncState, from: string, to: string): boolean {
 
 function forgetPushed(state: ChannelSyncState, through: string): void {
   const end = BigInt(through);
+  state.stored = end;
   for (const seq of state.pushed) {
     if (BigInt(seq) <= end) state.pushed.delete(seq);
   }
@@ -199,6 +202,7 @@ export async function catchUpAndRefresh(
   for (let run = 0; run < MAX_PUSH_RERUNS; run += 1) {
     if (outcome.kind === 'reset') {
       state.pushed.clear();
+      state.stored = undefined;
       refresh = true;
     } else if (outcome.kind === 'applied') {
       refresh ||= !allPushed(state, outcome.from, outcome.seq);
@@ -257,27 +261,41 @@ async function storePushes(
 }
 
 /**
- * Waits until the device holds what the open views were pushed. The device
- * takes a push a moment after the views do, from the server's log, so what it
- * answers meanwhile is older than what is on screen. Resolves true when there
- * was such a push: a device read made before this resolved is to be made
- * again, not shown. `heldSeq` is the sequence that read was made at, when it
- * is known; a read at or past every pushed change is already current.
+ * Whether a device read is to be made again, not shown: the open views were
+ * pushed a change the read is older than. The device takes a push a moment
+ * after the views do, from the server's log, so this waits until it has, and
+ * answers false when it has not within the wait, since reading again would
+ * bring the same. `heldSeq` is the sequence the read was made at, when it is
+ * known; a read at or past every pushed change is already current.
  */
 export async function pushesStored(
   channelId: string,
   heldSeq?: string | null
 ): Promise<boolean> {
   const state = channels.get(channelId);
-  const storing = state?.storing;
-  if (!state || !storing) return false;
-  if (heldSeq != null) {
-    const held = BigInt(heldSeq);
+  if (!state) return false;
+  const held = heldSeq == null ? undefined : BigInt(heldSeq);
+  // The device took a push while this read was being made.
+  if (held !== undefined && state.stored !== undefined && held < state.stored) {
+    return true;
+  }
+  const storing = state.storing;
+  if (!storing) return false;
+  if (held !== undefined) {
     const ahead = [...state.pushed].some((seq) => BigInt(seq) > held);
     if (!ahead) return false;
   }
-  await Promise.race([storing.promise, sleep(PUSH_STORE_WAIT_MS)]);
+  return Promise.race([settled(storing.promise), gaveUp()]);
+}
+
+async function settled(storing: Promise<void>): Promise<boolean> {
+  await storing;
   return true;
+}
+
+async function gaveUp(): Promise<boolean> {
+  await sleep(PUSH_STORE_WAIT_MS);
+  return false;
 }
 
 /** Forgets every channel's sync state; for account changes and tests. */

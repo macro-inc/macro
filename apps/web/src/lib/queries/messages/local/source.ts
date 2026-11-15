@@ -128,6 +128,7 @@ export async function loadLocalChannelTimelinePage(
     for (let reread = 0; reread < MAX_PUSH_REREADS; reread += 1) {
       if (loaded.source !== 'device') break;
       if (!(await pushesStored(read.channelId, loaded.storedSeq))) break;
+      read.signal?.throwIfAborted();
       const again = await loadChannelPage(host, request, {
         signal: read.signal,
       });
