@@ -1508,8 +1508,8 @@ fn distinct_links(link_ids: &[Uuid]) -> Vec<Uuid> {
 }
 
 /// Reads an owned address page with [`OwnedRead`], all its statements on one
-/// snapshot: a short inbox page is final only if the window it read is the
-/// one the count sees. Like the general builder's owned requests, it has no
+/// snapshot: a round goes on below the last thread the window before it
+/// walked only if both see the same threads. Like the general builder's owned requests, it has no
 /// statement timeout, so it never errors where the general builder answers.
 async fn read_owned_page(
     pool: &PgPool,

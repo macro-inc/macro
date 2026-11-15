@@ -26,24 +26,26 @@
 //! window_per_row` threads (at most [`MAX_WINDOW`]). The page is final when
 //! that window filled it, or held every thread left in the inboxes (a list's
 //! last page). Otherwise the page goes on below the last walked thread in
-//! rounds, each with a window [`GROWTH`] times the last:
+//! rounds, each with a window [`GROWTH`] times the last, up to
+//! [`MAX_ROUND_WINDOW`]:
 //!
 //! - When the threads walked so far yielded enough rows that, at that rate,
 //!   the round's window would fill the page, the inbox stream walks it.
-//! - Otherwise a probe first counts the superset up to the round's cap, and
-//!   when it fits, the superset stream finishes the page below the last
-//!   walked thread. When it doesn't, the cap grows [`GROWTH`]-fold and the
-//!   inbox stream walks the round's window.
+//! - Otherwise a probe first counts the superset up to the round's cap
+//!   ([`OwnedReadTuning::round_cap`]), which follows the walk the page still
+//!   needs at that rate and the walk so far. When the superset fits, the
+//!   superset stream finishes the page below the last walked thread; when it
+//!   doesn't, the inbox stream walks the round's window. A round probes only
+//!   with a cap [`GROWTH`] times the last one the superset outgrew.
 //!
 //! A walked thread whose messages miss the addresses costs the pick a read of
 //! each of them, so on a cold cache a window of addresses gone quiet costs
-//! several times their superset; the rounds keep that walk to the first
-//! window unless the walk is finding rows. Every statement reads a bounded
-//! number of rows, and the walks and the probes grow geometrically, so a page
-//! costs a small multiple of the cheaper of walking to its last row and
-//! reading the superset. All the page's statements read one snapshot, and
-//! each lists only threads below the previous one's, so their rows
-//! concatenate in page order.
+//! several times their superset. Every statement reads a bounded number of
+//! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
+//! and the walks and the probes grow geometrically, so a page costs a small
+//! multiple of the cheaper of walking to its last row and reading the
+//! superset. All the page's statements read one snapshot, and each lists only
+//! threads below the previous one's, so their rows concatenate in page order.
 //!
 //! The address tree must be the filter's only top-level term with a message
 //! literal. Another one (a subject, or an address under `NOT`) can drop most
@@ -88,9 +90,12 @@ pub(crate) struct OwnedReadTuning {
     pub(crate) superset_limit: i64,
     /// The inbox stream's first window, in threads per page row.
     pub(crate) window_per_row: i64,
-    /// The most superset rows the first probe of the rounds reads the
-    /// superset for.
-    pub(crate) round_superset_cap: i64,
+    /// A round's cap, in superset rows per thread the walk would still read
+    /// to fill the page at the rate it found rows.
+    pub(crate) superset_per_need: i64,
+    /// The most a round's cap reaches, in superset rows per thread walked so
+    /// far.
+    pub(crate) superset_per_walked: i64,
 }
 
 impl OwnedReadTuning {
@@ -98,14 +103,29 @@ impl OwnedReadTuning {
     /// rows before the first thread, and at 5,000 rows that stays well under
     /// the inbox stream's cost for addresses that rare. Past it the
     /// addresses that fill pages fill one within 10 threads per row of the
-    /// inboxes. The rounds' first cap reads a superset ten times that size,
-    /// which on a cold cache costs less than walking the 4,000 threads of the
-    /// round's window.
+    /// inboxes. On a cold cache a walked thread costs about 1.4 ms, a
+    /// superset row 0.15–0.5 ms and a probed row 0.05 ms, so the superset is
+    /// the cheaper read while it has up to about 3 rows per thread the walk
+    /// still needs. At 50 rows per thread walked, a cold probe the superset
+    /// outgrows costs about twice the walk before it.
     pub(crate) const DEFAULT: Self = Self {
         superset_limit: 5_000,
         window_per_row: 10,
-        round_superset_cap: 50_000,
+        superset_per_need: 3,
+        superset_per_walked: 50,
     };
+
+    /// The most superset rows a round reads the superset for, after the walk
+    /// found `found` rows in `walked` threads and the page needs `left` more:
+    /// `superset_per_need` per thread the walk would still read at that rate
+    /// (as if it found one row when it found none), at most
+    /// `superset_per_walked` per thread walked and [`MAX_SUPERSET_CAP`].
+    pub(crate) fn round_cap(&self, walked: i64, found: i64, left: i64) -> i64 {
+        let need = left.saturating_mul(walked) / found.max(1);
+        need.saturating_mul(self.superset_per_need)
+            .min(walked.saturating_mul(self.superset_per_walked))
+            .min(MAX_SUPERSET_CAP)
+    }
 }
 
 /// The most threads the inbox stream's first window reads: a Sales Email
@@ -114,7 +134,16 @@ impl OwnedReadTuning {
 /// addresses fill slowly.
 const MAX_WINDOW: i64 = 1_000;
 
-/// How much each round's window and each probe's cap grow over the last.
+/// The most threads a round's window reads. Past it the rounds keep this
+/// window, so no one statement walks more.
+const MAX_ROUND_WINDOW: i64 = 16_000;
+
+/// The most superset rows a round's probe counts, and so the superset stream
+/// reads below the walk. Past it the rounds only walk.
+const MAX_SUPERSET_CAP: i64 = 800_000;
+
+/// How much each round's window grows over the last, and the least each
+/// probe's cap grows over the last cap the superset outgrew.
 const GROWTH: i64 = 4;
 
 /// The inbox stream's first window for a page of `query_limit` rows:
@@ -316,24 +345,30 @@ impl<'a> OwnedRead<'a> {
             return Ok(Taken::new(OwnedStreams::InboxesToEnd, 0, rows));
         };
         let mut walked = window;
-        let mut cap = self.tuning.round_superset_cap;
+        // The superset holds more rows than this.
+        let mut over = self.tuning.superset_limit;
         let mut rounds = 0;
         loop {
             rounds += 1;
-            window = window.saturating_mul(GROWTH);
+            window = window.saturating_mul(GROWTH).min(MAX_ROUND_WINDOW);
             let found = rows.len() as i64;
             let left = limit - found;
             // At the rate the walk found rows so far, the page needs
             // `left × walked / found` more threads.
             if left.saturating_mul(walked) > found.saturating_mul(window) {
-                if self.superset_rows(connection, cap).await? <= cap {
-                    rows.extend(
-                        self.page(connection, Stream::Superset, Some(below), left)
-                            .await?,
-                    );
-                    return Ok(Taken::new(OwnedStreams::InboxesThenSuperset, rounds, rows));
+                let cap = self.tuning.round_cap(walked, found, left);
+                // A smaller cap would recount most of what the last probe
+                // counted.
+                if cap >= over.max(1).saturating_mul(GROWTH) {
+                    if self.superset_rows(connection, cap).await? <= cap {
+                        rows.extend(
+                            self.page(connection, Stream::Superset, Some(below), left)
+                                .await?,
+                        );
+                        return Ok(Taken::new(OwnedStreams::InboxesThenSuperset, rounds, rows));
+                    }
+                    over = cap;
                 }
-                cap = cap.saturating_mul(GROWTH);
             }
             rows.extend(
                 self.page(connection, Stream::Inboxes { window }, Some(below), left)

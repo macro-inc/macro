@@ -34,24 +34,26 @@ const READS: [(&str, OwnedReadTuning); 6] = [
         OwnedReadTuning {
             superset_limit: i64::MAX,
             window_per_row: 20,
-            round_superset_cap: i64::MAX,
+            ..OwnedReadTuning::DEFAULT
         },
     ),
+    // Rounds that never probe.
     (
         "inboxes",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1_000,
-            round_superset_cap: -1,
+            superset_per_need: 0,
+            superset_per_walked: 0,
         },
     ),
-    // Rounds that only walk.
     (
         "inboxes_tight",
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 3,
-            round_superset_cap: -1,
+            superset_per_need: 0,
+            superset_per_walked: 0,
         },
     ),
     // The superset finishes a page whenever the walk finds rows too slowly.
@@ -60,7 +62,8 @@ const READS: [(&str, OwnedReadTuning); 6] = [
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1,
-            round_superset_cap: i64::MAX,
+            superset_per_need: i64::MAX,
+            superset_per_walked: i64::MAX,
         },
     ),
     // Probes that come up over their cap until it outgrows the superset: the
@@ -70,7 +73,8 @@ const READS: [(&str, OwnedReadTuning); 6] = [
         OwnedReadTuning {
             superset_limit: -1,
             window_per_row: 1,
-            round_superset_cap: 10,
+            superset_per_need: i64::MAX,
+            superset_per_walked: 2,
         },
     ),
 ];
@@ -979,7 +983,7 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
     let read = streams(&pool, &both, &sparse, 7, fallback).await?;
     assert_eq!(read.first(), Some(&"inboxes_then_superset"), "{read:?}");
-    // Probes over their cap walk on, until the cap outgrows the superset.
+    // Probes the superset outgrows walk on, until a cap fits it.
     let read = streams(&pool, &both, &sparse, 7, rounds).await?;
     assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
     // An Owner term outside the caller's inboxes leaves nothing to read.
@@ -1017,4 +1021,18 @@ fn window_grows_with_the_page_up_to_its_cap() {
     assert_eq!(inbox_window(500, 10), 1_000);
     assert_eq!(inbox_window(i64::MAX, 2), 1_000);
     assert_eq!(inbox_window(7, 0), 1);
+}
+
+#[test]
+fn round_cap_follows_the_walk_left() {
+    let tuning = OwnedReadTuning::DEFAULT;
+    // 2 rows in 1,000 threads: 49,000 more threads at that rate, so the
+    // cap is the walk so far's 50 rows per thread.
+    assert_eq!(tuning.round_cap(1_000, 2, 98), 50_000);
+    // 16 rows: 5,250 more threads, 3 rows each.
+    assert_eq!(tuning.round_cap(1_000, 16, 84), 15_750);
+    // No rows counts as one.
+    assert_eq!(tuning.round_cap(100, 0, 100), 5_000);
+    assert_eq!(tuning.round_cap(1_000_000, 0, 100), 800_000);
+    assert_eq!(tuning.round_cap(i64::MAX, 0, i64::MAX), 800_000);
 }
