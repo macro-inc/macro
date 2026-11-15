@@ -405,6 +405,7 @@ export const thread = {
       trigger: 'direct URL /app/email/<thread-id>?email_message_id=<id>',
       source: [
         ADAPTER,
+        'src/features/email-view/components/EmailDetailView.tsx',
         'src/features/email-thread/primitives/target-message-navigation.ts',
         'src/features/email-thread/primitives/scroll-to-message.ts',
       ],

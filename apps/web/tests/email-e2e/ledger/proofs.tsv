@@ -9,6 +9,8 @@ AC-007	Kobalte's removeOnBackspace is switched off on the recipient combobox in 
 AC-008	pressing PageDown, or ArrowDown on the last suggestion, does not bring the next people
 AC-009	pressing Escape in the recipient suggestions clears the typed text instead of only closing them
 AC-010	The drop handler of a dragged recipient chip in compose-recipients.tsx returns before calling onRecipientDrop, so a chip dropped on another field stays where it was.
+AC-011	The desktop Cc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Cc field, so clicking Cc opens no Cc row.
+AC-012	The desktop Bcc button's onClick in compose-layout.tsx (the new-email composer's recipient actions) returns without revealing the Bcc field, so clicking Bcc opens no Bcc row.
 AC-013	on a phone, tapping a new email's Cc/Bcc, From row does not unfold the Cc, Bcc and From fields
 AC-015	pressing Shift+Cmd+O does not move the cursor back to To
 AC-016	pressing Shift+Cmd+S does not move the cursor to the Subject
@@ -132,6 +134,7 @@ AC-403	pressing Ctrl+J in the open send-time picker does not move down its optio
 AC-500	A send made offline is never followed after the network returns: announceQueuedSend in queued-send-notice.ts does not watch the attempt when it was queued offline, so its delivery is never reported (online sends are still followed).
 AC-501	The outbox dispatcher in email-send-dispatcher.ts skips any send whose submission started before this page load, so an unsettled send is never resumed after a reload (it is never asked about or retried); sends started in this page still go out.
 AC-910	The /app/mail/new route view in EmailComposeRouteView.tsx renders nothing in place of the composer, so loading the address opens no new message.
+AC-911	The new-email composer's body change handler (onContentChange in email-composer.ts) no longer schedules a draft save, so text typed in the body is not saved by itself.
 AC-912	The compose route in email-compose.tsx ignores the draft named in its URL (s0.email-compose.draft) when it mounts, so a reload opens an empty composer instead of the saved draft; a new composer, which has no draft id, is unaffected.
 AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
 AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
@@ -222,6 +225,7 @@ AL-096	The phone list's swipe-left handler (onSwipeLeft on SwipableRowProvider i
 AL-097	a swipe to the right on a row opens no Remind me menu
 AL-098	The reminder clock on a mail row (EmailRowSchedule in email-row-schedule.tsx) no longer calls edit, so clicking it opens no reminder menu.
 AL-099	The mail rows' tag chips in EmailList.tsx get an onFilterByTag that does nothing, so their Filter button no longer calls filterByTag.
+AL-100	Hovering a sender or recipient name opens no person card: EmailUserTooltip in email-user-tooltip.tsx passes disabled to its HoverCard, so the full name and address never show.
 AL-101	The tutorial row's button (TutorialRowView in TutorialEntries.tsx) loses its onClick, so it no longer opens the video; the pill and sidebar entries are unchanged.
 AL-102	The tutorial row's Dismiss button (TutorialRowView in TutorialEntries.tsx) gets a handler that does nothing instead of onDismiss.
 AL-103	The ? hotkey's handler in GlobalHotkeys.tsx returns before toggling the keyboard shortcuts sheet.
@@ -302,9 +306,11 @@ AL-188	The Remind me menu's "Remove reminder" button in email-reminder-form.tsx 
 AL-189	the Remind me form's Cancel leaves it open
 AL-190	a confirmed Keep Macro version or Use mailbox version does not settle a conflicting draft
 AL-191	the Retry under Unable to load this email does not load the thread again
+AL-192	A link to a message opens its thread without going to that message: EmailDetailRouteView in EmailDetailView.tsx drops the message id the router maps from email_message_id, so the thread opens with only its latest message unfolded.
 AL-193	A value picked in the property editor opened from a side panel's Add property (the editor has the section's add handler) is not saved in PropertyEditorModal.tsx; the editor opened any other way still saves.
 AL-194	Opening a thread no longer marks it read: EmailThreadLoadGate.tsx stops mounting EmailReadMarker, and markRowNotificationsSeenOnOpen in mark-row-seen.ts skips its markEmailThreadSeen for an opened email row.
 AL-196	the open thread's Copy Share Link copies nothing
+AL-197	The `m` (move to folder) hotkey's keyDownHandler in use-entity-action-hotkeys.ts claims the key and returns without starting the move action, so pressing m on a list row opens no folder picker; folders.spec.ts and journey-mail-day.spec.ts mark the same hotkey.
 AL-400	pressing g then e from another view does not open Email
 AL-402	pressing Cmd+K with nothing selected opens no command menu
 AL-403	a Cmd+click or Ctrl+click on a row opens it instead of selecting it
@@ -741,6 +747,7 @@ STC-433	not shown as the row says (dialog body: Draft storage could not be check
 STC-434	not shown as the row says (Saved on this device; waiting to sync — Changes stay on this device until draft synchronization resumes. (Retry while unavailable)): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-435	not shown as the row says (the banner's detail line replaced by the failed action's error): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-914	A send cancelled back into a draft is not reopened in its composer: compose-adapter.ts no longer forwards draft-restoration events to the thread view and the reply composer, so the cancelled reply's editor never comes back (the status row still goes away).
+STC-915	The Sent tab's query in email-query.ts (buildEmailQuery) asks only for the nil thread id, so the delivered scheduled message is not listed in Sent.
 STC-932	Each recipient field's chip row in RecipientSelector.tsx keeps rendering every recipient it ever held, keyed by address, so a recipient taken out keeps its chip.
 STC-933	The Cc and Bcc rows of the composer in compose-recipients.tsx are handed no selected recipients to show, so they show no chips for the people added to them.
 STC-934	The editor theme's check-list class in LexicalMarkdown/theme.ts is replaced by "hidden", so a checklist typed in the composer is not drawn.
@@ -789,6 +796,7 @@ STL-021	the empty list's title "Trash is empty" is changed in src/features/email
 STL-022	not shown as the row says (No email yet): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-023	The mail list's `showsTutorial` condition is made false on the Signal tab in EmailList.tsx, so the "Learn how to use Macro Mail" row is not rendered above the list.
 STL-024	not shown as the row says ("Load More" row; "Loading..." with aria-busy while a page loads): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-025	The inbox selector in the Email sidebar (InboxAccountGroup in EmailInboxSelector.tsx) labels one chosen inbox "1 inbox" instead of its address.
 STL-026	The reading pane button's aria-label when the pane is on is "Reading pane" instead of "Hide reading pane" in EmailControls.tsx.
 STL-027	The filter button's active-count badge is not rendered in EmailControls.tsx.
 STL-028	not shown as the row says (No conversation selected ("Pick one from the list, or move with j and k")): its rendering is switched off or changed in src/features/email-view/components/EmailReader.tsx
@@ -932,6 +940,7 @@ STL-711	not shown as the row says (desktop row menus have no Move items; picker 
 STL-712	The email list header in EmailHeader.tsx no longer shows the open saved view's "Saved view actions" menu beside its name.
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-901	The Archived tab's slice in email-query.ts asks for threads that are not done, so a thread archived in the provider's client is not listed there.
+STL-902	The Gmail inbox sync's delete_message (crates/email/src/domain/mailbox/inbox_sync/delete_message.rs) returns Ok before deleting anything, so a message deleted at Gmail stays in its thread in the service.
 STL-903	A draft's row in the mail list shows no snippet (the draft's text is emptied) in list-entity/email.tsx.
 STL-904	The Sent tab asks the service for the drafts view instead of the sent view (`emailViewForTab` in email-query.ts), so sent mail, such as mail sent from the provider's client, is not listed in Sent.
 STL-905	The thread's messages are sorted newest first instead of oldest first, in selectThreadMessages in thread-messages.ts.
@@ -946,16 +955,22 @@ STL-925	The Shared tab's slice in email-query.ts asks for the user's own mail (s
 STL-927	The mail list (`listEntities` in use-email-query.ts) keeps showing only the threads of its first render, so a refresh does not bring the mail that arrived since into the list.
 STL-928	Keyboard stops on a message in the thread's navigation cannot be applied, so the arrow keys no longer move focus between messages, in thread-navigation.ts.
 STL-929	List rows show the Unread mark whatever the thread's read state, so an opened thread's row keeps it, in ListEntity.tsx.
+STL-930	The mail list keeps showing rows that leave its query: the list publication in use-email-query.ts carries rows the query no longer returns while the list stays the same, so threads marked done stay in the list.
 STL-931	The desktop composer's Subject input in compose-subject-field.tsx shows "Untitled" when the subject is empty, so New email no longer opens a composer that shows empty.
+STL-940	The thread's message list in message-list.tsx leaves out every message sent from one of the viewer's own inboxes, so a reply sent on a thread someone else shared does not show in that thread.
 STL-942	the text shown once access is requested is changed in src/features/access-requests/views/RequestAccessView.tsx
 STL-943	The Share dialog's pending-requests heading in PermissionRequestsView.tsx reads "Requests (n)" instead of "Permission requests (n)".
 STL-944	A person's roster row in DirectAccessView.tsx shows Edit as their access level whatever access they were granted.
 STL-945	The Source pill in SourceLinkPill.tsx (the task composer's link to the thread it came from) is labelled with the bare name instead of "Open source <name>".
+STL-946	The docked sidebar panel in ViewShell.tsx stays aria-hidden once it has been shown and then collapsed, so the Email sidebar does not come back when Show navigation is pressed.
 STL-947	The Open button of the "Moved to folder" notice dismisses the notice without opening the folder (the `openFolder` call is skipped in moved-to-folder-toast.ts).
 STL-948	The copy-ID action in make-copy-entity-id-action.ts writes an empty string to the clipboard instead of the entity's ID, while still saying "ID copied to clipboard".
 STL-951	The open thread's message body renders nothing (an empty first Match) in email-message-body.tsx.
 STL-952	The email detail's list navigation opens nothing when it steps to the next or previous thread, in use-email-detail-list-navigation.ts.
+STL-953	The same break as STL-930: the threads marked done stay in the list they were marked done in, because the list publication in use-email-query.ts keeps rows that leave the list's query.
+STL-954	Mark not done in make-mark-not-done-action.ts shows its "Marked as not done" notice and returns before the unarchive (no request, no optimistic update), so the thread stays out of the Inbox list.
 STL-955	The mail list's rows (`entities` in use-email-query.ts) put a row that once left the list at the bottom when it comes back, so Undo does not put the row back where it was.
+STL-962	A saved reply draft on the thread's last message no longer reopens its editor after a reload: the effect in thread-reply-area.ts that opens the bottom reply for a draft and the draft check in message-container.tsx are both skipped.
 STL-965	The wide mail row (`EmailWideContent` in list-entity/email.tsx) leaves out the thread's subject between the sender and the snippet.
 STL-966	The email list column is rendered only the first time the view has no thread open, so it does not come back when a thread is closed, in email-view.tsx.
 STL-967	The mail list's data source input (`listInput.inboxIds`) ignores the chosen inboxes in email-view-context.tsx, so the list keeps every inbox's threads.
@@ -963,6 +978,7 @@ STL-968	Drive's list (the final row filter in drive-data-source.ts) drops email 
 STL-969	Discarding a draft in email-composer.ts (`deleteDraftAndReset`) no longer calls the host's goBack, so the composer stays open after its draft is discarded.
 STL-971	The reply composer's attachment row leaves out the pills of forwarded attachments, in reply-input.tsx.
 STL-972	The Favorites tab's client filter in use-email-query.ts drops every row, so the starred thread is not listed.
+STL-973	EmailSnippet in list-entity/email.tsx renders nothing, so no mail row (wide, narrow or inbox layout) shows its snippet text; the drafts-only STL-903 break on the same component's fallback line is a separate break.
 STL-974	The tutorial video dialog's play pill loses its aria-label "Play <title>, <length>" in TutorialVideoDialog.tsx.
 STL-975	The tutorial's dismissal is no longer written to localStorage in create-tutorial-state.ts, so a dismissed row returns after a reload.
 STL-976	The keyboard shortcuts sheet's "This view" section is titled "View" instead in KeyboardShortcutsDialog.tsx, so no region of that name lists the view's shortcuts.
@@ -1028,6 +1044,8 @@ STX-316	not shown as the row says (Setup status "Connect your calendar" / "Enabl
 STX-317	The "Email" section of Settings > Keyboard shortcuts (Shortcuts.tsx) is retitled "Mail", so the page no longer shows an "Email" shortcuts section.
 STX-318	The deep-link target loader in thread-navigation.ts no longer expands the linked message, so a link to a message opens the thread with that message still folded.
 STX-920	The sync status of an inbox row in Settings › Email stays on "Reconnect to resume sync" whatever the inbox's state in Email.tsx.
+STX-921	The Email settings page (settings/Email.tsx) keeps drawing the disabled primary row ("Primary", "Disabled", "Sync disabled", Enable) even once the primary inbox is enabled again.
+STX-949	An email mention chip in DocumentMention.tsx renders collapsed, its icon without the thread's subject, so a pasted thread link becomes a chip that does not name the thread.
 STX-963	A removed inbox's row stays in Settings › Email: the remove mutation keeps it in the cached links (link.ts) and the link_removed event no longer refetches them (sync.ts).
 STX-964	The read receipts switch of an inbox always shows on, whatever the inbox's setting, in email-settings.tsx.
 STX-965	The inbox picker's option rows (InboxOptionLabel in EmailInboxSelector.tsx) render no address, so neither inbox is listed by name in the menu.
