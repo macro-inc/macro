@@ -5,7 +5,7 @@ import {
   type Page,
 } from '@playwright/test';
 import { Api } from './api';
-import { type History, makeHistory } from './history';
+import { type History, readHistory } from './history';
 import {
   apiFor,
   type Person,
@@ -45,7 +45,7 @@ function api(key: PersonKey) {
 }
 
 type WorkerFixtures = {
-  /** The long, read-only channel; made once for each worker that asks. */
+  /** The long, read-only channel, made before the run's first test. */
   history: History;
 };
 
@@ -53,9 +53,9 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   history: [
     // biome-ignore lint/correctness/noEmptyPattern: Playwright reads what a fixture needs from this pattern and accepts nothing else here.
     async ({}, use) => {
-      await use(await makeHistory());
+      await use(readHistory());
     },
-    { scope: 'worker', timeout: 180_000 },
+    { scope: 'worker' },
   ],
   // biome-ignore lint/correctness/noEmptyPattern: Playwright reads what a fixture needs from this pattern and accepts nothing else here.
   people: async ({}, use) => {

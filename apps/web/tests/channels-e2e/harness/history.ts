@@ -1,5 +1,8 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Api, type SentMessage } from './api';
 import { apiFor, readPeople } from './people';
+import { runDirectory, stackUrl } from './stack';
 
 export const HISTORY_LENGTH = 230;
 export const OLD_THREAD_REPLIES = 30;
@@ -25,7 +28,7 @@ export function historyText(position: number): string {
   return `history ${String(position).padStart(3, '0')}`;
 }
 
-export async function makeHistory(): Promise<History> {
+async function makeHistory(): Promise<History> {
   const people = readPeople();
   const adaHttp = await apiFor('ada');
   const benHttp = await apiFor('ben');
@@ -62,4 +65,49 @@ export async function makeHistory(): Promise<History> {
   await adaHttp.dispose();
   await benHttp.dispose();
   return { ...channel, texts, messages, oldThread, recentThread };
+}
+
+function historyFile(): string {
+  return join(runDirectory(), 'history.json');
+}
+
+type StoredHistory = { stack: string; history: History };
+
+async function stillThere(history: History): Promise<boolean> {
+  const http = await apiFor('ada');
+  const selection = JSON.stringify({ limit: 1, direction: 'older' });
+  const response = await http.get(
+    `/dss/messages/channel/${history.id}/timeline?selection=${encodeURIComponent(selection)}`
+  );
+  await http.dispose();
+  return response.ok();
+}
+
+/**
+ * Makes the history before any test runs, or keeps the one an earlier run
+ * against the same stack made: nothing writes to it, so it stays what it
+ * was. Making it while tests run would send every open page of Ada's and
+ * Ben's hundreds of new messages a second, which no test means to measure.
+ */
+export async function prepareHistory(): Promise<void> {
+  if (existsSync(historyFile())) {
+    const stored = JSON.parse(
+      readFileSync(historyFile(), 'utf8')
+    ) as StoredHistory;
+    if (stored.stack === stackUrl() && (await stillThere(stored.history))) {
+      return;
+    }
+  }
+  const stored: StoredHistory = {
+    stack: stackUrl(),
+    history: await makeHistory(),
+  };
+  writeFileSync(historyFile(), JSON.stringify(stored));
+}
+
+export function readHistory(): History {
+  const stored = JSON.parse(
+    readFileSync(historyFile(), 'utf8')
+  ) as StoredHistory;
+  return stored.history;
 }
