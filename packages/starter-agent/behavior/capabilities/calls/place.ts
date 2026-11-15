@@ -33,7 +33,11 @@ export const tellMs = 4000;
 
 const calling = /\b(call(s|ed|ing)?|ring|phone|dial)\b/i;
 const person = /^(macro\|)?[^@\s]+@[^@\s]+$/;
-const macroId = 'macro|';
+const macroPrefix = 'macro|';
+
+/** Macro's message and channel ids are UUIDs; anything else, e.g. a `{id}` copied from a template, would only come back as a 400. */
+const macroUuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const no = (rule: string, why: string): PlaceVerdict => ({
   ok: false,
@@ -163,6 +167,37 @@ export const placeCall = async (
 ): Promise<PlaceOutcome> => {
   const now = ports.clock.now();
   const base = { reason: input.reason, target: input.target };
+  if (!person.test(input.target) && !macroUuid.test(input.target)) {
+    await ports.rows.add({
+      ...base,
+      at: now,
+      event: 'refused',
+      asker: input.asked?.id ?? null,
+      rule: 'who',
+      why: 'not a person or a channel id',
+    });
+    return no(
+      'who',
+      "That isn't someone to call: pass their Macro id or email, or a channel's id."
+    );
+  }
+  if (
+    input.message !== undefined &&
+    !(macroUuid.test(input.message.channel) && macroUuid.test(input.message.id))
+  ) {
+    await ports.rows.add({
+      ...base,
+      at: now,
+      event: 'refused',
+      asker: input.asked?.id ?? null,
+      rule: 'message-id',
+      why: `not a message: ${JSON.stringify(input.message)}`,
+    });
+    return no(
+      'message-id',
+      "That isn't a message: pass `message: { channelId, id }`, the asking message's `channel_id` and `id` as the conversation gives them."
+    );
+  }
   // So two runs can't both pass the limits.
   const held = await ports.lock().catch(() => null);
   try {
@@ -231,7 +266,11 @@ export const placeCall = async (
       rule: 'error',
       why: String(error),
     });
-    return no('error', `Couldn't place it: ${error}`);
+    console.error(`placeCall: ${String(error)}`);
+    return no(
+      'error',
+      "I couldn't place the call just now. Say so in a line, without the error; the details are in my log."
+    );
   } finally {
     held?.release();
   }
@@ -246,7 +285,7 @@ export const macroPlaceFacts = (
     if (person.test(who))
       return {
         kind: 'user',
-        id: who.startsWith(macroId) ? who : `${macroId}${who}`,
+        id: who.startsWith(macroPrefix) ? who : `${macroPrefix}${who}`,
       };
     const me = await api.me();
     const members = await api.members(who);

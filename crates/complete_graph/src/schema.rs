@@ -48,8 +48,9 @@ use graphql_notification::{
     NotificationMutationService, NotificationSubscriptionRoot, SoupNotificationEdgeReader,
 };
 use graphql_notification_inbox::{
-    GraphqlNotificationInboxPage, NotificationInboxInput, NotificationInboxMutationRoot,
-    NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    GraphqlNotificationInboxClear, GraphqlNotificationInboxPage, NotificationInboxInput,
+    NotificationInboxMutationRoot, NotificationInboxSubscriptionRoot, resolve_notification_inbox,
+    resolve_notification_inbox_clears,
 };
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
@@ -1012,6 +1013,19 @@ where
         .await
     }
 
+    /// The authenticated user's clears of their notifications inbox: the
+    /// one named by `clearId` when given (none once it is forgotten, a day
+    /// after it finished), otherwise every clear and undo still running.
+    /// While a clear is applying, hide the rows it covers; read this again
+    /// after reconnecting, since updates about clears are not replayed.
+    async fn notification_inbox_clears(
+        &self,
+        ctx: &Context<'_>,
+        clear_id: Option<ID>,
+    ) -> async_graphql::Result<Vec<GraphqlNotificationInboxClear>> {
+        resolve_notification_inbox_clears(ctx, self.user_id.clone(), clear_id).await
+    }
+
     /// Authenticated user email catalog fields supplied by `graphql_email`.
     #[graphql(flatten)]
     async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<GraphqlEmailQuery<E>> {
@@ -1114,7 +1128,7 @@ where
         let entity_id = parse_id(input.entity_id, "entityId")?;
         let entity = input
             .entity_type
-            .into_model()
+            .into_model()?
             .with_entity_string(entity_id.to_string());
         resolve_soup_entity::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(ctx, self.user_id.clone(), entity)
             .await

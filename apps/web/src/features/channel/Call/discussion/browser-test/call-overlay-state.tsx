@@ -3,6 +3,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createClient, fetchExchange } from '@urql/core';
 import { createSignal, type ParentProps } from 'solid-js';
 import { createCallMediaPermissions } from '../../primitives/call-media-permissions';
+import { createCallPin } from '../../primitives/create-call-pin';
 
 const params = new URLSearchParams(location.search);
 if (params.has('layout'))
@@ -10,6 +11,9 @@ if (params.has('layout'))
 const callId = '00000000-0000-7000-8000-0000000ca110';
 const channelId = '00000000-0000-7000-8000-00000000c0c0';
 let permissions: ReturnType<typeof createCallMediaPermissions> | undefined;
+let pin:
+  | ReturnType<typeof createCallPin<(typeof participants)[number]>>
+  | undefined;
 const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
   type: 'none',
 });
@@ -202,6 +206,19 @@ async function captureMedia(
 }
 const call = {
   activeCallId: () => callId,
+  get pin() {
+    pin ??= createCallPin({
+      callId: () => callId,
+      participants: () => participants,
+      screens: () =>
+        participants.filter(
+          (participant) =>
+            !!participant.getTrackPublication('screen_share')?.track
+        ),
+      screenSharing,
+    });
+    return pin;
+  },
   callLifecycle: {
     getState: () => ({ t: 'active', call: { channelId, callId } }),
     onLeave: () => () => {},

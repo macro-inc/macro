@@ -1493,6 +1493,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         document: args.document,
         fragmentName: args.fragmentName,
         keys,
+        ...(args.priority ? { priority: args.priority } : {}),
       })) as ReadRecordsByKeysResult;
     },
 

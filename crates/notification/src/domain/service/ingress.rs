@@ -525,6 +525,11 @@ where
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
                     .await?
             }
+            NotificationStatus::Reopen { unseen } => {
+                self.repository
+                    .reopen_notifications(&req.user_id, req.notification_ids, unseen)
+                    .await?
+            }
         };
 
         if !changed.is_empty() {
@@ -777,7 +782,7 @@ where
         Ok(paginated)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,

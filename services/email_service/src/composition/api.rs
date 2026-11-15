@@ -247,6 +247,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         provider: crate::outbound::inbox_connection::GoogleConnectionProvider {
             gmail: email_api.clone(),
             auth: auth_service_client.clone(),
+            token_info_url: macro_service_urls::GoogleOauthTokenInfoUrl::new()?,
         },
         grants: crate::outbound::inbox_connection::GoogleConnectionGrants {
             db: db.clone(),

@@ -5,13 +5,18 @@ import { createGraphqlSoupDoneProjection } from '@queries/soup/graphql/done-proj
 import { usePendingGraphqlSoupDone } from '@queries/soup/graphql/optimistic-done';
 import type { SoupAstItemsData } from '@queries/soup/items';
 import { QueryClient } from '@tanstack/solid-query';
+import { CombinedError } from '@urql/core';
+import { GraphQLError } from 'graphql';
 import { createMemo, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createGraphqlDoneOperation,
   doneEntityKey,
 } from './graphql-done-operation';
-import { notificationReceipt } from './tests/done-write-fixture';
+import {
+  notificationReceipt,
+  reportDoneWriteOutcomes,
+} from './tests/done-write-fixture';
 
 type DoneArgs = Parameters<
   typeof import('../utils').executeMarkEntitiesDone
@@ -246,5 +251,74 @@ describe('no-op receipts with the normalized cache', () => {
     // Nothing changed on the server, so Undo has nothing to reverse.
     await operation.undo();
     expect(writes.undone).not.toHaveBeenCalled();
+  });
+});
+
+describe('offline entity notification clears', () => {
+  const offline = () =>
+    new CombinedError({ networkError: new TypeError('Failed to fetch') });
+
+  it('queues the known notifications by ID when the entity write cannot reach the server', async () => {
+    const { operation, visible } = setup(false, ['a']);
+    writes.done.mockReset();
+    writes.done.mockImplementationOnce(async (args) => {
+      const error = offline();
+      args.onWriteSettled?.({
+        kind: 'entity-notifications',
+        result: { status: 'rejected', reason: error },
+      });
+      throw error;
+    });
+    // The ID-scoped write is durably queued and replayed on reconnect.
+    writes.done.mockImplementationOnce(async (args) => {
+      reportDoneWriteOutcomes(args, { status: 'fulfilled', value: [] });
+      return [];
+    });
+    await vi.waitFor(() =>
+      expect(visible().entities.map(({ id }) => id)).toEqual(['b'])
+    );
+
+    await operation.execute();
+
+    expect(writes.done).toHaveBeenCalledTimes(2);
+    expect(writes.done.mock.calls[1][0]).toMatchObject({
+      emailIds: [],
+      notificationIds: ['n-a'],
+    });
+    expect(writes.done.mock.calls[1][0].notificationEntities ?? []).toEqual([]);
+    expect(operation.hasFailures()).toBe(false);
+    expect(operation.completedCount()).toBe(1);
+    expect(visible().entities.map(({ id }) => id)).toEqual(['b']);
+
+    writes.undone.mockImplementationOnce(async (args) => {
+      args.onWriteSettled?.({
+        kind: 'notifications',
+        result: { status: 'fulfilled', value: args.notificationIds },
+      });
+      return 'queued';
+    });
+    await operation.undo();
+    expect(writes.undone).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationIds: ['n-a'] })
+    );
+  });
+
+  it('still fails a server refusal without a second write', async () => {
+    const { operation } = setup(false, ['a']);
+    writes.done.mockReset();
+    writes.done.mockImplementationOnce(async (args) => {
+      const error = new CombinedError({
+        graphQLErrors: [new GraphQLError('refused')],
+      });
+      args.onWriteSettled?.({
+        kind: 'entity-notifications',
+        result: { status: 'rejected', reason: error },
+      });
+      throw error;
+    });
+
+    await expect(operation.execute()).rejects.toBeInstanceOf(CombinedError);
+    expect(writes.done).toHaveBeenCalledOnce();
+    expect(operation.hasFailures()).toBe(true);
   });
 });
