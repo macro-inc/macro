@@ -15,6 +15,9 @@ use gh_workflow::{
 
 use crate::workflows::runners;
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow.
 pub fn pr_privacy_check() -> Workflow {
     Workflow::new("PR Privacy Check")

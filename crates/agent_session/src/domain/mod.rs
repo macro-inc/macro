@@ -21,6 +21,8 @@ pub mod model;
 pub mod name_generation;
 pub mod ports;
 pub mod pull_request;
+/// The session and source links a session's pull request carries.
+pub mod pull_request_backlinks;
 pub mod pull_request_links;
 pub mod read;
 pub mod retitle;

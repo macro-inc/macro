@@ -39,6 +39,10 @@ use agent_session::{
         model::{AgentSessionId, SessionStatus},
         ports::{AgentSessionLogRepo, AgentSessionRepo},
         pull_request::SessionPullRequestService,
+        pull_request_backlinks::{
+            PullRequestBacklinkService, PullRequestDescriptionError, PullRequestDescriptions,
+            PullRequestNumber,
+        },
         session_task::{
             LinkedTask, PullRequestState, SessionTaskError, SessionTasks, TaskPullRequest,
             TaskPullRequests,
@@ -53,6 +57,30 @@ use axum::{
 use tower::ServiceExt;
 
 type BoxFuture<'a, T> = std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// A pull request description held in memory, written as the owner.
+#[derive(Clone, Default)]
+struct HeldDescription(Arc<std::sync::Mutex<String>>);
+
+impl PullRequestDescriptions for HeldDescription {
+    fn read<'a>(
+        &'a self,
+        _owner: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        _pull_request: &'a PullRequestNumber,
+    ) -> BoxFuture<'a, Result<String, PullRequestDescriptionError>> {
+        Box::pin(async move { Ok(self.0.lock().unwrap().clone()) })
+    }
+
+    fn write<'a>(
+        &'a self,
+        _owner: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        _pull_request: &'a PullRequestNumber,
+        description: &'a str,
+    ) -> BoxFuture<'a, Result<(), PullRequestDescriptionError>> {
+        *self.0.lock().unwrap() = description.to_owned();
+        Box::pin(async { Ok(()) })
+    }
+}
 
 /// Answers task tools with fixed values and records which session linked what.
 #[derive(Clone, Default)]
@@ -173,6 +201,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
             .await
             .unwrap();
         let tasks = FixedTasks::default();
+        let held = HeldDescription::default();
         let app = router(
             Arc::new(repo.clone()),
             configured_hosts(&[
@@ -187,12 +216,17 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                     RecordingRealtime::new(),
                     Arc::new(tasks.clone()),
                 )),
+                backlinks: Arc::new(PullRequestBacklinkService::new(
+                    repo.clone(),
+                    agent_session::testing::FixedTaskDirectory::default(),
+                    Arc::new(held.clone()),
+                    "https://macro.com",
+                )),
                 tasks: Arc::new(tasks.clone()),
                 code_mode: None,
                 cognition: None,
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
-                app_url: "https://macro.com".into(),
             },
         );
         for (host, expected) in [
@@ -365,13 +399,23 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         assert_ne!(called["result"]["isError"], true, "{called}");
         let output: serde_json::Value =
             serde_json::from_str(called["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        // The fixture records no origin, so the source says so and links the session.
+        let session_url = format!("https://macro.com/app/agent/{}", session.id);
+        let block = format!(
+            "<!-- macro-agent-links -->\nMacro agent session: {session_url}\n\nSource (not recorded, see the session): {session_url}\n<!-- /macro-agent-links -->"
+        );
         assert_eq!(
             output,
             serde_json::json!({
                 "pull_request_url": "https://github.com/org/repo/pull/1",
-                "session_url": format!("https://macro.com/app/agent/{}", session.id),
+                "session_url": session_url,
+                "source_kind": "not_recorded",
+                "source_url": session_url,
+                "description_links": block,
+                "description": "added",
             })
         );
+        assert_eq!(*held.0.lock().unwrap(), block);
         assert_eq!(
             repo.get(session.id)
                 .await

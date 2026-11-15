@@ -1370,3 +1370,44 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         Ok(true)
     }
 }
+
+/// A [`TaskDirectory`](crate::domain::session_task::TaskDirectory) that knows a
+/// fixed set of task ids, each titled after its id; any other document is not
+/// a task.
+#[derive(Debug, Clone, Default)]
+pub struct FixedTaskDirectory {
+    /// The document ids that are tasks.
+    pub tasks: Vec<String>,
+}
+
+impl crate::domain::session_task::TaskDirectory for FixedTaskDirectory {
+    async fn task(
+        &self,
+        _viewer: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        task: &crate::domain::session_task::TaskDocumentId,
+    ) -> std::result::Result<
+        crate::domain::session_task::TaskFacts,
+        crate::domain::session_task::SessionTaskError,
+    > {
+        if !self.tasks.iter().any(|id| id == task.as_str()) {
+            return Err(crate::domain::session_task::SessionTaskError::NotATask);
+        }
+        Ok(crate::domain::session_task::TaskFacts {
+            id: task.clone(),
+            title: task.as_str().to_owned(),
+            short_id: task.as_str().to_owned(),
+            reference: task.as_str().to_owned(),
+        })
+    }
+
+    async fn pull_requests(
+        &self,
+        _viewer: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _task: &crate::domain::session_task::TaskDocumentId,
+    ) -> std::result::Result<
+        Vec<crate::domain::session_task::TaskPullRequest>,
+        crate::domain::session_task::SessionTaskError,
+    > {
+        Ok(Vec::new())
+    }
+}
