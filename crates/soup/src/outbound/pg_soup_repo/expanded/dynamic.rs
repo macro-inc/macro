@@ -1848,8 +1848,9 @@ const CANONICAL_UUID_PATTERN: &str =
 /// The most named ids an arm checks access for after its filters. Each
 /// survivor costs a few index probes, so the per-candidate form grows with
 /// the list while the planned semi-join and property bitmaps do not. CRM
-/// scopes measured up to about 2,000 ids; from per-probe cost, the status
-/// bitmap a 2,000-id task list replaced would break even near 4,000.
+/// scopes measured up to about 2,000 ids. On a filtered task list the two
+/// forms read the same warm buffers at 4,000 ids, and the per-candidate form
+/// read about 9% more at 8,000.
 const MAX_NAMED_CANDIDATES: usize = 4_000;
 
 /// At most how many documents the filter admits when it admits only
