@@ -100,6 +100,7 @@ import {
   QUEUE_REQUEST_TIMEOUT_MS,
   queueAttemptOf,
   replayDocument,
+  webLockLeaseOwnerLiveness,
   withQueueRequestTimeout,
 } from './mutation-queue-runner';
 import {
@@ -952,6 +953,7 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
+        leaseOwnerLiveness: webLockLeaseOwnerLiveness(),
         forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({
@@ -1186,6 +1188,9 @@ export function normalizedCacheExchange(
           clientMetadata: optimistic.clientMetadata,
           uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
+        // The enqueue may claim the head for this runner.
+        const registration = mutationQueue.ownerRegistration();
+        if (registration) await registration;
         const now = Date.now();
         const claim = {
           owner: queueOwner,

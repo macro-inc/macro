@@ -931,7 +931,10 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
-/** Read-only request snapshot; never contains a settlement lease token. */
+/**
+ * Read-only request snapshot. It names a live lease so a runner can release
+ * one whose owner is gone; engines that predate this omit the lease.
+ */
 export type MutationInspection = Pick<
   ClaimedMutation,
   | 'transactionId'
@@ -942,7 +945,12 @@ export type MutationInspection = Pick<
   | 'variables'
   | 'clientMetadata'
   | 'enqueuedAtMs'
-> & { optimisticData: unknown };
+> & {
+  optimisticData: unknown;
+  leaseOwner?: string;
+  leaseGeneration?: string;
+  leaseExpiresAtMs?: number;
+};
 
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {

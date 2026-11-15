@@ -75,7 +75,10 @@ function enqueue(
       : { kind: 'not-runnable' },
   };
 }
-function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
+function fixture(
+  options: MutationQueueRunnerDeps['options'] = {},
+  leaseOwnerLiveness?: MutationQueueRunnerDeps['leaseOwnerLiveness']
+) {
   const forwarded: Operation[] = [];
   const commit = vi.fn<CacheHost['commitOptimisticWrite']>(
     async () =>
@@ -121,6 +124,7 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
     }),
     options,
     owner: 'owner',
+    leaseOwnerLiveness,
     forward: (op) => forwarded.push(op),
     writeThrough: (result) =>
       runner.settle(result, queueAttemptOf(result.operation)!),
@@ -358,4 +362,88 @@ it('reports retry exhaustion apart from a permanent rollback', async () => {
       { failure: 'server', errorCode: 'INTERNAL', httpStatus: undefined },
     ],
   ]);
+});
+
+function leasedHead(owner: string) {
+  const op = operation();
+  return {
+    transactionId: '1',
+    uuid: 'left-behind',
+    superseded: false,
+    query: stringifyDocument(op.query),
+    variables: op.variables ?? {},
+    optimisticData: {},
+    leaseOwner: owner,
+    leaseGeneration: '3',
+    leaseExpiresAtMs: Date.now() + 60_000,
+  };
+}
+
+it('releases a lease whose runner is gone and claims the head at once', async () => {
+  const { runner, host } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async (owner) => owner !== 'reloaded' }
+  );
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('reloaded')] : []);
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+    '1',
+    { owner: 'reloaded', generation: '3' },
+    expect.any(Number),
+    'Lease owner is gone'
+  );
+  // The pump asks again without waiting for its poll.
+  expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  ['its runner is alive', 'other-tab', true],
+  ['this runner holds it', 'owner', false],
+])('waits out a lease when %s', async (_case, leaseOwner, alive) => {
+  const { runner, host } = fixture(
+    {},
+    { hold: async () => {}, isAlive: async () => alive }
+  );
+  host.inspectMutations = async () => [leasedHead(leaseOwner)];
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('claims nothing before its owner is registered as alive', async () => {
+  let register!: () => void;
+  const { runner, host } = fixture(
+    {},
+    {
+      hold: () =>
+        new Promise<void>((resolve) => {
+          register = resolve;
+        }),
+      isAlive: async () => true,
+    }
+  );
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).not.toHaveBeenCalled();
+  expect(runner.ownerRegistration()).toBeDefined();
+
+  register();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+  expect(runner.ownerRegistration()).toBeUndefined();
 });

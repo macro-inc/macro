@@ -29,6 +29,13 @@
  * Head changes go through `transition`, which checks the token, and each
  * awaited step rechecks `isCurrent` before it acts. Releasing live callers as
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
+ *
+ * A lease outlives the page that took it: a reload between a claim and its
+ * settlement leaves the head leased to a runner that no longer exists, and the
+ * strict queue would wait out the whole lease behind it. Each runner therefore
+ * holds a Web Lock named after its owner for as long as its page lives, and a
+ * runner that finds the head leased to an owner whose lock is free releases
+ * that lease and claims the head itself.
  */
 
 import { anyAbortSignal } from '@core/util/abort-signal';
@@ -95,6 +102,44 @@ function askedToRetry(error: CombinedError | undefined): boolean {
   );
 }
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
+
+/** Whether queue runners are alive, as far as this context can tell. */
+export type LeaseOwnerLiveness = {
+  /** Marks `owner` alive until this page goes away; resolves once it shows. */
+  hold: (owner: string) => Promise<void>;
+  /** False only when `owner` is known to be gone. */
+  isAlive: (owner: string) => Promise<boolean>;
+};
+
+const leaseOwnerLockName = (owner: string) =>
+  `graphql-cache-mutation-queue:${owner}`;
+
+async function holdForPageLifetime(registered: () => void): Promise<void> {
+  registered();
+  await new Promise<never>(() => {});
+}
+
+/** Liveness through Web Locks, which the browser frees when a page dies. */
+export function webLockLeaseOwnerLiveness(): LeaseOwnerLiveness | undefined {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return undefined;
+  return {
+    hold: (owner) =>
+      new Promise<void>((resolve) => {
+        fireAndForget(
+          locks.request(leaseOwnerLockName(owner), () =>
+            holdForPageLifetime(resolve)
+          ),
+          'graphql-cache-mutation-queue'
+        );
+      }),
+    isAlive: async (owner) => {
+      const name = leaseOwnerLockName(owner);
+      const snapshot = await locks.query();
+      return (snapshot.held ?? []).some((lock) => lock.name === name);
+    },
+  };
+}
 
 async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -306,6 +351,11 @@ export type MutationQueueRunnerDeps = {
   >;
   /** Lease owner for this exchange's claims. */
   owner: string;
+  /**
+   * Tells a lease whose runner is gone from one still being worked on.
+   * Without it a foreign lease is always waited out.
+   */
+  leaseOwnerLiveness?: LeaseOwnerLiveness;
   /** Sends an operation down the exchange's network stream. */
   forward: (op: Operation) => void;
   /** Delivers a result through the exchange's normal write path. */
@@ -353,6 +403,11 @@ export type MutationQueueRunner = {
     result: OperationResult,
     attempt: QueueAttemptContext
   ) => Promise<OperationResult>;
+  /**
+   * Pending until this runner's claims can be told from a dead runner's;
+   * undefined from then on, so a claim made later does not yield.
+   */
+  ownerRegistration: () => Promise<void> | undefined;
   /** Schedules the first drain. */
   start: () => void;
   /** Probes the queue now, keeping the request until a claim can run. */
@@ -388,6 +443,18 @@ export function createMutationQueueRunner(
   let drainRequested = false;
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  const liveness = deps.leaseOwnerLiveness;
+  // Register before the first claim: an unregistered owner looks gone.
+  let ownerRegistration = liveness?.hold(owner);
+  if (ownerRegistration) {
+    fireAndForget(
+      (async () => {
+        await ownerRegistration;
+        ownerRegistration = undefined;
+      })(),
+      'graphql-cache-mutation-queue'
+    );
+  }
 
   function isNewClaim(claim: ClaimedMutation): boolean {
     if (!latestClaim) return true;
@@ -744,6 +811,7 @@ export function createMutationQueueRunner(
       // Restore can invalidate the generation while the host initializes.
       // Finish that handshake before tagging a claim or starting its lease.
       await host.currentRevision();
+      if (ownerRegistration) await ownerRegistration;
       if (options.prepareMutationQueue) await prepareQueueRecovery();
       const now = Date.now();
       // A wakeup probes immediately, but must retain a future retry
@@ -759,6 +827,10 @@ export function createMutationQueueRunner(
         now + QUEUE_LEASE_MS
       );
       if (!claimed) {
+        if (await releaseAbandonedLease(epoch, now)) {
+          drainRequested = true;
+          return;
+        }
         resolveLiveOperationsAsQueued();
         // Short retries keep their deadline; uncertain five-minute lease
         // backoffs must not prevent regular polling after a wakeup.
@@ -784,6 +856,38 @@ export function createMutationQueueRunner(
       drainRunning = false;
       if (drainRequested) scheduleDrain();
     }
+  }
+
+  /**
+   * Releases the head's lease when the runner that took it is gone, so the
+   * head is claimable now instead of when the lease lapses. The head keeps
+   * its optimism and is sent again; the server makes a repeated request safe.
+   */
+  async function releaseAbandonedLease(
+    epoch: StorageEpoch,
+    now: number
+  ): Promise<boolean> {
+    if (!liveness || !host.inspectMutations) return false;
+    const [blocked] = await host.inspectMutations();
+    if (
+      !blocked?.leaseOwner ||
+      blocked.leaseGeneration === undefined ||
+      blocked.leaseOwner === owner ||
+      (blocked.leaseExpiresAtMs ?? Infinity) <= now
+    ) {
+      return false;
+    }
+    if (await liveness.isAlive(blocked.leaseOwner)) return false;
+    if (!isCurrent(epoch)) return false;
+    // Fenced by the lease itself: a head claimed again meanwhile is kept.
+    await host.deferOptimisticWrite(
+      blocked.transactionId,
+      { owner: blocked.leaseOwner, generation: blocked.leaseGeneration },
+      now,
+      'Lease owner is gone'
+    );
+    telemetry.skipped('lease-owner-gone');
+    return true;
   }
 
   async function prepareQueueRecovery(): Promise<void> {
@@ -1143,6 +1247,7 @@ export function createMutationQueueRunner(
     isCurrent,
     admit,
     settle,
+    ownerRegistration: () => ownerRegistration,
     start: () => {
       telemetry.loaded(async () => host.inspectMutations?.());
       scheduleDrain();
