@@ -70,6 +70,8 @@ const LINK_CLEANUP_HANDLER: &str = "user_link_cleanup_handler";
 const SFS_DELETE_HANDLER: &str = "email_sfs_delete_handler";
 /// The Lambda binary that records bounces and complaints.
 const SUPPRESSION_HANDLER: &str = "email_suppression_handler";
+/// The Lambda binary of the hourly link maintenance.
+const REFRESH_HANDLER: &str = "email_refresh_handler";
 /// The topic the email services publish their events to.
 const EMAIL_EVENTS: &str = "macro.email";
 /// What the name of a queue's dead-letter queue ends with, in the evidence.
@@ -742,10 +744,44 @@ impl Stack {
             .await
     }
 
+    /// Runs the hourly link maintenance once, as the cron does in
+    /// production: the real `email_refresh_handler` enqueues a `HealthCheck`
+    /// on `link-manager` for every Gmail inbox that is due and a `Refresh`
+    /// for those whose hour it is. The handler runs with a health interval
+    /// of one hour, so every syncing Gmail inbox is due a health check on
+    /// each run; which inboxes are refreshed depends on the hour and the
+    /// link's id, so a scenario cannot count on a refresh. Returns when the
+    /// handler has finished; the workers then carry out what it enqueued.
+    pub async fn run_refresh(&self) -> Result<(), Report> {
+        self.run_lambda_with(
+            REFRESH_HANDLER,
+            None,
+            &[
+                ("INBOX_HEALTH_POLL_INTERVAL_HOURS", "1"),
+                ("DELETE_UNUSED_AFTER_DAYS", "30"),
+                ("DELETE_INACTIVE_AFTER_DAYS", "90"),
+            ],
+        )
+        .await
+    }
+
     /// Runs one Lambda binary on the scenario's database and queues for
     /// `event`, or for the event a schedule sends.
     async fn run_lambda(&self, name: &'static str, event: Option<String>) -> Result<(), Report> {
+        self.run_lambda_with(name, event, &[]).await
+    }
+
+    /// [`Self::run_lambda`] with settings only this Lambda reads.
+    async fn run_lambda_with(
+        &self,
+        name: &'static str,
+        event: Option<String>,
+        settings: &[(&str, &str)],
+    ) -> Result<(), Report> {
         let mut env = self.worker_env.clone();
+        for (key, value) in settings {
+            env.insert((*key).to_owned(), (*value).to_owned());
+        }
         env.insert("DATABASE_URL".to_owned(), self.database().url());
         let ran = match event {
             Some(event) => crate::lambda::invoke(name, event, &env, &self.log_dir).await,

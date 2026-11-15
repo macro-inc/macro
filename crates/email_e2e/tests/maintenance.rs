@@ -1,6 +1,7 @@
 //! What the maintenance Lambdas do: the daily sweep of unfinished sign-ins,
 //! the daily cleanup of stored attachment files, and the recording of
-//! bounces and complaints about mail Macro sent.
+//! bounces and complaints about mail Macro sent, and the hourly link
+//! maintenance.
 
 #![expect(
     clippy::disallowed_methods,
@@ -526,4 +527,56 @@ async fn gmail_bounced_and_reported_addresses_are_suppressed() -> Result<(), Rep
 #[tokio::test(flavor = "multi_thread")]
 async fn outlook_bounced_and_reported_addresses_are_suppressed() -> Result<(), Report> {
     bounced_and_reported_addresses_are_suppressed(Provider::Outlook).await
+}
+
+/// The hourly link maintenance finds a Gmail grant the user revoked at
+/// Google without any mail arriving: the inbox asks to be reconnected. An
+/// inbox whose grant is fine is checked and left as it is.
+///
+/// When this fails, the hourly maintenance checks no inbox: a revoked grant
+/// goes unnoticed until mail fails to arrive, and no inbox is asked to
+/// reconnect in the meantime.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_hourly_maintenance_finds_a_revoked_grant() -> Result<(), Report> {
+    const LINK_MANAGER: &str = "link-manager";
+    let handled = async |stack: &Stack| {
+        eventually(
+            "the maintenance jobs to be handled and deleted",
+            DEFAULT_TIMEOUT,
+            async || Ok((stack.queue_depth(LINK_MANAGER).await? == 0).then_some(())),
+        )
+        .await
+    };
+
+    let stack = Stack::start().await?;
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    let side = ada.link(Provider::Gmail, "ada.work@example.com").await?;
+
+    // Nothing is wrong: the check changes nothing.
+    stack.run_refresh().await?;
+    handled(&stack).await?;
+    for healthy in [&inbox, &side] {
+        let link = healthy.link().await?;
+        assert_eq!(link["needs_reauth"], false, "{link}");
+    }
+
+    inbox.revoke_grant()?;
+    stack.run_refresh().await?;
+    let link = inbox
+        .wait_for_link("the maintenance to ask for a reconnect", |link| {
+            link["needs_reauth"] == true
+        })
+        .await?;
+    assert_eq!(link["sync_status"], "NEEDS_REAUTH", "{link}");
+    handled(&stack).await?;
+    let other = side.link().await?;
+    assert_eq!(other["needs_reauth"], false, "{other}");
+    assert_eq!(
+        stack.dead_letters(LINK_MANAGER).await?,
+        0,
+        "a maintenance job was given up on"
+    );
+
+    stack.finish().await
 }

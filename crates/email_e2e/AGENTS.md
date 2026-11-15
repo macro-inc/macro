@@ -86,9 +86,12 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   from its own binary, which must be built as well:
   `stack.run_link_cleanup()` (`user_link_cleanup_handler`),
   `stack.run_stored_file_cleanup()` (`email_sfs_delete_handler`, which
-  enqueues on `sfs-delete`) and `stack.notify_of_mail_feedback(&notification)`
-  (`email_suppression_handler`, one bounce or complaint). See
-  `tests/maintenance.rs`. Work of the other crons is enqueued by the
+  enqueues on `sfs-delete`), `stack.notify_of_mail_feedback(&notification)`
+  (`email_suppression_handler`, one bounce or complaint) and
+  `stack.run_refresh()` (`email_refresh_handler`, the hourly link
+  maintenance: a `HealthCheck` on `link-manager` for every Gmail inbox, and
+  a `Refresh` for those whose hour it is, which a scenario cannot count
+  on). See `tests/maintenance.rs`. Work of the other crons is enqueued by the
   scenario: `stack.send_to_queue("link-manager" | "sfs-delete", …)`, and on a
   stack with `document_storage` the reminder sweep tick
   (`"reminder-dispatch"`, `{ "operation": "sweep" }`).

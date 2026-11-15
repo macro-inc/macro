@@ -12,8 +12,9 @@ cargo test --no-run "${flags[@]}" -p email_service --test service_binary_builds
 # The scheduled-send sweep, which scenarios run as the cron does.
 cargo build "${flags[@]}" -p email_scheduled_handler
 # The other lambdas scenarios run: the sweep of abandoned sign-ins, the
-# stored-file cleanup and the bounce and complaint handler.
-cargo build "${flags[@]}" -p user_link_cleanup_handler -p email_sfs_delete_handler -p email_suppression_handler
+# stored-file cleanup, the bounce and complaint handler and the hourly link
+# maintenance.
+cargo build "${flags[@]}" -p user_link_cleanup_handler -p email_sfs_delete_handler -p email_suppression_handler -p email_refresh_handler
 # calendar_service, which the calendar scenarios start, has no such test
 # target: its binary is built directly.
 cargo build "${flags[@]}" -p calendar_service --bin calendar_service
