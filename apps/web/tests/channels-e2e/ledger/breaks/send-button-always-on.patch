@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Input/SendAction.tsx b/apps/web/src/features/channel/Input/SendAction.tsx
+index adab3d5a8c..349405db1c 100644
+--- a/apps/web/src/features/channel/Input/SendAction.tsx
++++ b/apps/web/src/features/channel/Input/SendAction.tsx
+@@ -22,7 +22,7 @@ export function SendAction(props: SendActionProps) {
+   const isBlockedByPending = () => !!input().hasPendingAttachments;
+   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
+   const isDisabled = () =>
+-    !!local.disabled || isBlockedByPending() || isBlockedByEmptyInput();
++    !!local.disabled || isBlockedByPending();
+ 
+   const tooltipText = () => local.tooltip ?? 'Send message';
+ 

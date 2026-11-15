@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx b/apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx
+index 93ff5b12e6..f485abe31c 100644
+--- a/apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx
++++ b/apps/web/src/lib/core/component/LexicalMarkdown/builder/MarkdownShell.tsx
+@@ -156,7 +156,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
+       if (!onEnter) return undefined;
+       return (e) => {
+         if (!e) return false;
+-        if (e.shiftKey) {
++        if (e.shiftKey && !onEnter) {
+           // Shift+enter = regular newline
+           Object.defineProperty(e, 'shiftKey', { value: false });
+           return false;

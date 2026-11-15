@@ -39,6 +39,7 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. The seed scenario has people for six. |
 | `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
+| `VITE_ENABLE_GRAPHQL_SOUP` | Set to `true` when the app under test was built with it, as CI does for both the build and the run: some known defects exist only with the flag, others only without. |
 
 The people sign in through the passwordless code flow of a local stack, so
 the suite needs a stack that offers it; it does not run against a deployed
@@ -65,9 +66,12 @@ environment.
 that cover it or the reason none does. `ledger/proofs.tsv` names, for each
 test, a deliberate break of the product that made it fail, and
 `ledger/breaks/` holds those breaks as patches. `ledger/known-defects.tsv`
-lists the tests that assert behaviour the product does not have yet; they
-are marked `test.fail()` and fail the run the day the defect is fixed, so
-the mark gets removed.
+lists the tests that assert behaviour the product does not have yet, and
+whether that is in builds without `VITE_ENABLE_GRAPHQL_SOUP` (`off`), with it
+(`on`) or `both`; they are marked `knownDefect(...)` and fail the run the day
+the defect is fixed, so the mark gets removed. `ledger/intermittent-defects.tsv`
+lists the tests with a check a defect fails only in some runs, wrapped in
+`failsSometimes`; the checker reports each run in which one showed.
 
 ```sh
 bun tests/channels-e2e/ledger/check.ts                      # ledger against the tests
@@ -83,5 +87,6 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   the product where the behaviour lives, build the bundle, watch the test
   fail, and record the break in `ledger/proofs.tsv` and `ledger/breaks/`.
 - A test that fails because the product is wrong keeps asserting the right
-  behaviour, marked `test.fail()` with the defect in a comment and a row in
+  behaviour, marked `knownDefect('both')` (or `'off'` / `'on'` when only one
+  build has the defect) with the defect in a comment and a row in
   `ledger/known-defects.tsv`.

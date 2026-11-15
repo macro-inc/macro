@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/queries/channel/get-or-create-dm.ts b/apps/web/src/lib/queries/channel/get-or-create-dm.ts
+index d8d30a3da9..90a89f7eb1 100644
+--- a/apps/web/src/lib/queries/channel/get-or-create-dm.ts
++++ b/apps/web/src/lib/queries/channel/get-or-create-dm.ts
+@@ -72,7 +72,7 @@ function findDirectMessage(
+   let found: ApiChannelWithLatest | undefined;
+   for (const channel of channels) {
+     if (channel.channel_type !== ChannelType.direct_message) continue;
+-    if (channel.participants.length !== 2) continue;
++    if (channel.participants.length === 2) continue;
+     const members = channel.participants.map(({ user_id }) => user_id);
+     if (!members.includes(viewerId) || !members.includes(recipientId)) continue;
+     if (!found || channel.created_at < found.created_at) found = channel;

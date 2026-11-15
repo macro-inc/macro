@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/core/util/channels.ts b/apps/web/src/lib/core/util/channels.ts
+index 783021649a..a24cc25ad3 100644
+--- a/apps/web/src/lib/core/util/channels.ts
++++ b/apps/web/src/lib/core/util/channels.ts
+@@ -60,7 +60,7 @@ export function useSendMessageToPeople() {
+     args: SendContent & { navigate?: NavigationOptions }
+   ) {
+     const senderId = userId();
+-    if (!senderId) return;
++    if (!senderId || channelId) return;
+     const { navigate } = args;
+     await args.beforeSend?.(channelId);
+     const messageResponse = await sendMessage

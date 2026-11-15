@@ -1,0 +1,21 @@
+diff --git a/apps/web/src/features/channels-view/queries.ts b/apps/web/src/features/channels-view/queries.ts
+index b93cd8337f..bc2a9ced64 100644
+--- a/apps/web/src/features/channels-view/queries.ts
++++ b/apps/web/src/features/channels-view/queries.ts
+@@ -188,6 +188,8 @@ export function resolveReferencedChannels(
+   return lookup.data.entities.filter(isChannelEntity);
+ }
+ 
++const SEARCH_OPENED_AT = Date.now();
++
+ export function deduplicateChannels(
+   collections: readonly (readonly ChannelEntity[])[]
+ ): ChannelEntity[] {
+@@ -195,6 +197,7 @@ export function deduplicateChannels(
+ 
+   for (const channels of collections) {
+     for (const channel of channels) {
++      if (new Date(channel.createdAt ?? 0).getTime() > SEARCH_OPENED_AT) continue;
+       if (!channelsById.has(channel.id)) {
+         channelsById.set(channel.id, channel);
+       }

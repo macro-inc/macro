@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.ts b/apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.ts
+index 3cba530921..4a5b7506da 100644
+--- a/apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.ts
++++ b/apps/web/src/features/channels-view/components/rail/hooks/useChannelRailActivity.ts
+@@ -271,7 +271,7 @@ export function useChannelRailActivity(
+       notificationActivity().mentionCounts.get(channelId) ?? 0,
+     targetChannelId,
+     targetLabel,
+-    unreadChannelIds: () => notificationActivity().unreadChannelIds,
++    unreadChannelIds: () => new Set<string>(),
+     unreadCount: (group: ChannelsGroup) =>
+       notificationActivity().unreadCounts[group],
+   };

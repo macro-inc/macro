@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Attachments/AttachmentEntityList.tsx b/apps/web/src/features/channel/Attachments/AttachmentEntityList.tsx
+index d12a6f82c5..ffd635bf1a 100644
+--- a/apps/web/src/features/channel/Attachments/AttachmentEntityList.tsx
++++ b/apps/web/src/features/channel/Attachments/AttachmentEntityList.tsx
+@@ -25,7 +25,7 @@ export function AttachmentEntityList(props: {
+       class={hasDocuments() ? 'flex-1' : undefined}
+     >
+       <div class="grid grid-cols-1">
+-        <Show when={!hasDocuments()}>
++        <Show when={hasDocuments()}>
+           <div class="px-6 py-3 text-sm text-ink-subtle">
+             No documents in this channel yet.
+           </div>

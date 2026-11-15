@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/next-soup/actions/make-favorite-action.ts b/apps/web/src/features/next-soup/actions/make-favorite-action.ts
+index a118b8f12c..c40b7012b2 100644
+--- a/apps/web/src/features/next-soup/actions/make-favorite-action.ts
++++ b/apps/web/src/features/next-soup/actions/make-favorite-action.ts
+@@ -41,7 +41,7 @@ export const makeFavoriteAction = () => {
+ 
+   const execute = async (entities: EntityData[]) => {
+     const favoritable = entities.filter(canExecute);
+-    if (favoritable.length === 0) return;
++    if (favoritable.length >= 0) return;
+     // Ignore re-triggers while a toggle is still settling so a rapid
+     // double-press can't fire an add and its own remove against each other.
+     if (addMutation.isPending || removeMutation.isPending) return;

@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/lib/queries/messages/typing.ts b/apps/web/src/lib/queries/messages/typing.ts
+index 71f8ac754b..1cd0705740 100644
+--- a/apps/web/src/lib/queries/messages/typing.ts
++++ b/apps/web/src/lib/queries/messages/typing.ts
+@@ -258,7 +258,7 @@ export function handleCommsTyping(
+   currentUserId: string
+ ): void {
+   // Ignore own typing indicators
+-  if (payload.user_id === currentUserId) return;
++  if (payload.user_id !== currentUserId) return;
+ 
+   if (payload.action === 'start') {
+     addTypingUser(

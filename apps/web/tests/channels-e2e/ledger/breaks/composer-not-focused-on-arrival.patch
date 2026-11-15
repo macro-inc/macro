@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/composer-arrival-focus.ts b/apps/web/src/features/channel/composer-arrival-focus.ts
+index eaf211b23f..44e3080e8d 100644
+--- a/apps/web/src/features/channel/composer-arrival-focus.ts
++++ b/apps/web/src/features/channel/composer-arrival-focus.ts
+@@ -25,7 +25,7 @@ const isEnter = (hotkey: ValidHotkey) =>
+ export function arrivalFocusesComposer(pane: PaneArrival): boolean {
+   const cause = pane.lastNavigationCause();
+   if (cause === 'history-back' || cause === 'history-forward') return false;
+-  if (isModality('touch')) return false;
++  if (!isModality('touch')) return false;
+ 
+   const source = pane.lastNavigationSource();
+   if (shouldAutofocusNavigation(source, cause)) return true;
