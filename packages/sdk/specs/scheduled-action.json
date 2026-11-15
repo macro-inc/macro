@@ -4541,7 +4541,7 @@
       },
       "ItemKind": {
         "type": "string",
-        "description": "A kind of item a request can name, as the name lookup knows them.",
+        "description": "A kind of item a request can name.",
         "enum": [
           "channel",
           "person",

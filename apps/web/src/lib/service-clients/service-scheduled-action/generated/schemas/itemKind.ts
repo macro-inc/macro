@@ -7,7 +7,7 @@
  */
 
 /**
- * A kind of item a request can name, as the name lookup knows them.
+ * A kind of item a request can name.
  */
 export type ItemKind = (typeof ItemKind)[keyof typeof ItemKind];
 

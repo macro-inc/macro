@@ -897,7 +897,7 @@ export type InProgressExecution = {
 };
 
 /**
- * A kind of item a request can name, as the name lookup knows them.
+ * A kind of item a request can name.
  */
 export type ItemKind = 'channel' | 'person' | 'project' | 'initiative' | 'document' | 'task' | 'database' | 'agent' | 'label' | 'tag' | 'channel_label';
 
