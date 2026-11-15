@@ -193,7 +193,11 @@ export async function resendUnqueuedSends(
   const adopted: Entry[] = [];
   await locks.request(`${KEY_PREFIX}resend:${senderId}`, async () => {
     const snapshot = await locks.query();
-    const alive = new Set((snapshot.held ?? []).map((lock) => lock.name));
+    const alive = new Set(
+      [...(snapshot.held ?? []), ...(snapshot.pending ?? [])].map(
+        (lock) => lock.name
+      )
+    );
     for (const { key, entry } of readEntries(storage, senderId)) {
       if (!entry || now - Date.parse(entry.createdAt) > MAX_AGE_MS) {
         storage.removeItem(key);

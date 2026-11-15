@@ -127,16 +127,26 @@ export function webLockLeaseOwnerLiveness(): LeaseOwnerLiveness | undefined {
     hold: (owner) =>
       new Promise<void>((resolve) => {
         fireAndForget(
-          locks.request(leaseOwnerLockName(owner), () =>
-            holdForPageLifetime(resolve)
-          ),
+          (async () => {
+            try {
+              await locks.request(leaseOwnerLockName(owner), () =>
+                holdForPageLifetime(resolve)
+              );
+            } finally {
+              // A refused lock must not keep the queue waiting to register.
+              resolve();
+            }
+          })(),
           'graphql-cache-mutation-queue'
         );
       }),
     isAlive: async (owner) => {
       const name = leaseOwnerLockName(owner);
       const snapshot = await locks.query();
-      return (snapshot.held ?? []).some((lock) => lock.name === name);
+      // A lock still being granted belongs to a page that is starting.
+      return [...(snapshot.held ?? []), ...(snapshot.pending ?? [])].some(
+        (lock) => lock.name === name
+      );
     },
   };
 }
