@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recommendedVoice } from './voices';
+import { currentVoice, defaultAgentVoice, recommendedVoice } from './voices';
 
 const arcas = {
   model: 'aura-2-arcas-en',
@@ -39,5 +39,20 @@ describe('recommendedVoice', () => {
   it('uses any voice when none speak English, and nothing when empty', () => {
     expect(recommendedVoice([celeste], '')).toBe(celeste);
     expect(recommendedVoice([], 'warm')).toBeUndefined();
+  });
+});
+
+describe('currentVoice', () => {
+  it('an agent with no saved voice is on the default, which is shown chosen', () => {
+    expect(currentVoice(null)).toBe(defaultAgentVoice);
+    expect(defaultAgentVoice).toBe('aura-2-thalia-en');
+  });
+
+  it('a saved voice is shown as it is', () => {
+    expect(currentVoice({ model: 'aura-2-orion-en' })).toBe('aura-2-orion-en');
+  });
+
+  it('nothing is shown before the voice has loaded', () => {
+    expect(currentVoice(undefined)).toBeUndefined();
   });
 });

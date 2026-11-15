@@ -28,6 +28,7 @@ the gateway `/email` prefix.
   auth feature is selected once in composition; handlers only extract and render.
 - `src/outbound/inbox_connection.rs`: adapters for the domain-owned `/email/init`
   flow; transaction boundaries, legacy errors, and token-info HTTP are preserved.
+  Scope discovery asks the typed `GoogleOauthTokenInfoUrl`, resolved at startup.
   The transport failure observer and shared HTTP status rule live in `src/api/email/init.rs`.
 - `src/outbound/backfill_jobs.rs`: the existing job queries and initialization
   queue send behind the email domain backfill-job service.
@@ -288,6 +289,13 @@ the gateway `/email` prefix.
   spends live provider quota; Gmail reads three messages at a time to stay
   under the gate's live cap. Don't record message content or addresses on
   its spans.
+- To run against `crates/gmail_emulator` instead of Google, set the
+  `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
+  Google client sets them itself. Without
+  `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL`, an `/email/init` with no OAuth
+  attempt asks Google about the emulator's token: discovery fails with a
+  warning, no calendar grant is recorded and calendar sync never starts,
+  though init succeeds.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer

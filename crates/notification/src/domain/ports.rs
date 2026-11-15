@@ -125,6 +125,16 @@ pub trait NotificationRepository: Send + Sync + 'static {
         done: bool,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
+    /// Atomically reopen done notifications: those in `unseen` return to unseen,
+    /// the rest to seen, so an undo restores the state each had before its done.
+    /// Notifications no longer done are left alone. Return the updated rows.
+    fn reopen_notifications(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        unseen: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+
     /// Get non-deleted, user-owned notification IDs associated with any primary or secondary
     /// entity that need the requested status transition or an initial viewing timestamp.
     fn get_notification_ids_for_entities(

@@ -159,6 +159,7 @@ vi.mock('@queries/agents/capabilities', () => ({
 
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
+  useRunnableHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
     isPending: false,
@@ -661,6 +662,27 @@ describe('Harness', () => {
     expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
   });
+
+  it.each([true, false])(
+    "never lists an agent teammate's computer as a machine (computers on: %s)",
+    (computersOn) => {
+      teamComputers.enabled = computersOn;
+      harnessMocks.query.data = [
+        {
+          ...REGISTERED_HARNESS,
+          access: 'owner',
+          computer_id: 'computer-1',
+          team_agent_user_id: 'macro|agent@example.com',
+        },
+      ];
+
+      render(() => <Harness />);
+      expect(screen.queryByText('Dev box')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Rename' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    }
+  );
 
   it('renames a paired runtime', async () => {
     harnessMocks.query.data = [{ ...REGISTERED_HARNESS, access: 'owner' }];

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { For, Match, Show, Switch } from 'solid-js';
 import { OptionPill } from '../../database/components/select-pill';
 import type { AnswerRenderers } from '../context/answer-display';
@@ -31,7 +32,11 @@ export function ResultValue(props: {
             type="checkbox"
             checked={cell().checked}
             disabled
-            aria-label={cell().checked ? 'True' : 'False'}
+            aria-label={
+              cell().checked
+                ? t('databaseAnswers.true')
+                : t('databaseAnswers.false')
+            }
             class="size-3.5 rounded border-edge-muted align-middle accent-ink disabled:opacity-50"
           />
         )}
