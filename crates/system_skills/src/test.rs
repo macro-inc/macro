@@ -69,8 +69,15 @@ fn compose_routines_finds_items_with_the_sdk_and_ends_with_the_code_step_text() 
         assert!(content.contains(rule), "{rule}");
     }
     let code = compose_routines::CODE.to_string();
-    assert!(content.trim_end().ends_with(routine_program::CODE_STEPS.trim_end()));
-    assert!(code.trim_end().ends_with(routine_program::CODE_STEPS.trim_end()));
+    assert!(
+        content
+            .trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
+    assert!(
+        code.trim_end()
+            .ends_with(routine_program::CODE_STEPS.trim_end())
+    );
     assert!(code.contains("macro.routines.check(routine, { created })"));
     assert!(!code.contains("# Without code"));
     let direct = compose_routines::DIRECT.to_string();
