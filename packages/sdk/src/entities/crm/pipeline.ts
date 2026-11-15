@@ -457,7 +457,9 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
    * a list for any of several, `null` for empty), only some companies or
    * contacts, or a search of their names, domains and emails; sorted by a
    * field. Also answers per-stage counts and number totals (such as Revenue)
-   * over every match, and the pipeline's fields and version.
+   * over every match, and the pipeline's fields and version. A monetary field
+   * (one whose field summary names a `currencyField`) has one total per
+   * `currency`; amounts in different currencies are never converted or added.
    *
    * @param query.limit Most entries to return, 1 to 5000 (default 50); counts and totals cover every match.
    *

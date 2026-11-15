@@ -238,7 +238,9 @@ test('a failed setup notice says why and reopens setup to Retry', async ({
     json(route, 200, offers)
   );
   await page.goto('/');
-  await expect(row(page)).toContainText('Failed');
+  await expect(row(page)).toContainText(
+    'Setup failed: The host ran out of disk.'
+  );
 
   await page.evaluate(() =>
     window.computerFixture.notify({
@@ -254,17 +256,26 @@ test('a failed setup notice says why and reopens setup to Retry', async ({
   await shoot(page, 'notice-failed');
 
   await page.getByRole('button', { name: 'Retry setup' }).last().click();
+  // One banner at the top says why, with Retry setup as its action.
+  await expect(dialog(page).getByRole('alert')).toHaveText(
+    "Couldn't create the computer: the host ran out of disk",
+    { timeout: 10_000 }
+  );
   await expect(
-    dialog(page)
-      .getByRole('list', { name: 'Setup progress' })
-      .getByRole('button', { name: 'Retry setup' })
-  ).toBeVisible({ timeout: 10_000 });
+    dialog(page).getByRole('button', { name: 'Retry setup' })
+  ).toBeVisible();
+  await expect(
+    dialog(page).getByRole('list', { name: 'Setup progress' })
+  ).toHaveCount(0);
   // Setup is stopped: the sign-in step waits on Retry, with nothing spinning
   // and no action that cannot work.
   await expect(dialog(page)).toContainText(
     'Setup stopped before the computer came up'
   );
   await expect(dialog(page)).not.toContainText('Preparing sign-in');
+  await expect(dialog(page)).not.toContainText(
+    'Everyone using this computer can use this Claude sign-in'
+  );
   await expect(
     dialog(page).getByRole('button', { name: 'Use Macro credits instead' })
   ).toHaveCount(0);

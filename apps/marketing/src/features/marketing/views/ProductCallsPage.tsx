@@ -73,7 +73,7 @@ export function RouteCalls() {
           cta="calls_hero_get_started"
           tutorial="calls"
           product="Calls"
-          title="Calls feed into team memory."
+          title="Calls that feed into team memory."
           description="Call from any channel or DM. Give your team and agents context with recordings and transcripts."
         />
         <FeaturePageSection

@@ -56,6 +56,7 @@ const CALLOUTS: readonly {
   id: Destination;
   label: string;
   description?: string;
+  mobileDescription?: string;
   icon: NavIcon;
   side: 'left' | 'right';
 }[] = [
@@ -93,6 +94,7 @@ const CALLOUTS: readonly {
     id: 'agents',
     label: 'External agents',
     description: 'Cursor, Claude, ChatGPT, Hermes, ACP, etc.',
+    mobileDescription: 'Cursor, Claude, ChatGPT',
     icon: AgentIcon,
     side: 'right',
   },
@@ -232,7 +234,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
           const x1 =
             ((left ? a.right + 14 : a.left - 14) - bounds.left) * scale;
           const y1 = (a.top + a.height / 2 - bounds.top) * scale;
-          const x2 = ((left ? b.left - 8 : b.right + 8) - bounds.left) * scale;
+          const x2 = ((left ? b.left - 8 : b.right + 10) - bounds.left) * scale;
           const y2 = (b.top + b.height / 2 - bounds.top) * scale;
           const firstBend = x1 + (x2 - x1) * 0.25;
           const secondBend = x1 + (x2 - x1) * 0.75;
@@ -490,9 +492,7 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
             {(pointer) => (
               <g data-highlighted={highlighted() === pointer().id}>
                 <path d={pointer().path} pathLength="1" />
-                <polygon
-                  points={`${pointer().x},${pointer().y - 3} ${pointer().x + 3},${pointer().y} ${pointer().x},${pointer().y + 3} ${pointer().x - 3},${pointer().y}`}
-                />
+                <circle cx={pointer().x} cy={pointer().y} r={2.55} />
               </g>
             )}
           </Index>
@@ -513,7 +513,19 @@ export function HomepageSidebar(props: { showInteractiveDemo?: boolean } = {}) {
               >
                 <span>{item.label}</span>
                 <Show when={item.description}>
-                  <p>{item.description}</p>
+                  <p
+                    classList={{
+                      'homepage-sidebar-description-full':
+                        !!item.mobileDescription,
+                    }}
+                  >
+                    {item.description}
+                  </p>
+                  <Show when={item.mobileDescription}>
+                    <p class="homepage-sidebar-description-mobile">
+                      {item.mobileDescription}
+                    </p>
+                  </Show>
                 </Show>
               </div>
             )}
