@@ -43,7 +43,6 @@ pub type DcsAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtVal
 pub type DcsUserPermissionsService =
     roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
         roles_and_permissions::outbound::pgpool::MacroDB,
-        roles_and_permissions::outbound::pgpool::MacroDB,
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.

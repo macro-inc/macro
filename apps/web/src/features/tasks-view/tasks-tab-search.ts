@@ -23,6 +23,7 @@ export const tasksTabSearch = {
         'updated_at',
         'created_at',
         'viewed_at',
+        'title',
         'status',
         'priority',
         'due_date_earliest',

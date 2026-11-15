@@ -112,7 +112,10 @@ interface RoutineCommonOptions {
   runVisibility?: RunVisibility;
 }
 
-/** A routine that hands each run to one model or agent. */
+/**
+ * A routine that hands each run to one model or agent: the older form, which
+ * runs as one Ask AI step. Write new routines as {@link StepsRoutineOptions}.
+ */
 export interface AgentRoutineOptions extends RoutineCommonOptions {
   /** Instructions delivered to the agent. */
   prompt: string;
@@ -151,7 +154,7 @@ export interface StepsRoutineOptions extends RoutineCommonOptions {
   agent?: never;
 }
 
-/** Configuration of a routine: one agent task, or code and Ask AI steps. */
+/** Configuration of a routine: code and Ask AI steps, or the older single agent task. */
 export type RoutineOptions = AgentRoutineOptions | StepsRoutineOptions;
 
 /** A scheduled or event-triggered agent task. */

@@ -319,6 +319,57 @@ impl SessionService {
         self.repository.complete_lookup(scope, lookup, answer).await
     }
 
+    /// Profile-picture checks due now, within the account's budget; empty
+    /// when the budget is spent.
+    #[tracing::instrument(name = "whatsapp.session.claim_picture_checks", skip_all, err, fields(account_id = %scope.account_id, count))]
+    pub async fn claim_picture_checks(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<PictureCheck>> {
+        let checks = self.repository.claim_picture_checks(scope, limit).await?;
+        tracing::Span::current().record("count", checks.len());
+        Ok(checks)
+    }
+
+    /// Record what WhatsApp answered about a claimed picture check. A
+    /// picture too large, not an image, or with an id too long to store
+    /// counts as a failed check, so it backs off instead of being retried at
+    /// once.
+    pub async fn complete_picture_check(
+        &self,
+        scope: SessionScope,
+        check: &PictureCheck,
+        answer: &PictureAnswer,
+    ) -> ExternalChatResult<()> {
+        let unstorable = matches!(answer, PictureAnswer::Picture { id, bytes, mime }
+            if bytes.len() > PICTURE_LIMIT_BYTES
+                || id.len() > PICTURE_ID_LIMIT_BYTES
+                || mime.len() > PICTURE_MIME_LIMIT_BYTES
+                || !mime.starts_with("image/"));
+        let answer = if unstorable {
+            &PictureAnswer::Failed
+        } else {
+            answer
+        };
+        self.repository
+            .complete_picture_check(scope, check, answer)
+            .await
+    }
+
+    /// WhatsApp says a person's or group's picture changed (`None`: removed).
+    #[tracing::instrument(name = "whatsapp.session.picture_changed", skip_all, err, fields(account_id = %scope.account_id, removed = picture_id.is_none()))]
+    pub async fn picture_changed(
+        &self,
+        scope: SessionScope,
+        jids: &[String],
+        picture_id: Option<&str>,
+    ) -> ExternalChatResult<()> {
+        self.repository
+            .picture_changed(scope, jids, picture_id)
+            .await
+    }
+
     /// No message of an added chat is known to start importing from.
     #[tracing::instrument(name = "whatsapp.session.backfill_waiting_for_message", skip_all, err, fields(account_id = %scope.account_id, chat_id = %group))]
     pub async fn backfill_waiting_for_message(

@@ -23,6 +23,10 @@ pub mod set_contact_name;
 /// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
 
+/// One page of a company's contacts, filtered by archive state and search,
+/// for the Team list. Same visibility rules as `list_company_contacts`.
+pub mod list_company_contacts_page;
+
 /// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
@@ -36,6 +40,9 @@ pub mod search_contacts;
 
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
+
+/// Title many CRM company and contact chips in one request.
+pub mod previews;
 
 /// Manually create a CRM company (name + domain) for the caller's team.
 pub mod create_company;
@@ -167,10 +174,15 @@ where
             "/companies/{company_id}",
             get(get_company::handler::<C, St, Eas, Auth>),
         )
+        .route("/previews", post(previews::handler::<C, St, Eas, Auth>))
         .route(
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)
                 .post(create_contact::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/contacts/page",
+            get(list_company_contacts_page::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts",

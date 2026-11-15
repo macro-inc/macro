@@ -874,6 +874,18 @@ impl GraphqlComputerSetupMetadata {
         &self.0.computer_name
     }
 
+    /// The Macro user id of the agent teammate the computer runs; absent for
+    /// a plain computer.
+    async fn agent_user_id(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.user_id.as_str())
+    }
+
+    /// The name of the agent teammate the computer runs; absent for a plain
+    /// computer.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
     /// Whether setup finished or failed.
     async fn outcome(&self) -> GraphqlComputerSetupOutcome {
         match self.0.outcome {

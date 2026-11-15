@@ -165,6 +165,9 @@ export function PreviewFrame(props: PreviewFrameProps) {
             isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
             mobileHeaderOwner,
+            // The preview has its own header; its content must not resize the
+            // hosting split's header controls.
+            headerMdControls: undefined,
             headerCollapser: headerCollapseController.collapser,
             toolbarCollapser: toolbarCollapseController.collapser,
           }}

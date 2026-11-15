@@ -10,10 +10,8 @@ import ExportIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear-six.svg';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import ImportIcon from '@icon/system/regular/upload-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { Button, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -50,10 +48,6 @@ export function CrmSidebar(props: {
   onImport: () => void;
   onExport: () => void;
   onSettings: () => void;
-  /** Omitted in the narrow menu, which already has split navigation. */
-  onCollapse?: () => void;
-  search?: () => JSX.Element;
-  searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
@@ -62,29 +56,9 @@ export function CrmSidebar(props: {
     <ViewSidebar.Root aria-label={t('crm.navigation')}>
       <header class="flex shrink-0 flex-col">
         <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header
-            search={props.search}
-            searchLabel={props.searchLabel}
-            collapseControl={
-              <Show when={props.onCollapse}>
-                <Tooltip label={t('crm.collapseSidebar')}>
-                  <Button
-                    aria-label={t('crm.collapseSidebar')}
-                    tooltip={t('crm.collapseSidebar')}
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={props.onCollapse}
-                  >
-                    <SidebarIcon class="size-4" />
-                  </Button>
-                </Tooltip>
-              </Show>
-            }
-          >
+          <ViewSidebar.Header>
             <div class="flex min-w-0 items-center gap-1">
-              <Show when={props.onCollapse}>
-                <ViewSidebar.CloseButton class="shrink-0" />
-              </Show>
+              <ViewSidebar.CloseButton class="shrink-0" />
               <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
             </div>
           </ViewSidebar.Header>
