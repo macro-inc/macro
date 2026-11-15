@@ -135,7 +135,12 @@ entire cache in browser memory. With 10s of thousands of cached objects
     `attempt_count` still counts every claim for backoff and coalescing safety.
     Settlement removes the pending mutation and counter; there is no retained DLQ.
     Each queued network attempt has a one-minute timeout, comfortably inside its
-    five-minute lease.
+    five-minute lease. A page holds a Web Lock named after its lease owner for
+    as long as it runs; a runner whose claim is refused by another owner's
+    unexpired lease releases that lease at once when the owner's lock is free
+    (`releaseAbandonedLease`), so a reload between claim and settlement does not
+    block the queue until the lease runs out. `MutationInspection` carries the
+    lease owner, generation and expiry for that check.
 
 ### Open questions
 
