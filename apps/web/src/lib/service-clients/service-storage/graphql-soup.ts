@@ -115,6 +115,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
@@ -932,6 +933,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
+            isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
@@ -1566,6 +1568,14 @@ function mapGraphqlNotificationMetadata(
             computerId: metadata.computerSetupComputerId,
             harnessId: metadata.computerSetupHarnessId ?? null,
             computerName: metadata.computerSetupComputerName,
+            agent:
+              metadata.computerSetupAgentUserId &&
+              metadata.computerSetupAgentName
+                ? {
+                    userId: metadata.computerSetupAgentUserId,
+                    name: metadata.computerSetupAgentName,
+                  }
+                : null,
             outcome: match(metadata.computerSetupOutcome)
               .with('READY', () => ({ kind: 'ready' as const }))
               .with('FAILED', () => ({

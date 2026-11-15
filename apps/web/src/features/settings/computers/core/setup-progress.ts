@@ -18,7 +18,7 @@ export type SetupStageState =
   | 'current'
   | 'upcoming'
   | 'failed'
-  /** Not needed: the agent runs on Macro's Claude. */
+  /** Not needed: the agent runs on Macro credits. */
   | 'skipped';
 
 export type SetupStage = {
@@ -215,4 +215,95 @@ export function setupStages(
               : undefined,
     };
   });
+}
+
+/** The stage setup is on, or stopped at: the one the header names. */
+export function currentSetupStage(
+  stages: readonly SetupStage[]
+): SetupStage | undefined {
+  return stages.find(
+    (stage) => stage.state === 'current' || stage.state === 'failed'
+  );
+}
+
+/**
+ * The dialog header's one progress line, "Starting up · 0:24": the current
+ * stage and how long it has taken, or what it waits for. Undefined once
+ * nothing is left to do.
+ */
+export function setupProgressLine(
+  computer: ComputerStatus,
+  stages: readonly SetupStage[],
+  elapsed: string | undefined
+): string | undefined {
+  const stage = currentSetupStage(stages);
+  if (!stage) return undefined;
+  const label =
+    computer.status === 'waiting_for_capacity'
+      ? t('computers.waitingForCapacity')
+      : stage.label;
+  return elapsed
+    ? t('computers.progressLine', { stage: label, elapsed })
+    : label;
+}
+
+/** "The host ran out of disk." as "the host ran out of disk", after a colon. */
+function plainReason(reason: string): string {
+  const trimmed = reason.trim().replace(/\.+$/, '');
+  // Keep acronyms ("API", "AWS") as the server wrote them.
+  const second = trimmed.charAt(1);
+  return second && second === second.toLowerCase()
+    ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1)
+    : trimmed;
+}
+
+function stageFailedHeadline(stage: SetupStageId | undefined): string {
+  return match(stage)
+    .with(BILLING_STEP, () => t('computers.failedBilling'))
+    .with('creating', () => t('computers.failedCreating'))
+    .with('booting', () => t('computers.failedBooting'))
+    .with('connecting', () => t('computers.failedConnecting'))
+    .with('sign_in', 'ready', undefined, () => t('computers.failedSetup'))
+    .exhaustive();
+}
+
+/** Why setup stopped, as the dialog's banner says it. */
+export type SetupFailure = {
+  /** One line: "Couldn't create the computer: the host ran out of disk". */
+  message: string;
+  /** What happens next, behind Details. */
+  details?: string;
+  /** Retry setup starts it again. */
+  retryable: boolean;
+};
+
+/**
+ * A setup that stopped and will not move on its own: failed (Retry sets it
+ * up again) or waiting on support. Undefined while setup is under way.
+ */
+export function setupFailure(
+  computer: ComputerStatus,
+  stages: readonly SetupStage[]
+): SetupFailure | undefined {
+  return match(computer.status)
+    .returnType<SetupFailure | undefined>()
+    .with('failed', () => {
+      const headline = stageFailedHeadline(currentSetupStage(stages)?.id);
+      const reason = setupFailureReason(computer);
+      return {
+        message: reason
+          ? t('computers.failedWithReason', {
+              headline,
+              reason: plainReason(reason),
+            })
+          : headline,
+        details: t('computers.setupFailedDetails'),
+        retryable: true,
+      };
+    })
+    .with('needs_attention', () => ({
+      message: t('computers.needsAttention'),
+      retryable: false,
+    }))
+    .otherwise(() => undefined);
 }

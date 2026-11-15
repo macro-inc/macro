@@ -8,6 +8,7 @@
 
 import type { RunMode } from './runMode';
 import type { SuggestionKindOneOfKind } from './suggestionKindOneOfKind';
+import type { SuggestionKindOneOfSends } from './suggestionKindOneOfSends';
 
 /**
  * A prompt for an agent: opened in the composer, or run in the
@@ -19,4 +20,9 @@ export type SuggestionKindOneOf = {
   prompt: string;
   /** How it runs. */
   runMode: RunMode;
+  /** For a background run that posts or sends something: what, and
+where, in plain words. The card shows it before Run, and running
+it approves exactly that. None when the run posts and sends
+nothing. */
+  sends?: SuggestionKindOneOfSends;
 };

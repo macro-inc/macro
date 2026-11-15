@@ -318,6 +318,8 @@ pub struct NewReservation {
     pub extra_items: Vec<SubscriptionItem>,
     /// The purchase's trace context, carried to the computer.
     pub provision_traceparent: Option<String>,
+    /// The agent teammate the computer is bought for, if any.
+    pub agent: Option<MacroUserIdStr<'static>>,
 }
 
 /// Capacity held on a host for a purchase whose charge is being confirmed.
@@ -349,6 +351,8 @@ pub struct Reservation {
     pub provision_traceparent: Option<String>,
     /// After this the confirm worker settles the charge and stops replaying it.
     pub expires_at: DateTime<Utc>,
+    /// The agent teammate the computer is bought for, if any.
+    pub agent: Option<MacroUserIdStr<'static>>,
     /// When the purchase began.
     pub created_at: DateTime<Utc>,
 }

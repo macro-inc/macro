@@ -199,7 +199,7 @@ function DocumentDemo(props: { demo: WorkspaceDemo }) {
   const initialDocument = props.demo.document();
   return (
     <div class="workspace-demo-scroll workspace-demo-document">
-      <h1 class="mb-6 text-2xl font-semibold">Website launch plan</h1>
+      <h1 class="mb-6 text-2xl font-medium">Website launch plan</h1>
       <div
         contentEditable
         role="textbox"

@@ -255,7 +255,7 @@ const PANEL_CSS = `
     padding: 8px;
     width: 100%;
   }
-  .chh-title { font-size: 10px; font-weight: 600; white-space: nowrap; }
+  .chh-title { font-size: 10px; font-weight: 500; white-space: nowrap; }
   .chh-tabs {
     background: #000;
     border: 0.5px solid #1f1f1f;
@@ -317,7 +317,7 @@ const PANEL_CSS = `
     white-space: nowrap;
     width: 100%;
   }
-  .chh-name { font-weight: 600; }
+  .chh-name { font-weight: 500; }
   .chh-time { color: #8b8b8b; }
   /* The timestamp sits at the row's right edge, so the copy has to stop
      short of it rather than at the panel's own padding: 16, which is what

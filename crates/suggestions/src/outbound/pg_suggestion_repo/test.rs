@@ -3,6 +3,9 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use super::*;
 use crate::domain::model::{ChangeAction, RunMode};
 
+mod lifecycle;
+mod runs;
+
 /// A person who can own suggestions.
 pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = Uuid::now_v7();
@@ -49,6 +52,8 @@ fn content(key: &str) -> SuggestionContent {
         categories: Vec::new(),
         about: Vec::new(),
         prompt: Some("Compare them.".to_owned()),
+        sends: None,
+        waiting: None,
     }
 }
 
@@ -267,4 +272,179 @@ async fn reads_load_only_the_suggestions_they_show(pool: PgPool) {
             .map(|suggestion| suggestion.id),
         Some(ids[2])
     );
+}
+
+async fn suggestion_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
+    let suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'entity', 'doc:review', 'Review the plan', 'It changed.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        suggestion,
+        user,
+        Uuid::now_v7(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, 'review')",
+        suggestion
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
+           VALUES ($1, 'about', 0, 'document', $2)"#,
+        suggestion,
+        document,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    suggestion
+}
+
+/// A suggestion row that doesn't decode is skipped, so the item's other suggestions
+/// still resolve.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_broken_row_about_an_item_is_skipped_and_the_rest_found(pool: PgPool) {
+    const LEGACY: &str = "not a macro user id";
+    insert_user(&pool, OWNER).await;
+    insert_user(&pool, LEGACY).await;
+    let document = Uuid::now_v7().to_string();
+    let good = suggestion_about_document(&pool, OWNER, &document).await;
+    suggestion_about_document(&pool, LEGACY, &document).await;
+    let found = PgSuggestionRepo::new(pool)
+        .open_about(EntityType::Document, &document)
+        .await
+        .unwrap();
+    assert_eq!(
+        found
+            .iter()
+            .map(|target| target.suggestion)
+            .collect::<Vec<_>>(),
+        vec![good]
+    );
+}
+
+/// Limits no fixture reaches.
+const NO_LIMITS: Limits = Limits {
+    open: 1000,
+    new_per_generation: 1000,
+};
+
+/// A person's suggestions in a fresh database.
+struct Fixture {
+    pool: PgPool,
+    repo: PgSuggestionRepo,
+    user: MacroUserIdStr<'static>,
+    generation: Uuid,
+}
+
+async fn fixture(pool: PgPool) -> Fixture {
+    insert_user(&pool, OWNER).await;
+    let generation = generation(&pool).await;
+    Fixture {
+        repo: PgSuggestionRepo::new(pool.clone()),
+        pool,
+        user: MacroUserIdStr::parse_from_str(OWNER).unwrap(),
+        generation,
+    }
+}
+
+impl Fixture {
+    fn change(&self, action: ChangeAction) -> Change {
+        Change {
+            session: Uuid::now_v7(),
+            generation: self.generation,
+            action,
+            old: None,
+            new: None,
+            reason: None,
+            at: Utc::now(),
+        }
+    }
+
+    /// A new proposed background prompt suggestion, sending what `sends` says.
+    async fn prompt(&self, sends: Option<&str>) -> Uuid {
+        let id = Uuid::now_v7();
+        let mut content = content(&format!("prompt:{id}"));
+        content.sends = sends.map(str::to_owned);
+        let written = self
+            .repo
+            .create(
+                &self.user,
+                id,
+                &NewKind::Prompt {
+                    run_mode: RunMode::Background,
+                },
+                &content,
+                NO_LIMITS,
+                &self.change(ChangeAction::Created),
+            )
+            .await
+            .unwrap();
+        assert_eq!(written, Written::Applied);
+        id
+    }
+
+    /// A background prompt suggestion in `state`.
+    async fn prompt_in(&self, state: SuggestionState) -> Uuid {
+        let id = self.prompt(None).await;
+        self.force(id, state).await;
+        id
+    }
+
+    /// Put suggestion `id` in `state`, whatever its lifecycle says.
+    async fn force(&self, id: Uuid, state: SuggestionState) {
+        sqlx::query!(
+            r#"UPDATE suggestion
+               SET state = $2, state_reason = CASE WHEN $2 = 'resolved' THEN 'replied' END
+               WHERE id = $1"#,
+            id,
+            state.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .unwrap();
+    }
+
+    async fn suggestion(&self, id: Uuid) -> Suggestion {
+        self.repo.suggestion(&self.user, id).await.unwrap().unwrap()
+    }
+
+    async fn state(&self, id: Uuid) -> SuggestionState {
+        self.suggestion(id).await.state
+    }
+
+    /// A run of suggestion `id`, starting now, sending what `sends` says.
+    fn run_of(&self, id: Uuid, sends: Option<&str>) -> StoredRun {
+        let now = Utc::now();
+        StoredRun {
+            session: Uuid::now_v7(),
+            suggestion: id,
+            user: self.user.clone(),
+            agent: Uuid::now_v7(),
+            action: Uuid::now_v7(),
+            started_at: now,
+            state: RunState::Starting,
+            state_changed_at: now,
+            sends: sends.map(str::to_owned),
+        }
+    }
+
+    /// Start a run of suggestion `id` as it is now, held by no one; the run
+    /// when it started.
+    async fn start(&self, id: Uuid) -> Option<StoredRun> {
+        let run = self.run_of(id, None);
+        let shown = self.suggestion(id).await.updated_at;
+        self.repo
+            .start_run(&run, shown, run.started_at)
+            .await
+            .unwrap()
+            .then_some(run)
+    }
 }

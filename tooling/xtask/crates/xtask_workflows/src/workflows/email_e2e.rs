@@ -1,5 +1,5 @@
-//! `Email end-to-end` — the `email_e2e` suite: the real `email_service` and
-//! its workers against the Gmail and Outlook emulators. Generated into
+//! `Email end-to-end` — the `email_e2e` suite: the real `email_service`,
+//! its workers and `calendar_service` against the Gmail and Outlook emulators. Generated into
 //! `email_e2e.yml`.
 //!
 //! It runs on every push to `main` that changes backend code, because a
@@ -20,7 +20,7 @@ use crate::workflows::{
     vars,
 };
 
-/// Files whose change makes `PR CI` call this workflow: email's own code,
+/// Files whose change makes `PR CI` call this workflow: email and calendar code,
 /// the provider emulators, the schema, and the suite.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("services/email_service/**"),
@@ -28,6 +28,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/email/**"),
     xtask_paths::repo_glob!("crates/email_*/**"),
     xtask_paths::repo_glob!("crates/graphql_email/**"),
+    xtask_paths::repo_glob!("services/calendar_service/**"),
+    xtask_paths::repo_glob!("crates/calendar_*/**"),
     xtask_paths::repo_glob!("crates/gmail_*/**"),
     xtask_paths::repo_glob!("crates/outlook_*/**"),
     xtask_paths::repo_glob!("services/search_processing_service/**"),
