@@ -35,6 +35,24 @@ import {
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
+import { optimisticIdOf, SEND_MESSAGE_MUTATION_KEY } from './unsent';
+
+/**
+ * The sends this session is still waiting on, other than `deliveredId`: the
+ * server has not placed them, so they stay after every placed message.
+ */
+function waitingSendIds(deliveredId: string): Set<string> {
+  const ids = new Set<string>();
+  const sending = queryClient.getMutationCache().findAll({
+    mutationKey: SEND_MESSAGE_MUTATION_KEY,
+    status: 'pending',
+  });
+  for (const mutation of sending) {
+    const id = optimisticIdOf(mutation.state.variables);
+    if (id !== undefined && id !== deliveredId) ids.add(id);
+  }
+  return ids;
+}
 
 /**
  * A refetch can have read before this committed event, including on a page that
@@ -129,7 +147,11 @@ export function applyQueuedWrite(
   );
   if (change === 'posted' && !message.thread_id) {
     setMessageTimelineData(message.parent, (data) =>
-      placeTopLevelMessageInMessageTimeline(data, message.id)
+      placeTopLevelMessageInMessageTimeline(
+        data,
+        message.id,
+        waitingSendIds(message.id)
+      )
     );
   }
 }
@@ -233,7 +255,11 @@ export function applyMessage(
     channelCacheHost()
   ) {
     setMessageTimelineData(parent, (data) =>
-      placeTopLevelMessageInMessageTimeline(data, message.id)
+      placeTopLevelMessageInMessageTimeline(
+        data,
+        message.id,
+        waitingSendIds(message.id)
+      )
     );
   }
   softInvalidateTargetCaches(parent, target);

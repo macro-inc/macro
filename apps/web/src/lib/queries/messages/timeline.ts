@@ -557,11 +557,14 @@ export function insertTopLevelMessageIntoMessageTimeline(
  * Moves a root message of the newest page to where its time puts it among the
  * page's messages. A message the server placed after it was first shown, such
  * as this person's own send delivered late, otherwise stays where it was
- * written, above messages the server holds before it.
+ * written, above messages the server holds before it. `waitingIds` are this
+ * person's sends the server has not placed yet: they stay last, in the order
+ * written, so nothing is moved past them.
  */
 export function placeTopLevelMessageInMessageTimeline(
   data: MessageTimelineData | undefined,
-  messageId: string
+  messageId: string,
+  waitingIds: ReadonlySet<string> = new Set()
 ): MessageTimelineData | undefined {
   const newestPage = data?.pages[0];
   if (!data || !newestPage || newestPage.previous_cursor) return data;
@@ -573,11 +576,15 @@ export function placeTopLevelMessageInMessageTimeline(
   const position = timelineEntryPosition(moved);
   const others = newestPage.entries.filter((_, index) => index !== from);
   // Entries run newest first: the message goes above the first older entry.
+  const waiting = (entry: MessageTimelineEntry) =>
+    entry.type === 'message' && waitingIds.has(entry.message.id);
   const older = others.findIndex(
     (entry) =>
+      !waiting(entry) &&
       compareTimelinePositions(timelineEntryPosition(entry), position) < 0
   );
-  const to = older === -1 ? others.length : older;
+  const placed = older === -1 ? others.length : older;
+  const to = Math.max(placed, others.findLastIndex(waiting) + 1);
   if (to === from) return data;
   return {
     ...data,
