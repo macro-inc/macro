@@ -13,6 +13,7 @@ import {
   DmWorkProvider,
   DmWorkToggle,
 } from '@app/features/agent-work/views/dm-work';
+import { TeamAgentDmStatusChip } from '@app/features/settings/views/team-agent-dm-status';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -184,6 +185,11 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
 
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.agent-status">
+          <TeamAgentDmStatusChip channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <Show when={activeTab() !== 'call'}>
         <DmWorkToggle />
       </Show>

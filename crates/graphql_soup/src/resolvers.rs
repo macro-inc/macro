@@ -18,7 +18,10 @@ use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
-use soup::domain::{models::grouping::build_grouped_response, ports::SoupService};
+use soup::domain::{
+    models::{SoupPropertiesField, grouping::build_grouped_response},
+    ports::SoupService,
+};
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
@@ -96,7 +99,13 @@ where
     let sort = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
     let grouping = request.grouping.clone();
-    let items: Vec<_> = service.get_user_soup_grouped(request).await?.collect();
+    // Properties resolve through each entity's property edge, so the page
+    // skips Soup's own property read.
+    let items: Vec<_> = service
+        .get_user_soup_grouped_without_properties(request)
+        .await?
+        .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+        .collect();
     let mut keys: Vec<String> = items
         .iter()
         .map(|item| item.key.clone())

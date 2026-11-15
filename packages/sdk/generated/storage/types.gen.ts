@@ -3535,6 +3535,11 @@ export type ChannelAccessRequestedMetadata = {
      * Person asking to join.
      */
     requester_id: MacroUserIdStr;
+    /**
+     * The requester's profile name when they asked, if they had one. Absent
+     * on events from before it was added.
+     */
+    requester_name?: string | null;
 };
 
 /**
@@ -5262,6 +5267,12 @@ export type CreateCrmTeamContactRequest = {
  */
 export type CreateDatabaseRequest = {
     /**
+     * The first table's display name; "Table 1" when omitted. Name it when
+     * you are about to fill a table, and build into it rather than adding a
+     * second table beside an empty "Table 1".
+     */
+    firstTable?: string | null;
+    /**
      * Display name.
      */
     name: string;
@@ -6051,6 +6062,29 @@ export type CrmCompanyFilters = {
 };
 
 /**
+ * What a company chip shows: the fields the company read returns for its
+ * title, without its contacts.
+ */
+export type CrmCompanyPreview = {
+    /**
+     * The company.
+     */
+    id: string;
+    /**
+     * The team's name override, else the primary domain's directory name.
+     */
+    name?: string | null;
+    /**
+     * The company's first domain, which titles a company with no name.
+     */
+    primaryDomain?: string | null;
+    /**
+     * The company's last interaction, as the company read's `updatedAt`.
+     */
+    updatedAt: string;
+};
+
+/**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.
  * Mirrors the soup-listed `crmCompany` shape (`name` / `description`
  * resolved from the primary domain's `crm_domain_directory` entry) and
@@ -6102,6 +6136,60 @@ export type CrmCompanyResponse = {
     teamId: string;
     /**
      * Most recent known interaction with this company.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The name and visibility of a contact's company.
+ */
+export type CrmContactCompanyResponse = {
+    /**
+     * The company's oldest domain, which clients show when it has no
+     * name.
+     */
+    domain?: string | null;
+    /**
+     * Whether the company is hidden. Only admin/owner callers can see a
+     * hidden company.
+     */
+    hidden: boolean;
+    /**
+     * The id of the company; equal to the contact's `companyId`.
+     */
+    id: string;
+    /**
+     * The company's display name, if it has one.
+     */
+    name?: string | null;
+};
+
+/**
+ * A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the
+ * contact, with what its page shows of its company.
+ */
+export type CrmContactDetailResponse = CrmContactResponse & {
+    company?: null | CrmContactCompanyResponse;
+};
+
+/**
+ * What a contact chip shows.
+ */
+export type CrmContactPreview = {
+    /**
+     * The contact's primary email, which titles a contact with no name.
+     */
+    email?: string | null;
+    /**
+     * The contact.
+     */
+    id: string;
+    /**
+     * The contact's display name.
+     */
+    name?: string | null;
+    /**
+     * When the contact record last changed.
      */
     updatedAt: string;
 };
@@ -6205,6 +6293,35 @@ export type CrmDomainResponse = {
  * `member` is deliberately not representable.
  */
 export type CrmPermissionRole = 'admin' | 'owner';
+
+/**
+ * The previews of the requested records the viewer may open; a record the
+ * viewer may not open, or that does not exist, is left out.
+ */
+export type CrmPreviews = {
+    /**
+     * Company previews, in no particular order.
+     */
+    companies: Array<CrmCompanyPreview>;
+    /**
+     * Contact previews, in no particular order.
+     */
+    contacts: Array<CrmContactPreview>;
+};
+
+/**
+ * The CRM records whose chips to title.
+ */
+export type CrmPreviewsRequest = {
+    /**
+     * Companies to preview, at most 100.
+     */
+    companyIds?: Array<string>;
+    /**
+     * Contacts to preview, at most 100.
+     */
+    contactIds?: Array<string>;
+};
 
 /**
  * One stage in a `PUT /crm/stages` body.
@@ -10216,6 +10333,11 @@ export type ExternalChatParticipant = {
      * else a generic name.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
 };
 
 /**
@@ -10227,6 +10349,11 @@ export type ExternalChatPersonRef = {
      * Display name, never authentication evidence.
      */
     name: string;
+    /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * Verified Macro user, if any.
      */
@@ -10444,6 +10571,11 @@ export type ExternalChatSender = {
      */
     personId: string;
     /**
+     * Their profile picture as the chat owner's account sees it: a static
+     * file id; `null` when hidden, unset or not fetched yet.
+     */
+    pictureFileId?: string | null;
+    /**
      * Verified Macro user association, if present.
      */
     userId?: string | null;
@@ -10475,6 +10607,12 @@ export type ExternalChatSummary = {
      * Display name: the group's, or a direct chat's other person.
      */
     name: string;
+    /**
+     * The group's picture, or a direct chat's person's, as the owner's
+     * account sees it: a static file id; `null` when hidden, unset or not
+     * fetched yet.
+     */
+    pictureFileId?: string | null;
     /**
      * The service the chat lives in.
      */
@@ -12391,7 +12529,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property' | 'name';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -12597,6 +12735,7 @@ export type Harness = {
      * Teams it is a team machine for: their every member is a user of it.
      */
     shared_team_ids?: Array<string>;
+    team_agent_user_id?: null | MacroUserIdStr;
     /**
      * Update timestamp.
      */
@@ -18568,7 +18707,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property' | 'name';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -27324,7 +27463,7 @@ export type GetContactErrors = {
 export type GetContactError = GetContactErrors[keyof GetContactErrors];
 
 export type GetContactResponses = {
-    200: CrmContactResponse;
+    200: CrmContactDetailResponse;
 };
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
@@ -28033,6 +28172,38 @@ export type GetCrmPipelineViewPositionsResponses = {
 };
 
 export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
+
+export type PreviewCrmRecordsData = {
+    body: CrmPreviewsRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/previews';
+};
+
+export type PreviewCrmRecordsErrors = {
+    /**
+     * More than 100 ids of a kind
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * A bot or harness credential
+     */
+    403: unknown;
+    /**
+     * An id that is not a UUID
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type PreviewCrmRecordsError = PreviewCrmRecordsErrors[keyof PreviewCrmRecordsErrors];
+
+export type PreviewCrmRecordsResponses = {
+    200: CrmPreviews;
+};
+
+export type PreviewCrmRecordsResponse = PreviewCrmRecordsResponses[keyof PreviewCrmRecordsResponses];
 
 export type GetCrmTeamSettingsData = {
     body?: never;
@@ -33139,7 +33310,8 @@ export type GetItemsSoupData = {
         /**
          * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
          * Missing definitions, unsupported types, and mismatched values sort as missing.
-         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * `name` orders by the item's own name, case-insensitively in ICU root collation order, unnamed last.
+         * Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
          * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;

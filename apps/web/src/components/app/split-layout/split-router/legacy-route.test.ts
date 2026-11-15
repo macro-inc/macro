@@ -114,6 +114,19 @@ describe('legacy link mentions', () => {
     });
   });
 
+  it('keeps the table and view of a database link opened in the app', () => {
+    const databaseId = '01a1d6aa-3b54-72fc-8a19-2f097c4ba71e';
+    expect(
+      resolveMention(
+        appUrl(`/database/${databaseId}?tableId=table-1&viewId=view-1`)
+      )
+    ).toEqual({
+      id: databaseId,
+      block: 'database',
+      params: { tableId: 'table-1', viewId: 'view-1' },
+    });
+  });
+
   it('opens a shared project link in Tasks', () => {
     const middleware = createAppSplitRouterMiddleware({
       isTouchDevice: () => false,
@@ -179,6 +192,22 @@ describe('opening an app URL', () => {
     });
     expect(entry?.location.search).toEqual({
       calendar: { eventId: ['event-1'] },
+    });
+  });
+
+  it('opens a database link on the table and view it names', async () => {
+    const { router } = openApp(
+      '/app/database/database-1?tableId=table-1&viewId=view-1'
+    );
+    await router.settled();
+
+    const entry = router.entry(router.panes()[0]!);
+    expect(entry?.location.route.matches.at(-1)).toEqual({
+      id: legacyContentRoute.id,
+      params: { type: 'database', id: 'database-1' },
+    });
+    expect(entry?.location.search).toEqual({
+      'database-detail': { tableId: ['table-1'], viewId: ['view-1'] },
     });
   });
 

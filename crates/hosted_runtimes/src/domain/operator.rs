@@ -433,6 +433,8 @@ where
             }
             Effect::NotifySetup { outcome } => {
                 let computer = self.computer(computer_id).await?;
+                // An agent teammate's computer is told about as its agent.
+                let agent = self.repo.agent_of(computer_id).await.map_err(internal)?;
                 self.notices
                     .send(SetupNotice {
                         computer_id,
@@ -440,6 +442,7 @@ where
                         harness_id: computer.harness_id,
                         computer_name: computer.name.as_str().to_owned(),
                         buyer: computer.created_by,
+                        agent,
                         outcome: outcome.clone(),
                     })
                     .await

@@ -18,6 +18,7 @@ import {
   useHarnessesQuery,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
+import { isTeamAgentComputer } from '@queries/harnesses/runnable';
 import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
@@ -217,8 +218,11 @@ export function Harness(
                   ? harnessesQuery.data.filter(
                       // A Macro computer is listed once, under Macro computers;
                       // with that section off it stays an ordinary machine.
+                      // An agent teammate's computer is never one: people
+                      // message the agent instead.
                       (harness) =>
                         harness.access === 'owner' &&
+                        !isTeamAgentComputer(harness) &&
                         !(
                           teamComputers.enabled() &&
                           (harness.computer_id ||

@@ -2194,6 +2194,9 @@ impl IntoResponse for CreateSessionApiError {
                 tracing::info!(reason, "create refused: the bot's runtime is unavailable");
                 (StatusCode::CONFLICT, reason.to_owned())
             }
+            Self::Domain(error @ AgentSessionError::TeamAgentComputer) => {
+                (StatusCode::CONFLICT, error.to_string())
+            }
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "failed to open an agent session");
                 (
@@ -2401,6 +2404,9 @@ pub async fn create_agent_session_handler<
                             CreateSessionApiError::UnmanagedSystemBot
                         }
                         ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                        ManagedPersonaError::TeamAgentComputer => {
+                            CreateSessionApiError::Domain(AgentSessionError::TeamAgentComputer)
+                        }
                         ManagedPersonaError::OwnerNotUser(owner_type) => {
                             CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(
                                 owner_type,
@@ -2532,6 +2538,7 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        on_team_agent_computer,
         managed_profile,
         ..
     } = state
@@ -2558,6 +2565,10 @@ pub async fn create_agent_session_handler<
         && harness_id != Some(harness.harness_id)
     {
         return Err(CreateSessionApiError::NotYourBot);
+    }
+    // Nothing runs on an agent teammate's computer but the agent itself.
+    if on_team_agent_computer {
+        return Err(AgentSessionError::TeamAgentComputer.into());
     }
 
     validate_workspace(&workspace)?;

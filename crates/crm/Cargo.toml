@@ -52,6 +52,7 @@ outbound = [
   "dep:macro_user_id",
   "dep:models_properties",
   "dep:properties",
+  "dep:readonly_pool",
   "dep:sqlx",
   "dep:unfurl",
   "ports",
@@ -109,6 +110,7 @@ utoipa = { workspace = true, optional = true }
 # Outbound dependencies
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
+readonly_pool = { path = "../readonly_pool", optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -117,11 +119,13 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 agent_correlation = { path = "../agent_correlation" }
 databases = { path = "../databases", features = ["postgres", "gateway"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+harness_id = { path = "../harness_id" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 
 macro_db_migrator = { path = "../macro_db_migrator" }
 messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 macro_user_id = { path = "../macro_user_id" }
+model_user = { path = "../model_user" }
 properties = { path = "../properties", default-features = false, features = [
   "outbound",
   "ports",

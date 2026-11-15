@@ -4,7 +4,12 @@ import { Show } from 'solid-js';
 import { ContactCompanyProperty } from '../components/contact-company-property';
 import { ContactEmailProperty } from '../components/contact-email-property';
 import { useCrmContext } from '../context/crm-context';
-import { type CrmContact, contactEmails } from '../core/contact';
+import {
+  type CrmContact,
+  contactCompanyName,
+  contactCompanySummary,
+  contactEmails,
+} from '../core/contact';
 import { useCompanyQuery } from './use-crm';
 
 function editError(error: unknown): string {
@@ -64,7 +69,15 @@ export function ContactCompanyField(props: {
 }) {
   const context = useCrmContext();
   const mutation = context.editContactCompany();
-  const { company } = useCompanyQuery(() => props.contact.companyId ?? '');
+  // The contact detail names its company; read the company only without it.
+  const summary = () => contactCompanySummary(props.contact);
+  const { company } = useCompanyQuery(() =>
+    summary() ? '' : (props.contact.companyId ?? '')
+  );
+  const companyName = () => {
+    const known = summary();
+    return known ? contactCompanyName(known) : company()?.name;
+  };
   const navigation = context.createNavigation();
   // Older servers omit the classification; the relation then stays read-only.
   const independent = () => props.contact.companyDomain === false;
@@ -81,7 +94,7 @@ export function ContactCompanyField(props: {
               : undefined
           }
           companyId={props.contact.companyId}
-          companyName={company()?.name}
+          companyName={companyName()}
           errorMessage={editError}
           save={async (companyId) => {
             await mutation.mutateAsync({ contact: props.contact, companyId });

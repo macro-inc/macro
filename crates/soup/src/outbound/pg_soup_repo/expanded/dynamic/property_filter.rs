@@ -9,6 +9,9 @@ use uuid::Uuid;
 
 use super::{property_literal_predicate, sql_string_literal};
 
+#[cfg(test)]
+mod test;
+
 pub(super) fn predicate(expr: &Expr<PropertiesLiteral>, entity_id_sql: &str) -> String {
     // Fold once, retaining each maximal OR region until AND/NOT requires SQL.
     // Re-scanning subtrees for eligible leaves is quadratic on mixed skew trees.
@@ -29,16 +32,37 @@ pub(super) fn predicate(expr: &Expr<PropertiesLiteral>, entity_id_sql: &str) -> 
     .render(entity_id_sql)
 }
 
-struct ReferenceGroup {
+/// One property definition (and entity type) whose values an OR region
+/// matches against several members.
+struct MembershipGroup<T> {
     first: PropertiesLiteral,
-    ids: Vec<EntityRefId>,
+    members: Vec<T>,
 }
+
+type GroupKey = (Uuid, Option<String>);
 
 #[derive(Default)]
 struct Disjunction {
-    references: BTreeMap<(Uuid, Option<String>), ReferenceGroup>,
+    references: BTreeMap<GroupKey, MembershipGroup<EntityRefId>>,
+    options: BTreeMap<GroupKey, MembershipGroup<Uuid>>,
     others: Vec<String>,
     terms: usize,
+}
+
+fn merge_groups<T>(
+    into: &mut BTreeMap<GroupKey, MembershipGroup<T>>,
+    from: BTreeMap<GroupKey, MembershipGroup<T>>,
+) {
+    for (key, mut group) in from {
+        match into.entry(key) {
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                entry.get_mut().members.append(&mut group.members);
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(group);
+            }
+        }
+    }
 }
 
 impl Disjunction {
@@ -51,21 +75,36 @@ impl Disjunction {
     }
 
     fn literal(literal: PropertiesLiteral, entity_id_sql: &str) -> Self {
-        let PropertyMatchValue::EntityRef(id) = &literal.value else {
-            return Self::sql(property_literal_predicate(&literal, entity_id_sql));
-        };
         let key = (
             literal.property_definition_id,
             literal.entity_type.map(|value| value.to_string()),
         );
-        let group = ReferenceGroup {
-            ids: vec![id.clone()],
-            first: literal,
-        };
-        Self {
-            references: BTreeMap::from([(key, group)]),
-            others: Vec::new(),
-            terms: 1,
+        match &literal.value {
+            PropertyMatchValue::EntityRef(id) => Self {
+                references: BTreeMap::from([(
+                    key,
+                    MembershipGroup {
+                        members: vec![id.clone()],
+                        first: literal,
+                    },
+                )]),
+                terms: 1,
+                ..Self::default()
+            },
+            PropertyMatchValue::SelectOption(option_id) => Self {
+                options: BTreeMap::from([(
+                    key,
+                    MembershipGroup {
+                        members: vec![*option_id],
+                        first: literal,
+                    },
+                )]),
+                terms: 1,
+                ..Self::default()
+            },
+            PropertyMatchValue::DateRange(_) => {
+                Self::sql(property_literal_predicate(&literal, entity_id_sql))
+            }
         }
     }
 
@@ -74,16 +113,8 @@ impl Disjunction {
         if self.terms < other.terms {
             std::mem::swap(&mut self, &mut other);
         }
-        for (key, mut group) in other.references {
-            match self.references.entry(key) {
-                std::collections::btree_map::Entry::Occupied(mut entry) => {
-                    entry.get_mut().ids.append(&mut group.ids);
-                }
-                std::collections::btree_map::Entry::Vacant(entry) => {
-                    entry.insert(group);
-                }
-            }
-        }
+        merge_groups(&mut self.references, other.references);
+        merge_groups(&mut self.options, other.options);
         self.others.append(&mut other.others);
         self.terms += other.terms;
         self
@@ -91,12 +122,23 @@ impl Disjunction {
 
     fn render(self, entity_id_sql: &str) -> String {
         let mut predicates = self.others;
+        // Singleton groups retain their indexable JSON containment checks.
         predicates.extend(self.references.into_values().map(|group| {
-            // Singleton groups retain their indexable JSON containment checks.
-            if group.ids.len() == 1 {
+            if group.members.len() == 1 {
                 property_literal_predicate(&group.first, entity_id_sql)
             } else {
-                membership_predicate(&group, entity_id_sql)
+                reference_membership_predicate(&group, entity_id_sql)
+            }
+        }));
+        predicates.extend(self.options.into_values().map(|mut group| {
+            // Sorted, so the SQL text does not depend on the shape of the OR
+            // tree; deduplicated first, so `A OR A` keeps the singleton form.
+            group.members.sort_unstable();
+            group.members.dedup();
+            if group.members.len() == 1 {
+                property_literal_predicate(&group.first, entity_id_sql)
+            } else {
+                option_membership_predicate(&group, entity_id_sql)
             }
         }));
         if predicates.len() == 1 {
@@ -106,18 +148,24 @@ impl Disjunction {
     }
 }
 
-fn membership_predicate(group: &ReferenceGroup, entity_id_sql: &str) -> String {
+fn entity_type_clause(literal: &PropertiesLiteral) -> String {
+    literal
+        .entity_type
+        .map(|value| format!("AND ep_prop.entity_type = '{value}'"))
+        .unwrap_or_default()
+}
+
+fn reference_membership_predicate(
+    group: &MembershipGroup<EntityRefId>,
+    entity_id_sql: &str,
+) -> String {
     let ids = group
-        .ids
+        .members
         .iter()
         .map(|id| sql_string_literal(&id.to_string()))
         .collect::<Vec<_>>()
         .join(", ");
-    let entity_type_clause = group
-        .first
-        .entity_type
-        .map(|value| format!("AND ep_prop.entity_type = '{value}'"))
-        .unwrap_or_default();
+    let entity_type_clause = entity_type_clause(&group.first);
     let definition = group.first.property_definition_id;
     // The AST carries a variable-size set. Keep one membership predicate per
     // definition/type, rather than one correlated EXISTS per reference.
@@ -135,6 +183,29 @@ fn membership_predicate(group: &ReferenceGroup, entity_id_sql: &str) -> String {
             AND ep_prop.property_definition_id = '{definition}'
             AND jsonb_typeof(ep_ref.value->'entity_id') = 'string'
             AND ep_ref.value->>'entity_id' = ANY(ARRAY[{ids}]::text[])
+        )"#
+    )
+}
+
+fn option_membership_predicate(group: &MembershipGroup<Uuid>, entity_id_sql: &str) -> String {
+    let options = group
+        .members
+        .iter()
+        .map(|id| format!("'{id}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let entity_type_clause = entity_type_clause(&group.first);
+    let definition = group.first.property_definition_id;
+    // `?|` is the OR of `?` over its array, so one EXISTS reads the entity's
+    // row once. One EXISTS per option was planned as a hashed subplan each,
+    // every one reading that option's rows across all entities.
+    format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_properties ep_prop
+            WHERE ep_prop.entity_id = {entity_id_sql}
+            {entity_type_clause}
+            AND ep_prop.property_definition_id = '{definition}'
+            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[]
         )"#
     )
 }

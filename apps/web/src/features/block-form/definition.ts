@@ -1,9 +1,11 @@
 import { defineBlock, LoadErrors, loadResult } from '@core/block';
 import { lazy } from 'solid-js';
+import { FormBlockLoading } from './form-block-loading';
 
 export const definition = defineBlock({
   name: 'form',
   description: 'Build a form and collect responses',
+  loading: FormBlockLoading,
   // Loaded lazily, only when a form opens. Cards in messages and the
   // respond view work for everyone the service lets in; the block itself
   // keeps the builder behind the flag.
