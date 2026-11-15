@@ -98,8 +98,10 @@ function watchPageLeaving(): void {
   if (typeof addEventListener !== 'function') return;
   addEventListener(
     'pagehide',
-    () => {
-      pageLeaving = true;
+    (event: Event) => {
+      // A page kept for back and forward comes back as itself, and nothing
+      // would resend for it.
+      pageLeaving = !('persisted' in event && event.persisted === true);
     },
     { capture: true }
   );

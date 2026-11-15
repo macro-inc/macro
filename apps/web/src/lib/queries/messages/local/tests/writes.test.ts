@@ -364,10 +364,16 @@ describe('queued channel writes', () => {
   });
 
   it('keeps a send pending when it fails because the page is being left', async () => {
-    const { client } = fakeClient(() => ({
-      error: refused('SERVICE_UNAVAILABLE'),
-      disposition: { kind: 'permanently-failed' },
-    }));
+    let leaving = false;
+    const { client } = fakeClient(() => {
+      // The mark lands after the failure, as it does when the cache host's
+      // listener runs first.
+      if (leaving) setTimeout(() => pageIsLeaving.mockReturnValue(true), 0);
+      return {
+        error: refused('SERVICE_UNAVAILABLE'),
+        disposition: { kind: 'permanently-failed' },
+      };
+    });
     const send = () =>
       sendChannelMessage(
         writeHost().host,
@@ -381,12 +387,17 @@ describe('queued channel writes', () => {
       );
     await expect(send()).rejects.toBeInstanceOf(ThrownResultError);
 
-    pageIsLeaving.mockReturnValue(true);
+    leaving = true;
+    const settled = async () => {
+      try {
+        await send();
+      } catch {
+        // Settled either way.
+      }
+      return 'settled';
+    };
     const outcome = await Promise.race([
-      send().then(
-        () => 'settled',
-        () => 'settled'
-      ),
+      settled(),
       new Promise((resolve) => setTimeout(() => resolve('pending'), 20)),
     ]);
     expect(outcome).toBe('pending');
