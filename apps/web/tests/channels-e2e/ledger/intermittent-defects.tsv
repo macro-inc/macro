@@ -19,8 +19,9 @@ OFF-10	A message that arrived while the channel was open is missing when the cha
 OFF-11	Opening a held channel with no connection shows a notice that a new version is out and asks for a reload, or does not open (3 of 10 runs on a busy machine; 0 of 4 on a quiet one)
 SYN-05	A device that showed a channel caught up shows it without the last changes when it next opens it with no connection (4 of 10 runs on a busy machine; 0 of 1 on a quiet one)
 WRT-01	A message written offline is gone from the screen it was written on once the connection is back (1 of 10 runs)
-WRT-03	Six messages written offline show with the first three below the last three (1 of 10 runs), or not at all (1 of 10)
+WRT-03	Six messages written offline show with the first three below the last three (1 of 10 runs), or not at all (1 of 10); in one whole-suite run the six showed out of order while still offline
 WRT-07	A message kept after deleting another offline is gone from the screen once the connection is back (1 of 10 runs)
 WRT-09	A message the services refuse stays on the screen under the notice that it failed (5 of 10 runs on a busy machine; 0 of 5 on a quiet one)
-WRT-12	A window that wrote offline shows another window's earlier offline message below its own once both are sent (4 of 10 runs on a busy machine; 6 of 6 on a quiet one)
+WRT-12	A window that wrote offline shows another window's earlier offline message below its own once both are sent (4 of 10 runs on a busy machine; 6 of 6 on a quiet one); in one whole-suite run the first window's message was not at the services after two minutes
 WRT-13	A device that was offline keeps its own queued message above messages the services hold before it (5 of 10 runs); in 1 of 10 what it wrote offline had not reached the services after a minute
+WRT-04	Messages blocked from being sent are gone after a reload, the first back in the composer and the second lost (4 of 6 probes); when kept they are sent only some five minutes after the services can be reached (failed 13 of 14 runs)

@@ -139,6 +139,6 @@ WRT-12	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVi
 WRT-13	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: the channel as the services hold it
 WRT-09	ledger/breaks/refused-write-kept.patch	failed: Error: expect(locator).toBeVisible() failed
 WRT-10	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
-WRT-04	none: the build with the flag as it is	failed: Error: the channel as it is on the screen
+WRT-04	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
 WRT-11	none: the build with the flag as it is	failed: Error: expect(locator).toBeVisible() failed
 WRT-14	none: the build with the flag as it is	failed: Error: the channel as it is on the screen
