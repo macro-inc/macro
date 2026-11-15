@@ -289,7 +289,11 @@ test-email-e2e-full-stack instance *ARGS:
     # A stack runs the three stand-ins only when its config holds no real
     # key for what they stand for: without one of them, it would call the
     # real service.
-    model=$(port model_emulator 8080)
+    model=$(port model_emulator 8080 2>/dev/null || true)
+    if [ -z "$model" ]; then
+        echo "The instance {{instance}} has no model stand-in running, so the assistant would reach a real model. Stop it and start it with: just email-e2e-full-stack" >&2
+        exit 1
+    fi
     export EMAIL_E2E_STACK_PROXY_URL="$proxy"
     export EMAIL_E2E_STACK_DATABASE_URL="$database"
     export EMAIL_E2E_STACK_REDIS_URL="redis://localhost:$redis"

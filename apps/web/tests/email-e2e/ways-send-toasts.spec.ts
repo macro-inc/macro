@@ -48,6 +48,8 @@ for (const provider of PROVIDERS) {
           .click();
         await expect(scheduledNotice(page)).toBeVisible();
         saw('STC-059');
+        // A notice goes after eight seconds unless the pointer rests on it.
+        await scheduledNotice(page).hover();
       };
       const tomorrow = morningIn(1).toString();
 
@@ -72,6 +74,7 @@ for (const provider of PROVIDERS) {
       await expect(page).toHaveURL(/\/app\/mail\/[0-9a-f-]{36}$/);
       const message = page.url();
       await inbox.click();
+      await scheduledNotice(page).hover();
       await expect(page).not.toHaveURL(message);
       await scheduledNotice(page)
         .getByRole('button', { name: 'View message' })
@@ -104,10 +107,12 @@ for (const provider of PROVIDERS) {
       const rescheduled = notice(page, 'Email rescheduled');
       await expect(rescheduled).toBeVisible();
       saw('STC-404');
+      await rescheduled.hover();
       await expect
         .poll(() => scheduledTimes(mailbox))
         .toEqual([morningIn(2).toString()]);
       await inbox.click();
+      await rescheduled.hover();
       await expect(page).not.toHaveURL(message);
       await rescheduled.getByRole('button', { name: 'View message' }).click();
       did('AC-056', 'F-143');

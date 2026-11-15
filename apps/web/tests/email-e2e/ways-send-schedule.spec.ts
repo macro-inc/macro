@@ -62,8 +62,8 @@ const WAYS: Way[] = [
     row: 'AC-403',
     subject: 'By keyboard',
     choose: async (page) => {
-      // Down twice: the second option, taken with Enter. (ctrl+k has a
-      // test of its own below.)
+      // Down twice: the second option, taken with Enter. Ctrl+K, the way
+      // back up, is a known bug with a test of its own below.
       const options = page.getByRole('option');
       const second = await options.nth(1).innerText();
       const label = Object.keys(PRESET_DAYS).find((name) =>
@@ -125,6 +125,27 @@ for (const provider of PROVIDERS) {
         confirmed('F-142');
       }
       expect(await sentMessages(mailbox)).toEqual([]);
+    });
+
+    // Where Ctrl is the app's modifier key, Ctrl+K opens the command menu
+    // over the picker instead of moving up its options. When this passes,
+    // that is fixed: remove the tag.
+    test('known bug: picker-ctrl-k-opens-command-menu: ctrl+k moves up the options of the open picker @known-bug', {
+      tag: '@known-bug',
+    }, async ({ page, mailbox }) => {
+      await composeNew(page, mailbox, {
+        to: 'grace@example.com',
+        subject: 'Up again',
+        body: 'The numbers are in.',
+      });
+      await openPicker(page, clock(page));
+      const options = page.getByRole('option');
+      await page.keyboard.press('Control+j');
+      await expect(options.nth(0)).toHaveAttribute('data-highlighted');
+      await page.keyboard.press('Control+j');
+      await expect(options.nth(1)).toHaveAttribute('data-highlighted');
+      await page.keyboard.press('Control+k');
+      await expect(options.nth(0)).toHaveAttribute('data-highlighted');
     });
 
     // When this fails, the schedule bar's Cancel does not take a chosen

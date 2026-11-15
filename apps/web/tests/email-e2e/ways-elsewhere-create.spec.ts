@@ -93,9 +93,10 @@ for (const provider of PROVIDERS) {
       await page.getByRole('button', { name: 'Content type' }).click();
       await page.getByRole('option', { name: 'Email' }).click();
       did('AX-305');
+      // "Auto · Email" is the app's guess; "Email" alone is the choice.
       await expect(
         page.getByRole('button', { name: 'Content type' })
-      ).toContainText('Email');
+      ).toHaveText('Email');
       await expect(input.getByRole('combobox', { name: 'To' })).toBeVisible();
       await expect(input.getByText('Choose a recipient')).toBeVisible();
       await expect(send).toBeDisabled();

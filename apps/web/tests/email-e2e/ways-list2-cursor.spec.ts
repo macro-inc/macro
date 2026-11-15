@@ -6,7 +6,13 @@
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { focusedRowId, rowIds } from './harness/list';
-import { deliverThreads, listShows, row } from './harness/ways-list2';
+import {
+  deliverThreads,
+  listShows,
+  row,
+  rowCheckbox,
+  selectedIds,
+} from './harness/ways-list2';
 import { did } from './ledger/record';
 
 /** Each key that jumps, and the end of the list it jumps to. */
@@ -65,12 +71,26 @@ test.describe("other ways to move the list's cursor, in a Gmail inbox", () => {
 
     // Nothing selected: the app's command menu, not a thread's actions.
     await page.keyboard.press('ControlOrMeta+k');
-    did('AL-402');
     const palette = page.getByRole('dialog');
     await expect(palette.getByRole('textbox')).toBeFocused();
     await expect(search).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(palette).toHaveCount(0);
+
+    // A row selected: the list's own binding opens that thread's actions,
+    // which the app-wide Ctrl+K does not.
+    await (await rowCheckbox(page, ids.Minutes)).click();
+    expect(await selectedIds(page)).toEqual([ids.Minutes]);
+    await page.keyboard.press('ControlOrMeta+k');
+    did('AL-402');
+    await expect(search).toBeVisible();
+    await expect(
+      results.getByRole('option', { name: /^Mark done/ })
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect.poll(() => selectedIds(page)).toEqual([]);
 
     await row(page, ids.Minutes).click({ button: 'right' });
     did('AL-411');
