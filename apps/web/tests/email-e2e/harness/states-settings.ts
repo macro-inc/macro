@@ -118,12 +118,13 @@ export async function providerFault(
  * second never arrives. This one answers each ping, and passes on what is
  * sent to the user once the page first connects (not what was sent before,
  * such as the end of the first backfill, which would raise its notice
- * again). Call it before the page opens; it stops when the page closes.
+ * again). Call it before the page opens. Answers what stops it; it also
+ * stops when the page closes.
  */
 export async function steadyGateway(
   page: Page,
   mailbox: Mailbox
-): Promise<void> {
+): Promise<() => Promise<void>> {
   const { stack, user } = mailbox;
   const mine = `/message/send/user/${user.macroUserId}`;
   const sentToUser = async () =>
@@ -143,31 +144,38 @@ export async function steadyGateway(
     socket.onClose(() => sockets.delete(socket));
     connected = true;
   });
+  let stopped = false;
   const relay = async () => {
-    while (!page.isClosed()) {
-      // A failed read leaves the cursor where it is: the next one catches up.
-      const sent = connected
-        ? await sentToUser().catch(() => undefined)
-        : undefined;
-      if (sent && passed === undefined) passed = sent.length;
-      else if (sent) {
-        for (const request of sent.slice(passed)) {
-          const body = request.body as {
-            message_type: string;
-            message: unknown;
-          };
-          const frame = JSON.stringify({
-            type: body.message_type,
-            data: JSON.stringify(body.message),
-          });
-          for (const socket of sockets) socket.send(frame);
+    while (!stopped && !page.isClosed()) {
+      try {
+        const sent = connected ? await sentToUser() : undefined;
+        if (sent && passed === undefined) passed = sent.length;
+        else if (sent) {
+          for (const request of sent.slice(passed)) {
+            const body = request.body as {
+              message_type: string;
+              message: unknown;
+            };
+            const frame = JSON.stringify({
+              type: body.message_type,
+              data: JSON.stringify(body.message),
+            });
+            for (const socket of sockets) socket.send(frame);
+          }
+          passed = sent.length;
         }
-        passed = sent.length;
+      } catch {
+        // A failed read, or a socket that closed under the send, leaves the
+        // cursor where it is: the next round catches up.
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   };
-  relay().catch(() => undefined);
+  const relaying = relay();
+  return async () => {
+    stopped = true;
+    await relaying;
+  };
 }
 
 /**

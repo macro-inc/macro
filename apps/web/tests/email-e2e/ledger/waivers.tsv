@@ -56,31 +56,9 @@ AX-040	-	needs	needs enable-calendar-prompt-web, off unless the flag service tur
 AX-209	-	needs	needs enable-calendar-prompt-web, off unless the flag service turns it on, and the suite's bundle has no flag service: only a bundle built with it on shows the prompt, over every other test
 AX-211	-	no-user-path	The button shows only with workNeedsReconnect, which no caller of the step passes.
 AX-045	-	native-only	MobileOnboarding is rendered only when isNativeMobilePlatform() is true.
-STX-001	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
-STX-003	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
-STX-004	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
-STX-005	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
-STX-006	-	backlog	not exercised itself: another way into, or state of, F-067, covered through other rows
-STX-008	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
-STX-200	-	backlog	not exercised itself: another way into, or state of, F-004, covered through other rows
-STX-201	-	backlog	not exercised itself: another way into, or state of, F-023, covered through other rows
-STX-010	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
-STX-012	-	backlog	not exercised itself: another way into, or state of, F-002, covered through other rows
-STX-013	-	backlog	not exercised itself: another way into, or state of, F-067, covered through other rows
-STX-202	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
-STX-203	-	backlog	not exercised itself: another way into, or state of, F-016, covered through other rows
-STX-204	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
-STX-205	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-STX-206	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
 STX-017	-	needs	needs the static file service, and no test on the full-stack tier does it yet
-STX-208	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
-STX-018	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-STX-025	-	backlog	not exercised itself: another way into, or state of, F-174, covered through other rows
 STX-210	-	native-only	Both toasts are raised only on the Tauri link paths (native auth session and system-browser open).
-STX-211	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
-STX-212	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-STX-029	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-STX-030	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
+STX-029	-	needs	the calendar prompt is off unless the flag service turns it on, and the suite's bundle has no flag service
 AX-049	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AX-050	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 AX-307	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
@@ -96,10 +74,7 @@ AX-318	-	needs	needs the search service, and no test on the full-stack tier does
 AX-323	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AX-062	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AX-325	-	needs	needs enable-in-app-tours, off unless the flag service turns it on, and the suite's bundle has no flag service: a bundle built with it on starts a tour by itself over each view a new user opens, in every other test
-STX-033	-	backlog	not exercised: of F-166, not all covered (see their waivers)
-STX-301	-	backlog	not exercised: of F-166, not all covered (see their waivers)
-STX-302	-	backlog	not exercised: of F-166, not all covered (see their waivers)
-STX-303	-	backlog	not exercised: of F-166, not all covered (see their waivers)
+STX-303	-	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
 STX-034	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-304	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-305	-	needs	needs the AI service, and no test on the full-stack tier does it yet
@@ -108,8 +83,5 @@ STX-307	-	needs	needs the AI service, and no test on the full-stack tier does it
 STX-308	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-309	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 STX-310	-	needs	needs the AI service, and no test on the full-stack tier does it yet
-STX-311	-	backlog	not exercised itself: another way into, or state of, F-164, covered through other rows
-STX-314	-	backlog	not exercised itself: another way into, or state of, F-051, covered through other rows
-STX-316	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-STX-035	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-STX-319	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+STX-035	-	needs	needs the calendar service (a calendar sync error), and no test on the full-stack tier does it yet
+STX-319	-	needs	the tour is off unless the flag service turns it on, and the suite's bundle has no flag service

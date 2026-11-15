@@ -587,6 +587,7 @@ export const elsewhere = {
       trigger: 'Connect Google failed',
       source: ['src/features/universal-input/actions.ts'],
       flag: 'enable-universal-input',
+      note: 'tested: with a consent address the browser refuses to open, answered by the stand-in auth service',
     },
     {
       id: 'STX-303',
