@@ -4,10 +4,9 @@
 //
 // Sharing with a person is sent through the channels service, which the
 // stack does not run, so the grant a share makes is written to the database
-// here. A thread offers no way to ask for access in the app (only view
-// access exists, and the dialog is reached by someone who already has it),
-// so the request is made at the storage service; granting it is done in the
-// app.
+// here. Asking for access in the app needs a list row of a thread whose
+// access was taken back (states-organise-access.spec.ts); here the request
+// is made at the storage service, and granting it is done in the app.
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';

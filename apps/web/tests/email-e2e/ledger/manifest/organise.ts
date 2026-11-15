@@ -964,63 +964,12 @@ export const organise = {
       ],
     },
     {
-      id: 'STL-609',
-      surface: 'SL-30',
-      fn: ['F-068', 'F-069'],
-      state: 'toast "Marked as unread" / "Marked as read"',
-      trigger: 'unread toggle or title menu Mark Unread / Mark Read',
-      source: ['src/features/email-thread/thread-read-adapter.ts'],
-      toasts: [
-        'src/features/email-thread/thread-read-adapter.ts#Marked as unread',
-        'src/features/email-thread/thread-read-adapter.ts#Marked as read',
-      ],
-      note: 'hideOnMobile: not shown on a phone',
-    },
-    {
-      id: 'STL-610',
-      surface: 'SL-30',
-      fn: ['F-068', 'F-069'],
-      state: 'toast "Failed to mark as unread" / "Failed to mark as read"',
-      trigger: 'the read-state request fails',
-      source: ['src/features/email-thread/thread-read-adapter.ts'],
-      toasts: [
-        'src/features/email-thread/thread-read-adapter.ts#Failed to mark as unread',
-        'src/features/email-thread/thread-read-adapter.ts#Failed to mark as read',
-      ],
-    },
-    {
       id: 'STL-611',
       surface: 'SL-30',
       fn: ['F-069', 'F-177'],
       state: 'thread closes back to the list',
       trigger: 'mark unread in the inline thread view',
       source: ['src/features/email-view/components/EmailDetailView.tsx'],
-    },
-    {
-      id: 'STL-612',
-      surface: 'SL-30',
-      fn: ['F-071', 'F-072', 'F-083'],
-      state: 'toast "Marked as done" / "Marked as not done" + Undo',
-      trigger: 'done toggle or title menu Mark Done / Mark Not Done',
-      source: ['src/features/email-thread/thread-completion-adapter.tsx'],
-      toasts: [
-        'src/features/email-thread/thread-completion-adapter.tsx#message',
-      ],
-      note: 'hideOnMobile: not shown on a phone',
-    },
-    {
-      id: 'STL-613',
-      surface: 'SL-30',
-      fn: ['F-071', 'F-072', 'F-083'],
-      state:
-        'toast "Failed to mark as done" / "Failed to mark as not done" / "Failed to undo"',
-      trigger: 'the done request or its Undo fails',
-      source: ['src/features/email-thread/thread-completion-adapter.tsx'],
-      toasts: [
-        'src/features/email-thread/thread-completion-adapter.tsx#Failed to mark as done',
-        'src/features/email-thread/thread-completion-adapter.tsx#Failed to mark as not done',
-        'src/features/email-thread/thread-completion-adapter.tsx#Failed to undo',
-      ],
     },
     {
       id: 'STL-104',
@@ -1260,6 +1209,7 @@ export const organise = {
       trigger: 'the server answers a set with a state other than pending',
       source: ['src/features/reminders/views/email-reminder-composer.tsx'],
       flag: 'enable-reminders',
+      note: 'tested with the answer of the service rewritten to a state other than pending: the stack has no way to make the service answer one',
     },
     {
       id: 'STL-627',

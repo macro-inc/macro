@@ -958,6 +958,7 @@ export const thread = {
         'src/features/email-thread/thread-completion-adapter.tsx#message',
         'src/features/email-thread/thread-completion-adapter.tsx#Failed to undo',
       ],
+      note: 'tested: "Marked as not done" with Undo and "Failed to undo"; the same toast is raised from the header and title menu of an open thread (was STL-612, STL-613). "Marked as done" from an open thread is not asserted here',
     },
     {
       id: 'STL-075',
@@ -970,6 +971,7 @@ export const thread = {
         'src/features/email-thread/thread-completion-adapter.tsx#Failed to mark as done',
         'src/features/email-thread/thread-completion-adapter.tsx#Failed to mark as not done',
       ],
+      note: 'the same toasts are raised from the header and title menu of an open thread (was STL-613)',
     },
     {
       id: 'STL-076',
@@ -982,7 +984,7 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Marked as unread',
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as unread',
       ],
-      note: 'the success toast is hidden on mobile',
+      note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
     },
     {
       id: 'STL-077',
@@ -995,7 +997,7 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Marked as read',
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as read',
       ],
-      note: 'the success toast is hidden on mobile',
+      note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
     },
     {
       id: 'STL-079',

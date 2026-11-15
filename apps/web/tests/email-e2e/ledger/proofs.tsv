@@ -503,3 +503,92 @@ STC-434	not shown as the row says (Saved on this device; waiting to sync — Cha
 STC-435	not shown as the row says (the banner's detail line replaced by the failed action's error): its rendering is switched off or changed in src/features/email-compose/primitives/draft-sync-status.ts
 STC-938	not shown as the row says (result: the draft is saved: Drafts lists it with its text): its rendering is switched off or changed in src/features/email-compose/components/draft-back-menu.tsx
 STC-960	not shown as the row says (result: From shows the chosen address): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
+STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list fallback)): its rendering is switched off or changed in src/features/email-view/email-view.tsx
+STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-004	not shown as the row says (Connect your email + button "Connect email"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-009	not shown as the row says (Inbox zero): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-015	not shown as the row says (No calendar email): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-019	not shown as the row says (You're caught up + "See the rest of your inbox"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-022	not shown as the row says (No email yet): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-024	not shown as the row says ("Load More" row; "Loading..." with aria-busy while a page loads): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-028	not shown as the row says (No conversation selected ("Pick one from the list, or move with j and k")): its rendering is switched off or changed in src/features/email-view/components/EmailReader.tsx
+STL-029	not shown as the row says (row Draft badge): its rendering is switched off or changed in src/features/entity/composed/list-entity/email.tsx
+STL-030	not shown as the row says (paperclip aria-label "Has attachments"): its rendering is switched off or changed in src/features/entity/extractors/entity-timestamp.tsx
+STL-031	not shown as the row says (Scheduled badge with send time): its rendering is switched off or changed in src/features/entity/components/Badges.tsx
+STL-033	not shown as the row says (Focus pills: Reply needed / Follow up / Calendar change / Customer / Teammate / Contact): its rendering is switched off or changed in src/features/email-view/focus-reason.ts
+STL-034	not shown as the row says (Due today / Due tomorrow / Due <weekday> / Due <date> / Overdue): its rendering is switched off or changed in src/features/email-view/focus-due.ts
+STL-035	not shown as the row says (score meter with rising/falling marker): its rendering is switched off or changed in src/features/email-view/components/EmailFocusBadges.tsx
+STL-038	not shown as the row says (restore button label "Not spam" (Spam) / "Restore" (Trash)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-040	not shown as the row says (toast "Failed to mark as done"): its rendering is switched off or changed in src/features/next-soup/actions/make-mark-done-action.ts
+STL-041	not shown as the row says (alert "Some changes could not be saved. Undo will reverse the accepted changes."): its rendering is switched off or changed in src/features/next-soup/actions/make-mark-done-action.ts
+STL-046	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/next-soup/actions/make-delete-action.ts
+STL-053	not shown as the row says (toast "Draft discarded" / "Failed to discard draft"): its rendering is switched off or changed in src/features/next-soup/actions/make-discard-draft-action.ts
+STL-054	not shown as the row says (toast "Failed to undo"): its rendering is switched off or changed in src/features/email-view/use-email-view-hotkeys.ts
+STL-055	not shown as the row says (status "Loading views…"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-056	not shown as the row says (empty state "Your go-to views", "Save a set of senders, subjects, or filters to triage first." + "Create view"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-057	not shown as the row says ("Retry loading views" button (no error text)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-059	not shown as the row says (toast with the server message or "Could not reorder views"; the order goes back): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-060	not shown as the row says (toast with the reason the current filters cannot be saved; no dialog): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-061	not shown as the row says ("Save changes" and "Reset" shown while the view has edits): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-062	not shown as the row says (save-error alert with "Duplicate"; "Reload saved view" too on a conflict): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-063	not shown as the row says (alert "This saved view is unavailable or you no longer have access." + "Return to Email"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-064	not shown as the row says (alert "Some saved settings were skipped." with "Skipped settings: <names>"): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-067	not shown as the row says (thread loading; "Unable to load this email" with Retry (not-found suppressed for a local draft)): its rendering is switched off or changed in src/features/block-email/component/EmailThreadLoadGate.tsx
+STL-068	not shown as the row says ("Loading messages" over the reply area of the last message): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx
+STL-071	not shown as the row says ("Draft" preview row with the draft text / "No text yet"): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx, src/features/email-thread/components/draft-reply-preview.tsx
+STL-072	not shown as the row says (unread toggle label "Mark as read" (accent closed envelope) / "Mark as unread"): its rendering is switched off or changed in src/features/block-email/views/email-thread-parts.tsx
+STL-073	not shown as the row says (done toggle label "Mark as not done" / "Mark done"): its rendering is switched off or changed in src/features/block-email/views/email-thread-parts.tsx
+STL-074	not shown as the row says (toast "Marked as done" / "Marked as not done" with Undo; "Failed to undo"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
+STL-075	not shown as the row says (toast "Failed to mark as done" / "Failed to mark as not done"): its rendering is switched off or changed in src/features/email-thread/thread-completion-adapter.tsx
+STL-076	not shown as the row says (toast "Marked as unread" / "Failed to mark as unread"): its rendering is switched off or changed in src/features/email-thread/thread-read-adapter.ts
+STL-078	not shown as the row says (toast "Moved to Trash" + Undo; Undo shows "Restored from Trash" or "Failed to restore from Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
+STL-081	not shown as the row says ("<action>: Could not apply this change. Try the action again."): its rendering is switched off or changed in src/features/email-thread/email-thread-operations.tsx
+STL-084	not shown as the row says ("The mailbox version is ready. Reload the draft to continue" with "Reload draft"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-085	not shown as the row says (resolve error text (alert)): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-087	not shown as the row says (details rows From / To / Cc / Bcc with the full date): its rendering is switched off or changed in src/features/email-message/components/email-message-top-bar.tsx
+STL-089	not shown as the row says (caret tooltip "Collapse Message Header" / "Expand Message Header"): its rendering is switched off or changed in src/features/email-message/components/email-message-top-bar.tsx
+STL-092	not shown as the row says (toast "Download failed"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
+STL-093	not shown as the row says (toast "Attachment unavailable"): its rendering is switched off or changed in src/features/email-message/attachment-action-adapter.ts
+STL-097	not shown as the row says (notice "Calendar unavailable. Showing saved invitation details." / "…last-known details and response." with "Retry calendar"): its rendering is switched off or changed in src/features/email-thread/calendar-invitation.tsx
+STL-103	not shown as the row says (alert "The reminder was not set. The conversation has been restored."): its rendering is switched off or changed in src/features/reminders/views/email-reminder-composer.tsx
+STL-107	not shown as the row says (Reply all pill only when it reaches more than Reply; Forward owner only): its rendering is switched off or changed in src/features/email-thread/views/bottom-reply-buttons.tsx
+STL-108	not shown as the row says ("Copy subject" button revealed on hovering the title; absent for an empty subject): its rendering is switched off or changed in src/features/email-thread/components/email-thread-title.tsx, src/features/email-thread/components/copy-subject-button.tsx
+STL-110	not shown as the row says (drawer trigger "Open email filters", sheet "Email filters", section label "Filters" ("Inboxes" on Scheduled)): its rendering is switched off or changed in src/features/email-view/components/EmailFilterDrawer.tsx
+STL-401	not shown as the row says (date group headers between rows (sticky on Focus sorted by Most recent)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-402	not shown as the row says (selection toolbar with the selected rows; extra "Not spam" / "Restore" button in Spam / Trash (disabled while a restore is pending)): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-404	not shown as the row says (queued-send status above the Drafts list): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
+STL-405	not shown as the row says (active filter count on the drawer trigger): its rendering is switched off or changed in src/features/email-view/components/EmailFilterDrawer.tsx
+STL-505	not shown as the row says (toast "Attachment upload is unfinished. Retry the upload or remove the file."): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-506	not shown as the row says (toast "Failed to save attachments"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-507	not shown as the row says (toast "Failed to remove draft attachment"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-508	not shown as the row says (toast "Failed to add forwarded attachments"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-509	not shown as the row says (toast "Failed to remove forwarded attachment"): its rendering is switched off or changed in src/lib/queries/email/attachment.ts
+STL-510	not shown as the row says (Reply all hidden when it reaches no one new; Forward hidden for a non-owner): its rendering is switched off or changed in src/features/email-thread/views/message-container.tsx
+STL-511	not shown as the row says (previous / next arrows disabled at the ends of the list; done toggle hidden on a done thread that cannot be marked not done): its rendering is switched off or changed in src/features/email-thread/views/bottom-reply-buttons.tsx
+STL-515	not shown as the row says (eyebrow "Cancelled" with the schedule struck through): its rendering is switched off or changed in src/features/email-message/components/calendar-invite-card.tsx
+STL-516	not shown as the row says (scheduling notice "<name> accepted / declined / responded maybe to / proposed a new time for <title>" with the comment): its rendering is switched off or changed in src/features/email-message/components/calendar-invite-card.tsx
+STL-520	not shown as the row says (confirmation prompt with checkbox "I understand this may send a duplicate email." / "I have reviewed the original copy…"): its rendering is switched off or changed in src/features/email-message/views/message-operation-recovery.tsx
+STL-521	not shown as the row says (header with Back, the subject and Info only): its rendering is switched off or changed in src/features/block-email/views/mobile/email-thread.tsx
+STL-600	not shown as the row says (toast "Failed to block sender" / "Failed to unblock sender"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
+STL-601	not shown as the row says (toast "Failed to mark sender as <label>" / "Failed to undo"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
+STL-611	not shown as the row says (thread closes back to the list): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
+STL-614	not shown as the row says ("Previous item" / "Next item" disabled at the ends of the list): its rendering is switched off or changed in src/components/app/split-layout/components/SplitHeader.tsx
+STL-615	not shown as the row says (toast "Link copied to clipboard." / "Could not copy link"): its rendering is switched off or changed in src/lib/core/util/useCopyLink.ts
+STL-616	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
+STL-617	not shown as the row says (thread closes (inline view returns to the list)): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
+STL-619	not shown as the row says (menu shows as a bottom sheet without hotkey hints): its rendering is switched off or changed in src/components/app/split-layout/components/SplitFileMenu.tsx
+STL-620	not shown as the row says (References section with a count, only when the thread has any): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
+STL-621	not shown as the row says (Tags and Properties read-only for a viewer who is not the owner): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
+STL-625	not shown as the row says (empty state "Enter a future time, like in 2 hours or tomorrow 9am." or the reason the text is not a time): its rendering is switched off or changed in src/features/reminders/components/email-reminder-form.tsx, src/features/reminders/core/reminder-phrase.ts
+STL-626	not shown as the row says (status "Saving…", input, options and buttons disabled): its rendering is switched off or changed in src/features/reminders/components/email-reminder-form.tsx
+STL-627	not shown as the row says (alert "Couldn’t confirm the change. Your time is still here; retrying this request is safe."): its rendering is switched off or changed in src/features/reminders/views/email-reminder-composer.tsx
+STL-628	not shown as the row says (alert "Couldn’t load this email reminder." with Retry; options disabled): its rendering is switched off or changed in src/features/reminders/views/email-reminder-composer.tsx
+STL-700	not shown as the row says (toast with the reason the edits cannot be saved): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-703	not shown as the row says ("Load more views" button, disabled while loading more): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-704	not shown as the row says (pill reads "Saved views"; active and named after the view while one is open): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-706	not shown as the row says (submit disabled with an empty name or a definition that does not decode; "Saving…" while pending): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-707	not shown as the row says (alert with the save error inside the dialog): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-708	not shown as the row says (Advanced settings start open when the view sets one; Inboxes shown with two or more inboxes; Tags shown when tags exist): its rendering is switched off or changed in src/features/email-view/components/EmailSavedViewFields.tsx
+STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
+STL-711	not shown as the row says (desktop row menus have no Move items; picker row menus have Move up / Move down (absent at either end)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx

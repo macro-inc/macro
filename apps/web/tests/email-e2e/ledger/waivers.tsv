@@ -9,82 +9,22 @@ AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is regi
 AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
 AL-046	-	no-user-path	The "No inboxes selected" state needs an empty inbox selection, and every writer of the selection turns an empty one into "all inboxes".
 AL-074	-	no-user-path	The hotkey is registered only when every selected row is a task, so it never fires on email rows.
-STL-001	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-002	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-401	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
-STL-004	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-005	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
-STL-009	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-010	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-011	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-012	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-015	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-016	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-404	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
-STL-017	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-018	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-019	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-021	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-022	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
-STL-024	-	backlog	not exercised itself: another way into, or state of, F-036, covered through other rows
-STL-028	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
-STL-029	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
-STL-030	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
-STL-031	-	backlog	not exercised itself: another way into, or state of, F-145, covered through other rows
-STL-033	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
-STL-034	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
-STL-035	-	backlog	not exercised itself: another way into, or state of, F-027, covered through other rows
-STL-038	-	backlog	not exercised: of F-076, F-078, not all covered (see their waivers)
-STL-040	-	backlog	not exercised itself: another way into, or state of, F-071, covered through other rows
-STL-041	-	backlog	not exercised itself: another way into, or state of, F-071, covered through other rows
-STL-409	-	backlog	not exercised itself: another way into, or state of, F-072, covered through other rows
-STL-046	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
-STL-400	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
-STL-053	-	backlog	not exercised itself: another way into, or state of, F-119, covered through other rows
-STL-054	-	backlog	not exercised itself: another way into, or state of, F-044, covered through other rows
-STL-110	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-STL-405	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-STL-402	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
-STL-410	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+STL-005	-	no-user-path	the empty state needs an empty inbox selection, and every write of that selection turns an empty one into all inboxes
+STL-409	-	needs	shown only with the GraphQL list off: with it on, the check before this notice always passes and a server error shows "Failed to mark as not done" (STL-075); the suite's bundle turns the list on and has no flag service
+STL-400	-	needs	the Mail list pages from the local cache, which drops a failed next page before the list sees it; needs a way to fail the cache host's paging
+STL-410	-	needs	shown only with in-app tours off; the flag is on unless the flag service turns it off, and the suite's bundle has no flag service
 AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AL-181	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
-STL-067	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
-STL-068	-	backlog	not exercised itself: another way into, or state of, F-060, covered through other rows
-STL-087	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
-STL-089	-	backlog	not exercised itself: another way into, or state of, F-058, covered through other rows
-STL-071	-	backlog	not exercised itself: another way into, or state of, F-117, covered through other rows
-STL-070	-	backlog	not exercised itself: another way into, or state of, F-116, covered through other rows
-STL-074	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
-STL-075	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
-STL-076	-	backlog	not exercised itself: another way into, or state of, F-069, covered through other rows
-STL-077	-	backlog	not exercised itself: another way into, or state of, F-068, covered through other rows
-STL-079	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
+STL-070	-	no-user-path	the header that would show the draft badge is never told that its thread is a draft
+STL-077	-	bug	the read toggle of an open thread goes back to Mark as unread after the app's own write (thread-unread-toggle-resets-on-own-write); its test is kept as a known bug
 STL-504	-	needs	needs live updates over the websocket, and no test on the full-stack tier does it yet
-STL-505	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STL-506	-	backlog	not exercised itself: another way into, or state of, F-122, covered through other rows
-STL-507	-	backlog	not exercised itself: another way into, or state of, F-123, covered through other rows
-STL-508	-	backlog	not exercised itself: another way into, or state of, F-124, covered through other rows
-STL-509	-	backlog	not exercised itself: another way into, or state of, F-123, F-124, covered through other rows
-STL-510	-	backlog	not exercised itself: another way into, or state of, F-109, F-110, covered through other rows
-STL-107	-	backlog	not exercised itself: another way into, or state of, F-109, F-110, covered through other rows
-STL-511	-	backlog	not exercised itself: another way into, or state of, F-061, F-072, covered through other rows
-STL-092	-	backlog	not exercised itself: another way into, or state of, F-127, covered through other rows
-STL-093	-	backlog	not exercised itself: another way into, or state of, F-126, covered through other rows
-STL-097	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
-STL-100	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
-STL-515	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
-STL-516	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
+STL-100	-	needs	needs the calendar service (the day agenda), and no test on the full-stack tier does it yet
 STL-518	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
-STL-519	-	backlog	not exercised itself: another way into, or state of, F-153, covered through other rows
-STL-081	-	backlog	not exercised itself: another way into, or state of, F-180, covered through other rows
-STL-084	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STL-085	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-STL-520	-	backlog	not exercised: of F-136, F-140, not all covered (see their waivers)
-STL-521	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
+STL-519	-	needs	shown only with the calendar UI off; the flag is on in the suite's bundle, which has no flag service
 AL-081	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-602	-	native-only	The item only shows when the desktop app has tabs, which a browser never has.
 AL-607	-	no-user-path	The email.archive token is only declared; no hotkey, menu item or tooltip uses it.
@@ -92,51 +32,7 @@ AL-610	-	needs	needs the notification service, and no test on the full-stack tie
 AL-152	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AL-614	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-620	-	no-user-path	The dialog shows this Copy Link only to a viewer who cannot forward, and every viewer of an email thread can.
-AL-903	-	no-user-path	An email thread has one access level (view), so the dialog never has a higher one to request.
-STL-600	-	backlog	not exercised itself: another way into, or state of, F-080, covered through other rows
-STL-601	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
 STL-605	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-STL-607	-	backlog	not exercised: of F-076, F-078, not all covered (see their waivers)
-STL-072	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
-STL-073	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
-STL-609	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
-STL-610	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
-STL-611	-	backlog	not exercised itself: another way into, or state of, F-069, F-177, covered through other rows
-STL-612	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
-STL-613	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, F-083, covered through other rows
-STL-614	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
-STL-615	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
-STL-078	-	backlog	not exercised itself: another way into, or state of, F-075, F-083, covered through other rows
-STL-616	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
-STL-617	-	backlog	not exercised itself: another way into, or state of, F-075, F-177, covered through other rows
-STL-619	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
-STL-108	-	backlog	not exercised itself: another way into, or state of, F-178, covered through other rows
-STL-620	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
-STL-621	-	backlog	not exercised itself: another way into, or state of, F-084, F-088, covered through other rows
-STL-625	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-STL-626	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-STL-103	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-STL-627	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-STL-628	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-STL-942	-	backlog	not exercised itself: another way into, or state of, F-160, covered through other rows
-STL-055	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-056	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-057	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-059	-	backlog	not exercised itself: another way into, or state of, F-049, covered through other rows
-STL-703	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-704	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-706	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
-STL-707	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
-STL-708	-	backlog	not exercised itself: another way into, or state of, F-045, F-047, covered through other rows
-STL-060	-	backlog	not exercised itself: another way into, or state of, F-045, covered through other rows
-STL-709	-	backlog	not exercised itself: another way into, or state of, F-048, covered through other rows
-STL-711	-	backlog	not exercised itself: another way into, or state of, F-049, covered through other rows
-STL-061	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
-STL-713	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
-STL-062	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
-STL-700	-	backlog	not exercised itself: another way into, or state of, F-047, covered through other rows
-STL-063	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
-STL-064	-	backlog	not exercised itself: another way into, or state of, F-046, covered through other rows
 AC-014	-	bug	a tap on the folded recipients of a phone's new email does not open them (phone-recipient-summary-tap-ignored); its test is kept as a known bug
 AC-319	-	bug	Escape in the phone reply Subject: field does not leave it: the composer puts the focus straight back (phone-reply-subject-escape-keeps-focus); its test is kept as a known bug
 STC-314	-	no-user-path	the recipient picker leaves the user's own address out of its suggestions, and typed or pasted it becomes a plain chip
@@ -217,3 +113,4 @@ STX-314	-	backlog	not exercised itself: another way into, or state of, F-051, co
 STX-316	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
 STX-035	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
 STX-319	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
+STL-079	-	backlog	Next item on the last thread of a page whose next page cannot be loaded: a test of it passed in about half of its runs (in the others Next item did nothing, or the page asked for had already failed) and was left out; whether the app or the test is wrong is not established
