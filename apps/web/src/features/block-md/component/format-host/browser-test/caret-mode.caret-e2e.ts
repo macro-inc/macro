@@ -181,22 +181,77 @@ const scriptedMove = (page: Page) =>
     throw new Error('SETUP: missing marked text');
   });
 
-/** The touch toolbar's visible options, or null when no toolbar renders. */
+/** The touch toolbar's visible options, or null when no toolbar renders.
+ *  b3: one page function, read by toolbarOptions and by the per-frame sampler. */
+const readToolbarOptions = () => {
+  const root = document.querySelector('div.relative.touch-pan-y');
+  if (!root) return null;
+  return [...root.querySelectorAll('button')]
+    .filter(
+      (button) =>
+        !button.closest('[inert], [aria-hidden="true"]') &&
+        button.getBoundingClientRect().width > 0 &&
+        !['Previous options', 'More options'].includes(
+          button.getAttribute('aria-label') ?? ''
+        )
+    )
+    .map((button) => button.textContent?.trim() ?? '');
+};
+
 async function toolbarOptions(page: Page) {
-  return page.evaluate(() => {
-    const root = document.querySelector('div.relative.touch-pan-y');
-    if (!root) return null;
-    return [...root.querySelectorAll('button')]
-      .filter(
-        (button) =>
-          !button.closest('[inert], [aria-hidden="true"]') &&
-          button.getBoundingClientRect().width > 0 &&
-          !['Previous options', 'More options'].includes(
-            button.getAttribute('aria-label') ?? ''
-          )
-      )
-      .map((button) => button.textContent?.trim() ?? '');
-  });
+  return page.evaluate(readToolbarOptions);
+}
+
+/** b3 (diag-hide-03): [ms since `start`, options or null] on EVERY animation
+ *  frame until `windowMs` has elapsed, read with readToolbarOptions. */
+function sampleToolbar(page: Page, start: number, windowMs: number) {
+  return page.evaluate(
+    ([from, span, reader]) =>
+      new Promise<[number, string[] | null][]>((resolve) => {
+        const read = new Function(`return (${reader})()`) as () =>
+          | string[]
+          | null;
+        const out: [number, string[] | null][] = [];
+        const step = () => {
+          const now = performance.now();
+          out.push([now - from, read()]);
+          if (now - from < span) requestAnimationFrame(step);
+          else resolve(out);
+        };
+        step();
+      }),
+    [start, windowMs, readToolbarOptions.toString()] as const
+  );
+}
+
+/** b3 (t1yg, from diag-hide-03): the hide SHAPE, no ms bound. Present on the
+ *  first sample, FIRST absent on a sample before the window ends (b4), and
+ *  absent on every sample after it; samples cover the whole window. */
+function hideShape(samples: [number, string[] | null][], windowMs: number) {
+  const presentAtFirst = samples.length > 0 && samples[0][1] !== null;
+  const firstAbsent = samples.find(([, options]) => options === null);
+  const firstAbsentMs = firstAbsent ? firstAbsent[0] : null;
+  const absentAfter =
+    firstAbsentMs !== null &&
+    samples.every(([ms, options]) => ms < firstAbsentMs || options === null);
+  const lastMs = samples.length > 0 ? samples[samples.length - 1][0] : null;
+  return {
+    // b4 (t1zr): the FIRST absence must fall inside the window, not on a frame
+    // that overshoots it.
+    ok:
+      presentAtFirst &&
+      firstAbsentMs !== null &&
+      Number.isFinite(firstAbsentMs) &&
+      firstAbsentMs >= 0 &&
+      firstAbsentMs < windowMs &&
+      absentAfter &&
+      lastMs !== null &&
+      lastMs >= windowMs,
+    presentAtFirst,
+    firstAbsentMs,
+    absentAfter,
+    lastMs,
+  };
 }
 
 /** The popup pill's raw facts. */
@@ -290,6 +345,25 @@ async function caretRect(page: Page) {
   });
 }
 
+/** C-TOUCH-CARET-WEBKIT-01 packet B: the Tauri-iOS boundary's recorded IPC log
+ *  (index.html), or null on a page without ?ios. */
+const ipcLog = (page: Page) =>
+  page.evaluate(
+    () =>
+      (
+        window as unknown as { __TAURI_CARET_IPC_LOG__?: unknown[] }
+      ).__TAURI_CARET_IPC_LOG__?.slice() ?? null
+  );
+
+/** The suppression values the page asked the native edit menu for, in order. */
+const suppressions = (log: unknown[] | null) =>
+  (log ?? []).flatMap((entry) => {
+    const call = entry as { cmd?: string; args?: { suppressed?: unknown } };
+    return call.cmd === 'plugin:edit-menu|set_native_menu_suppressed'
+      ? [call.args?.suppressed]
+      : [];
+  });
+
 const activeElement = (page: Page) =>
   page.evaluate(() => {
     const active = document.activeElement;
@@ -350,6 +424,9 @@ for (const device of DEVICES) {
               .caretToolbarShows ?? null
         )
         .catch(() => null);
+      // b3 (t232 lead 1): the final IPC log is captured here for EVERY row, so a
+      // failed row keeps it; null without ?ios, '<unreadable>' if it can't be read.
+      record.ipcLog = await ipcLog(page).catch(() => '<unreadable>');
       await info.attach('caret-facts', {
         body: JSON.stringify(record),
         contentType: 'application/json',
@@ -600,6 +677,146 @@ for (const device of DEVICES) {
         requireCaret(facts, 'Before ', 2);
         await staysAbsent(page);
         record.after = await witnesses(page);
+      }
+    );
+
+    // C-TOUCH-CARET-WEBKIT-01 packet B (?ios: the Tauri-iOS boundary only).
+    caretRow(
+      'iOS caret mode offers Paste with edit access',
+      async (page, record) => {
+        record.tap = await tapChar(page, 'marked', 3);
+        await selectionSettled(page);
+        requireCaret(await readFacts(page), 'marked', 3);
+        await settledOptions(page, ['Show comment', 'Paste']);
+        record.options = await toolbarOptions(page);
+        record.selection = (await readFacts(page)).selection;
+      }
+    );
+
+    caretRow(
+      'iOS caret mode offers no Paste read-only',
+      async (page, record) => {
+        record.tap = await tapChar(page, 'marked', 3);
+        await selectionSettled(page);
+        requireCaret(await readFacts(page), 'marked', 3);
+        await settledOptions(page, ['Show comment']);
+        record.options = await toolbarOptions(page);
+        record.selection = (await readFacts(page)).selection;
+      }
+    );
+
+    caretRow(
+      'iOS Paste inserts the pasteboard text at the caret',
+      async (page, record) => {
+        record.tap = await tapChar(page, 'marked', 3);
+        await selectionSettled(page);
+        requireCaret(await readFacts(page), 'marked', 3);
+        await settledOptions(page, ['Show comment', 'Paste']);
+        record.ipcBefore = await ipcLog(page);
+        const option = page
+          .getByRole('button', { name: 'Paste', exact: true })
+          .filter({ visible: true });
+        const box = await option.boundingBox();
+        if (!box) throw new Error('SETUP: Paste has no box');
+        await page.touchscreen.tap(
+          box.x + box.width / 2,
+          box.y + box.height / 2
+        );
+        await expect
+          .poll(async () => (await readFacts(page)).paragraphs[0])
+          .toBe('Before marPBked after');
+        const facts = await readFacts(page);
+        record.paragraph = facts.paragraphs[0];
+        record.selection = facts.selection;
+        // b2 (t232, t1yg): where 'PB' landed, for Source == native parity: every
+        // DOM text node holding it, whether it sits inside a comment <mark>, that
+        // mark's full text, and its element path up to the editor root.
+        record.pasteHolders = await page.evaluate(() => {
+          const body = document.getElementById('body');
+          if (!body) return null;
+          const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+          const holders: {
+            insideMark: boolean;
+            markText: string | null;
+            path: string[];
+          }[] = [];
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent?.includes('PB')) continue;
+            const mark = node.parentElement?.closest('mark') ?? null;
+            const inside = mark !== null && body.contains(mark);
+            const path: string[] = [];
+            for (
+              let element = node.parentElement;
+              element && element !== body;
+              element = element.parentElement
+            )
+              path.push(element.tagName.toLowerCase());
+            holders.push({
+              insideMark: inside,
+              markText: inside ? (mark?.textContent ?? null) : null,
+              path,
+            });
+          }
+          return holders;
+        });
+      }
+    );
+
+    caretRow(
+      'iOS suppression follows the caret toolbar',
+      async (page, record) => {
+        record.ipcAtLoad = await ipcLog(page);
+        record.tap = await tapChar(page, 'marked', 3);
+        await selectionSettled(page);
+        requireCaret(await readFacts(page), 'marked', 3);
+        await settledOptions(page, ['Show comment', 'Paste']);
+        record.ipcShown = await ipcLog(page);
+        // b3 (diag-hide-03): the hide is MEASURED, not raced against Source's
+        // 100 ms trailing debounce: every frame for the window from t0 (just
+        // before the tap-away), plus each toolbar removal's time.
+        await page.evaluate(() => {
+          const scope = window as unknown as { caretHideRemovals: number[] };
+          scope.caretHideRemovals = [];
+          const isToolbar = (node: Node) =>
+            node instanceof Element &&
+            (node.matches('.z-action-menu') ||
+              node.querySelector('.z-action-menu') !== null);
+          new MutationObserver((records) => {
+            for (const mutation of records)
+              for (const node of mutation.removedNodes)
+                if (isToolbar(node))
+                  scope.caretHideRemovals.push(performance.now());
+          }).observe(document.body, { childList: true, subtree: true });
+        });
+        const away = await charPoint(page, 'Before ', 2);
+        record.tapAway = away;
+        const t0 = await page.evaluate(() => performance.now());
+        await page.touchscreen.tap(away.x, away.y);
+        record.hideSamples = await sampleToolbar(page, t0, ABSENCE_WINDOW_MS);
+        record.hideRemovalsMs = await page.evaluate(
+          (start) =>
+            (
+              window as unknown as { caretHideRemovals: number[] }
+            ).caretHideRemovals.map((at) => at - start),
+          t0
+        );
+        const shape = hideShape(
+          record.hideSamples as [number, string[] | null][],
+          ABSENCE_WINDOW_MS
+        );
+        record.hideFirstAbsentMs = shape.firstAbsentMs;
+        if (!shape.ok)
+          throw new Error(
+            `the toolbar hide shape failed: ${JSON.stringify(shape)}`
+          );
+        await selectionSettled(page);
+        const facts = await readFacts(page);
+        requireCaret(facts, 'Before ', 2);
+        record.selection = facts.selection;
+        const after = await ipcLog(page);
+        record.suppressedAtLoad = suppressions(record.ipcAtLoad as unknown[]);
+        record.suppressedShown = suppressions(record.ipcShown as unknown[]);
+        record.suppressedHidden = suppressions(after);
       }
     );
   });

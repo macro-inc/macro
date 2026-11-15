@@ -34,6 +34,10 @@
     { "title": "Show comment moves focus off the editor root", "params": "&thread" },
     { "title": "a DOM-only move from a node selection is not adopted", "params": "&thread" },
     { "title": "the same DOM-only move from a range is adopted", "params": "&thread" },
-    { "title": "a caret outside any comment shows nothing", "params": "&thread" }
+    { "title": "a caret outside any comment shows nothing", "params": "&thread" },
+    { "title": "iOS caret mode offers Paste with edit access", "params": "&thread&ios" },
+    { "title": "iOS caret mode offers no Paste read-only", "params": "&thread&readonly&ios" },
+    { "title": "iOS Paste inserts the pasteboard text at the caret", "params": "&thread&ios" },
+    { "title": "iOS suppression follows the caret toolbar", "params": "&thread&ios" }
   ]
 }

@@ -49,9 +49,18 @@ for (const device of DEVICES)
         // facts for its (device, variant) as well as a clean mount.
         const setup: Record<string, unknown> = {};
         let ready: string | null = null;
+        // C-TOUCH-CARET-WEBKIT-01 packet B: the Tauri-iOS boundary's at-load IPC
+        // log on an ?ios variant (index.html), null otherwise.
+        let ipcLog: unknown[] | null = null;
         try {
           await openCaretPage(page, device, variant.params, ENGINE, setup);
           ready = await page.locator('html').getAttribute('data-ready');
+          ipcLog = await page.evaluate(
+            () =>
+              (
+                window as unknown as { __TAURI_CARET_IPC_LOG__?: unknown[] }
+              ).__TAURI_CARET_IPC_LOG__?.slice() ?? null
+          );
         } finally {
           await info.attach('caret-ready-facts', {
             body: JSON.stringify({
@@ -62,6 +71,7 @@ for (const device of DEVICES)
               deviceFacts: setup.device ?? null,
               initialCoarse: setup.initialCoarse ?? null,
               touchMechanism: setup.touchMechanism ?? null,
+              ipcLog,
               pageErrors,
               consoleErrors,
             }),
