@@ -67,6 +67,7 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
 import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
@@ -147,6 +148,7 @@ import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
 import type { JobId } from './generated/schemas/jobId';
+import type { ListCompanyContactsPageParams } from './generated/schemas/listCompanyContactsPageParams';
 import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
@@ -2911,10 +2913,33 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
-  async getCompany({ companyId }: { companyId: string }) {
-    return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
-      method: 'GET',
-    });
+  /** `includeContacts: false` leaves `contacts` empty; page them instead. */
+  async getCompany({
+    companyId,
+    includeContacts = true,
+  }: {
+    companyId: string;
+    includeContacts?: boolean;
+  }) {
+    const query = includeContacts ? '' : '?includeContacts=false';
+    return await dssFetch<CrmCompanyResponse>(
+      `/crm/companies/${companyId}${query}`,
+      { method: 'GET' }
+    );
+  },
+  async listCompanyContactsPage({
+    companyId,
+    ...params
+  }: { companyId: string } & ListCompanyContactsPageParams) {
+    const search = new URLSearchParams();
+    if (params.archived) search.set('archived', 'true');
+    if (params.query) search.set('query', params.query);
+    if (params.cursor) search.set('cursor', params.cursor);
+    if (params.limit) search.set('limit', String(params.limit));
+    return await dssFetch<CompanyContactsPageResponse>(
+      `/crm/companies/${companyId}/contacts/page?${search}`,
+      { method: 'GET' }
+    );
   },
   /** Titles of many company and contact chips; records the caller can't open are left out. */
   async previewCrmRecords(body: CrmPreviewsRequest) {

@@ -340,6 +340,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.list_contacts_for_company")
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crm::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crm::domain::model::CrmCompanyContactsPage, CrmError> {
+        unimplemented!("FakeCrm.list_company_contacts_page")
+    }
+
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
@@ -367,6 +375,7 @@ impl CrmService for FakeCrm {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!("FakeCrm.get_company_for_team")
     }

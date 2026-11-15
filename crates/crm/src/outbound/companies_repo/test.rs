@@ -21,6 +21,7 @@ mod get_contact_for_team;
 mod has_depopulate_target;
 mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;
+mod list_company_contacts_page;
 mod list_contacts_for_company;
 mod list_contacts_for_soup;
 mod personal_emails;

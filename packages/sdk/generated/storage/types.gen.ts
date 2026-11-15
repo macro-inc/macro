@@ -4685,6 +4685,21 @@ export type CommittedChange = {
 };
 
 /**
+ * One page of a company's contacts.
+ */
+export type CompanyContactsPageResponse = {
+    /**
+     * The page's contacts, alphabetically by name (the email when
+     * unnamed), in the same order as `GET /crm/companies/{company_id}/contacts`.
+     */
+    contacts: Array<CrmContactResponse>;
+    /**
+     * Cursor for the next page; absent on the last page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -6087,14 +6102,15 @@ export type CrmCompanyPreview = {
 /**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.
  * Mirrors the soup-listed `crmCompany` shape (`name` / `description`
- * resolved from the primary domain's `crm_domain_directory` entry) and
- * embeds the company's contacts so the panel can render in a single
- * request.
+ * resolved from the primary domain's `crm_domain_directory` entry). It
+ * embeds the company's contacts unless the caller asks it not to
+ * (`includeContacts=false`).
  */
 export type CrmCompanyResponse = {
     /**
      * Contacts attached to this company. Hidden contacts are filtered
-     * out for non-admin viewers.
+     * out for non-admin viewers. Empty when the request set
+     * `includeContacts=false`.
      */
     contacts: Array<CrmContactResponse>;
     /**
@@ -27201,7 +27217,14 @@ export type GetCompanyData = {
          */
         company_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Whether to embed every contact of the company (default `true`).
+         * A caller that pages contacts through
+         * `GET /crm/companies/{company_id}/contacts/page` sets it to `false`.
+         */
+        includeContacts?: boolean;
+    };
     url: '/crm/companies/{company_id}';
 };
 
@@ -27273,6 +27296,54 @@ export type CreateCrmContactResponses = {
 };
 
 export type CreateCrmContactResponse = CreateCrmContactResponses[keyof CreateCrmContactResponses];
+
+export type ListCompanyContactsPageData = {
+    body?: never;
+    path: {
+        /**
+         * The CRM company whose contacts to list
+         */
+        company_id: string;
+    };
+    query?: {
+        /**
+         * `true` for the archived contacts (admins only: plain members get an
+         * empty list), `false` (default) for the active ones. Every contact of
+         * an archived company counts as archived.
+         */
+        archived?: boolean;
+        /**
+         * Keep contacts whose name or primary email contains this text,
+         * ignoring case. Blank matches every contact.
+         */
+        query?: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`.
+         */
+        cursor?: string;
+        /**
+         * Contacts per page, from 1 through 200 (default 50). Values outside
+         * the range are clamped.
+         */
+        limit?: number;
+    };
+    url: '/crm/companies/{company_id}/contacts/page';
+};
+
+export type ListCompanyContactsPageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCompanyContactsPageError = ListCompanyContactsPageErrors[keyof ListCompanyContactsPageErrors];
+
+export type ListCompanyContactsPageResponses = {
+    200: CompanyContactsPageResponse;
+};
+
+export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;

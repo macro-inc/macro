@@ -11,9 +11,9 @@ use crate::domain::{
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
-        CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
-        CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
-        DepopulateContactOutcome,
+        CrmBlockedDomain, CrmCompanyContactsPage, CrmCompanyContactsQuery, CrmCompanyForSoup,
+        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError, CrmScopePrecheck,
+        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -350,6 +350,17 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
+    /// One page of the Team list of the company addressed by `access`. The
+    /// caller's role decides visibility as in
+    /// [`Self::list_contacts_for_company`]. The search text is trimmed and
+    /// the page size clamped to [`MAX_COMPANY_CONTACTS_PAGE`]. See
+    /// [`CompaniesRepository::list_company_contacts_page`].
+    fn list_company_contacts_page(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+        query: CrmCompanyContactsQuery,
+    ) -> impl Future<Output = Result<CrmCompanyContactsPage, CrmError>> + Send;
+
     /// Fetch the contact addressed by `access`, scoped to its owning
     /// team, with its company's name and visibility. The receipt's role
     /// decides whether a hidden contact (or one under a hidden company) is
@@ -383,13 +394,14 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
     /// Fetch the company addressed by `access`, hydrated with all
-    /// domains, the primary domain's directory metadata, and the
-    /// company's full contact list. The receipt's role decides whether a
+    /// domains, the primary domain's directory metadata, and, when
+    /// `include_contacts`, the company's full contact list. The receipt's role decides whether a
     /// hidden company and hidden contacts are revealed. See
     /// [`CompaniesRepository::get_company_for_team`].
     fn get_company_for_team(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
+        include_contacts: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Preview the companies and contacts `user_id` may open, each as its
@@ -474,6 +486,9 @@ const MAX_EMAIL_CHARS: usize = 320;
 /// Most contacts one [`CrmService::search_contacts`] call returns. Large
 /// enough for the Quick Access feed of a team's recent contacts.
 pub const MAX_CONTACT_SEARCH_LIMIT: u16 = 500;
+
+/// The most contacts one page of a company's Team list holds.
+pub const MAX_COMPANY_CONTACTS_PAGE: i64 = 200;
 
 /// The records a viewer-scoped CRM read covers: every enabled team the
 /// viewer belongs to, or the single team of a verified team-scoped bot
@@ -1206,6 +1221,30 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn list_company_contacts_page(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+        mut query: CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
+        query.search = query.search.trim().to_owned();
+        query.limit = query.limit.clamp(1, MAX_COMPANY_CONTACTS_PAGE);
+        if query
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| !cursor.continues(company_id, &query))
+        {
+            return Err(CrmError::InvalidRequest(
+                "contacts cursor belongs to another list".into(),
+            ));
+        }
+        self.companies_repository
+            .list_company_contacts_page(&team_id, &company_id, access.include_hidden(), &query)
+            .await
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     async fn get_contact_for_team(
         &self,
@@ -1260,12 +1299,13 @@ where
     async fn get_company_for_team(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
+        include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         let team_id = access.team_id();
         let company_id = access.company_id()?;
         let include_hidden = access.include_hidden();
         self.companies_repository
-            .get_company_for_team(&team_id, &company_id, include_hidden)
+            .get_company_for_team(&team_id, &company_id, include_hidden, include_contacts)
             .await
     }
 
@@ -1654,6 +1694,17 @@ impl CrmService for NoOpCrmService {
         Ok(Vec::new())
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        Ok(CrmCompanyContactsPage {
+            contacts: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
@@ -1681,6 +1732,7 @@ impl CrmService for NoOpCrmService {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         Ok(None)
     }

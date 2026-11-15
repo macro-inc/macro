@@ -475,6 +475,14 @@ impl CrmService for FakeCrmService {
         panic!("unexpected list_contacts_for_company call")
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crate::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crate::domain::model::CrmCompanyContactsPage, CrmError> {
+        panic!("unexpected list_company_contacts_page call")
+    }
+
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
@@ -502,6 +510,7 @@ impl CrmService for FakeCrmService {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         panic!("unexpected get_company_for_team call")
     }

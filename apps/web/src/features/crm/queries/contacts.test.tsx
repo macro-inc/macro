@@ -1,10 +1,20 @@
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
+import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useContactQuery, useCrmContactByEmailQuery } from './contacts';
+import { useCompanyContactsQuery } from './company-contacts';
+import {
+  useContactQuery,
+  useCrmContactByEmailQuery,
+  useSetContactNameMutation,
+} from './contacts';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+
+vi.mock('@service-storage/crm-contacts', () => ({
+  invalidateCachedCrmContacts: async () => undefined,
+}));
 
 const storage = { getContact: vi.fn(), getContactByEmail: vi.fn() };
 let client: QueryClient;
@@ -96,4 +106,44 @@ it('reads a contact detail with an abortable request', async () => {
     contactId: contact.id,
     signal: expect.any(AbortSignal),
   });
+});
+
+it('refetches a searched Team list when a rename stops matching it', async () => {
+  // The search matches the name only, never the address.
+  const anna = { ...contact, name: 'Anna' };
+  let stored = anna;
+  const listCompanyContactsPage = vi.fn(async ({ query }: { query?: string }) =>
+    ok({
+      contacts:
+        !query || stored.name?.toLowerCase().includes(query) ? [stored] : [],
+      nextCursor: null,
+    })
+  );
+  const setContactName = vi.fn(async ({ name }: { name: string }) => {
+    stored = { ...stored, name, updatedAt: '2026-10-03' };
+    return ok(stored);
+  });
+  const deps = {
+    client,
+    storage: { listCompanyContactsPage, setContactName },
+  } as unknown as CrmRecordDependencies;
+  const { source, rename, dispose } = createRoot((dispose) => ({
+    source: useCompanyContactsQuery(deps, () => ({
+      companyId: 'company-1',
+      archived: false,
+      search: 'anna',
+    })),
+    rename: useSetContactNameMutation(deps),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(source.contacts).toEqual([anna]));
+
+  await rename.mutateAsync({
+    contactId: anna.id,
+    companyId: anna.companyId,
+    name: 'Bo',
+  });
+  expect(listCompanyContactsPage).toHaveBeenCalledTimes(2);
+  expect(source.contacts).toEqual([]);
+  dispose();
 });

@@ -1,9 +1,9 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail,
-    CrmError, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
-    DomainMetadata,
+    CrmBlockedDomain, CrmCompanyContactsPage, CrmCompanyContactsQuery, CrmCompanyForSoup,
+    CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError, CrmScopePrecheck,
+    CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 
@@ -602,6 +602,20 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
+    /// One page of `company_id`'s Team list, in
+    /// [`Self::list_contacts_for_company`]'s order, holding the contacts
+    /// `query` selects. Company and contact visibility follow
+    /// `include_hidden` as there; under an archived company every contact
+    /// counts as archived. Returns [`CrmError::CompanyNotFoundForTeam`]
+    /// when the company isn't visible.
+    fn list_company_contacts_page(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+        query: &CrmCompanyContactsQuery,
+    ) -> impl Future<Output = Result<CrmCompanyContactsPage, CrmError>> + Send;
+
     /// Fetches a single CRM contact by id, scoped to `team_id` via the
     /// contact's company. Returns `Ok(None)` when the contact doesn't
     /// exist, belongs to a different team, or — for non-admin viewers
@@ -659,8 +673,9 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
     /// Fetches a single CRM company by id, scoped to `team_id`,
     /// hydrated with all domains (ordered by `created_at ASC` —
     /// primary first), the primary domain's `crm_domain_directory`
-    /// display metadata (name + description), and the company's full
-    /// contact list (subject to `include_hidden`). Returns `Ok(None)`
+    /// display metadata (name + description), and, when
+    /// `include_contacts`, the company's full contact list (subject to
+    /// `include_hidden`; empty otherwise). Returns `Ok(None)`
     /// when the company doesn't exist, belongs to a different team,
     /// or — for non-admin viewers (`include_hidden = false`) — the
     /// company is hidden. With `include_hidden = true` (admin/owner)
@@ -671,6 +686,7 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
         include_hidden: bool,
+        include_contacts: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Read the team's CRM configuration from `team_crm_settings`.

@@ -22,6 +22,7 @@ axum = [
   "dep:macro_authorization",
   "dep:macro_uuid",
   "dep:model-error-response",
+  "dep:models_pagination",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -77,6 +78,7 @@ filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -105,6 +107,7 @@ axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+models_pagination = { path = "../models_pagination", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
