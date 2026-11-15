@@ -31,13 +31,21 @@ const IN_PROGRESS: Uuid = uuid::uuid!("00000001-0000-0000-0002-000000000002");
 /// grants, B and D through both kinds, the standalone document directly.
 const VISIBLE: [Uuid; 5] = [STANDALONE, D, C, B, A];
 
+/// A balanced OR over `ids`, as the domain builds an association.
+fn any_of(ids: &[Uuid]) -> Option<Expr<DocumentLiteral>> {
+    match ids {
+        [] => None,
+        [id] => Some(Expr::val(DocumentLiteral::Id(*id))),
+        ids => {
+            let (a, b) = ids.split_at(ids.len() / 2);
+            any_of(a).zip(any_of(b)).map(|(a, b)| Expr::or(a, b))
+        }
+    }
+}
+
 fn documents(ids: &[Uuid]) -> EntityFilterAst {
     EntityFilterAst {
-        document_filter: ids
-            .iter()
-            .map(|id| Expr::val(DocumentLiteral::Id(*id)))
-            .reduce(Expr::or)
-            .map(Arc::new),
+        document_filter: any_of(ids).map(Arc::new),
         chat_filter: Some(Arc::new(Expr::val(ChatLiteral::Importance(false)))),
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::Importance(false)))),
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
@@ -152,7 +160,9 @@ fn only_id_bounded_arms_check_access_after_their_filters() {
             .to_owned()
     };
     let bounded = sql(&every_document());
-    assert!(bounded.contains("ORDER BY sort_ts DESC, id DESC OFFSET 0) bounded_documents"));
+    assert!(bounded.contains(
+        "ORDER BY sort_ts DESC, id DESC OFFSET 0) bounded_documents WHERE ($4::timestamptz IS NULL OR (bounded_documents.sort_ts"
+    ));
     assert!(bounded.contains("ea.granted_from_project_id IS NOT NULL"));
     assert!(!bounded.contains("d.id IN (\n"));
 
@@ -171,6 +181,13 @@ fn only_id_bounded_arms_check_access_after_their_filters() {
         Expr::val(DocumentLiteral::FileType("md".parse().unwrap())),
     )));
     assert!(!sql(&widened).contains("bounded_documents"));
+
+    // So does a list too long to probe one id at a time.
+    let ids: Vec<Uuid> = (0..=MAX_NAMED_CANDIDATES as u128)
+        .map(Uuid::from_u128)
+        .collect();
+    assert!(sql(&documents(&ids[1..])).contains("bounded_documents"));
+    assert!(!sql(&documents(&ids)).contains("bounded_documents"));
 }
 
 #[sqlx::test(

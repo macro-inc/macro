@@ -1845,28 +1845,55 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
 const CANONICAL_UUID_PATTERN: &str =
     "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
 
-/// Whether the document filter admits only documents it names by id (a
-/// resolved CRM association, or ids passed in), so the arm's candidates are
-/// that id list rather than the caller's whole accessible set.
-fn document_filter_is_id_bounded(ast: Option<&Expr<DocumentLiteral>>) -> bool {
-    ast.is_some_and(|expr| {
-        expr.collapse_frames(|frame| match frame {
-            filter_ast::ExprFrame::And(a, b) => a || b,
-            filter_ast::ExprFrame::Or(a, b) => a && b,
-            filter_ast::ExprFrame::Not(_) => false,
-            filter_ast::ExprFrame::Literal(DocumentLiteral::Id(_)) => true,
-            filter_ast::ExprFrame::Literal(_) => false,
-        })
+/// The most named ids an arm checks access for after its filters. Each
+/// survivor costs a few index probes, so the per-candidate form grows with
+/// the list while the planned semi-join and property bitmaps do not. CRM
+/// scopes measured up to about 2,000 ids; from per-probe cost, the status
+/// bitmap a 2,000-id task list replaced would break even near 4,000.
+const MAX_NAMED_CANDIDATES: usize = 4_000;
+
+/// At most how many documents the filter admits when it admits only
+/// documents it names by id (a resolved CRM association, or ids passed in),
+/// or `None` when it can admit any document.
+fn named_document_bound(ast: Option<&Expr<DocumentLiteral>>) -> Option<usize> {
+    ast.and_then(|expr| {
+        expr.collapse_frames(
+            |frame: filter_ast::ExprFrame<Option<usize>, _>| match frame {
+                filter_ast::ExprFrame::And(a, b) => match (a, b) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (a, b) => a.or(b),
+                },
+                filter_ast::ExprFrame::Or(a, b) => a.zip(b).map(|(a, b)| a.saturating_add(b)),
+                filter_ast::ExprFrame::Not(_) => None,
+                filter_ast::ExprFrame::Literal(DocumentLiteral::Id(_)) => Some(1),
+                filter_ast::ExprFrame::Literal(_) => None,
+            },
+        )
     })
+}
+
+/// How a flat timestamp page reads a fenced arm: in page order, past the
+/// cursor, so access probes stop at its `LIMIT` and skip earlier pages. The
+/// outer `TopItems` keeps the same cursor predicate.
+const FLAT_TIMESTAMP_PAGE: FencedPage = FencedPage {
+    order_by: "sort_ts DESC, id DESC",
+    after_cursor: "($4::timestamptz IS NULL OR (bounded_documents.sort_ts, bounded_documents.id::text) < ($4, $5))",
+};
+
+/// The page order and cursor a fenced arm applies before probing access.
+struct FencedPage {
+    order_by: &'static str,
+    after_cursor: &'static str,
 }
 
 /// How a document arm gates access. A broad arm keeps the flattenable
 /// [`bound_access_semi_join`], so Postgres can hash the caller's grants. An
-/// id-bounded arm reads its candidates and their own filters behind an
-/// `OFFSET` fence and probes `entity_access` once per survivor afterwards
-/// ([`bounded_access_probe`]): Postgres otherwise checks access first, on
-/// every listed id, and pays a grant lookup for each document the sub-type,
-/// file-type and property filters then reject.
+/// arm bounded by at most [`MAX_NAMED_CANDIDATES`] named ids reads its
+/// candidates and their own filters behind an `OFFSET` fence and probes
+/// `entity_access` once per survivor afterwards ([`bounded_access_probe`]):
+/// Postgres otherwise checks access first, on every listed id, and pays a
+/// grant lookup for each document the sub-type, file-type and property
+/// filters then reject.
 #[derive(Clone, Copy)]
 enum DocumentArmAccess {
     Joined,
@@ -1875,10 +1902,9 @@ enum DocumentArmAccess {
 
 impl DocumentArmAccess {
     fn new(document_filter: Option<&Expr<DocumentLiteral>>) -> Self {
-        if document_filter_is_id_bounded(document_filter) {
-            Self::AfterFilters
-        } else {
-            Self::Joined
+        match named_document_bound(document_filter) {
+            Some(bound) if bound <= MAX_NAMED_CANDIDATES => Self::AfterFilters,
+            _ => Self::Joined,
         }
     }
 
@@ -1897,18 +1923,24 @@ impl DocumentArmAccess {
         }
     }
 
-    /// Closes the arm, after its filters. `order_by` orders the fenced
-    /// candidates as the page does, so a flat page stops probing access at its
-    /// `LIMIT`; grouped pages count every candidate and pass `None`.
-    fn close(self, order_by: Option<&str>, source_ids: usize) -> String {
-        match self {
-            Self::Joined => String::new(),
-            Self::AfterFilters => format!(
-                "{} {PER_CANDIDATE}) bounded_documents WHERE {}\n",
-                order_by
-                    .map(|order| format!(" ORDER BY {order}"))
-                    .unwrap_or_default(),
-                bounded_access_probe("bounded_documents.id", "document", source_ids)
+    /// Closes the arm, after its filters. A flat timestamp page passes
+    /// [`FLAT_TIMESTAMP_PAGE`]; property and name sorts, and grouped pages,
+    /// which count every candidate, pass `None` and probe them all.
+    fn close(self, page: Option<&FencedPage>, source_ids: usize) -> String {
+        let probe = bounded_access_probe("bounded_documents.id", "document", source_ids);
+        match (self, page) {
+            (Self::Joined, _) => String::new(),
+            (Self::AfterFilters, None) => {
+                format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}\n")
+            }
+            (
+                Self::AfterFilters,
+                Some(FencedPage {
+                    order_by,
+                    after_cursor,
+                }),
+            ) => format!(
+                " ORDER BY {order_by} {PER_CANDIDATE}) bounded_documents WHERE {after_cursor} AND {probe}\n"
             ),
         }
     }
@@ -2108,9 +2140,8 @@ fn build_query<'a>(
             "d.id",
             access.property_probe(),
         ));
-        // The page's own order, so the access probes stop at its LIMIT.
-        let page_order = (!property_sort && !name_sort).then_some("sort_ts DESC, id DESC");
-        builder.push(access.close(page_order, source_ids));
+        let page = (!property_sort && !name_sort).then_some(&FLAT_TIMESTAMP_PAGE);
+        builder.push(access.close(page, source_ids));
     }
 
     if include_chats {
