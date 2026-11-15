@@ -762,6 +762,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
+        redis.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();

@@ -8,16 +8,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn disabled_startup_launches_neither_consumer_nor_worker() {
+async fn disabled_intake_still_runs_the_worker_for_webhooks() {
     let lifecycle = ServiceLifecycle::default();
+    let worker_shutdown = lifecycle.stop_workers.clone();
     start_event_tasks(
         false,
         &lifecycle,
         || async { panic!("disabled consumer was polled") },
-        async { panic!("disabled worker was polled") },
+        async move { worker_shutdown.cancelled().await },
     );
     assert!(lifecycle.consumers.is_empty());
-    assert!(lifecycle.workers.is_empty());
+    assert_eq!(lifecycle.workers.len(), 1);
     lifecycle.stop();
     lifecycle.drain().await;
 }
