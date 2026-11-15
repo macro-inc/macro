@@ -177,6 +177,14 @@ with `EMAIL_E2E_DIST=<bundle> EMAIL_E2E_BREAK=F-073`: they must fail at the
 function's own assertion, and pass on the clean bundle. Record the function
 and the break, in words, in `proofs.tsv`. The breaks are never committed.
 
+Before any proof, run the suite against the bundle of breaks with no break
+switched on: it must pass. A guard written wrongly (a boolean where the code
+passes an accessor, say) breaks the app for every run, and each test then
+fails before its own assertion, which looks like a proof and is none. For the
+same reason read where the broken run failed: a failure in the steps that
+lead to the row's assertion proves nothing about the row. A line in
+`proofs.tsv` stands only for a break that was run this way.
+
 A way into a function (an action row: a menu entry, a shortcut, a button) is
 proved the same way, with the row's id as the name of the guard, in the
 wiring of that way in rather than in what it calls: the point is that it can

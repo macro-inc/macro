@@ -26,7 +26,10 @@ AC-056	the View message of the Email scheduled and Email rescheduled notices doe
 AC-058	on a phone, the header's Send does not send a new email
 AC-061	on a phone, Save Draft in the Draft options sheet does not leave the composer
 AC-062	on a phone, Delete Draft in the Draft options sheet does not delete the draft
+AC-063	Retry in "Unable to load this draft" does nothing
+AC-065	Reload in the draft banner does not reload
 AC-066	the Draft could not be synced banner's Keep editing does not save the draft again
+AC-072	a file added while offline is attached anyway after the You're offline notice
 AC-073	clicking a reply's one-line recipient summary does not open its recipient fields
 AC-074	the Cc button of a reply's open recipient fields does not show the Cc field
 AC-075	the Bcc button of a reply's open recipient fields does not show the Bcc field
@@ -43,11 +46,13 @@ AC-097	a reply's Create event button opens no event
 AC-098	a send time picked from a reply's clock does not schedule the reply
 AC-099	the Cancel and Restore draft of the bar under a scheduled reply do not take the schedule back
 AC-100	scrolling inside a long reply does not make its box taller
+AC-102	Retry in "Unable to load local draft" does nothing
 AC-103	a reply's Don't include signature keeps the signature
 AC-105	the Queued email sends panel's Restore draft does not bring back a send another device cancelled
 AC-106	the Queued email sends panel's Check status does not resume a send held until its inbox is reconnected
 AC-108	the Queued email sends panel's Cancel and restore does not cancel a send queued on another device
 AC-109	the Queued email sends panel's Check status does not refresh a send queued on another device
+AC-110	Load more sends in the Queued email sends panel loads nothing
 AC-300	pressing E in the Create menu opens no new email
 AC-301	pressing Shift+E in the Create menu opens no new email in a split
 AC-302	pressing Shift+Cmd+C in a new email does not show or focus the Cc field
@@ -151,6 +156,7 @@ AL-171	the Reply... box under a thread opens no reply
 AL-173	on a phone, the dock's Next email arrow does not move to the next email
 AL-174	on a phone, the dock's check does not mark the thread done or not done
 AL-175	on a phone, tapping the Draft row under a message does not open the draft reply
+AL-176	a click on a received file's chip opens nothing
 AL-182	the invitation card's Connect calendar starts no calendar connection
 AL-184	the invitation card's Retry calendar does not load the calendar again
 AL-189	the Remind me form's Cancel leaves it open
@@ -190,6 +196,8 @@ AL-703	Create view in the empty phone drawer opens nothing
 AL-704	a tag picked in the view builder is not added to the view
 AL-705	Advanced settings in the view builder shows nothing
 AL-706	Cancel in the view builder leaves it open
+AL-708	Duplicate in the notice of a saved view that could not be saved opens no dialog
+AL-903	Request access on a thread taken back sends no request
 AL-910	opening a thread from its address loads no thread
 AX-008	the Cancel button of Turn off calendar leaves the dialog open
 AX-012	the Cancel button of Remove inbox leaves the dialog open
@@ -222,6 +230,8 @@ AX-215	answering Sign out in the remove-local-drafts question keeps the user sig
 AX-304	on a phone, the Mail page's create button opens no new message
 AX-305	picking Email as the universal input's content type does not switch it to an email
 AX-306	the universal input's email ignores the From picked, the Cc/Bcc button and the recipients typed
+AX-316	Connect email under Welcome home opens no chooser
+AX-317	Connect your inbox on Home does not open Settings
 F-001	the return from consent never sets up the inbox
 F-002	Outlook in the connect dialog starts nothing
 F-003	Copy admin approval link copies nothing
@@ -408,10 +418,12 @@ STC-013	not shown as the row says (Please select at least one recipient): its re
 STC-014	not shown as the row says (Please enter a message): its rendering is switched off or changed in src/features/email-compose/views/compose-body.tsx
 STC-015	not shown as the row says (Please enter a subject): its rendering is switched off or changed in src/features/email-compose/views/compose-subject.tsx
 STC-016	not shown as the row says (Unable to find linked email account. Select a sending inbox.): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
+STC-020	the title of the notice of a mentioned document that could not be made viewable is changed in src/features/email-compose/make-attachment-public.ts
 STC-022	not shown as the row says (You're offline — Attachments can't be added while you're offline. Reconnect and try again.): its rendering is switched off or changed in src/features/email-compose/primitives/attachment-persistence.ts
 STC-027	not shown as the row says (toast: Delivery unconfirmed — Check your sent mail. We will not resend automatically.): its rendering is switched off or changed in src/features/email-compose/primitives/queued-send-notice.ts
 STC-029	not shown as the row says (toast: Cancellation pending — Waiting for confirmation): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
 STC-030	not shown as the row says (toast: Too late to undo — Delivery has already started): its rendering is switched off or changed in src/features/email-compose/undo-send.ts
+STC-032	the text of "Failed to undo send" of a queued send is changed in src/features/email-compose/undo-send.ts
 STC-033	not shown as the row says (toast: Failed to send email — Reconnect to send this email.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-034	not shown as the row says (toast: Failed to send email — Wait for images and videos to finish uploading, or remove them.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-035	not shown as the row says (toast: Failed to send email — Draft not saved): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
@@ -419,6 +431,9 @@ STC-036	not shown as the row says (toast: Failed to send email — Attachment no
 STC-037	not shown as the row says (toast: Failed to send email (no subtext)): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-038	not shown as the row says (toast: Loading email sender addresses...): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
 STC-039	not shown as the row says (toast: Email failed to send. No recipients provided): its rendering is switched off or changed in src/features/email-compose/primitives/reply-composer.ts
+STC-040	the text of "Loading email accounts..." is changed in src/features/email-compose/primitives/reply-composer.ts
+STC-041	the text of "Could not load email accounts" is changed in src/features/email-compose/primitives/reply-composer.ts
+STC-042	the text of "No email account connected" is changed in src/features/email-compose/primitives/reply-composer.ts
 STC-044	not shown as the row says (toast: Failed to restore thread to inbox): its rendering is switched off or changed in src/features/email-compose/primitives/email-send-schedule.ts, src/features/email-compose/primitives/reply-composer.ts
 STC-045	not shown as the row says (send button disabled, tooltip: Queued to send. Cancel the send before editing.): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
 STC-048	not shown as the row says (send button tooltip while busy: Scheduling email… / Updating schedule… / Cancelling schedule… / Sending… / Uploading files to share…): its rendering is switched off or changed in src/features/email-compose/primitives/email-composer.ts
@@ -459,6 +474,7 @@ STC-091	not shown as the row says (Draft options sheet: Delete Draft / Save Draf
 STC-096	not shown as the row says (trash tooltip: Discard / Delete draft): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
 STC-097	not shown as the row says (recipient summary: <name>, <name> & N more…): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
 STC-098	not shown as the row says (Cc/Bcc, From: <address> (or Select sending inbox)): its rendering is switched off or changed in src/features/email-compose/views/compose-recipients.tsx
+STC-099	the label "Queued on this device" is changed in src/features/email-compose/queued-send-status.tsx
 STC-101	not shown as the row says (Send cancelled (Restore draft)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-102	not shown as the row says (Cancellation pending (Cancel disabled)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
 STC-103	not shown as the row says (Delivery unconfirmed. Your email may already have been sent. Check your sent mail. We will not resend automatically. (Check status, no Cancel)): its rendering is switched off or changed in src/features/email-compose/queued-send-status.tsx
@@ -469,6 +485,7 @@ STC-111	not shown as the row says (notice above the composer: the operation desc
 STC-306	not shown as the row says (From shows the address as plain text, no dropdown): its rendering is switched off or changed in src/features/email-compose/components/from-inbox-selector.tsx
 STC-308	not shown as the row says (Cc:, Bcc: and From: rows fold back into the combined row): its rendering is switched off or changed in src/features/email-compose/views/compose-layout.tsx
 STC-309	not shown as the row says (subject shown as one truncated line): its rendering is switched off or changed in src/features/email-compose/components/compose-subject-field.tsx
+STC-312	the phone reply's Send stays enabled with an empty body (src/features/email-compose/views/reply-input.tsx)
 STC-313	not shown as the row says (suggestion menu status: Loading options… / Options unavailable. Selected values are kept. / Cached options or selected names may be incomplete. / No matches in this page or cached snapshot.): its rendering is switched off or changed in src/lib/core/component/RecipientSourceControls.tsx
 STC-315	not shown as the row says (Drop file(s) to attach): its rendering is switched off or changed in src/features/email-compose/views/reply-input.tsx
 STC-316	not shown as the row says (no trash button in the toolbar): its rendering is switched off or changed in src/features/email-compose/views/compose-toolbar.tsx
@@ -507,8 +524,15 @@ STL-001	not shown as the row says (spinner aria-label "Loading email" (lazy list
 STL-002	not shown as the row says (list loading spinner aria-label "Loading email"): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-004	not shown as the row says (Connect your email + button "Connect email"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-009	not shown as the row says (Inbox zero): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-010	the empty list's title "No noise" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-011	the empty list's title "No favorite emails" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-012	the empty list's title "No sent email" is changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-015	not shown as the row says (No calendar email): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-016	the empty list's title "No drafts" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-017	the empty list's title "No shared email" is changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-018	the empty list's title "No archived email" is changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-019	not shown as the row says (You're caught up + "See the rest of your inbox"): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
+STL-021	the empty list's title "Trash is empty" is changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-022	not shown as the row says (No email yet): its rendering is switched off or changed in src/features/email-view/components/EmailEmptyState.tsx
 STL-024	not shown as the row says ("Load More" row; "Loading..." with aria-busy while a page loads): its rendering is switched off or changed in src/features/email-view/components/EmailList.tsx
 STL-028	not shown as the row says (No conversation selected ("Pick one from the list, or move with j and k")): its rendering is switched off or changed in src/features/email-view/components/EmailReader.tsx
@@ -571,6 +595,7 @@ STL-520	not shown as the row says (confirmation prompt with checkbox "I understa
 STL-521	not shown as the row says (header with Back, the subject and Info only): its rendering is switched off or changed in src/features/block-email/views/mobile/email-thread.tsx
 STL-600	not shown as the row says (toast "Failed to block sender" / "Failed to unblock sender"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
 STL-601	not shown as the row says (toast "Failed to mark sender as <label>" / "Failed to undo"): its rendering is switched off or changed in src/lib/queries/email/thread.ts
+STL-607	Restore and Not spam stay enabled while a restore is pending (src/features/email-view/components/EmailList.tsx)
 STL-611	not shown as the row says (thread closes back to the list): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
 STL-614	not shown as the row says ("Previous item" / "Next item" disabled at the ends of the list): its rendering is switched off or changed in src/components/app/split-layout/components/SplitHeader.tsx
 STL-615	not shown as the row says (toast "Link copied to clipboard." / "Could not copy link"): its rendering is switched off or changed in src/lib/core/util/useCopyLink.ts
@@ -592,6 +617,8 @@ STL-708	not shown as the row says (Advanced settings start open when the view se
 STL-709	not shown as the row says (alert with the delete error inside the confirmation): its rendering is switched off or changed in src/features/saved-views/components/saved-view-dialog.tsx
 STL-711	not shown as the row says (desktop row menus have no Move items; picker row menus have Move up / Move down (absent at either end)): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
+STL-942	the text shown once access is requested is changed in src/features/access-requests/views/RequestAccessView.tsx
+STX-001	the text of "Loading accounts…" in the Read receipts list is changed in src/features/settings/email-settings.tsx
 STX-003	not shown as the row says ("Loading signatures…" / "Loading signature…"): its rendering is switched off or changed in src/features/settings/email-settings.tsx
 STX-004	not shown as the row says ("Couldn't load signatures" + Try again): its rendering is switched off or changed in src/features/settings/email-settings.tsx
 STX-005	not shown as the row says ("Connect an email account above to add a signature."): its rendering is switched off or changed in src/features/settings/email-settings.tsx
@@ -615,6 +642,7 @@ STX-208	not shown as the row says (Shared inbox description "Shared inbox. Autom
 STX-211	not shown as the row says ("Finishing account connection…" with "Back to app"): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
 STX-212	not shown as the row says (Toast "Failed to connect email" with "Select email permissions on sign-in to enable"; other failures toast the error message): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
 STX-301	not shown as the row says ("Connect Google to send email and create calendar events. Then return here to compose."): its rendering is switched off or changed in src/features/universal-input/views/universal-composer.tsx
+STX-302	the text of the notice of a consent screen that cannot open is changed in src/features/universal-input/actions.ts
 STX-311	not shown as the row says (Empty Home "Welcome home": "… Connect email to include your inbox, too." with "Connect email"): its rendering is switched off or changed in src/features/home/components/HomeEmptyState.tsx
 STX-314	not shown as the row says (Email entries in the mention menu / quick access: cached threads by subject and sender, unsynced local drafts, "No Subject" fallback): its rendering is switched off or changed in src/features/command/queries/entity-search.ts, src/lib/core/context/quickAccess/QuickAccessSource.tsx
 STX-316	not shown as the row says (Setup status "Connect your calendar" / "Enable calendar" / "Calendar is off" / "Reconnect calendar": overlay on an empty grid, pill when events show): its rendering is switched off or changed in src/features/calendar-view/components/SetupStatus.tsx
