@@ -87,8 +87,9 @@ fn web_notification_selection_completes_backfill_pages() {
 
 #[test]
 fn canonical_type_wins_over_the_soup_fallback() {
-    // `entityType` maps types outside Soup to DOCUMENT; the canonical type
-    // keeps an external chat from counting toward a document.
+    // Older servers mapped `entityType` outside Soup to DOCUMENT, and cached
+    // records still carry it; the canonical type keeps an external chat from
+    // counting toward a document.
     let mut external = web_notification(A, "UNSEEN");
     external["targetEntityType"] = json!("EXTERNAL_CHAT");
     let query = backfill_query("id entityId entityType targetEntityType state", "");

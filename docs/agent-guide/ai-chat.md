@@ -153,6 +153,12 @@ assets; importing the client alone should not construct a worker. A
 `data:video/mp2t` worker URL indicates raw TypeScript was packaged as an asset.
 An empty worker startup error does not by itself establish that the tab is stale.
 
+While a reply streams, the transcript follows its end. Pressing a disclosure in
+it (a tool group, a tool row, a thought) stops following, so what you open stays
+under the pointer while text keeps arriving below; scrolling back to the bottom
+or the jump-to-latest button follows again. The backend-free desktop/phone check
+is `bunx playwright test --config apps/web/src/features/block-agent/browser-test/playwright.config.ts transcript.browser.e2e.ts`.
+
 Repeat from Home, Agents, and the create menu with an already-ready session.
 The first prompt can be accepted before its destination mounts; navigating into
 the session must keep the same streamed turn without restarting its load. Also
@@ -690,8 +696,12 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Home's agent input also restores unsent text, under a
-  separate key from the Agents page composer. Check the Home path explicitly:
+  when switching channels. The phone Agents list's composer and the desktop
+  list views' AI input hold that same draft and attachments, so an edit in one
+  shows in the other at once: type on the composer page, go Back to the list,
+  edit there, and return; neither should show an older version. Home's agent
+  input also restores unsent text, under a separate key from the Agents page
+  composer. Check the Home path explicitly:
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
@@ -933,19 +943,23 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
-The draft runs in an ordinary hidden agent session of the in-process Macro
-agent, as the person, with its usual tools, on the model their Ask AI steps
-use, billed as agent session usage. It never appears in Home or the Agents list, notifies nobody,
-and is deleted when the draft comes back. It finds the channels, people,
-folders, labels, tags and agents the description names itself, paging and
-refining searches, and leaves out a name that matches nothing or several
-items, so the review shows the normal picker for it. It creates only what the
-routine must reference (such as a database "a new database called Bug log"
-asks for) and never does the routine's own work now ("every Monday make a
-task" makes no task). It hands the routine back by checking it with
-`macro.routines.check` (`POST /scheduled-actions/check`: saving's checks,
-including the type check of its code steps together, with nothing saved),
-naming what it created, and fixes what the check reports. The last check is
+First a fast call, billed as the person's automation usage, names the
+channels, people, folders, labels, tags, agents and other items the
+description refers to; document storage looks those names up as the person
+(`POST /search/names`) and settles each on the one item with that name, or
+leaves out a name that matches nothing or several items, so the review shows
+the normal picker for it. The routine is then written in a hidden agent
+session of the in-process Macro agent, as the person, on the model their Ask
+AI steps use, billed as agent session usage. It never appears in Home or the
+Agents list, notifies nobody, and is deleted when the draft comes back. It is
+given the items found and the SDK reference it needs, so it searches for
+nothing and writes one program. It creates only what the routine must
+reference (such as a database "a new database called Bug log" asks for) and
+never does the routine's own work now ("every Monday make a task" makes no
+task). It hands the routine back by checking it with `macro.routines.check`
+(`POST /scheduled-actions/check`: saving's checks, including the type check
+of its code steps together, with nothing saved), naming what it created, and
+fixes what the check reports. The last passing check (else the last check) is
 the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
@@ -953,6 +967,29 @@ the routine can't be created until it is drafted again or the step is
 removed. Saving checks every id again. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
+
+With `enable-routine-background-drafts` (PostHog, on in development builds),
+Draft it starts the same draft in the background instead
+(`POST /scheduled-actions/draft-jobs`), answered once its AI usage is admitted.
+The box gives way to the request, three milestones, each with a detail line
+under it, and **Cancel draft**: **Looking up what it names**, then what it
+found by name (**Found #engineering and your Finance label**, with a line
+for any name left for the person, such as "No channel is called #marketing,
+so you'll pick one"); **Writing the steps**, then **Wrote 2 steps** with
+their titles; **Checking that it runs**, with **Fixing a problem the check
+found** while it fixes one. **Cancel draft** puts the request back in the
+box. **Close this anytime**: the draft
+carries on. While New routine is closed, a **Drafting routine** pill sits at
+the bottom right (above the dock on phones) with the current stage, and opens
+New routine. A finished draft gets a toast: **Routine draft ready** with
+**Review**, or **Couldn’t draft that routine** with the reason and **Edit
+request**, which reopens New routine with the request back in the box and the
+reason under it. A ready draft waits until it is opened or discarded, also
+across reloads and devices, and one left unopened for 7 days is deleted. While
+one waits, New routine shows **Your draft is ready** with **Discard** and
+**Review**, and closing its toast only closes the toast.
+Reloading mid-draft brings the pill back. Off, the dialog waits on the
+blocking request as before; older clients keep using it.
 
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
@@ -1855,7 +1892,8 @@ no caret. Tool arguments and results never fall back to raw JSON.
 
 Consecutive tool calls, programs and thoughts between two pieces of the agent's
 text form one group, with the thoughts before, between and after its calls; a
-run of thoughts with no call stays as separate rows. Subagents, tools requiring user input, presented views and tools that
+run of thoughts with no call stays as separate rows. A blank line the agent
+emits between calls is not text and does not split the group. Subagents, tools requiring user input, presented views and tools that
 render their own answer stay outside groups so they stay visible during other
 tool bursts. A group never opens on its own and has no scrolling window: opened,
 it lists every call in full, and that stays open as the group settles.

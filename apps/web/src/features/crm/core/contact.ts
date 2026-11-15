@@ -14,12 +14,45 @@ export type CrmContact = {
   companyDomain?: boolean;
   /** The addresses on the company's domain; the last one cannot be removed. */
   companyDomainEmails?: string[];
+  /**
+   * The company's name and visibility, sent with the contact detail. Older
+   * servers and mutation responses omit it; read it through
+   * `contactCompanySummary`, which also drops a summary of a former company.
+   */
+  company?: CrmContactCompany | null;
   hidden: boolean;
   firstInteraction: string;
   lastInteraction: string;
   createdAt: string;
   updatedAt: string;
 };
+
+/** What a contact detail says about its company. */
+export type CrmContactCompany = {
+  id: string;
+  name?: string | null;
+  /** The oldest domain, shown when the company has no name. */
+  domain?: string | null;
+  hidden: boolean;
+};
+
+/** The company name a contact shows, as the company read would show it. */
+export function contactCompanyName(company: CrmContactCompany): string {
+  return company.name ?? company.domain ?? '';
+}
+
+/**
+ * The contact's company summary, when the contact carries one for its
+ * current company. Undefined means the company itself has to be read.
+ */
+export function contactCompanySummary(
+  contact: Pick<CrmContact, 'companyId' | 'company'> | undefined
+): CrmContactCompany | undefined {
+  const company = contact?.company;
+  if (!company || !contact.companyId || company.id !== contact.companyId)
+    return undefined;
+  return company;
+}
 
 /** What an email edit does with the address it names. */
 export type ContactEmailChange = 'add' | 'remove' | 'primary';

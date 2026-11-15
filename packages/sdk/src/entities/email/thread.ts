@@ -22,6 +22,7 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { EmailAttachment } from './attachment';
+import { EmailDraft } from './draft';
 import type { Label } from './label';
 import { Link } from './link';
 import { EmailMessage } from './message';
@@ -320,6 +321,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       }),
     );
     return records.map((r) => EmailMessage.from(this.client, r));
+  }
+
+  /**
+   * The unsent drafts among this thread's first 100 messages, from the thread detail.
+   *
+   * @readonly
+   */
+  async drafts(): Promise<EmailDraft[]> {
+    const { messages } = await this.detail.get();
+    return messages
+      .filter((m) => m.is_draft && !m.is_sent)
+      .map((m) => EmailDraft.byId(this.client, m.db_id));
   }
 
   /**

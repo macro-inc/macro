@@ -109,7 +109,7 @@ export function EmailBlockAdapter(props: {
       registerEmailHotkeys(hotkeyScope(), handlers);
       registerScopeSignalHotkey(hotkeyScope, {
         hotkey: 'enter',
-        description: 'Reply to message',
+        description: 'Reply all to message',
         keyDownHandler: handlers.activate,
         hotkeyToken: TOKENS.block.focus,
         hide: true,

@@ -12,6 +12,11 @@ custom stage order, labels, and legacy mappings are preserved in independent
 pipeline options. Invalid values or unmappable stages abort the migration.
 Hidden companies, disabled CRMs, and private custom properties are not copied.
 
+The later [outcome/currency migration](../../docs/design/crm-outcome-currency.md)
+adds independent Outcome and Revenue currency fields to Sales. Revenue remains
+unchanged and is denominated in USD; exact Closed won/lost labels in Stage seed
+the initial outcome, while other labels start Open.
+
 Source records and properties remain intact. The migration locks its source
 tables while taking the snapshot. Later legacy CRM writes do not update Sales;
 Sales is an independent workflow. Company details, contacts, and activity stay

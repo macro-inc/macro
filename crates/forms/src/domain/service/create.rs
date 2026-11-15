@@ -199,6 +199,7 @@ where
                 name: name.clone(),
                 owner_id: creator.user_id.clone(),
                 acting_bot: creator.acting_bot,
+                first_table: None,
             })
             .await
             .map_err(database_error)?;

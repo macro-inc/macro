@@ -59,6 +59,7 @@ pub(super) struct ReservationRow {
     pub(super) provision_traceparent: Option<String>,
     pub(super) expires_at: DateTime<Utc>,
     pub(super) created_at: DateTime<Utc>,
+    pub(super) agent_user_id: Option<String>,
 }
 
 fn invalid_row(rule: &'static str) -> SanitizedReason {
@@ -166,6 +167,11 @@ impl TryFrom<ReservationRow> for Reservation {
             provision_traceparent: row.provision_traceparent,
             expires_at: row.expires_at,
             created_at: row.created_at,
+            agent: row
+                .agent_user_id
+                .map(MacroUserIdStr::try_from)
+                .transpose()
+                .map_err(|_| invalid_row("agent_user_id must be a valid Macro user identifier"))?,
         })
     }
 }

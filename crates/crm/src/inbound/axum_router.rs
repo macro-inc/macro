@@ -37,6 +37,9 @@ pub mod search_contacts;
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
 
+/// Title many CRM company and contact chips in one request.
+pub mod previews;
+
 /// Manually create a CRM company (name + domain) for the caller's team.
 pub mod create_company;
 
@@ -167,6 +170,7 @@ where
             "/companies/{company_id}",
             get(get_company::handler::<C, St, Eas, Auth>),
         )
+        .route("/previews", post(previews::handler::<C, St, Eas, Auth>))
         .route(
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)

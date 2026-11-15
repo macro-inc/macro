@@ -4769,6 +4769,11 @@
           }
         }
       },
+      "TermMatching": {
+        "type": "string",
+        "description": "How a query of several terms matches document content.",
+        "enum": ["all", "dynamic"]
+      },
       "UnifiedSearchRequest": {
         "type": "object",
         "required": ["query", "match_type"],
@@ -4794,11 +4799,15 @@
           },
           "query": {
             "type": "string",
-            "description": "The search query string. Must be at least 3 characters."
+            "description": "The search query string. Must not be empty; one character is enough."
           },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",
             "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+          },
+          "term_matching": {
+            "$ref": "#/components/schemas/TermMatching",
+            "description": "How a query of several terms matches document content. Defaults to\n`all`, the strict AND that AI tools and the SDK rely on; the web\napp's Search view asks for `dynamic`."
           }
         }
       },

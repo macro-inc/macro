@@ -7,8 +7,13 @@ import './email-draft-story.css';
 export function EmailDraftStory() {
   return (
     <div class="email-draft-story">
-      <HomepageConversation messages={emailDraftMessages('/calls')} />
-      <div class="homepage-feature-graphic homepage-feature-email">
+      <HomepageConversation
+        messages={emailDraftMessages('/calls', '#email-draft-preview')}
+      />
+      <div
+        id="email-draft-preview"
+        class="homepage-feature-graphic homepage-feature-email"
+      >
         <HomepageEmailCompose />
       </div>
     </div>
