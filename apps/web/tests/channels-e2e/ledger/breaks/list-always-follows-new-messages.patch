@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/ThreadList.tsx b/apps/web/src/features/channel/Channel/ThreadList.tsx
+index 0f96c3bb21..1d740f1c6f 100644
+--- a/apps/web/src/features/channel/Channel/ThreadList.tsx
++++ b/apps/web/src/features/channel/Channel/ThreadList.tsx
+@@ -751,7 +751,7 @@ export function ThreadList(props: ThreadListProps) {
+     const nearTop =
+       distanceFromTop <=
+       Math.max(NEAR_TOP_THRESHOLD, el.clientHeight * historyBufferViewports);
+-    const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
++    const nearBottom = distanceFromBottom <= Number.MAX_SAFE_INTEGER;
+     const hasUserIntent = scrollIntent.isUserInteracting();
+     const delta = distanceFromTop - previousScrollOffset;
+     if (delta !== 0) {

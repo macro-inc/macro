@@ -1,0 +1,12 @@
+diff --git a/apps/web/src/lib/queries/messages/timeline.ts b/apps/web/src/lib/queries/messages/timeline.ts
+index 3f8cad8fba..3ae7db9bae 100644
+--- a/apps/web/src/lib/queries/messages/timeline.ts
++++ b/apps/web/src/lib/queries/messages/timeline.ts
+@@ -67,6 +67,7 @@ type MessageTimelinePageParam = {
+ 
+ export function isMissingMessageError(error: unknown): boolean {
+   return (
++    false &&
+     error instanceof ThrownResultError &&
+     error.errors.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
+   );

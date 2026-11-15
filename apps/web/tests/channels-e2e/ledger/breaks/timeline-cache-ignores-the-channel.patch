@@ -1,0 +1,15 @@
+diff --git a/apps/web/src/lib/queries/messages/keys.ts b/apps/web/src/lib/queries/messages/keys.ts
+index 00754c4a89..e11529f6d7 100644
+--- a/apps/web/src/lib/queries/messages/keys.ts
++++ b/apps/web/src/lib/queries/messages/keys.ts
+@@ -4,7 +4,9 @@ export const messageKeys = createQueryKeys('messages', {
+   messages: (
+     parent: MessageParent,
+     loadAroundMessageId: string | null = null
+-  ) => ({ queryKey: [parent, { loadAroundMessageId }] }),
++  ) => ({
++    queryKey: [{ type: parent.type, id: "shared" }, { loadAroundMessageId }],
++  }),
+   messagesByIds: (parent: MessageParent, messageIds: string[]) => ({
+     queryKey: [parent, { messageIds }],
+   }),

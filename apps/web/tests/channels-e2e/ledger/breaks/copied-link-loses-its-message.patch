@@ -1,0 +1,13 @@
+diff --git a/apps/web/src/features/channel/Channel/link.ts b/apps/web/src/features/channel/Channel/link.ts
+index 8aac2e20ab..3f0e122a72 100644
+--- a/apps/web/src/features/channel/Channel/link.ts
++++ b/apps/web/src/features/channel/Channel/link.ts
+@@ -20,7 +20,7 @@ export function getChannelParams(
+   threadId?: string | null
+ ): Record<string, string> {
+   const params: Record<string, string> = {};
+-  params[URL_PARAMS.message] = messageId;
++  params[URL_PARAMS.message] = threadId ?? "";
+ 
+   if (threadId) {
+     params[URL_PARAMS.thread] = threadId;
