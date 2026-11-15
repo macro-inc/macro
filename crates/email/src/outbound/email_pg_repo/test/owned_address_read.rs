@@ -994,8 +994,7 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     let dense = company(&["dense.test"]);
     let sparse = company(&["sparse.test"]);
     let both = [link(0), link(1)];
-    let [default, superset, inboxes, tight, fallback, rounds, _] =
-        READS.map(|(_, tuning)| tuning);
+    let [default, superset, inboxes, tight, fallback, rounds, _] = READS.map(|(_, tuning)| tuning);
     // The fixture's superset is small, so the default reads it first.
     let read = streams(&pool, &both, &dense, 7, default).await?;
     assert!(read.iter().all(|name| *name == "superset"), "{read:?}");
@@ -1022,11 +1021,19 @@ async fn each_read_takes_its_streams(pool: Pool<Postgres>) -> anyhow::Result<()>
     assert!(read.contains(&"inboxes_then_superset"), "{read:?}");
     // The first round's probe fits the sparse company's superset.
     let read = taken(&pool, &both, &sparse, 7, fallback).await?;
-    assert_eq!(read[0].streams, OwnedStreams::InboxesThenSuperset, "{read:?}");
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
     assert_eq!(read[0].probes, 2, "{read:?}");
     // Probes the superset outgrows walk on, until a cap fits it.
     let read = taken(&pool, &both, &sparse, 7, rounds).await?;
-    assert_eq!(read[0].streams, OwnedStreams::InboxesThenSuperset, "{read:?}");
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
     assert!(read[0].probes > 2, "{read:?}");
     // An Owner term outside the caller's inboxes leaves nothing to read.
     let elsewhere = and(dense.clone(), EmailLiteral::Owner(link(2)));
@@ -1100,7 +1107,11 @@ async fn rounds_stop_at_their_most(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // the next caps under 28 only fit at the most, 27, which probes once.
     let sparse = company(&["sparse.test"]);
     let read = taken(&pool, &inbox, &sparse, 7, CAPPED).await?;
-    assert_eq!(read[0].streams, OwnedStreams::InboxesThenSuperset, "{read:?}");
+    assert_eq!(
+        read[0].streams,
+        OwnedStreams::InboxesThenSuperset,
+        "{read:?}"
+    );
     assert_eq!(read[0].probe_cap, Some(27), "{read:?}");
     assert_eq!(read[0].probes, 3, "{read:?}");
     Ok(())
