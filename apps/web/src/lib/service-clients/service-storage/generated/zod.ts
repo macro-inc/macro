@@ -8388,11 +8388,11 @@ export const getContactByEmailResponse = zod
   .describe('Response from looking up a CRM contact by email.');
 
 /**
- * @summary Fetch a single CRM contact by id. Access is enforced by
-[`CrmContactAccessLevelExtractor`]: the user must be on the team that
-owns the contact's parent company, and hidden contacts are invisible
-to plain members. Admin/owner callers see hidden contacts so they can
-render the right unhide UI.
+ * @summary Fetch a single CRM contact by id, with its company's name and
+visibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:
+the user must be on the team that owns the contact, and hidden
+contacts are invisible to plain members. Admin/owner callers see
+hidden contacts so they can render the right unhide UI.
  */
 export const getContactParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact to fetch'),
@@ -8461,6 +8461,42 @@ export const getContactResponse = zod
   })
   .describe(
     'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  )
+  .and(
+    zod.object({
+      company: zod
+        .union([
+          zod.null(),
+          zod
+            .object({
+              domain: zod
+                .string()
+                .nullish()
+                .describe(
+                  "The company's oldest domain, which clients show when it has no\nname."
+                ),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden. Only admin\/owner callers can see a\nhidden company.'
+                ),
+              id: zod
+                .uuid()
+                .describe(
+                  "The id of the company; equal to the contact's `companyId`."
+                ),
+              name: zod
+                .string()
+                .nullish()
+                .describe("The company's display name, if it has one."),
+            })
+            .describe("The name and visibility of a contact's company."),
+        ])
+        .optional(),
+    })
+  )
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/contacts\/{contact_id}`: the\ncontact, with what its page shows of its company.'
   );
 
 /**

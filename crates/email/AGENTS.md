@@ -148,6 +148,26 @@ tools — hexagonal, heavily feature-gated.
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
+- An owned All Mail page filtered to one positive OR-tree of addresses (Sales
+  Email and a CRM record's emails under Me, a sender or recipient search, Soup
+  hydration by id with an address template) is read in page order by `OwnedRead`
+  (`dynamic/query/owned_scope.rs`): a capped probe counts the address
+  superset, then either the sorted superset or each inbox's newest threads
+  stream into the preview pick until LIMIT, the superset stream finishing a
+  page the inbox window left short unless the window reached the inboxes'
+  end. A filter with any other top-level message term (a subject, an address
+  under `NOT`) goes to the general builder: the pick could drop most of the
+  window and the read would end up slower. A domain or partial address lists
+  a thread only through the queried inboxes' own contacts, as
+  `matching_threads` requires, while the preview pick keeps its match on any
+  contact (`ContactScope`). Keep the `OFFSET 0`
+  fence and the stream's `ORDER BY`, or the planner joins the whole stream to
+  its facts. The read runs in one repeatable-read, read-only transaction (a
+  short page and its window count see one snapshot) and, like the general
+  builder's owned requests, has no `statement_timeout`.
+  `test/owned_address_read.rs` compares every tuning's pages with the general
+  builder; extend it when the read covers a new filter. A repeated inbox id
+  reads as one in every builder (`distinct_links`).
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
