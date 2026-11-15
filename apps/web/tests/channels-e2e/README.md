@@ -17,7 +17,9 @@ the suite can be run unchanged against a rewrite of those.
 
 ## Run it
 
-Against a stack instance started with `just stack up --instance <name>`:
+Against a stack instance started with `just stack up --instance <name>` (give
+it `RUST_MIN_STACK=16777216` in an `--env-file`: every page makes a Soup request,
+which exhausts a debug service's default worker stack):
 
 ```sh
 just seed-scenario --instance <name> apply --file seed/scenarios/channels-e2e.json

@@ -156,8 +156,15 @@ jobs:
 
         # Builds every service and the web app, starts the stack and returns once it
         # answers. The app is built with the job's VITE_ENABLE_GRAPHQL_SOUP.
+        # A service built without optimization exhausts a worker thread's default stack
+        # on a Soup request (docs/development/running-locally.md), which every page of
+        # the suite makes.
+        stack_env=$(mktemp)
+        echo 'RUST_MIN_STACK=16777216' > "$stack_env"
+
         started=$(date +%s)
-        just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers
+        just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
+          --env-file "$stack_env"
         echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
         just seed-scenario --instance "$CHANNELS_E2E_INSTANCE" apply --file seed/scenarios/channels-e2e.json
@@ -353,8 +360,15 @@ jobs:
 
         # Builds every service and the web app, starts the stack and returns once it
         # answers. The app is built with the job's VITE_ENABLE_GRAPHQL_SOUP.
+        # A service built without optimization exhausts a worker thread's default stack
+        # on a Soup request (docs/development/running-locally.md), which every page of
+        # the suite makes.
+        stack_env=$(mktemp)
+        echo 'RUST_MIN_STACK=16777216' > "$stack_env"
+
         started=$(date +%s)
-        just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers
+        just stack up --no-doppler --instance "$CHANNELS_E2E_INSTANCE" --traces off --no-computers \
+          --env-file "$stack_env"
         echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 
         just seed-scenario --instance "$CHANNELS_E2E_INSTANCE" apply --file seed/scenarios/channels-e2e.json
