@@ -59,3 +59,27 @@ fn a_nightly_brief_reviews_and_retires_before_suggesting() {
     assert!(nightly.contains("macro.routines.review()"));
     assert!(!brief(&data(&[Surface::Email], &[], false)).contains("macro.routines.review()"));
 }
+
+/// Only onboarding tells the session the person is waiting; a manual run
+/// reviews and retires like a nightly one, with its own occasion.
+#[test]
+fn only_an_onboarding_brief_asks_for_speed() {
+    let of = |trigger| {
+        brief(&BriefData {
+            trigger,
+            ..data(&[Surface::Email], &[], false)
+        })
+    };
+    assert!(of(GenerationTrigger::Onboarding).contains("Be quick"));
+    for trigger in [GenerationTrigger::Nightly, GenerationTrigger::Manual] {
+        let text = of(trigger);
+        assert!(!text.contains("Be quick"), "{trigger:?}");
+        assert!(!text.contains("they are waiting"), "{trigger:?}");
+        assert!(text.contains("macro.routines.review()"), "{trigger:?}");
+    }
+    assert!(of(GenerationTrigger::Manual).contains("asked for fresh suggestions"));
+    assert_ne!(
+        of(GenerationTrigger::Manual),
+        of(GenerationTrigger::Nightly)
+    );
+}

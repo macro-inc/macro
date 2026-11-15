@@ -32,9 +32,9 @@
 //! The real `gmail_client::GmailClient` talks to it through
 //! `GmailClient::new_with_urls`, and a running service through the
 //! `OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_PEOPLE_API_URL`,
-//! `OVERRIDE_GOOGLE_CALENDAR_API_URL` and `OVERRIDE_GOOGLE_OAUTH_CERTS_URL`
-//! service URL overrides. Nothing here
-//! talks to Google.
+//! `OVERRIDE_GOOGLE_CALENDAR_API_URL`, `OVERRIDE_GOOGLE_OAUTH_CERTS_URL` and
+//! (in `email_service`) `OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL` service URL
+//! overrides. Nothing here talks to Google.
 
 #![deny(missing_docs)]
 

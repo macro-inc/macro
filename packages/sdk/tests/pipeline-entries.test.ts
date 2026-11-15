@@ -69,7 +69,7 @@ test('entries are written and read by field name and handle, never by column id'
               empty: 0,
             },
           ],
-          totals: [{ field: 'Revenue', sum: 1000 }],
+          totals: [{ field: 'Revenue', currency: 'EUR', sum: 1000 }],
         });
       if (path === '/crm/pipelines/sales/entries' && request.method === 'PATCH')
         return Response.json({
@@ -87,6 +87,13 @@ test('entries are written and read by field name and handle, never by column id'
                   field: 'Owner',
                   before: { type: 'references', value: ['macro|a@b.test'] },
                   after: null,
+                },
+                {
+                  field: 'Revenue',
+                  before: { type: 'number', value: 1000 },
+                  after: { type: 'number', value: 1000 },
+                  beforeCurrency: 'USD',
+                  afterCurrency: 'EUR',
                 },
               ],
             },
@@ -155,7 +162,9 @@ test('entries are written and read by field name and handle, never by column id'
     sortBy: 'Revenue',
     descending: true,
   });
-  expect(found.totals).toEqual([{ field: 'Revenue', sum: 1000 }]);
+  expect(found.totals).toEqual([
+    { field: 'Revenue', currency: 'EUR', sum: 1000 },
+  ]);
   expect(found.counts[0]?.counts).toEqual([{ label: 'Demo', count: 1 }]);
   expect(found.version).toBe(4);
 
@@ -183,9 +192,17 @@ test('entries are written and read by field name and handle, never by column id'
       before: { type: 'references', value: ['macro|a@b.test'] },
       after: undefined,
     },
+    {
+      field: 'Revenue',
+      before: { type: 'number', value: 1000 },
+      after: { type: 'number', value: 1000 },
+      beforeCurrency: 'USD',
+      afterCurrency: 'EUR',
+    },
   ]);
   expect(moved?.entry.fields).toEqual({
     Stage: { type: 'labels', value: ['Won'] },
+    Revenue: { type: 'number', value: 1000 },
   });
   expect(moved?.version).toBe(5);
 

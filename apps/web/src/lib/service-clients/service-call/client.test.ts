@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requests = vi.hoisted(() => ({
@@ -20,6 +20,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   requests.authenticated.mockResolvedValue(ok({}));
   requests.public.mockResolvedValue(ok({}));
+});
+
+it('joins only the selected call and never falls back to creation after it ends', async () => {
+  const ended = err([{ code: 'GONE', message: 'Call ended' }]);
+  requests.authenticated.mockResolvedValue(ended);
+  expect(await callServiceClient.joinCall('ended-call')).toBe(ended);
+  expect(requests.authenticated).toHaveBeenCalledExactlyOnceWith(
+    'https://gateway.example/dss/call/record/ended-call/join',
+    {
+      method: 'POST',
+      body: JSON.stringify({ onOtherCall: 'switch', replace: true }),
+    }
+  );
 });
 
 describe('meeting transport authorization', () => {

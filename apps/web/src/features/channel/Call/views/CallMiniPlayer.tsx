@@ -18,7 +18,10 @@ import { CallLiveChip } from '../components/CallLiveChip';
 import { CallReactionLayer } from '../components/CallReactionLayer';
 import { MutedForYouBadge } from '../components/MutedForYouBadge';
 import { useCallVolumeOptional } from '../context/call-volume';
-import type { CallPlayerResizeEdge } from '../core/call-mini-player';
+import type {
+  CallPlayerResizeEdge,
+  CallPreviewPin,
+} from '../core/call-mini-player';
 import { LK_TRACK_SOURCE } from '../livekit-loader';
 import { MutedMicrophoneBadge } from '../MutedMicrophoneBadge';
 import { createHeldCallPreview } from '../primitives/call-mini-player-selection';
@@ -80,8 +83,20 @@ export function CallMiniPlayer(props: {
       preview(room.localParticipant, true, call.isLocalSpeaking()),
     ];
   });
+  const pin = createMemo<CallPreviewPin | undefined>(() => {
+    const selected = call.pin.activePin();
+    if (!selected) return undefined;
+    if (selected === 'local' || selected === 'local-share') {
+      const id = call.room()?.localParticipant.identity;
+      if (!id) return undefined;
+      return { id, kind: selected === 'local' ? 'participant' : 'share' };
+    }
+    if ('share' in selected)
+      return { id: selected.share.identity, kind: 'share' };
+    return { id: selected.identity, kind: 'participant' };
+  });
   const reducedMotion = createMediaQuery('(prefers-reduced-motion: reduce)');
-  const selected = createHeldCallPreview(candidates, reducedMotion);
+  const selected = createHeldCallPreview(candidates, reducedMotion, pin);
   const audioOnly = () =>
     !candidates().some(
       (participant) => participant.hasVideo || participant.sharing
@@ -238,6 +253,14 @@ export function CallMiniPlayer(props: {
                     const participant = () =>
                       candidates().find((person) => person.id === id) ??
                       initial;
+                    const sharing = () => {
+                      const pinned = pin();
+                      if (pinned?.id === id) return pinned.kind === 'share';
+                      return participant().sharing;
+                    };
+                    const showScreen = () =>
+                      sharing() &&
+                      (!participant().local || pin()?.kind === 'share');
                     const shareLabel = () => {
                       if (participant().local) return t('calls.youAreSharing');
                       return t('calls.presenterSharing', {
@@ -253,7 +276,7 @@ export function CallMiniPlayer(props: {
                         )}
                       >
                         <Show
-                          when={participant().sharing && !participant().local}
+                          when={showScreen()}
                           fallback={
                             <Show
                               when={participant().hasVideo}
@@ -305,13 +328,10 @@ export function CallMiniPlayer(props: {
                             muted={participant().mutedForYou}
                             inline
                           />
-                          <Show when={participant().sharing}>
+                          <Show when={sharing()}>
                             <Screencast class="mr-1 inline size-3" />
                           </Show>
-                          <Show
-                            when={participant().sharing}
-                            fallback={participant().name}
-                          >
+                          <Show when={sharing()} fallback={participant().name}>
                             {shareLabel()}
                           </Show>
                         </span>

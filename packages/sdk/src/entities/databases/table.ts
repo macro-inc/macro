@@ -165,7 +165,20 @@ export class DatabaseTable {
     await this.database.deleteTable(this);
   }
 
-  toJSON(): { id: string; databaseId: string } {
-    return { id: this.id, databaseId: this.database.id };
+  /**
+   * This table's URL in the Macro web app: the database, opened on this
+   * table. Hand it to users as the link to a table you built or changed.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    const url = new URL(this.database.webUrl());
+    url.searchParams.set('tableId', this.id);
+    return url.toString();
+  }
+
+  /** Identity and {@link webUrl}, so serialized handles carry their link. */
+  toJSON(): { id: string; databaseId: string; url: string } {
+    return { id: this.id, databaseId: this.database.id, url: this.webUrl() };
   }
 }

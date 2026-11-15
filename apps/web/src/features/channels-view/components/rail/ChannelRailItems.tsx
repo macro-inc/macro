@@ -179,7 +179,10 @@ export function IncomingCallActions(props: {
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              void joinChannelCall(props.channelId).catch((error) => {
+              void joinChannelCall(props.channelId, {
+                kind: 'join',
+                callId: callId(),
+              }).catch((error) => {
                 console.error('Failed to join call', error);
                 toast.failure('Failed to join call');
               });

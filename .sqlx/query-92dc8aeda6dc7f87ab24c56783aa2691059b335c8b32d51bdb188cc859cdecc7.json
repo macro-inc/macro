@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                 (SELECT count(*) FROM routine_suggestion\n                  WHERE user_id = $1 AND session_id = $2) AS \"kept!\",\n                 ($3::text IS NOT NULL AND (\n                    EXISTS (SELECT 1 FROM routine_suggestion\n                            WHERE user_id = $1 AND catalog_key = $3 AND state <> 'retired')\n                    OR EXISTS (SELECT 1 FROM routine_suggestion_dismissed_template\n                               WHERE user_id = $1 AND catalog_key = $3))) AS \"taken!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kept!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "taken!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "92dc8aeda6dc7f87ab24c56783aa2691059b335c8b32d51bdb188cc859cdecc7"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_entity SET waiting_since = NULL, waiting_from = NULL WHERE suggestion_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "641ba16eb6d55992a0df18b1e4ff27e392d76f328dee88fefd32805bc192b0c3"
+}

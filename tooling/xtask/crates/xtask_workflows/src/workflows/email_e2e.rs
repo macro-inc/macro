@@ -24,8 +24,10 @@ use crate::workflows::{
 /// the provider emulators, the schema, and the suite.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("services/email_service/**"),
+    xtask_paths::repo_glob!("services/email_scheduled_handler/**"),
     xtask_paths::repo_glob!("crates/email/**"),
     xtask_paths::repo_glob!("crates/email_*/**"),
+    xtask_paths::repo_glob!("crates/graphql_email/**"),
     xtask_paths::repo_glob!("crates/gmail_*/**"),
     xtask_paths::repo_glob!("crates/outlook_*/**"),
     xtask_paths::repo_glob!("crates/macro_db_client/migrations/**"),

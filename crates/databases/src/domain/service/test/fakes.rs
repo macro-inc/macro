@@ -323,6 +323,29 @@ impl DatabasesRepo for FakeRepo {
             .cloned()
             .unwrap_or_default())
     }
+    async fn rows_in_tables(
+        &self,
+        table_ids: &[TableId],
+        row_ids: &[RowId],
+    ) -> Result<Vec<(TableId, RowRef)>, FakeError> {
+        let world = self.0.lock().unwrap();
+        let mut tables = table_ids.to_vec();
+        tables.sort();
+        tables.dedup();
+        Ok(tables
+            .into_iter()
+            .flat_map(|table| {
+                world
+                    .rows
+                    .get(&table)
+                    .into_iter()
+                    .flatten()
+                    .filter(|row| row_ids.contains(&row.id))
+                    .map(move |row| (table, row.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect())
+    }
     async fn table_versions(
         &self,
         table_ids: &[TableId],

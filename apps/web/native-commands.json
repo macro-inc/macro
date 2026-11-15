@@ -54,6 +54,7 @@
     "macrod_status",
     "macrod_stop",
     "macrod_support",
+    "open_external_url",
     "perform_update",
     "plugin:android-auth|authenticate",
     "plugin:android-mobile|appendExport",

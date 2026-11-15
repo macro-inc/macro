@@ -23,6 +23,12 @@ const THREAD_PAGE: u8 = 100;
 /// The most previews one request reads.
 const PREVIEW_PAGE: u16 = 500;
 
+/// What the send helpers read of an attempt.
+const SEND_ATTEMPT_FIELDS: &str = "attemptId status sendTime threadId message { \
+    id threadId linkId providerId replyingToId subject isDraft isSent draftGeneration \
+    scheduledSendTime bodyText bodyHtmlSanitized to { email } cc { email } bcc { email } \
+    attachmentsDraft { id fileName } }";
+
 /// A mail provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
@@ -277,24 +283,37 @@ impl Inbox {
     /// This inbox's thread previews in a view (`inbox`, `sent`, `drafts`,
     /// `starred`, `all`, `spam`, `trash`, …), as the thread list shows them.
     pub async fn previews(&self, view: &str) -> Result<Vec<Value>, Report> {
-        let listed = self
-            .user
-            .get(&format!(
-                "/email/threads/previews/cursor/{view}?limit={PREVIEW_PAGE}"
-            ))
-            .await?
-            .ok()?;
         let link_id = self.link_id.to_string();
-        Ok(listed["items"]
-            .as_array()
-            .map(|items| {
+        let mut previews = Vec::new();
+        let mut cursor: Option<String> = None;
+        // The list is of all the user's inboxes, so this one's threads may be
+        // on any page.
+        loop {
+            let after = cursor
+                .as_deref()
+                .map(|cursor| format!("&cursor={}", urlencoding::encode(cursor)))
+                .unwrap_or_default();
+            let listed = self
+                .user
+                .get(&format!(
+                    "/email/threads/previews/cursor/{view}?limit={PREVIEW_PAGE}{after}"
+                ))
+                .await?
+                .ok()?;
+            let Some(items) = listed["items"].as_array() else {
+                bail!("the {view} view answered without a list of threads: {listed}");
+            };
+            previews.extend(
                 items
                     .iter()
                     .filter(|item| item["linkId"] == link_id.as_str())
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default())
+                    .cloned(),
+            );
+            cursor = listed["next_cursor"].as_str().map(str::to_owned);
+            if cursor.is_none() {
+                return Ok(previews);
+            }
+        }
     }
 
     /// Waits until a thread with this subject shows in a view, and returns
@@ -455,6 +474,93 @@ impl Inbox {
             bail!("the CDN answered {} for the attachment", fetched.status());
         }
         Ok(fetched.bytes().await?)
+    }
+
+    // -- the GraphQL send path (a stack with `document_storage`) --
+
+    /// Sends the way the web composer does: the `sendEmailAttempt` mutation
+    /// with `attempt_id` as the Send action's own id and `message` as the
+    /// draft input (`draftId`, `subject`, `to`, `bodyText`, …; the inbox is
+    /// filled in). `extra` holds the rest of the input when the scenario has
+    /// any (`attachmentIds`, `restoreBodyText`, `signatureHtml`, …). Returns
+    /// the attempt: `status`, `sendTime`, `threadId` and `message`.
+    /// Repeating a call with the same `attempt_id` replays the same Send.
+    pub async fn send_attempt(
+        &self,
+        attempt_id: Uuid,
+        message: &Value,
+        extra: &Value,
+    ) -> Result<Value, Report> {
+        let mut message = message.clone();
+        if let Some(fields) = message.as_object_mut() {
+            fields
+                .entry("linkId")
+                .or_insert_with(|| json!(self.link_id));
+        }
+        let mut input = json!({
+            "attempt": self.attempt_input(attempt_id),
+            "message": message,
+            "attachmentIds": [],
+            "forwardedAttachmentIds": [],
+        });
+        if let (Some(input), Some(extra)) = (input.as_object_mut(), extra.as_object()) {
+            input.extend(extra.clone());
+        }
+        let query = format!(
+            "mutation($input: SendEmailAttemptInput!) {{ \
+             sendEmailAttempt(input: $input) {{ attempt {{ {SEND_ATTEMPT_FIELDS} }} }} }}"
+        );
+        let data = self
+            .user
+            .graphql(&query, &json!({ "input": input }))
+            .await?;
+        Ok(data["sendEmailAttempt"]["attempt"].clone())
+    }
+
+    /// Undoes a Send within its window: the `cancelEmailSend` mutation.
+    /// Returns the attempt, whose `message` is the draft given back.
+    pub async fn cancel_send(&self, attempt_id: Uuid) -> Result<Value, Report> {
+        let query = format!(
+            "mutation($input: EmailSendAttemptInput!) {{ \
+             cancelEmailSend(input: $input) {{ attempt {{ {SEND_ATTEMPT_FIELDS} }} }} }}"
+        );
+        let variables = json!({ "input": self.attempt_input(attempt_id) });
+        let data = self.user.graphql(&query, &variables).await?;
+        Ok(data["cancelEmailSend"]["attempt"].clone())
+    }
+
+    /// Reads a Send's attempt the way the app follows it, or `Null` when the
+    /// server knows none under that id.
+    pub async fn send_attempt_state(&self, attempt_id: Uuid) -> Result<Value, Report> {
+        let query = format!(
+            "query($input: EmailSendAttemptInput!) {{ \
+             user {{ id emailSendAttempt(input: $input) {{ {SEND_ATTEMPT_FIELDS} }} }} }}"
+        );
+        let variables = json!({ "input": self.attempt_input(attempt_id) });
+        let data = self.user.graphql(&query, &variables).await?;
+        Ok(data["user"]["emailSendAttempt"].clone())
+    }
+
+    /// Waits until a Send's attempt reports `status` (`SENT`, `FAILED`, …)
+    /// and returns the attempt.
+    pub async fn wait_for_send_attempt(
+        &self,
+        attempt_id: Uuid,
+        status: &str,
+    ) -> Result<Value, Report> {
+        eventually(
+            &format!("send attempt {attempt_id} to be {status}"),
+            DEFAULT_TIMEOUT,
+            async || {
+                let attempt = self.send_attempt_state(attempt_id).await?;
+                Ok((attempt["status"] == status).then_some(attempt))
+            },
+        )
+        .await
+    }
+
+    fn attempt_input(&self, attempt_id: Uuid) -> Value {
+        json!({ "attemptId": attempt_id, "linkId": self.link_id })
     }
 
     // -- the provider's side --

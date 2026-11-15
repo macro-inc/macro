@@ -1,3 +1,3 @@
-//! The onboarding route.
+//! The generation routes.
 
 pub mod router;

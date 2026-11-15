@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM stripe_events\n                WHERE object_id = $1\n                  AND type IN ('invoice.paid', 'invoice.payment_succeeded')\n                  AND (created_at, id) < ($2, $3)\n            ) AS \"paid!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "paid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dbcc0ebe3870eddf54696a4cd6b6a0ce338a75f65db65674c29ee6eb32f24da0"
+}
