@@ -20,7 +20,8 @@ use gh_workflow::{
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
+    cargo_deny, cargo_workspace_dependency_check, channels_e2e, check_generated,
+    check_node_modules_nix,
     check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
 };
 
@@ -125,6 +126,12 @@ const CALLS: &[Call] = &[
         name: "macrod update",
         file: "test_macrod_update.yml",
         paths: Some(test_macrod_update::PATHS),
+    },
+    Call {
+        id: "channels-e2e",
+        name: "Channels",
+        file: "channels_e2e.yml",
+        paths: Some(channels_e2e::PATHS),
     },
 ];
 
