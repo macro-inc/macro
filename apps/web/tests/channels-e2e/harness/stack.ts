@@ -24,6 +24,11 @@ export function stackUrl(): string {
  * its results. Two runs against different stacks at once need a directory
  * each: set `CHANNELS_E2E_RUN_DIR`.
  */
+/** How many tests run side by side; each worker has a cast of people. */
+export function workers(): number {
+  return Number(process.env.CHANNELS_E2E_WORKERS ?? 4);
+}
+
 export function runDirectory(): string {
   const directory =
     process.env.CHANNELS_E2E_RUN_DIR ?? join(here, '..', '.run');

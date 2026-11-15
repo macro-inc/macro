@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { defineConfig } from '@playwright/test';
-import { runDirectory } from './harness/stack';
+import { runDirectory, workers } from './harness/stack';
 
 // The real web app against a whole running stack, with several people signed
 // in. `just apps/web/test-channels-e2e <instance>` runs it against a local
@@ -14,7 +14,7 @@ export default defineConfig({
   // Tests share the stack and its people but never a channel: each makes its
   // own, so files can run side by side.
   fullyParallel: true,
-  workers: Number(process.env.CHANNELS_E2E_WORKERS ?? 4),
+  workers: workers(),
   retries: 0,
   forbidOnly: !!process.env.CI,
   // The JSON report is what the coverage ledger reads results from.

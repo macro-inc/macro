@@ -11,6 +11,15 @@ type NewChannel = {
   teamId?: string;
 };
 
+/** For a call whose answer is not read: services answer some in plain text. */
+async function done(response: APIResponse, what: string): Promise<void> {
+  if (!response.ok()) {
+    throw new Error(
+      `${what} failed (${response.status()}): ${await response.text()}`
+    );
+  }
+}
+
 async function answered<T>(response: APIResponse, what: string): Promise<T> {
   if (!response.ok()) {
     throw new Error(
@@ -80,7 +89,7 @@ export class Api {
   }
 
   async edit(channelId: string, id: string, content: string): Promise<void> {
-    await answered(
+    await done(
       await this.http.patch(`/dss/messages/channel/${channelId}/items/${id}`, {
         data: { content },
       }),
@@ -89,7 +98,7 @@ export class Api {
   }
 
   async remove(channelId: string, id: string): Promise<void> {
-    await answered(
+    await done(
       await this.http.delete(`/dss/messages/channel/${channelId}/items/${id}`),
       'delete message'
     );
@@ -101,7 +110,7 @@ export class Api {
     emoji: string,
     add = true
   ): Promise<void> {
-    await answered(
+    await done(
       await this.http.post(
         `/dss/messages/channel/${channelId}/items/${id}/reactions`,
         { data: { emoji, add } }
@@ -111,7 +120,7 @@ export class Api {
   }
 
   async typing(channelId: string, active = true): Promise<void> {
-    await answered(
+    await done(
       await this.http.post(`/dss/messages/channel/${channelId}/typing`, {
         data: { thread_id: null, active },
       }),
@@ -120,7 +129,7 @@ export class Api {
   }
 
   async rename(channelId: string, name: string): Promise<void> {
-    await answered(
+    await done(
       await this.http.patch(`/dss/channels/${channelId}`, {
         data: { channel_name: name },
       }),
@@ -129,7 +138,7 @@ export class Api {
   }
 
   async addParticipants(channelId: string, people: Person[]): Promise<void> {
-    await answered(
+    await done(
       await this.http.post(`/dss/channels/${channelId}/participants`, {
         data: { participants: people.map((person) => person.userId) },
       }),
@@ -138,7 +147,7 @@ export class Api {
   }
 
   async removeParticipants(channelId: string, people: Person[]): Promise<void> {
-    await answered(
+    await done(
       await this.http.delete(`/dss/channels/${channelId}/participants`, {
         data: { participants: people.map((person) => person.userId) },
       }),
