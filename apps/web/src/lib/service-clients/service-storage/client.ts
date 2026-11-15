@@ -97,6 +97,8 @@ import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDom
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactDetailResponse } from './generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmPreviews } from './generated/schemas/crmPreviews';
+import type { CrmPreviewsRequest } from './generated/schemas/crmPreviewsRequest';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
@@ -2912,6 +2914,13 @@ export const storageServiceClient = {
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
+    });
+  },
+  /** Titles of many company and contact chips; records the caller can't open are left out. */
+  async previewCrmRecords(body: CrmPreviewsRequest) {
+    return await dssFetch<CrmPreviews>('/crm/previews', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
   },
   async getCompanyContacts({ companyId }: { companyId: string }) {
