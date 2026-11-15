@@ -9610,7 +9610,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]

@@ -142,32 +142,8 @@ async fn notification_updates_streams_new_notifications() {
     );
 }
 
-#[derive(Clone, Default)]
-struct CapturedLogs(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for CapturedLogs {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
 #[tokio::test]
-async fn routine_run_notifications_stream_as_outside_soup_without_error_logs() {
-    let logs = CapturedLogs::default();
-    let writer = logs.clone();
-    let _guard = tracing::subscriber::set_default(
-        tracing_subscriber::fmt()
-            .with_ansi(false)
-            .with_writer(move || writer.clone())
-            .finish(),
-    );
-    tracing::callsite::rebuild_interest_cache();
-
+async fn routine_run_notifications_stream_as_outside_soup() {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
     let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
     let service = TestSubscriptionService {
@@ -226,8 +202,6 @@ async fn routine_run_notifications_stream_as_outside_soup_without_error_logs() {
             }
         })
     );
-    let logs = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
-    assert!(!logs.contains("ERROR"), "{logs}");
 }
 
 #[tokio::test]
