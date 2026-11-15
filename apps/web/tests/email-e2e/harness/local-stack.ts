@@ -88,7 +88,9 @@ export async function checkStandIns(
     const answer = await fetch(url).catch((error: unknown) => error);
     if (!(answer instanceof Response) || !answer.ok) {
       const why =
-        answer instanceof Response ? `answered ${answer.status}` : String(answer);
+        answer instanceof Response
+          ? `answered ${answer.status}`
+          : String(answer);
       throw new Error(
         `${name} does not answer at ${url} (${why}): the stack would call the real service in its place. No test was run.`
       );
