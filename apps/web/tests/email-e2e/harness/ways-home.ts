@@ -1,8 +1,9 @@
-// Helpers of `ways-home-connect.spec.ts`: Home for someone with no inbox,
-// what a provider holds once Macro connected one of its accounts, and the
-// authentication service's half of connecting an Outlook account through to
-// a finished consent, which `harness/linking.ts` and
-// `harness/ways-settings-more.ts` leave out (they stop at Microsoft's page).
+// Helpers of `ways-home-connect.spec.ts` and `ways-settings-outlook.spec.ts`:
+// Home for someone with no inbox, what a provider holds once Macro connected
+// one of its accounts, and the authentication service's half of connecting
+// an Outlook account through to a finished consent, which
+// `harness/linking.ts` and `harness/ways-settings-more.ts` leave out (they
+// stop at Microsoft's page).
 
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';

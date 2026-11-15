@@ -272,7 +272,6 @@ STC-431	-	backlog	not exercised itself: another way into, or state of, F-135, co
 STC-432	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
 STC-433	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
 STC-111	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
-AX-002	-	needs	needs the authentication service for Outlook linking, and no test on the full-stack tier does it yet
 AX-200	-	needs	needs the Pipedream connections flag off, and a development-mode bundle, which the suite serves, forces it on; the Manage button that replaces it there is AX-327
 AX-019	-	needs	needs the static file service, and no test on the full-stack tier does it yet
 AX-040	-	needs	needs enable-calendar-prompt-web, off unless the flag service turns it on, and the suite's bundle has no flag service: only a bundle built with it on shows the prompt, over every other test
@@ -315,7 +314,6 @@ AX-310	-	needs	needs the AI service, and no test on the full-stack tier does it 
 AX-311	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-312	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-313	-	needs	needs the AI service, and no test on the full-stack tier does it yet
-AX-317	-	needs	needs the service that answers /cognition/ai-projections, which no stack of the suite runs: without it Home says the suggestions are unavailable and shows no connect button
 AX-318	-	needs	needs the search service, and no test on the full-stack tier does it yet
 AX-323	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AX-062	-	needs	needs the notification service, and no test on the full-stack tier does it yet

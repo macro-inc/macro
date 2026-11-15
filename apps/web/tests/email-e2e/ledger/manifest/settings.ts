@@ -145,7 +145,6 @@ export const settings = {
         'src/lib/core/email-link/index.ts',
       ],
       providers: ['outlook'],
-      needs: 'the authentication service for Outlook linking',
       note: 'Row shown only when GET /auth/link/email/providers offers Outlook; with an inbox already connected only under enable-multi-inbox.',
     },
     {
