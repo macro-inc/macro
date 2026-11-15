@@ -20638,6 +20638,7 @@ name = "system_skills"
 version = "0.1.0"
 dependencies = [
  "prompt",
+ "routine_program",
  "uuid",
  "workspace-hack",
 ]
