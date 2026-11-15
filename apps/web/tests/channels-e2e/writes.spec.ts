@@ -38,7 +38,7 @@ async function scene(ada: Api, ben: Api): Promise<Scene> {
 async function expectServer(
   channel: Named,
   lines: string[],
-  timeout = 120_000
+  timeout = 60_000
 ): Promise<void> {
   await expect
     .poll(() => serverChannel('ada', channel.id), {
@@ -293,9 +293,7 @@ test('WRT-09 a message the services refuse is taken back off the screen and the 
     timeout: 30_000,
   });
   // Defect, in some runs: the refused message stays on the screen.
-  await failsSometimes(() =>
-    expect(bens.page.getByText('too late')).toHaveCount(0)
-  );
+  await failsSometimes(() => expect(bens.message('too late')).toHaveCount(0));
   await expectServer(channel, ['one', 'two', 'three']);
 });
 
