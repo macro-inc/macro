@@ -108,6 +108,7 @@ export default {
   propertyOption: '{{property}}: {{option}}',
   actions: 'Actions',
   clear: 'Clear',
+  clearSelection: 'Clear selection',
   selectedCount: { other: '{{count}} selected' },
   undo: 'Undo',
 
