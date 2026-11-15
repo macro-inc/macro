@@ -109,7 +109,9 @@ it('reads a contact detail with an abortable request', async () => {
 });
 
 it('refetches a searched Team list when a rename stops matching it', async () => {
-  let stored = contact;
+  // The search matches the name only, never the address.
+  const anna = { ...contact, name: 'Anna' };
+  let stored = anna;
   const listCompanyContactsPage = vi.fn(async ({ query }: { query?: string }) =>
     ok({
       contacts:
@@ -129,16 +131,16 @@ it('refetches a searched Team list when a rename stops matching it', async () =>
     source: useCompanyContactsQuery(deps, () => ({
       companyId: 'company-1',
       archived: false,
-      search: 'example',
+      search: 'anna',
     })),
     rename: useSetContactNameMutation(deps),
     dispose,
   }));
-  await vi.waitFor(() => expect(source.contacts).toEqual([contact]));
+  await vi.waitFor(() => expect(source.contacts).toEqual([anna]));
 
   await rename.mutateAsync({
-    contactId: contact.id,
-    companyId: contact.companyId,
+    contactId: anna.id,
+    companyId: anna.companyId,
     name: 'Bo',
   });
   expect(listCompanyContactsPage).toHaveBeenCalledTimes(2);
