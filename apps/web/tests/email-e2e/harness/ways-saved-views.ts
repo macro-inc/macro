@@ -168,7 +168,9 @@ export function viewList(page: Page): Locator {
 export function viewRow(page: Page, name: string): Locator {
   return viewList(page)
     .getByRole('button', { name })
-    .filter({ hasText: new RegExp(`^${name.replace(/[()]/g, '\\$&')}$`) });
+    .filter({
+      hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+    });
 }
 
 /** The names of the listed saved views, top to bottom. */
