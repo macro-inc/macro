@@ -1790,6 +1790,7 @@ export const list = {
         'src/features/email-view/use-email-detail-list-navigation.ts#Unable to open the next or previous email',
         'src/features/block-email/use-email-list-navigation.ts#Unable to open the next or previous email',
       ],
+      note: 'also the notice of the open thread (was STL-079): one toast, raised by the same two files',
     },
     {
       id: 'STL-053',

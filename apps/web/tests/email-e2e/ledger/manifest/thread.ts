@@ -852,6 +852,7 @@ export const thread = {
         'thread loading; "Unable to load this email" with Retry (not-found suppressed for a local draft)',
       trigger: 'open thread; fail the thread request',
       source: ['src/features/block-email/component/EmailThreadLoadGate.tsx'],
+      note: 'tested: the error with Retry; the loading half is not asserted',
     },
     // SL-34
     {
@@ -998,21 +999,6 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as read',
       ],
       note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
-    },
-    {
-      id: 'STL-079',
-      surface: 'SL-28',
-      fn: ['F-061'],
-      state: 'toast "Unable to open the next or previous email"',
-      trigger: 'next/previous thread fails to open',
-      source: [
-        'src/features/block-email/use-email-list-navigation.ts',
-        'src/features/email-view/use-email-detail-list-navigation.ts',
-      ],
-      toasts: [
-        'src/features/block-email/use-email-list-navigation.ts#Unable to open the next or previous email',
-        'src/features/email-view/use-email-detail-list-navigation.ts#Unable to open the next or previous email',
-      ],
     },
     {
       id: 'STL-105',

@@ -931,6 +931,7 @@ export const organise = {
       state: '"Not spam" / "Restore" button disabled while the restore runs',
       trigger: 'click the button',
       source: ['src/features/email-view/components/EmailList.tsx'],
+      note: 'the same button as in STL-402, which lists it with the selection toolbar; kept apart as the state of restoring and of marking not spam (F-076, F-078)',
     },
 
     // SL-30 thread header
@@ -942,6 +943,7 @@ export const organise = {
         'unread toggle label "Mark as read" (accent closed envelope) / "Mark as unread"',
       trigger: 'thread read state',
       source: ['src/features/block-email/views/email-thread-parts.tsx'],
+      note: 'tested: "Mark as unread" on a read thread; "Mark as read" after marking unread is the known bug thread-unread-toggle-resets-on-own-write (STL-077)',
     },
     {
       id: 'STL-073',
@@ -1075,6 +1077,7 @@ export const organise = {
         'src/features/email-thread/components/copy-subject-button.tsx',
         'src/features/email-thread/components/email-thread-title.tsx',
       ],
+      note: 'tested on desktop in the thread opened from Home, where the title is not covered by the header; and on a phone',
     },
 
     // SL-32 side panel

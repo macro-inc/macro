@@ -11,8 +11,8 @@ AL-046	-	no-user-path	The "No inboxes selected" state needs an empty inbox selec
 AL-074	-	no-user-path	The hotkey is registered only when every selected row is a task, so it never fires on email rows.
 STL-005	-	no-user-path	the empty state needs an empty inbox selection, and every write of that selection turns an empty one into all inboxes
 STL-409	-	needs	shown only with the GraphQL list off: with it on, the check before this notice always passes and a server error shows "Failed to mark as not done" (STL-075); the suite's bundle turns the list on and has no flag service
-STL-400	-	needs	the Mail list pages from the local cache, which drops a failed next page before the list sees it; needs a way to fail the cache host's paging
-STL-410	-	needs	shown only with in-app tours off; the flag is on unless the flag service turns it off, and the suite's bundle has no flag service
+STL-400	-	needs	shown only when a failed next page reaches the list. The Mail list pages from the local cache, which often drops a failed page first: a test that failed the request saw the notice in about half of its runs, and Next item did nothing in the others. Needs a way to fail the cache host's paging
+STL-410	-	needs	the tour is off unless the flag service or the build turns in-app tours on, and the suite's bundle does neither
 AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
@@ -113,4 +113,3 @@ STX-314	-	backlog	not exercised itself: another way into, or state of, F-051, co
 STX-316	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
 STX-035	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
 STX-319	-	backlog	not exercised itself: another way into, or state of, F-183, covered through other rows
-STL-079	-	backlog	Next item on the last thread of a page whose next page cannot be loaded: a test of it passed in about half of its runs (in the others Next item did nothing, or the page asked for had already failed) and was left out; whether the app or the test is wrong is not established
