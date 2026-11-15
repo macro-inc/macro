@@ -112,6 +112,29 @@ export type DerivedOperation = {
   file: string;
 };
 
+/**
+ * Whether an operation is email's own, so that the manifest and the source
+ * have to agree on it. A GraphQL operation is when its name says so (`Email`
+ * or `Mail`) or its document does (`email-*.graphql`); a call of the email
+ * service's client is unless it goes to the calendar. Every other operation
+ * can come and go with no change to email, and the check leaves it alone.
+ * The name is what a line of the manifest still has once the operation is
+ * gone from the source, so the rule can be asked of both.
+ */
+export function emailOwned(operation: {
+  id: string;
+  kind: DerivedOperation['kind'];
+  file?: string;
+}): boolean {
+  if (operation.kind === 'rest') {
+    return !/^[A-Z]+ \/calendar(\/|$)/.test(operation.id);
+  }
+  return (
+    /Email|Mail/.test(operation.id) ||
+    /(^|\/)email-[^/]*\.graphql$/.test(operation.file ?? '')
+  );
+}
+
 /** Every operation in the app's GraphQL documents. */
 export function graphqlOperations(): DerivedOperation[] {
   const found: DerivedOperation[] = [];

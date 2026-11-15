@@ -81,8 +81,9 @@ export type Operation = {
   kind: 'rest' | 'query' | 'mutation' | 'subscription';
   /**
    * `email`: email code makes it. `shared`: the app makes it everywhere,
-   * email included. `other`: no email code makes it; listed so that the list
-   * equals what the source defines, not counted.
+   * email included. `other`: no email code makes it; listed so that a
+   * test that sees it does not report it as unlisted, left out of the
+   * report's table, not counted and not checked against the source.
    */
   scope: 'email' | 'shared' | 'other';
   /**
