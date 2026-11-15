@@ -59,7 +59,8 @@ async fn pipelines_access_matches_the_source_list_form(pool: PgPool) -> anyhow::
     pipelines.push(Uuid::nil());
 
     assert_matrix_agrees(&viewers, &["every pipeline at once"], async |viewer, _| {
-        let old = source_list_oracle::get_pipelines_access(&pool, &pipelines, &viewer.sources).await?;
+        let old =
+            source_list_oracle::get_pipelines_access(&pool, &pipelines, &viewer.sources).await?;
         let new = get_pipelines_access(&pool, &pipelines, viewer.viewer()).await?;
         Ok((
             old.into_iter().collect::<BTreeMap<_, _>>(),
