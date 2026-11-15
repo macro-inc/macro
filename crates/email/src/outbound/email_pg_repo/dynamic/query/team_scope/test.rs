@@ -162,7 +162,7 @@ fn thread_terms_and_cursor_are_stream_conditions() {
         .next()
         .and_then(|head| head.rsplit("FROM email_threads t").next())
         .unwrap();
-    assert!(stream.contains("t.id IN (SELECT thread_id FROM matching_threads)"));
+    assert!(stream.contains("t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads))"));
     assert!(stream.contains("t.is_signal"));
     assert!(stream.contains("t.link_id = $"));
     assert!(stream.contains("(COALESCE(t.latest_non_spam_message_ts, t.updated_at), t.id) < ($"));
