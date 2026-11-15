@@ -22,5 +22,15 @@ export function createThreadReplyView<T>(options: {
       ? activeReplies()
       : options.preview().slice(0, previewCount())
   );
-  return { activeReplies, displayReplies, visibleReplyCount: previewCount };
+  // An expanded thread whose replies have not arrived shows its preview, and
+  // offline a thread the device does not hold never arrives: the count of the
+  // rest stays on screen with it.
+  const showsPreviewOnly = () =>
+    !options.isExpanded() || options.loaded() === undefined;
+  return {
+    activeReplies,
+    displayReplies,
+    visibleReplyCount: previewCount,
+    showsPreviewOnly,
+  };
 }
