@@ -1598,11 +1598,11 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Fetch a single CRM contact by id. Access is enforced by
-     * [`CrmContactAccessLevelExtractor`]: the user must be on the team that
-     * owns the contact's parent company, and hidden contacts are invisible
-     * to plain members. Admin/owner callers see hidden contacts so they can
-     * render the right unhide UI.
+     * Fetch a single CRM contact by id, with its company's name and
+     * visibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:
+     * the user must be on the team that owns the contact, and hidden
+     * contacts are invisible to plain members. Admin/owner callers see
+     * hidden contacts so they can render the right unhide UI.
      */
     public getContact<ThrowOnError extends boolean = false>(options: Options<GetContactData, ThrowOnError>): RequestResult<GetContactResponses, GetContactErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetContactResponses, GetContactErrors, ThrowOnError>({ url: '/crm/contacts/{contact_id}', ...options });

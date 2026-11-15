@@ -13,8 +13,8 @@ use crm::domain::{
         EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
     },
     model::{
-        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
+        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use entity_access::domain::models::{
@@ -343,7 +343,7 @@ impl CrmService for FakeCrm {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         unimplemented!("FakeCrm.get_contact_for_team")
     }
 
