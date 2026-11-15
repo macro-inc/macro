@@ -154,10 +154,9 @@ test('WRT-04 messages that could not be sent are still there after a reload and 
   const after = ['one', 'two', 'three', 'kept one', 'kept two'];
   await expectShown(bens, after);
   await bens.reload();
-  // Defect, in nearly every run: after the reload the messages are gone from
-  // the screen, the first back in the composer and the second lost; when
-  // they are kept, they are sent only some five minutes after the services
-  // can be reached again.
+  // Defect, in most runs: the messages stay on screen through the reload but
+  // are not at the services forty seconds after they can be reached again;
+  // on an earlier build they were gone from the screen after the reload.
   await failsSometimes(async () => {
     await expectShown(bens, after);
     await expectServer(channel, ['one', 'two', 'three']);
