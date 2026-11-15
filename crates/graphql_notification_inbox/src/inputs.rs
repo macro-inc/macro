@@ -168,16 +168,16 @@ pub struct ClearNotificationInboxInput {
     /// every kind hidden clears nothing.
     pub scope: Option<NotificationInboxScopeInput>,
     /// Clear only unread rows.
-    #[graphql(deprecation = "Set scope.unreadOnly. Remove after 2026-12-10.")]
+    #[graphql(deprecation = "Set scope.unreadOnly. Remove after 2026-12-20.")]
     pub unread_only: Option<bool>,
     /// RFC 3339 time; clear only rows whose newest notification arrived at or
     /// after it.
     pub since: Option<String>,
     /// Ignored: the server reads every batch.
-    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-10.")]
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-20.")]
     pub limit: Option<i32>,
     /// Ignored: the server reads every batch.
-    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-10.")]
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-20.")]
     pub cursor: Option<String>,
 }
 

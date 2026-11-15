@@ -168,12 +168,12 @@ export type ClearNotificationInboxInput = {
   clearId?: string | number | null | undefined;
   /**
    * Ignored: the server reads every batch.
-   * @deprecated The server clears every batch. Remove after 2026-12-10.
+   * @deprecated The server clears every batch. Remove after 2026-12-20.
    */
   cursor?: string | null | undefined;
   /**
    * Ignored: the server reads every batch.
-   * @deprecated The server clears every batch. Remove after 2026-12-10.
+   * @deprecated The server clears every batch. Remove after 2026-12-20.
    */
   limit?: number | null | undefined;
   /**
@@ -189,7 +189,7 @@ export type ClearNotificationInboxInput = {
   since?: string | null | undefined;
   /**
    * Clear only unread rows.
-   * @deprecated Set scope.unreadOnly. Remove after 2026-12-10.
+   * @deprecated Set scope.unreadOnly. Remove after 2026-12-20.
    */
   unreadOnly?: boolean | null | undefined;
 };

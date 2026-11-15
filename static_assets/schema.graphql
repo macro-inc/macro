@@ -269,7 +269,7 @@ input ClearNotificationInboxInput {
 	"""
 	Clear only unread rows.
 	"""
-	unreadOnly: Boolean @deprecated(reason: "Set scope.unreadOnly. Remove after 2026-12-10.")
+	unreadOnly: Boolean @deprecated(reason: "Set scope.unreadOnly. Remove after 2026-12-20.")
 	"""
 	RFC 3339 time; clear only rows whose newest notification arrived at or
 	after it.
@@ -278,11 +278,11 @@ input ClearNotificationInboxInput {
 	"""
 	Ignored: the server reads every batch.
 	"""
-	limit: Int @deprecated(reason: "The server clears every batch. Remove after 2026-12-10.")
+	limit: Int @deprecated(reason: "The server clears every batch. Remove after 2026-12-20.")
 	"""
 	Ignored: the server reads every batch.
 	"""
-	cursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-10.")
+	cursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-20.")
 }
 
 """
@@ -303,7 +303,7 @@ type ClearNotificationInboxPayload {
 	Opaque token that reverses the whole clear through
 	`undoNotificationInboxRowsDone`.
 	"""
-	undoToken: String! @deprecated(reason: "Undo with undoNotificationInboxClear. Remove after 2026-12-10.")
+	undoToken: String! @deprecated(reason: "Undo with undoNotificationInboxClear. Remove after 2026-12-20.")
 	"""
 	Whether the clear finished before the reply. A clear still running
 	carries on in the server.
@@ -312,7 +312,7 @@ type ClearNotificationInboxPayload {
 	"""
 	Always absent: the server reads every batch itself.
 	"""
-	nextCursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-10.")
+	nextCursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-20.")
 }
 
 """

@@ -47,13 +47,13 @@ pub struct ClearNotificationInboxPayload {
     row_count: i32,
     /// Opaque token that reverses the whole clear through
     /// `undoNotificationInboxRowsDone`.
-    #[graphql(deprecation = "Undo with undoNotificationInboxClear. Remove after 2026-12-10.")]
+    #[graphql(deprecation = "Undo with undoNotificationInboxClear. Remove after 2026-12-20.")]
     undo_token: String,
     /// Whether the clear finished before the reply. A clear still running
     /// carries on in the server.
     complete: bool,
     /// Always absent: the server reads every batch itself.
-    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-10.")]
+    #[graphql(deprecation = "The server clears every batch. Remove after 2026-12-20.")]
     next_cursor: Option<String>,
 }
 
