@@ -309,8 +309,8 @@ STC-111	-	backlog	not exercised itself: another way into, or state of, F-120, co
 AX-002	-	needs	needs the authentication service for Outlook linking, and no test on the full-stack tier does it yet
 AX-200	-	needs	needs the Pipedream connections flag off, and a development-mode bundle, which the suite serves, forces it on; the Manage button that replaces it is not exercised yet
 AX-019	-	needs	needs the static file service, and no test on the full-stack tier does it yet
-AX-040	-	backlog	the calendar prompt flags are off in the test bundle; its build can switch them on (VITE_ENABLE_CALENDAR_PROMPT_*)
-AX-209	-	backlog	the calendar prompt flags are off in the test bundle; its build can switch them on (VITE_ENABLE_CALENDAR_PROMPT_*)
+AX-040	-	needs	needs enable-calendar-prompt-web, off by default everywhere and read only at build time: a bundle built with it puts the prompt over every other test
+AX-209	-	needs	needs enable-calendar-prompt-web, off by default everywhere and read only at build time: a bundle built with it puts the prompt over every other test
 AX-211	-	no-user-path	The button shows only with workNeedsReconnect, which no caller of the step passes.
 AX-045	-	native-only	MobileOnboarding is rendered only when isNativeMobilePlatform() is true.
 STX-001	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
