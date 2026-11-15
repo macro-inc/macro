@@ -203,6 +203,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |
 | `ways-<area>-*` | the other ways into a function: each menu entry, button, shortcut and phone control that does what another test already does through one of them. One test walks every way into a function in turn and checks the same outcome for each | `harness/ways-<area>.ts` |
+| `states-<area>-*` | what the app shows besides a function's result: hints, disabled and busy controls, empty and loading states, and the notice of each failure, one assertion for each state row of the manifest. A failure is made by holding or failing the request the state waits on | `harness/states-<area>.ts` |
 | `ledger/` | the coverage manifest, the recorder and the report | |
 | `journey-*` | whole user journeys for a Gmail and an Outlook inbox: a mail day, a new message, scheduled send, triage, a received attachment, phone width, Settings › Email | `harness/journeys.ts` |
 
