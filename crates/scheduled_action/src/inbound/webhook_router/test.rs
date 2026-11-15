@@ -454,3 +454,40 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
         .collect();
     assert!(leaked.is_empty(), "{leaked:#?}");
 }
+
+fn signed_in(origin: macro_authorization::CredentialOrigin) -> MacroUserAuthentication {
+    let user_id = "macro|owner@macro.com";
+    MacroUserAuthentication {
+        origin,
+        agent_id: None,
+        agent_via: None,
+        macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_owned())
+            .unwrap(),
+        user_context: model::user::UserContext {
+            user_id: user_id.into(),
+            ..Default::default()
+        },
+    }
+}
+
+#[test]
+fn only_a_persons_own_session_manages_a_webhook() {
+    use macro_authorization::CredentialOrigin;
+    assert_eq!(
+        managing_caller(&signed_in(CredentialOrigin::Session)),
+        ManagingCaller::Person
+    );
+    // An API token (the SDK, an MCP client) carries no agent context, yet is
+    // not the person in their own session.
+    for origin in [
+        CredentialOrigin::MacroApiJwt,
+        CredentialOrigin::ScopedMacroApiJwt,
+        CredentialOrigin::UserApiKey,
+        CredentialOrigin::Bot,
+    ] {
+        assert_eq!(managing_caller(&signed_in(origin)), ManagingCaller::Agent);
+    }
+    let mut attributed = signed_in(CredentialOrigin::Session);
+    attributed.agent_id = Some(bot_id::BotId::TEST_A);
+    assert_eq!(managing_caller(&attributed), ManagingCaller::Agent);
+}

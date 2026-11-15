@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.enabled, a.configuration_revision FROM scheduled_action a\n            JOIN scheduled_action_webhook w ON w.action_id = a.id\n            WHERE a.id = $1 AND w.hook_id = $2 AND w.secret_hash = $3\n              AND jsonb_path_exists(a.trigger_config, '$.triggers[*] ? (@.type == \"webhook\")')\n            FOR UPDATE OF a, w\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "98fe28b6f5a0a687f53432cb49fb29ee3f86519d3fee6b77dee3ff1e353612c8"
+}

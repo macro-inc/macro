@@ -117,15 +117,23 @@ impl WebhookStore for PgWebhookStore {
 
     async fn admit(&self, admission: WebhookAdmission) -> Result<AdmissionOutcome, Report> {
         let mut tx = self.pool.begin().await?;
-        // Waits for the routine's lock: a rotation, a save or a claim in
-        // progress settles first, and a revoked URL admits nothing.
+        // A delivery waits briefly for the routine, then answers 503 rather
+        // than holding a connection while senders stack up.
+        sqlx::query!("SET LOCAL lock_timeout = '2s'")
+            .execute(&mut *tx)
+            .await?;
+        // Locks the routine, then its URL row: a rotation, a save or a claim
+        // in progress settles first, and the URL row is read again once its
+        // lock is ours (a row only joined would keep its first snapshot), so
+        // a URL rotated or revoked meanwhile admits nothing. A removal waits
+        // for this delivery to commit.
         let routine = sqlx::query!(
             r#"
             SELECT a.enabled, a.configuration_revision FROM scheduled_action a
             JOIN scheduled_action_webhook w ON w.action_id = a.id
             WHERE a.id = $1 AND w.hook_id = $2 AND w.secret_hash = $3
               AND jsonb_path_exists(a.trigger_config, '$.triggers[*] ? (@.type == "webhook")')
-            FOR UPDATE OF a
+            FOR UPDATE OF a, w
             "#,
             admission.action_id,
             admission.hook_id.as_uuid(),
