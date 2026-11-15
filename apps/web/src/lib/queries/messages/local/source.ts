@@ -163,14 +163,33 @@ export async function loadLocalChannelTimelinePage(
   }
 }
 
+/** Has the device hold a thread the views were answered over REST. */
+async function holdChannelThread(
+  host: CacheHost,
+  channelId: string,
+  rootId: string
+): Promise<void> {
+  try {
+    await loadChannelThread(host, channelId, rootId);
+  } catch (error) {
+    reportDeviceFault(error);
+  }
+}
+
 /** A channel thread through the device cache; undefined to read over REST. */
 export async function loadLocalChannelThread(
   channelId: string,
   rootId: string
 ): Promise<MessageThread | undefined> {
   const host = channelCacheHost();
-  // A host still starting would hold the open up; REST answers meanwhile.
-  if (!host || !channelCacheAnswered(host)) return undefined;
+  if (!host) return undefined;
+  if (!channelCacheAnswered(host)) {
+    // A host still starting would hold the open up; REST answers meanwhile.
+    // The views keep that answer, so the device is given the thread as well,
+    // or it would not hold a thread the person read.
+    fireAndForget(holdChannelThread(host, channelId, rootId), SYNC_SURFACE);
+    return undefined;
+  }
   try {
     let loaded = await loadChannelThread(host, channelId, rootId);
     // The views may already show a push this device thread is older than.
