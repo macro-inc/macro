@@ -365,15 +365,6 @@ export const organise = {
       ],
       note: 'bulk done / read / star / delete run from that menu (SL-140); the toolbar has no per-action buttons',
     },
-    {
-      id: 'AL-095',
-      surface: 'SL-26',
-      fn: ['F-078', 'F-076'],
-      action: 'bulk Not spam / Restore',
-      trigger: 'toolbar "Not spam" (Spam) / "Restore" (Trash) button',
-      source: ['src/features/email-view/components/EmailList.tsx'],
-      note: 'as AL-093/094',
-    },
 
     // SL-30 thread header
     {
@@ -667,18 +658,6 @@ export const organise = {
       trigger: 'title menu',
       source: ['src/components/app/split-layout/components/SplitFileMenu.tsx'],
     },
-    {
-      id: 'AL-162',
-      surface: 'SL-31',
-      fn: ['F-178'],
-      action: 'copy subject',
-      trigger: '"Copy subject" button beside the title',
-      source: [
-        'src/features/email-thread/components/copy-subject-button.tsx',
-        'src/features/email-thread/components/email-thread-title.tsx',
-      ],
-      note: 'shown only where the title has no menu mounted after it',
-    },
 
     // SL-32 side panel
     {
@@ -690,18 +669,6 @@ export const organise = {
       source: [
         'src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx',
       ],
-    },
-    {
-      id: 'AL-618',
-      surface: 'SL-32',
-      fn: ['F-188'],
-      action: 'open thread details sheet',
-      trigger: 'mobile header Info button',
-      source: [
-        'src/features/block-email/views/mobile/email-thread.tsx',
-        'src/components/app/side-panel/SidePanel.tsx',
-      ],
-      viewports: ['phone'],
     },
 
     // SL-33 share dialog

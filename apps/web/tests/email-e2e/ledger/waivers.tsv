@@ -5,40 +5,10 @@ F-078	gmail	bug	not spam on Gmail does not bring the thread back; its test is ke
 F-100	outlook	bug	the From choice is dropped while the draft syncs (outlook-from-choice-dropped-while-draft-syncs); its test is kept as a known bug
 F-136	outlook	bug	retrying a rejected send conflicts (outlook-retry-send-after-rejection-conflicts); its test is kept as a known bug
 F-166	both	bug	the universal input cannot make an email without a draft id (universal-input-email-needs-draft-id); its test is kept as a known bug
-AL-001	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
-AL-004	-	backlog	not exercised itself: another way into, or state of, F-029, F-030, F-031, F-032, covered through other rows
-AL-006	-	backlog	not exercised itself: another way into, or state of, F-029, F-030, covered through other rows
-AL-007	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
 AL-401	-	no-user-path	The token is only declared in tokens.ts; no hotkey is registered with it.
-AL-011	-	backlog	not exercised itself: another way into, or state of, F-095, covered through other rows
-AL-014	-	backlog	not exercised itself: another way into, or state of, F-050, covered through other rows
-AL-015	-	backlog	not exercised itself: another way into, or state of, F-050, covered through other rows
-AL-019	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-021	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-022	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-023	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-024	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-025	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-026	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-027	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-410	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-029	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-030	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-031	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-032	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-036	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
-AL-037	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
-AL-413	-	backlog	not exercised itself: another way into, or state of, F-040, covered through other rows
-AL-040	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
 AL-041	-	no-user-path	EmailInboxFilter is exported but no component imports or renders it.
-AL-042	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
-AL-043	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
-AL-046	-	backlog	not exercised itself: another way into, or state of, F-033, covered through other rows
-AL-074	-	backlog	not exercised itself: another way into, or state of, F-088, covered through other rows
-AL-104	-	backlog	not exercised itself: another way into, or state of, F-029, covered through other rows
-AL-107	-	backlog	not exercised itself: another way into, or state of, F-045, covered through other rows
-AL-108	-	backlog	not exercised itself: another way into, or state of, F-034, covered through other rows
-AL-406	-	backlog	not exercised: of F-076, F-078, F-082, not all covered (see their waivers)
+AL-046	-	no-user-path	The "No inboxes selected" state needs an empty inbox selection, and every writer of the selection turns an empty one into "all inboxes".
+AL-074	-	no-user-path	The hotkey is registered only when every selected row is a task, so it never fires on email rows.
 STL-001	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
 STL-002	-	backlog	not exercised itself: another way into, or state of, F-043, covered through other rows
 STL-401	-	backlog	not exercised itself: another way into, or state of, F-041, covered through other rows
@@ -137,53 +107,14 @@ STL-084	-	backlog	not exercised itself: another way into, or state of, F-120, co
 STL-085	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
 STL-520	-	backlog	not exercised: of F-136, F-140, not all covered (see their waivers)
 STL-521	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
-AL-605	-	backlog	not exercised itself: another way into, or state of, F-179, covered through other rows
-AL-078	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
-AL-079	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
-AL-080	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
 AL-081	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AL-082	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-AL-083	-	backlog	not exercised itself: another way into, or state of, F-084, covered through other rows
-AL-085	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
-AL-089	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
 AL-602	-	native-only	The item only shows when the desktop app has tabs, which a browser never has.
-AL-091	-	backlog	not exercised itself: another way into, or state of, F-087, covered through other rows
 AL-607	-	no-user-path	The email.archive token is only declared; no hotkey, menu item or tooltip uses it.
-AL-601	-	backlog	not exercised itself: another way into, or state of, F-082, covered through other rows
-AL-608	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
 AL-610	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AL-611	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
-AL-056	-	backlog	not exercised itself: another way into, or state of, F-039, covered through other rows
-AL-092	-	backlog	not exercised itself: another way into, or state of, F-082, covered through other rows
-AL-095	-	backlog	not exercised: of F-078, F-076, not all covered (see their waivers)
-AL-125	-	backlog	not exercised itself: another way into, or state of, F-061, covered through other rows
-AL-126	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
-AL-127	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
-AL-612	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
-AL-196	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
-AL-149	-	backlog	not exercised itself: another way into, or state of, F-158, covered through other rows
-AL-150	-	backlog	not exercised itself: another way into, or state of, F-071, F-072, covered through other rows
-AL-151	-	backlog	not exercised itself: another way into, or state of, F-068, F-069, covered through other rows
 AL-152	-	needs	needs the AI service, and no test on the full-stack tier does it yet
-AL-153	-	backlog	not exercised itself: another way into, or state of, F-167, covered through other rows
-AL-154	-	backlog	not exercised itself: another way into, or state of, F-114, covered through other rows
-AL-155	-	backlog	not exercised itself: another way into, or state of, F-087, covered through other rows
-AL-157	-	backlog	not exercised itself: another way into, or state of, F-075, covered through other rows
-AL-158	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
-AL-159	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
-AL-160	-	backlog	not exercised itself: another way into, or state of, F-080, covered through other rows
-AL-161	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-AL-613	-	backlog	not exercised itself: another way into, or state of, F-073, F-074, covered through other rows
 AL-614	-	needs	needs the notification service, and no test on the full-stack tier does it yet
-AL-615	-	backlog	not exercised itself: another way into, or state of, F-084, covered through other rows
-AL-616	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
-AL-617	-	backlog	not exercised itself: another way into, or state of, F-187, covered through other rows
-AL-162	-	backlog	not exercised itself: another way into, or state of, F-178, covered through other rows
-AL-618	-	backlog	not exercised itself: another way into, or state of, F-188, covered through other rows
-AL-620	-	backlog	not exercised itself: another way into, or state of, F-065, covered through other rows
-AL-189	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-AL-622	-	backlog	not exercised itself: another way into, or state of, F-090, covered through other rows
-AL-903	-	backlog	not exercised itself: another way into, or state of, F-160, covered through other rows
+AL-620	-	no-user-path	The dialog shows this Copy Link only to a viewer who cannot forward, and every viewer of an email thread can.
+AL-903	-	no-user-path	An email thread has one access level (view), so the dialog never has a higher one to request.
 STL-600	-	backlog	not exercised itself: another way into, or state of, F-080, covered through other rows
 STL-601	-	backlog	not exercised itself: another way into, or state of, F-081, covered through other rows
 STL-605	-	needs	needs the notification service, and no test on the full-stack tier does it yet
@@ -406,36 +337,12 @@ STC-432	-	backlog	not exercised itself: another way into, or state of, F-121, co
 STC-433	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
 STC-111	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
 AX-002	-	needs	needs the authentication service for Outlook linking, and no test on the full-stack tier does it yet
-AX-015	-	backlog	not exercised itself: another way into, or state of, F-162, covered through other rows
-AX-016	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-AX-200	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
-AX-012	-	backlog	not exercised itself: another way into, or state of, F-009, covered through other rows
-AX-008	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-AX-017	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-018	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
+AX-200	-	needs	needs the Pipedream connections flag off, and a development-mode bundle, which the suite serves, forces it on; the Manage button that replaces it is not exercised yet
 AX-019	-	needs	needs the static file service, and no test on the full-stack tier does it yet
-AX-201	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-202	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-022	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-203	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-204	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-023	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-205	-	backlog	not exercised itself: another way into, or state of, F-149, covered through other rows
-AX-206	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
-AX-207	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-AX-033	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-AX-035	-	backlog	not exercised itself: another way into, or state of, F-003, covered through other rows
-AX-040	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-AX-209	-	backlog	not exercised itself: another way into, or state of, F-157, covered through other rows
-AX-041	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-AX-210	-	backlog	not exercised itself: another way into, or state of, F-006, covered through other rows
-AX-211	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
-AX-212	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
-AX-044	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
-AX-213	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
-AX-214	-	backlog	not exercised itself: another way into, or state of, F-010, covered through other rows
+AX-040	-	needs	needs the calendar prompt flags, which exist only in PostHog, and the test bundle has no PostHog key
+AX-209	-	needs	needs the calendar prompt flags, which exist only in PostHog, and the test bundle has no PostHog key
+AX-211	-	no-user-path	The button shows only with workNeedsReconnect, which no caller of the step passes.
 AX-045	-	native-only	MobileOnboarding is rendered only when isNativeMobilePlatform() is true.
-AX-215	-	backlog	not exercised itself: another way into, or state of, F-121, covered through other rows
 STX-001	-	backlog	not exercised itself: another way into, or state of, F-189, covered through other rows
 STX-003	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows
 STX-004	-	backlog	not exercised itself: another way into, or state of, F-148, covered through other rows

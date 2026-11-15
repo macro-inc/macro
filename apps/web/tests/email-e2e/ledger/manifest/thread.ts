@@ -372,6 +372,7 @@ export const thread = {
         'src/features/email-thread/components/email-thread-title.tsx',
         'src/features/email-thread/email-thread.tsx',
       ],
+      note: 'AL-162 was a second row for this one button and is merged here',
     },
     {
       id: 'AL-502',
@@ -802,7 +803,11 @@ export const thread = {
       fn: ['F-188'],
       action: 'open the details sheet',
       trigger: 'mobile header Info button',
-      source: ['src/features/block-email/views/mobile/email-thread.tsx'],
+      source: [
+        'src/features/block-email/views/mobile/email-thread.tsx',
+        'src/components/app/side-panel/SidePanel.tsx',
+      ],
+      note: 'AL-618 was a second row for this one button and is merged here',
     },
     {
       id: 'AL-900',

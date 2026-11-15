@@ -1259,6 +1259,7 @@ export const list = {
         'src/features/email-view/components/EmailList.tsx',
         'src/lib/queries/email/folders.ts',
       ],
+      note: 'AL-095 was a second row for this one button and is merged here',
     },
     {
       id: 'AL-407',
