@@ -89,12 +89,19 @@ for (const provider of PROVIDERS) {
 
       await page.keyboard.press('ControlOrMeta+Shift+KeyC');
       did('AC-302');
+      // The row is there: its button, which stands in for it, is gone.
+      await expect(
+        page.getByRole('button', { name: 'Cc', exact: true })
+      ).toHaveCount(0);
       await expect(recipientInput(page, 'Cc')).toBeFocused();
       await page.keyboard.type('lou@example.com');
       await page.keyboard.press('Enter');
 
       await page.keyboard.press('ControlOrMeta+Shift+KeyB');
       did('AC-303');
+      await expect(
+        page.getByRole('button', { name: 'Bcc', exact: true })
+      ).toHaveCount(0);
       await expect(recipientInput(page, 'Bcc')).toBeFocused();
       await page.keyboard.type('max@example.com');
       await page.keyboard.press('Enter');
