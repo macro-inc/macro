@@ -53,4 +53,4 @@ link-previews	Link previews, document and task mention cards, GIFs, polls in mes
 attachment-editing	Removing an attachment before sending, drag and drop, pasting an image		Not written; attach by the picker is covered
 reply-details	Reply-to-reply, the reply box's send button, collapsing a thread by pointer		Not written; reply by Enter and by hotkey are covered
 other-browsers	Safari and Firefox		Chromium only
-scale	Channels with tens of thousands of messages, hundreds of members, many channels		The long history is 230 messages; larger volumes stall the pages of main under test
+scale	Channels with tens of thousands of messages, hundreds of members, many channels		The long history is 230 messages; larger volumes stall every open page of their authors

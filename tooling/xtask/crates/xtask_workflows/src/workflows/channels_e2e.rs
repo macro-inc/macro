@@ -30,6 +30,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/src/lib/queries/messages/**"),
     xtask_paths::repo_glob!("apps/web/src/lib/queries/channel/**"),
     xtask_paths::repo_glob!("tooling/seed_cli/seed/scenarios/channels-e2e.json"),
+    xtask_paths::repo_glob!("apps/web/justfile"),
     xtask_paths::repo_glob!("tooling/xtask/crates/xtask_local/**"),
     xtask_paths::repo_glob!(
         "tooling/xtask/crates/xtask_workflows/src/workflows/scripts/channels_e2e.sh"
@@ -124,6 +125,8 @@ fn stack_logs() -> Step<Run> {
 
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
     steps::upload_artifact(name, path)
+        // The results are in `.run`, which the action skips as hidden otherwise.
+        .add_with(("include-hidden-files", true))
         .add_with(("if-no-files-found", "ignore"))
         .add_with(("retention-days", 7))
         .if_condition(Expression::new("failure()"))
