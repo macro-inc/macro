@@ -33,6 +33,7 @@ import {
   FULL_STACK_ONLY,
   FUNCTIONS,
   PROOFS,
+  PROOFS_PENDING,
   WAIVERS,
   type Waiver,
 } from './manifest/functions';
@@ -698,6 +699,7 @@ function report(mode: Mode): void {
       functions: FUNCTIONS,
       rows: ledger.rows.map((row) => row.id),
       proofs: PROOFS,
+      proofsPending: PROOFS_PENDING,
       waivers: WAIVERS,
       fullStackOnly: FULL_STACK_ONLY,
       covered,

@@ -109,7 +109,10 @@ Both CI jobs run the report with `--enforce`. It fails when
 - a passing test covers what `waivers.tsv` waives: remove the line;
 - a function waived on no provider has no line in `proofs.tsv`;
 - a row without a line in `waivers.tsv` has no line in `proofs.tsv`: a
-  new row comes with a test and with the break that made the test fail;
+  new row comes with a test and with the break that made the test fail.
+  `proofs-pending.tsv` lists the rows whose proof still waits; only a row
+  that the full-stack tier alone covers may be on it, and a row leaves it
+  with its proof. Do not add to it;
 - the tests tagged `@known-bug` were not run, or one of them passes:
   remove the tag, and the waiver that stood for the bug. A bug that shows only in some runs is also tagged
   `@sometimes`, and a pass of its test fails nothing: one run cannot tell
