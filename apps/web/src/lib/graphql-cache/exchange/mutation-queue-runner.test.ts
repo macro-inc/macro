@@ -478,3 +478,30 @@ it('claims again when a write settles while a lease check is waiting', async () 
   await vi.advanceTimersByTimeAsync(1);
   expect(claims).toHaveBeenCalledTimes(2);
 });
+
+it('keeps the drain a settled write asked for when an empty claim answers', async () => {
+  const { runner, host, forwarded } = fixture();
+  let claimAnswered!: (claimed: undefined) => void;
+  const claims = vi.fn(
+    () =>
+      new Promise<undefined>((resolve) => {
+        claimAnswered = resolve;
+      })
+  );
+  host.claimNextMutation = claims;
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledOnce();
+
+  // The head this runner was sending settles, and asks for the next drain,
+  // just before the first claim answers that nothing is claimable.
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  claimAnswered(undefined);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(claims).toHaveBeenCalledTimes(2);
+});

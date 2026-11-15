@@ -453,6 +453,7 @@ export function createMutationQueueRunner(
   let drainRequested = false;
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  let drainDueAt = 0;
   const liveness = deps.leaseOwnerLiveness;
   // Register before the first claim: an unregistered owner looks gone.
   let ownerRegistration = liveness?.hold(owner);
@@ -497,14 +498,21 @@ export function createMutationQueueRunner(
     return true;
   }
 
-  function scheduleDrain(delayMs = 0): void {
-    if (drainTimer !== undefined) clearTimeout(drainTimer);
+  function scheduleDrain(delayMs = 0, keepSooner = false): void {
+    const dueAt = Date.now() + (drainRequested ? 0 : delayMs);
+    if (drainTimer !== undefined) {
+      // A poll must not replace a drain already due sooner: a write that
+      // settled while the claim was being checked asked for that one.
+      if (keepSooner && drainDueAt <= dueAt) return;
+      clearTimeout(drainTimer);
+    }
+    drainDueAt = dueAt;
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
         fireAndForget(drainQueue(), 'graphql-cache-mutation-queue');
       },
-      drainRequested ? 0 : delayMs
+      Math.max(0, dueAt - Date.now())
     );
   }
 
@@ -854,7 +862,8 @@ export function createMutationQueueRunner(
             : Math.min(
                 EMPTY_QUEUE_POLL_MS,
                 Math.max(0, deferredUntil - Date.now())
-              )
+              ),
+          true
         );
         return;
       }
@@ -865,7 +874,7 @@ export function createMutationQueueRunner(
       // Enqueue already succeeded, so callers must observe these as
       // queued even if the runner cannot currently inspect the head.
       resolveLiveOperationsAsQueued();
-      scheduleDrain(EMPTY_QUEUE_POLL_MS);
+      scheduleDrain(EMPTY_QUEUE_POLL_MS, true);
     } finally {
       drainRunning = false;
       if (drainRequested) scheduleDrain();
