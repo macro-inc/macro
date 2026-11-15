@@ -50,7 +50,6 @@ AL-139	-	bug	u and Shift+U in a thread opened inline reach the list behind it an
 AL-140	-	bug	u and Shift+U in a thread opened inline reach the list behind it and not the thread (inline-thread-read-keys-reach-the-list); its test is kept as a known bug
 AL-500	-	needs	needs the notification service, and no test on the full-stack tier does it yet
 AL-503	-	needs	needs the static file service, and no test on the full-stack tier does it yet
-AL-176	-	backlog	not exercised itself: another way into, or state of, F-126, covered through other rows
 AL-512	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AL-181	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 STL-067	-	backlog	not exercised itself: another way into, or state of, F-053, covered through other rows
@@ -174,10 +173,7 @@ STC-309	-	backlog	not exercised itself: another way into, or state of, F-113, co
 STC-312	-	backlog	not exercised itself: another way into, or state of, F-113, covered through other rows
 STC-938	-	backlog	not exercised itself: another way into, or state of, F-115, covered through other rows
 STC-960	-	backlog	not exercised: of F-100, not all covered (see their waivers)
-AC-063	-	backlog	not exercised itself: another way into, or state of, F-116, F-118, covered through other rows
-AC-065	-	backlog	not exercised itself: another way into, or state of, F-120, covered through other rows
 AC-067	-	needs	exists only with enable-graphql-soup off, and the bundle of the suite is built with it on, as the app runs: there the sync banner recovers a rejected draft instead
-AC-102	-	backlog	not exercised itself: another way into, or state of, F-117, F-118, covered through other rows
 AC-110	-	backlog	not exercised itself: another way into, or state of, F-135, covered through other rows
 AC-915	-	bug	a rejected scheduled send that is cancelled in an Outlook inbox stays locked (outlook-cancelled-failed-schedule-stays-locked); its test is kept as a known bug
 STC-001	-	backlog	not exercised itself: another way into, or state of, F-116, F-117, F-118, covered through other rows

@@ -1,8 +1,7 @@
 // The chips of a calendar file attached to a received message: the chip
 // downloads the file when the message shows no event, and the event
 // preview offers its own "Download .ics". For a Gmail and an Outlook inbox.
-// (A file chip opening its Drive copy needs the real document storage
-// service, which this stack stands in for.)
+// (A file chip opening its Drive copy: ways-faults-attachment.spec.ts.)
 
 import { readFile } from 'node:fs/promises';
 import { loadAppSteadily } from './harness/drafts';
