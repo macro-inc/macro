@@ -6134,6 +6134,38 @@ export type CrmCompanyResponse = {
 };
 
 /**
+ * The name and visibility of a contact's company.
+ */
+export type CrmContactCompanyResponse = {
+    /**
+     * The company's oldest domain, which clients show when it has no
+     * name.
+     */
+    domain?: string | null;
+    /**
+     * Whether the company is hidden. Only admin/owner callers can see a
+     * hidden company.
+     */
+    hidden: boolean;
+    /**
+     * The id of the company; equal to the contact's `companyId`.
+     */
+    id: string;
+    /**
+     * The company's display name, if it has one.
+     */
+    name?: string | null;
+};
+
+/**
+ * A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the
+ * contact, with what its page shows of its company.
+ */
+export type CrmContactDetailResponse = CrmContactResponse & {
+    company?: null | CrmContactCompanyResponse;
+};
+
+/**
  * A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.
  */
 export type CrmContactResponse = {
@@ -27428,7 +27460,7 @@ export type GetContactErrors = {
 export type GetContactError = GetContactErrors[keyof GetContactErrors];
 
 export type GetContactResponses = {
-    200: CrmContactResponse;
+    200: CrmContactDetailResponse;
 };
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];

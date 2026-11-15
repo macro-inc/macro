@@ -233,3 +233,38 @@ it('archives a contact in place in Team lists and refreshes only the lists it ca
   });
   client.clear();
 });
+
+it("archives a contact detail's company summary with its company", async () => {
+  const client = new QueryClient();
+  const current = crmKeys.contact('contact-1').queryKey;
+  const former = crmKeys.contact('contact-2').queryKey;
+  const company = { id: 'company-1', name: 'Acme', hidden: false };
+  client.setQueryData(current, {
+    id: 'contact-1',
+    companyId: 'company-1',
+    hidden: false,
+    company,
+  });
+  client.setQueryData(former, {
+    id: 'contact-2',
+    companyId: 'company-2',
+    hidden: false,
+    company: { ...company, id: 'company-2' },
+  });
+  await updateVisibilityDetails(client, {
+    kind: 'company',
+    id: 'company-1',
+    hidden: true,
+  });
+  expect(client.getQueryData(current)).toEqual({
+    id: 'contact-1',
+    companyId: 'company-1',
+    hidden: true,
+    company: { ...company, hidden: true },
+  });
+  expect(client.getQueryData(former)).toMatchObject({
+    hidden: false,
+    company: { hidden: false },
+  });
+  client.clear();
+});

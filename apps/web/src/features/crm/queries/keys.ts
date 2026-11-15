@@ -5,7 +5,8 @@ export const crmKeys = createQueryKeys('crm', {
     teamId,
     userId,
   ],
-  lists: null,
+  // One `/saved_views` read serves CRM lists and personal views.
+  savedViews: null,
   pipelines: (teamId: string | undefined) => [teamId],
   pipelineTable: (id: string) => [id],
   stageRequirements: (id: string) => [id],

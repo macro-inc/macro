@@ -440,13 +440,13 @@ team definition rather than opening an editor with system defaults. Check both
 the entity actions menu and command menu with stage requests delayed; cancel the
 editors without changing hosted data.
 
-`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
-At narrow widths, `Show CRM navigation` opens the same navigation in a menu
-without **Close** or `Collapse CRM sidebar`; picking a destination or clicking
-outside closes it.
-While the sidebar is collapsed or shown as a menu, the split's **Close** sits
-before either toggle, including on a pipeline, and stays hidden when the split
-cannot close.
+The CRM sidebar collapses and expands like every other workspace's: `Hide
+navigation`, `Show navigation` and `Cmd+.` animate it, and the choice persists
+across visits. At narrow widths `Show navigation` slides it in as an overlay
+that the backdrop, Escape or `Hide navigation` dismisses.
+While the sidebar is collapsed, the split's **Close** sits before
+`Show navigation` in every CRM header, including on a pipeline, a record and
+CRM settings, and stays hidden when the split cannot close.
 The sidebar's Records and Lists sections can also collapse independently.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form

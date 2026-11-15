@@ -1279,6 +1279,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_contact_company::SetContactCompanyRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::list_company_contacts_page::CompanyContactsPageResponse,
+            crm::inbound::axum_router::get_contact::CrmContactDetailResponse,
+            crm::inbound::axum_router::get_contact::CrmContactCompanyResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,
             crm::inbound::axum_router::create_company::CreateCrmCompanyRequest,

@@ -12,8 +12,8 @@ use crate::domain::{
     generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
         CrmBlockedDomain, CrmCompanyContactsPage, CrmCompanyContactsQuery, CrmCompanyForSoup,
-        CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck, CrmTeamSettings,
-        CrmTeamSettingsPatch, DepopulateContactOutcome,
+        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError, CrmScopePrecheck,
+        CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
     },
 };
 use chrono::{DateTime, TimeDelta, Utc};
@@ -362,13 +362,13 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
     ) -> impl Future<Output = Result<CrmCompanyContactsPage, CrmError>> + Send;
 
     /// Fetch the contact addressed by `access`, scoped to its owning
-    /// team. The receipt's role decides whether a hidden contact (or one
-    /// under a hidden company) is revealed. See
-    /// [`CompaniesRepository::get_contact_for_team`].
+    /// team, with its company's name and visibility. The receipt's role
+    /// decides whether a hidden contact (or one under a hidden company) is
+    /// revealed. See [`CompaniesRepository::get_contact_for_team`].
     fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Search the caller's team's contacts by email or name, most recently
     /// interacted first. The caller's role decides whether hidden contacts
@@ -1236,12 +1236,12 @@ where
     async fn get_contact_for_team(
         &self,
         access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         let team_id = access.team_id();
         let contact_id = access.contact_id()?;
         let include_hidden = access.include_hidden();
         self.companies_repository
-            .get_contact_for_team(&team_id, &contact_id, include_hidden)
+            .get_contact_detail_for_team(&team_id, &contact_id, include_hidden)
             .await
     }
 
@@ -1642,7 +1642,7 @@ impl CrmService for NoOpCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         Ok(None)
     }
 

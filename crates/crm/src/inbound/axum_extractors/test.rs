@@ -36,8 +36,8 @@ use crate::{
         auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
         companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
         model::{
-            CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-            DepopulateContactOutcome,
+            CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
+            CrmScopePrecheck, DepopulateContactOutcome,
         },
         service::CrmService,
     },
@@ -486,7 +486,7 @@ impl CrmService for FakeCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
-    ) -> Result<Option<CrmContact>, CrmError> {
+    ) -> Result<Option<CrmContactDetail>, CrmError> {
         panic!("unexpected get_contact_for_team call")
     }
 
@@ -1069,5 +1069,128 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
     assert_eq!(body["companyId"], Value::Null);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn contact_detail_http_contract_carries_the_company_summary(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::{companies_repo::CompaniesRepository, service::CrmServiceImpl};
+    use crate::inbound::axum_router::get_contact;
+    use crate::outbound::{
+        companies_repo::CompaniesRepositoryImpl, no_op_resolver::NoOpCompanyMetadataResolver,
+    };
+    let team = uuid(TEAM_ID);
+    let user = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $3)",
+        user,
+        USER_ID,
+        format!("stripe_{user}")
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ($1, $1, $2)",
+        USER_ID,
+        user
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Test team', $2)",
+        team,
+        USER_ID
+    )
+    .execute(&pool)
+    .await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let loose = repo
+        .create_contact_for_team(&team, None, "Loose", Utc::now())
+        .await?;
+    let company = repo
+        .create_company_for_team(&team, Some("example.com"), "Example company", Utc::now())
+        .await?;
+    let filed = repo
+        .create_contact_for_company(
+            &team,
+            &company.company.id,
+            Some("filed@example.com"),
+            "Filed",
+            Utc::now(),
+            true,
+        )
+        .await?;
+    repo.set_company_hidden(&team, &company.company.id, true)
+        .await?;
+    // Hiding cascades to the contact; clear its own flag so only the
+    // company's keeps it from a member.
+    sqlx::query!(
+        "UPDATE crm_contacts SET hidden = FALSE WHERE id = $1",
+        filed.id
+    )
+    .execute(&pool)
+    .await?;
+    let service = Arc::new(CrmServiceImpl::new(repo, NoOpCompanyMetadataResolver));
+    // Edit maps to an admin's team role in the fake, View to a member's.
+    let get = |level, id: Uuid| {
+        let authorization = MacroAuthorizationServiceImpl::new(
+            FakeJwtValidator,
+            InternalAuthConfig {
+                api_key: INTERNAL_KEY.to_string(),
+                default_user_id: None,
+            },
+            macro_authorization::NoBotAuthorizer,
+            macro_authorization::NoUserApiKeyAuthorizer,
+        );
+        Router::new()
+            .route(
+                "/contacts/{contact_id}",
+                get(get_contact::handler::<_, (), _, _>),
+            )
+            .with_state(CrmRouterState {
+                service: service.clone(),
+                stage_service: Arc::new(()),
+                entity_access_service: Arc::new(FakeEntityAccessService::with_access_level(level)),
+                authorization_state: MacroAuthorizationState::new(Arc::new(authorization)),
+            })
+            .oneshot(
+                Request::get(format!("/contacts/{id}"))
+                    .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+    };
+    let body = |response: axum::response::Response| async move {
+        anyhow::Ok(serde_json::from_slice::<Value>(
+            &to_bytes(response.into_body(), usize::MAX).await?,
+        )?)
+    };
+
+    let response = get(AccessLevel::View, loose.id).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let loose_body = body(response).await?;
+    assert_eq!(loose_body["id"], loose.id.to_string());
+    assert_eq!(loose_body.get("company"), Some(&Value::Null));
+
+    let response = get(AccessLevel::Edit, filed.id).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let filed_body = body(response).await?;
+    assert_eq!(filed_body["companyId"], company.company.id.to_string());
+    assert_eq!(
+        filed_body["company"],
+        json!({
+            "id": company.company.id,
+            "name": "Example company",
+            "domain": "example.com",
+            "hidden": true,
+        })
+    );
+
+    assert_eq!(
+        get(AccessLevel::View, filed.id).await?.status(),
+        StatusCode::NOT_FOUND
+    );
     Ok(())
 }

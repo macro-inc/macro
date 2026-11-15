@@ -9318,7 +9318,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
+        "summary": "Fetch a single CRM contact by id, with its company's name and\nvisibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:\nthe user must be on the team that owns the contact, and hidden\ncontacts are invisible to plain members. Admin/owner callers see\nhidden contacts so they can render the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
@@ -9338,7 +9338,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmContactResponse"
+                  "$ref": "#/components/schemas/CrmContactDetailResponse"
                 }
               }
             }
@@ -37764,6 +37764,55 @@
             "description": "Most recent known interaction with this company."
           }
         }
+      },
+      "CrmContactCompanyResponse": {
+        "type": "object",
+        "description": "The name and visibility of a contact's company.",
+        "required": ["id", "hidden"],
+        "properties": {
+          "domain": {
+            "type": ["string", "null"],
+            "description": "The company's oldest domain, which clients show when it has no\nname."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden. Only admin/owner callers can see a\nhidden company."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company; equal to the contact's `companyId`."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The company's display name, if it has one."
+          }
+        }
+      },
+      "CrmContactDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CrmContactResponse",
+            "description": "The contact."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "company": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrmContactCompanyResponse",
+                    "description": "The contact's company, when it has one the caller may see. Older\nservers omit it; clients then read the company itself."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the\ncontact, with what its page shows of its company."
       },
       "CrmContactResponse": {
         "type": "object",

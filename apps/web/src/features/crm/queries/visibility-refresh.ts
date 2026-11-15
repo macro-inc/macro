@@ -1,4 +1,5 @@
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
+import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import type { Query, QueryClient } from '@tanstack/solid-query';
 import {
@@ -108,7 +109,7 @@ export async function updateVisibilityDetails(
   client.setQueriesData({ predicate: visibilityQueryFilter(change) }, (data) =>
     patchVisibilitySnapshot(data, change)
   );
-  const patchContact = (contact: CrmContactResponse | undefined) => {
+  const patchContact = (contact: CrmContactDetailResponse | undefined) => {
     if (!contact) return contact;
     if (
       change.kind === 'contact'
@@ -116,9 +117,16 @@ export async function updateVisibilityDetails(
         : contact.companyId !== change.id
     )
       return contact;
+    // The detail's company summary carries the company's own flag.
+    if (change.kind === 'company' && contact.company?.id === change.id)
+      return {
+        ...contact,
+        hidden: change.hidden,
+        company: { ...contact.company, hidden: change.hidden },
+      };
     return { ...contact, hidden: change.hidden };
   };
-  client.setQueriesData<CrmContactResponse>(
+  client.setQueriesData<CrmContactDetailResponse>(
     { queryKey: crmKeys.contact._def },
     patchContact
   );

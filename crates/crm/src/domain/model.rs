@@ -281,6 +281,31 @@ pub struct CrmCompanyContactsPage {
     pub next_cursor: Option<CrmCompanyContactsCursor>,
 }
 
+/// The name and visibility of a contact's company, which the contact's page
+/// shows without reading the whole company.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CrmCompanySummary {
+    /// The id of the company
+    pub id: uuid::Uuid,
+    /// The team's name for the company, else its primary domain's
+    /// directory name, as the company read resolves it
+    pub name: Option<String>,
+    /// The company's oldest domain, which stands in for a missing name
+    pub domain: Option<String>,
+    /// Whether the company is hidden for the owning team
+    pub hidden: bool,
+}
+
+/// A contact with a summary of its company.
+#[derive(Debug, Clone)]
+pub struct CrmContactDetail {
+    /// The contact
+    pub contact: CrmContact,
+    /// Its company; `None` for a contact without one, or one the caller
+    /// may not see
+    pub company: Option<CrmCompanySummary>,
+}
+
 /// What a depopulate teardown actually removed. Every field is `false` on
 /// the no-op paths (unknown contact, malformed email), so
 /// [`Self::removed_anything`] distinguishes a real teardown from a call

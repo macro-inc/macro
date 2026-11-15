@@ -5,7 +5,11 @@ import { prepareCrmContactEdit } from '@service-storage/crm-contact-edit';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { useMutation } from '@tanstack/solid-query';
-import type { ContactEmailChange, CrmContact } from '../core/contact';
+import {
+  type ContactEmailChange,
+  type CrmContact,
+  contactCompanySummary,
+} from '../core/contact';
 import {
   contactEditDetailsFilter,
   sameContactIdentity,
@@ -32,6 +36,28 @@ export async function editContact(
     );
     if (!cache.isCurrent()) return contact;
     try {
+      // The company name the caches show: the detail's summary when it is of
+      // `companyId`, else the cached company when `cached`, else a company
+      // read.
+      const companyNameOf = async (
+        companyId: string | null | undefined,
+        detail: Pick<CrmContact, 'companyId' | 'company'>,
+        cached: boolean
+      ): Promise<string | null> => {
+        if (!companyId) return null;
+        const summary = contactCompanySummary(detail);
+        if (summary?.id === companyId) return summary.name ?? null;
+        const company = cached
+          ? deps.client.getQueryData<CrmCompanyResponse>(
+              crmKeys.company(companyId).queryKey
+            )
+          : undefined;
+        if (company) return company.name ?? null;
+        const result = await span.span('crm.contact_edit.company', () =>
+          deps.storage.getCompany({ companyId, includeContacts: false })
+        );
+        return result.isOk() ? (result.value.name ?? null) : null;
+      };
       const details = contactEditDetailsFilter(deps.client, before, contact);
       const refresh = async (authoritative: boolean) => {
         if (authoritative) {
@@ -82,14 +108,7 @@ export async function editContact(
           ))
         )
           return;
-        let companyName: string | null = null;
-        if (fresh.companyId) {
-          const companyId = fresh.companyId;
-          const company = await span.span('crm.contact_edit.company', () =>
-            deps.storage.getCompany({ companyId, includeContacts: false })
-          );
-          if (company.isOk()) companyName = company.value.name ?? null;
-        }
+        const companyName = await companyNameOf(fresh.companyId, fresh, false);
         const current = deps.client.getQueryData<CrmContactResponse>(key);
         if (!cache.isCurrent() || !sameContactIdentity(current, fresh)) return;
         await span.span('crm.contact_edit.cache', () =>
@@ -110,18 +129,7 @@ export async function editContact(
         if (cache.isCurrent()) await refresh(true);
         return contact;
       }
-      let company = contact.companyId
-        ? deps.client.getQueryData<CrmCompanyResponse>(
-            crmKeys.company(contact.companyId).queryKey
-          )
-        : undefined;
-      if (contact.companyId && !company) {
-        const companyId = contact.companyId;
-        const result = await span.span('crm.contact_edit.company', () =>
-          deps.storage.getCompany({ companyId, includeContacts: false })
-        );
-        if (result.isOk()) company = result.value;
-      }
+      const companyName = await companyNameOf(contact.companyId, before, true);
       const current = deps.client.getQueryData<CrmContactResponse>(
         crmKeys.contact(contact.id).queryKey
       );
@@ -134,7 +142,7 @@ export async function editContact(
         return contact;
       }
       await span.span('crm.contact_edit.cache', () =>
-        cache.commit(contact, company?.name ?? null)
+        cache.commit(contact, companyName)
       );
       if (!cache.isCurrent()) return contact;
       await refresh(false);
