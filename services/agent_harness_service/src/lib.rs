@@ -758,6 +758,10 @@ pub async fn run() -> anyhow::Result<()> {
         routine_code,
         http_ready,
         Arc::clone(&notifications),
+        search_service_client::SearchServiceClient::new(
+            config.document_storage_service_auth_key.clone(),
+            macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
+        ),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();

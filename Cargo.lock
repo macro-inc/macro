@@ -697,6 +697,7 @@ dependencies = [
  "databases",
  "databases_sql",
  "document_storage_service_client",
+ "document_sub_type",
  "documents",
  "doppler-config",
  "email",
@@ -766,6 +767,8 @@ dependencies = [
  "models_ai_projection",
  "models_dcs",
  "models_permissions",
+ "models_search",
+ "nom 8.0.0",
  "non_empty",
  "notification",
  "onboarding",
@@ -825,6 +828,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -18343,6 +18347,7 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_tower_layers",
  "models_search",
  "reqwest 0.13.4",
  "workspace-hack",
