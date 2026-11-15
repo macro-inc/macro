@@ -1,6 +1,8 @@
-// The requests the web app's email code can make. The first two lists equal
-// what the source defines (`../derive.ts`; the report says when they do
-// not); the third is kept by hand.
+// The requests the web app's email code can make. The first two lists hold
+// every operation of email's own that the source defines (`emailOwned` in
+// `../derive.ts`; the check fails when the two differ) and operations of
+// the rest of the app, which are kept by hand and checked against nothing;
+// the third is kept by hand.
 
 import type { Operation } from './types';
 
