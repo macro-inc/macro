@@ -568,6 +568,9 @@ function report(mode: Mode): void {
     process.exit(mode === 'report' ? 0 : 1);
   }
   const knownBugs = readRun('known-bugs');
+  // Each machine of a split run leaves a report of its part of them.
+  const knownBugParts = runReports('known-bugs').length;
+  const suiteParts = runReports('gating').length;
   const ledger = buildLedger(gating, knownBugs);
 
   // Each stack's run by itself: what it covers is held against its own part.
@@ -608,7 +611,7 @@ function report(mode: Mode): void {
         .map((test) => `${test.file}:${test.line} ${test.title}`),
     }),
     // A run that left no result cannot say that no such test passes.
-    ...(knownBugs.found
+    ...(knownBugs.found && knownBugParts >= suiteParts
       ? []
       : [
           'the tests kept for known bugs were not run: run them (EMAIL_E2E_KNOWN_BUGS=1) before the check',

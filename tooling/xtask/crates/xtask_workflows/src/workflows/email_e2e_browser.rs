@@ -167,6 +167,7 @@ fn suite() -> Job {
         .add_step(
             steps::upload_artifact("email-e2e-browser-recorded-${{ matrix.shard }}", RECORDED)
                 .add_with(("if-no-files-found", "ignore"))
+                .add_with(("overwrite", true))
                 .add_with(("retention-days", 7))
                 .if_condition(Expression::new("!cancelled()")),
         )
@@ -202,6 +203,7 @@ fn coverage() -> Job {
         .add_step(
             steps::upload_artifact("email-e2e-browser-coverage", LEDGER)
                 .add_with(("if-no-files-found", "ignore"))
+                .add_with(("overwrite", true))
                 .add_with(("retention-days", 30))
                 .if_condition(Expression::new("!cancelled()")),
         )
@@ -264,6 +266,8 @@ fn ledger() -> Step<Run> {
 fn upload(name: &str, path: xtask_paths::RuntimePath<'static>) -> Step<Use> {
     steps::upload_artifact(name, path)
         .add_with(("if-no-files-found", "ignore"))
+        // A re-run of a failed job uploads under the same name again.
+        .add_with(("overwrite", true))
         .add_with(("retention-days", 7))
         .if_condition(Expression::new("failure()"))
 }

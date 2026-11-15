@@ -324,6 +324,7 @@ jobs:
         path: apps/web/tests/email-e2e/ledger-results
         if-no-files-found: ignore
         retention-days: '7'
+        overwrite: 'true'
     - name: Upload email-e2e-browser-logs-${{ matrix.shard }} artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -332,6 +333,7 @@ jobs:
         path: target/debug/email-e2e
         if-no-files-found: ignore
         retention-days: '7'
+        overwrite: 'true'
     - name: Upload email-e2e-browser-traces-${{ matrix.shard }} artifact
       if: failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -340,6 +342,7 @@ jobs:
         path: apps/web/tests/email-e2e/test-results
         if-no-files-found: ignore
         retention-days: '7'
+        overwrite: 'true'
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -393,6 +396,7 @@ jobs:
         path: apps/web/tests/email-e2e/ledger-results/report
         if-no-files-found: ignore
         retention-days: '30'
+        overwrite: 'true'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

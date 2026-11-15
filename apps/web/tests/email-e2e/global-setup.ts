@@ -13,7 +13,7 @@ import {
   localStackAddresses,
 } from './harness/local-stack';
 import { checkSignUpCounter } from './harness/sign-up-limit';
-import { currentRun, runPaths } from './ledger/paths';
+import { currentRun, runPaths, runReports } from './ledger/paths';
 
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -26,6 +26,11 @@ export default async function globalSetup(): Promise<
   const recorded = runPaths(currentRun());
   rmSync(recorded.evidence, { recursive: true, force: true });
   rmSync(recorded.playwright, { force: true });
+  // A run on one machine replaces what the parts of a split run left too.
+  if (!process.env.EMAIL_E2E_SHARD) {
+    for (const report of runReports(currentRun()))
+      rmSync(report, { force: true });
+  }
 
   // The local stack is already running, and so is a named stack server.
   const local = localStackAddresses();
