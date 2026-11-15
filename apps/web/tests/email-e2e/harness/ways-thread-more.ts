@@ -39,10 +39,16 @@ export function phoneHeaderSubject(page: Page, subject: string): Locator {
  * Counts the page's reads of a thread's messages, and its mark-read writes,
  * that are still on their way. An open thread takes a scroll to its top only
  * once those are done: one made while it still reads its messages loads no
- * older ones, and nothing asks again.
+ * older ones, and nothing asks again. The count stays above zero for half
+ * a second after the last of them, so that the gap between a read and the
+ * write that follows it does not read as done.
  */
 export function threadReadsInFlight(page: Page): () => number {
   const inFlight = new Set<Request>();
+  let last = 0;
+  const done = (request: Request) => {
+    if (inFlight.delete(request)) last = Date.now();
+  };
   page.on('request', (request) => {
     if (request.method() !== 'POST') return;
     const body = request.postData() ?? '';
@@ -52,7 +58,7 @@ export function threadReadsInFlight(page: Page): () => number {
     )
       inFlight.add(request);
   });
-  page.on('requestfinished', (request) => inFlight.delete(request));
-  page.on('requestfailed', (request) => inFlight.delete(request));
-  return () => inFlight.size;
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  return () => inFlight.size || (Date.now() - last < 500 ? 1 : 0);
 }

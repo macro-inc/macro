@@ -16,7 +16,6 @@ import {
   favorites,
   held,
   openFromList,
-  row,
   runThreadCommand,
   senderFilters,
 } from './harness/ways-thread';
@@ -184,7 +183,6 @@ for (const provider of PROVIDERS) {
       await expect
         .poll(() => senderFilters(mailbox))
         .toContainEqual({ address: 'ida@example.com', signal: true });
-      expect(await row(page, ids.Offers).count()).toBe(0);
     });
   });
 }

@@ -766,14 +766,14 @@ export const thread = {
       surface: 'SL-44',
       fn: ['F-120', 'F-136', 'F-140'],
       action:
-        'resolve draft/message operation (Keep Macro version, Use mailbox version, Check again, Retry send, Keep original copy and continue), confirming where asked; Reload draft',
+        'resolve draft/message operation (Keep Macro version, Use mailbox version, Check again, Retry send, Keep original copy and continue), confirming where asked',
       trigger: 'notice buttons, then the confirmation checkbox and button',
       source: [
         RECOVERY,
         'src/features/email-message/queries/message-operation.ts',
         'src/features/email-message/core/message-operation.ts',
       ],
-      note: 'no provider check in the web app; which states arise depends on the provider coordinator',
+      note: 'no provider check in the web app; which states arise depends on the provider coordinator. The same notice, with the same buttons, is above a composer (SC-22); its Reload draft is AC-402',
     },
     // SL-54
     {

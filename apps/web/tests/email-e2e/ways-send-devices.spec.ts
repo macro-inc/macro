@@ -114,6 +114,9 @@ for (const provider of PROVIDERS) {
         .getByRole('button', { name: 'Restore draft', exact: true })
         .click();
       did('AC-105');
+      // The draft was back at the service since the other device's Cancel
+      // and restore; what this button does on its own is take the cancelled
+      // send off this device, which is what the row going shows.
       await expect(here).toHaveCount(0);
       expect(await draftNames(mailbox)).toEqual([SUBJECT]);
       expect(await sentMessages(mailbox)).toEqual([]);

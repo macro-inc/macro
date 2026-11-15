@@ -27,7 +27,6 @@ AC-058	on a phone, the header's Send does not send a new email
 AC-061	on a phone, Save Draft in the Draft options sheet does not leave the composer
 AC-062	on a phone, Delete Draft in the Draft options sheet does not delete the draft
 AC-066	the Draft could not be synced banner's Keep editing does not save the draft again
-AC-072	a file added while offline is attached anyway after the You're offline notice
 AC-073	clicking a reply's one-line recipient summary does not open its recipient fields
 AC-074	the Cc button of a reply's open recipient fields does not show the Cc field
 AC-075	the Bcc button of a reply's open recipient fields does not show the Bcc field
