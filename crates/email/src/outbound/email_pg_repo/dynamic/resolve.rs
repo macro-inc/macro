@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Cache mailbox-scoped contact identities for address predicates and team scope.
+#[derive(Clone)]
 pub(super) struct ResolvedFilters {
     /// Only the explicit Trash view may admit present messages in trash.
     pub(super) include_trash: bool,
@@ -24,6 +25,10 @@ pub(super) struct ResolvedFilters {
     /// (`crm_email_thread_allowed`'s mailbox conditions). `Some` only for
     /// team-scoped queries. The query rechecks them as it reads.
     contributing_link_ids: Option<Vec<Uuid>>,
+    /// The inboxes whose contacts a domain or partial address matches on a
+    /// message, or `None` for every inbox. Complete addresses resolve to
+    /// contacts of the queried inboxes already.
+    text_match_links: Option<Vec<Uuid>>,
 }
 
 impl ResolvedFilters {
@@ -46,6 +51,20 @@ impl ResolvedFilters {
     /// The team's primary link ids, when this resolution was team-scoped.
     pub(super) fn team_link_ids(&self) -> Option<&[Uuid]> {
         self.team_link_ids.as_deref()
+    }
+
+    /// The inboxes a domain or partial address's contacts must belong to.
+    pub(super) fn text_match_links(&self) -> Option<&[Uuid]> {
+        self.text_match_links.as_deref()
+    }
+
+    /// This resolution with domain and partial addresses matching only
+    /// contacts of `links`.
+    pub(super) fn text_matches_within(&self, links: &[Uuid]) -> Self {
+        Self {
+            text_match_links: Some(links.to_vec()),
+            ..self.clone()
+        }
     }
 
     /// The team links that contributed to CRM when this resolution ran.
@@ -81,6 +100,7 @@ impl ResolvedFilters {
                 .collect(),
             team_link_ids: self.team_link_ids.clone(),
             contributing_link_ids: self.contributing_link_ids.clone(),
+            text_match_links: self.text_match_links.clone(),
         }
     }
 
@@ -101,6 +121,7 @@ impl ResolvedFilters {
             contact_links: HashMap::new(),
             team_link_ids: None,
             contributing_link_ids: None,
+            text_match_links: None,
         }
     }
 
@@ -289,5 +310,6 @@ pub(super) async fn resolve_filters(
         contact_links,
         team_link_ids,
         contributing_link_ids,
+        text_match_links: None,
     })
 }

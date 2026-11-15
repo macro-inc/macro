@@ -1108,7 +1108,7 @@ where
         let entity_id = parse_id(input.entity_id, "entityId")?;
         let entity = input
             .entity_type
-            .into_model()
+            .into_model()?
             .with_entity_string(entity_id.to_string());
         resolve_soup_entity::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(ctx, self.user_id.clone(), entity)
             .await

@@ -79,9 +79,18 @@ tools/HTTP/GraphQL surfaces over them.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
-  column. Don't pass one to `referencing_rows`: its SQL reads primary cells as
-  reference arrays. Don't add `ON DELETE` actions touching the pipeline row: they
-  wait on the row lock the write guard holds, and the request hangs.
+  column; `referencing_rows` reads tracked pipelines only. Don't add `ON DELETE`
+  actions touching the pipeline row: they wait on the row lock the write guard
+  holds, and the request hangs.
+- The Pipelines card (`entries`) starts from the records: `referencing_rows`
+  reaches primary cells through `idx_ep_database_row_references_gin` (keep its
+  literal `entity_type`/`type` predicates, the guarded uuid cast, and the
+  materialized CTE that keeps a generic plan from probing once per pipeline),
+  grants are read for the holding pipelines only (`get_pipelines_access`, fenced
+  per pipeline), and one `lock_live_many` guard
+  covers every pipeline while `storage_tables_rows` reads their columns and
+  cells. Never start it from the viewer's pipelines or lock them one at a time:
+  that cost grew with every pipeline the viewer can see.
 - Pipeline board-position reads require a pipeline View receipt, hold its live
   lifecycle guard, and scope the view to its backing table/database through
   `DatabaseStorage::storage_view_positions`.
