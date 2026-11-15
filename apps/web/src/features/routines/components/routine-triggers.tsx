@@ -620,12 +620,17 @@ function ScopeToken(
   );
 }
 
-/** "in All repositories": a GitHub trigger's selector and payload tests, in its panel. */
-function GithubToken(
+/**
+ * "in All repositories" or "at its URL": a GitHub or webhook trigger's
+ * settings and payload tests, in its panel.
+ */
+function SettingsToken(
   props: EventSlots & {
     trigger: EventTriggerDraft;
     onSave: (trigger: RoutineTriggerDraft) => void;
     onRemove: () => void;
+    /** What the token reads; the event's label by default. */
+    text?: string;
   }
 ) {
   const [open, setOpen] = createSignal(false);
@@ -646,7 +651,7 @@ function GithubToken(
         content: (
           <>
             <span class="min-w-0 truncate">
-              {props.renderEventLabel(trigger)}
+              {props.text ?? props.renderEventLabel(trigger)}
             </span>
             <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
           </>
@@ -872,7 +877,17 @@ function TriggerSentence(
                     <Match when={eventScopeKind(value()) === 'GITHUB'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
                         <span class="text-sm text-ink-muted">in</span>
-                        <GithubToken {...props} trigger={value()} />
+                        <SettingsToken {...props} trigger={value()} />
+                      </span>
+                    </Match>
+                    <Match when={eventScopeKind(value()) === 'WEBHOOK'}>
+                      <span class="flex min-w-0 max-w-full items-center gap-2">
+                        <span class="text-sm text-ink-muted">at</span>
+                        <SettingsToken
+                          {...props}
+                          trigger={value()}
+                          text="its URL"
+                        />
                       </span>
                     </Match>
                   </Switch>

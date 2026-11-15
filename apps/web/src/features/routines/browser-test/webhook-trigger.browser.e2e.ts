@@ -57,4 +57,10 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
     page.getByRole('button', { name: 'Change Webhook received trigger' })
   ).toBeVisible();
   await shot(page, 'list');
+
+  // The saved trigger reopens its panel, where its URL is replaced or deleted.
+  await page.getByRole('button', { name: 'URL for Webhook received' }).click();
+  const saved = page.getByRole('dialog', { name: 'Edit trigger' });
+  await expect(saved.getByText('Webhook URL', { exact: true })).toBeVisible();
+  await expect(saved.getByText('Only when the JSON body')).toBeVisible();
 });

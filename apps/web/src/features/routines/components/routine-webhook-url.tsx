@@ -2,7 +2,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button, CopyButton, Input } from '@ui';
-import { createRenderEffect, Match, on, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createRenderEffect,
+  Match,
+  on,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { RoutineWebhookState } from '../core/webhook';
 
 async function copy(text: string) {
@@ -52,13 +59,13 @@ export function RoutineWebhookUrl(props: {
   /** Undefined until the routine is saved. */
   state: RoutineWebhookState | undefined;
 }) {
+  // Loads once per saved panel: the state changes with every read, but
+  // a reload would drop the secret shown since the last one.
+  const saved = createMemo(() => props.state !== undefined);
   createRenderEffect(
-    on(
-      () => props.state !== undefined,
-      (saved) => {
-        if (saved) props.state?.load();
-      }
-    )
+    on(saved, (saved) => {
+      if (saved) props.state?.load();
+    })
   );
   return (
     <div class="grid min-w-0 gap-2">
