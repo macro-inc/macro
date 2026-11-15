@@ -360,7 +360,11 @@ describe('violations', () => {
     expect(
       violations(
         input({
-          proofs: new Map([['F-001', 'a break']]),
+          proofs: new Map([
+            ['F-001', 'a break'],
+            ['AL-001', 'a break of one way in'],
+            ['AL-008', 'a break of a row that is gone'],
+          ]),
           waivers: [
             { id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' },
             { id: 'AL-009', on: '-', kind: 'backlog', reason: 'later' },
@@ -369,6 +373,7 @@ describe('violations', () => {
       )
     ).toEqual([
       'waivers.tsv: AL-009 is not a row, or not a function with a UI on that provider',
+      'proofs.tsv: AL-008 is not a row of the manifest',
       'F-002 is not proved: proofs.tsv names no break that makes its tests fail',
     ]);
   });

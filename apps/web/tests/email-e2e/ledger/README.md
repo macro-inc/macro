@@ -167,6 +167,13 @@ with `EMAIL_E2E_DIST=<bundle> EMAIL_E2E_BREAK=F-073`: they must fail at the
 function's own assertion, and pass on the clean bundle. Record the function
 and the break, in words, in `proofs.tsv`. The breaks are never committed.
 
+A way into a function (an action row: a menu entry, a shortcut, a button) is
+proved the same way, with the row's id as the name of the guard, in the
+wiring of that way in rather than in what it calls: the point is that it can
+break alone. One break for each distinct handler or wiring is enough; its
+line in `proofs.tsv` is under the row it was run for and names the other
+rows that go through the same wiring. Rows need no proof to pass the check.
+
 A function whose work is the service's (the sync functions) is proved by a
 break in the service code instead: the same kind of guard on the process
 environment variable `EMAIL_E2E_BREAK`, in a build of the services kept

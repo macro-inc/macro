@@ -55,10 +55,12 @@ export const FUNCTIONS: readonly EmailFunction[] = parseFunctions(
 );
 
 const PROOF_HEAD = 'id\tbreak';
+const PROOF_ID = /^(F-\d{3}|(AL|AC|AX|STL|STC|STX)-\d+)$/;
 
 /**
  * `../proofs.tsv`: the functions whose tests were shown to catch a
- * regression, each with the break that was put into the product for it.
+ * regression, each with the break that was put into the product for it,
+ * and the rows (a way into a function) shown the same way.
  */
 export function parseProofs(table: string): Map<string, string> {
   const [head, ...lines] = table.split('\n').filter((line) => line !== '');
@@ -67,7 +69,7 @@ export function parseProofs(table: string): Map<string, string> {
   const proofs = new Map<string, string>();
   for (const line of lines) {
     const [id, broke, ...more] = line.split('\t');
-    if (!/^F-\d{3}$/.test(id) || !broke || more.length > 0)
+    if (!PROOF_ID.test(id) || !broke || more.length > 0)
       throw new Error(`proofs.tsv: cannot read "${line}"`);
     if (proofs.has(id)) throw new Error(`proofs.tsv: ${id} is listed twice`);
     proofs.set(id, broke);

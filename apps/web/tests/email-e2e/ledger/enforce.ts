@@ -90,6 +90,11 @@ export function violations(input: Enforced): string[] {
     else if (waived.has(item))
       found.push(`${item} is both waived and in full-stack-only.tsv`);
   }
+  const rows = new Set(input.rows);
+  for (const id of input.proofs.keys()) {
+    if (!id.startsWith('F-') && !rows.has(id))
+      found.push(`proofs.tsv: ${id} is not a row of the manifest`);
+  }
   for (const fn of withUi) {
     // A function waived on a provider is covered in part at most, and is
     // not counted as proved.
