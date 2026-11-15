@@ -204,7 +204,8 @@ the code that shows the state (its text changed, or its rendering switched
 off), under the row's id.
 
 Every row that is not waived needs its own line in `proofs.tsv`, and the
-check fails without it. A row that goes through another row's wiring or
+check fails without it; the one exception is a row on
+`proofs-pending.tsv`, until its proof is run. A row that goes through another row's wiring or
 render site is run against that row's break, and its line says which break
 it shares and why the row goes through it. A test that passes with its row
 broken is weak: give it an assertion on what the row alone does or shows

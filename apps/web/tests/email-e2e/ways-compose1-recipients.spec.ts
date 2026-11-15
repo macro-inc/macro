@@ -59,6 +59,8 @@ for (const provider of PROVIDERS) {
       // takes the highlight away again, and Tab then takes nothing: the
       // two keys are pressed again until the chip is there.
       await expect(async () => {
+        // A chip that showed late is not to be taken off again.
+        if (await chip(page, 'grace@example.com').isVisible()) return;
         await to.press('ArrowDown');
         await expect(grace).toHaveAttribute('data-highlighted', {
           timeout: 3_000,

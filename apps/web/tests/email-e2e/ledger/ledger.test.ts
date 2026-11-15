@@ -13,6 +13,7 @@ import {
   restMatcher,
 } from './ledger';
 import {
+  PROOFS_PENDING,
   parseFullStackOnly,
   parseFunctions,
   parseProofs,
@@ -421,6 +422,14 @@ describe('violations', () => {
     expect(violations(input({ proofsPending: ['STL-001'] }))).toEqual([
       'STL-001 is proved: remove it from proofs-pending.tsv',
     ]);
+  });
+});
+
+describe('proofs-pending.tsv', () => {
+  // Lower the number as rows are proved. Never raise it: a new row comes
+  // with its proof.
+  it('does not grow', () => {
+    expect(PROOFS_PENDING.length).toBeLessThanOrEqual(52);
   });
 });
 

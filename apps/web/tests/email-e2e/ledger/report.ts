@@ -189,7 +189,7 @@ const WAIVER_KINDS: Record<Waiver['kind'], string> = {
 };
 
 const ENFORCED =
-  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv (proofs-pending.tsv lists the rows of the full-stack tier whose proof still waits); when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
 
 function waiverTable(): Table {
   return {
@@ -281,16 +281,19 @@ const KINDS = Object.keys(WAIVER_KINDS) as Waiver['kind'][];
 function provedTable(ledger: Ledger): Table {
   const ft = functionTotals(ledger.functions);
   // Each function that is not covered is counted once: under the kind of
-  // its own waiver, else of the waiver of one of its rows, else as not waived.
+  // its own waiver; else, when every way to do it is waived, of the waiver
+  // of one of its rows; else as not waived.
   const rowWaivers = new Map(ledger.rows.map((row) => [row.id, row.waiver]));
   const uncovered = ledger.functions
     .filter((fn) => fn.status !== 'backend' && fn.status !== 'covered')
     .map(
       (fn) =>
         FUNCTION_WAIVERS.get(fn.id)?.kind ??
-        [...fn.variants, ...fn.states]
-          .map((id) => rowWaivers.get(id))
-          .find((kind) => kind !== undefined)
+        (fn.status === 'deferred' || fn.status === 'waived'
+          ? [...fn.variants, ...fn.states]
+              .map((id) => rowWaivers.get(id))
+              .find((kind) => kind !== undefined)
+          : undefined)
     );
   const waivedFunctions = (kind: Waiver['kind']) =>
     uncovered.filter((each) => each === kind).length;
@@ -383,7 +386,7 @@ function render(
   const rowsLine = `${rt.total} rows (the ways to do each function, and what the app shows): ${rt.covered} have a passing test, ${rt.proved} of them proved by a break that made the test fail at the row's own assertion and ${rt.covered - rt.proved} not proved; ${rowsUntested.filter((row) => row.waiver).length} are waived (${KINDS.map((kind) => `${rowsUntested.filter((row) => row.waiver === kind).length} ${kind}`).join(', ')}) and ${rowsUntested.filter((row) => !row.waiver).length} have neither a test nor a waiver.`;
   const proved = provedTable(ledger);
   const provedNote =
-    'Tested: a passing, gating test covers it (a function on Gmail and on Outlook; a row at all). Proved: proofs.tsv names the break that was put into the product for it and made its test fail. For a function, a function with a partial test counts as not tested here; the waived columns count the functions with a line of that kind in waivers.tsv on either provider.';
+    'Tested: a passing, gating test covers it (a function on Gmail and on Outlook; a row at all). Proved: proofs.tsv names the break that was put into the product for it and made its test fail. For a function, a function with a partial test counts as not tested here; a function that is not tested is counted once, under the kind of its own line in waivers.tsv or, when every way to do it is waived, of one of its rows.';
   const operationsHeadline: Table = {
     head: OPERATIONS_HEAD,
     rows: [
