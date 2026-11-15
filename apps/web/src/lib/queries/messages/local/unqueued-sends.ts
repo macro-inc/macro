@@ -97,9 +97,14 @@ export function holdUnqueuedSendsPage(
 ): void {
   if (pageLockRequested || !locks) return;
   pageLockRequested = true;
-  globalThis.addEventListener?.('pagehide', () => {
-    pageLeaving = true;
-  });
+  // Capturing, to run before the cache host's listener fails what is in flight.
+  globalThis.addEventListener?.(
+    'pagehide',
+    () => {
+      pageLeaving = true;
+    },
+    { capture: true }
+  );
   // A page kept for back and forward navigation runs again.
   globalThis.addEventListener?.('pageshow', () => {
     pageLeaving = false;
