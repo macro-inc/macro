@@ -1,8 +1,4 @@
-import {
-  SearchBar,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
@@ -30,7 +26,6 @@ import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import {
-  canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_IDS,
   EMAIL_TAB_LABELS,
@@ -175,15 +170,11 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
   );
 }
 
-export function EmailSidebar(props: {
-  searchOpen?: boolean;
-  onSearchOpenChange?: (open: boolean) => void;
-  searchRef?: (input: HTMLInputElement) => void;
-}) {
+export function EmailSidebar() {
   const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab } = useEmailView();
+  const { state, setTab } = useEmailView();
 
   const tabIds = () =>
     (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
@@ -208,24 +199,7 @@ export function EmailSidebar(props: {
   return (
     <ViewSidebar.Root aria-label="Email navigation">
       <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header
-          searchLabel="Search email"
-          searchOpen={props.searchOpen}
-          onSearchOpenChange={props.onSearchOpenChange}
-          search={
-            canSearchEmailTab(state.tab)
-              ? () => (
-                  <SearchBar
-                    ref={props.searchRef}
-                    label="Search email"
-                    placeholder="Search email"
-                    value={state.search}
-                    onValueChange={(search) => setState('search', search)}
-                  />
-                )
-              : undefined
-          }
-        >
+        <ViewSidebar.Header>
           <div class="flex min-w-0 items-center gap-1">
             <ViewSidebar.CloseButton class="shrink-0" />
             <ViewSidebar.Title>Email</ViewSidebar.Title>

@@ -178,7 +178,7 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
     }
 
     /// Serve agent teammates' brains under `/brain/anthropic`, to agents with
-    /// `enable-agent-teammates` on.
+    /// `enable-agent-teammates` on for their creator.
     pub(super) fn with_brains(
         mut self,
         brains: Arc<dyn brain::BrainAuthenticator>,

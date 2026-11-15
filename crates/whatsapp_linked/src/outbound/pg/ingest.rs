@@ -51,6 +51,12 @@ pub(super) enum Reserve {
 /// WhatsApp reported without naming anyone.
 const GROUP_PERSON_NAMESPACE: Uuid = Uuid::from_u128(0x2f7c_9a41_5d0e_4b83_9c16_7e2a_b04d_51f8);
 
+/// The chat's stand-in person: the one who writes as the chat's remote id,
+/// the group itself or a direct chat's other person. It has no alias rows.
+pub(super) fn chat_stand_in(chat: Uuid) -> Uuid {
+    Uuid::new_v5(&GROUP_PERSON_NAMESPACE, chat.as_bytes())
+}
+
 /// How far before adoption or consent a message may be stamped and still be
 /// imported. WhatsApp stamps messages in whole seconds by its own clock, which
 /// can differ from ours; comparing exactly drops messages sent in the same
@@ -127,7 +133,7 @@ pub(super) async fn reserve_in(
         aliases.extend(sender.alternate_jid.clone());
     }
     let people = if group_itself {
-        vec![Uuid::new_v5(&GROUP_PERSON_NAMESPACE, binding.id.as_bytes())]
+        vec![chat_stand_in(binding.id)]
     } else {
         sqlx::query_scalar!(
             "SELECT DISTINCT person_id FROM whatsapp_identity_alias WHERE chat_id = $1 AND jid = ANY($2)",
@@ -181,6 +187,19 @@ pub(super) async fn reserve_in(
         macro_user = stored.macro_user,
     )
     .in_scope(|| {});
+    // A new person's picture is checked once; Macro users show their Macro
+    // avatar. Phones key people by LID, so ask by LID when one is known.
+    // A direct chat's other person is already tracked by the chat's
+    // `remote_id` from adoption.
+    let direct_peer =
+        binding.kind == ExternalChatKind::Direct && aliases.contains(&binding.remote_id);
+    if stored.created && !stored.macro_user && !group_itself && !direct_peer {
+        let preferred = aliases
+            .iter()
+            .find(|jid| jid.ends_with("@lid"))
+            .unwrap_or(&sender.jid);
+        super::pictures::track_person_in(tx, &binding.user_id, preferred, &aliases).await?;
+    }
     for alias in &aliases {
         sqlx::query!(
             r#"INSERT INTO whatsapp_identity_alias (chat_id, jid, person_id, evidence_account_id, verified_at)

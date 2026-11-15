@@ -580,7 +580,7 @@ export function useEmailDataSource(
   const hasMore = () => {
     if (!filtersReady()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
-    // A search the service has not run (too short, or still debouncing) lists
+    // A search the service has not run (still debouncing) lists
     // no inbox rows, so the inbox's next page is not this list's next page.
     if (search.isSearching()) return false;
     return !isListPending() && query.hasNextPage;

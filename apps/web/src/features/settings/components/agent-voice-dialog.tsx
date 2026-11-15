@@ -11,6 +11,7 @@ import {
 import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
+import { currentVoice } from '../core/voices';
 import { useVoicePickerSource, VoicePicker } from './voice-picker';
 
 function AgentVoiceSettings(props: {
@@ -30,7 +31,8 @@ function AgentVoiceSettings(props: {
   const save = useSetAgentVoiceMutation();
   // A failed save keeps the admin's pick for the retry.
   const [chosen, setChosen] = createSignal<string>();
-  const saved = () => (current.isSuccess ? current.data?.model : undefined);
+  const saved = () =>
+    current.isSuccess ? currentVoice(current.data) : undefined;
   const value = () => chosen() ?? saved();
   const canSave = () =>
     !!value() && value() !== saved() && current.isSuccess && !save.isPending;
