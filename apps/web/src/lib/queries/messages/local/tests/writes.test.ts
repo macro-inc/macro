@@ -14,7 +14,7 @@ import {
   type OperationResult,
   type OperationResultSource,
 } from '@urql/core';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapChannelMessage } from '../map';
 import { unplacedSortKey } from '../sort-key';
 import {
@@ -25,6 +25,17 @@ import {
   sendChannelMessage,
 } from '../writes';
 import { CHANNEL_ID, fakeHost, graphqlMessage } from './fixtures';
+
+const { pageIsLeaving } = vi.hoisted(() => ({
+  pageIsLeaving: vi.fn(() => false),
+}));
+vi.mock('../unqueued-sends', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../unqueued-sends')>()),
+  pageIsLeaving,
+}));
+afterEach(() => {
+  pageIsLeaving.mockReturnValue(false);
+});
 
 const NOW = new Date('2026-11-01T10:00:07.000Z');
 const SENDER = 'macro|sender@example.test';
@@ -350,6 +361,35 @@ describe('queued channel writes', () => {
     expect((failure as ThrownResultError).errors[0].code).toBe(
       'SERVICE_UNAVAILABLE'
     );
+  });
+
+  it('keeps a send pending when it fails because the page is being left', async () => {
+    const { client } = fakeClient(() => ({
+      error: refused('SERVICE_UNAVAILABLE'),
+      disposition: { kind: 'permanently-failed' },
+    }));
+    const send = () =>
+      sendChannelMessage(
+        writeHost().host,
+        {
+          channelId: CHANNEL_ID,
+          id: graphqlMessage(7).id,
+          senderId: SENDER,
+          message: { content: 'hello' },
+        },
+        { client, now: () => NOW }
+      );
+    await expect(send()).rejects.toBeInstanceOf(ThrownResultError);
+
+    pageIsLeaving.mockReturnValue(true);
+    const outcome = await Promise.race([
+      send().then(
+        () => 'settled',
+        () => 'settled'
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 20)),
+    ]);
+    expect(outcome).toBe('pending');
   });
 
   it('patches only what an edit, a delete and a reaction change', async () => {

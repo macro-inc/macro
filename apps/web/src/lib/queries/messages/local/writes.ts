@@ -31,7 +31,7 @@ import { ResultAsync } from 'neverthrow';
 import { mapChannelMessage } from './map';
 import { CHANNEL_MESSAGE_TYPENAME, unplacedSortKey } from './sort-key';
 import { loadChannelMessage } from './thread';
-import { noteUnqueuedSend } from './unqueued-sends';
+import { noteUnqueuedSend, pageIsLeaving } from './unqueued-sends';
 
 /**
  * Channel message hooks run their `mutationFn` while offline when the device
@@ -319,40 +319,56 @@ export function sendChannelMessage(
   const predicted = predictedMessage(send, createdAt);
   // Until the queue holds it, a reload would lose a message already shown.
   const note = noteUnqueuedSend(send, createdAt);
-  return queuedWrite(host, deps, {
-    operation: 'channel.write.send',
-    channelId: send.channelId,
-    messageId: send.id,
-    predicted,
-    run: async (client) => {
-      try {
-        return await executeOptimisticMutation(
-          client,
-          SendChannelMessageDocument,
-          {
-            input: {
-              channelId: send.channelId,
-              id: send.id,
-              content: send.message.content,
-              threadId: send.message.thread_id ?? null,
-              mentions: (send.message.mentions ?? []).map(mentionInput),
-              attachments: (send.message.attachments ?? []).map(
-                attachmentInput
-              ),
-              nonce: send.id,
+  return unlessPageLeft(
+    queuedWrite(host, deps, {
+      operation: 'channel.write.send',
+      channelId: send.channelId,
+      messageId: send.id,
+      predicted,
+      run: async (client) => {
+        try {
+          return await executeOptimisticMutation(
+            client,
+            SendChannelMessageDocument,
+            {
+              input: {
+                channelId: send.channelId,
+                id: send.id,
+                content: send.message.content,
+                threadId: send.message.thread_id ?? null,
+                mentions: (send.message.mentions ?? []).map(mentionInput),
+                attachments: (send.message.attachments ?? []).map(
+                  attachmentInput
+                ),
+                nonce: send.id,
+              },
             },
-          },
-          (predicted
-            ? { sendChannelMessage: predicted }
-            : {}) as OptimisticResponse<SendChannelMessageMutation>,
-          { uuid: send.id, onEnqueued: note.stored }
-        ).toPromise();
-      } finally {
-        note.ended();
-      }
-    },
-    written: (data) => data.sendChannelMessage,
-  });
+            (predicted
+              ? { sendChannelMessage: predicted }
+              : {}) as OptimisticResponse<SendChannelMessageMutation>,
+            { uuid: send.id, onEnqueued: note.stored }
+          ).toPromise();
+        } finally {
+          note.ended();
+        }
+      },
+      written: (data) => data.sendChannelMessage,
+    })
+  );
+}
+
+/**
+ * A send that fails because its page is being left stays pending: the next
+ * page sends what was noted, so failing here would take the message off the
+ * screen and put its text back in the composer, to be sent a second time.
+ */
+async function unlessPageLeft(write: Promise<Message>): Promise<Message> {
+  try {
+    return await write;
+  } catch (error) {
+    if (pageIsLeaving()) return new Promise<never>(() => {});
+    throw error;
+  }
 }
 
 /** Edits a message's body, mentions and attachments through the queue. */

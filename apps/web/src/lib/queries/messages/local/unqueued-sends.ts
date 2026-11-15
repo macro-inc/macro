@@ -84,6 +84,30 @@ async function holdForPageLifetime(): Promise<void> {
 }
 
 let pageLockRequested = false;
+let pageLeaving = false;
+
+/**
+ * Whether this page is being left. The cache host fails its requests in
+ * flight then, which a send must not take for the queue refusing it.
+ */
+export function pageIsLeaving(): boolean {
+  return pageLeaving;
+}
+
+function watchPageLeaving(): void {
+  if (typeof addEventListener !== 'function') return;
+  // Capture, so this runs before the cache host fails its requests.
+  addEventListener(
+    'pagehide',
+    () => {
+      pageLeaving = true;
+    },
+    { capture: true }
+  );
+  addEventListener('pageshow', () => {
+    pageLeaving = false;
+  });
+}
 
 /** Marks this page alive for as long as it runs. Call when the app starts. */
 export function holdUnqueuedSendsPage(
@@ -91,6 +115,7 @@ export function holdUnqueuedSendsPage(
 ): void {
   if (pageLockRequested || !locks) return;
   pageLockRequested = true;
+  watchPageLeaving();
   fireAndForget(
     locks.request(pageLockName(PAGE_ID), holdForPageLifetime),
     'channel-local-sync'
