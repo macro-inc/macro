@@ -5,6 +5,11 @@
 -- `secret_hash` the SHA-256 of its random 256-bit secret, which is never
 -- stored. Rotating replaces both; removing the trigger or deleting the
 -- routine deletes the row, which revokes the URL.
+--
+-- Every statement here locks scheduled_action (the foreign key, then the
+-- check), so none waits long behind it.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE scheduled_action_webhook (
     action_id UUID PRIMARY KEY REFERENCES scheduled_action (id) ON DELETE CASCADE,
     hook_id UUID NOT NULL UNIQUE,
@@ -15,8 +20,6 @@ CREATE TABLE scheduled_action_webhook (
 
 -- A routine's trigger list may now hold a webhook trigger. NOT VALID so no
 -- scan runs under the ACCESS EXCLUSIVE lock; the next migration validates it.
-SET LOCAL lock_timeout = '5s';
-
 ALTER TABLE scheduled_action DROP CONSTRAINT scheduled_action_supported_triggers_check;
 ALTER TABLE scheduled_action
 ADD CONSTRAINT scheduled_action_supported_triggers_check CHECK (

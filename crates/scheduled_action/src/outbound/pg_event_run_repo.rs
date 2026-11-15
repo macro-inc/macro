@@ -285,17 +285,22 @@ impl EventRunRepository for PgEventRunRepo {
         let rows = sqlx::query_as!(
             PendingRow,
             r#"
-            SELECT r.action_id, r.event_id, r.configuration_revision, r.event_context, r.admitted_at
-            FROM scheduled_action a
-            CROSS JOIN LATERAL (
-                SELECT action_id, event_id, configuration_revision, event_context, admitted_at, admission_order
+            SELECT r.action_id AS "action_id!", r.event_id AS "event_id!",
+                r.configuration_revision AS "configuration_revision!",
+                r.event_context AS "event_context!", r.admitted_at AS "admitted_at!"
+            -- Each routine's oldest pending run, read from the pending runs
+            -- (few) rather than from every event or webhook routine (many).
+            FROM (
+                SELECT DISTINCT ON (action_id)
+                    action_id, event_id, configuration_revision, event_context, admitted_at, admission_order
                 FROM scheduled_action_event_run
-                WHERE action_id = a.id AND state = 'pending'
-                ORDER BY admission_order LIMIT 1
+                WHERE state = 'pending'
+                ORDER BY action_id, admission_order
             ) r
+            JOIN scheduled_action a ON a.id = r.action_id
+            LEFT JOIN scheduled_action_webhook w ON w.action_id = a.id
             WHERE a.enabled
-              AND (a.event_filters IS NOT NULL
-                OR EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id))
+              AND (a.event_filters IS NOT NULL OR w.action_id IS NOT NULL)
               AND a.configuration_revision = r.configuration_revision
               AND (a.claimed IS NULL OR a.claimed < $1)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run s WHERE s.action_id = a.id AND s.state = 'started')
@@ -650,10 +655,10 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             SELECT r.action_id, r.event_id FROM scheduled_action_event_run r
             JOIN scheduled_action a ON a.id = r.action_id
+            LEFT JOIN scheduled_action_webhook w ON w.action_id = a.id
             WHERE (r.state = 'started' AND r.deadline <= $1)
                OR (r.state = 'pending' AND (NOT a.enabled OR a.configuration_revision <> r.configuration_revision
-                   OR (a.event_filters IS NULL
-                       AND NOT EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id))))
+                   OR (a.event_filters IS NULL AND w.action_id IS NULL)))
             ORDER BY r.admission_order LIMIT $2 FOR UPDATE OF a SKIP LOCKED
             "#,
             now,
