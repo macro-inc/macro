@@ -1,4 +1,6 @@
+import { join } from 'node:path';
 import { defineConfig } from '@playwright/test';
+import { runDirectory } from './harness/stack';
 
 // The real web app against a whole running stack, with several people signed
 // in. `just apps/web/test-channels-e2e <instance>` runs it against a local
@@ -6,7 +8,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
-  outputDir: './test-results',
+  outputDir: join(runDirectory(), 'test-results'),
   timeout: 90_000,
   expect: { timeout: 15_000 },
   // Tests share the stack and its people but never a channel: each makes its
@@ -21,8 +23,7 @@ export default defineConfig({
     [
       'json',
       {
-        outputFile:
-          process.env.CHANNELS_E2E_REPORT ?? './.run/playwright-report.json',
+        outputFile: join(runDirectory(), 'playwright-report.json'),
       },
     ],
   ],

@@ -19,9 +19,14 @@ export function stackUrl(): string {
   return url.replace(/\/+$/, '');
 }
 
-/** Where this run keeps its sign-ins and what it learned about its people. */
+/**
+ * Where this run keeps its sign-ins, what it learned about its people, and
+ * its results. Two runs against different stacks at once need a directory
+ * each: set `CHANNELS_E2E_RUN_DIR`.
+ */
 export function runDirectory(): string {
-  const directory = join(here, '..', '.run');
+  const directory =
+    process.env.CHANNELS_E2E_RUN_DIR ?? join(here, '..', '.run');
   mkdirSync(directory, { recursive: true });
   return directory;
 }
