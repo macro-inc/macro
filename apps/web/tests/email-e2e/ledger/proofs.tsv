@@ -1,4 +1,73 @@
 id	break
+AC-002	a comma or semicolon typed after an address does not turn it into a recipient
+AC-004	pressing Tab in the recipient suggestions does not add the highlighted person
+AC-006	a recipient chip's X does not remove the recipient
+AC-008	pressing PageDown, or ArrowDown on the last suggestion, does not bring the next people
+AC-009	pressing Escape in the recipient suggestions clears the typed text instead of only closing them
+AC-013	on a phone, tapping a new email's Cc/Bcc, From row does not unfold the Cc, Bcc and From fields
+AC-015	pressing Shift+Cmd+O does not move the cursor back to To
+AC-016	pressing Shift+Cmd+S does not move the cursor to the Subject
+AC-017	pressing Shift+Cmd+M does not move the cursor into the message
+AC-019	pressing Escape in a new email's Subject does not take the cursor out of it
+AC-021	the Retry inbox change of a failed inbox switch does not change the inbox the email is sent from
+AC-023	mentioning a person in a new email does not add them to Cc
+AC-025	on a phone, a file picked from a new email's header Attach is not attached
+AC-027	a picture or file pasted into a new email is not added to it
+AC-030	clicking an attached picture's chip in the composer does not open the picture
+AC-041	the floating format menu's Bold and other text styles do not change the selected text
+AC-043	in a reply, a colon offers no emoji, [] makes no checkbox and ``` makes no code block
+AC-045	a preset of the send-time picker, such as Tomorrow, does not set the send time
+AC-047	a custom date and time picked in the send-time picker do not set the send time
+AC-048	the schedule bar's Clear send time keeps the chosen send time
+AC-051	the schedule bar's Cancel change keeps the newly picked send time of a scheduled email
+AC-054	the schedule bar's Check status does not refresh the state of an unconfirmed delivery
+AC-055	the Email scheduled notice's Undo does not take the schedule back
+AC-056	the View message of the Email scheduled and Email rescheduled notices does not open the message
+AC-058	on a phone, the header's Send does not send a new email
+AC-061	on a phone, Save Draft in the Draft options sheet does not leave the composer
+AC-062	on a phone, Delete Draft in the Draft options sheet does not delete the draft
+AC-066	the Draft could not be synced banner's Keep editing does not save the draft again
+AC-072	a file added while offline is attached anyway after the You're offline notice
+AC-073	clicking a reply's one-line recipient summary does not open its recipient fields
+AC-074	the Cc button of a reply's open recipient fields does not show the Cc field
+AC-075	the Bcc button of a reply's open recipient fields does not show the Bcc field
+AC-076	on a phone, the caret beside a reply's To does not show or hide Cc and Bcc
+AC-078	a recipient chip dragged between the rows of a reply does not move
+AC-079	an inbox picked in a reply's From menu does not become the sender
+AC-083	a document mentioned in a reply is not made viewable through its link
+AC-084	a file picked from a reply's paperclip, or its phone header's Attach, is not attached
+AC-085	a file dropped on a reply is not attached
+AC-086	a file pasted into a reply is not attached
+AC-096	on a phone, going back from a written reply opens no Draft options sheet
+AC-097	a reply's Create event button opens no event
+AC-098	a send time picked from a reply's clock does not schedule the reply
+AC-099	the Cancel and Restore draft of the bar under a scheduled reply do not take the schedule back
+AC-100	scrolling inside a long reply does not make its box taller
+AC-103	a reply's Don't include signature keeps the signature
+AC-105	the Queued email sends panel's Restore draft does not bring back a send another device cancelled
+AC-106	the Queued email sends panel's Check status does not resume a send held until its inbox is reconnected
+AC-108	the Queued email sends panel's Cancel and restore does not cancel a send queued on another device
+AC-109	the Queued email sends panel's Check status does not refresh a send queued on another device
+AC-300	pressing E in the Create menu opens no new email
+AC-301	pressing Shift+E in the Create menu opens no new email in a split
+AC-302	pressing Shift+Cmd+C in a new email does not show or focus the Cc field
+AC-303	pressing Shift+Cmd+B in a new email does not show or focus the Bcc field
+AC-304	a file picked after pressing Shift+Cmd+U in a new email is not attached
+AC-305	pressing Shift+Cmd+period, Shift+Cmd+comma or Shift+Cmd+D does not discard a new email
+AC-306	pressing Cmd+Enter does not send a new email
+AC-307	pressing b in a new email, outside the text, opens no event
+AC-308	pressing Shift+Cmd+C in a reply does not move the cursor to the Cc field
+AC-309	pressing Shift+Cmd+B in a reply does not move the cursor to the Bcc field
+AC-310	a file picked after pressing Shift+Cmd+U in a reply is not attached
+AC-312	pressing Shift+Cmd+period, Shift+Cmd+comma or Shift+Cmd+D does not discard a reply
+AC-314	on a phone, tapping a new email's folded Subject does not open it for typing
+AC-315	on a phone, a tap beside the Draft options sheet does not close it
+AC-316	on a phone, Back on an untouched new email does not close the composer
+AC-317	the Next options button under the recipient suggestions does not bring the next people
+AC-320	clicking a cloud attachment's chip in the composer does not open the file's page
+AC-400	the Draft could not be synced banner's Retry discard does not throw the draft away
+AC-402	the Reload draft offered after Use mailbox version does not load the mailbox's copy
+AC-403	pressing Ctrl+J in the open send-time picker does not move down its options
 AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open
 AL-004	the phone's tab pills do not switch tabs
 AL-005	pressing g and a letter opens no tab
@@ -54,9 +123,18 @@ AL-118	Reload saved view after a refused save reloads nothing
 AL-119	Return to Email on a missing saved view goes nowhere
 AL-120	Retry loading views asks for nothing
 AL-121	the phone's views pill opens no drawer
+AL-122	the open thread's Back does not return to the list
 AL-125	the open thread's Previous item and Next item arrows do not move to another thread
 AL-126	the open thread's envelope button does not mark it unread
 AL-127	the open thread's check button does not mark it done
+AL-134	pressing Enter in an open thread with no message focused does not reply to all
+AL-135	pressing f in an open thread does not forward the message
+AL-138	pressing Shift+E in an open done thread does not bring it back to the inbox
+AL-143	pressing Shift+O in an open thread does not open its hidden messages
+AL-144	pressing s in an open thread does not star or unstar it
+AL-145	pressing # in an open thread does not move it to Trash
+AL-146	pressing h in an open thread opens no reminder form
+AL-147	picking Block sender from Cmd+K in an open thread does not block the sender
 AL-149	the title menu's Share opens no Share dialog
 AL-150	the title menu's Mark Done does not mark the thread done
 AL-151	the title menu's Mark Unread does not mark the thread unread
@@ -68,7 +146,16 @@ AL-158	the title menu's Sender to Signal does not move the sender to Signal
 AL-159	the title menu's Sender to Noise does not move the sender to Noise
 AL-160	the title menu's Block Sender does not block the sender
 AL-161	the title menu's Remind me opens no reminder form
+AL-165	a message header's caret does not show or hide who the message is from and to in full
+AL-171	the Reply... box under a thread opens no reply
+AL-173	on a phone, the dock's Next email arrow does not move to the next email
+AL-174	on a phone, the dock's check does not mark the thread done or not done
+AL-175	on a phone, tapping the Draft row under a message does not open the draft reply
+AL-182	the invitation card's Connect calendar starts no calendar connection
+AL-184	the invitation card's Retry calendar does not load the calendar again
 AL-189	the Remind me form's Cancel leaves it open
+AL-190	a confirmed Keep Macro version or Use mailbox version does not settle a conflicting draft
+AL-191	the Retry under Unable to load this email does not load the thread again
 AL-196	the open thread's Copy Share Link copies nothing
 AL-400	pressing g then e from another view does not open Email
 AL-402	pressing Cmd+K with nothing selected opens no command menu
@@ -79,6 +166,15 @@ AL-406	the toolbar's Restore and Not spam do not bring the selected threads back
 AL-407	clearing from the selection toolbar leaves the rows selected
 AL-411	a right-click on a row opens no menu
 AL-413	pressing Enter or clicking the row the reading pane shows does not move the focus into the pane
+AL-502	scrolling to the top of a long thread does not load its older messages
+AL-504	pressing Enter on the hidden messages chip does not show the hidden messages
+AL-506	pressing Enter on a collapsed message does not open it
+AL-508	clicking a calendar file's chip does not download the file
+AL-510	the event preview's Download .ics downloads nothing
+AL-513	a link in an invitation's description does not open
+AL-514	an invitation's View original email does not show the original message
+AL-515	on a phone, tapping the subject in a thread's header opens no menu of actions
+AL-516	on a phone, the header's Info button opens no item details
 AL-601	an action picked in the command menu does not run (the same wiring serves AL-608, AL-611)
 AL-605	a long press on a row on a phone opens no actions drawer
 AL-612	pressing Cmd+S in an open thread opens no Share dialog
@@ -94,6 +190,7 @@ AL-703	Create view in the empty phone drawer opens nothing
 AL-704	a tag picked in the view builder is not added to the view
 AL-705	Advanced settings in the view builder shows nothing
 AL-706	Cancel in the view builder leaves it open
+AL-910	opening a thread from its address loads no thread
 AX-008	the Cancel button of Turn off calendar leaves the dialog open
 AX-012	the Cancel button of Remove inbox leaves the dialog open
 AX-015	the Manage notifications button does not open the notification settings
@@ -106,6 +203,10 @@ AX-033	the Back to app button under Finishing account connection goes nowhere
 AX-035	the Connect a different account button of Admin approval required closes it without offering the account chooser
 AX-041	the Try again button of the Email access required prompt closes it without opening the account chooser
 AX-044	no Try again is offered when the connected accounts fail to load during onboarding
+AX-048	picking Email in the Create menu opens no new message
+AX-051	the universal input's Connect Google starts no connection when no inbox is connected
+AX-059	clicking the mention of an email thread does not open the thread
+AX-061	the calendar setup status's Grant access, Turn on, Reconnect and Connect calendar start no connection
 AX-201	dragging a signature picture's resize handle does not change its width
 AX-202	pasting an address over selected words in the signature pastes plain text instead of making a link
 AX-203	the Cancel button of the Convert to rich text question leaves it open
@@ -118,6 +219,9 @@ AX-212	the Connect personal email button starts no account sign-in
 AX-213	the Continue button on the onboarding email steps does not move on
 AX-214	the Skip for now button on the onboarding email step does not move on
 AX-215	answering Sign out in the remove-local-drafts question keeps the user signed in
+AX-304	on a phone, the Mail page's create button opens no new message
+AX-305	picking Email as the universal input's content type does not switch it to an email
+AX-306	the universal input's email ignores the From picked, the Cc/Bcc button and the recipients typed
 F-001	the return from consent never sets up the inbox
 F-002	Outlook in the connect dialog starts nothing
 F-003	Copy admin approval link copies nothing
