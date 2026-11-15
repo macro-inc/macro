@@ -319,8 +319,7 @@ AX-310	-	needs	needs the AI service, and no test on the full-stack tier does it 
 AX-311	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-312	-	needs	needs the AI service, and no test on the full-stack tier does it yet
 AX-313	-	needs	needs the AI service, and no test on the full-stack tier does it yet
-AX-316	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
-AX-317	-	backlog	not exercised itself: another way into, or state of, F-001, F-002, covered through other rows
+AX-317	-	needs	needs the service that answers /cognition/ai-projections, which no stack of the suite runs: without it Home says the suggestions are unavailable and shows no connect button
 AX-318	-	needs	needs the search service, and no test on the full-stack tier does it yet
 AX-323	-	needs	needs the calendar service, and no test on the full-stack tier does it yet
 AX-062	-	needs	needs the notification service, and no test on the full-stack tier does it yet
