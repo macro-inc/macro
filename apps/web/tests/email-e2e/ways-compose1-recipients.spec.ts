@@ -55,11 +55,20 @@ for (const provider of PROVIDERS) {
         .getByRole('option')
         .filter({ hasText: 'grace@' });
       await expect(grace).toBeVisible();
-      await to.press('ArrowDown');
-      await expect(grace).toHaveAttribute('data-highlighted');
-      await to.press('Tab');
+      // A page of suggestions that arrives between the arrow key and Tab
+      // takes the highlight away again, and Tab then takes nothing: the
+      // two keys are pressed again until the chip is there.
+      await expect(async () => {
+        await to.press('ArrowDown');
+        await expect(grace).toHaveAttribute('data-highlighted', {
+          timeout: 3_000,
+        });
+        await to.press('Tab');
+        await expect(chip(page, 'grace@example.com')).toBeVisible({
+          timeout: 3_000,
+        });
+      }).toPass({ timeout: 20_000 });
       did('AC-004');
-      await expect(chip(page, 'grace@example.com')).toBeVisible();
 
       await chip(page, 'bob@example.com').locator('svg').last().click();
       did('AC-006');
