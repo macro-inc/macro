@@ -9199,7 +9199,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
+        "summary": "Fetch a single CRM contact by id, with its company's name and\nvisibility. Access is enforced by [`CrmContactAccessLevelExtractor`]:\nthe user must be on the team that owns the contact, and hidden\ncontacts are invisible to plain members. Admin/owner callers see\nhidden contacts so they can render the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
@@ -9219,7 +9219,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmContactResponse"
+                  "$ref": "#/components/schemas/CrmContactDetailResponse"
                 }
               }
             }
@@ -10986,6 +10986,71 @@
         }
       }
     },
+    "/crm/previews": {
+      "post": {
+        "tags": ["crm::inbound::axum_router::previews"],
+        "summary": "Title many CRM company and contact chips at once. Each record answers as\nits own read (`GET /crm/companies/{company_id}`,\n`GET /crm/contacts/{contact_id}`) would: a record the caller may not open,\nor that does not exist, is left out of the response.",
+        "operationId": "preview_crm_records",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrmPreviewsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmPreviews"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "More than 100 ids of a kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A bot or harness credential"
+          },
+          "422": {
+            "description": "An id that is not a UUID"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/settings": {
       "get": {
         "tags": ["crm::inbound::axum_router::team_settings"],
@@ -11244,7 +11309,7 @@
       },
       "post": {
         "tags": ["databases"],
-        "summary": "Create a database owned by the caller; its first table, \"Table 1\", holds a\n\"Name\" text column.",
+        "summary": "Create a database owned by the caller; its first table, \"Table 1\" unless\n`firstTable` names it, holds a \"Name\" text column.",
         "operationId": "create_database",
         "requestBody": {
           "content": {
@@ -36547,6 +36612,10 @@
         "description": "Request body for creating a database.",
         "required": ["name"],
         "properties": {
+          "firstTable": {
+            "type": ["string", "null"],
+            "description": "The first table's display name; \"Table 1\" when omitted. Name it when\nyou are about to fill a table, and build into it rather than adding a\nsecond table beside an empty \"Table 1\"."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -37558,6 +37627,31 @@
           }
         }
       },
+      "CrmCompanyPreview": {
+        "type": "object",
+        "description": "What a company chip shows: the fields the company read returns for its\ntitle, without its contacts.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The team's name override, else the primary domain's directory name."
+          },
+          "primaryDomain": {
+            "type": ["string", "null"],
+            "description": "The company's first domain, which titles a company with no name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The company's last interaction, as the company read's `updatedAt`."
+          }
+        }
+      },
       "CrmCompanyResponse": {
         "type": "object",
         "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest.",
@@ -37621,6 +37715,80 @@
             "type": "string",
             "format": "date-time",
             "description": "Most recent known interaction with this company."
+          }
+        }
+      },
+      "CrmContactCompanyResponse": {
+        "type": "object",
+        "description": "The name and visibility of a contact's company.",
+        "required": ["id", "hidden"],
+        "properties": {
+          "domain": {
+            "type": ["string", "null"],
+            "description": "The company's oldest domain, which clients show when it has no\nname."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden. Only admin/owner callers can see a\nhidden company."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company; equal to the contact's `companyId`."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The company's display name, if it has one."
+          }
+        }
+      },
+      "CrmContactDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CrmContactResponse",
+            "description": "The contact."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "company": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CrmContactCompanyResponse",
+                    "description": "The contact's company, when it has one the caller may see. Older\nservers omit it; clients then read the company itself."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A CRM contact as returned by `GET /crm/contacts/{contact_id}`: the\ncontact, with what its page shows of its company."
+      },
+      "CrmContactPreview": {
+        "type": "object",
+        "description": "What a contact chip shows.",
+        "required": ["id", "updatedAt"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The contact's primary email, which titles a contact with no name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The contact."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The contact's display name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the contact record last changed."
           }
         }
       },
@@ -37732,6 +37900,49 @@
         "type": "string",
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
+      },
+      "CrmPreviews": {
+        "type": "object",
+        "description": "The previews of the requested records the viewer may open; a record the\nviewer may not open, or that does not exist, is left out.",
+        "required": ["companies", "contacts"],
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmCompanyPreview"
+            },
+            "description": "Company previews, in no particular order."
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactPreview"
+            },
+            "description": "Contact previews, in no particular order."
+          }
+        }
+      },
+      "CrmPreviewsRequest": {
+        "type": "object",
+        "description": "The CRM records whose chips to title.",
+        "properties": {
+          "companyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Companies to preview, at most 100."
+          },
+          "contactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Contacts to preview, at most 100."
+          }
+        }
       },
       "CrmStageInput": {
         "type": "object",

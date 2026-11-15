@@ -2528,7 +2528,7 @@ export type UnifiedSearchRequest = {
      */
     match_type: MatchType;
     /**
-     * The search query string. Must be at least 3 characters.
+     * The search query string. Must not be empty; one character is enough.
      */
     query: string;
     /**
