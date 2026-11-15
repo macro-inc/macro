@@ -44,8 +44,13 @@
 //! rows ([`MAX_ROUND_WINDOW`] threads, [`MAX_SUPERSET_CAP`] superset rows),
 //! and the walks and the probes grow geometrically, so a page costs a small
 //! multiple of the cheaper of walking to its last row and reading the
-//! superset. All the page's statements read one snapshot, and each lists only
-//! threads below the previous one's, so their rows concatenate in page order.
+//! superset. The rounds have no fixed count: a superset past
+//! [`MAX_SUPERSET_CAP`] rows leaves only the walk, which goes on to the
+//! page's last row or the end of the inboxes, about what reading that
+//! superset would cost. A page never comes up short to save rounds, so it
+//! keeps the general builder's rows. All the page's statements read one
+//! snapshot, and each lists only threads below the previous one's, so their
+//! rows concatenate in page order.
 //!
 //! The address tree must be the filter's only top-level term with a message
 //! literal. Another one (a subject, or an address under `NOT`) can drop most
