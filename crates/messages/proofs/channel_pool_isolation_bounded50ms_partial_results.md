@@ -23,7 +23,7 @@ variant uses the source state identified by its label:
 
 The benchmark-only method copies preserve the ordered SQL and add only
 the measured sleep and returned duration; verify them with
-[the source-equivalence audit](check_delayed_writers.py). Requests call
+[the source-equivalence audit](check_delayed_writers.ts). Requests call
 the repository directly and have no automatic retries. Each error is
 one failed request, not a successfully retried operation.
 
