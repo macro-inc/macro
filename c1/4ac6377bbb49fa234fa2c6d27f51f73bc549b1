@@ -1,0 +1,21 @@
+docs/development/rust.md
+  s_52ea9be992ee30::t_1787be354d7843 59-63
+tooling/xtask/crates/xtask_local/src/local/telemetry.rs
+  s_52ea9be992ee30::t_948255d8b1c6e8 919-920
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c14ac6377bbb49fa234fa2c6d27f51f73bc549b1",
+  "prompts": {},
+  "sessions": {
+    "s_52ea9be992ee30": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c0cff23-826d-44db-b3f2-7c9d8015eec1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
