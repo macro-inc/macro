@@ -267,10 +267,10 @@ impl Job {
         self.record.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub(super) fn step_started(&self, label: &str) {
+    pub(super) fn step_started(&self, label: &str, lane: &'static str) {
         self.record().step_started(label);
         self.save();
-        self.with_telemetry(|telemetry| telemetry.step_started(label));
+        self.with_telemetry(|telemetry| telemetry.step_started(label, lane));
     }
 
     pub(super) fn step_failed(&self, label: &str) {

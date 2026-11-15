@@ -132,18 +132,21 @@ one line per run, step, build and container health wait, with
 `service_name="local-telemetry"` and `deployment_environment="local"`, through
 the same OTLP route as CI. Each machine reads the ingest token from Doppler
 `observability/lcl` (`LOCAL_TELEMETRY_TOKEN`) into a 0600 per-user file; keep
-that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; each line's
-`trace_id` opens the run's step waterfall in Tempo. Runs that ended before their
+that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; a run's
+`trace_id` is its `run_id` and opens its waterfall in Tempo: steps nest under the
+step they ran in, crates under the build, and every span carries `run_id`. Runs that ended before their
 events were sent are sent by the developer's next run, clamped to 30 minutes old
-like CI's, and a killed run arrives with `outcome="interrupted"`.
+like CI's, and a killed run arrives with `outcome="interrupted"`, as do the steps
+it had open, which carry only `step` and `outcome`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `host_name` (the readable machine name, only from machines with `services = true`), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
-| `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
-| `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `host_name` (the readable machine name, only from machines with `services = true` or a `machine` setting), `machine` (`host_name`, else `host`: group machines by this), `platform`, `cpus`, `memory_gb`, `cpu_model`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
+| `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps`, `bring_up` (`<start>/<run_id>/<machine>`, on bring-ups that got ready: the dashboard's run pickers list it) |
+| `step` | `step`, `seconds`, `outcome`, `offset_in_run` (seconds from the run's start to the step's), `lane` (`main` for the bring-up's own thread, whose top-level steps add up to its time to ready, or a background lane: `frontend`, `fusionauth`, `localstack`), `parent_step` (the step it ran inside, if any), plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |
-| `service` | `service`, `phase` (`infra`, `app`), `health`, `seconds_to_healthy` (start to first passing probe), `restarts` |
+| `service` | `service`, `phase` (`infra`, `app`), `health`, `seconds_to_healthy` (start to first passing probe), `restarts`, `lane` (`containers`), `offset_in_run` (when the container started during the run) |
+| `crate` | `crate`, `target` (`lib`, `bin`, `build-script`, `build-script-run`, ...), `workspace` (one of ours), `seconds`, `offset_in_build`, `step`, `lane` (`cargo`): a build's compilation units of at least 1 s, at most 150, from `cargo build --timings` |
 
 ```logql
 quantile_over_time(0.9, {service_name="local-telemetry"} | event="step" | kind="up"
