@@ -186,8 +186,13 @@ pub struct EventActionConfiguration {
     pub owner: Owner,
     pub enabled: bool,
     pub revision: ConfigurationRevision,
-    pub filters: EventFilters,
-    pub activated_at: DateTime<Utc>,
+    /// None for a routine without event filters, such as one that runs only
+    /// on its webhook.
+    pub filters: Option<EventFilters>,
+    /// When its event filters took effect; None without them.
+    pub activated_at: Option<DateTime<Utc>>,
+    /// Whether its triggers hold a webhook that has a URL.
+    pub webhook: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -220,6 +225,11 @@ pub enum EventAccessCapability {
         owner: MacroUserIdStr<'static>,
         installation_id: u64,
     },
+    /// The owner's own webhook delivered: it carries its content, and the
+    /// routine is theirs.
+    Webhook {
+        owner: MacroUserIdStr<'static>,
+    },
 }
 
 impl EventAccessCapability {
@@ -251,6 +261,9 @@ impl EventAccessCapability {
                         event.source(),
                         EventSource::Github(delivery) if delivery.installation_id == *installation_id
                     )
+            }
+            (Self::Webhook { owner: claimant }, EventEntityType::Webhook) => {
+                claimant == owner && matches!(event.source(), EventSource::Webhook(_))
             }
             _ => false,
         }
@@ -298,13 +311,26 @@ impl AuthorizedEventRun {
 }
 
 impl EventActionConfiguration {
+    /// Whether the routine, as configured now, runs on `event`.
+    pub fn accepts(&self, event: &EventReference) -> bool {
+        match event.source() {
+            EventSource::Webhook(_) => self.webhook,
+            EventSource::Entity { .. } | EventSource::Github(_) => {
+                match (&self.filters, self.activated_at) {
+                    (Some(filters), Some(activated_at)) => filters.matches(event, activated_at),
+                    _ => false,
+                }
+            }
+        }
+    }
+
     fn check_pending(&self, pending: &PendingEventRun) -> Result<(), CancellationReason> {
         if !self.enabled {
             return Err(CancellationReason::Disabled);
         }
         if self.action_id != pending.action_id
             || self.revision != pending.revision
-            || !self.filters.matches(&pending.event, self.activated_at)
+            || !self.accepts(&pending.event)
         {
             return Err(CancellationReason::Superseded);
         }

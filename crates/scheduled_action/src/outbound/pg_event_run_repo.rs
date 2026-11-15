@@ -43,8 +43,9 @@ struct ConfigurationRow {
     owner: String,
     enabled: bool,
     configuration_revision: i64,
-    event_filters: Value,
-    event_activated_at: DateTime<Utc>,
+    event_filters: Option<Value>,
+    event_activated_at: Option<DateTime<Utc>>,
+    webhook: bool,
 }
 
 /// Deliberately excludes persisted content and underlying parser errors.
@@ -71,9 +72,13 @@ impl TryFrom<ConfigurationRow> for EventActionConfiguration {
                 .configuration_revision
                 .try_into()
                 .map_err(|_| InvalidConfiguration::Revision)?,
-            filters: serde_json::from_value(row.event_filters)
+            filters: row
+                .event_filters
+                .map(serde_json::from_value)
+                .transpose()
                 .map_err(|_| InvalidConfiguration::Filters)?,
             activated_at: row.event_activated_at,
+            webhook: row.webhook,
         })
     }
 }
@@ -104,8 +109,29 @@ impl TryFrom<PendingRow> for PendingEventRun {
 fn github_event(event: &EventReference) -> Option<&str> {
     match event.source() {
         EventSource::Github(delivery) => Some(delivery.event.as_str()),
-        EventSource::Entity { .. } => None,
+        EventSource::Entity { .. } | EventSource::Webhook(_) => None,
     }
+}
+
+/// The trigger a claimed run sees: the routine's own for a webhook delivery,
+/// else its event filters, as event runs have always seen.
+fn claimed_trigger(
+    event: &EventReference,
+    event_filters: Option<Value>,
+    trigger_config: Option<Value>,
+) -> Result<ActionTrigger, Report> {
+    if event.webhook_delivery().is_some() {
+        let Some(config) = trigger_config else {
+            bail!("a webhook delivery's routine has no trigger list");
+        };
+        return Ok(serde_json::from_value(config)?);
+    }
+    let Some(filters) = event_filters else {
+        bail!("an event run's routine has no event filters");
+    };
+    Ok(ActionTrigger::Events {
+        filters: serde_json::from_value(filters)?,
+    })
 }
 
 /// All paths use this lock order, including cancellation and maintenance. Skip
@@ -131,7 +157,7 @@ impl EventRunRepository for PgEventRunRepo {
             ConfigurationRow,
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
-                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
+                   event_filters, event_activated_at, FALSE AS "webhook!"
             FROM scheduled_action
             WHERE enabled AND event_filters IS NOT NULL
               AND ($1::uuid IS NULL OR id > $1)
@@ -180,9 +206,13 @@ impl EventRunRepository for PgEventRunRepo {
         Ok(sqlx::query_as!(
             ConfigurationRow,
             r#"
-            SELECT id AS action_id, owner, enabled, configuration_revision,
-                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
-            FROM scheduled_action WHERE id = $1 AND event_filters IS NOT NULL
+            SELECT a.id AS action_id, a.owner, a.enabled, a.configuration_revision,
+                   a.event_filters, a.event_activated_at,
+                   COALESCE(w.action_id IS NOT NULL
+                    AND jsonb_path_exists(a.trigger_config, '$.triggers[*] ? (@.type == "webhook")'), FALSE) AS "webhook!"
+            FROM scheduled_action a
+            LEFT JOIN scheduled_action_webhook w ON w.action_id = a.id
+            WHERE a.id = $1 AND (a.event_filters IS NOT NULL OR w.action_id IS NOT NULL)
             "#,
             action_id,
         )
@@ -263,7 +293,9 @@ impl EventRunRepository for PgEventRunRepo {
                 WHERE action_id = a.id AND state = 'pending'
                 ORDER BY admission_order LIMIT 1
             ) r
-            WHERE a.enabled AND a.event_filters IS NOT NULL
+            WHERE a.enabled
+              AND (a.event_filters IS NOT NULL
+                OR EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id))
               AND a.configuration_revision = r.configuration_revision
               AND (a.claimed IS NULL OR a.claimed < $1)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run s WHERE s.action_id = a.id AND s.state = 'started')
@@ -303,9 +335,11 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id,
                    appearance AS "appearance: Json<EntityAppearance>", suggestion_id,
                    description, parent_id, created_by_run_id, child_key, paused_by_parent,
-                   event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
-            FROM scheduled_action
-            WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
+                   event_filters, event_activated_at, trigger_config
+            FROM scheduled_action a
+            WHERE id = $1 AND enabled AND configuration_revision = $2
+              AND (event_filters IS NOT NULL
+                OR EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id))
               AND (claimed IS NULL OR claimed < $3)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run WHERE action_id = $1 AND state = 'started')
             "#,
@@ -351,9 +385,7 @@ impl EventRunRepository for PgEventRunRepo {
             id: Some(action.id),
             owner: Owner::from_principal_str(&action.owner)?,
             name: action.name,
-            trigger: ActionTrigger::Events {
-                filters: serde_json::from_value(action.event_filters)?,
-            },
+            trigger: claimed_trigger(&pending.event, action.event_filters, action.trigger_config)?,
             kind: serde_json::from_value(json!(action.kind))?,
             task: action.task,
             created_at: action.created_at,
@@ -366,7 +398,7 @@ impl EventRunRepository for PgEventRunRepo {
                 )
             })?,
             configuration_revision: pending.revision,
-            event_activated_at: Some(action.event_activated_at),
+            event_activated_at: action.event_activated_at,
             next_run_at: None,
             claimed: Some(started_at),
             template_id: action.template_id,
@@ -499,7 +531,7 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             UPDATE scheduled_action_event_run
             SET state = 'finished', finished_at = $3, outcome = $4, execution_record_id = $5,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2
             "#,
             run.key.action_id,
@@ -531,7 +563,7 @@ impl EventRunRepository for PgEventRunRepo {
         sqlx::query!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             "#,
             key.action_id,
@@ -565,7 +597,7 @@ impl EventRunRepository for PgEventRunRepo {
         let skipped = sqlx::query_scalar!(
             r#"
             UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
-                event_context = event_context #- '{github,payload}'
+                event_context = event_context #- '{github,payload}' #- '{webhook,body}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             RETURNING event_id
             "#,
@@ -619,8 +651,9 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT r.action_id, r.event_id FROM scheduled_action_event_run r
             JOIN scheduled_action a ON a.id = r.action_id
             WHERE (r.state = 'started' AND r.deadline <= $1)
-               OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
-                   OR a.configuration_revision <> r.configuration_revision))
+               OR (r.state = 'pending' AND (NOT a.enabled OR a.configuration_revision <> r.configuration_revision
+                   OR (a.event_filters IS NULL
+                       AND NOT EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id))))
             ORDER BY r.admission_order LIMIT $2 FOR UPDATE OF a SKIP LOCKED
             "#,
             now,
@@ -640,14 +673,15 @@ impl EventRunRepository for PgEventRunRepo {
                 r#"
                 UPDATE scheduled_action_event_run r
                 SET state = 'finished', finished_at = $3,
-                    event_context = r.event_context #- '{github,payload}',
+                    event_context = r.event_context #- '{github,payload}' #- '{webhook,body}',
                     outcome = CASE WHEN r.state = 'started' THEN $4::jsonb
                         WHEN NOT a.enabled THEN $5::jsonb ELSE $6::jsonb END
                 FROM scheduled_action a
                 WHERE r.action_id = $1 AND r.event_id = $2 AND a.id = r.action_id
                   AND ((r.state = 'started' AND r.deadline <= $3)
-                    OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
-                        OR a.configuration_revision <> r.configuration_revision)))
+                    OR (r.state = 'pending' AND (NOT a.enabled OR a.configuration_revision <> r.configuration_revision
+                        OR (a.event_filters IS NULL
+                            AND NOT EXISTS (SELECT 1 FROM scheduled_action_webhook w WHERE w.action_id = a.id)))))
                 RETURNING r.claim_token
                 "#,
                 candidate.action_id,

@@ -431,6 +431,12 @@ pub enum RunStart {
         /// Who started it.
         by: String,
     },
+    /// Something POSTed to its webhook URL.
+    Webhook {
+        /// The JSON body it sent, or null. Untrusted: whoever holds the URL
+        /// chose it.
+        body: serde_json::Value,
+    },
 }
 
 /// What the run page says about a run: what started it, when it counts as

@@ -928,11 +928,11 @@ async fn database_rejects_invalid_trigger_shapes(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn database_rejects_external_webhooks_and_unknown_mixed_trigger_kinds(pool: PgPool) {
+async fn database_rejects_a_bare_webhook_and_unknown_mixed_trigger_kinds(pool: PgPool) {
     insert_user(&pool, USER_A).await;
+    // A webhook trigger is stored only inside a trigger list.
     for config in [
         json!({ "type": "webhook" }),
-        json!({ "type": "multiple", "triggers": [{ "type": "webhook" }] }),
         json!({ "type": "multiple", "triggers": [{ "type": "unknown" }] }),
         json!({ "type": "multiple", "triggers": [] }),
     ] {

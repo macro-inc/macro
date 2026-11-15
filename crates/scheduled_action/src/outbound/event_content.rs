@@ -155,6 +155,8 @@ enum EventContent {
     Call(Option<CallRecord>),
     /// A GitHub delivery, as it was received.
     Github(Box<GithubWebhookReceived>),
+    /// A webhook delivery's body, as it was received.
+    Webhook(Value),
 }
 
 struct ChannelMessage {
@@ -192,8 +194,14 @@ where
             // External deliveries carry their own content; there is nothing to read.
             EventAccessCapability::GithubInstallation { .. } => match event.source() {
                 EventSource::Github(delivery) => Ok(EventContent::Github(delivery.clone())),
-                EventSource::Entity { .. } => Err(rootcause::report!(
+                EventSource::Entity { .. } | EventSource::Webhook(_) => Err(rootcause::report!(
                     "an external capability was minted for a Macro event"
+                )),
+            },
+            EventAccessCapability::Webhook { .. } => match event.webhook_delivery() {
+                Some(delivery) => Ok(EventContent::Webhook(delivery.body.clone())),
+                None => Err(rootcause::report!(
+                    "a webhook capability was minted for another event"
                 )),
             },
         }
@@ -375,6 +383,7 @@ fn content_json(event: &EventReference, content: &EventContent) -> Value {
             ),
         }),
         EventContent::Github(delivery) => json!({ "github": github_json(delivery) }),
+        EventContent::Webhook(body) => json!({ "webhook": { "body": body } }),
     }
 }
 

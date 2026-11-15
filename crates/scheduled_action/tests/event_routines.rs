@@ -123,7 +123,7 @@ impl CurrentOwnerAccess for FakeAccess {
                 EventEntityType::Channel => EntityType::Channel,
                 EventEntityType::EmailThread => EntityType::EmailThread,
                 EventEntityType::Call => EntityType::Call,
-                EventEntityType::GithubInstallation => {
+                EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                     unreachable!("these routines watch Macro events only")
                 }
             },
@@ -167,7 +167,7 @@ impl CurrentOwnerAccess for FakeAccess {
                 )
                 .unwrap(),
             ),
-            EventEntityType::GithubInstallation => {
+            EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                 unreachable!("these routines watch Macro events only")
             }
         };

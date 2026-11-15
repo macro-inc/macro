@@ -390,8 +390,9 @@ fn invalid_configuration_classifications_do_not_include_persisted_content() {
             owner: USER.into(),
             enabled: true,
             configuration_revision: 1,
-            event_filters: json!([{"events": ["document.updated"]}]),
-            event_activated_at: Utc::now(),
+            event_filters: Some(json!([{"events": ["document.updated"]}])),
+            event_activated_at: Some(Utc::now()),
+            webhook: false,
         }
     }
     let mut owner = row();
@@ -411,7 +412,7 @@ fn invalid_configuration_classifications_do_not_include_persisted_content() {
         "invalid_revision"
     );
     let mut filters = row();
-    filters.event_filters = json!([{"events": ["private malformed event"]}]);
+    filters.event_filters = Some(json!([{"events": ["private malformed event"]}]));
     assert_eq!(
         EventActionConfiguration::try_from(filters)
             .unwrap_err()
@@ -855,11 +856,7 @@ async fn invalid_deadlines_leave_the_run_pending(pool: PgPool) {
     let configuration = repo.current_configuration(id).await.unwrap().unwrap();
     assert_eq!(configuration.action_id, id);
     assert_eq!(configuration.revision, pending.revision);
-    assert!(
-        configuration
-            .filters
-            .matches(&event, configuration.activated_at)
-    );
+    assert!(configuration.accepts(&event));
     assert!(
         repo.current_configuration(generate_uuid_v7())
             .await
@@ -1095,7 +1092,12 @@ async fn conditions_do_not_change_candidate_matching(pool: PgPool) {
             .collect::<Vec<_>>(),
         [id]
     );
-    assert!(page.configurations[0].filters.has_conditions());
+    assert!(
+        page.configurations[0]
+            .filters
+            .as_ref()
+            .is_some_and(crate::domain::event_trigger::EventFilters::has_conditions)
+    );
     admit(&repo, id, &event).await;
 }
 

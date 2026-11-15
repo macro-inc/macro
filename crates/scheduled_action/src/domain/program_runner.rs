@@ -116,7 +116,12 @@ where
         let acts_as = program.code_identity();
         // Code gets the triggering item whenever there is one.
         let trigger = match firing {
-            RoutineRun::Event(run) if has_code => Some(self.trigger(owner, run).await?),
+            // A webhook's body is its own; there is no item to read.
+            RoutineRun::Event(run)
+                if has_code && run.pending.event.webhook_delivery().is_none() =>
+            {
+                Some(self.trigger(owner, run).await?)
+            }
             _ => None,
         };
         let (mut info, code_context) = self
@@ -280,9 +285,15 @@ where
             ),
             RoutineRun::Event(run) => (
                 run.pending.event.event_id().published_at(),
-                RunStart::Event {
-                    event: run.pending.event.event_name().as_str().to_owned(),
-                    entity_id: run.pending.event.entity_id().map(|id| id.to_string()),
+                match run.pending.event.webhook_delivery() {
+                    // The run page shows what the sender sent.
+                    Some(delivery) => RunStart::Webhook {
+                        body: delivery.body.clone(),
+                    },
+                    None => RunStart::Event {
+                        event: run.pending.event.event_name().as_str().to_owned(),
+                        entity_id: run.pending.event.entity_id().map(|id| id.to_string()),
+                    },
                 },
             ),
         };
@@ -306,6 +317,9 @@ where
                 json!({ "kind": "event", "event": event, "item": item })
             }
             RunStart::Manual { by } => json!({ "kind": "manual", "by": by }),
+            RunStart::Webhook { body } => {
+                json!({ "kind": "webhook", "body": body, "receivedAt": at })
+            }
         };
         let context = json!({
             "run": {
@@ -406,7 +420,9 @@ fn first_schedule(trigger: &ActionTrigger) -> Option<(String, String)> {
                 .iter()
                 .find_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
-                    RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
+                    RoutineTrigger::Once { .. }
+                    | RoutineTrigger::Events { .. }
+                    | RoutineTrigger::Webhook {} => None,
                 })
         }
         ActionTrigger::Once { .. } | ActionTrigger::Events { .. } => None,
@@ -463,7 +479,7 @@ fn schedule(trigger: &ActionTrigger) -> String {
             .filter_map(|trigger| match trigger {
                 RoutineTrigger::Cron { schedule, timezone } => Some(cron(schedule, timezone)),
                 RoutineTrigger::Once { at } => Some(once(at)),
-                RoutineTrigger::Events { .. } => None,
+                RoutineTrigger::Events { .. } | RoutineTrigger::Webhook {} => None,
             })
             .collect::<Vec<_>>()
             .join("; "),
@@ -494,6 +510,7 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                 } => Some(schedule(cron, timezone)),
                 RoutineTrigger::Once { at } => Some(ContextTrigger::Once { at: *at }),
                 RoutineTrigger::Events { .. } => None,
+                RoutineTrigger::Webhook {} => Some(ContextTrigger::Webhook),
             })
             .collect(),
         ActionTrigger::Events { .. } => Vec::new(),

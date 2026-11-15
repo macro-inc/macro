@@ -64,6 +64,13 @@ impl<S: EntityAccessService, G: GithubInstallationClaims> CurrentOwnerAccess
                     installation_id: delivery.installation_id,
                 }));
             }
+            // The routine is the owner's, and the delivery came through its URL;
+            // there is no item to read.
+            EventSource::Webhook(_) => {
+                return Ok(Some(EventAccessCapability::Webhook {
+                    owner: owner.clone(),
+                }));
+            }
         };
         let id = &entity_id;
         let result = match event.entity_type() {
@@ -102,7 +109,7 @@ impl<S: EntityAccessService, G: GithubInstallationClaims> CurrentOwnerAccess
                 )
                 .await
                 .map(EventAccessCapability::Call),
-            EventEntityType::GithubInstallation => {
+            EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                 return Err(rootcause::report!(
                     "an entity event named an external source"
                 ));

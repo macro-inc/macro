@@ -39,11 +39,12 @@ pub fn configuration() -> EventActionConfiguration {
         owner: Owner::User(user()),
         enabled: true,
         revision: ConfigurationRevision::INITIAL,
-        filters: serde_json::from_value(
-            json!([{"events":["document.updated", "channel.created"]}]),
-        )
-        .unwrap(),
-        activated_at: Utc::now() - chrono::Duration::days(1),
+        filters: Some(
+            serde_json::from_value(json!([{"events":["document.updated", "channel.created"]}]))
+                .unwrap(),
+        ),
+        activated_at: Some(Utc::now() - chrono::Duration::days(1)),
+        webhook: false,
     }
 }
 
@@ -64,6 +65,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
                 installation_id: delivery.installation_id,
             };
         }
+        EventSource::Webhook(_) => return EventAccessCapability::Webhook { owner },
         EventSource::Entity { .. } => {}
     }
     let entity = Entity {
@@ -73,7 +75,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
             EventEntityType::Channel => EntityType::Channel,
             EventEntityType::EmailThread => EntityType::EmailThread,
             EventEntityType::Call => EntityType::Call,
-            EventEntityType::GithubInstallation => {
+            EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                 unreachable!("external events returned above")
             }
         },
@@ -117,7 +119,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
             )
             .unwrap(),
         ),
-        EventEntityType::GithubInstallation => {
+        EventEntityType::GithubInstallation | EventEntityType::Webhook => {
             unreachable!("external events returned above")
         }
     }
@@ -313,7 +315,7 @@ impl EventRunRepository for Repo {
                 owner: config.owner,
                 name: "routine".into(),
                 trigger: ActionTrigger::Events {
-                    filters: config.filters,
+                    filters: config.filters.unwrap(),
                 },
                 kind: ActionKind::Agent,
                 task: json!({}),
@@ -321,7 +323,7 @@ impl EventRunRepository for Repo {
                 updated_at: started_at,
                 enabled: true,
                 configuration_revision: config.revision,
-                event_activated_at: Some(config.activated_at),
+                event_activated_at: config.activated_at,
                 next_run_at: None,
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,

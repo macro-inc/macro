@@ -54,9 +54,9 @@ async fn coarse_candidates_are_rechecked_before_access_or_admission() {
     let repo = Arc::new(Repo::default());
     let mut configs: Vec<_> = (0..5).map(|_| configuration()).collect();
     configs[0].enabled = false;
-    configs[1].activated_at = Utc::now() + chrono::Duration::days(1);
+    configs[1].activated_at = Some(Utc::now() + chrono::Duration::days(1));
     configs[2].filters =
-        serde_json::from_value(json!([{"events":["document.updated"],"ids":[]}])).unwrap();
+        Some(serde_json::from_value(json!([{"events":["document.updated"],"ids":[]}])).unwrap());
     configs[3].owner = Owner::Team(generate_uuid_v7());
     configs[4].owner =
         Owner::from_principal_str("bot|01900000-0000-7000-8000-000000000004").unwrap();

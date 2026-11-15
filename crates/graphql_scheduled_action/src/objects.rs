@@ -171,6 +171,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     CallEnded,
     /// Macro's GitHub App received a delivery.
     Github,
+    /// Someone POSTed to the routine's webhook URL.
+    Webhook,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -192,6 +194,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::CallStarted => Self::CallStarted,
             EventName::CallEnded => Self::CallEnded,
             EventName::Github => Self::Github,
+            EventName::Webhook => Self::Webhook,
         }
     }
 }
@@ -253,7 +256,9 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                                     .flatten(),
                             })
                         }
-                        RoutineTrigger::Once { .. } | RoutineTrigger::Events { .. } => None,
+                        RoutineTrigger::Once { .. }
+                        | RoutineTrigger::Events { .. }
+                        | RoutineTrigger::Webhook {} => None,
                     })
                     .collect(),
                 once: triggers
@@ -261,7 +266,9 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
                     .iter()
                     .filter_map(|trigger| match trigger {
                         RoutineTrigger::Once { at } => Some(once_trigger(action, *at)),
-                        RoutineTrigger::Cron { .. } | RoutineTrigger::Events { .. } => None,
+                        RoutineTrigger::Cron { .. }
+                        | RoutineTrigger::Events { .. }
+                        | RoutineTrigger::Webhook {} => None,
                     })
                     .collect(),
                 events: action.trigger.event_filters().map(event_filters),

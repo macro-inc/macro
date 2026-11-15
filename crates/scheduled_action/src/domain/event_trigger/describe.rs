@@ -28,6 +28,7 @@ impl ActionTrigger {
                 }
                 Some(RoutineTrigger::Events { filters }) => describe_filters(filters.as_slice()),
                 Some(RoutineTrigger::Once { at }) => describe_once(*at, zone, now),
+                Some(RoutineTrigger::Webhook {}) => "When its webhook URL is called".to_owned(),
                 None => String::new(),
             },
         }
@@ -197,6 +198,7 @@ fn event_label(event: EventName, filter: &EventFilter) -> &'static str {
         },
         EventName::EmailMessageReceived => "New email received",
         EventName::ChannelCreated => "Channel created",
+        EventName::Webhook => "Webhook called",
         EventName::ChannelMessagePosted => "Message sent in channel",
         EventName::ChannelMentioned => "@ mentioned in channel",
         EventName::ChannelMessagePatched => "Message edited",
