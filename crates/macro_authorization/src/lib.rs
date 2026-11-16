@@ -64,11 +64,11 @@ pub use domain::{
     harness_authorizer::HarnessAuthorizerService,
     models::{
         AccountManagerCredential, AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication,
-        BotAuthorizationOwner, BotScope, BotTokenAuthorization, CredentialOrigin,
-        HarnessAuthentication, HarnessAuthorizationOwner, HarnessTokenAuthorization,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
-        MacroUserAuthentication, ResolvedApiKeyUser, ResolvedBotActingUser, ValidatedCredential,
-        ValidatedIdentity,
+        BotAuthorizationOwner, BotScope, BotTokenAuthorization, CredentialAttribution,
+        CredentialOrigin, HarnessAuthentication, HarnessAuthorizationOwner,
+        HarnessTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
+        MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
+        ResolvedBotActingUser, ValidatedCredential, ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, HarnessAuthorizationRepo, HarnessAuthorizer,

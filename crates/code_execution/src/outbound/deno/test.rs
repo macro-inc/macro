@@ -1131,3 +1131,58 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+/// Every request to an SDK origin is marked, whatever credential it carries.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_credential_outside_the_authorization_header_is_still_marked() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        for path in [
+            "GET /query?macro-api-token=fixture-run-token ",
+            "GET /cookie ",
+        ] {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(request.starts_with(path), "{request}");
+            let lowercase = request.to_ascii_lowercase();
+            assert!(!lowercase.contains("authorization:"), "{request}");
+            assert!(
+                lowercase.contains("x-macro-code-execution: 1\r\n"),
+                "{request}"
+            );
+            respond(&mut stream, "{}").await;
+        }
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = r#"
+export async function main({token, hosts}) {
+  await fetch(`${hosts.cognition}/query?macro-api-token=${token}`);
+  await fetch(`${hosts.cognition}/cookie`, {headers: {cookie: `macro-access-token=${token}`}});
+  return {data: null, reviews: []};
+}
+"#;
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 5000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    server.await.unwrap();
+    assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
+}

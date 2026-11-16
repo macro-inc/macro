@@ -19,6 +19,9 @@ pub struct MacroUserAuthentication {
     pub agent_id: Option<BotId>,
     /// Signed label of the client the user drives `agent_id` through.
     pub agent_via: Option<String>,
+    /// Signed routine whose run this credential acts for, which may carry no
+    /// `agent_id` (a routine code step running as its owner).
+    pub routine_id: Option<Uuid>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
@@ -30,8 +33,33 @@ impl MacroUserAuthentication {
     /// token or an agent acting for them.
     #[must_use]
     pub fn is_human_session(&self) -> bool {
-        self.origin == CredentialOrigin::Session && self.agent_id.is_none()
+        self.origin == CredentialOrigin::Session
+            && self.attribution() == CredentialAttribution::Person
     }
+
+    /// Who the signed claims say this credential acts for: the person, or a
+    /// program running with their access.
+    #[must_use]
+    pub fn attribution(&self) -> CredentialAttribution {
+        if self.agent_id.is_some() {
+            CredentialAttribution::Agent
+        } else {
+            CredentialAttribution::Person
+        }
+    }
+}
+
+/// Whose program, if any, a user credential was signed for. Routes only a
+/// person may drive refuse every variant but `Person` (see `is_agent_run`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialAttribution {
+    /// No signed program attribution.
+    Person,
+    /// Signed for an agent (`agent_id`).
+    Agent,
+    /// Signed for a routine's run (`routine_id`) with no agent, such as a
+    /// routine code step running as its owner.
+    Routine,
 }
 
 /// The kind of credential that authenticated a user, set where the credential
@@ -312,6 +340,8 @@ pub struct ValidatedIdentity {
     pub agent_id: Option<BotId>,
     /// Client label signed with `agent_id`, such as "Claude Code".
     pub agent_via: Option<String>,
+    /// Routine attribution from a cryptographically verified Macro API token.
+    pub routine_id: Option<Uuid>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.
@@ -339,6 +369,7 @@ impl ValidatedCredential {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: context.user_id,
                 fusion_user_id: context.fusion_user_id,
                 organization_id: context.organization_id,

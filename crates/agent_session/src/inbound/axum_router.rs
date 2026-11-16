@@ -1048,7 +1048,7 @@ pub(crate) fn control_principal(
 
     match caller {
         UserBotOrHarnessAuthorization::User(user)
-            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+            if macro_authorization::is_agent_run(user.attribution(), headers) =>
         {
             ControlPrincipal::Program
         }

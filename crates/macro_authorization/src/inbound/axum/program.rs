@@ -2,6 +2,8 @@
 
 use ::axum::http::HeaderMap;
 
+use crate::domain::models::CredentialAttribution;
+
 #[cfg(test)]
 mod test;
 
@@ -11,8 +13,8 @@ mod test;
 pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
 
 /// Whether a request comes from an agent's program rather than a person in
-/// the app: a code-mode run, or a token carrying an agent's attribution
-/// (`MacroUserAuthentication::agent_id`).
-pub fn is_agent_run(agent_attributed: bool, headers: &HeaderMap) -> bool {
-    agent_attributed || headers.contains_key(CODE_EXECUTION_HEADER)
+/// the app: a code-mode run, or a credential signed for a program
+/// ([`MacroUserAuthentication::attribution`](crate::MacroUserAuthentication::attribution)).
+pub fn is_agent_run(attribution: CredentialAttribution, headers: &HeaderMap) -> bool {
+    attribution != CredentialAttribution::Person || headers.contains_key(CODE_EXECUTION_HEADER)
 }

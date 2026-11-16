@@ -151,6 +151,7 @@ pub(super) fn authenticated_user(
         origin,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id,
         user_context,
     })

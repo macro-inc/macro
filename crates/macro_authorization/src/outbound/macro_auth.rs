@@ -74,6 +74,7 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
         identity: ValidatedIdentity {
             agent_id,
             agent_via,
+            routine_id: None,
             user_id,
             fusion_user_id,
             organization_id,
