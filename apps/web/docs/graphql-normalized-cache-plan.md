@@ -150,8 +150,8 @@ entire cache in browser memory. With 10s of thousands of cached objects
 - urql usage is imperative-only: `@urql/core` + `fetchExchange`, called via
   `fetchGraphqlSoup()` (`src/lib/service-clients/service-storage/graphql-soup.ts`),
   results mapped to REST `SoupApiItem` shapes and fed into TanStack
-  solid-query infinite queries (`src/lib/queries/soup/items.ts`), gated by
-  `ENABLE_GRAPHQL_SOUP` with REST fallback.
+  solid-query infinite queries (`src/lib/queries/soup/items.ts`), then gated
+  by a feature flag (since removed) with REST fallback.
 - A separate normalization layer exists at the tanstack level:
   `@normy/query-core` (`src/lib/queries/soup/normalized-cache/`).
 - WASM precedent: loro-crdt via `vite-plugin-wasm`; note the documented
@@ -684,7 +684,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   reads), all four request policies, push-driven re-execution downgraded to
   `cache-first`, write-through of network results, cache errors degrade to
   network. 8 vitest cases against a scripted fake host.
-- Wired into `graphql-soup.ts` behind `ENABLE_GRAPHQL_SOUP` override
+- Wired into `graphql-soup.ts` (then behind a since-removed override)
   (browser: worker host; Tauri: native host): lazily builds the cached
   client; `fetchGraphqlSoup` uses
   `cache-and-network` (`.toPromise()` skips stale emissions → identical
@@ -704,8 +704,8 @@ apps/web/src/lib/graphql-cache/ # JS glue
   `satisfies EntityResolverConfig`; TypeScript `any`/assertions can bypass
   static checks, but malformed values are rejected during exchange
   construction and validated again by the Rust engine.
-- **Manual smoke test pending**: dev-server run with the override enabled
-  (localStorage `ENABLE_GRAPHQL_SOUP=true`), verify hit/miss + offline
+- **Manual smoke test pending**: dev-server run with the cache enabled,
+  verify hit/miss + offline
   behavior in the browser.
 
 **Phase 5 — write path & coexistence**
