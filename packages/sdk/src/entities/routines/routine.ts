@@ -457,6 +457,8 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * The routine's webhook URL, without its secret, or `undefined` when it
    * has none. The full URL is returned only by {@link createWebhook}.
+   *
+   * @readonly
    */
   async webhook(): Promise<RoutineWebhook | undefined> {
     const result = await this.client.scheduledAction.getRoutineWebhook({
@@ -477,6 +479,8 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
    * is enabled and has a `webhook` event trigger, such as
    * `{ type: 'events', filters: [{ events: ['webhook'] }] }`. Any URL the
    * routine had stops working. The URL is shown only here.
+   *
+   * @write
    */
   async createWebhook(): Promise<CreatedRoutineWebhook> {
     const created = unwrap(
@@ -491,7 +495,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     };
   }
 
-  /** Stop the routine's webhook URL working. A routine without one is left as it is. */
+  /**
+   * Stop the routine's webhook URL working. A routine without one is left as it is.
+   *
+   * @destructive
+   * @idempotent
+   */
   async deleteWebhook(): Promise<void> {
     unwrap(
       await this.client.scheduledAction.deleteRoutineWebhook({
