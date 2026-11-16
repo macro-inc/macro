@@ -17,13 +17,15 @@
  * order and decodes the rest at once.
  */
 
+import figEngineWasm from 'wasm:fig-engine';
+import type { FigFile } from '@core/wasm/generated/fig-engine';
+import { isWasmTrap } from '@core/wasm/is-wasm-trap';
 import { match } from 'ts-pattern';
 import type { FigRequest, FigResponse, QueryMethod } from './protocol';
-import { isWasmTrap, loadFigEngineWasm, type WasmFigFile } from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-let file: WasmFigFile | undefined;
+let file: FigFile | undefined;
 let trapped = false;
 
 type Render = Extract<FigRequest, { kind: 'render' }>;
@@ -109,7 +111,7 @@ function fail(id: number, error: unknown) {
   });
 }
 
-function openFile(): WasmFigFile {
+function openFile(): FigFile {
   if (trapped) throw new Error('the engine stopped after an internal error');
   if (!file) throw new Error('no file is open');
   return file;
@@ -118,7 +120,7 @@ function openFile(): WasmFigFile {
 async function serve(request: FigRequest) {
   switch (request.kind) {
     case 'open': {
-      const wasm = await loadFigEngineWasm(request.module);
+      const wasm = await figEngineWasm.load({ module: request.module });
       file?.free();
       file = new wasm.FigFile(new Uint8Array(request.bytes));
       post({
@@ -403,7 +405,7 @@ async function serve(request: FigRequest) {
     case 'registerFont': {
       // Fonts belong to the worker (every file it opens), so they can
       // arrive before the file.
-      const wasm = await loadFigEngineWasm();
+      const wasm = await figEngineWasm.load();
       const json = wasm.FigFile.registerFont(
         new Uint8Array(request.bytes),
         request.family ?? undefined
@@ -412,7 +414,7 @@ async function serve(request: FigRequest) {
       return;
     }
     case 'blank': {
-      const wasm = await loadFigEngineWasm(request.module);
+      const wasm = await figEngineWasm.load({ module: request.module });
       const bytes = wasm.FigFile.blank(request.name).slice().buffer;
       post({ id: request.id, ok: true, kind: 'saved', bytes }, [bytes]);
       return;

@@ -2,8 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { FigEngine } from './client';
 import type { FigRequest, FigResponse } from './protocol';
 
-vi.mock('./compiled-module', () => ({
-  compiledFigModule: async () => ({}),
+vi.mock('wasm:fig-engine', () => ({
+  default: { compiled: async () => ({}) },
 }));
 
 const workers: FakeWorker[] = [];

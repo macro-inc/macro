@@ -9,6 +9,9 @@
  * order they were posted, which keeps edits, renders, and saves consistent.
  */
 
+import pptxEngineWasm from 'wasm:pptx-engine';
+import type { PptxDocument } from '@core/wasm/generated/pptx-engine';
+import { isWasmTrap } from '@core/wasm/is-wasm-trap';
 import { match } from 'ts-pattern';
 import type { PptxRequest, PptxResponse } from './protocol';
 import type {
@@ -24,12 +27,6 @@ import type {
   TextLayoutInfo,
   TextMatch,
 } from './types';
-import {
-  discardPptxEngineWasm,
-  isWasmTrap,
-  loadPptxEngineWasm,
-  type WasmPptxDocument,
-} from './wasm-module';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -49,7 +46,7 @@ type Source =
   | { kind: 'entries'; entries: string; seed: number };
 
 interface OpenDocument {
-  doc: WasmPptxDocument;
+  doc: PptxDocument;
   source: Source;
   /** Whether it takes part in collaborative editing. */
   collab: boolean;
@@ -67,7 +64,7 @@ function entryFor(docKey: string): OpenDocument {
   return entry;
 }
 
-function documentFor(docKey: string): WasmPptxDocument {
+function documentFor(docKey: string): PptxDocument {
   return entryFor(docKey).doc;
 }
 
@@ -75,7 +72,7 @@ function documentFor(docKey: string): WasmPptxDocument {
 function record(
   docKey: string,
   entry: LogEntry,
-  run: (doc: WasmPptxDocument) => string | undefined
+  run: (doc: PptxDocument) => string | undefined
 ) {
   const open = entryFor(docKey);
   const result = run(open.doc);
@@ -89,8 +86,8 @@ function record(
  * bytes and change log, so no edit is lost.
  */
 async function recover() {
-  discardPptxEngineWasm();
-  const wasm = await loadPptxEngineWasm();
+  pptxEngineWasm.discard();
+  const wasm = await pptxEngineWasm.load();
   for (const [key, open] of [...documents]) {
     try {
       const doc =
@@ -138,7 +135,7 @@ async function toBitmap(
 
 function editResponse(
   id: number,
-  doc: WasmPptxDocument,
+  doc: PptxDocument,
   json: string | undefined,
   changes?: EntryChange[]
 ): PptxResponse {
@@ -160,7 +157,7 @@ function takeChanges(docKey: string): EntryChange[] {
   return JSON.parse(json ?? '[]') as EntryChange[];
 }
 
-function openResponse(id: number, doc: WasmPptxDocument): PptxResponse {
+function openResponse(id: number, doc: PptxDocument): PptxResponse {
   const size = doc.slideSize();
   return {
     id,
@@ -174,7 +171,7 @@ function openResponse(id: number, doc: WasmPptxDocument): PptxResponse {
 async function serve(
   request: PptxRequest
 ): Promise<[PptxResponse, Transferable[]]> {
-  const wasm = await loadPptxEngineWasm();
+  const wasm = await pptxEngineWasm.load();
   const { id } = request;
   return match(request)
     .with({ kind: 'open' }, ({ docKey, bytes }) => {
