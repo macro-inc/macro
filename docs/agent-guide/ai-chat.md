@@ -1141,8 +1141,7 @@ The greeting, agent/model selector, coding repository/branch drawer, and send fl
 are shared. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
 top of the Home list once the session is created.
-Home suggestions and document/project context populate this same draft as markdown
-mentions. A failed suggestion conversion preserves the text and shows an error.
+Document/project context populates this same draft as markdown mentions.
 Session creation and prompt delivery use the shared pending-session flow.
 
 ## Sharing a chat
