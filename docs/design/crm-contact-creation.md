@@ -22,7 +22,7 @@ companies remain open.
 | CSV contact import | Keep for this stage | Existing contacts are found by email; missing contacts use domain inference. Personal-address creation through import remains follow-on work. |
 | Email-only contact lookup in imports and pipeline actions | Change | Multiple visible matches produce an ambiguity error requiring an explicit contact ID; never choose a company arbitrarily. Hidden and cross-team records do not participate in a member's lookup. |
 | Email sync and backfill | Change | Existing domain inference, self-domain checks, sources and consent gates. Sent mail to personal-provider addresses creates a company-less contact only when no same-team identity exists; otherwise sent and received mail refresh the unique existing contact without changing its selected company. Personal sync requires the team to turn off "Keep personal emails out" (on by default); received mail only updates existing contacts. Other generic providers stay excluded. Turning the setting back on stops future sync only; contacts it added stay. An assigned company with email sync disabled suppresses email-derived interaction/source updates without changing the manual contact or relation. Enabled-parent refresh still requires exact-primary consent and eligible stored history. Domain exclusions suppress matching email contribution and backfill; adding or removing an exclusion does not hide, restore or delete company/contact records. Team exclusions apply to all contributors, personal exclusions only to their owner, and whole-thread participant checks also cover subdomains. Explicit creation does not manufacture mailbox-source rows. |
-| Ownership and visibility | Keep | Team membership and company receipt authorize creation; hidden companies remain restricted and contacts inherit hidden state. |
+| Ownership and visibility | Keep | Current CRM access on the team and a company receipt authorize creation; hidden companies remain restricted and contacts inherit hidden state. |
 | Company domains | Keep | Storage supports multiple domains; this stage does not add domain editing or primary selection. |
 
 `POST /crm/companies` accepts `{"name":"Acme"}` or
@@ -32,8 +32,11 @@ companies remain open.
 The create API remains an insert, not an idempotent import/upsert API; callers
 must retain a successful response instead of retrying a confirmed create.
 
-The company Emails view and automatic call association remain domain-based;
+The company Emails view remains domain-based;
 use the contact's Emails view for an explicitly attached off-domain address.
+A call links the companies at a participant's domain, and every visible contact
+of the team that holds the participant's address as any of its addresses, with
+or without a company, together with that contact's company.
 Address prechecks aggregate repeated emails within the team, preserving any
 hidden or disabled association rather than letting a second company bypass it.
 The existing People listing still displays one representative per email; each
@@ -57,7 +60,7 @@ known by, with `crm_contacts.email` kept as the primary. A trigger records the
 primary there, so writers from before the table keep it complete during a
 rolling deploy, and a backfill covers existing contacts. Address lookups (personal
 sync and teardown, email scope prechecks, thread access, call linking, lookup
-by email) read that table; the team-wide activity scope still reads the primary.
+by email, the team-wide activity scope) read that table.
 
 The contact API then writes further addresses: `PUT` and `DELETE
 /crm/contacts/{id}/emails` add and remove the address in the request body

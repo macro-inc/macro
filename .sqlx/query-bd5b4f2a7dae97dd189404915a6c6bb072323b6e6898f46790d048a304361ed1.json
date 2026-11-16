@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"fileType\") VALUES ('0193a1b2-0000-7000-8000-0000000000d0', 'Vendor notes', $1, 'md')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd5b4f2a7dae97dd189404915a6c6bb072323b6e6898f46790d048a304361ed1"
+}

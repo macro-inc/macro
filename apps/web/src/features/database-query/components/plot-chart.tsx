@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
@@ -84,7 +85,7 @@ export function PlotChart(props: {
       <div ref={container} class="[&_[aria-label=tip]]:text-ink" />
       <Show when={failed()}>
         <p class="py-6 text-center text-xs text-ink-muted">
-          The chart could not load. View the data below.
+          {t('databaseAnswers.chartFailed')}
         </p>
       </Show>
     </div>

@@ -6,6 +6,7 @@ import { Badge, cn, ToggleSwitch, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
+import { canToggleRoutine } from '../core/routine-menu';
 import type { TriggerKind } from '../core/routine-triggers';
 import type { RoutineRow } from '../core/types';
 import { triggerKindIcon } from './routine-trigger-icons';
@@ -67,11 +68,7 @@ export function RoutineListRow(props: {
   /** Keep room for the caret, so names line up with rows that have one. */
   caretGutter?: boolean;
 }) {
-  const toggleDisabled = () =>
-    !props.row.editable ||
-    props.pending ||
-    (!props.row.enabled &&
-      (props.row.status === 'Running' || props.row.status === 'Completed'));
+  const toggleDisabled = () => !canToggleRoutine(props.row, props.pending);
   const toggleDescription = () => {
     if (props.pending) return 'Saving…';
     if (!props.row.enabled && props.row.status === 'Completed')
@@ -89,7 +86,8 @@ export function RoutineListRow(props: {
     <div
       role="row"
       class={cn(
-        'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0',
+        // Highlighted while its context menu is open, as when focused.
+        'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted group-data-expanded/routine-menu:bg-list-highlighted @max-[760px]/routines:min-w-0',
         !props.row.enabled && 'opacity-60'
       )}
       onClick={() => props.onOpen(props.row.id)}

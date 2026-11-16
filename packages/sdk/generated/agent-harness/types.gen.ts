@@ -1664,6 +1664,23 @@ export type CreateSessionThread = {
 };
 
 /**
+ * Error body for a provider that refused the caller's connected credential.
+ *
+ * JSON rather than the plain text other failures answer with, so a client
+ * can tell this 409 from a disconnected runtime and show `message` as is.
+ */
+export type CredentialRejectedResponse = {
+    /**
+     * Always [`Self::CODE`].
+     */
+    code: string;
+    /**
+     * What to tell the caller, e.g. which kind of key to reconnect with.
+     */
+    message: string;
+};
+
+/**
  * Surface of a review decision.
  */
 export type DecisionVia = 'card' | 'chat' | 'inbox';
@@ -1885,6 +1902,17 @@ export type EmailSuggestions = {
  * The type of an entity in Macro
  */
 export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+
+/**
+ * A plain old json error response for use with axum.
+ * yup, thats it.
+ */
+export type ErrorResponse = {
+    /**
+     * Message to explain failure
+     */
+    message: string;
+};
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -3179,6 +3207,32 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * One voice of the provider's catalog.
+ */
+export type Voice = {
+    /**
+     * The provider's accent label.
+     */
+    accent: string;
+    /**
+     * Languages the voice speaks.
+     */
+    languages: Array<string>;
+    /**
+     * The model to save as the agent's voice.
+     */
+    model: string;
+    /**
+     * The provider's name for the voice.
+     */
+    name: string;
+    /**
+     * The provider's gender and character tags.
+     */
+    tags: Array<string>;
+};
+
+/**
  * A client-minted id deduplicates warm calls without creating a conversation.
  */
 export type WarmAgentSessionRequest = {
@@ -3295,9 +3349,9 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod machine or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)
      */
-    409: unknown;
+    409: CredentialRejectedResponse;
     /**
      * Provider probe failed
      */
@@ -3307,6 +3361,8 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     504: unknown;
 };
+
+export type DiscoverAgentCapabilitiesHandlerError = DiscoverAgentCapabilitiesHandlerErrors[keyof DiscoverAgentCapabilitiesHandlerErrors];
 
 export type DiscoverAgentCapabilitiesHandlerResponses = {
     /**
@@ -3520,9 +3576,9 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod machine or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected (plain text), or the provider refused the connected credential (JSON)
      */
-    409: unknown;
+    409: CredentialRejectedResponse;
     /**
      * Provider probe failed
      */
@@ -3532,6 +3588,8 @@ export type LoadAgentModelsHandlerErrors = {
      */
     504: unknown;
 };
+
+export type LoadAgentModelsHandlerError = LoadAgentModelsHandlerErrors[keyof LoadAgentModelsHandlerErrors];
 
 export type LoadAgentModelsHandlerResponses = {
     /**
@@ -4794,7 +4852,7 @@ export type AnswerAgentSessionToolApprovalData = {
 export type AnswerAgentSessionToolApprovalErrors = {
     401: string;
     /**
-     * Not the owner, for approve or deny; or no edit access
+     * Agent run approving, not the owner for approve or deny, or no edit access
      */
     403: string;
     404: string;
@@ -5129,3 +5187,54 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoicesError = GetAgentVoicesErrors[keyof GetAgentVoicesErrors];
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        /**
+         * An Aura-2 model, such as aura-2-thalia-en
+         */
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoiceSampleError = GetAgentVoiceSampleErrors[keyof GetAgentVoiceSampleErrors];
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

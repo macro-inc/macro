@@ -41,6 +41,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const items = [forYou, template, drafted].flatMap(
@@ -128,7 +129,9 @@ describe('suggestion cards', () => {
     expect(
       screen.getByText('Tag each new email Answer within 14 days.')
     ).toBeTruthy();
-    fireEvent.click(await screen.findByRole('button', { name: 'Enabled' }));
+    expect(await screen.findByText('Enabled')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enabled' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Tag new email' }));
     expect(host.onOpenRoutine).toHaveBeenCalledWith('routine-1');
   });
 
@@ -187,42 +190,114 @@ describe('suggestion cards', () => {
   });
 });
 
-describe('the row above the routines list', () => {
-  it('shows one row of Discover’s cards, counts each as shown, and says how many more Discover has', () => {
-    vi.mocked(analytics.track).mockClear();
-    const onOpenDiscover = vi.fn();
-    // Five cards for four columns: three, then the cell for two more.
-    const many = [
-      ...items,
-      ...items.slice(0, 2).map((item, n) => ({ ...item, id: `more-${n}` })),
-    ];
-    render(() => {
-      const actions = createSuggestionActions({
-        placement: () => ({ kind: 'routines' }),
-        create: vi.fn(async () => 'routine-1'),
-        customize: vi.fn(),
-        dismiss: vi.fn(async () => {}),
-        notify: vi.fn(),
-      });
-      return (
-        <SuggestionRow
-          items={many}
-          actions={actions}
-          onOpenDiscover={onOpenDiscover}
-          onOpenRoutine={vi.fn()}
-        />
-      );
+/**
+ * Lays the row's grid out with these resolved columns, which jsdom can't
+ * compute, and measures it after the cards mount, as a browser does after
+ * layout and before the first paint.
+ */
+function layOutRow(columns: string) {
+  const computed = window.getComputedStyle.bind(window);
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+    const style = computed(element, pseudo);
+    if (element.tagName !== 'UL') return style;
+    return new Proxy(style, {
+      get(target, key) {
+        if (key === 'gridTemplateColumns') return columns;
+        const value: unknown = Reflect.get(target, key);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
     });
-    const shown = vi
+  });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe(target: Element) {
+        const entry = { target, contentRect: { width: 1000, height: 240 } };
+        queueMicrotask(() =>
+          this.callback(
+            [entry as unknown as ResizeObserverEntry],
+            this as unknown as ResizeObserver
+          )
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+}
+
+/** Five suggestions in the row; the ids it counted as shown. */
+function renderRow(onOpenDiscover = vi.fn()) {
+  vi.mocked(analytics.track).mockClear();
+  const many = [
+    ...items,
+    ...items.slice(0, 2).map((item, n) => ({ ...item, id: `more-${n}` })),
+  ];
+  render(() => {
+    const actions = createSuggestionActions({
+      placement: () => ({ kind: 'routines' }),
+      create: vi.fn(async () => 'routine-1'),
+      customize: vi.fn(),
+      dismiss: vi.fn(async () => {}),
+      notify: vi.fn(),
+    });
+    return (
+      <SuggestionRow
+        items={many}
+        actions={actions}
+        onOpenDiscover={onOpenDiscover}
+        onOpenRoutine={vi.fn()}
+      />
+    );
+  });
+  return () =>
+    vi
       .mocked(analytics.track)
       .mock.calls.filter(([event]) => event === 'routine_suggestion_shown')
       .map(([, props]) => (props as { suggestionId: string }).suggestionId);
-    expect(shown).toEqual(['pick-1', 'template-1', 'drafted-1']);
+}
+
+describe('the row above the routines list', () => {
+  it('shows as many of Discover’s cards as fit, counts each as shown, and says how many more Discover has', async () => {
+    layOutRow('400px 400px 400px 400px 128px');
+    const onOpenDiscover = vi.fn();
+    const shown = renderRow(onOpenDiscover);
+    const more = await screen.findByRole('button', {
+      name: '1 more in Discover',
+    });
+    expect(shown()).toEqual(['pick-1', 'template-1', 'drafted-1', 'more-0']);
     // Discover's card: the sentence, not a one-line chain.
+    const [pick] = screen.getAllByRole('listitem');
     expect(
-      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+      within(pick!).getByRole('button', {
+        name: 'Reply tag: Respond. Change it',
+      })
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: '2 more in Discover' }));
+    fireEvent.click(more);
     expect(onOpenDiscover).toHaveBeenCalledOnce();
+  });
+
+  it('shows one card where the page fits one, never counting a card it dropped as shown', async () => {
+    layOutRow('400px 128px');
+    const shown = renderRow();
+    expect(
+      await screen.findByRole('button', { name: '4 more in Discover' })
+    ).toBeTruthy();
+    expect(shown()).toEqual(['pick-1']);
+  });
+
+  it('counts no columns from a grid that is not laid out', async () => {
+    layOutRow('repeat(auto-fill, minmax(0px, 400px)) 128px');
+    const shown = renderRow();
+    // Past the measurement, which runs as a microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      screen.getByRole('button', { name: '4 more in Discover' })
+    ).toBeTruthy();
+    expect(shown()).toEqual(['pick-1']);
   });
 });

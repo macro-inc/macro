@@ -574,6 +574,38 @@ fn task_flag_shares_only_when_a_team_was_resolved() {
     ));
 }
 
+/// A session that may not share numbers a task in its team without sharing
+/// it, and a create request that omits `shareWithTeam` defaults to private.
+#[tokio::test]
+async fn a_session_that_may_not_share_makes_private_tasks() {
+    use agent_correlation::context::{Attribution, scope_attribution};
+    use agent_correlation::scope::SessionScope;
+
+    let team_id = uuid::Uuid::from_u128(7);
+    let parse = || -> CreateTaskRequest {
+        serde_json::from_value(serde_json::json!({ "taskName": "task" })).unwrap()
+    };
+    assert!(parse().share_with_team);
+    let no_send = Attribution {
+        scope: Some(SessionScope::NoSend),
+        ..Attribution::default()
+    };
+    scope_attribution(no_send, async {
+        assert!(!parse().share_with_team);
+        let MarkdownSubtype::Task {
+            share_with_team,
+            team_id: numbering_team,
+            ..
+        } = MarkdownSubtype::from_task_flag(true, Some(team_id))
+        else {
+            panic!("a task flag builds a task subtype");
+        };
+        assert!(!share_with_team);
+        assert_eq!(numbering_team, Some(team_id));
+    })
+    .await;
+}
+
 #[test]
 fn test_file_shas() {
     let hashes = file_shas(b"hello");

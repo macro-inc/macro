@@ -28,6 +28,8 @@ export interface ColumnCast {
   failures: number;
   /** Whether the target holds several values. */
   is_multi_select: boolean;
+  /** Whether the target shows a number as a percent. */
+  percentage?: boolean;
   /** Why nothing converts, for a `never` cast. */
   reason: ColumnCastReason;
   /** Whether the target is a relation to another table's rows. */

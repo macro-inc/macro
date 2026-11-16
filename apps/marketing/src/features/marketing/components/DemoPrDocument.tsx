@@ -46,7 +46,7 @@ export function DemoPrDocument(props: {
   const record = () => props.record ?? DEPLOY_PR;
   return (
     <>
-      <h1 class="text-2xl font-semibold">{record().name}</h1>
+      <h1 class="text-2xl font-medium">{record().name}</h1>
       <div class="spacer h-3" />
       <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm">
         <PrPill

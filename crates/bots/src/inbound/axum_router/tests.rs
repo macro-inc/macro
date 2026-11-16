@@ -521,7 +521,11 @@ fn router(service: TestBotService, role: EntityParticipantRole) -> Router {
 }
 
 fn real_router(pool: PgPool, user_id: &str) -> Router {
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(pool));
     let bearer_token = user_id.to_string();
     bots_router(BotsRouterState::new(
@@ -965,7 +969,11 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
     insert_user(&pool, CHANNEL_ADMIN_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, CHANNEL_ADMIN_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(BOT_OWNER_ID),
@@ -1065,7 +1073,11 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
     insert_user(&pool, ADMIN_USER_ID).await?;
     insert_private_channel_with_admin(&pool, channel_id, ADMIN_USER_ID).await?;
 
-    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker);
+    let bot_service = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    );
     let bot = bot_service
         .create_bot(
             macro_user_id(ADMIN_USER_ID),

@@ -1,6 +1,7 @@
 //! Direct channel grants that preserve an existing sharing choice.
 
-use crate::{AccessLevel, EntityType};
+use crate::scoped_grants::{Grant, refuse_added_access};
+use crate::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_uuid::Uuid;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::{PgPool, Postgres, Transaction};
@@ -17,6 +18,13 @@ pub async fn insert_if_absent(
     channel_id: &Uuid,
     access_level: AccessLevel,
 ) -> Result<(), sqlx::Error> {
+    let channel = channel_id.to_string();
+    let grant = Grant {
+        source_id: &channel,
+        source_type: EntityAccessSourceType::Channel,
+        access_level,
+    };
+    refuse_added_access(transaction.as_mut(), entity_id, entity_type, &[grant]).await?;
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
         VALUES ($1, $2, $3, 'channel', $4)

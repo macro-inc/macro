@@ -54,7 +54,8 @@ PORT=3004 just android-dev --no-watch --no-dev-server-wait --config '{"build":{"
 
 That address is emulator-only; the host-side server check must be skipped.
 
-Build commands embed the production frontend. Outputs are under
+Build commands embed the production frontend, without its source maps (see
+[building bundles](../../apps/web/tauri/src-tauri/README.md#building-bundles)). Outputs are under
 `tauri/src-tauri/gen/android/app/build/outputs/`. The launcher defaults to ARM64.
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
@@ -210,7 +211,9 @@ To release:
    it is the release decision: nothing else approves it. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
-   up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
+   up to 30 minutes; the native checks and either platform's release checks
+   don't count, so a failed or in-flight iOS release never holds this one
+   back), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
    the merge result, so such a bundle could never pass it; the refusal lists
    the native files `main` changed; merge `main`, bump, re-add the label).

@@ -5,9 +5,8 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity } from '@entity';
-import { notificationIsRead } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
-import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
+import { markChannelsAsRead } from '@notifications/notification-helpers';
 import {
   useCreateChannelLabelMutation,
   useDeleteChannelLabelMutation,
@@ -703,16 +702,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     try {
-      await ensureNotificationSourceLoaded(notificationSource);
-      const unread = notificationSource
-        .notifications()
-        .filter(
-          (notification) =>
-            notification.entity_type === 'channel' &&
-            channelIds.has(notification.entity_id) &&
-            !notificationIsRead(notification)
-        );
-      await notificationSource.bulkMarkAsRead(unread);
+      await markChannelsAsRead(notificationSource, channelIds);
     } catch (error) {
       toast.failure(
         errorMessage(error, t('channelSections.markLabelReadFailed'))

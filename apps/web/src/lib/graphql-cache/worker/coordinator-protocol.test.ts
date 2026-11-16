@@ -216,12 +216,19 @@ describe('coordinator runtime protocol', () => {
       tabId: 'tab',
       ownerEpoch: 2,
     };
-    for (const valid of [cacheUnavailable, superseded, removeStale]) {
+    for (const valid of [
+      cacheUnavailable,
+      { ...cacheUnavailable, superseded: true },
+      superseded,
+      removeStale,
+    ]) {
       expect(validateCoordinatorToTabEnvelope(valid).ok).toBe(true);
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
+      { ...cacheUnavailable, superseded: false },
       { ...superseded, reason: '' },
+      { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
       { ...removeStale, ownerEpoch: 0 },
     ]) {
@@ -570,14 +577,21 @@ describe('coordinator runtime protocol', () => {
       })
     ).toBe(false);
 
-    const selectionRequest = (keys: string[]) =>
+    const selectionRequest = (keys: string[], priority?: string) =>
       isCacheRequest({
         id: 2,
         kind: 'read-records-by-keys',
         document: 'fragment Item on GraphqlSoupDocument { name }',
         fragmentName: 'Item',
         keys,
+        ...(priority ? { priority } : {}),
       });
+    expect(selectionRequest(['GraphqlSoupDocument:one'], 'typed-search')).toBe(
+      true
+    );
+    expect(selectionRequest(['GraphqlSoupDocument:one'], 'user-visible')).toBe(
+      false
+    );
     expect(selectionRequest(['ROOT_QUERY'])).toBe(false);
     expect(selectionRequest([`Thing:${'x'.repeat(1024)}`])).toBe(false);
   });

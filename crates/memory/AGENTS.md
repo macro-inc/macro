@@ -12,13 +12,19 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
   generation and sequential catch-up. `models.rs` owns line edits and UTC periods.
 - `src/domain/ports.rs`: storage, generation and current membership contracts.
 - `src/outbound/pg_composed_memory.rs`: component storage and generation leases.
-- `src/outbound/generator.rs`: generic agent research and tool-free privacy judge.
+- `src/outbound/generator.rs`: generic agent research and summaries on Sonnet 5.5 at
+  medium effort, and the tool-free privacy judge (its decision is read from anywhere
+  in the reply; no decision, or a malformed one, rejects).
 - `src/inbound/toolset.rs`: ReadMemory, UpdateMemory, GetUserActivity.
 - `src/inbound/axum_router.rs`: `GET /memory` (composed), `GET`/`PATCH
   /memory/explicit` and `GET /memory/activity`, the SDK's equivalents of the tools.
 - `src/schedule.rs`: tracked internal cron closure hosted by cognition in nonlocal
   environments; retries due users every five minutes, generating completed days.
-- `../ai_tools/src/memory.rs`: composition root and allowlisted read-only research.
+  The PostHog flag `disable-memory-refresh` (service context `memory-refresh`)
+  is read before each claim and stops the batch while it is on; a failed flag read
+  keeps refresh running.
+- `../ai_tools/src/memory.rs`: composition root, allowlisted read-only research, and
+  the activity-log adapter behind `MemoryActivity`.
 - `../ai_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p ai_tools
   --bin memory`); uses the existing memory environment configuration.
 
@@ -37,7 +43,10 @@ Daily reports are immutable. Weekly/monthly reports rebuild from daily reports
 (whole weeks plus uncovered days for months); only the summary uses its prior
 version. UTC weeks start Monday. A 25-minute database lease bounds concurrent
 workers; each generation has a 20-minute timeout. Profile revisions guard the
-atomic component commit. Failed days must complete before later days.
+atomic component commit. Days commit in order: a failed day is retried after a
+growing delay and given up after `MAX_REFRESH_ATTEMPTS` claims, committing the
+pieces that passed review (kept in `memory_refresh_piece` between attempts). A day
+with no activity in the activity log (`MemoryActivity`) commits without model calls.
 
 ## Checks
 

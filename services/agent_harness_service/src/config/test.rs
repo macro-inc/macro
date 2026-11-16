@@ -49,7 +49,12 @@ fn config_values() -> serde_json::Value {
         "AGENT_SESSION_CHANGES_BUCKET": "test-bucket",
         "GITHUB_PULL_REQUEST_PATCH_BUCKET": "test-bucket",
         "GITHUB_SYNC_APP_CLIENT_ID": "github-client-id",
-        "GITHUB_SYNC_APP_PEM_SECRET_KEY": "github-secret-name"
+        "GITHUB_SYNC_APP_PEM_SECRET_KEY": "github-secret-name",
+        "REPO_STORAGE_ROOT": "/data/agent-git",
+        "MAX_REPO_SIZE_BYTES": 524288000,
+        "PUSHES_PER_MINUTE": 30,
+        "LIVEKIT_API_KEY": "livekit-key",
+        "LIVEKIT_API_SECRET": "livekit-secret"
     })
 }
 
@@ -127,7 +132,12 @@ fn values() -> serde_json::Value {
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 1500,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 15000,
-        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25,
+        "REPO_STORAGE_ROOT": "/data/agent-git",
+        "MAX_REPO_SIZE_BYTES": 524288000,
+        "PUSHES_PER_MINUTE": 30,
+        "LIVEKIT_API_KEY": "livekit-key",
+        "LIVEKIT_API_SECRET": "livekit-secret"
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -249,6 +259,7 @@ fn computer_fleet_settings_require_the_selected_groups() {
         "COMPUTERS_CONTROL_PLANE_ID": "local-test",
         "COMPUTERS_HOST_NAME": "local-docker",
         "COMPUTERS_IMAGE": "macro-box:latest",
+        "COMPUTERS_AGENT_IMAGE": "macro-box-agent:latest",
         "COMPUTERS_HOST_RESERVE_GB": 7,
         "COMPUTERS_OVERSELL_FACTOR": 3,
         "COMPUTERS_DOCKER_NETWORK": "test-services",
@@ -266,6 +277,26 @@ fn computer_fleet_settings_require_the_selected_groups() {
         .err()
         .unwrap();
     assert!(error.to_string().contains("COMPUTERS_DOCKER_MEMORY_GB"));
+    // No agent image is a startup failure, never the regular image.
+    let mut no_agent_image = settings.clone();
+    no_agent_image
+        .as_object_mut()
+        .unwrap()
+        .remove("COMPUTERS_AGENT_IMAGE");
+    let error = serde_json::from_value::<DockerFleetSettings>(no_agent_image)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("COMPUTERS_AGENT_IMAGE"));
+    let mut blank_agent_image = settings.clone();
+    blank_agent_image["COMPUTERS_AGENT_IMAGE"] = serde_json::json!(" ");
+    assert!(
+        serde_json::from_value::<DockerFleetSettings>(blank_agent_image)
+            .unwrap()
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("COMPUTERS_AGENT_IMAGE")
+    );
     let mut blank = settings;
     blank["COMPUTERS_IMAGE"] = serde_json::json!("");
     assert!(
@@ -298,5 +329,21 @@ fn computer_retention_and_past_due_grace_default_to_two_weeks_and_a_week_and_ref
         zero[key] = serde_json::json!(0);
         let config: Config = serde_json::from_value(zero).unwrap();
         assert!(config.computer_billing_policy().is_err(), "{key}");
+    }
+}
+
+#[test]
+fn agent_repo_storage_limits_and_speech_credentials_are_required() {
+    for key in [
+        "REPO_STORAGE_ROOT",
+        "MAX_REPO_SIZE_BYTES",
+        "PUSHES_PER_MINUTE",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
+    ] {
+        let mut incomplete = values();
+        incomplete.as_object_mut().unwrap().remove(key);
+        let error = serde_json::from_value::<Config>(incomplete).err().unwrap();
+        assert!(error.to_string().contains(key), "{error}");
     }
 }

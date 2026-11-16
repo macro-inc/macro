@@ -21,19 +21,26 @@ semantic control islands on the right. Collection headers use `ListHeader`:
 filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
-Noise) are `Tabs`: separate 32px pills, never inside a group. Action groups use
-`variant="secondary" finish="raised"`, fully rounded ends, `sm`/`icon-sm` segments
-(28px controls), and 8px gaps. Tabs, New, and Search retain `md` sizing.
+Noise) are `Tabs`: separate pills at their bar's control height (`size="sm"`
+in a detail header), never inside a group. Action groups use
+`variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
+the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
+(28px controls); collection headers, beside New and Search, use `md`/`icon-md`
+(32px). New and Search retain `md` sizing. A block whose split header is 32px
+passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
-belongs to its view's mobile view. Where one exists (the email thread is the
-first), the header shows Back, the title (tap it for the title menu), and Info,
-with other actions in the title menu; other touch headers keep their current
-controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
+belongs to its view's mobile view, which lists every island it shows. A new one
+shows Back, the title (tap it for the title menu), and Info, with other actions
+in the title menu, as the email thread's does. A header split from a shared one
+keeps what it had: a document's or task's also shows the access badge, the sync
+indicator, Ask Macro and, on tablets, Dispatch Agent. Other touch headers keep
+their current controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)
@@ -51,24 +58,40 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## More menus
+
+Top-level action rows use one appropriate shared interface icon, including Mute
+and Change icon. Match each action across header, context, preview, and mobile
+menus using the [canonical action icons](../../apps/web/src/components/icon/system/README.md#menu-action-icons);
+simple choices such as mute durations stay text-only. Copy actions
+retain the open menu and focused row; the explicit icon blurs and fades to a plain
+green check after the clipboard write succeeds, then resets after the last copy.
+Labels remain unchanged and success toasts do not appear. A failed copy keeps the
+original icon and reports the error. The same behavior applies to mobile action
+sheets. Ordinary actions close immediately without waiting; desktop Change icon
+and Add tag open the existing pickers inside submenus instead.
+
 ## Entity icons and colors
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon** after Rename in an entity menu, without a leading menu icon.
-Document header icons open the picker separately from their breadcrumb name's
-navigation button. Header buttons are 24px with unchanged 16px glyphs and the
-shared larger touch targets. Row icons still navigate. Sidebar category icons do
+**Change icon** after Rename in an entity menu, with its appearance icon.
+Editable document and task-project header icons open the picker separately from
+their breadcrumb name's navigation button. Read-only and flag-disabled icons stay
+inside that navigation button. Header buttons are 24px with unchanged 16px glyphs
+and the shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.
-Document content titles have no leading icon. Without a custom icon, **Add icon**
-appears before the other title pills for editors.
+Document content titles have no leading icon or Add icon pill; use the header
+icon or More menu to edit appearance.
 Editing requires `enable-entity-appearance`; disabled or loading flags hide all
 entry points, and disabling closes an open picker. Saved appearance remains
 visible, including public/read-only views; API/SDK access and permissions do not
 change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
 
-Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+Desktop header icons use a compact 344px anchored popover; desktop menu entries
+use the same picker inside a submenu, with a matching skeleton while its code
+loads instead of the branded logo loader. Phones retain a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
 stays open. Escape, outside clicks, and Done close without undoing saved choices.
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back

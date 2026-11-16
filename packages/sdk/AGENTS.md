@@ -48,9 +48,11 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
-  either the single agent task or `steps` (generated `CodeStep`s, agent steps
-  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
-  restricts to an explicit user request; `routineBody` maps both onto the
+  `steps` (generated `CodeStep`s, agent steps with `Agent` handles) and
+  `dangerouslyOperateAsUser`, which its TSDoc restricts to an explicit user
+  request, or the older single agent task. Its examples use steps only:
+  agents copy them, and a routine draft hands back steps, converting a single
+  agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
@@ -59,7 +61,9 @@ enforced by the ordinary backend APIs.
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
   `children()` and `keepAsOwn()` read and change the link, and
   `RoutineExecution.created` holds the routines a run created. The rules an
-  agent needs are in the `@agent` block on `RoutineNamespace`.
+  agent needs are in the `@agent` block on `RoutineNamespace`, which the
+  routine drafter also reads; code mode follows it with the Compose Routines
+  skill (`crates/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
@@ -137,8 +141,9 @@ enforced by the ordinary backend APIs.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
   grants, webhook URLs, `BotToken`s) with user auth, and reads the
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
-  bot-management tools in its favour; `IssueBotCredential` stays, because its
-  chat card mints a token the model never reads.
+  bot-management tools in its favour, `IssueBotCredential` too: a program
+  presents a `botCredential` view, whose card mints a token the model never
+  reads.
 - `src/entities/imports/`: `macro.imports`, the import ledger (cognition
   `/import/entities`, `/import/notion/pages`): `list`, `track`,
   `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
@@ -158,8 +163,15 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
-- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
-  normal human-session authorization and secret disclosure are outside v1 agent capabilities.
+- Keep the human-session-only Passwords vault endpoints, including batch import
+  and name matching and the human review of agent access requests, in coverage
+  exclusions; normal human-session authorization and secret disclosure are
+  outside v1 agent capabilities.
+- `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the
+  agent vault for the agent's own API key; every call sends that wake's
+  `X-Macro-Agent-Session-Id`. Its classes are `@mcp-exclude` and stay out of the
+  code-mode catalog: disclosed values and codes go to the agent's secrets
+  capability, never to model context.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
   routes in app-only coverage exclusions.
@@ -192,6 +204,8 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- The SDK is a root Bun workspace member: its dependencies resolve from the
+  root `bun.lock`, and there is no `bun.lock` here.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
@@ -229,6 +243,10 @@ the existing gateway prefixes.
   in step.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
+  When a merge conflicts in `generated/`, first run them on the merged specs,
+  since `code_mode_assets` (built by the OpenAPI exporters) type-checks the
+  handwritten SDK against these clients; then regenerate the clients, and run
+  them again on the exported specs.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
@@ -310,3 +328,5 @@ the existing gateway prefixes.
 - Keep LiveKit and OpenTelemetry external in the calls build so room objects and
   tracing use the consumer's runtime instances. Do not re-export calls helpers
   or their runtime types from `src/macro.ts`.
+
+- `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.

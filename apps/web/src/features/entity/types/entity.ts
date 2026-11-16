@@ -145,6 +145,13 @@ export type ChannelEntity = EntityBase & {
     state: 'unseen' | 'seen' | 'done';
     createdAt: DateValue;
   }[];
+  /** The viewer's unread mentions, thread replies included, from an edge
+   * limited to `CHANNEL_MENTION_EDGE_LIMIT` rows. Undefined on rows from other
+   * projections. Never use for bulk reads. */
+  unreadMentions?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   teamId?: string;
   interactedAt?: DateValue | null;
@@ -473,6 +480,14 @@ export type HarnessEntity = EntityBase & {
   type: 'harness';
 };
 
+/**
+ * A team. Only the notifications inbox lists it, for team-scoped requests
+ * filed under it (a vault access request); it has no page of its own.
+ */
+export type TeamEntity = EntityBase & {
+  type: 'team';
+};
+
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
 export type FormEntity = EntityBase & {
   type: 'form';
@@ -539,6 +554,7 @@ export type EntityData =
   | DatabaseEntity
   | FormEntity
   | HarnessEntity
+  | TeamEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -559,6 +575,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'database',
   'form',
   'harness',
+  'team',
   'routine',
   'calendar_event',
   'foreign',

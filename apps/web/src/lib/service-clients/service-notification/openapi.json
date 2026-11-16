@@ -1837,6 +1837,88 @@
           }
         }
       },
+      "ComputerSetupAgent": {
+        "type": "object",
+        "description": "The agent teammate a computer was bought for, so its inviter hears about\nthe agent rather than the machine.",
+        "required": ["userId", "name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The agent's name."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The agent's Macro user id, to open a DM with it."
+          }
+        }
+      },
+      "ComputerSetupMetadata": {
+        "type": "object",
+        "description": "A team's Macro computer finished first-time setup, or could not be set\nup. Sent to its buyer, who continues (or retries) from the setup flow.",
+        "required": ["computerId", "computerName", "outcome"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSetupAgent",
+                "description": "The agent teammate the computer runs; absent for a plain computer."
+              }
+            ]
+          },
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer that was set up."
+          },
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The computer's harness, once macrod has connected."
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ComputerSetupOutcome",
+            "description": "Ready, or why setup failed."
+          }
+        }
+      },
+      "ComputerSetupOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "macrod connected for the first time: the computer is ready.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["ready"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Setup gave up before the computer was ready.",
+            "required": ["failureReason", "kind"],
+            "properties": {
+              "failureReason": {
+                "type": "string",
+                "description": "Why, in the words the computer's status shows."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "How a computer's first setup ended."
+      },
       "ConnGatewayNotificationPayload": {
         "$ref": "#/components/schemas/RealtimeNotif_TaggedContent_Value",
         "description": "Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.\n\nUsed for OpenAPI schema generation — serializes identically to\n`RealtimeNotif<serde_json::Value>`."
@@ -3193,6 +3275,21 @@
           },
           {
             "type": "object",
+            "description": "An agent asked for access to a vault item the user manages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/PasswordAccessRequestedMetadata",
+                "description": "An agent asked for access to a vault item the user manages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["password_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "One of the user's routines finished a run, successfully or not.",
             "required": ["content", "tag"],
             "properties": {
@@ -3218,6 +3315,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["agent_sign_in_expiry"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ComputerSetupMetadata",
+                "description": "A Macro computer the user bought finished first-time setup, or\ncould not be set up."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["computer_setup"]
               }
             }
           },
@@ -3311,6 +3423,32 @@
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
+      },
+      "PasswordAccessRequestedMetadata": {
+        "type": "object",
+        "description": "An agent asked for access to a team vault item. Sent to the item's current\nhuman creator and the team's current administrators, with the agent as\nsender. Carries the item name and opaque ids only, never values.",
+        "required": ["requestId", "teamId", "itemId", "itemName"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Requested item."
+          },
+          "itemName": {
+            "type": "string",
+            "description": "Item display name when the request was made."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request under review."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team owning the item."
+          }
+        }
       },
       "PushNotificationData": {
         "type": "object",

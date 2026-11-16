@@ -7,7 +7,10 @@ import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
@@ -49,13 +52,14 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
   useIsTeamOwner,
 } from '@queries/team/teams';
+import type { AgentModelDto } from '@service-agent-harness/generated/schemas/agentModelDto';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
@@ -71,6 +75,7 @@ import {
   on,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
@@ -136,6 +141,9 @@ type ConnectedHarness = {
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 
+/** The model id a runtime lists for its own default choice (Claude Code's). */
+const DEFAULT_HARNESS_MODEL = 'default';
+
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: MACRO_HARNESS_NAME,
@@ -167,11 +175,21 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const [creating, setCreating] = createSignal(false);
+  // A create request already waiting opens the form on first render, so the
+  // list never flashes before it.
+  const pendingCreate = untrack(agentSettingsRequest);
+  const [creating, setCreating] = createSignal(
+    pendingCreate?.type === 'create'
+  );
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal(
+    pendingCreate?.type === 'create' ? pendingCreate.harnessId : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setCreateHarnessId(undefined);
     setEditingAgent(undefined);
     setDeletingAgent(undefined);
     props.onCloseCreate?.();
@@ -193,7 +211,7 @@ export function Agents(props: {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
-  const harnessesQuery = useHarnessesQuery();
+  const harnessesQuery = useRunnableHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
     return buildAgentModelTargets(cursorConnected(), harnesses).map(
@@ -266,14 +284,37 @@ export function Agents(props: {
       isTeamOwner(),
       isTeamAdmin()
     );
+  const managedAgents = () =>
+    (agentsQuery.isSuccess ? agentsQuery.data : []).filter((agent) =>
+      canManageAgent(agent.bot, currentUserId(), currentTeamId())
+    );
+  // Only a runtime's own catalog says which model its `default` resolves to,
+  // so load the catalogs of runtimes that have an agent on `default`.
+  const defaultModelHarnesses = createMemo(() =>
+    connectedHarnesses().filter((harness) =>
+      managedAgents().some(
+        (agent) =>
+          agent.default_model === DEFAULT_HARNESS_MODEL &&
+          (agent.harness_id ?? agent.harness) === harness.id
+      )
+    )
+  );
+  const defaultModelQueries = useAgentModelsQueries(() =>
+    defaultModelHarnesses().map((harness) => harness.target)
+  );
+  const catalogFor = (harnessId: string) => {
+    const index = defaultModelHarnesses().findIndex(
+      (harness) => harness.id === harnessId
+    );
+    const query = index >= 0 ? defaultModelQueries[index] : undefined;
+    return query?.isSuccess && query.data.status === 'available'
+      ? query.data.models
+      : [];
+  };
   const agents = createMemo(() =>
-    (agentsQuery.isSuccess ? agentsQuery.data : [])
-      .filter((agent) =>
-        canManageAgent(agent.bot, currentUserId(), currentTeamId())
-      )
-      .map((agent) =>
-        summarizeAgent(agent, connectedHarnesses(), channelOptions())
-      )
+    managedAgents().map((agent) =>
+      summarizeAgent(agent, connectedHarnesses(), channelOptions(), catalogFor)
+    )
   );
   const teamAgents = createMemo(() => [
     MACRO_AGENT,
@@ -283,11 +324,21 @@ export function Agents(props: {
     agents().filter((agent) => agent.share === 'Private')
   );
 
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request?.type !== 'create') return;
+      setEditingAgent(undefined);
+      setCreateHarnessId(request.harnessId);
+      setCreating(true);
+      consumeAgentSettingsRequest(request.id);
+    })
+  );
+
   // Opened from an agent's user card: wait for the list, then show that
   // agent's editor if it is one the viewer manages.
   createEffect(
     on([agentSettingsRequest, () => agentsQuery.isPending], ([request]) => {
-      if (!request || agentsQuery.isPending) return;
+      if (request?.type !== 'edit' || agentsQuery.isPending) return;
       const agent = agents().find(
         (candidate) => candidate.id === request.agentId
       );
@@ -436,6 +487,7 @@ export function Agents(props: {
       <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
           initialKind={props.createKind}
+          initialHarnessId={createHarnessId()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -479,7 +531,8 @@ export function Agents(props: {
 function summarizeAgent(
   agent: AgentWithHarnessId,
   harnesses: readonly ConnectedHarness[],
-  channels: readonly ChannelOption[]
+  channels: readonly ChannelOption[],
+  catalogFor: (harnessId: string) => readonly AgentModelDto[]
 ): AgentSummary {
   const harnessKey = agent.harness_id ?? agent.harness;
   const harness = harnesses.find((option) => option.id === harnessKey);
@@ -501,7 +554,10 @@ function summarizeAgent(
     instructions: agent.instructions,
     whereItRuns: whereItRunsLabel(harnessKey, harness),
     defaultModel:
-      MODEL_PRETTYNAME[agent.default_model as Model] ?? agent.default_model,
+      agent.default_model === DEFAULT_HARNESS_MODEL
+        ? catalogModelLabel(agent.default_model, catalogFor(harnessKey))
+        : (MODEL_PRETTYNAME[agent.default_model as Model] ??
+          agent.default_model),
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
@@ -672,6 +728,8 @@ function AgentDeleteDialog(props: {
 
 function AgentEditorPage(props: {
   initialKind?: AgentKind;
+  /** The machine a new agent starts on under Where it runs. */
+  initialHarnessId?: string;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -698,6 +756,7 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      props.initialHarnessId ??
       (props.initialKind === 'coder'
         ? props.connectedHarnesses.find((harness) =>
             isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
@@ -723,7 +782,7 @@ function AgentEditorPage(props: {
   };
   const preferredModelId = (id: string) => {
     const data = modelDataForHarness(id);
-    if (data?.status === 'unsupported') return 'default';
+    if (data?.status === 'unsupported') return DEFAULT_HARNESS_MODEL;
     if (data?.status !== 'available') return '';
     const current = data.currentModel;
     if (
@@ -772,8 +831,9 @@ function AgentEditorPage(props: {
       // The built-in runtime reports slugs as names; other runtimes name
       // their own models.
       label:
-        harnessId() === IN_MEMORY_HARNESS.id
-          ? modelLabel(model.id, model.name)
+        harnessId() === IN_MEMORY_HARNESS.id ||
+        model.id === DEFAULT_HARNESS_MODEL
+          ? modelLabel(model.id, model.name, model.description)
           : model.name,
       description: model.description ?? undefined,
       group: model.group ?? undefined,
@@ -907,7 +967,9 @@ function AgentEditorPage(props: {
                     )
                   }
                   fallback={
-                    <p class="settings-input text-ink-muted">
+                    // A status line, not a field: it wraps on a phone
+                    // instead of spilling out of an input's fixed height.
+                    <p class="flex min-h-9 not-touch:min-h-8 items-center text-sm text-ink-muted">
                       {t('computers.modelsWhenOn')}
                     </p>
                   }
@@ -1325,7 +1387,8 @@ function AgentEditorPage(props: {
                 title="Where it runs"
                 description="Pick where this agent does its work."
               >
-                <fieldset class="flex flex-col gap-2">
+                {/* A fieldset is min-content wide by default; a long option would widen the phone form. */}
+                <fieldset class="flex min-w-0 flex-col gap-2">
                   <legend class="sr-only">Where it runs</legend>
                   <WhereItRunsOption
                     value="in-memory"

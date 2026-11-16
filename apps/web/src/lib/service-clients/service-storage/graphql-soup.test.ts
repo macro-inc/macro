@@ -479,15 +479,19 @@ vi.mock('@macro-inc/observability', () => ({
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
     captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
-      work({
+    span: (_name: string, work?: (span: unknown) => Promise<unknown>) => {
+      const span = {
         run: <T>(work: () => T) => work(),
         event: vi.fn(),
         setAttr: vi.fn(),
+        error: vi.fn(),
+        end: vi.fn(),
         injectTraceHeaders: (headers: Record<string, string>) => {
           headers.traceparent = mocks.traceparent;
         },
-      }),
+      };
+      return work ? work(span) : span;
+    },
   },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
@@ -561,7 +565,7 @@ vi.mock('@urql/core', () => ({
   },
 }));
 
-it('maps the unread alias without pretending it is the full notification edge', async () => {
+it('maps the unread and mention aliases without pretending either is the full notification edge', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const item = {
     __typename: 'GraphqlSoupChannel',
@@ -587,6 +591,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
+    unreadMentions: [{ id: 'mention', state: 'UNSEEN' }],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({
     tag: 'channel',
@@ -595,6 +600,7 @@ it('maps the unread alias without pretending it is the full notification edge', 
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
       ],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
     },
   });
 });
@@ -1231,6 +1237,31 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).not.toHaveBeenCalled();
   });
 
+  it('keeps activity pushes out of the cache and other subscriptions in it', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const subscription = (text: string): Operation => ({
+      kind: 'subscription',
+      key: 43,
+      query: parse(text),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    });
+    const uncached =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.isUncachedSubscription;
+
+    expect(
+      uncached?.(
+        subscription('subscription ActivityUpdates { activityUpdates { id } }')
+      )
+    ).toBe(true);
+    expect(
+      uncached?.(
+        subscription('subscription SoupUpdates { soupUpdates { __typename } }')
+      )
+    ).toBe(false);
+  });
+
   it.each(['query', 'mutation', 'subscription'] as const)(
     'reports handled cache-disposed failures for %s without exporting operation payloads',
     async (kind) => {
@@ -1390,6 +1421,48 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   });
 
+  it('stops restarting the cache once a newer build took it over', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(
+          new Error('a newer version of the app took over the local cache'),
+          { errorCode: 'cache-superseded' }
+        )
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying while another context holds the owner lock', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(
+        Object.assign(new Error('owner lock is held by another context'), {
+          errorCode: 'owner-lock-unavailable',
+        })
+      );
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects drafts from both retired and uncached transports after recovery', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');
@@ -1501,6 +1574,17 @@ describe('GraphQL Soup browser cache session gate', () => {
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
     );
+  });
+
+  it('does not hand out a host that is already unusable', async () => {
+    const soup = await import('./graphql-soup');
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.getGraphqlCacheHost()).toBeUndefined();
   });
 
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {

@@ -91,16 +91,21 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   'scheduled-action': {
     generated: 'suggestRoutine',
     checked: 'checkScheduledAction',
-    listed: 'listScheduledActions listScheduledActionHistory',
-    read: 'getScheduledAction getScheduledActionTemplate',
-    created: 'createScheduledAction',
+    listed: 'listScheduledActions listScheduledActionHistory listSuggestions',
+    read: 'getScheduledAction getScheduledActionTemplate reviewSuggestions reviewRoutineSuggestions',
+    created: 'createScheduledAction addSuggestion',
     deleted: 'deleteScheduledAction',
     edited:
-      'updateScheduledAction setScheduledActionAppearance detachScheduledAction',
+      'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
+    archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
+    approved: 'acceptSuggestion',
+    rejected: 'dismissSuggestion',
+    restored: 'restoreSuggestion',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -110,7 +115,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendReferralCode',
     invited: 'inviteToTeam',
     deleted: 'deleteTeamInviteHandler',
-    edited: 'putUserName putProfilePictureFile',
+    edited: 'putUserName putProfilePictureFile patchTeam',
     uploaded: 'createProfilePictureUpload',
   },
   calendar: {
@@ -220,7 +225,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
-      getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
+      getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
       getDocumentShortId getSkillDescription getDocumentTeamShare getDocumentTextContent
@@ -232,6 +237,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
+      passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
@@ -248,7 +254,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
     `,
     searched: `
-      searchContacts taskSimilaritySearchHandler
+      searchContacts taskSimilaritySearchHandler passwordsAgentSearch
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
@@ -260,7 +266,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       checkActiveCall getCallRingState getTeamAvailability
     `,
     requested:
-      'requestAccountManager requestChannelAccess accessRequestsSubmit',
+      'requestAccountManager requestChannelAccess accessRequestsSubmit passwordsAgentRequestAccess',
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
@@ -268,9 +274,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall passwordsAgentCreate
     `,
     edited: `
+      passwordsAgentUpdate passwordsAgentSetTotp
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps

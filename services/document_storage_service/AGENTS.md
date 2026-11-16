@@ -12,12 +12,13 @@ threads, pins, recents, notifications, folders, activity.
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
+- `src/api/middleware/crm_access.rs` adds the optional `x-macro-crm-access` retirement hint only for `x-macro-crm-access-signal: 1`; other requests skip signal authentication and lookup. A per-instance 10,000-user LRU coalesces each resident user's lookups and memoizes results/failures/cancellations for three non-sliding seconds from lookup start; admission omits the hint if it would evict an active lookup. The primary read runs concurrently with the handler (200 ms lookup-future budget, 250 ms total signal budget after authentication extraction); failed or expired hints are omitted. This cache never authorizes a record: domain receipts and `GET /crm/member-access` remain fresh. Clients treat a missing hint as unknown and verify changed hints through current authority before changing cache policy.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it share the CRM configuration-kind permission gate. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
   Compose primary-backed graph and name readers in `server.rs`, and insert the
   context through the shared GraphQL HTTP/websocket request-data function.
@@ -95,6 +96,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
+
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.
 
@@ -110,17 +114,41 @@ threads, pins, recents, notifications, folders, activity.
   disabled locally can hide a bug that only shows in deployed builds.
 - CRM-scoped Soup email previews read the primary so consent withdrawal and
   exclusions take effect without replica lag; ordinary inbox lists keep the replica.
+- The list Soup reader gets its own CRM service, which reads the Sales views'
+  activity edges from the replica (`with_activity_edges_replica`) after checking
+  current permitted teams on the primary. Its record and other access reads,
+  and the primary-backed Soup reader, keep the primary.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
-- Dev's readonly pool keeps 2–20 connections per task, independently of the
-  primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
-  sessions, or 120 while a rolling deployment overlaps all three. Old tasks
-  retain their previous cap until they drain during the initial rollout.
-  Production and local pools retain their existing primary/readonly limits.
+- Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
+  apart from the primary. Dev's readonly pool keeps 2–20 connections: three
+  tasks allow 60 replica sessions, or 120 while a rolling deployment overlaps
+  all three. Production's keeps 10–50, so 7 tasks allow 350 and a deployment
+  700. Both pools wait 30 s for a connection.
+- A read is never retried on the primary. The only fallback is at startup: a
+  task that cannot reach the replica reads the primary for its lifetime and
+  reports no `readonly` pool metrics.
+- Sessions carry the application name `document_storage_service`, so
+  `pg_stat_activity` and database monitoring can attribute them.
+- Each pool reports `db.client.connection.count` (state `idle`/`used`),
+  `db.client.connection.max`, `db.client.connection.used` (a histogram of the
+  in-use count sampled every second, for peaks the once-a-minute gauges miss)
+  and `db.client.connection.wait_time`, tagged
+  `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
+  once-a-second probe, not a per-query timing: sqlx acquires inside each query.
+  It reports zero while a connection is idle. When none is, it waits like a
+  query: in the queue at the limit, or for a new connection below it. It does
+  not time the health check sqlx runs on an idle connection, so sqlx's
+  slow-acquire warnings can appear while the probe reads zero.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Thread edits (`api/threads/edit_thread.rs`) and saved view definition
+  creates and updates refuse sharing changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check. Every agent session scope is refused `/soup/graphql` and
+  its WebSocket (`agent_correlation::scope`).
 
 ## Related
 
@@ -138,6 +166,9 @@ together. Partial configuration fails startup; absent configuration denies vault
 Human requests evaluate `enable-passwords-v1` for their authenticated user only;
 missing, disabled or failed evaluations fail closed. Local explicitly enables it.
 Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
+The session-only `/passwords/teams/{team}/imports/{import_id}/items` route accepts
+normalized import batches up to 4 MiB; its domain service reuses ordinary creation
+and TOTP enrollment and records counts-only batch activity.
 Postgres stores metadata; values stay in OpenBao. Admission checks current human
 account classification and membership, including session-shaped agent accounts.
 

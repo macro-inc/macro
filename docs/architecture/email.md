@@ -166,7 +166,7 @@ The compose controllers now assemble these smaller responsibilities:
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
 | `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
-| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. Each refusal logs `email_send.refused` with its reason. |
+| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. A reply with nothing written outside the quoted thread (no text or media in any block, no attachments, no typed subject, and for a forward no recipients) is refused before its pre-send save, even if an earlier save gave it draft ids; any send whose draft still has no ids after the save is refused too. Each refusal logs `email_send.refused` with its reason. |
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
@@ -694,7 +694,12 @@ attachment handles retain the generation captured at reservation.
 
 The status panel combines device intents with actor/inbox-authorized, cursor-paged
 `pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
-never automatic resubmission. Delivery state distinguishes local queueing,
+never automatic resubmission. `queries/email/server-sends.ts` reads that list
+at sign-in, when the tab is shown or comes online, when this browser's send
+journal gains or loses a send, and on a timer only while the tab is visible:
+every 10 seconds while a send is in motion, once a minute otherwise. No realtime
+event announces a send attempt, so the minute is how soon an idle tab learns of
+another device's send. Delivery state distinguishes local queueing,
 server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
 but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project

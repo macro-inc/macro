@@ -17,6 +17,9 @@ the background; a slow discovery refresh must not delay the new database card.
 Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
+`?tableId=<uuid>&viewId=<uuid>` (what the SDK's table and view `webUrl()` hand out)
+opens that table and view over the viewer's remembered tab; without `viewId` the
+table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
@@ -163,7 +166,9 @@ all records, including records beyond the first page, and that opening a record
 keeps it available when a view filter excludes it. Cell edits and **Add column**
 use pipeline authorization. Viewer grants hide editing controls. The CRM editor
 fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
-adapter and shared provider against local test responses.
+adapter and shared provider against local test responses, including wrapped and
+multi-line notes; the plain-database counterpart is
+`features/block-database/browser-test/records.html?multiline`.
 Pipelines poll every five seconds. A poll that returns unchanged data must not
 remount company previews or request them again.
 
@@ -209,13 +214,14 @@ must use.
 The current type has a checkmark in **Change type**; selecting it leaves the column unchanged. Types that cannot convert any existing values are omitted, while empty columns can still choose a new type.
 
 The header arrow menu groups schema and view actions. **Change type** checks the
-column's values against Text, Number, Select, Multi-select, Date, Time range,
+column's values against Text, Number, Percentage, Select, Multi-select, Date, Time range,
 Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
 (**Related table**) or in any other database you can see (**Other databases**, one
 submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
-relation). A type some values would not survive shows how many, such
+relation). Number and Percentage share the same stored values: 0.25 as a number
+is 25% as a percentage, with no rescaling when the type changes. A type some values would not survive shows how many, such
 as "3 values aren't numbers · Converts into a new column"; it never changes the
 column in place. Choosing it opens a confirmation listing a few of those values,
 and **Convert into a new column** adds a column of that type right after this
@@ -241,7 +247,8 @@ by a number.`); **Save** stays disabled until it does, and Enter saves. Names wi
 spaces go in braces. Numbers added to a date count days; a date minus a date is
 the days between them. An empty number counts as 0 unless every input is empty.
 Formula columns show an ƒ icon, their cells are read-only, and their header menu
-has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+has **Edit formula**. A number formula also offers **Change type** between Number
+and Percentage. Values follow edits to their inputs
 at once, and sort and filter like numbers or dates. Deleting a column a formula uses
 is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
@@ -333,10 +340,14 @@ whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
-previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+previous save. Shift+Enter moves up, except in a text cell, where it starts a new
+line, as Alt+Enter does. Moving places the typing cursor at the end of
 the destination cell's text, ready to type. The active cell has one subtle outline,
-with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
-behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
+with no additional border around its editor. A text cell opens in place at the
+weight and line height it shows, and its row grows to fit a long or multi-line
+value; closed, the cell shows a multi-line value's lines joined on one line. Arrow
+keys inside a text editor move through its lines, wrapped or not, and leave the
+cell only from its first or last line. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
 skipped. If a pending save infers a column's type, the cell currently being typed
 in keeps its editor, draft and focus until it is committed or canceled.
@@ -353,6 +364,11 @@ rounded value. **Enter a valid number** appears in an opaque, focus-only hint. L
 the field hides the hint but keeps the draft and outline; other fields remain
 editable, including through Tab or Shift+Tab. Correct the value or press Escape to
 cancel. Signed decimals and scientific notation remain supported.
+Percentage cells store a fraction and display it with a percent sign (`0.25` shows
+as `25%`). The editor shows percentage points without the sign, so typing `25`
+stores `0.25`. A trailing `%` is accepted. Changing Number to Percentage does not
+rescale existing values. Filters and column totals use the displayed percent, not
+the stored fraction.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
@@ -382,7 +398,8 @@ Drag across table cells to select a rectangle, or Shift-click another cell to
 extend from the first cell. From the keyboard, Shift+Arrow grows or shrinks the
 rectangle from the focused cell, Shift+Cmd/Ctrl+Arrow runs to the edge of the
 data, Shift+Home/End to the ends of the row, and Cmd/Ctrl+A selects every loaded
-cell; a plain arrow collapses it. Inside an open cell editor Shift+Arrow selects
+cell; a plain arrow collapses it. The grid marks itself
+`data-owns-arrow-keys`, so these keys don't move split focus. Inside an open cell editor Shift+Arrow selects
 text as usual. Delete or Backspace clears editable cells in that
 rectangle as one undoable change; read-only cells are skipped. Newly saved rows
 can be included immediately; unsaved insertion rows are excluded. Escape clears
@@ -831,7 +848,8 @@ below shows each webhook's token prefix and a delete button. Deleting the last
 webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
-400 listing every problem. The row is written as the webhook's creator, and the
+400 listing every problem. Number and percentage columns take the stored
+number (0.25 is 25%); a trailing `%` is not accepted. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
 
 Browser examples: [desktop](media/database-webhooks/desktop.png) and

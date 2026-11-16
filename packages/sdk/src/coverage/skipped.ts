@@ -40,6 +40,8 @@ export const agentHarnessExcluded = [
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.
   'startClaudeSignIn', // Computer account credentials are managed in the app.
+  'getAgentVoices', // The agent voice picker is an admin app flow.
+  'getAgentVoiceSample', // The agent voice picker is an admin app flow.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -112,7 +114,6 @@ export const authExcluded = [
   'passwordLogin',
   'passwordlessCallback',
   'passwordlessLogin',
-  'patchTeam',
   'patchTeamCrmSettings',
   'patchTeamMemberPlan',
   'patchUserGroup',
@@ -153,6 +154,11 @@ export const authExcluded = [
 ];
 
 export const authBacklog = [
+  'createTeamAgent', // Inviting an agent teammate buys a computer; an admin app flow for now.
+  'deleteTeamAgent', // Removing an agent teammate releases its computer; an admin app flow for now.
+  'listTeamAgents', // Agent teammates fit a team entity; wrap with the team namespace later.
+  'getTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
+  'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
@@ -219,7 +225,6 @@ export const cognitionExcluded = [
   'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
-  'upsertAiProjection',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const cognitionBacklog =
@@ -298,7 +303,11 @@ export const scheduledActionExcluded = [
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
-  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
+  'recordSuggestionsSeen', // The app records each load; agents have no use for it.
+  'getSuggestionGeneration', // The app polls it while fresh suggestions generate.
+  'regenerateSuggestions', // The app's refresh button, at most hourly; generation sessions may not call it.
+  'recordSuggestionsViewed', // The app records the person opening the feed; an agent's read is not a visit.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
@@ -343,6 +352,9 @@ export const storageExcluded = [
   'requestToJoin',
   // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
   'collaborateForm',
+  // The company Team tab's paging; SDK callers read a company's whole contact
+  // list with listCompanyContacts.
+  'listCompanyContactsPage',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
   'cancelSlackImport',
   'completeSlackImportUploads',
@@ -421,9 +433,12 @@ export const storageExcluded = [
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
-  // The v1 vault requires a normal human session and item access.
-  // Agent SDK credentials cannot access it.
+  // The v1 vault, and the human review of agent access requests, require a
+  // normal human session and item access. Agent SDK credentials cannot access it.
   'passwordsActivity',
+  'passwordsAgentAccessRequests',
+  'passwordsAgentResolveRequest',
+  'passwordsAgentRevoke',
   'passwordsCopy',
   'passwordsCopyUsername',
   'passwordsCreate',
@@ -432,7 +447,9 @@ export const storageExcluded = [
   'passwordsFolders',
   'passwordsGrants',
   'passwordsHistory',
+  'passwordsImportBatch',
   'passwordsList',
+  'passwordsMatch',
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
@@ -449,6 +466,9 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
+  // Chip titles for a page of CRM records, a web-app batch preview; the SDK
+  // reads companies and contacts by handle.
+  'previewCrmRecords',
   // Live presence between viewers of a database, internal to the web app.
   'shareDatabaseAwareness',
   // Composer dictation is an app-internal, user-only upload flow.
@@ -476,6 +496,7 @@ export const storageExcluded = [
 export const storageBacklog = [
   // CRM privacy settings use the generated client.
   'getCrmEmailPrivacy',
+  'listCrmExcludedEmailThreads',
   'updateCrmEmailPrivacy',
 ] as const satisfies readonly (keyof StorageSdk)[];
 

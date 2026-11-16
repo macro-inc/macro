@@ -3,6 +3,7 @@
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -23,7 +24,7 @@ use crate::domain::ports::{
     Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
 };
 use crate::domain::service::Clock;
-use crate::domain::size::{ComputerResources, ComputerSize};
+use crate::domain::size::ComputerResources;
 
 #[cfg(test)]
 mod test;
@@ -86,11 +87,13 @@ impl FakeError {
     }
 }
 
-/// One host with `sold_units` of sold capacity; every computer awake fits.
+/// One host with `sold_units` of sold capacity and `awake_units` of awake
+/// capacity (`sold_units` when unset, so every computer awake fits).
 #[derive(Default)]
 pub struct FakeRepo {
     pub calls: AtomicUsize,
     pub sold_units: u32,
+    pub awake_units: Option<u32>,
     pub reserve_calls: Mutex<usize>,
     pub reservations: Mutex<HashMap<ComputerId, Reservation>>,
     pub purchase_keys: Mutex<HashMap<PurchaseKey, ComputerId>>,
@@ -109,6 +112,45 @@ pub struct FakeRepo {
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
     pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
+    /// The agent teammate each computer was bought for.
+    pub agents: Mutex<HashMap<ComputerId, MacroUserIdStr<'static>>>,
+}
+
+impl crate::domain::agent::ComputerAgents for FakeRepo {
+    type Error = std::convert::Infallible;
+
+    async fn agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> Result<Option<MacroUserIdStr<'static>>, Self::Error> {
+        Ok(self.agents.lock().unwrap().get(&computer).cloned())
+    }
+
+    async fn computer_for_agent(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ComputerId>, Self::Error> {
+        let computers = self.computers.lock().unwrap();
+        Ok(self
+            .agents
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(id, linked)| {
+                linked.as_ref() == agent.as_ref()
+                    && computers.get(id).is_some_and(|c| c.team_id == team_id)
+            })
+            .map(|(id, _)| *id))
+    }
+
+    async fn has_live_computer(
+        &self,
+        team_id: Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Self::Error> {
+        Ok(self.computer_for_agent(team_id, agent).await?.is_some())
+    }
 }
 
 impl FakeRepo {
@@ -124,6 +166,10 @@ impl FakeRepo {
         } else {
             computer.into()
         }
+    }
+
+    fn awake_units(&self) -> u32 {
+        self.awake_units.unwrap_or(self.sold_units)
     }
 
     fn live_units(&self) -> u32 {
@@ -219,7 +265,8 @@ impl ComputerRepo for FakeRepo {
                 return Ok(Reserved::Pending(pending.clone()));
             }
         }
-        if self.live_units() + reservation.resources.units() > self.sold_units {
+        let units = reservation.resources.units();
+        if units > self.awake_units() || self.live_units() + units > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let held = Reservation {
@@ -237,6 +284,7 @@ impl ComputerRepo for FakeRepo {
             provision_traceparent: reservation.provision_traceparent,
             expires_at,
             created_at: now,
+            agent: reservation.agent,
         };
         self.purchase_keys
             .lock()
@@ -387,10 +435,19 @@ impl ComputerRepo for FakeRepo {
                 policy: policy(),
             },
         );
-        let (state, effects) = match transitioned {
+        let (mut state, effects) = match transitioned {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
+        // Latch setup milestones like the Postgres applier.
+        let (phase, connected, waiting) = (
+            state.phase.clone(),
+            state.macrod_connected,
+            state.waiting_for_capacity(),
+        );
+        if let Some(setup) = state.setup.as_mut() {
+            setup.advance(&phase, connected, waiting, now);
+        }
         computer.state = state;
         self.push_effects(computer, effects, now);
         Ok(Some(Applied::Changed(Box::new(computer.clone()))))
@@ -717,7 +774,7 @@ impl ComputerRepo for FakeRepo {
             host: Host {
                 id: HOST,
                 name: "fake".to_owned(),
-                awake_capacity_units: self.sold_units,
+                awake_capacity_units: self.awake_units(),
                 sold_capacity_units: self.sold_units,
             },
             sold_units: held.iter().map(|resources| resources.units()).sum(),
@@ -728,20 +785,6 @@ impl ComputerRepo for FakeRepo {
                 .sum(),
             disk_gib: held.iter().map(|resources| resources.disk_gib.get()).sum(),
         }])
-    }
-
-    async fn sold_out_sizes(
-        &self,
-        catalog: &[crate::domain::size::CatalogEntry],
-        _now: DateTime<Utc>,
-    ) -> Result<Vec<ComputerSize>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        let sold = self.live_units();
-        Ok(catalog
-            .iter()
-            .filter(|entry| entry.resources.units() > self.sold_units.saturating_sub(sold))
-            .map(|entry| entry.size)
-            .collect())
     }
 }
 
@@ -790,6 +833,26 @@ impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
     }
 }
 
+/// Records every setup notice sent; `fail` refuses every send after
+/// recording it.
+#[derive(Default)]
+pub struct FakeSetupNotices {
+    pub sent: Mutex<Vec<crate::domain::ports::SetupNotice>>,
+    pub fail: AtomicBool,
+}
+
+impl crate::domain::ports::SetupNotices for FakeSetupNotices {
+    type Err = FakeError;
+
+    async fn send(&self, notice: crate::domain::ports::SetupNotice) -> Result<(), FakeError> {
+        self.sent.lock().unwrap().push(notice);
+        if self.fail.load(Ordering::SeqCst) {
+            return Err(FakeError::Storage);
+        }
+        Ok(())
+    }
+}
+
 /// A guest program for a fake [`crate::domain::ports::Fleet::exec`]: it reads
 /// its stdin to the end, then writes the stdout `script` makes of it and exits
 /// with `script`'s code.
@@ -810,5 +873,27 @@ pub fn scripted_process<Err: Send + 'static>(
         stdin: Box::pin(stdin),
         stdout: Box::pin(stdout),
         exit: Box::pin(async move { Ok(program.await.unwrap()) }),
+    }
+}
+
+/// A fixture enrollment for `computer_id`, carrying an agent when `agent`.
+pub fn enrollment(computer_id: ComputerId, agent: bool) -> crate::domain::enrollment::Enrollment {
+    crate::domain::enrollment::Enrollment {
+        computer_id,
+        generation: crate::domain::enrollment::EnrollmentGeneration::new(1),
+        pairing_id: crate::domain::ids::PairingId::new_from_uuid(Uuid::from_u128(1)),
+        device_secret: crate::domain::enrollment::DeviceSecret::new(
+            "fixture-pairing-value".to_owned(),
+        ),
+        name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
+        deployment: deployment(),
+        traceparent: None,
+        agent: agent.then(|| crate::domain::agent::AgentEnrollment {
+            agent_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+                "macro|agent@example.com".to_owned(),
+            )
+            .unwrap(),
+            env: crate::domain::agent::AgentEnv::default(),
+        }),
     }
 }

@@ -65,6 +65,8 @@ export type NotificationSource = {
   readonly notifications: Accessor<UnifiedNotification[]>;
   readonly mutedEntities: Accessor<UserUnsubscribe[]>;
   readonly isLoading: Accessor<boolean>;
+  /** Whether the session may read notifications at all; never starts the feed. */
+  readonly isEnabled: Accessor<boolean>;
 
   readonly _notificationsQuery: UserNotificationsQuery;
 
@@ -557,6 +559,7 @@ export function createNotificationSource(
     notifications,
     mutedEntities,
     isLoading,
+    isEnabled: enabled,
     _notificationsQuery: notificationsQuery,
     _mutedEntitiesQuery: mutedEntitiesQuery,
     markAsDone,

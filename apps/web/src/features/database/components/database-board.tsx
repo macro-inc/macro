@@ -554,6 +554,7 @@ function LaneIcon(props: { group: BoardGroup; column: DatabaseViewColumn }) {
             <PropertyIcon
               type={props.column.dataType}
               entityType={props.column.specificEntityType}
+              percentage={!!props.column.percentage}
               class="size-4 text-ink-muted"
             />
           }
@@ -779,7 +780,7 @@ function BoardCard(props: {
                 <div
                   class="flex min-w-0 flex-col gap-0.5 rounded has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
                   data-card-field
-                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id))}`}
+                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id), props.row.cells)}`}
                   data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
                   <span
@@ -809,7 +810,8 @@ function BoardCard(props: {
                             <span class="block break-words whitespace-normal text-xs text-ink-muted">
                               {formatCellValue(
                                 column(),
-                                rowValue(props.row, column().id)
+                                rowValue(props.row, column().id),
+                                props.row.cells
                               )}
                             </span>
                           }

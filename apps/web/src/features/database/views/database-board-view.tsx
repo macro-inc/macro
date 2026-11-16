@@ -314,7 +314,10 @@ function GroupedBoard(
   const addGroup = () => {
     const add = props.onAddGroup;
     const columnId = props.groupColumn.id;
-    return add && canEdit() && isOptionColumn(props.groupColumn)
+    return add &&
+      canEdit() &&
+      !props.groupColumn.fixedOptions &&
+      isOptionColumn(props.groupColumn)
       ? (label: string) => add(columnId, label)
       : undefined;
   };

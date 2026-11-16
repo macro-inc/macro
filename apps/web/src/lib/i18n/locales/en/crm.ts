@@ -1,4 +1,17 @@
 export default {
+  privacyExcludeThread: 'Keep this thread out of CRM',
+  privacyThreadExcluded:
+    'Your copy is no longer contributed to CRM. Manage it in Email settings; a teammate’s copy may still be shared.',
+  privacyThreadsTitle: 'Threads kept out of CRM',
+  privacyThreadsDescription:
+    'These exceptions stop sharing your copy through CRM, including mail already shared. A teammate’s contributed copy can still be visible. Company and contact records stay. To add an exception, open your thread’s menu and choose “Keep this thread out of CRM”.',
+  privacyNoThreads: 'No threads on this page.',
+  privacyThreadNoSubject: '(No subject)',
+  privacyRestoreThread: 'Remove exception',
+  privacyRestoreThreadLabel: 'Remove exception for {{subject}}',
+  privacyThreadsFirst: 'Back to first page',
+  privacyThreadsNext: 'Next page',
+
   email: 'Email',
   addEmail: 'Add email',
   manageContactEmail: 'Email options for {{email}}',
@@ -39,9 +52,6 @@ export default {
     'This change is unavailable. Check the value and try again.',
 
   navigation: 'CRM navigation',
-  collapseSidebar: 'Collapse CRM sidebar',
-  expandSidebar: 'Expand CRM sidebar',
-  showNavigation: 'Show CRM navigation',
   records: 'Records',
   recordsNavigation: 'CRM records',
   viewsNavigation: 'CRM views',
@@ -56,6 +66,22 @@ export default {
   searchSalesNotes: 'Search sales notes',
   searchSalesCalls: 'Search sales calls',
   pipelines: 'Pipelines',
+  pipelineEntryPrivate: 'Private pipeline',
+  pipelineEntryOpen: 'Open {{name}}',
+  pipelineEntryShowMore: {
+    one: 'Show {{count}} more',
+    other: 'Show {{count}} more',
+  },
+  pipelineEntryShowLess: 'Show less',
+  pipelineEntryEmptyFields: {
+    one: '{{count}} empty field',
+    other: '{{count}} empty fields',
+  },
+  pipelineEntryEmptyFieldsLabel: {
+    one: '{{count}} empty field: {{names}}',
+    other: '{{count}} empty fields: {{names}}',
+  },
+  pipelineEntryEmpty: 'Empty',
   pipelinesNavigation: 'CRM pipelines',
   newPipeline: 'New pipeline',
   pipelineTeam: 'Team',
@@ -136,4 +162,6 @@ export default {
   privacyCompanyDescription:
     'Manage your mailbox contribution and excluded domains. Email exclusions preserve company and contact records.',
   privacyUpdateFailed: 'Could not update CRM email settings',
+  privacyRefreshFailed:
+    'Your email settings were saved, but some views could not refresh. Reload to see the latest state.',
 };

@@ -16,6 +16,7 @@ export type NotificationEventGroupId =
   | 'crm'
   | 'tasks'
   | 'calendar'
+  | 'passwords'
   | 'email'
   | 'ai'
   | 'github';
@@ -161,6 +162,17 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
     ],
   },
   {
+    id: 'passwords',
+    label: 'Passwords',
+    events: [
+      {
+        type: 'password_access_requested',
+        label: 'Agent access requests',
+        description: 'When an agent asks to use a password item you manage',
+      },
+    ],
+  },
+  {
     id: 'email',
     label: 'Email',
     events: [
@@ -205,6 +217,13 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Computer agent sign-ins',
         description:
           "When an agent sign-in on your team's computer is about to expire",
+        macroComputers: true,
+      },
+      {
+        type: 'computer_setup',
+        label: 'Computer setup',
+        description:
+          'When a computer you bought is ready, or could not be set up',
         macroComputers: true,
       },
     ],

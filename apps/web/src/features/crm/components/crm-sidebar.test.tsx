@@ -1,7 +1,11 @@
+import { ViewShell } from '@app/components/view-shell';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import type { JSX } from 'solid-js';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CrmSidebar } from './crm-sidebar';
+
+const measurement = vi.hoisted(() => ({ width: 1200 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
@@ -10,19 +14,52 @@ vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
   SidebarRoutineSuggestions: () => null,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('./crm-create-menu', () => ({ CrmCreateMenu: () => null }));
+vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},
+  createElementSize: () => ({
+    get width() {
+      return measurement.width;
+    },
+    height: 800,
+  }),
+}));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => measurement.width,
+}));
+vi.mock('@ui', async () => ({
+  ...(await import('@ui/utils/classname')),
+  ...(await import('@ui/utils/press')),
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button aria-label={props['aria-label']} onClick={props.onClick}>
+      {props.children}
+    </button>
+  ),
 }));
 
+const COLLAPSED = 'macro:pref:view-sidebar:collapsed:crm';
 const close = vi.fn();
+let values: Map<string, string>;
+
+beforeEach(() => {
+  values = new Map();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+  });
+  measurement.width = 1200;
+});
 
 afterEach(() => {
   cleanup();
   close.mockReset();
+  vi.unstubAllGlobals();
 });
 
-function renderSidebar(onCollapse?: () => void) {
-  render(() => (
+function renderWorkspace() {
+  return render(() => (
     <SplitPanelControllerProvider
       controller={{
         canGoBack: () => false,
@@ -33,40 +70,61 @@ function renderSidebar(onCollapse?: () => void) {
         close,
       }}
     >
-      <CrmSidebar
-        active="active"
-        lists={[]}
-        listsEnabled={false}
-        listsLoading={false}
-        listsError={false}
-        canCreateList
-        onNavigate={() => {}}
-        onCreateCompany={() => {}}
-        onCreateContact={() => {}}
-        onNewList={() => {}}
-        onImport={() => {}}
-        onExport={() => {}}
-        onSettings={() => {}}
-        onCollapse={onCollapse}
-      />
+      <ViewShell.Root asidePreferenceKey="crm">
+        <ViewShell.Aside>
+          <CrmSidebar
+            active="active"
+            lists={[]}
+            listsEnabled={false}
+            listsLoading={false}
+            listsError={false}
+            canCreateList
+            onNavigate={() => {}}
+            onCreateCompany={() => {}}
+            onCreateContact={() => {}}
+            onNewList={() => {}}
+            onImport={() => {}}
+            onExport={() => {}}
+            onSettings={() => {}}
+          />
+        </ViewShell.Aside>
+        <ViewShell.Main>
+          <ViewShell.TopBar />
+        </ViewShell.Main>
+      </ViewShell.Root>
     </SplitPanelControllerProvider>
   ));
 }
 
-it('closes the split and collapses from the docked sidebar header', () => {
-  const collapse = vi.fn();
-  renderSidebar(collapse);
-  fireEvent.click(screen.getByRole('button', { name: 'Collapse CRM sidebar' }));
-  expect(collapse).toHaveBeenCalledOnce();
+it('hides and shows CRM navigation with the shell controls and saves the choice', () => {
+  const first = renderWorkspace();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+  expect(screen.queryByRole('button', { name: 'Hide navigation' })).toBeNull();
+  expect(values.get(COLLAPSED)).toBe('true');
+  first.unmount();
+
+  renderWorkspace();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  expect(values.get(COLLAPSED)).toBe('false');
+});
+
+it('closes the split from the sidebar header', () => {
+  renderWorkspace();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   expect(close).toHaveBeenCalledOnce();
 });
 
-it('leaves split controls to the split header inside the navigation menu', () => {
-  renderSidebar();
-  expect(screen.getByText('Customers')).toBeTruthy();
+it('offers the navigation as an overlay at narrow widths', () => {
+  measurement.width = 600;
+  renderWorkspace();
   expect(
-    screen.queryByRole('button', { name: 'Collapse CRM sidebar' })
+    screen.queryByRole('complementary', { name: 'CRM navigation' })
   ).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  expect(
+    screen.getByRole('complementary', { name: 'CRM navigation' })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+  expect(values.get(COLLAPSED)).toBeUndefined();
 });

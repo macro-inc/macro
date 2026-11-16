@@ -213,6 +213,16 @@ export const enableMacroComputers = defineFlag({
   env: 'ENABLE_MACRO_COMPUTERS',
 });
 
+/**
+ * Agent teammates: team admins invite an AI agent, with its own account and
+ * Macro computer, from Settings → Team → Members.
+ */
+export const enableAgentTeammates = defineFlag({
+  key: 'enable-agent-teammates',
+  env: 'ENABLE_AGENT_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
@@ -565,6 +575,12 @@ export const enableCrmActivity = defineFlag({
   env: 'ENABLE_CRM_ACTIVITY',
 });
 
+// Stay off until all ingestion and Team email reader binaries support exceptions.
+// No dev default or local override: the server independently requires this flag.
+export const enableCrmThreadExclusions = defineFlag({
+  key: 'enable-crm-thread-exclusions',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
@@ -611,6 +627,15 @@ export const enableReminders = defineFlag({
 export const enableEmailSavedViews = defineFlag({
   key: 'enable-email-saved-views',
   env: 'ENABLE_EMAIL_SAVED_VIEWS',
+  default: onInDev,
+});
+
+// Mail's search field takes over the list header while searching, lists
+// recent searches, and keeps the rows on screen while results load; on phones
+// it adds a search page to the Email list.
+export const enableEmailWideSearch = defineFlag({
+  key: 'enable-email-wide-search',
+  env: 'ENABLE_EMAIL_WIDE_SEARCH',
   default: onInDev,
 });
 
@@ -1032,6 +1057,14 @@ export const enableRoutineSuggestions = defineFlag({
 export const enableRoutineBackgroundDrafts = defineFlag({
   key: 'enable-routine-background-drafts',
   env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
   default: onInDev,
 });
 

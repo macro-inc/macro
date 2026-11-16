@@ -460,7 +460,7 @@ export function CallRecordBody(props: {
       <div class="call-record-column">
         <div class="flex flex-col gap-10">
           <header>
-            <h1 class="text-2xl font-semibold text-balance text-ink">
+            <h1 class="text-2xl font-medium text-balance text-ink">
               {props.call.title}
             </h1>
             <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
@@ -470,7 +470,7 @@ export function CallRecordBody(props: {
             </div>
           </header>
           <section class="flex flex-col gap-3" data-call-section="participants">
-            <h3 class="text-sm font-semibold text-ink">
+            <h3 class="text-sm font-medium text-ink">
               Participants
               <span class="ml-1.5 font-normal text-ink-muted tabular-nums">
                 {props.call.people.length}
@@ -498,19 +498,19 @@ export function CallRecordBody(props: {
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="summary">
-            <h3 class="text-sm font-semibold text-ink">Summary</h3>
+            <h3 class="text-sm font-medium text-ink">Summary</h3>
             <div class="call-summary text-sm/6 text-pretty text-ink">
               <DemoMarkdown markdown={props.call.summary} />
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="recording">
-            <h3 class="text-sm font-semibold text-ink">Recording</h3>
+            <h3 class="text-sm font-medium text-ink">Recording</h3>
             <div class="overflow-hidden rounded border border-edge-muted/50">
               <RecordingPlayer call={props.call} playback={props.playback} />
             </div>
           </section>
           <section class="flex flex-col gap-3" data-call-section="transcript">
-            <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+            <h3 class="text-sm font-medium text-ink">Transcript</h3>
             <CallTranscriptBox
               segments={props.call.segments}
               playback={props.playback}
@@ -524,7 +524,7 @@ export function CallRecordBody(props: {
                 class="flex min-w-0 flex-col gap-3"
                 aria-label="Call chat"
               >
-                <h3 class="text-sm font-semibold text-ink">Call chat</h3>
+                <h3 class="text-sm font-medium text-ink">Call chat</h3>
                 <div class="call-chat-history min-w-0 rounded border border-edge-muted/50 py-2">
                   <For each={chat()}>
                     {(message) => (
