@@ -104,3 +104,4 @@ export {
   handleNotificationUpdate,
   useNotificationUpdates,
 } from './use-notification-updates';
+export { useOpenEntityNotifications } from './use-open-entity-notifications';
