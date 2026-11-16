@@ -57,9 +57,11 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions stay local:
-partial sync returns partial local results; unavailable or older hosts never fall
-back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+window, never an authorization error. Interactive contact suggestions read locally:
+partial sync returns partial local results. Only a tab with no usable local cache
+(none, retired, unsupported, unbound or older host) reads bounded server
+`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
+server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
