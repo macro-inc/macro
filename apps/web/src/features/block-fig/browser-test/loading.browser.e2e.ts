@@ -7,7 +7,11 @@ test('opening preserves canvas geometry without a thumbnail pop', async ({
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route('**/fig_engine_bg.wasm*', async (route) => {
+  // The binary itself; in dev, `?import` requests are the module that exports its URL.
+  const binary = (url: URL) =>
+    url.pathname.endsWith('/fig_engine_bg.wasm') &&
+    !url.searchParams.has('import');
+  await page.route(binary, async (route) => {
     await gate;
     await route.continue();
   });
