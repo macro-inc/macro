@@ -18,7 +18,7 @@ import { createVault, type VaultController } from '../primitives/vault';
 import { passwordKeys } from '../queries/keys';
 import { createFocusSelection, type PasswordsFocus } from '../views/vault-view';
 import { createFakePasswordSource } from './fake-source';
-import { createFixtureScope, FIXTURE_SCOPE } from './fixture-scope';
+import { createFixtureScope, FIXTURE_SCOPE, noImport } from './fixture-scope';
 
 afterEach(cleanup);
 
@@ -48,6 +48,7 @@ function mountVault(
           recipientsError: () => false,
           writeClipboard: clipboard,
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <Probe />
@@ -310,6 +311,7 @@ it('discards a reveal that completes after the vault locks', async () => {
           recipientsError: () => false,
           writeClipboard: async () => {},
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <Probe />
@@ -387,6 +389,7 @@ it('does not copy a late response for a credential that is no longer selected', 
           recipientsError: () => false,
           writeClipboard: clipboard,
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <Probe />
@@ -474,6 +477,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsError: () => false,
             writeClipboard: async () => {},
             displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+            ...noImport(),
           }}
         >
           <Probe />
@@ -558,6 +562,7 @@ it.each(['reveal', 'copy'] as const)(
             recipientsError: () => false,
             writeClipboard: async () => {},
             displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+            ...noImport(),
           }}
         >
           <Probe />
@@ -620,6 +625,7 @@ it('drops a reveal, copy and clipboard write that finish after the viewer change
           recipientsError: () => false,
           writeClipboard: clipboard,
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <Probe />
@@ -670,6 +676,7 @@ it('never carries a dirty draft into another account or sign-in session', async 
               recipientsError: () => false,
               writeClipboard: async () => {},
               displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+              ...noImport(),
             }}
           >
             <Probe />

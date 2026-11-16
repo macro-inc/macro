@@ -916,7 +916,8 @@ impl SccacheStats {
     }
 }
 
-/// Only when the build goes through sccache, as the Nix dev shell sets up.
+/// Only when the build goes through sccache; local dev shells use kache, so
+/// this is `None` there.
 fn sccache_stats() -> Option<SccacheStats> {
     let wrapper = std::env::var_os("RUSTC_WRAPPER")?;
     let output = Command::new(wrapper)

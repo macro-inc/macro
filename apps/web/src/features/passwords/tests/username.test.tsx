@@ -8,7 +8,7 @@ import {
 } from '../context/passwords-context';
 import { createVault, type VaultController } from '../primitives/vault';
 import { createFakePasswordSource } from './fake-source';
-import { FIXTURE_SCOPE } from './fixture-scope';
+import { FIXTURE_SCOPE, noImport } from './fixture-scope';
 
 afterEach(cleanup);
 
@@ -61,6 +61,7 @@ it('loads and copies only the username without disclosing or caching the passwor
           recipientsError: () => false,
           writeClipboard: clipboard,
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <Probe />
@@ -143,6 +144,7 @@ it.each(['username', 'copyUsername'] as const)(
             recipientsError: () => false,
             writeClipboard: clipboard,
             displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+            ...noImport(),
           }}
         >
           <Probe />

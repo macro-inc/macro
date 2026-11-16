@@ -71,8 +71,17 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   response bodies in Debug, Display, error sources or tracing.
 - Team namespace is `team-{uuid}`, KV mount `passwords`, TOTP mount `totp`;
   JWT role `macro/passwords-service` binds issuer, audience, subject and team ID.
+- Value calls reuse a team's service token (`outbound/openbao/token_cache.rs`): one
+  login per team per lease (clamped to 60 s), single-flight (waiters share a failed
+  login), refreshed 20 s before the lease ends. Idle slots are LRU-evicted past
+  1024 teams; a slot with a caller is never evicted. A 401/403 on a cached token
+  replaces it once and re-runs the whole operation, so every `with_session`
+  closure must be safe to re-run. A denied fresh token is policy: no retry, no
+  eviction. `passwords.openbao.authenticate` spans mark real logins only;
+  operation spans carry `cache_hit` and `token_retry`. Lifecycle (namespace
+  purge) logins are never cached.
 
-Run both ignored Rust provider tests against a disposable local OpenBao with
+Run the ignored Rust provider and import tests against a disposable local OpenBao with
 `PASSWORDS_TEST_OPENBAO_ADDRESS`, `PASSWORDS_TEST_OPENBAO_SIGNING_KEY` (private
 PEM file path), `PASSWORDS_TEST_OPENBAO_PUBLIC_KEY` (public PEM file path), and
 `BAO_TOKEN` and `DATABASE_URL` set explicitly: `cargo test -p passwords -- --ignored`.
@@ -211,3 +220,27 @@ those tags and a code-mode catalog entry.
 - Lock the actual publisher's membership row through write-intent publication.
   Recheck username, reveal/copy, history and codes after I/O; denied rechecks record
   `post_io_access_denied=true` and codes require the same active enrollment generation.
+
+## Imports
+
+`src/domain/service/import.rs` imports at most 25 normalized items and 200 source
+folders per batch; `src/inbound/import.rs` exposes the session-only 4 MiB route.
+Include referenced source folders and ancestors in parent-first order in every batch. UUIDv7 import ids
+and opaque source keys derive stable item, folder and target ids. Retries use the
+ordinary create recovery path; existing folders retain their current name and
+parent, and an existing TOTP enrollment is never replaced by an import.
+Per-item failures use fixed codes (`busy` for lease contention, `folder_missing`
+when a folder was deleted after the batch ensured it); a failed TOTP setup
+returns the created item id so retrying can finish enrollment. Items recheck
+membership once, after their lease (`admit_member`); the batch checked it first.
+`POST /teams/{team}/items/match` takes up to 500 names in the body (never a
+URL), already trimmed and lower-cased by the client, and returns visible
+metadata whose `lower(name)` equals one, for the client's duplicate check. Both routes answer a malformed JSON body with the fixed
+`invalid_request` failure, never serde's message. Limits (item, folders, batch,
+match) are `password_import::vault` constants; don't write them out here.
+`password_import_activity` records one counts-and-format entry per completed
+batch attempt, including empty and fully failed batches; team purge removes it.
+Audit failure preserves per-item results and records `audit_failed` on the batch
+span. Import steps await `ItemLock::release` so a new step cannot contend with
+asynchronous rollback of its own previous lease.
+The 20,000-item import limit belongs to the browser parser/client.

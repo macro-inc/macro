@@ -3,6 +3,7 @@ import '@app/index.css';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { parseExportFile } from '@core/password-import/client';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -11,7 +12,10 @@ import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import type { AgentRequestSource } from '../queries/agent-requests';
 import { createFakePasswordSource } from '../tests/fake-source';
-import { FIXTURE_SCOPE } from '../tests/fixture-scope';
+import {
+  createMemoryImportResume,
+  FIXTURE_SCOPE,
+} from '../tests/fixture-scope';
 import { focusFromParams, VaultView } from '../views/vault-view';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
@@ -248,6 +252,9 @@ const View = () => (
           document.body.dataset.copied = value;
         },
         displayName: (accountId) => getDisplayName(tryMacroId(accountId)),
+        // The real wasm parser in its worker (`just ensure-password-import-wasm`).
+        parseExport: parseExportFile,
+        importResume: createMemoryImportResume(),
       }}
     >
       <ItemDndProvider>

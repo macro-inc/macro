@@ -102,6 +102,7 @@ fn visible_crm_record(alias: &str) -> String {
                 SELECT 1 FROM team_user tu
                 WHERE tu.team_id = {alias}.team_id
                 AND tu.user_id = $1
+                AND (tu.crm_access OR tu.team_role <> 'member')
             )"#
     )
 }

@@ -57,9 +57,11 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions stay local:
-partial sync returns partial local results; unavailable or older hosts never fall
-back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+window, never an authorization error. Interactive contact suggestions read locally:
+partial sync returns partial local results. Only a tab with no usable local cache
+(none, retired, unsupported, unbound or older host) reads bounded server
+`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
+server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -222,6 +224,10 @@ Give browser fixtures the app's viewport metadata and assert the CSS viewport wi
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+The same suite's `list-search.browser.e2e.ts` drives the list header's search
+field over the real hotkey engine and list controller: ArrowDown and Enter move
+to the first result, and Escape keeps the search in the field and clears it
+from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -1018,6 +1024,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search field only when the sidebar is the list it searches (Home, Chat, Agents),
   in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
   New; a view with a list header searches from `ListHeaderSearch` alone.
+  `ListHeaderSearch` owns the search keys: pass `focusResults` so ArrowDown,
+  Enter and Escape can move the keyboard into the list, and never clear the
+  query on Escape yourself. ArrowDown and Enter then run the list's own "go to
+  first item" command, so a list on `useListInteractions` lands on its first
+  row with no code in the view. It registers the
+  split's Escape that clears a search from the list; keep a view's own Escape
+  steps (leaving a tab) conditional on no search, and selection clearing at
+  `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1099,7 +1113,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
+- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
@@ -1783,5 +1797,8 @@ or install a nested provider. Scope drag cancellation and auto-scroll to the
 current vault's own drag. Register its desktop composable split layout
 and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
 legacy header does not reserve an empty band. The responsive vault fixture is exercised with
-`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
-See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`
+(its import case needs `just ensure-password-import-wasm`). Imports parse in a
+per-file worker (`lib/core/password-import`); the parsed export lives only in
+the import primitive's closure while the dialog is open, and sessionStorage
+holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

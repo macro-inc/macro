@@ -630,7 +630,11 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         .issue(&identity, "fixture", CancellationToken::new())
         .await
         .unwrap();
-        assert_eq!(signed(&run.token).as_deref(), name, "session run {scope:?}");
+        assert_eq!(
+            signed(&run.environment.token).as_deref(),
+            name,
+            "session run {scope:?}"
+        );
         let run = UserRunCredentials {
             signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
             correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),

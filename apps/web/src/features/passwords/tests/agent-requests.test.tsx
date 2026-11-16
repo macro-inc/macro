@@ -20,7 +20,7 @@ import type {
 } from '../queries/agent-requests';
 import { ItemAgentRequests } from '../views/item-agent-requests';
 import { createFakePasswordSource } from './fake-source';
-import { FIXTURE_SCOPE } from './fixture-scope';
+import { FIXTURE_SCOPE, noImport } from './fixture-scope';
 
 afterEach(cleanup);
 
@@ -154,6 +154,7 @@ function mount(source: AgentRequestSource) {
           recipientsError: () => false,
           writeClipboard: async () => {},
           displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+          ...noImport(),
         }}
       >
         <ItemAgentRequests source={source} itemId={ITEM} />
@@ -399,6 +400,7 @@ it('keeps the item on screen while its agent list loads', async () => {
             recipientsError: () => false,
             writeClipboard: async () => {},
             displayName: (accountId) => accountId.replace(/^macro\|/, ''),
+            ...noImport(),
           }}
         >
           <ItemAgentRequests source={source} itemId={ITEM} />

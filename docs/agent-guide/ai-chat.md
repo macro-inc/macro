@@ -1335,8 +1335,9 @@ SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
-`render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image; a program's
+`render`; `ReadCanvas`, `ApplyCanvasEdits`, `EditCanvas` and `RenderCanvas`
+are hidden, and the model sees a render a program returns in
+`images: [await canvas.render()]` as an image block; a program's
 render or generated image shows in the reply through the image's
 `toMarkdown()` `<m-image>` line, since a document mention of a static file id
 reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
@@ -1457,7 +1458,10 @@ presenting, the agent asks “Should I kick it off?”, unless the user said not
 to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
-request”. SDK operation
+request”. The HTTP review decision endpoint requires direct user authentication;
+agent runs receive 403 for edits, submissions, and dismissals before their
+request body is decoded. The separate **DecideReview** chat tool keeps its
+existing user-prompted-turn checks. SDK operation
 activity reports request outcomes, without storing request arguments or response
 bodies. The execution journal retains source, status and final JSON/error;
 completed API writes are not rolled back after failure or cancellation.
@@ -1678,8 +1682,10 @@ plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and U
 `Open` button that only opens a new tab after you click it. Once answered the card collapses
 to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn. Anyone with edit access to the session may
-answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+square cancels the question and the turn. A directly authenticated user with
+edit access to the session may answer; agent runs and runtimes cannot answer
+questions or permission requests, even using a user's credentials. Viewers see
+the form locked with `Waiting for an editor`. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1712,7 +1718,10 @@ wants to do. The owner sees `Approval needed` with `Decline`, `Always allow`, an
 `Always allow` retains its existing scope: the named requester’s same Macro tool,
 or all tools of the connected app, for this session. It does not change which
 account a call selects. Declined, cancelled, expired, or superseded calls do not
-run. The Magic Chip reads `Waiting for approval` while a call is held.
+run. Agent runs receive 403 for `approve` and `approve_and_remember`, including
+when they use the owner's credentials; deny and cancel remain available under
+the existing owner and edit-access checks. The Magic Chip reads `Waiting for
+approval` while a call is held.
 
 Email/calendar reviews separately retain the account selected at creation. Only
 that account, with session edit access, may edit or submit those drafts. Older
