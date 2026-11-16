@@ -1332,9 +1332,10 @@ Display remain personal.
 ### Phone sections (flag on)
 
 The phone list reuses Home rows and the existing large favorite circles with
-unread dots. Up to six loaded favorites retain their saved order in one sideways
-scrolling row. All is selected initially, followed by Direct messages and custom
-sections in personal display order. All excludes pins except incoming-call rows;
+unread dots. All loaded channel favorites retain their saved order in one sideways
+scrolling row; swipe horizontally to reach favorites beyond the viewport. All is
+selected initially, followed by Direct messages and custom sections in personal
+display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
 control sits below Favorites and above the conversation list, scrolls horizontally,
