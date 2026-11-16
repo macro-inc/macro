@@ -342,8 +342,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 ///
 /// - `IssueBotCredential`: its card mints the secret without the model
 ///   reading it.
-/// - `ListCompanies`: `macro.crm.searchCompanies()` has no stage or owner
-///   filter.
 /// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
 ///   plan an import review presents.
 /// - `SelfKnowledge`, the Anthropic code-execution tools, and `SearchTools`
@@ -352,7 +350,6 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<bots::inbound::toolset::IssueBotCredential, ToolBotToolContext>()
-        .add_tool::<crm::inbound::toolset::ListCompanies, ToolCrmToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()

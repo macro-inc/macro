@@ -743,7 +743,6 @@ fn code_mode_sessions_get_only_the_tools_the_sdk_cannot_replace() {
         "ImportFromLinear",
         "ImportFromNotion",
         "IssueBotCredential",
-        "ListCompanies",
         "LoadTools",
         "SearchTools",
         "SelfKnowledge",
