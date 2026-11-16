@@ -342,15 +342,14 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 ///
 /// - `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`: they stage the
 ///   plan an import review presents.
-/// - `SelfKnowledge`, the Anthropic code-execution tools, and `SearchTools`
-///   / `LoadTools`, which also load the session's connected MCP tools.
+/// - `SelfKnowledge`, and `SearchTools` / `LoadTools`, which also load the
+///   session's connected MCP tools.
 pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromLinear, ToolImportToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromJira, ToolImportToolContext>()
-        .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
         .add_tool::<SearchTools, ToolServiceContext>()
         .add_tool::<LoadTools, ToolServiceContext>();
     let deferred = deferred_tools(&toolset, EAGER_TOOLS);

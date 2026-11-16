@@ -741,14 +741,12 @@ fn code_mode_sessions_get_only_the_tools_the_sdk_cannot_replace() {
         .map(String::as_str)
         .collect::<std::collections::BTreeSet<_>>();
     let expected = [
-        "BashCodeExecution",
         "ImportFromJira",
         "ImportFromLinear",
         "ImportFromNotion",
         "LoadTools",
         "SearchTools",
         "SelfKnowledge",
-        "TextEditorCodeExecution",
     ]
     .into_iter()
     .collect();

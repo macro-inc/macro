@@ -1351,7 +1351,7 @@ chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. The only native tools a
 session keeps are the ones a program cannot replace: the Notion, Linear and Jira import planners,
-`SelfKnowledge`, explicit provider code execution, `AskUser`, and tool loading
+`SelfKnowledge`, `AskUser`, and tool loading
 for connected apps. Connector discovery is `macro.connectedApps.discover`; a
 `botCredential` view presents the bot token card.
 Connected third-party MCP tools remain available.
