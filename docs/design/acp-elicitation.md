@@ -563,7 +563,7 @@ Everything is `#[non_exhaustive]`, so every `match` in our code needs a
 wildcard arm, same as `PermissionOutcome` today.
 
 Wasm: `agent_fold` builds for wasm32. The schema crate is pure serde; the
-feature adds no native deps. `just ensure-agent-fold-wasm` in `apps/web`
+feature adds no native deps. `just ensure-wasm agent-fold` in `apps/web`
 is the check.
 
 ### 1. `agent_runtime_protocol` — the action
@@ -1073,7 +1073,7 @@ PR; 4 is the web PR against the regenerated types.
 
 | # | Step | Gate |
 | --- | --- | --- |
-| 0 | Cargo feature | `cargo check -p agent_session -p agent_fold -p agent_runtime_protocol`; `just ensure-agent-fold-wasm` |
+| 0 | Cargo feature | `cargo check -p agent_session -p agent_fold -p agent_runtime_protocol`; `just ensure-wasm agent-fold` |
 | 1 | `AgentAction::RespondElicitation` + tests | `cargo test -p agent_runtime_protocol` |
 | 2 | Machine: advertise, hold, answer, stop-cancel, error, HTTP 409 + tests | `cargo test -p agent_session` (`bash .cursor/infra.sh` first — postgres tests) |
 | 3 | Fold: model, state, dispatch, tests; regenerate TS | `cargo test -p agent_fold`; `just gen-agent-fold-types`; diff review |

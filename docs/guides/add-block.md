@@ -255,15 +255,13 @@ was moved onto `crates/docx_engine` the next day; start with a crate.
   `codegen-units = 1`). Add it to the wasm-safe exclusion list in
   `.config/hakari.toml`, then run `just hakari` and commit
   `crates/workspace-hack` and `.github/workspace-dep-closures.json`.
-- **Build recipes** in `apps/web/justfile`: `build-<x>-engine-wasm` (wasm-pack
-  into `src/lib/core/<x>-engine/wasm`) and `ensure-<x>-engine-wasm` (rebuild only
-  when the crate, or a crate it depends on such as `fig_engine`, is newer than
-  the output). Add the build recipe to `build-wasm`, which CI's web build and
-  the release builds run, and the ensure recipe to `dev:prepare` in
-  `apps/web/package.json` and to `apps/web/tests/native/build.sh`.
-  `build-tauri-dev`, which builds iOS PR previews, lists its wasm recipes
-  separately and builds no engines today; add yours there if the block must
-  work in those previews.
+- **Manifest entry** in `apps/web/wasm-modules.json`: the crate, its output
+  directory (`src/lib/core/<x>-engine/wasm`), profile, rustflags (`+simd128`),
+  assets it embeds (`extraWatch`) and the thread it runs on. That one entry
+  gives it `just build-wasm <x>-engine` / `just ensure-wasm <x>-engine`, puts it
+  in every app, preview, desktop and CI build and in `dev:prepare`, and adds its
+  crates to the web CI path filters. Run `cargo x deps` to add its
+  `wasm_closures` entry, which keys its package cache.
 - **Output stays out of git.** Put a `.gitignore` containing `wasm/` in
   `src/lib/core/<x>-engine/`. If the crate has a Rust module named `build`,
   un-ignore it in the root `.gitignore`; `**/build` silently drops its files.
@@ -342,7 +340,7 @@ save.
 
 ```sh
 cd apps/web
-just ensure-<x>-engine-wasm                     # engine blocks
+just ensure-wasm <x>-engine                     # engine blocks
 bun run type-check
 bun run test -- src/features/block-<name> src/lib/core/constant src/features/command
 bunx playwright test --config src/features/block-<name>/browser-test/playwright.config.ts

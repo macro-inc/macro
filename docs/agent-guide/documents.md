@@ -2086,7 +2086,7 @@ Layout and test hooks:
   read-only design leaves the editing keys (R, T, O…) to the app.
 
 The viewer has a browser fixture that needs no backend. From `apps/web`
-(build the engine first with `just ensure-fig-engine-wasm`):
+(build the engine first with `just ensure-wasm fig-engine`):
 
 ```sh
 bunx vite --config src/features/block-fig/browser-test/vite.config.ts
@@ -2254,7 +2254,7 @@ foreground and background, ⌫ clears the selection or deletes the layer,
 and ⌘/ (or the keyboard button) lists them all (`psd-shortcuts`).
 
 To exercise the editor without a backend, run the browser fixture from
-`apps/web` (build the engine first with `just ensure-psd-engine-wasm`):
+`apps/web` (build the engine first with `just ensure-wasm psd-engine`):
 
 ```sh
 bunx vite --config src/features/block-psd/browser-test/vite.config.ts
@@ -2385,7 +2385,7 @@ Layout and test hooks (root `ai-editor`, canvas `ai-canvas`):
   deselect, stay the app's.
 
 The editor has a browser fixture that needs no backend. From `apps/web`
-(build the engine first with `just ensure-ai-engine-wasm`):
+(build the engine first with `just ensure-wasm ai-engine`):
 
 ```sh
 bunx vite --config src/features/block-ai/browser-test/vite.config.ts

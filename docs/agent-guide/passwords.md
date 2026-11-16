@@ -120,7 +120,7 @@ Import buttons; Import opens the same dialog.
 Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON,
 CSV or `.zip` export (its attachments are counted, not imported). The file is parsed on the device: `crates/password_import`
 compiled to wasm (`crates/password_import_wasm`, built by
-`just ensure-password-import-wasm`) runs in a worker started for that file and
+`just ensure-wasm password-import`) runs in a worker started for that file and
 terminated after it answers; the raw file is never uploaded or stored. An
 unreadable or encrypted file shows the reason in place.
 
@@ -180,7 +180,7 @@ bunx playwright test --config src/features/passwords/browser-test/playwright.con
 ```
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required.
-Its import case uses the real wasm parser: run `just ensure-password-import-wasm`
+Its import case uses the real wasm parser: run `just ensure-wasm password-import`
 in `apps/web` first.
 The fixture suite complements authenticated local-stack verification.
 

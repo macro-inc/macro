@@ -43,7 +43,7 @@ and to WebAssembly for the browser presentation editor.
 - `cargo test -p pptx_engine` (`SQLX_OFFLINE` unset) — includes the corpus
   regression test against `tests/corpus/baseline.json`.
 - `cargo test -p pptx_engine --features cli` for the `pptx_corpus` CLI.
-- `just build-pptx-engine-wasm` (from `apps/web`) for the wasm build.
+- `just build-wasm pptx-engine` (from `apps/web`) for the wasm build.
 
 ## Related
 

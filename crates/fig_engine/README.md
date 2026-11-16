@@ -413,9 +413,9 @@ similarity score (a fidelity check that needs no Figma account). Run it over
 any local collection of `.fig` files after rendering changes; third-party
 files are not committed.
 
-The browser build: `just build-fig-engine-wasm` from `apps/web` (wasm-pack,
+The browser build: `just build-wasm fig-engine` from `apps/web` (wasm-pack,
 `--target web`, SIMD enabled, the `fig-engine-wasm` profile with full LTO;
-`ensure-fig-engine-wasm` rebuilds only when the crate changed).
+`ensure-wasm fig-engine` rebuilds only when the crate changed).
 
 ## Tests
 

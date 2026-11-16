@@ -582,7 +582,7 @@ cargo test -p predicate-index
 cargo test -p cache-core
 cargo test -p cache-turso
 cargo test -p cache-wasm
-just build-cache-wasm
+just build-wasm cache-wasm
 ```
 
 Run focused worker/host tests and the real WASM/Turso browser test covering optimistic local filtering. This is a browser cache schema change, not an application SQL query change: do not run database migrations or `just prepare_db` unless unrelated Rust SQLx queries also change.

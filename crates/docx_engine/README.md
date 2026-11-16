@@ -148,8 +148,8 @@ session.apply(
 std::fs::write("edited.docx", session.document().save()?)?;
 ```
 
-The browser build: `just build-docx-engine-wasm` from `apps/web` (wasm-pack,
-`--target web`, SIMD enabled); `just ensure-docx-engine-wasm` rebuilds only
+The browser build: `just build-wasm docx-engine` from `apps/web` (wasm-pack,
+`--target web`, SIMD enabled); `just ensure-wasm docx-engine` rebuilds only
 when sources changed, and `bun run dev` runs it.
 
 ## Testing
