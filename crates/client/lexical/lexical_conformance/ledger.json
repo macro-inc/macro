@@ -436,26 +436,6 @@
       "failure": "unimplemented configured class \"details\""
     },
     {
-      "file": "packages/lexical-core/tests/auto-link.test.ts",
-      "test": "Markdown URL imports > links a URL whose only escapes are formatting escapes",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/auto-link.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "nodeMapKeys count: 6 != 5"
-    },
-    {
-      "file": "packages/lexical-core/tests/auto-link.test.ts",
-      "test": "Markdown URL imports > saves plain-text URLs that load as links, keeping their formatting",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "wasm-rust PM ruling 2026-11-16: port for parity; packages/lexical-core/tests/auto-link.test.ts",
-      "note": "Temporary: native port pending on wolf/rem-fix-details (#10697 details nodes / URL export parity); this entry is removed in the commit that fixes it.",
-      "failure": "op 8 read: call 0: \"@lexical/markdown.$convertToMarkdownString\": value mismatch: \"snake\\\\_case https://example.com/post?a=x_y&s=20 and *https://example.com/a\\\\*b*\" != \"snake\\\\_case https://example.com/post?a=x\\\\_y&s=20 and *https://example.com/a\\\\*b*\""
-    },
-    {
       "file": "packages/lexical-core/tests/github-markdown.test.ts",
       "test": "normalizeGithubMarkdown > converts links, headings, rules, lists and alerts",
       "status": "xfail",

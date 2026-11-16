@@ -2,6 +2,20 @@
 use crate::links::{AutoLinkMode, find_auto_link_matches};
 use lexical_markdown::{Result, matcher::*};
 use lexical_model::Utf16Offset;
+/// Lexical's Markdown export escapes these in plain text, so a URL saved before the
+/// editor linked it carries their escapes. Other escapes mark a URL kept literal.
+pub(super) fn is_formatting_character(c: char) -> bool {
+    matches!(c, '*' | '_' | '`' | '~')
+}
+fn has_only_formatting_escapes(raw: &str) -> bool {
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' && !chars.next().is_some_and(is_formatting_character) {
+            return false;
+        }
+    }
+    true
+}
 #[derive(Debug)]
 pub(super) struct AutoLinkMatcher {
     escaped: bool,
@@ -45,10 +59,16 @@ impl Matcher for AutoLinkMatcher {
                 if raw == link.text {
                     continue;
                 }
+                // The third group is the link destination, or empty to keep the URL literal.
+                let url = if has_only_formatting_escapes(&raw) {
+                    link.url
+                } else {
+                    String::new()
+                };
                 return Match::new(
                     Utf16Offset(start as u32),
                     source,
-                    vec![Some(raw), Some(link.text)],
+                    vec![Some(raw), Some(link.text), Some(url)],
                 )
                 .ok();
             }

@@ -55,6 +55,7 @@ impl TextMatchTransformer for Callback {
                 )?))
             }
             "LINK_XML" | "UNLINKED_TEXT" => export_link(cx, node, name == "UNLINKED_TEXT"),
+            "AUTO_LINK" => export_plain_text_urls(cx, node),
             "HTML_TEXT_FORMAT_EXPORTER" => export_html_format(cx, node),
             name if name.starts_with("LIST_ITEM_IMAGE_") => {
                 super::block::export_list_image(cx, node, name)
@@ -148,16 +149,19 @@ impl TextMatchTransformer for Callback {
                     return Ok(None);
                 }
                 let format = tx.text_data(node)?.format;
-                if name == "ESCAPED_AUTO_LINK" {
+                let (url, label) = if name == "ESCAPED_AUTO_LINK" {
+                    (m.get(2).unwrap_or(""), m.get(1).unwrap_or(""))
+                } else {
+                    (m.get(1).unwrap_or(""), m.get(2).unwrap_or(""))
+                };
+                if url.is_empty() && name == "ESCAPED_AUTO_LINK" {
                     let text = tx.create(UnlinkedTextNode {})?;
-                    tx.text(text)?
-                        .set_text_content(m.get(1).unwrap_or(""))?
-                        .set_format(format)?;
+                    tx.text(text)?.set_text_content(label)?.set_format(format)?;
                     tx.replace(node, text, false)?;
                 } else {
-                    let link =
-                        create_link_node(tx, m.get(1).unwrap_or(""), LinkAttributes::default())?;
-                    let text = tx.create_text(m.get(2).unwrap_or(""))?;
+                    // The label is not parsed further: URL punctuation is literal.
+                    let link = create_link_node(tx, url, LinkAttributes::default())?;
+                    let text = tx.create_text(label)?;
                     tx.text(text)?.set_format(format)?;
                     tx.append(link, &[text.key()])?;
                     tx.replace(node, link, false)?;
@@ -319,6 +323,64 @@ fn escape_unlinked(text: &str) -> String {
         out.push(c);
     }
     out
+}
+/// Stands in for each URL while the rest of the text is escaped; a private-use
+/// character that editor text does not contain.
+const URL_PLACEHOLDER: char = '\u{e000}';
+/// An editor links a URL only once the caret leaves it, so a message sent right after
+/// its URL holds it as plain text. Write such URLs as typed so import links them; formatted
+/// text keeps its escapes, because raw `*` or `~` would pair with the format's markers.
+fn export_plain_text_urls(cx: &mut ExportCx<'_>, node: NodeKey) -> Result<Option<String>> {
+    let Some(data) = cx.state().text(node) else {
+        return Ok(None);
+    };
+    if data.format.bits() != 0 || cx.state().is::<UnlinkedTextNode>(node) {
+        return Ok(None);
+    }
+    let text = cx.state().text_content(node).into_owned();
+    if text.contains(URL_PLACEHOLDER) {
+        return Ok(None);
+    }
+    let links: Vec<_> =
+        crate::links::find_auto_link_matches(&text, crate::links::AutoLinkMode::CommonTlds)
+            .into_iter()
+            .filter(|link| {
+                link.raw.contains(super::auto_link::is_formatting_character)
+                    && !link.raw.contains('\\')
+            })
+            .collect();
+    if links.is_empty() {
+        return Ok(None);
+    }
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let slice = |range: std::ops::Range<usize>| {
+        units
+            .get(range)
+            .map(String::from_utf16_lossy)
+            .ok_or(Error::InvalidArgument("invalid auto-link offset"))
+    };
+    let mut masked = String::new();
+    let mut end = 0;
+    for link in &links {
+        masked.push_str(&slice(end..link.index)?);
+        masked.push(URL_PLACEHOLDER);
+        end = link.last_index;
+    }
+    masked.push_str(&slice(end..units.len())?);
+    let mut raws = links.iter().map(|link| link.raw.as_str());
+    let exported = cx.export_format(node, &masked)?;
+    let mut out = String::with_capacity(exported.len());
+    for c in exported.chars() {
+        if c == URL_PLACEHOLDER {
+            out.push_str(
+                raws.next()
+                    .ok_or(Error::InvalidArgument("auto-link placeholder count"))?,
+            );
+        } else {
+            out.push(c);
+        }
+    }
+    Ok(Some(out))
 }
 fn export_html_format(cx: &mut ExportCx<'_>, node: NodeKey) -> Result<Option<String>> {
     let Some(data) = cx.state().text(node) else {
