@@ -12,12 +12,17 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
   generation and sequential catch-up. `models.rs` owns line edits and UTC periods.
 - `src/domain/ports.rs`: storage, generation and current membership contracts.
 - `src/outbound/pg_composed_memory.rs`: component storage and generation leases.
-- `src/outbound/generator.rs`: generic agent research and tool-free privacy judge.
+- `src/outbound/generator.rs`: generic agent research and summaries on Sonnet 5.5 at
+  medium effort, and the tool-free privacy judge (its decision is read from anywhere
+  in the reply; no decision rejects).
 - `src/inbound/toolset.rs`: ReadMemory, UpdateMemory, GetUserActivity.
 - `src/inbound/axum_router.rs`: `GET /memory` (composed), `GET`/`PATCH
   /memory/explicit` and `GET /memory/activity`, the SDK's equivalents of the tools.
 - `src/schedule.rs`: tracked internal cron closure hosted by cognition in nonlocal
   environments; retries due users every five minutes, generating completed days.
+  The PostHog flag `disable-memory-refresh` (service context `memory-refresh`)
+  is read before each claim and stops the batch while it is on; a failed flag read
+  keeps refresh running.
 - `../ai_tools/src/memory.rs`: composition root and allowlisted read-only research.
 - `../ai_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p ai_tools
   --bin memory`); uses the existing memory environment configuration.

@@ -1134,8 +1134,26 @@ pub async fn build(
         event_broker_tracker.clone(),
     );
     if !matches!(config.environment, Environment::Local) {
+        // Without a PostHog key there is no kill switch, and refresh runs.
+        let memory_flags = config
+            .posthog_api_key
+            .value()
+            .map(|key| {
+                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                    config
+                        .posthog_host
+                        .value()
+                        .unwrap_or(crate::DEFAULT_POSTHOG_HOST),
+                    key.to_owned(),
+                    std::time::Duration::from_secs(3),
+                    config.environment,
+                )
+                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+            })
+            .transpose()?;
         memory::schedule::start(
             memory_service.clone(),
+            memory_flags,
             &event_broker_tracker,
             cancellation.clone(),
         )?;
