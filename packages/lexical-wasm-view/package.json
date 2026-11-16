@@ -40,7 +40,7 @@
     "@lexical/table": "0.45.0",
     "@lexical/code": "0.45.0",
     "@lexical/mark": "0.45.0",
-    "loro-crdt": "1.17.1"
+    "loro-crdt": "1.16.3"
   },
   "sideEffects": false
 }

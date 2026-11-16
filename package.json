@@ -97,7 +97,7 @@
 			"packages/starter-agent"
 		],
 		"catalog": {
-			"loro-crdt": "1.17.1"
+			"loro-crdt": "1.16.3"
 		}
 	},
 	"devDependencies": {
