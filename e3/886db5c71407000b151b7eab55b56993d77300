@@ -1,0 +1,33 @@
+crates/code_execution/src/outbound/deno.rs
+  s_19e7455dcd0901::t_679b74fcb8100a 241-246,257,286-294
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_55d96f0c2de296::t_6e72287a12ee9d 231-233,238
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_55d96f0c2de296::t_dfd7e75b99c308 150-151
+crates/code_execution/src/outbound/ocaml.rs
+  s_19e7455dcd0901::t_238805c7b68311 97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e3886db5c71407000b151b7eab55b56993d77300",
+  "prompts": {},
+  "sessions": {
+    "s_19e7455dcd0901": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2c02256-11ee-4267-b095-d88e7cb7df7b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_55d96f0c2de296": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "28a7957c-6e94-4604-966b-d1c21dfa3b6b",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
