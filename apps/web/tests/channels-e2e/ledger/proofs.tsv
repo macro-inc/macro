@@ -107,8 +107,8 @@ UNR-06	ledger/breaks/muted-channel-shows-no-bell.patch	failed: Error: expect(loc
 UNR-07	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
 UNR-08	ledger/breaks/found-list-misses-new-channels.patch	failed: Error: expect(locator).toBeVisible() failed
 UNR-10	ledger/breaks/unread-mark-never-shows.patch	failed: Error: expect(locator).toBeVisible() failed
-SYN-01	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
-SYN-03	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
+SYN-01	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
+SYN-03	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
 SYN-05	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
 OFF-03	ledger/breaks/channel-changes-not-applied.patch	failed: Error: the channel as it is on the screen
 SYN-02	ledger/breaks/changes-reach-neither-screen-nor-device.patch	failed: Error: the channel as it is on the screen
@@ -118,27 +118,28 @@ SYN-09	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the 
 SYN-10	ledger/breaks/held-channel-shown-as-it-was-left.patch	failed: Error: the channel as it is on the screen
 SYN-08	ledger/breaks/no-access-shown-as-unavailable.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-02	ledger/breaks/channel-load-error-not-shown.patch	failed: Error: expect(locator).toBeVisible() failed
-OFF-01	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: expect(locator).toBeVisible() failed
-OFF-04	ledger/breaks/device-not-used.patch	failed: Test timeout of 90000ms exceeded.
+OFF-01	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-04	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: expect(locator).toBeVisible() failed
 OFF-05	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-06	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-07	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 OFF-08	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
-OFF-09	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: the channel as it is on the screen
-OFF-10	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: expect(locator).toBeVisible() failed
-OFF-11	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: expect(locator).toBeVisible() failed
+OFF-09	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
+OFF-10	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+OFF-11	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
 PRE-01	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
-WRT-01	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
+WRT-01	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as it is on the screen
 WRT-02	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
-WRT-03	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
+WRT-03	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
 WRT-05	ledger/breaks/device-not-used.patch	failed: Error: the channel as the services hold it
 WRT-06	ledger/breaks/device-not-used.patch	failed: Test timeout of 90000ms exceeded.
 WRT-07	ledger/breaks/device-not-used.patch	failed: Test timeout of 90000ms exceeded.
-WRT-08	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
-WRT-12	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
-WRT-13	ledger/breaks/device-not-used.patch	the check recorded as an intermittent defect failed: Error: the channel as the services hold it
+WRT-08	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-12	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
+WRT-13	ledger/breaks/queued-writes-never-sent.patch	failed: Error: the channel as the services hold it
 WRT-09	ledger/breaks/refused-write-kept.patch	failed: Error: expect(locator).toBeVisible() failed
 WRT-10	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
-WRT-04	ledger/breaks/device-not-used.patch	failed: Error: the channel as it is on the screen
-WRT-11	none: the build with the flag as it is	failed: Error: expect(locator).toBeVisible() failed
-WRT-14	none: the build with the flag as it is	failed: Error: the channel as it is on the screen
+WRT-04	ledger/breaks/queued-writes-never-sent.patch	the check recorded as an intermittent defect failed: Error: the channel as the services hold it
+WRT-11	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-14	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+REC-04	none: the build as it is, with or without the flag	failed: Error: expect(locator).toHaveCount(expected) failed
