@@ -65,7 +65,12 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - A page cut off in its first seconds is still fetching code: it then says a
   new version is out (REC-04), may not open a held channel and can take the
   keyboard from the composer. `goOffline` waits for the code first;
-  `goOfflineAtOnce` is only for a test of that moment.
+  `goOfflineAtOnce` is for a test of that moment, or one that has waited
+  with `codeFetched` already (OFF-02).
+- While `goOffline` waits, the device is connected and left alone, so it
+  also brings its recent channels up to date: a test of what a device holds
+  with no such pause (OFF-09, OFF-10, SYN-05) cannot be told from REC-04
+  until that defect is gone.
 - Left alone for a few seconds, a device fetches a channel with something
   unread in it (PRE-01): a test that needs a channel the device has never
   held makes it and loses the connection with no wait between (OFF-02).

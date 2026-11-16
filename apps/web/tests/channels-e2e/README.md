@@ -98,8 +98,9 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   The one timed wait is `leaveAlone` in `harness/device.ts`: a device
   fetches channels ahead only while its person does nothing, so doing
   nothing for a while is the step under test (PRE-01, REC-04). The one read
-  of what a page has fetched is in `goOffline`, which lets a page finish
-  fetching the app's code before it cuts it off: no test asserts on it.
+  of what a page has fetched is `codeFetched`, with which `goOffline` lets a
+  page finish fetching the app's code before it cuts it off: no test asserts
+  on it.
 - A test of what only a build with `VITE_ENABLE_GRAPHQL_SOUP` does (channels
   kept on the device, writes that wait there) skips itself on other builds
   with `test.skip(!SOUP_BUILD, ...)`, and its proof is run on a build with

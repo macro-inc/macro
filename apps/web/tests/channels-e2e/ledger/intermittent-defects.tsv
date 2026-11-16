@@ -10,5 +10,5 @@ CHN-02	A team channel someone else makes is sometimes missing from a teammate's 
 ACC-06	With VITE_ENABLE_GRAPHQL_SOUP, after a teammate joins a team channel found by name its row sometimes stays under "Not joined" with a Join button until reload; the join itself works (every run on one machine, none in CI)
 CHN-08	With VITE_ENABLE_GRAPHQL_SOUP a deleted channel sometimes stays under its owner's Favorites until reload (every run in CI, 1 of 5 on the local-index branch); without it, always (known-defects.tsv)
 UNR-08	With VITE_ENABLE_GRAPHQL_SOUP a channel a person is added to is sometimes missing from the rows shown by "Search conversations" until the search is run again (3 of 4 whole-suite runs on a much-used stack, none in CI)
-OFF-04	Scrolling back offline through a long history read while connected jumps from the latest messages to the middle (3 of 5 runs, 0 of 5 in another five)
-WRT-04	Messages blocked from being sent stay on screen through a reload but are not at the services forty seconds after they can be reached again (7 of 10 runs); timed once, they arrived five minutes after
+OFF-04	Scrolling back offline through a long history read while connected jumps from the latest messages to the middle (3 of 5 runs when the connection was lost just after the page opened, 0 of 10 since)
+WRT-04	Messages blocked from being sent stay on screen through a reload but are not at the services forty seconds after they can be reached again (10 of 15 runs); timed once, they arrived five minutes after

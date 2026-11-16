@@ -141,5 +141,5 @@ WRT-09	ledger/breaks/refused-write-kept.patch	failed: Error: expect(locator).toB
 WRT-10	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
 WRT-04	ledger/breaks/queued-writes-never-sent.patch	the check recorded as an intermittent defect failed: Error: the channel as the services hold it
 WRT-11	ledger/breaks/waiting-message-not-marked.patch	failed: Error: expect(locator).toBeVisible() failed
-WRT-14	ledger/breaks/device-not-used.patch	failed: Error: expect(locator).toBeVisible() failed
+WRT-14	ledger/breaks/waiting-write-not-shown-in-other-window.patch	failed: Error: the channel as it is on the screen
 REC-04	none: the build as it is, with or without the flag	failed: Error: expect(locator).toHaveCount(expected) failed
