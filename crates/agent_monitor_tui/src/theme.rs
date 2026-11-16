@@ -206,30 +206,46 @@ pub fn strip_title(text: &str) -> Vec<Span<'static>> {
     vec![Span::styled(format!(" {text} "), strip())]
 }
 
-/// A pane title as the HUD writes it: `1 AGENTS` becomes `01 // AGENTS`.
-fn hud_title(title: &str) -> String {
-    match title.split_once(' ') {
-        Some((number, rest))
-            if !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) =>
-        {
-            format!("{number:0>2} // {rest}")
-        }
-        _ => title.to_owned(),
+/// Right-aligned action labels followed by bracketed hotkeys.
+pub fn hotkeys(keys: &[(&str, &str)]) -> Line<'static> {
+    let mut spans = Vec::new();
+    for (key, action) in keys {
+        spans.push(Span::styled(format!(" {action} "), ink(Token::TextDim)));
+        spans.push(Span::styled(format!("[{key}] "), bold(Token::Highlight)));
     }
+    Line::from(spans).right_aligned()
 }
 
-/// A pane: a thin frame, a numbered title chip, and extra
-/// title spans after it. A focused pane gets a highlighted frame.
-pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'static> {
+/// A pane with a title chip and its page hotkey on the right, outside the chip.
+pub fn pane(area: Rect, title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'static> {
     let border = if focused {
         Token::Highlight
     } else {
         Token::Frame
     };
-    let mut spans = vec![Span::styled("─", ink(border))];
-    spans.extend(strip_title(&hud_title(title)));
+    let (key, title) = match title.split_once(' ') {
+        Some((key, title)) if key.chars().all(|c| c.is_ascii_digit()) || key == "w" => {
+            (Some(key), title)
+        }
+        _ => (None, title),
+    };
+    let mut spans = strip_title(title);
     spans.extend(extra);
-    frame(border).title(Line::from(spans))
+    let key_width = key.map_or(0, |key| hotkeys(&[(key, "")]).width() + 1);
+    let mut remaining = usize::from(area.width.saturating_sub(2)).saturating_sub(key_width);
+    let mut visible = Vec::new();
+    for span in spans {
+        if span.width() > remaining {
+            break;
+        }
+        remaining -= span.width();
+        visible.push(span);
+    }
+    let mut block = frame(border).title(Line::from(visible));
+    if let Some(key) = key {
+        block = block.title(hotkeys(&[(key, "")]));
+    }
+    block
 }
 
 /// Columns and rows between grid dots.

@@ -33,6 +33,8 @@ pub struct Cursors {
     pub source: usize,
     /// The selected SPEND row.
     pub spend: usize,
+    /// The selected agent cost on the full SPEND page.
+    pub spend_agent: usize,
     /// The tree page's selection and open nodes.
     pub tree: TreeState<String>,
     /// Tree nodes already opened once, so a closed node stays closed.
@@ -116,7 +118,7 @@ pub struct App {
     pub cursors: Cursors,
     /// A one-line note for the command line, such as an unknown command.
     pub message: Option<String>,
-    /// A label for the header, such as `DEMO`.
+    /// A label for the bottom status line, such as `DEMO`.
     pub label: Option<String>,
     /// The colour theme frames are drawn in.
     pub theme: ThemeName,
@@ -521,6 +523,10 @@ impl App {
             (Some(Pane::Sources), _) => {
                 let len = self.view.source_rows().len();
                 self.cursors.source = moved(self.cursors.source, len, motion);
+            }
+            (Some(Pane::Spend), Page::Zoom(Pane::Spend)) => {
+                self.cursors.spend_agent =
+                    moved(self.cursors.spend_agent, self.view.agents.len(), motion);
             }
             (Some(Pane::Spend), _) => {
                 let len = self.view.spend_by_kind().len();

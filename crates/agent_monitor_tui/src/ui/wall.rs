@@ -6,7 +6,7 @@ use ratatui::layout::{Margin, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use agent_monitor::domain::model::{Agent, Cost};
+use agent_monitor::domain::model::Agent;
 
 use crate::app::App;
 use crate::format;
@@ -39,18 +39,15 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     let pages = agents.len().div_ceil(per_page).max(1);
 
     let block = theme::pane(
-        "WALL",
+        area,
+        "w WALL",
         vec![Span::styled(
-            format!(
-                " {} AGENTS · PAGE {}/{} · ←→↑↓ MOVE · ENTER OPEN ",
-                agents.len(),
-                page + 1,
-                pages
-            ),
+            format!(" {} AGENTS · PAGE {}/{} ", agents.len(), page + 1, pages),
             theme::ink(Token::TextDim),
         )],
         true,
     );
+    let block = block.title_bottom(theme::hotkeys(&[("←→↑↓", "MOVE"), ("Enter", "OPEN")]));
     frame.render_widget(block, area);
 
     let card_width = inner.width / columns;
@@ -118,11 +115,6 @@ pub fn draw_card(
             theme::ink(Token::TextDim),
         ),
     };
-    let cost_color = if let Cost::Unpriced = agent.cost {
-        Token::Rule
-    } else {
-        Token::Highlight
-    };
     let started = agent
         .started
         .map_or_else(|| String::from("—"), |at| format::duration(clock.now - at));
@@ -146,17 +138,6 @@ pub fn draw_card(
             Span::styled(agent.turns.to_string(), theme::bold(Token::Text)),
             Span::styled(" TLS ", theme::ink(Token::Rule)),
             Span::styled(agent.tool_calls.to_string(), theme::bold(Token::Info)),
-            Span::styled(" ERR ", theme::ink(Token::Rule)),
-            Span::styled(
-                agent.tool_errors.to_string(),
-                theme::bold(if agent.tool_errors > 0 {
-                    Token::Alert
-                } else {
-                    Token::Rule
-                }),
-            ),
-            Span::styled(" ", theme::ink(Token::Rule)),
-            Span::styled(format::cost(agent.cost), theme::bold(cost_color)),
             Span::styled(format!(" {started}"), theme::ink(Token::TextDim)),
         ]),
     ];

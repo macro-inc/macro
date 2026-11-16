@@ -30,8 +30,9 @@ const EXPANDED_CHARS: usize = 600;
 /// Draws the drill-in page for `id`.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, id: &AgentId) {
     let Some(agent) = app.view.agents.get(id).cloned() else {
-        let block = theme::pane("AGENT", Vec::new(), true);
-        let text = format!("  {id} is gone. ESC goes back.");
+        let block =
+            theme::pane(area, "AGENT", Vec::new(), true).title(theme::hotkeys(&[("Esc", "BACK")]));
+        let text = format!("  {id} is gone.");
         frame.render_widget(
             Paragraph::new(Span::styled(text, theme::ink(Token::Alert))).block(block),
             area,
@@ -138,29 +139,16 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
         || String::from("—"),
         |started| format::duration(agent.ended.unwrap_or(clock.now) - started),
     );
-    let errors = agent.tool_errors;
     let minutes = &agent.minutes;
     let counts = |series: &[u16]| series.iter().map(|value| u64::from(*value)).collect();
-    // Cents, so the sparkline's integer levels still tell small spends apart.
-    let cents = minutes
-        .cost_usd
-        .iter()
-        .map(|usd| (f64::from(*usd) * 100.0).round().max(0.0) as u64)
-        .collect();
     let tokens = minutes
         .tokens
         .iter()
         .map(|value| u64::from(*value))
         .collect();
     // Cells with a per-minute series draw it; the rest show only their value.
-    let cells: [(&str, String, Token, Option<Vec<u64>>); 9] = [
+    let cells: [(&str, String, Token, Option<Vec<u64>>); 7] = [
         ("DURATION", duration, Token::Text, None),
-        (
-            "COST",
-            format::cost(agent.cost),
-            Token::Highlight,
-            Some(cents),
-        ),
         (
             "TURNS",
             format::thousands(u64::from(agent.turns)),
@@ -172,12 +160,6 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
             format::thousands(u64::from(agent.tool_calls)),
             Token::Info,
             Some(counts(&minutes.tools)),
-        ),
-        (
-            "ERRORS",
-            errors.to_string(),
-            if errors > 0 { Token::Alert } else { Token::Ok },
-            Some(counts(&minutes.errors)),
         ),
         (
             "TOKENS",
@@ -208,7 +190,7 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, agent: &Agent, clock: Clock) {
             None,
         ),
     ];
-    let areas = Layout::horizontal([Constraint::Ratio(1, 9); 9]).split(area);
+    let areas = Layout::horizontal([Constraint::Ratio(1, 7); 7]).split(area);
     for ((label, value, color, series), cell) in cells.into_iter().zip(areas.iter()) {
         let block = theme::frame(Token::Frame).title(Line::from(vec![Span::styled(
             format!(" {label} "),
@@ -293,6 +275,7 @@ fn marks(app: &App, agent: &Agent) -> Vec<Mark> {
 fn draw_timeline(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: Clock) {
     let marks = marks(app, agent);
     let block = theme::pane(
+        area,
         "TIMELINE",
         vec![Span::styled(
             format!(
@@ -393,7 +376,7 @@ fn results(items: &[&TranscriptItem]) -> HashMap<String, TranscriptItem> {
 fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let focused = matches!(app.mode.base(), Base::Idle | Base::Pane(Pane::Transcript));
     let Some(transcript) = app.view.transcript.as_ref() else {
-        let block = theme::pane("TRANSCRIPT", Vec::new(), focused);
+        let block = theme::pane(area, "TRANSCRIPT", Vec::new(), focused);
         frame.render_widget(Paragraph::new("").block(block), area);
         return;
     };
@@ -416,11 +399,8 @@ fn draw_transcript(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
             theme::chip(Token::Highlight),
         )
     });
-    extra.push(Span::styled(
-        " ENTER EXPANDS A TOOL CALL ",
-        theme::ink(Token::Rule),
-    ));
-    let block = theme::pane("TRANSCRIPT", extra, focused);
+    let block = theme::pane(area, "TRANSCRIPT", extra, focused)
+        .title_bottom(theme::hotkeys(&[("Enter", "EXPAND TOOL CALL")]));
     let inner = block.inner(area);
     let width = usize::from(inner.width);
 
@@ -574,13 +554,15 @@ fn item_lines(
 fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: Clock) {
     let focused = app.mode.base() == Base::Pane(Pane::Children);
     let block = theme::pane(
+        area,
         "CHILDREN",
         vec![Span::styled(
-            format!(" {} · TAB HERE, ENTER DRILLS ", agent.children.len()),
+            format!(" {} ", agent.children.len()),
             theme::ink(Token::TextDim),
         )],
         focused,
     );
+    let block = block.title_bottom(theme::hotkeys(&[("Tab", "FOCUS"), ("Enter", "OPEN")]));
     let mut lines: Vec<Line<'static>> = Vec::new();
     for (index, child) in agent.children.iter().enumerate() {
         let line = match app.view.agents.get(child) {
@@ -597,11 +579,6 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
                     format!("{} ", theme::status_word(child.status)),
                     theme::ink(theme::status_color(child.status)),
                 ),
-                Span::styled(
-                    format::right(&format::cost(child.cost), 8),
-                    theme::bold(Token::Highlight),
-                ),
-                Span::raw(" "),
                 Span::styled(
                     child.doing.clone().unwrap_or_default(),
                     theme::ink(Token::Info),
@@ -630,13 +607,15 @@ fn draw_children(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, cl
 fn draw_prs(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: Clock) {
     let focused = app.mode.base() == Base::Pane(Pane::AgentPrs);
     let block = theme::pane(
+        area,
         "PRS",
         vec![Span::styled(
-            format!(" {} · ENTER OPENS ITS OTHER AGENT ", agent.prs.len()),
+            format!(" {} ", agent.prs.len()),
             theme::ink(Token::TextDim),
         )],
         focused,
     );
+    let block = block.title_bottom(theme::hotkeys(&[("Enter", "OPEN AGENT")]));
     let width = usize::from(block.inner(area).width);
     let mut lines: Vec<Line<'static>> = app
         .view
@@ -664,7 +643,7 @@ fn draw_prs(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: 
 }
 
 fn draw_agent_tape(frame: &mut Frame<'_>, area: Rect, app: &App, agent: &Agent, clock: Clock) {
-    let block = theme::pane("TAPE", Vec::new(), false);
+    let block = theme::pane(area, "TAPE", Vec::new(), false);
     let height = usize::from(block.inner(area).height);
     let lines: Vec<Line<'static>> = app
         .view

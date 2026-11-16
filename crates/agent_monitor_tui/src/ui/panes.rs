@@ -9,8 +9,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Cell, Paragraph, Row, Table, TableState};
 
 use agent_monitor::domain::model::{
-    Agent, AgentKind, CiState, Mergeable, Pr, PrState, ReviewState, SourceState, TapeEvent,
-    TapeKind, Timestamp,
+    Agent, AgentKind, CiState, Mergeable, Pr, PrState, ReviewState, SourceKind, SourceState,
+    TapeEvent, TapeKind, Timestamp,
 };
 
 use crate::app::App;
@@ -34,7 +34,7 @@ pub fn draw(
     match pane {
         Pane::Agents => agents(frame, area, app, clock, focused),
         Pane::Tape => tape(frame, area, app, clock, focused),
-        Pane::Spend => spend(frame, area, app, focused),
+        Pane::Spend => spend(frame, area, app, focused, zoomed),
         Pane::Failures => failures(frame, area, app, clock, focused),
         Pane::Sources => sources(frame, area, app, clock, focused),
         Pane::Body => body(frame, area, app, focused),
@@ -63,11 +63,11 @@ fn age_since(clock: Clock, at: Option<Timestamp>) -> String {
 const NAME_WIDTH: u16 = 20;
 
 /// Width of the AGENTS columns that always show, with their spacing.
-const FIXED: u16 = 45 + NAME_WIDTH;
+const FIXED: u16 = 32 + NAME_WIDTH;
 
 /// The AGENTS table's optional columns at a given inner width.
 struct AgentColumns {
-    /// Narrow: no KIND, STAT or ERR columns; the status square stays.
+    /// Narrow: no KIND or STAT columns; the status square stays.
     compact: bool,
     task: u16,
     tokens: bool,
@@ -76,10 +76,10 @@ struct AgentColumns {
 
 impl AgentColumns {
     fn for_width(width: u16) -> Self {
-        // The fixed columns and their spacing take 65, `doing` at least 18;
+        // The fixed columns and their spacing take 52, `doing` at least 18;
         // what is left goes to tokens, then the sparkline, then the task.
         let compact = width < FIXED + 18;
-        let fixed = if compact { FIXED - 18 } else { FIXED };
+        let fixed = if compact { FIXED - 14 } else { FIXED };
         let mut rest = width.saturating_sub(fixed + 18);
         let tokens = rest >= 8;
         if tokens {
@@ -117,13 +117,6 @@ fn agent_row(
             (None, None) => Span::styled("—", theme::ink(Token::Rule)),
         },
     };
-    let cost_color = match agent.cost {
-        agent_monitor::domain::model::Cost::Known(_) => Token::Highlight,
-        agent_monitor::domain::model::Cost::Estimated(_) => Token::Text,
-        agent_monitor::domain::model::Cost::Unpriced => Token::Rule,
-    };
-    let errors = agent.tool_errors + agent.failures;
-
     let mut cells = vec![Cell::from(theme::status_square(
         agent.status,
         clock.blink(),
@@ -171,19 +164,6 @@ fn agent_row(
             .right_aligned(),
         ),
     ]);
-    if !columns.compact {
-        cells.push(Cell::from(
-            Line::from(Span::styled(
-                errors.to_string(),
-                theme::ink(if errors > 0 {
-                    Token::Alert
-                } else {
-                    Token::Rule
-                }),
-            ))
-            .right_aligned(),
-        ));
-    }
     if columns.tokens {
         cells.push(Cell::from(
             Line::from(Span::styled(
@@ -193,13 +173,6 @@ fn agent_row(
             .right_aligned(),
         ));
     }
-    cells.push(Cell::from(
-        Line::from(Span::styled(
-            format::cost(agent.cost),
-            theme::bold(cost_color),
-        ))
-        .right_aligned(),
-    ));
     if columns.spark > 0 {
         let color = if agent.status.is_final() {
             Token::Rule
@@ -227,7 +200,6 @@ fn row_name(app: &App, agent: &Agent) -> String {
 
 fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
     let rows: Vec<&Agent> = app.view.sorted_agents(&app.filter);
-    let live = rows.iter().filter(|agent| !agent.status.is_final()).count();
     let selected = app
         .cursors
         .agent
@@ -237,19 +209,25 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
     let columns = AgentColumns::for_width(area.width.saturating_sub(2));
 
     let mut extra = vec![count_span(format!(
-        "{live} LIVE · {} ROWS / {} ALL",
+        "{} SHOWN / {} TOTAL",
         rows.len(),
         app.view.agents.len()
     ))];
-    extra.push(if app.filter.all {
-        Span::styled(" ALL · a HIDES ENDED ", theme::bold(Token::Highlight))
-    } else {
-        Span::styled(" a SHOWS ENDED ", theme::ink(Token::Rule))
-    });
     if !app.filter.is_empty() {
         extra.push(Span::styled(" FILTERED ", theme::bold(Token::Highlight)));
     }
-    let block = theme::pane("1 AGENTS", extra, focused);
+    let toggle = if app.filter.all {
+        "HIDE ENDED"
+    } else {
+        "SHOW ENDED"
+    };
+    let block = theme::pane(area, "1 AGENTS", extra, focused)
+        .title_bottom(theme::hotkeys(&[("a", toggle)]));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let [summary, table_area] =
+        Layout::vertical([Constraint::Length(2), Constraint::Min(0)]).areas(inner);
+    super::agent_summary::draw(frame, summary, app);
 
     let mut header = vec![""];
     let mut widths = vec![Constraint::Length(1)];
@@ -275,16 +253,10 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         Constraint::Length(4),
         Constraint::Length(5),
     ]);
-    if !columns.compact {
-        header.push("ERR");
-        widths.push(Constraint::Length(3));
-    }
     if columns.tokens {
         header.push("TOKENS");
         widths.push(Constraint::Length(7));
     }
-    header.push("COST");
-    widths.push(Constraint::Length(8));
     if columns.spark > 0 {
         header.push("ACTIVITY 60M");
         widths.push(Constraint::Length(columns.spark));
@@ -305,7 +277,6 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
     let table = Table::new(table_rows, widths)
         .header(header_row)
         .column_spacing(1)
-        .block(block)
         .row_highlight_style(if focused {
             theme::selected()
         } else {
@@ -313,7 +284,7 @@ fn agents(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focuse
         });
 
     let mut state = TableState::default().with_selected(Some(selected));
-    frame.render_stateful_widget(table, area, &mut state);
+    frame.render_stateful_widget(table, table_area, &mut state);
 }
 
 /// An agent's pull request badge: `#<number>` for one, `⎇<count>` for
@@ -538,7 +509,7 @@ fn tape(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused:
     } else {
         extra.push(Span::styled(" ▼ FOLLOWING ", theme::ink(Token::Ok)));
     }
-    let block = theme::pane("2 TAPE", extra, focused);
+    let block = theme::pane(area, "2 TAPE", extra, focused);
     let inner = block.inner(area);
     let height = usize::from(inner.height);
     let skip = scroll(cursor, height);
@@ -553,9 +524,10 @@ fn tape(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused:
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
+fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool, zoomed: bool) {
     let totals = &app.view.totals;
     let block = theme::pane(
+        area,
         "3 SPEND TODAY",
         vec![Span::styled(
             format!(" {} ", format::cost(totals.cost_today)),
@@ -611,6 +583,48 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
         axis_area,
     );
 
+    let [table_area, agents_area] = Layout::horizontal([
+        Constraint::Percentage(if zoomed { 50 } else { 100 }),
+        Constraint::Min(0),
+    ])
+    .areas(table_area);
+    if zoomed {
+        let mut agents: Vec<_> = app.view.agents.values().collect();
+        agents.sort_by(|a, b| {
+            b.cost
+                .usd()
+                .unwrap_or(0.0)
+                .total_cmp(&a.cost.usd().unwrap_or(0.0))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        let widths = [Constraint::Min(0), Constraint::Length(12)];
+        let rows = agents.into_iter().map(|agent| {
+            Row::new(vec![
+                Cell::from(agent.name.clone()),
+                Cell::from(
+                    Line::from(Span::styled(
+                        format::cost(agent.cost),
+                        theme::ink(Token::Highlight),
+                    ))
+                    .right_aligned(),
+                ),
+            ])
+        });
+        let selected = app
+            .cursors
+            .spend_agent
+            .min(app.view.agents.len().saturating_sub(1));
+        let mut state = TableState::default().with_selected(Some(selected));
+        frame.render_stateful_widget(
+            Table::new(rows, widths)
+                .header(Row::new(["AGENT", "LIFETIME USD"]).style(theme::bold(Token::Rule)))
+                .row_highlight_style(theme::selected())
+                .column_spacing(2),
+            agents_area,
+            &mut state,
+        );
+    }
+
     let kinds = app.view.spend_by_kind();
     let total: f64 = kinds.iter().filter_map(|(_, cost)| cost.usd()).sum();
     let width = usize::from(table_area.width);
@@ -641,7 +655,7 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
             .chain(theme::meter(filled, bar_room, Token::Accent))
             .collect::<Vec<_>>(),
         );
-        lines.push(if focused && index == app.cursors.spend {
+        lines.push(if focused && !zoomed && index == app.cursors.spend {
             line.style(theme::selected())
         } else {
             line
@@ -653,7 +667,7 @@ fn spend(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
 fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
     let rows = app.view.failures(&app.filter);
     let totals = &app.view.totals;
-    // The board's count, so the two always agree; rows give the detail.
+    // Totals cover the last day; rows give the individual failures.
     let count = totals.errors_24h + totals.failed_24h;
     let color = if count == 0 && rows.is_empty() {
         Token::Ok
@@ -661,18 +675,13 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
         Token::Alert
     };
     let block = theme::pane(
+        area,
         "4 FAILURES",
-        vec![
-            Span::styled(format!(" {count} 24H "), theme::bold(color)),
-            Span::styled(
-                format!("{} TOOL · {} AGENT ", totals.errors_24h, totals.failed_24h),
-                theme::ink(Token::TextDim),
-            ),
-        ],
+        vec![Span::styled(format!(" {count} 24H "), theme::bold(color))],
         focused,
     );
     let inner = block.inner(area);
-    let height = usize::from(inner.height);
+    let height = usize::from(inner.height.saturating_sub(1));
     let cursor = app.cursors.failure.min(rows.len().saturating_sub(1));
     let skip = scroll(cursor, height);
 
@@ -732,6 +741,21 @@ fn failures(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focu
             theme::ink(Token::Ok),
         )));
     }
+    let error_rate = if totals.tools_24h == 0 {
+        0.0
+    } else {
+        f64::from(totals.errors_24h) * 100.0 / f64::from(totals.tools_24h)
+    };
+    lines.insert(
+        0,
+        Line::from(Span::styled(
+            format!(
+                "{} TOOL · {} AGENT · {error_rate:.1}% TOOLS FAILED",
+                totals.errors_24h, totals.failed_24h
+            ),
+            theme::ink(Token::TextDim),
+        )),
+    );
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
@@ -750,6 +774,7 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
         Token::Alert
     };
     let block = theme::pane(
+        area,
         "6 SOURCES",
         vec![Span::styled(
             format!(" {healthy}/{} OK ", rows.len()),
@@ -831,7 +856,7 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
             ));
         }
         if let Some(detail) = &health.detail
-            && health.state != SourceState::Healthy
+            && (health.state != SourceState::Healthy || row.source == SourceKind::Daemon)
         {
             lines.push(Line::from(Span::styled(
                 format!("  {detail}"),
@@ -850,6 +875,7 @@ fn sources(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focus
 
 fn body(frame: &mut Frame<'_>, area: Rect, app: &mut App, focused: bool) {
     let block = theme::pane(
+        area,
         "7 BODY",
         vec![
             Span::styled(" BIOSCAN ", theme::bold(Token::Info)),

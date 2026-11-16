@@ -9,7 +9,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Widget};
 
 use agent_monitor::domain::model::{Commit, Lane, LaneBase, Pr, PrState, RepoGraph, Status};
 
@@ -52,7 +52,7 @@ impl Board {
 
 /// Draws the page into `area`.
 pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
-    let block = theme::pane("8 CHANGES", title_spans(app), focused);
+    let block = theme::pane(area, "8 CHANGES", title_spans(app), focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.width < 40 || inner.height < 8 {
@@ -275,18 +275,12 @@ fn draw_other_prs(buffer: &mut Buffer, inner: Rect, app: &mut App, clock: Clock)
     for x in inner.left()..right {
         put(buffer, x, footer_y, "┄", theme::ink(Token::InfoFaint));
     }
-    let mut keys = Vec::new();
-    for (key, what) in [("↑↓", "PR"), ("ENTER", "AGENT"), ("[ ]", "REPO")] {
-        keys.push(Span::styled(
-            format!(" {key}"),
-            theme::bold(Token::Highlight),
-        ));
-        keys.push(Span::styled(
-            format!(" {what} "),
-            theme::ink(Token::TextDim),
-        ));
-    }
-    write(buffer, inner.x, footer_y + 1, right, &keys);
+    Paragraph::new(theme::hotkeys(&[
+        ("↑↓", "PR"),
+        ("Enter", "AGENT"),
+        ("[ ]", "REPO"),
+    ]))
+    .render(Rect::new(inner.x, footer_y + 1, inner.width, 1), buffer);
 }
 
 /// The scroll that keeps `cursor` in view, clamped to the list.
@@ -1072,30 +1066,20 @@ impl Painter<'_> {
         let (first, second) = self.inspector(selected, orphans);
         write(buffer, self.inner.x, y + 1, right, &first);
         write(buffer, self.inner.x, y + 2, right, &second);
-        let mut keys = Vec::new();
-        for (key, what) in [
+        Paragraph::new(theme::hotkeys(&[
             ("↑↓", "LANE"),
             ("←→", "COMMIT"),
-            ("ENTER", "AGENT"),
+            ("Enter", "AGENT"),
             ("p", "LANE PAGE"),
             ("n N", "NEXT ✕"),
             ("+ −", "ZOOM"),
             ("< >", "PAN"),
-            ("HOME", "NOW"),
+            ("Home", "NOW"),
             ("[ ]", "REPO"),
             ("m", "LANDED"),
             ("s", "SORT"),
-        ] {
-            keys.push(Span::styled(
-                format!(" {key}"),
-                theme::bold(Token::Highlight),
-            ));
-            keys.push(Span::styled(
-                format!(" {what} "),
-                theme::ink(Token::TextDim),
-            ));
-        }
-        write(buffer, self.inner.x, y + 3, right, &keys);
+        ]))
+        .render(Rect::new(self.inner.x, y + 3, self.inner.width, 1), buffer);
     }
 
     /// The inspector's two lines for the row under the cursor.

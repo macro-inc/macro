@@ -22,7 +22,11 @@ times a second, and ticks at `fps` only while something animates.
 - `src/view.rs`: the mirrored state and the derived rows (sorting, failures,
   spend, PRs: failing CI first). Spend by kind is the collector's split of
   today (`Totals::spend_by_kind`), never a sum of rows' lifetime costs, so it adds up to the day total.
-- `src/ui.rs`: layout and its width breakpoints; panes and pages live in `src/ui/`.
+- `src/ui.rs`: bottom key hints and width breakpoints; panes and
+  pages live in `src/ui/`. The global header, navigation strip, and quote board are removed.
+  `ui/agent_summary.rs` draws separate status and activity rows inside AGENTS,
+  both in the monitor and on its full page. Spend lives in SPEND (the full
+  page also lists lifetime cost by agent), and error counts live in FAILURES.
   8 CHANGES (`ui/changes.rs`) shares the lower right with FAILURES; agent
   rows carry a PR badge and the drill-in lists the agent's PRs (`pr_line`).
 - `src/ui/changes/`: the CHANGES page. `layout.rs` is pure (time buckets to
@@ -114,6 +118,8 @@ times a second, and ticks at `fps` only while something animates.
   `theme::active()` is thread-local and `ui::draw` sets it from `App::theme`
   each frame, so render through `ui::draw` (or call `theme::set_active`). Pick the token
   by role, not by the hue you want: see the doc on each `Token` variant.
+- Put only the title in a pane's chip; render hotkeys in square brackets,
+  right-aligned outside the chip with `theme::hotkeys` (help stays in the bottom bar).
 - Use thin outlines for every pane through `theme::pane` or `theme::frame`;
   `ui::draw` finishes each frame with `theme::grid` (dots on blank pane rows).
 - The glitch follows the frame clock, so it moves only while frames are drawn

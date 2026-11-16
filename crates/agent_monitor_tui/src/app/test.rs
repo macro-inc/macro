@@ -197,3 +197,18 @@ fn the_theme_command_switches_theme_or_reports_an_unknown_one() {
         Some("UNKNOWN THEME: neon (classic, ember, phosphor, dusk)")
     );
 }
+
+#[test]
+fn spend_page_can_reach_every_agent_cost() {
+    let mut app = changes_app();
+    let agents = app.view.agents.len();
+    assert!(agents > app.view.spend_by_kind().len());
+    app.key(Key::Char('3'));
+    app.key(Key::End);
+    assert_eq!(app.cursors.spend_agent, agents - 1);
+    app.key(Key::Up);
+    assert_eq!(app.cursors.spend_agent, agents - 2);
+    app.key(Key::Home);
+    assert_eq!(app.cursors.spend_agent, 0);
+    assert_eq!(app.cursors.spend, 0);
+}

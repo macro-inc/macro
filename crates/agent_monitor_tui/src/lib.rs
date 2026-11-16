@@ -109,7 +109,7 @@ mod unix {
     }
 
     /// [`run`] on a feed the caller built, such as [`feed::in_process`]
-    /// over a store it hosts; `label` is shown in the header and `notice` on
+    /// over a store it hosts; `label` is shown in the bottom status line and `notice` on
     /// the command line until the first key.
     pub async fn run_feed(
         feed: Feed,

@@ -36,7 +36,7 @@ pub fn draw(
     focused: bool,
     zoomed: bool,
 ) {
-    let block = theme::pane("8 CHANGES", title_spans(app), focused || zoomed);
+    let block = theme::pane(area, "8 CHANGES", title_spans(app), focused || zoomed);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let width = usize::from(inner.width);

@@ -239,7 +239,11 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   no theme draws in `classic` with a warning on the command line; the
   collector ignores the key. In the viewer, Ctrl-T (or a backtick, for a
   terminal in a browser, which keeps Ctrl-T) cycles the themes and the
-  `THEME [name]` command picks one.
+  `THEME [name]` command picks one. The AGENTS pane and page separate
+  current status from 24-hour activity. SPEND owns cost figures (including
+  lifetime cost by agent on its full page); FAILURES owns error totals.
+  Pane titles contain only names, with bracketed hotkeys on the right;
+  the bottom bar includes `HELP [?]`.
 - **`macrod monitor serve`** runs the collector alone: no pairing, no config
   lock, no harness. It reads only `[monitor]`, from `~/.macrod/macrod.toml`
   or the `--config` / `--profile` it is given (resolved as for
@@ -286,8 +290,8 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
 - `--socket <path>` points any of them at another socket (tests).
 - A hosting panel or service adds the `daemon` source: its harness id,
   whether the runtime is connected, and its open prompts, as that source's
-  health (detail = harness id, items = open prompts); the viewer's header
-  shows it as `HOST <harness> ● ON  PROMPTS n` or `○ OFFLINE`.
+  health (detail = harness id, items = open prompts), visible in the viewer's
+  SOURCES pane.
 - The Config tab toggles hosting (`Agent monitor`), which writes a
   `[monitor]` table; new configs leave it out (hosting is on by default),
   because a macrod older than the monitor rejects a file that has one.

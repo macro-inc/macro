@@ -75,17 +75,15 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
     };
 
     let block = theme::pane(
+        tree_area,
         "5 TREE",
         vec![Span::styled(
-            format!(
-                " {} AGENTS · {} ROOTS · ←→ FOLD · ENTER OPEN ",
-                agents.len(),
-                roots.len()
-            ),
+            format!(" {} AGENTS · {} ROOTS ", agents.len(), roots.len()),
             theme::ink(Token::TextDim),
         )],
         true,
     );
+    let block = block.title_bottom(theme::hotkeys(&[("←→", "FOLD"), ("Enter", "OPEN")]));
     match Tree::new(&items) {
         Ok(tree) => {
             let tree = tree
@@ -124,6 +122,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
         draw_card(frame, card, app, clock, agent, true);
         frame.render_widget(
             ratatui::widgets::Paragraph::new(details(agent, clock)).block(theme::pane(
+                rest,
                 "DETAIL",
                 Vec::new(),
                 false,
@@ -206,10 +205,6 @@ fn item(
         ),
         Span::styled(started, theme::ink(Token::Rule)),
         Span::styled(format::right(&age, 5), theme::ink(Token::TextDim)),
-        Span::styled(
-            format::right(&format::cost(agent.cost), 9),
-            theme::bold(Token::Highlight),
-        ),
         Span::styled(
             format!(" {:>3}▸", agent.children.len()),
             theme::ink(Token::Rule),

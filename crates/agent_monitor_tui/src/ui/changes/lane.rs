@@ -41,7 +41,7 @@ pub fn draw_lane(
         ),
         Span::raw(" "),
     ];
-    let block = theme::pane("8 CHANGES", title, true);
+    let block = theme::pane(area, "8 CHANGES", title, true);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let (Some(graph), Some(lane)) = (graph, lane) else {
@@ -186,10 +186,8 @@ pub fn draw_lane(
         None => side.push(Line::from(Span::styled("none", theme::ink(Token::Rule)))),
     }
     side.push(Line::from(""));
-    side.push(Line::from(Span::styled(
-        "AGENTS  (ENTER OPENS)",
-        theme::bold(Token::Rule),
-    )));
+    side.push(Line::from(Span::styled("AGENTS", theme::bold(Token::Rule))));
+    side.push(theme::hotkeys(&[("Enter", "OPEN")]));
     for (index, id) in lane.agents.iter().enumerate() {
         let chosen = index == app.cursors.changes.lane_agent;
         let line = match app.view.agents.get(id) {

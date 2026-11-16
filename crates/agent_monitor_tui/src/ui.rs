@@ -1,9 +1,9 @@
-//! Drawing: the header, the quote board, the page body and the command line.
+//! Drawing: the page body and the command line.
 //! Layout degrades by width: under 140 columns BODY and SOURCES drop, under
-//! 100 everything stacks in one column (CHANGES and FAILURES share a row); under 40 rows the board shrinks to
-//! one line. Above 200 columns BODY takes a quarter of the width.
+//! 100 everything stacks in one column. Above 200 columns BODY takes a quarter
+//! of the width.
 
-mod board;
+mod agent_summary;
 mod changes;
 mod drill;
 mod panes;
@@ -13,16 +13,15 @@ mod wall;
 #[cfg(test)]
 mod test;
 
-use chrono::{FixedOffset, Timelike as _};
+use chrono::FixedOffset;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 
-use agent_monitor::domain::model::{SourceKind, SourceState, TapeKind, Timestamp};
+use agent_monitor::domain::model::Timestamp;
 
 use crate::app::App;
-use crate::format;
 use crate::keys::{Mode, Page, Pane};
 use crate::theme;
 use crate::theme::Token;
@@ -31,9 +30,6 @@ use crate::view::Link;
 /// Widths at which the layout changes.
 const WIDE: u16 = 140;
 const NARROW: u16 = 100;
-
-/// Height under which the board takes one line.
-const SHORT: u16 = 40;
 
 /// The time a frame is drawn at, so tests can fix it.
 #[derive(Clone, Copy, Debug)]
@@ -64,20 +60,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
     let area = frame.area();
     frame.render_widget(Block::default().style(theme::base()), area);
 
-    let short = area.height < SHORT;
-    let board_height = if short { 1 } else { 4 };
-    let [header, tabs, board_area, body, command] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(board_height),
-        Constraint::Min(0),
-        Constraint::Length(1),
-    ])
-    .areas(area);
-
-    draw_header(frame, header, app, clock);
-    draw_tabs(frame, tabs, app);
-    board::draw(frame, board_area, app);
+    let [body, command] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
 
     match app.page().clone() {
         Page::Monitor => draw_monitor(frame, body, app, clock),
@@ -93,255 +76,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, clock: Clock) {
         draw_help(frame, body);
     }
     theme::grid(frame.buffer_mut(), body);
-}
-
-fn draw_header(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
-    let totals = &app.view.totals;
-    let wide = area.width >= WIDE;
-    let (link, link_style) = match &app.view.link {
-        Link::Connecting => (String::from("○ CONNECTING"), theme::bold(Token::Highlight)),
-        Link::Live => (String::from("● LIVE"), theme::bold(Token::Ok)),
-        Link::Reconnecting(_) => (String::from("● RECONNECTING"), theme::bold(Token::Alert)),
-        Link::Incompatible(_) => (String::from("✕ UPDATE MACROD"), theme::bold(Token::Alert)),
-    };
-    let errors = totals.errors_24h + totals.failed_24h;
-    let error_color = if errors > 0 { Token::Alert } else { Token::Ok };
-    let state = match (wide, app.view.any_working()) {
-        (false, _) => "",
-        (true, true) => "ACTIVE ",
-        (true, false) => "IDLE ",
-    };
-    // Wide headers split their fields with slashes; narrow ones with spaces.
-    let gap = if wide { " ╱ " } else { "  " };
-    let field = |label: &str| {
-        vec![
-            Span::styled(gap.to_owned(), theme::ink(Token::Rule)),
-            Span::styled(format!("{label} "), theme::ink(Token::TextDim)),
-        ]
-    };
-
-    let mut left = theme::strip_title("MACROD://MON");
-    left.push(Span::styled(" >_ ", theme::bold(Token::Highlight)));
-    if let Some(label) = &app.label {
-        left.push(Span::styled(
-            format!(" {label} "),
-            theme::chip(Token::Highlight),
-        ));
-        left.push(Span::raw(" "));
-    }
-    left.push(Span::styled(state, theme::ink(Token::TextDim)));
-    if wide {
-        left.push(Span::styled("SYS.LINK ", theme::ink(Token::InfoDim)));
-    }
-    left.push(Span::styled(link, link_style));
-    left.extend(field("WORK"));
-    left.push(Span::styled(
-        totals.working.to_string(),
-        theme::bold(Token::Ok),
-    ));
-    left.extend(field("WAIT"));
-    left.push(Span::styled(
-        totals.waiting.to_string(),
-        theme::bold(if totals.waiting > 0 {
-            Token::Attention
-        } else {
-            Token::Text
-        }),
-    ));
-    left.extend(field("BLOCK"));
-    left.push(Span::styled(
-        totals.blocked.to_string(),
-        theme::bold(if totals.blocked > 0 {
-            Token::Alert
-        } else {
-            Token::Text
-        }),
-    ));
-    left.extend(field("ERR"));
-    // The error count flickers while its newest failure is fresh.
-    let newest_failure = app
-        .view
-        .tape
-        .iter()
-        .rev()
-        .find(|event| matches!(event.kind, TapeKind::ToolError | TapeKind::Failure))
-        .map(|event| event.at);
-    let error_text = newest_failure.map_or_else(
-        || errors.to_string(),
-        |at| {
-            theme::glitch(
-                &errors.to_string(),
-                (clock.now - at).num_milliseconds(),
-                clock.now.timestamp_millis(),
-            )
-        },
-    );
-    left.push(Span::styled(error_text, theme::bold(error_color)));
-    left.extend(field("DAY"));
-    left.push(Span::styled(
-        format::cost(totals.cost_today),
-        theme::bold(Token::Highlight),
-    ));
-    if wide {
-        left.extend(field("AGENTS"));
-        left.push(Span::styled(
-            app.view.agents.len().to_string(),
-            theme::bold(Token::Text),
-        ));
-        left.extend(host_spans(app));
-        left.push(Span::styled(gap, theme::ink(Token::Rule)));
-        left.push(Span::styled(
-            format!("SEQ 0x{:04X}", app.view.seq),
-            theme::ink(Token::InfoDim),
-        ));
-    }
-
-    let local = clock.now.with_timezone(&clock.offset);
-    let separator = if clock.blink() { " " } else { ":" };
-    let time = format!(
-        "{:02}:{:02}{separator}{:02}",
-        local.hour(),
-        local.minute(),
-        local.second()
-    );
-    let date = if wide {
-        local.format("%a %d %b ").to_string().to_uppercase()
-    } else {
-        String::new()
-    };
-    // `⟦` and `⟧` around the time.
-    let right_width = date.chars().count() + time.len() + 4;
-
-    let [left_area, right_area] = Layout::horizontal([
-        Constraint::Min(0),
-        Constraint::Length(u16::try_from(right_width).unwrap_or(0)),
-    ])
-    .areas(area);
-    frame.render_widget(Paragraph::new(Line::from(left)), left_area);
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(date, theme::ink(Token::TextDim)),
-            Span::styled("⟦ ", theme::ink(Token::InfoDim)),
-            Span::styled(time, theme::bold(Token::Text)),
-            Span::styled(" ⟧", theme::ink(Token::InfoDim)),
-        ])),
-        right_area,
-    );
-}
-
-/// Characters of the hosting macrod's harness id shown in the header.
-const HARNESS_ID_SHOWN: usize = 8;
-
-/// The header's segment for the macrod hosting the collector (its `daemon`
-/// source): the harness it serves, whether its runtime is connected, and its
-/// open prompts. Empty when no macrod hosts the collector.
-fn host_spans(app: &App) -> Vec<Span<'static>> {
-    let Some(health) = app.view.sources.get(&SourceKind::Daemon) else {
-        return Vec::new();
-    };
-    let label = Span::styled(" ╱ HOST ", theme::ink(Token::TextDim));
-    let harness = health
-        .detail
-        .as_deref()
-        .map(|id| id.chars().take(HARNESS_ID_SHOWN).collect::<String>());
-    let Some(harness) = harness else {
-        return vec![label, Span::styled("NOT SERVING", theme::ink(Token::Rule))];
-    };
-
-    let mut spans = vec![label, Span::styled(harness, theme::bold(Token::Text))];
-    if health.state == SourceState::Healthy {
-        spans.extend([
-            Span::styled(" ● ON", theme::bold(Token::Ok)),
-            Span::styled("  PROMPTS ", theme::ink(Token::TextDim)),
-            Span::styled(health.items.to_string(), theme::bold(Token::Highlight)),
-        ]);
-    } else {
-        spans.push(Span::styled(" ○ OFFLINE", theme::bold(Token::Alert)));
-    }
-    spans
-}
-
-fn draw_tabs(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let page = app.page();
-    let tabs: [(&str, &str, &str, bool); 10] = [
-        ("0", "MON", "MON", *page == Page::Monitor),
-        ("1", "AGENTS", "AGT", *page == Page::Zoom(Pane::Agents)),
-        ("2", "TAPE", "TAPE", *page == Page::Zoom(Pane::Tape)),
-        ("3", "SPEND", "SPND", *page == Page::Zoom(Pane::Spend)),
-        ("4", "FAILURES", "FAIL", *page == Page::Zoom(Pane::Failures)),
-        ("5", "TREE", "TREE", *page == Page::Tree),
-        ("6", "SOURCES", "SRC", *page == Page::Zoom(Pane::Sources)),
-        ("7", "BODY", "BODY", *page == Page::Zoom(Pane::Body)),
-        (
-            "8",
-            "CHANGES",
-            "CHG",
-            matches!(page, Page::Zoom(Pane::Changes) | Page::Lane(..)),
-        ),
-        ("w", "WALL", "WALL", *page == Page::Wall),
-    ];
-    let short = area.width < NARROW;
-    let active_style = theme::chip(Token::Text);
-
-    let mut spans = Vec::new();
-    for (key, long_name, short_name, active) in tabs {
-        let name = if short { short_name } else { long_name };
-        if active {
-            spans.push(Span::styled(format!(" {key} {name} "), active_style));
-        } else {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(key, theme::bold(Token::Highlight)));
-            spans.push(Span::styled(format!(" {name}"), theme::ink(Token::Text)));
-            spans.push(Span::raw(" "));
-        }
-        if !short {
-            spans.push(Span::raw(" "));
-        }
-    }
-    if let Page::Agent(id) = page {
-        spans.push(Span::styled(
-            format!(" {} ", app.view.name_of(id)),
-            theme::chip(Token::Highlight),
-        ));
-    }
-
-    let hints = if area.width >= WIDE {
-        " / FIND  ? KEYS  ESC BACK "
-    } else {
-        ""
-    };
-    let used: usize = spans.iter().map(Span::width).sum();
-    let room = usize::from(area.width).saturating_sub(used + hints.len() + 1);
-    if room > 0 {
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(rule(room), theme::ink(Token::InfoFaint)));
-    }
-    let [left, right] = Layout::horizontal([
-        Constraint::Min(0),
-        Constraint::Length(u16::try_from(hints.len()).unwrap_or(0)),
-    ])
-    .areas(area);
-    frame.render_widget(Paragraph::new(Line::from(spans)), left);
-    frame.render_widget(
-        Paragraph::new(Span::styled(hints, theme::ink(Token::TextDim))),
-        right,
-    );
-}
-
-/// Columns between the tick marks on a rule.
-const TICK_EVERY: usize = 8;
-
-/// A thin rule `width` wide with a tick mark every [`TICK_EVERY`] columns.
-fn rule(width: usize) -> String {
-    (0..width)
-        .map(|column| {
-            if column % TICK_EVERY == TICK_EVERY - 1 {
-                '┼'
-            } else {
-                '┄'
-            }
-        })
-        .collect()
 }
 
 /// Width above which the BODY pane grows with the terminal.
@@ -408,82 +142,90 @@ fn draw_monitor(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) 
 }
 
 fn draw_command(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let line = match &app.mode {
-        Mode::Command { input, .. } => Line::from(prompt(
-            "CMD",
-            vec![
-                Span::styled(format!(" {}", input.value()), theme::bold(Token::Highlight)),
-                Span::styled("█", theme::ink(Token::Highlight)),
-                Span::styled(
-                    "   MON AGT TAPE SPND FAIL TREE SRC BODY CHG WALL  + filter words",
-                    theme::ink(Token::Rule),
-                ),
-            ],
-        )),
-        Mode::Find { input, .. } => Line::from(prompt(
-            "FIND",
-            vec![
-                Span::styled(
-                    format!(" /{}", input.value()),
-                    theme::bold(Token::Highlight),
-                ),
-                Span::styled("█", theme::ink(Token::Highlight)),
-            ],
-        )),
+    let (status, hints) = match &app.mode {
+        Mode::Command { input, .. } | Mode::Find { input, .. } => {
+            let label = if matches!(app.mode, Mode::Find { .. }) {
+                "FIND"
+            } else {
+                "CMD"
+            };
+            (
+                Line::from(prompt(
+                    label,
+                    vec![
+                        Span::styled(format!(" {}", input.value()), theme::bold(Token::Highlight)),
+                        Span::styled("█", theme::ink(Token::Highlight)),
+                    ],
+                )),
+                theme::hotkeys(&[("Enter", "APPLY"), ("Esc", "CANCEL")]),
+            )
+        }
         Mode::Base(_) | Mode::Help { .. } => {
-            let mut spans = theme::strip_title(">_");
-            spans.push(Span::raw(" "));
-            if app.theme_notice {
-                spans.push(Span::styled("THEME ", theme::ink(Token::TextDim)));
+            let (link, color) = match &app.view.link {
+                Link::Connecting => (String::from("○ CONNECTING"), Token::Highlight),
+                Link::Live => (String::from("● LIVE"), Token::Ok),
+                Link::Reconnecting(reason) => (format!("○ {reason}"), Token::Alert),
+                Link::Incompatible(reason) => (format!("UPDATE MACROD: {reason}"), Token::Alert),
+            };
+            let mut spans = vec![Span::styled(link, theme::ink(color))];
+            if let Some(label) = &app.label {
                 spans.push(Span::styled(
-                    app.theme.to_string().to_uppercase(),
+                    format!(" {label}"),
+                    theme::ink(Token::TextDim),
+                ));
+            }
+            if app.theme_notice {
+                spans.push(Span::styled(
+                    format!(" THEME {}", app.theme.to_string().to_uppercase()),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::styled("  CTRL-T or ` NEXT", theme::ink(Token::Rule)));
-                spans.push(Span::raw("  "));
             }
             if let Some(message) = &app.message {
-                spans.push(Span::styled(message.clone(), theme::bold(Token::Alert)));
-                spans.push(Span::raw("  "));
+                spans.push(Span::styled(
+                    format!(" {message}"),
+                    theme::bold(Token::Alert),
+                ));
             }
             if !app.filter.words.is_empty() {
-                spans.push(Span::styled("FILTER ", theme::ink(Token::TextDim)));
                 spans.push(Span::styled(
-                    app.filter.words.join(" "),
+                    format!(" FILTER {}", app.filter.words.join(" ")),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::raw("  "));
             }
             if !app.filter.find.is_empty() {
-                spans.push(Span::styled("FIND ", theme::ink(Token::TextDim)));
                 spans.push(Span::styled(
-                    format!("/{}", app.filter.find),
+                    format!(" FIND /{}", app.filter.find),
                     theme::bold(Token::Highlight),
                 ));
-                spans.push(Span::raw("  "));
             }
-            for (key, what) in [
-                ("TYPE", "COMMAND"),
-                ("ENTER", "OPEN"),
-                ("TAB", "PANE"),
-                ("↑↓", "MOVE"),
+            let mut keys = vec![("?", "HELP")];
+            for hint in [
+                ("Esc", "BACK"),
+                ("Enter", "OPEN"),
                 ("0-8", "PAGE"),
                 ("w", "WALL"),
+                ("/", "FIND"),
+                ("Tab", "PANE"),
+                ("↑↓", "MOVE"),
                 ("q", "QUIT"),
+                ("`", "THEME"),
+                ("letter", "COMMAND"),
             ] {
-                spans.push(Span::styled(key, theme::bold(Token::Text)));
-                spans.push(Span::styled(format!(" {what}  "), theme::ink(Token::Rule)));
+                let width = theme::hotkeys(&keys).width() + theme::hotkeys(&[hint]).width();
+                if width + 16 <= usize::from(area.width) {
+                    keys.insert(0, hint);
+                }
             }
-            if let Link::Reconnecting(reason) = &app.view.link {
-                spans.push(Span::styled(
-                    format!("LINK: {reason}"),
-                    theme::ink(Token::Alert),
-                ));
-            }
-            Line::from(spans)
+            (Line::from(spans), theme::hotkeys(&keys))
         }
     };
-    frame.render_widget(Paragraph::new(line), area);
+    let hint_width = u16::try_from(hints.width())
+        .unwrap_or(area.width)
+        .min(area.width);
+    let [left, right] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(hint_width)]).areas(area);
+    frame.render_widget(Paragraph::new(status), left);
+    frame.render_widget(Paragraph::new(hints), right);
 }
 
 /// A command-line prompt: a title chip, then `rest`.
@@ -549,7 +291,7 @@ const HELP: [(&str, &str); 22] = [
 ];
 
 /// The help box: the keys column plus the longest description and borders.
-const HELP_WIDTH: u16 = 86;
+const HELP_WIDTH: u16 = 110;
 
 fn draw_help(frame: &mut Frame<'_>, area: Rect) {
     let width = area.width.min(HELP_WIDTH);
@@ -560,25 +302,36 @@ fn draw_help(frame: &mut Frame<'_>, area: Rect) {
         width,
         height,
     };
-    let lines: Vec<Line<'_>> = HELP
-        .iter()
-        .map(|(keys, what)| {
-            Line::from(vec![
-                Span::styled(format::cell(keys, 26), theme::bold(Token::Highlight)),
-                Span::styled(*what, theme::ink(Token::Text)),
-            ])
-        })
-        .collect();
+    let block =
+        theme::pane(popup, "KEYS", Vec::new(), true).title(theme::hotkeys(&[("Esc", "CLOSE")]));
+    let inner = block.inner(popup);
     frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            theme::pane(
-                "KEYS",
-                vec![Span::styled(" ESC CLOSES ", theme::ink(Token::TextDim))],
-                true,
-            )
-            .borders(Borders::ALL),
-        ),
-        popup,
-    );
+    frame.render_widget(block, popup);
+    for (index, (keys, what)) in HELP.iter().enumerate() {
+        let row = u16::try_from(index).unwrap_or(inner.height);
+        if row >= inner.height {
+            break;
+        }
+        let key_text = if index < 16 {
+            format!("[{keys}]")
+        } else {
+            (*keys).to_owned()
+        };
+        let key_width = u16::try_from(key_text.chars().count())
+            .unwrap_or(0)
+            .min(inner.width);
+        let line = Rect::new(inner.x, inner.y + row, inner.width, 1);
+        let [description, key_area] =
+            Layout::horizontal([Constraint::Min(0), Constraint::Length(key_width)]).areas(line);
+        frame.render_widget(
+            Paragraph::new(Span::styled(*what, theme::ink(Token::Text))),
+            description,
+        );
+        frame.render_widget(
+            Paragraph::new(
+                Line::from(Span::styled(key_text, theme::bold(Token::Highlight))).right_aligned(),
+            ),
+            key_area,
+        );
+    }
 }
