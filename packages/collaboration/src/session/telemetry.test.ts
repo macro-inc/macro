@@ -94,24 +94,25 @@ test('a synchronous native tick and its later snapshot share only their explicit
   expect(tick.attrs.has('snapshot.current_ops')).toBe(false);
 });
 
-test.each([undefined, null, { opaque: true }])(
-  'tick closes and releases its observation on an opaque failure: %j',
-  (cause) => {
-    const root = new RecordedSpan('root');
-    const telemetry = new SessionTelemetry(root);
-    let caught = false;
-    try {
-      telemetry.tick(42, () => {
-        throw cause;
-      });
-    } catch (error) {
-      caught = true;
-      expect(error).toBe(cause);
-    }
-    expect(caught).toBe(true);
-    const tick = root.children[0];
-    expect(tick.ends).toBe(1);
-    snapshotCounts(telemetry, 456n);
-    expect(tick.attrs.has('snapshot.current_ops')).toBe(false);
+test.each([
+  undefined,
+  null,
+  { opaque: true },
+])('tick closes and releases its observation on an opaque failure: %j', (cause) => {
+  const root = new RecordedSpan('root');
+  const telemetry = new SessionTelemetry(root);
+  let caught = false;
+  try {
+    telemetry.tick(42, () => {
+      throw cause;
+    });
+  } catch (error) {
+    caught = true;
+    expect(error).toBe(cause);
   }
-);
+  expect(caught).toBe(true);
+  const tick = root.children[0];
+  expect(tick.ends).toBe(1);
+  snapshotCounts(telemetry, 456n);
+  expect(tick.attrs.has('snapshot.current_ops')).toBe(false);
+});
