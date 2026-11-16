@@ -31,8 +31,9 @@ old WASM pruning → retained-build pruning
 
 The native archive (`app-archive.zip`, the OTA bundle) is staged from its own
 copy of the build without the cache WASM Brotli sidecar or source maps. Native
-crash frames are rewritten to the public web copies, so the maps published with
-the web assets (and uploaded to Datadog by the deploy workflow) still apply.
+apps' PostHog exception frames are rewritten to the public web copies, whose
+published maps still resolve them. Web delivery and the deploy workflow's
+Datadog upload keep every map.
 
 The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
