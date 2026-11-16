@@ -48,7 +48,7 @@ async fn detail_is_the_contact_read_with_the_company_named_as_the_company_read_n
                 .await?
                 .expect("contact should be returned");
             let company = repo
-                .get_company_for_team(&team_id, &company_id, false)
+                .get_company_for_team(&team_id, &company_id, false, false)
                 .await?
                 .expect("company should be returned");
             let domain = company.company.domains.first().map(|d| d.domain.clone());

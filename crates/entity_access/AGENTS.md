@@ -74,8 +74,9 @@ the entity-access domain service.
 - `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
   once: kinds whose users are exactly their `entity_access` grants go through
   one grouped lookup (`queries/entity_audiences.rs`: grants, then team and
-  channel members once per distinct source); other kinds and a single id use the
-  cached per-entity `get_users_by_entity`. Keep it in step with
+  channel members once per distinct source). CRM audiences always read current
+  membership; other kinds and single ids use the cached per-entity
+  `get_users_by_entity`. Keep it in step with
   `get_entity_users`.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 - Access statements pass the viewer (`queries::Viewer`) and check a grant's
@@ -91,3 +92,6 @@ the entity-access domain service.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
   · Skill: `cloud-storage-hexagonal-architecture`
+
+- CRM company/contact receipts and audiences require current `team_user.crm_access` or an admin/owner role. Pipeline reads (single, list, batched, and `visible_crm_entities`) check each grant by membership and rule out a team the caller may not use CRM in, so CRM denial removes only team grants; direct and channel grants remain. The email thread requester check is separate from contributor consent.
+- Grant lookups used by live activity checks have a local 15-second statement timeout. Keep team-bot company/contact lookups fenced by record ID before filtering team ownership; stale statistics otherwise favor team-wide scans.

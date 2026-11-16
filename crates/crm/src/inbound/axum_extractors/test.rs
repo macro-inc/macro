@@ -260,6 +260,10 @@ impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
 }
 
 impl CrmService for FakeCrmService {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         _user_id: &str,
@@ -448,7 +452,7 @@ impl CrmService for FakeCrmService {
 
     async fn crm_scope_precheck(
         &self,
-        _team_id: &Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
         _domains: &[String],
         _addresses: &[String],
     ) -> Result<CrmScopePrecheck, CrmError> {
@@ -473,6 +477,14 @@ impl CrmService for FakeCrmService {
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmContact>, CrmError> {
         panic!("unexpected list_contacts_for_company call")
+    }
+
+    async fn list_company_contacts_page(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _query: crate::domain::model::CrmCompanyContactsQuery,
+    ) -> Result<crate::domain::model::CrmCompanyContactsPage, CrmError> {
+        panic!("unexpected list_company_contacts_page call")
     }
 
     async fn get_contact_for_team(
@@ -502,8 +514,18 @@ impl CrmService for FakeCrmService {
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         panic!("unexpected get_company_for_team call")
+    }
+
+    async fn preview_records(
+        &self,
+        _user_id: &str,
+        _company_ids: &[uuid::Uuid],
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<crate::domain::previews::CrmPreviews, CrmError> {
+        panic!("unexpected preview_records call")
     }
 
     async fn get_team_settings(

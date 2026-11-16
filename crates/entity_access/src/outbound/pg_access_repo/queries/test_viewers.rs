@@ -219,3 +219,19 @@ where
     );
     Ok(())
 }
+
+/// Runs `check` with every team member allowed CRM, then with none allowed it:
+/// the plain member's team grants on CRM records drop out while the owners
+/// keep theirs.
+pub(crate) async fn for_each_crm_setting(
+    pool: &PgPool,
+    mut check: impl AsyncFnMut() -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    for crm_access in [true, false] {
+        sqlx::query!("UPDATE team_user SET crm_access = $1", crm_access)
+            .execute(pool)
+            .await?;
+        check().await?;
+    }
+    Ok(())
+}

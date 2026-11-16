@@ -23,6 +23,10 @@ pub mod set_contact_name;
 /// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
 
+/// One page of a company's contacts, filtered by archive state and search,
+/// for the Team list. Same visibility rules as `list_company_contacts`.
+pub mod list_company_contacts_page;
+
 /// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
 /// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
@@ -36,6 +40,9 @@ pub mod search_contacts;
 
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
 pub mod get_company;
+
+/// Title many CRM company and contact chips in one request.
+pub mod previews;
 
 /// Manually create a CRM company (name + domain) for the caller's team.
 pub mod create_company;
@@ -52,6 +59,9 @@ pub mod blocked_domains;
 /// Team-level CRM configuration (permission thresholds, closed stages,
 /// team saved views).
 pub mod team_settings;
+
+/// Fresh viewer authority for session cache retirement.
+pub mod member_access;
 
 /// Individual email consent and domain blocklists.
 pub mod email_privacy;
@@ -143,6 +153,10 @@ where
 {
     Router::new()
         .route(
+            "/member-access",
+            get(member_access::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/email-privacy",
             get(email_privacy::get_handler::<C, St, Eas, Auth>)
                 .put(email_privacy::update_handler::<C, St, Eas, Auth>),
@@ -167,10 +181,15 @@ where
             "/companies/{company_id}",
             get(get_company::handler::<C, St, Eas, Auth>),
         )
+        .route("/previews", post(previews::handler::<C, St, Eas, Auth>))
         .route(
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, St, Eas, Auth>)
                 .post(create_contact::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/contacts/page",
+            get(list_company_contacts_page::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts",
@@ -248,6 +267,12 @@ impl IntoResponse for CrmError {
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: message.into(),
+                }),
+            ),
+            CrmError::AccessDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "CRM access is not enabled for this team member".into(),
                 }),
             ),
             CrmError::AdminRoleRequired => (

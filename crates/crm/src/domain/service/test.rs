@@ -84,6 +84,10 @@ struct ContactListCall {
 }
 
 impl CompaniesRepository for StubRepo {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         scope: CrmContactListScope<'_>,
@@ -115,6 +119,22 @@ impl CompaniesRepository for StubRepo {
         self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
             .await
             .map(Option::unwrap_or_default)
+    }
+
+    async fn preview_companies(
+        &self,
+        _viewer_id: &str,
+        _company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn preview_contacts(
+        &self,
+        _viewer_id: &str,
+        _contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        unimplemented!()
     }
 
     async fn activity_property_edges(
@@ -374,6 +394,16 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn list_company_contacts_page(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _include_hidden: bool,
+        _query: &CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_contact_for_team(
         &self,
         _team_id: &uuid::Uuid,
@@ -420,6 +450,7 @@ impl CompaniesRepository for StubRepo {
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
         _include_hidden: bool,
+        _include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         unimplemented!()
     }
@@ -1211,6 +1242,12 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for StubRepo {
+    async fn member_has_crm_access(&self, _: uuid::Uuid, _: &str) -> Result<bool, CrmError> {
+        Ok(true)
     }
 }
 

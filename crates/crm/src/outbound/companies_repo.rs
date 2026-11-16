@@ -4,21 +4,25 @@
 pub(crate) mod test;
 
 mod association;
+mod company_contacts;
 mod contact_listing;
 mod contact_update;
 mod email_privacy;
+mod previews;
 
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
-        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyForSoup, CrmCompanySummary,
-        CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmDomain, CrmDomainStatus, CrmError,
-        CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch,
-        DepopulateContactOutcome, DomainMetadata,
+        CrmAddressStatus, CrmBlockedDomain, CrmCompany, CrmCompanyContactsPage,
+        CrmCompanyContactsQuery, CrmCompanyForSoup, CrmCompanySummary, CrmCompanyWithContacts,
+        CrmContact, CrmContactDetail, CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole,
+        CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+        DomainMetadata,
     },
     stages::TeamSettingsStore,
 };
 use chrono::{DateTime, Utc};
+use company_contacts::VisibleCompany;
 use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -83,11 +87,12 @@ impl CompaniesRepositoryImpl {
     }
 
     /// Read the activity edges (`activity_property_edges`, the Sales views'
-    /// per-record probes) from `replica`, off the primary. They then follow
-    /// the replica's lag: a record hidden or a member removed a moment ago can
-    /// still match, and a record just added may not yet. Every item still
-    /// passes its own source's access check. Every other read and write stays
-    /// on the primary.
+    /// per-record probes) from `replica`, after checking the viewer's current
+    /// permitted teams on the primary. Record data follows the replica's lag:
+    /// a record hidden a moment ago can still match, and a record just added
+    /// may not yet. Removed memberships and CRM access revocation take effect
+    /// on the next request. Every item still passes its own source's access
+    /// check. Every other read and write stays on the primary.
     pub fn with_activity_edges_replica(mut self, replica: readonly_pool::ReadOnlyPool) -> Self {
         self.activity_edges_pool = replica.0;
         self
@@ -1082,6 +1087,22 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
+    async fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmCompanyPreview>, CrmError> {
+        self.query_company_previews(viewer_id, company_ids).await
+    }
+
+    async fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> Result<Vec<crate::domain::previews::CrmContactPreview>, CrmError> {
+        self.query_contact_previews(viewer_id, contact_ids).await
+    }
+
     async fn activity_property_edges(
         &self,
         scope: crate::domain::contact_listing::CrmContactListScope<'_>,
@@ -1312,7 +1333,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // Hydrate through the shared read path so domains + directory
         // metadata resolve identically to the GET endpoint.
-        self.get_company_for_team(team_id, &company_id, true)
+        self.get_company_for_team(team_id, &company_id, true, true)
             .await?
             .ok_or_else(|| {
                 CrmError::StorageLayerError(anyhow::anyhow!(
@@ -2283,6 +2304,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
     }
 
+    #[tracing::instrument(name = "crm.current_member_access", skip_all, err)]
+    async fn current_member_access(&self, user_id: &str) -> Result<Option<(Uuid, bool)>, CrmError> {
+        sqlx::query!(
+            r#"SELECT team_id, (crm_access OR team_role <> 'member') AS "allowed!"
+               FROM team_user WHERE user_id = $1"#,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map(|row| row.map(|row| (row.team_id, row.allowed)))
+        .map_err(|error| CrmError::StorageLayerError(error.into()))
+    }
+
     #[tracing::instrument(skip_all, err)]
     async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<uuid::Uuid>, CrmError> {
         sqlx::query_scalar!(
@@ -2493,83 +2527,39 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // member-role default) also treats hidden companies as not
         // found; `include_hidden = true` (admin/owner) makes hidden
         // companies reachable so admins can manage their contacts.
-        let visible = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM crm_companies
-                WHERE id = $1
-                  AND team_id = $2
-                  AND ($3 OR hidden = FALSE)
-            ) AS "exists!"
-            "#,
-            company_id,
-            team_id,
-            include_hidden,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        if !visible {
+        let Some(company) = self
+            .visible_company(team_id, company_id, include_hidden)
+            .await?
+        else {
             return Err(CrmError::CompanyNotFoundForTeam);
-        }
+        };
 
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                id,
-                company_id,
-                email,
-                name,
-                hidden,
-                first_interaction,
-                last_interaction,
-                created_at,
-                updated_at,
-                ARRAY(
-                    SELECT ce.email FROM crm_contact_emails ce
-                    WHERE ce.contact_id = ct.id
-                    ORDER BY ce.email <> LOWER(BTRIM(ct.email)), ce.created_at, ce.email
-                ) AS "emails!",
-                ARRAY(
-                    SELECT ce.email FROM crm_contact_emails ce
-                    WHERE ce.contact_id = ct.id
-                      AND EXISTS (
-                          SELECT 1 FROM crm_domains d
-                          WHERE d.team_id = ct.team_id
-                            AND LOWER(d.domain) = split_part(ce.email, '@', 2)
-                            AND d.company_id = ct.company_id
-                      )
-                    ORDER BY ce.created_at, ce.email
-                ) AS "company_domain_emails!"
-            FROM crm_contacts ct
-            WHERE company_id = $1
-              AND ($2 OR hidden = FALSE)
-            ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC
-            "#,
-            company_id,
-            include_hidden,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        self.read_company_contacts(&company).await
+    }
 
-        Ok(rows
-            .into_iter()
-            .map(|row| CrmContact {
-                id: row.id,
-                company_id: row.company_id,
-                email: row.email,
-                name: row.name,
-                hidden: row.hidden,
-                first_interaction: row.first_interaction,
-                last_interaction: row.last_interaction,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                emails: row.emails,
-                company_domain_emails: row.company_domain_emails,
-            })
-            .collect())
+    #[tracing::instrument(
+        skip(self, query),
+        fields(
+            archived = query.archived,
+            searched = !query.search.is_empty(),
+            continued = query.cursor.is_some(),
+            limit = query.limit,
+            contacts = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn list_company_contacts_page(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+        query: &CrmCompanyContactsQuery,
+    ) -> Result<CrmCompanyContactsPage, CrmError> {
+        let page = self
+            .query_company_contacts_page(team_id, company_id, include_hidden, query)
+            .await?;
+        tracing::Span::current().record("contacts", page.contacts.len());
+        Ok(page)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -2841,11 +2831,13 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
         include_hidden: bool,
+        include_contacts: bool,
     ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
         // Mirrors `list_companies_for_soup`'s domain + directory join shape
         // but scoped to a single id. Domains arrive ordered by their
-        // `created_at` so the first row carries the "primary" domain and
-        // its `crm_domain_directory` row contributes name/description.
+        // `created_at`, then id (as the preview batch orders them), so the
+        // first row carries the "primary" domain and its
+        // `crm_domain_directory` row contributes name/description.
         // First-interaction / last-interaction are aliased into the
         // CrmCompany.created_at / updated_at slots — same convention as
         // the soup listing.
@@ -2870,7 +2862,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             WHERE c.id = $1
               AND c.team_id = $2
               AND ($3 OR c.hidden = FALSE)
-            ORDER BY d.created_at ASC NULLS LAST
+            ORDER BY d.created_at ASC NULLS LAST, d.id
             "#,
             company_id,
             team_id,
@@ -2887,7 +2879,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
 
         // Display name is the team-scoped override when set, otherwise
         // the primary domain's directory name (first row by
-        // `created_at ASC` per the ORDER BY). Description comes from
+        // `created_at ASC, id` per the ORDER BY). Description comes from
         // the directory.
         let name = first.display_name.clone();
         let description = first.dir_description.clone();
@@ -2915,13 +2907,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             }
         }
 
-        // Fetch contacts via the existing list method so the hidden
-        // semantics stay in one place. Issued only after the company
-        // resolves so cross-team or hidden 404s short-circuit before
-        // a second round trip.
-        let contacts = self
-            .list_contacts_for_company(team_id, company_id, include_hidden)
-            .await?;
+        // The read above checked the company's team and visibility, so the
+        // contacts need no second check. Issued only after the company
+        // resolves so cross-team or hidden 404s short-circuit before a
+        // second round trip.
+        let contacts = if include_contacts {
+            let Some(visible) = VisibleCompany::from_read(&company, team_id, include_hidden) else {
+                return Ok(None);
+            };
+            self.read_company_contacts(&visible).await?
+        } else {
+            Vec::new()
+        };
 
         Ok(Some(CrmCompanyWithContacts {
             company,
@@ -3072,5 +3069,15 @@ impl TeamSettingsStore for CompaniesRepositoryImpl {
         patch: &CrmTeamSettingsPatch,
     ) -> Result<CrmTeamSettings, CrmError> {
         self.update_team_settings(team_id, patch).await
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for CompaniesRepositoryImpl {
+    async fn member_has_crm_access(
+        &self,
+        team_id: Uuid,
+        user_id: &str,
+    ) -> Result<bool, crate::domain::model::CrmError> {
+        super::member_access::member_has_crm_access(&self.pool, team_id, user_id).await
     }
 }

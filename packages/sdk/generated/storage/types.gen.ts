@@ -4685,6 +4685,21 @@ export type CommittedChange = {
 };
 
 /**
+ * One page of a company's contacts.
+ */
+export type CompanyContactsPageResponse = {
+    /**
+     * The page's contacts, alphabetically by name (the email when
+     * unnamed), in the same order as `GET /crm/companies/{company_id}/contacts`.
+     */
+    contacts: Array<CrmContactResponse>;
+    /**
+     * Cursor for the next page; absent on the last page.
+     */
+    nextCursor?: string | null;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -6062,16 +6077,40 @@ export type CrmCompanyFilters = {
 };
 
 /**
+ * What a company chip shows: the fields the company read returns for its
+ * title, without its contacts.
+ */
+export type CrmCompanyPreview = {
+    /**
+     * The company.
+     */
+    id: string;
+    /**
+     * The team's name override, else the primary domain's directory name.
+     */
+    name?: string | null;
+    /**
+     * The company's first domain, which titles a company with no name.
+     */
+    primaryDomain?: string | null;
+    /**
+     * The company's last interaction, as the company read's `updatedAt`.
+     */
+    updatedAt: string;
+};
+
+/**
  * A CRM company as returned by `GET /crm/companies/{company_id}`.
  * Mirrors the soup-listed `crmCompany` shape (`name` / `description`
- * resolved from the primary domain's `crm_domain_directory` entry) and
- * embeds the company's contacts so the panel can render in a single
- * request.
+ * resolved from the primary domain's `crm_domain_directory` entry). It
+ * embeds the company's contacts unless the caller asks it not to
+ * (`includeContacts=false`).
  */
 export type CrmCompanyResponse = {
     /**
      * Contacts attached to this company. Hidden contacts are filtered
-     * out for non-admin viewers.
+     * out for non-admin viewers. Empty when the request set
+     * `includeContacts=false`.
      */
     contacts: Array<CrmContactResponse>;
     /**
@@ -6147,6 +6186,28 @@ export type CrmContactCompanyResponse = {
  */
 export type CrmContactDetailResponse = CrmContactResponse & {
     company?: null | CrmContactCompanyResponse;
+};
+
+/**
+ * What a contact chip shows.
+ */
+export type CrmContactPreview = {
+    /**
+     * The contact's primary email, which titles a contact with no name.
+     */
+    email?: string | null;
+    /**
+     * The contact.
+     */
+    id: string;
+    /**
+     * The contact's display name.
+     */
+    name?: string | null;
+    /**
+     * When the contact record last changed.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -6241,6 +6302,20 @@ export type CrmDomainResponse = {
 };
 
 /**
+ * Current authority for the authenticated viewer; contribution consent is separate.
+ */
+export type CrmMemberAccessResponse = {
+    /**
+     * Whether the viewer may access that team's CRM.
+     */
+    allowed: boolean;
+    /**
+     * The viewer's current team, if any.
+     */
+    team_id?: string | null;
+};
+
+/**
  * Minimum team role required for a CRM governance capability. Members
  * can edit visible CRM records (e.g. company properties), but the
  * governance capabilities these settings gate stay restricted to
@@ -6248,6 +6323,35 @@ export type CrmDomainResponse = {
  * `member` is deliberately not representable.
  */
 export type CrmPermissionRole = 'admin' | 'owner';
+
+/**
+ * The previews of the requested records the viewer may open; a record the
+ * viewer may not open, or that does not exist, is left out.
+ */
+export type CrmPreviews = {
+    /**
+     * Company previews, in no particular order.
+     */
+    companies: Array<CrmCompanyPreview>;
+    /**
+     * Contact previews, in no particular order.
+     */
+    contacts: Array<CrmContactPreview>;
+};
+
+/**
+ * The CRM records whose chips to title.
+ */
+export type CrmPreviewsRequest = {
+    /**
+     * Companies to preview, at most 100.
+     */
+    companyIds?: Array<string>;
+    /**
+     * Contacts to preview, at most 100.
+     */
+    contactIds?: Array<string>;
+};
 
 /**
  * One stage in a `PUT /crm/stages` body.
@@ -27127,7 +27231,14 @@ export type GetCompanyData = {
          */
         company_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Whether to embed every contact of the company (default `true`).
+         * A caller that pages contacts through
+         * `GET /crm/companies/{company_id}/contacts/page` sets it to `false`.
+         */
+        includeContacts?: boolean;
+    };
     url: '/crm/companies/{company_id}';
 };
 
@@ -27199,6 +27310,54 @@ export type CreateCrmContactResponses = {
 };
 
 export type CreateCrmContactResponse = CreateCrmContactResponses[keyof CreateCrmContactResponses];
+
+export type ListCompanyContactsPageData = {
+    body?: never;
+    path: {
+        /**
+         * The CRM company whose contacts to list
+         */
+        company_id: string;
+    };
+    query?: {
+        /**
+         * `true` for the archived contacts (admins only: plain members get an
+         * empty list), `false` (default) for the active ones. Every contact of
+         * an archived company counts as archived.
+         */
+        archived?: boolean;
+        /**
+         * Keep contacts whose name or primary email contains this text,
+         * ignoring case. Blank matches every contact.
+         */
+        query?: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`.
+         */
+        cursor?: string;
+        /**
+         * Contacts per page, from 1 through 200 (default 50). Values outside
+         * the range are clamped.
+         */
+        limit?: number;
+    };
+    url: '/crm/companies/{company_id}/contacts/page';
+};
+
+export type ListCompanyContactsPageErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListCompanyContactsPageError = ListCompanyContactsPageErrors[keyof ListCompanyContactsPageErrors];
+
+export type ListCompanyContactsPageResponses = {
+    200: CompanyContactsPageResponse;
+};
+
+export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;
@@ -27617,6 +27776,19 @@ export type UpdateCrmEmailPrivacyResponses = {
 };
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
+export type GetCrmMemberAccessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/member-access';
+};
+
+export type GetCrmMemberAccessResponses = {
+    200: CrmMemberAccessResponse;
+};
+
+export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;
@@ -28098,6 +28270,38 @@ export type GetCrmPipelineViewPositionsResponses = {
 };
 
 export type GetCrmPipelineViewPositionsResponse = GetCrmPipelineViewPositionsResponses[keyof GetCrmPipelineViewPositionsResponses];
+
+export type PreviewCrmRecordsData = {
+    body: CrmPreviewsRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/previews';
+};
+
+export type PreviewCrmRecordsErrors = {
+    /**
+     * More than 100 ids of a kind
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * A bot or harness credential
+     */
+    403: unknown;
+    /**
+     * An id that is not a UUID
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type PreviewCrmRecordsError = PreviewCrmRecordsErrors[keyof PreviewCrmRecordsErrors];
+
+export type PreviewCrmRecordsResponses = {
+    200: CrmPreviews;
+};
+
+export type PreviewCrmRecordsResponse = PreviewCrmRecordsResponses[keyof PreviewCrmRecordsResponses];
 
 export type GetCrmTeamSettingsData = {
     body?: never;

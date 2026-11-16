@@ -786,6 +786,18 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn visible_crm_entities(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        entities: &[(EntityType, String)],
+    ) -> Result<std::collections::HashSet<(EntityType, String)>, AccessError> {
+        Ok(
+            queries::crm_batch_access::visible_entities(&self.pool, user.as_ref(), entities)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_company_access(
         &self,
@@ -858,6 +870,17 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if entity_type == EntityType::CrmPipeline {
+            return Ok(queries::entity_audiences::get_entity_audiences(
+                &self.pool,
+                &[*entity_id],
+                entity_type,
+            )
+            .await?
+            .into_iter()
+            .flat_map(|audience| audience.users)
+            .collect());
+        }
         if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
             return queries::crm_entity_users::get_crm_entity_users(
                 &self.pool,

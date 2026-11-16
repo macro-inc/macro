@@ -38,6 +38,7 @@ specta = { workspace = true }
 specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
 sqlx = { workspace = true, features = ["json"] }
+system_skills = { path = "../system_skills" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-util = { workspace = true, features = ["rt"] }

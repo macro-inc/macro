@@ -4,17 +4,19 @@
 //! The functions below are main's at 37d49af5c4, copied verbatim except that
 //! their visibility is narrowed, their tracing and cache attributes are
 //! dropped, and the helper they share (`database_access::highest_access_level`)
-//! is named by path. Each family's equality test runs them and the membership
+//! is named by path. Statements main changed later are marked with the commit
+//! they were copied from; `get_thread_access` carries main's changes through
+//! ebde683f33. Each family's equality test runs them and the membership
 //! form for every viewer `test_viewers::matrix_viewers` resolves, and requires
 //! the same answers. Delete this module with `external_chat_sources` and
 //! `external_chat_access_level(uuid, text[])`, which code deployed before the
 //! membership functions still calls.
 
-use crate::domain::models::AccessLevel;
+use crate::domain::models::{AccessLevel, EntityType};
 use bot_id::BotIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::{PgPool, Pool, Postgres};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -780,6 +782,7 @@ pub(super) async fn get_thread_access(
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
             WHERE requester.user_id = $2
+              AND (requester.crm_access OR requester.team_role <> 'member')
               AND crm_email_thread_allowed(requester.team_id, $1::uuid)
         ),
         participants AS (
@@ -812,11 +815,28 @@ pub(super) async fn get_thread_access(
                   -- only block plain members.
                   SELECT 1
                   FROM participants p
-                  JOIN crm_contact_emails ce ON ce.email = p.email
-                  JOIN crm_contacts ct ON ct.id = ce.contact_id
+                  -- Fence address and primary-key lookups so stale statistics
+                  -- cannot turn one thread's participants into a team-wide scan.
+                  CROSS JOIN LATERAL (
+                      SELECT ce.contact_id
+                      FROM crm_contact_emails ce
+                      WHERE ce.email = p.email
+                      OFFSET 0
+                  ) held
+                  CROSS JOIN LATERAL (
+                      SELECT ct.team_id, ct.company_id, ct.hidden
+                      FROM crm_contacts ct
+                      WHERE ct.id = held.contact_id
+                      OFFSET 0
+                  ) ct
                   -- Contacts without a company opt out through their own
                   -- hidden flag; email_sync is a company setting.
-                  LEFT JOIN crm_companies c ON c.id = ct.company_id
+                  LEFT JOIN LATERAL (
+                      SELECT c.email_sync, c.hidden
+                      FROM crm_companies c
+                      WHERE c.id = ct.company_id
+                      OFFSET 0
+                  ) c ON TRUE
                   WHERE ct.team_id = st.team_id
                     AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
                     AND (
@@ -1014,16 +1034,137 @@ pub(super) async fn list_pipeline_access(
 }
 
 /// Resolve one pipeline without enumerating the caller's other pipelines.
+/// As main had it at ebde683f33.
 pub(super) async fn get_pipeline_access(
     pool: &PgPool,
     id: Uuid,
     sources: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let levels = sqlx::query_scalar!(
-        "SELECT access_level::text FROM entity_access WHERE entity_id = $1 AND entity_type = 'crm_pipeline' AND source_id = ANY($2)",
-        id, &sources.0,
-    ).fetch_all(pool).await?;
+        "SELECT ea.access_level::text FROM entity_access ea
+         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline' AND ea.source_id = ANY($2)",
+        id,
+        &sources.0,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
     super::database_access::highest_access_level(&levels)
+}
+
+/// The pipeline reads' own source list, as main had it at ebde683f33, where
+/// every pipeline read took it instead of `get_user_source_ids`.
+/// Fresh sharing sources for a CRM pipeline read. Team grants follow current
+/// CRM authority; direct and channel grants remain independent of that setting.
+pub(super) async fn pipeline_user_sources(
+    pool: &PgPool,
+    viewer: Option<&str>,
+) -> Result<SourceIds, sqlx::Error> {
+    let Some(viewer) = viewer else {
+        return Ok(SourceIds(Vec::new()));
+    };
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+    // Parameterize the channel lookup through one viewer so stale statistics
+    // cannot turn a frequently seen user's request into a membership-table scan.
+    let sources = sqlx::query_scalar!(
+        r#"SELECT cp.channel_id::text AS "source_id!"
+           FROM (SELECT $1::text AS user_id OFFSET 0) viewer
+           CROSS JOIN LATERAL (
+               SELECT cp.channel_id
+               FROM comms_channel_participants cp
+               WHERE cp.user_id = viewer.user_id AND cp.left_at IS NULL
+               OFFSET 0
+           ) cp
+           UNION ALL
+           SELECT tu.team_id::text FROM team_user tu
+           WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
+           UNION ALL
+           SELECT $1"#,
+        viewer,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(SourceIds(sources))
+}
+
+/// `crm_batch_access::visible_entities` as main had it at ebde683f33.
+/// Apply the single-record rules in batches, resolving pipeline sources once.
+pub(super) async fn visible_crm_entities(
+    pool: &PgPool,
+    viewer: &str,
+    entities: &[(EntityType, String)],
+) -> Result<HashSet<(EntityType, String)>, sqlx::Error> {
+    let sources = if entities
+        .iter()
+        .any(|(kind, _)| *kind == EntityType::CrmPipeline)
+    {
+        Some(pipeline_user_sources(pool, Some(viewer)).await?)
+    } else {
+        None
+    };
+    let mut visible = HashSet::new();
+    for batch in entities.chunks(100) {
+        let ids = |kind| {
+            batch
+                .iter()
+                .filter(|(item, _)| *item == kind)
+                .filter_map(|(_, id)| id.parse::<Uuid>().ok())
+                .collect::<Vec<_>>()
+        };
+        let companies = ids(EntityType::CrmCompany);
+        let contacts = ids(EntityType::CrmContact);
+        if !companies.is_empty() || !contacts.is_empty() {
+            let rows = sqlx::query!(
+                r#"SELECT c.id AS "id!", 'crm_company' AS "kind!"
+                   FROM crm_companies c JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = $1
+                   WHERE c.id = ANY($2) AND (tu.crm_access OR tu.team_role <> 'member')
+                     AND (NOT c.hidden OR tu.team_role <> 'member')
+                   UNION ALL
+                   SELECT ct.id, 'crm_contact'
+                   FROM crm_contacts ct LEFT JOIN crm_companies c ON c.id = ct.company_id
+                   JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+                   WHERE ct.id = ANY($3) AND (tu.crm_access OR tu.team_role <> 'member')
+                     AND (tu.team_role <> 'member' OR (NOT ct.hidden AND c.hidden IS NOT TRUE))"#,
+                viewer, &companies, &contacts,
+            ).fetch_all(pool).await?;
+            for row in rows {
+                let kind = if row.kind == "crm_company" {
+                    EntityType::CrmCompany
+                } else {
+                    EntityType::CrmContact
+                };
+                visible.insert((kind, row.id.to_string()));
+            }
+        }
+        let pipelines = ids(EntityType::CrmPipeline);
+        if let Some(sources) = &sources
+            && !pipelines.is_empty()
+        {
+            let mut tx = Box::pin(pool.begin()).await?;
+            // A requested pipeline can have many sharing grants even with 100 IDs.
+            sqlx::query!("SET LOCAL statement_timeout = '15s'")
+                .execute(&mut *tx)
+                .await?;
+            let rows = sqlx::query_scalar!(
+                "SELECT DISTINCT entity_id FROM entity_access WHERE entity_type = 'crm_pipeline' AND entity_id = ANY($1) AND source_id = ANY($2)",
+                &pipelines, &sources.0,
+            ).fetch_all(&mut *tx).await?;
+            tx.commit().await?;
+            visible.extend(
+                rows.into_iter()
+                    .map(|id| (EntityType::CrmPipeline, id.to_string())),
+            );
+        }
+    }
+    Ok(visible)
 }
 
 /// The batched pipeline check as main had it at baf4161aac.

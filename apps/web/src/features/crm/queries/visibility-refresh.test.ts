@@ -4,6 +4,7 @@ import { crmKeys } from './keys';
 import {
   patchVisibilitySnapshot,
   updateVisibilityDetails,
+  visibilityDetailsFilter,
   visibilityQueryFilter,
 } from './visibility-refresh';
 
@@ -184,6 +185,52 @@ it('patches company-capable search pages and cancels old responses without touch
     hidden: false,
   });
   expect(client.getQueryData(companyKey)).toEqual(page);
+  client.clear();
+});
+
+it('archives a contact in place in Team lists and refreshes only the lists it can move between', async () => {
+  const client = new QueryClient();
+  const row = { id: 'contact-1', companyId: 'company-1', hidden: false };
+  const team = (companyId: string, archived: boolean) => [
+    ...crmKeys.companyContacts(companyId).queryKey,
+    archived,
+    '',
+  ];
+  const page = {
+    pages: [{ contacts: [row], nextCursor: null, search: '' }],
+    pageParams: [null],
+  };
+  client.setQueryData(team('company-1', false), page);
+  client.setQueryData(team('company-1', true), {
+    pages: [{ contacts: [], nextCursor: null, search: '' }],
+    pageParams: [null],
+  });
+  client.setQueryData(team('company-2', false), page);
+  const affected = (change: Parameters<typeof visibilityDetailsFilter>[0]) =>
+    client
+      .getQueryCache()
+      .findAll({ predicate: visibilityDetailsFilter(change) })
+      .map((query) => query.queryKey);
+
+  expect(affected({ kind: 'company', id: 'company-1', hidden: true })).toEqual([
+    team('company-1', false),
+    team('company-1', true),
+  ]);
+  expect(affected({ kind: 'contact', id: 'contact-1', hidden: true })).toEqual([
+    team('company-1', false),
+    team('company-1', true),
+    team('company-2', false),
+  ]);
+
+  await updateVisibilityDetails(client, {
+    kind: 'contact',
+    id: 'contact-1',
+    hidden: true,
+  });
+  expect(client.getQueryData(team('company-1', false))).toEqual({
+    ...page,
+    pages: [{ ...page.pages[0], contacts: [{ ...row, hidden: true }] }],
+  });
   client.clear();
 });
 

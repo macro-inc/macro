@@ -110,6 +110,24 @@ pub trait ActivityAudienceExpander: Send + Sync {
         entity_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
+    /// Current visibility for a bounded page; adapters may share permission reads.
+    fn visible_entities(
+        &self,
+        viewer: &MacroUserIdStr<'_>,
+        entities: &[(EntityType, String)],
+    ) -> impl Future<Output = Result<std::collections::HashSet<(EntityType, String)>, Self::Err>> + Send
+    {
+        async move {
+            let mut visible = std::collections::HashSet::new();
+            for (kind, id) in entities {
+                if self.viewer_can_see(*kind, id, viewer).await? {
+                    visible.insert((*kind, id.clone()));
+                }
+            }
+            Ok(visible)
+        }
+    }
+
     /// Check a particular viewer, including link-based access that cannot be
     /// enumerated as an audience. The conservative default uses explicit recipients.
     fn viewer_can_see(

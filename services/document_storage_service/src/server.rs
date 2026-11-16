@@ -2460,10 +2460,20 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
                 KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
             ),
+            // Clears are stored on the primary, with the notification state
+            // they change.
+            notification::outbound::bulk_action::PgBulkActions::new(db.clone()),
+            notification_inbox::outbound::gateway_clear_updates::GatewayClearUpdates::new(
+                conn_gateway_client.clone(),
+            ),
         ),
         feed_triggers,
         feed_viewers,
+        consumer_tracker.clone(),
+        consumer_cancellation_token.clone(),
     );
+    // Resumes clears a crashed or redeployed instance left partway.
+    consumer_tracker.spawn(graphql_notification_inbox_context.clone().recover_clears());
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
@@ -2473,9 +2483,7 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
         crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
             (*conn_gateway_client).clone(),
-            Arc::new(crate::service::saved_views::Membership(
-                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-            )),
+            Arc::new(crate::service::saved_views::Membership::new(db.clone())),
             event_broker_tracker.clone(),
         ),
     ));
@@ -2654,9 +2662,11 @@ async fn run_server() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
-                entity_access_service.clone(),
+                crate::service::activity::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
             ),
         )),
         graphql_entity_mutation_service,

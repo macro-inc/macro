@@ -27,6 +27,14 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// How often a long run sends what it has, so a kill loses at most this much.
 pub(crate) const FLUSH_INTERVAL: Duration = Duration::from_secs(20);
+/// The event a step finishes with, which an interrupted run also closes its
+/// open steps with.
+const STEP_EVENT: &str = "step";
+/// The outcome of a run, and of each step still open, that a later run found
+/// left behind.
+const INTERRUPTED: &str = "interrupted";
+/// The field naming a step.
+const STEP_FIELD: &str = "step";
 /// Older buffer files are deleted unsent: a week down means nobody is watching.
 const MAX_FILE_AGE: Duration = Duration::from_secs(7 * 24 * 3600);
 /// Bounds one flush's work when the endpoint was down for a while.
@@ -292,8 +300,18 @@ fn send_left_behind(client: &Client, config: &Config, buffer_dir: &Path, own: &P
     rejected
 }
 
+/// A step a left-behind run began and never finished.
+struct OpenStep<'a> {
+    step: &'a str,
+    at_ns: u64,
+    span: Option<&'a str>,
+    parent: Option<&'a str>,
+}
+
 /// A left-behind file's records, closed with an `interrupted` run event when the
-/// run never finished. That event names the step it was in.
+/// run never finished. That event names the step it was in, and each step still
+/// open becomes an `interrupted` step span, so the steps and crates that finished
+/// inside it keep their parent.
 pub(crate) fn left_behind_batch(lines: &[Line]) -> Option<(Begin, Vec<Record>)> {
     let begin = lines.iter().find_map(|line| match line {
         Line::Begin(begin) => Some(begin.clone()),
@@ -304,41 +322,75 @@ pub(crate) fn left_behind_batch(lines: &[Line]) -> Option<(Begin, Vec<Record>)> 
         return Some((begin, records));
     }
 
-    let mut open_steps: Vec<&str> = Vec::new();
+    let mut open_steps: Vec<OpenStep> = Vec::new();
     let mut last_ns = begin.started_ns;
     for line in lines {
         match line {
             Line::Begin(_) => {}
-            Line::Started { step, at_ns } => {
-                open_steps.push(step);
+            Line::Started {
+                step,
+                at_ns,
+                span,
+                parent,
+            } => {
+                open_steps.push(OpenStep {
+                    step,
+                    at_ns: *at_ns,
+                    span: span.as_deref(),
+                    parent: parent.as_deref(),
+                });
                 last_ns = last_ns.max(*at_ns);
             }
             Line::Record(record) => {
-                if let Some(step) = record.fields.get("step").and_then(Value::as_str)
-                    && let Some(index) = open_steps.iter().rposition(|open| *open == step)
-                {
+                let closed = match record.span.as_deref() {
+                    Some(span) => open_steps.iter().rposition(|open| open.span == Some(span)),
+                    None => record
+                        .fields
+                        .get(STEP_FIELD)
+                        .and_then(Value::as_str)
+                        .and_then(|step| open_steps.iter().rposition(|open| open.step == step)),
+                };
+                if let Some(index) = closed {
                     open_steps.remove(index);
                 }
                 last_ns = last_ns.max(record.at_ns);
             }
         }
     }
+    let mut seq = records.iter().map(|record| record.seq).max().unwrap_or(0);
+    for open in open_steps.iter().filter(|open| open.span.is_some()) {
+        seq += 1;
+        records.push(Record {
+            seq,
+            event: STEP_EVENT.to_owned(),
+            name: Some(open.step.to_owned()),
+            at_ns: last_ns,
+            duration_ns: Some(last_ns.saturating_sub(open.at_ns)),
+            span: open.span.map(str::to_owned),
+            parent: open.parent.map(str::to_owned),
+            fields: BTreeMap::from([
+                (STEP_FIELD.to_owned(), Value::from(open.step)),
+                ("outcome".to_owned(), Value::from(INTERRUPTED)),
+            ]),
+        });
+    }
     let duration_ns = last_ns.saturating_sub(begin.started_ns);
     let mut fields = BTreeMap::new();
-    fields.insert("outcome".to_owned(), Value::from("interrupted"));
+    fields.insert("outcome".to_owned(), Value::from(INTERRUPTED));
     // Up to the last thing it recorded, as a finished run's `seconds` is.
     let millis = duration_ns / 1_000_000;
     fields.insert("seconds".to_owned(), Value::from(millis as f64 / 1000.0));
-    if let Some(step) = open_steps.last() {
-        fields.insert("failed_step".to_owned(), Value::from(*step));
+    if let Some(open) = open_steps.last() {
+        fields.insert("failed_step".to_owned(), Value::from(open.step));
     }
-    let seq = records.iter().map(|record| record.seq).max().unwrap_or(0) + 1;
     records.push(Record {
-        seq,
+        seq: seq + 1,
         event: RUN_EVENT.to_owned(),
         name: Some(RUN_EVENT.to_owned()),
         at_ns: last_ns,
         duration_ns: Some(duration_ns),
+        span: None,
+        parent: None,
         fields,
     });
     Some((begin, records))

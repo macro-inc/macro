@@ -55,9 +55,8 @@ A host can run a program with nobody watching (a routine step) by setting
   writes are the catalog's non-read operations (`operations.json` from
   `crates/code_mode_assets`, with each operation's method, path and `write`), and an operation
   missing from it counts as one. A dry run also refuses authenticated non-GET
-  requests at `fetch` unless a read matches; raw sockets (`Deno.connect`,
-  `connectTls`, `startTls`), workers and Node's networking and process modules
-  are unavailable.
+  requests at `fetch` unless a read matches;
+- it has no workers: `Worker` is undefined and worker modules throw.
 
 A dry run is held back inside the process, not by the APIs: code written to
 get around it can still write with the owner's permissions.
@@ -96,8 +95,8 @@ The supervisor clears inherited environment variables and gives each process a
 private scratch directory. Deno permits reads only there and network connections
 only to the configured API host/port destinations. Remote and npm imports,
 writes, environment access, subprocesses, FFI, and system information are denied.
-Timers, workers and other sleep primitives throw an error that points programs
-at `macro.routines.create` for checking back later; this steers agents and is not
+Timers, an attended program's workers and other sleep primitives throw an
+error that points programs at `macro.routines.create` for checking back later; this steers agents and is not
 a security boundary.
 The trusted bootstrap dynamically imports generated `main.mjs` so its module
 reads are subject to the scratch read permission. Both static and dynamic imports
@@ -117,7 +116,16 @@ complete afterward and must not be blindly retried. SDK operation events carry o
 They are bounded diagnostics, not proof of a committed action. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
 `x-macro-code-execution: 1` are sent to configured service origins on
-authenticated requests only.
+authenticated requests only. That header is how an API tells a program's
+request from the person's, so in every run `fetch` is the only way out. Raw
+sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
+WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
+`getBuiltinModule` and `binding` are removed. The import map sends every Node
+built-in to a module that throws, except a short list that neither connects,
+starts processes nor loads other built-ins (`NODE_ALLOWED` in
+`src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
+map doesn't know. Like a dry run, this is held inside the process: the
+sandbox's `--allow-net` still reaches the API origins directly.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other
