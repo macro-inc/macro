@@ -428,3 +428,37 @@ fn no_text_replacement_keeps_surrounding_recursive_formats() -> Result<()> {
     );
     Ok(())
 }
+/// A long backslash run is scanned once, as upstream isEscaped checks for a delimiter first;
+/// the long run imports with the same structure as a short even run.
+#[test]
+fn a_long_backslash_run_imports_in_linear_time() -> Result<()> {
+    let import = |backslashes: usize| -> Result<(usize, String)> {
+        let mut editor = Editor::builder(EditorMode::Headless)
+            .build()
+            .expect("editor");
+        let mut tx = editor.transaction();
+        convert_from_markdown_string(
+            &mut tx,
+            &format!("{}*a*", "\\".repeat(backslashes)),
+            &Transformers::default(),
+            None,
+            &MarkdownOptions::default(),
+        )?;
+        tx.commit()?;
+        let view = editor.state().view();
+        let paragraph = view.first_child(NodeKey::ROOT).expect("paragraph");
+        let last = view.last_child(paragraph).expect("last text");
+        Ok((
+            view.children_size(paragraph) as usize,
+            view.text_content(last).into_owned(),
+        ))
+    };
+    let (short_children, short_last) = import(2)?;
+    let (long_children, long_last) = import(200_000)?;
+    assert_eq!(long_children, short_children);
+    assert_eq!(
+        long_last.trim_start_matches('\\'),
+        short_last.trim_start_matches('\\')
+    );
+    Ok(())
+}

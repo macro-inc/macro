@@ -54,9 +54,10 @@ fn scan(text: &[u16], t: &Transformers, excluded: &[(usize, usize)]) -> Vec<Deli
     let mut out = Vec::new();
     let mut i = 0;
     while i < text.len() {
-        let backslashes = text[..i].iter().rev().take_while(|c| **c == 92).count();
+        // Count the preceding backslash run only at a delimiter, as upstream isEscaped
+        // does; counting it at every unit is quadratic in a long run.
         if !chars.contains(&text[i])
-            || backslashes % 2 == 1
+            || text[..i].iter().rev().take_while(|c| **c == 92).count() % 2 == 1
             || excluded.iter().any(|(a, b)| *a <= i && i < *b)
         {
             i += 1;
