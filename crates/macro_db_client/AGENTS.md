@@ -171,3 +171,8 @@ If the concurrent `password_activity_agent_requests` build (migration
 invalid index before retrying.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
+
+`crm_email_thread_exclusions` stores one contributor's private thread exceptions;
+its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
+owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
+veto used by the shared eligibility function and mirrored in set-based ingestion.

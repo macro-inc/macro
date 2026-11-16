@@ -733,6 +733,8 @@ reads retain client-scoped denial state across remounts and immediately reauthor
 previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
+Keep editable breadcrumb icons on that identity read, including owner metadata;
+never load project counts or task membership just to open the appearance editor.
 Project reads refresh only through the activity registry (pushes, websocket
 connects, the app's own project writes; `registerProjectRevalidation`); never
 add a timer or focus refetch to them.
@@ -818,6 +820,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1674,6 +1685,18 @@ people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
+
+### Tag picker selection and creation
+
+Keep tag checkbox toggles open for pointer and keyboard input; desktop row picks
+save the staged selection and close only the picker, while touch sheets retain
+explicit Done. Keep the parent More menu open after a tag pick or Escape, and
+prevent reopening the picker until its pending selection save settles. Dismiss
+the parent only when opening the tag editor or navigating to tagged items.
+Return from sharing to color to name with Back or Escape, preserving the draft
+and chosen color; native Back-button activation must not advance the flow.
+Keep tag-creation headers compact beside Back and show the current draft color
+beside the title throughout the color and sharing steps.
 
 ### Sidebar tag dragging
 

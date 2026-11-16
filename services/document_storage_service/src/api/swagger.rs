@@ -719,6 +719,7 @@ use utoipa::OpenApi;
         crm::inbound::pipeline_workflows::export_pipeline,
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::email_privacy::get_handler,
+        crm::inbound::axum_router::email_privacy::excluded_threads_handler,
         crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,

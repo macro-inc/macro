@@ -278,6 +278,9 @@ export function HomeList(props: HomeListProps) {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
 
+  // The tutorial introduces Home; search results are not Home's list.
+  const showsTutorial = () => state.tab === 'signal' && !state.search.trim();
+
   let scrollOffset = DEFAULT_HOME_LIST_STATE.scrollOffset;
   const readListState = (): HomeListStateSnapshot => ({
     focusKey: list.focus.requestedKey(),
@@ -663,7 +666,7 @@ export function HomeList(props: HomeListProps) {
                   {/* A new account's Home starts empty, when the tutorial
                       matters most. Touch devices show no tutorial, so there
                       the empty state keeps its own top inset. */}
-                  <Show when={state.tab === 'signal'}>
+                  <Show when={showsTutorial()}>
                     <HomeTutorial />
                   </Show>
                   <HomeEmptyState />
@@ -686,7 +689,7 @@ export function HomeList(props: HomeListProps) {
                       aria-hidden="true"
                       class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
-                    <Show when={state.tab === 'signal'}>
+                    <Show when={showsTutorial()}>
                       <HomeTutorial />
                     </Show>
                   </div>
