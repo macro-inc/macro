@@ -181,7 +181,12 @@ an invalid value reads as absent. Clearing such a slide is a no-op for that
 client, since it already reads as having no transition, so its value stays until
 a client that can read it clears or replaces it. The deck default is the `transition` key of the
 `presentation` root map (`backend.presentation`), and `commit` takes a presentation
-edit so that it lands in the same update as a scene change.
+edit so that it lands in the same update as a scene change. Like a library entry it
+is a last-writer-wins register that an edit sets outright: writers do not
+conflict-check it against a concurrent change. `commit` stages library and deck
+default writes only after the scene and the presentation edit validate, since Loro
+cannot roll back staged writes and a rejected batch must not leak them into the next
+commit.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
 
 ### Canvas host integration

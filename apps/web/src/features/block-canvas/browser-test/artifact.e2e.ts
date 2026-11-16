@@ -237,15 +237,21 @@ test('plays every transition kind forward and back to the right slide', async ({
   page,
 }) => {
   const counter = await presentDeck(page);
-  let position = 1;
-  let step = 1;
+  await setTransitions(page, { kind: 'none' });
+  await page.keyboard.press('ArrowRight');
+  await expectSettledOn(page, '2');
+
+  // Slides 2 and 3 are joined by the connector, so path follows it both ways.
   for (const kind of KINDS) {
     await setTransitions(page, { kind, durationMs: 300 });
-    if (position + step < 1 || position + step > 4) step = -step;
-    position += step;
-    await page.keyboard.press(step > 0 ? 'ArrowRight' : 'ArrowLeft');
-    await expect(counter).toHaveText(`${position} / 4`);
-    await expectSettledOn(page, String(position));
+    for (const [key, slide] of [
+      ['ArrowRight', '3'],
+      ['ArrowLeft', '2'],
+    ] as const) {
+      await page.keyboard.press(key);
+      await expect(counter).toHaveText(`${slide} / 4`);
+      await expectSettledOn(page, slide);
+    }
   }
 });
 
