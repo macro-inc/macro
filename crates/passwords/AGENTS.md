@@ -114,8 +114,10 @@ metadata revision, so losing a lease cannot restore stale grants or TOTP pointer
   both `enable-passwords-v1` and `enable-agent-vault` in the agent's own per-user
   snapshot, never its owner's (off, missing or failed → `404`), then
   `AgentDirectory` (`403 invalid_agent`), wake (`400 invalid_session_attribution`),
-  provider configuration presence (`503`), and only then catalog, policy, kind,
-  provider I/O and post-I/O rechecks. Body errors surface only after admission.
+  provider configuration presence (`503`), and only then catalog, policy, kind and
+  provider I/O. Authority is rechecked after provider reads (disclosure, codes and an
+  update's own read); writes are authorized when staged and are not retroactive. Body
+  errors surface only after admission.
 - Composition wires `NoAgents`, which admits nobody, until the agent platform
   supplies the authoritative directory adapter.
 - Human review routes require the reviewer's own snapshot of both keys; request
@@ -144,6 +146,51 @@ metadata revision, so losing a lease cannot restore stale grants or TOTP pointer
   even with the flags off. Before the first Agent grant is written, every binary
   that reads password records must include this change, and the rollback target
   must be one that does.
+
+## Agent runtime contract
+
+What an agent runtime must do with `macro.passwords.forAgent(team, { wake })`
+(`packages/sdk/src/entities/passwords/`). The SDK classes stay `@mcp-exclude` and
+carry no `@routing`/`@agent`, so code mode neither lists nor loads this area; a
+platform change that gives agents their own authority turns this section into
+those tags and a code-mode catalog entry.
+
+- **Prerequisites:** the agent's own user API key (code-mode credentials,
+  `MacroApiJwt` or `ScopedMacroApiJwt`, are refused); `enable-passwords-v1` and
+  `enable-agent-vault` on the agent's own account; an `AgentDirectory` that admits
+  it (composition wires `NoAgents`, so today nobody is); and a fresh UUIDv7 wake
+  per wake, never reused.
+- **Vault first:** on a sign-in wall or a missing credential, `vault.search(query)`
+  before asking a person. It lists team-shared items, items granted to the agent and
+  items it created, metadata only. An item neither shared with the team nor granted to
+  the agent never appears; one made private later stays visible while the agent keeps
+  its grant.
+- **Status:** `access.status` is `usable` (use it), `request_access` (ask first) or
+  `pending` (asked, undecided); use fails `pending` only while a request awaits review,
+  otherwise `not_granted`. `grantPermission` names the current Agent grant, which is no
+  authority on its own: after an approval-only revoke it stays while use is refused.
+- **Request:** `item.requestAccess(permission)` (`view` or `edit`) asks the human
+  creator and the team's admins, deduplicated per item and agent while pending:
+  asking again returns that request unchanged, with its original permission. Then
+  wait for `passwords.access_request.resolved` (`teamId`, `itemId`, `requestId`,
+  `status` `approved | denied | revoked`), a hint that grants nothing, or read
+  `item.accessRequest()` sparingly; its state is the truth.
+- **Denial:** on `denied` or `revoked`, tell the person and stop; never retry. A
+  denial blocks new requests for an hour, and new requests are limited to 20 an hour
+  per agent and team (`REQUEST_LIMITS`).
+- **One field:** `item.disclose(selector)` returns one login (`username`,
+  `password`) or API (`key`, `secret`) field for immediate use. Hand `value` only to
+  a sink the runtime supplies (the SDK has none); never put a value or code in chat,
+  messages, documents, logs, errors, program results or model context.
+- **Verification codes:** `item.verificationCode()` returns `code` and `validForMs`.
+  Hand `code` only to the runtime's sink, like a disclosed value, and never return it.
+  It is good for `validForMs` minus the time since the request was sent, rounded up; if
+  that is not positive when the code is entered, or the code is rejected, fetch a new
+  one. Never cache a code or reuse it. Enrolling a seed (`setVerificationSeed`) needs
+  `canSetTotp` (the creating agent with edit) on a Login item.
+- **Create:** `vault.create` stores a Login or API credential only, always with a team
+  Edit grant and the agent's own grant; there is no private option. Reuse one
+  `operationId` across retries; updates take `expectedVersion`.
 
 ## Membership and deletion
 
