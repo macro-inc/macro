@@ -260,6 +260,10 @@ impl crate::domain::email_privacy::EmailPrivacyService for FakeCrmService {
 }
 
 impl CrmService for FakeCrmService {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         _user_id: &str,
@@ -448,7 +452,7 @@ impl CrmService for FakeCrmService {
 
     async fn crm_scope_precheck(
         &self,
-        _team_id: &Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
         _domains: &[String],
         _addresses: &[String],
     ) -> Result<CrmScopePrecheck, CrmError> {

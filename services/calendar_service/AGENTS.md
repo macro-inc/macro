@@ -57,10 +57,10 @@ gateway `/calendar` prefix.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a
-  Fargate task of 0.5 vCPU (prod) or 0.25 vCPU (dev) that the Datadog agent
-  and log router sidecars share. Each worker round that does work runs in its
-  own root span (`calendar.sync_scheduler`, `google_backfill`,
-  `calendar.outlook_sync`, `calendar.projection_relay`,
+  Fargate task of 1 vCPU (prod) or 0.5 vCPU (dev) that the Datadog agent and
+  log router sidecars share (and Grafana Alloy in dev). Each worker round that
+  does work runs in its own root span (`calendar.sync_scheduler`,
+  `google_backfill`, `calendar.outlook_sync`, `calendar.projection_relay`,
   `calendar.replacement_recovery`, `recover_once`), so a
   `tokio runtime starvation detected` warning can be matched to the rounds
   running at that moment. Read its `cpu_wait_ms` first: near `delay_ms`, the

@@ -336,11 +336,16 @@ where
             item_filters::ast::CrmScope::Addresses(a) => (&[], a.as_slice()),
         };
 
+        let access = crm::domain::auth::CrmTeamReceipt::from_team_receipt(receipt.clone())
+            .map_err(|_| EmailErr::Unauthorized)?;
         let precheck = self
             .crm_service
-            .crm_scope_precheck(&team_id, domains, addresses)
+            .crm_scope_precheck(&access, domains, addresses)
             .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::anyhow!("crm precheck failed: {e}")))?;
+            .map_err(|error| match error {
+                crm::domain::model::CrmError::AccessDenied => EmailErr::Unauthorized,
+                error => EmailErr::RepoErr(anyhow::anyhow!("crm precheck failed: {error}")),
+            })?;
 
         if !precheck.crm_enabled {
             return Err(EmailErr::CrmDisabledForTeam);

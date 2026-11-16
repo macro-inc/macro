@@ -84,6 +84,10 @@ struct ContactListCall {
 }
 
 impl CompaniesRepository for StubRepo {
+    async fn current_member_access(&self, _: &str) -> Result<Option<(uuid::Uuid, bool)>, CrmError> {
+        Ok(None)
+    }
+
     async fn list_contacts_for_soup(
         &self,
         scope: CrmContactListScope<'_>,
@@ -1238,6 +1242,12 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
+    }
+}
+
+impl crate::domain::auth::CrmMemberAccess for StubRepo {
+    async fn member_has_crm_access(&self, _: uuid::Uuid, _: &str) -> Result<bool, CrmError> {
+        Ok(true)
     }
 }
 

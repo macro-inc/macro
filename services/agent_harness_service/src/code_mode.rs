@@ -1,6 +1,6 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
@@ -117,7 +117,7 @@ impl ExecutionCredentials for RunCredentials {
         identity: &ExecutionIdentity,
         source: &str,
         cancel: CancellationToken,
-    ) -> Result<RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
@@ -152,13 +152,16 @@ impl ExecutionCredentials for RunCredentials {
                 tracing::error!(?error, "could not mint execution credential");
                 CodeModeError::Unavailable
             })?;
-        Ok(RunEnvironment {
-            token,
-            trace_headers: trace_headers(),
-            endpoints: self.endpoints.clone(),
-            session_id: Some(identity.session.as_uuid()),
-            execution_id: Some(identity.execution.as_uuid()),
-            unattended: None,
+        Ok(IssuedRun {
+            environment: RunEnvironment {
+                token,
+                trace_headers: trace_headers(),
+                endpoints: self.endpoints.clone(),
+                session_id: Some(identity.session.as_uuid()),
+                execution_id: Some(identity.execution.as_uuid()),
+                unattended: None,
+            },
+            acting_user: actor,
         })
     }
 }
@@ -317,6 +320,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod images;
 pub mod reviews;
 pub mod ui_commands;
 

@@ -73,3 +73,5 @@ distribution.
 - The activity topic schema is v2 for the session event; older realtime consumers skip v2 frames during a rolling deployment, and new consumers skip v1 frames. Both feeds recover missed frames through authorized reads on reconnect.
 - Keep timeline id hydration bounded to 200 ids through `ActivityTimeline::read_ids`, preserving entity scope and the owner's activity selection.
 - Return optional owning-timeline sequences in `ActivityReceipt`; the materializer forwards them to publishers only after storage commits, while timeline-specific transaction composition stays in the hosting service.
+
+- `domain/visible_reads.rs` owns current project and CRM visibility for personal/team/range reads and overview references. Compose it with the primary-backed `outbound/entity_access_audience` adapter. Keep raw cursors when filtering denied rows; subscription adapters also recheck retained events before emission.

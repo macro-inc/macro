@@ -1,8 +1,8 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, build_document_filter,
-    build_grouped_query, build_query, expanded_dynamic_cursor_soup,
+    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, MAX_NAMED_CANDIDATES,
+    build_document_filter, build_grouped_query, build_query, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
 use document_sub_type::DocumentSubType;
@@ -212,8 +212,10 @@ fn arrays_follow_each_querys_fixed_binds() {
                 grouped_ids.into_binds().len(),
             )
         };
+        // One shape up to the per-candidate cap, another past it.
         let few = render(2);
-        assert_eq!(few, render(5_000));
+        assert_eq!(few, render(MAX_NAMED_CANDIDATES as u128));
+        assert_eq!(render(MAX_NAMED_CANDIDATES as u128 + 1), render(10_000));
         let (flat, flat_arrays, grouped, grouped_arrays) = few;
         assert_eq!((flat_arrays, grouped_arrays), (2, 2));
         for (sql, first) in [(&flat, flat_first), (&grouped, grouped_first)] {
