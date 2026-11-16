@@ -41,7 +41,7 @@ async function settleTicks(item: MentionItem, dispatched: string[]) {
   return settled;
 }
 
-// The values are the Source handler before the shared MentionInserts facade
+// The values are the Source handler before the shared WithInsertion handlers
 // (9df9909f): a synchronous dispatch adds no await of its own.
 test.each([
   [

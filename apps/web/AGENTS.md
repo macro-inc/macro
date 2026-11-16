@@ -370,8 +370,9 @@ Keep snippet fetching lazy in the real Source command payload; shared analytics
 runs before host dispatch and the snippet plugin retains async insertion policy.
 The native snippet host sends `group-a.snippet-insert`, fetches on the model's
 `group-a.snippet-request` and answers `group-a.snippet-resolve-source` (null clears).
-Route every mention kind through `MentionInserts` in `mentionHandlers.ts`, so
-the Source and native `@` hosts share tracking, routine sharing and payloads.
+Give every mention kind a `handle*WithInsertion` in `mentionHandlers.ts`, so the
+Source and native `@` hosts share tracking, routine sharing and payloads; Source
+inserts return void, so its handlers add no await.
 Run the behavior-inventory link browser checks and compare raw DOM/JSON before
 and after a host extraction; Source preservation alone does not establish native acceptance.
 Register attached Source roots through `createLexicalWrapper`'s actual root
