@@ -322,11 +322,37 @@ where
         }
     }
 
+    /// When the inbox may send its next sequence email, or `None` while that
+    /// is too far off to create a step for. Authoritative only under the
+    /// inbox's send-slot lock.
+    async fn next_slot(
+        &self,
+        tx: &mut R::Tx,
+        link_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, SequenceError> {
+        let latest = self
+            .repo
+            .latest_slot(tx, link_id, now - SPACING)
+            .await
+            .map_err(internal)?;
+        let slot = latest.map_or(now + MIN_LEAD, |latest| {
+            (latest + SPACING).max(now + MIN_LEAD)
+        });
+        Ok((slot <= now + MAX_LEAD).then_some(slot))
+    }
+
     /// Create an enrollment's next step, rendered from the sequence as it is
     /// now and the CRM person's current name, if every check passes.
     pub(super) async fn create_step(&self, due: &DueEnrollment) -> Result<Creation, SequenceError> {
         // A long pass must not schedule against a stale clock.
         let now = Utc::now();
+        let mut tx = self.repo.begin().await.map_err(internal)?;
+        // The cheap check first: an inbox pacing a backlog spends most passes
+        // waiting for its slot.
+        if self.next_slot(&mut tx, due.link_id, now).await?.is_none() {
+            return Ok(Creation::InboxWaits(due.link_id));
+        }
         let has_access = self.access.team_of(&due.owner_id).await.map_err(internal)?
             == Some(due.team_id)
             && self
@@ -337,7 +363,6 @@ where
         if !has_access {
             return Ok(Creation::OwnerWaits);
         }
-        let mut tx = self.repo.begin().await.map_err(internal)?;
         let Some(inbox) = self
             .usable_inbox(&mut tx, due.link_id, &due.owner_id)
             .await?
@@ -427,17 +452,9 @@ where
             .lock_send_slot(&mut tx, inbox.link_id)
             .await
             .map_err(internal)?;
-        let latest = self
-            .repo
-            .latest_slot(&mut tx, inbox.link_id, now - SPACING)
-            .await
-            .map_err(internal)?;
-        let slot = latest.map_or(now + MIN_LEAD, |latest| {
-            (latest + SPACING).max(now + MIN_LEAD)
-        });
-        if slot > now + MAX_LEAD {
+        let Some(slot) = self.next_slot(&mut tx, inbox.link_id, now).await? else {
             return Ok(Creation::InboxWaits(inbox.link_id));
-        }
+        };
 
         let recipient = self
             .repo
