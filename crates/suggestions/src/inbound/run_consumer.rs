@@ -15,7 +15,9 @@ mod test;
 use std::future::Future;
 use std::time::Duration;
 
-use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleMacroEvent};
+use agent_session::domain::events::{
+    AgentSessionLifecycleEvent, AgentSessionLifecycleMacroEvent, AgentTurnStopReason,
+};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     EventConsumer, KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _,
@@ -45,8 +47,6 @@ type RunsKafkaAdapter = KafkaConsumerAdapter<SuggestionRunsGroup, SessionLifecyc
 const MAX_ATTEMPTS: u8 = 4;
 // Three delays (1+2+4 seconds) before the fourth and final attempt.
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
-/// The stop reason of a turn that ended as asked.
-const END_TURN: &str = "end_turn";
 
 // Transport-only seam, so tests run the receive/apply/commit loop without a
 // broker.
@@ -66,7 +66,7 @@ fn session_event(event: &AgentSessionLifecycleEvent) -> Option<SessionEvent> {
         AgentSessionLifecycleEvent::Settled(settled) => match &settled.last_turn {
             Some(turn) => SessionNews::TurnEnded {
                 action: turn.action_id.as_uuid(),
-                finished: turn.stop_reason == END_TURN,
+                finished: turn.stop_reason == AgentTurnStopReason::EndTurn,
             },
             None => SessionNews::Changed,
         },
