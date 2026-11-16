@@ -2781,6 +2781,7 @@ export const CreateForm = z.object({
                                 const schemas = [
                                   z.object({ type: z.literal('text') }),
                                   z.object({ type: z.literal('number') }),
+                                  z.object({ type: z.literal('percentage') }),
                                   z.object({ type: z.literal('boolean') }),
                                   z.object({ type: z.literal('date') }),
                                   z.object({ type: z.literal('date_range') }),
@@ -5060,6 +5061,7 @@ export const MutationResult = z.object({
               const schemas = [
                 z.object({ type: z.literal('text') }),
                 z.object({ type: z.literal('number') }),
+                z.object({ type: z.literal('percentage') }),
                 z.object({ type: z.literal('boolean') }),
                 z.object({ type: z.literal('date') }),
                 z.object({ type: z.literal('date_range') }),
@@ -5918,6 +5920,7 @@ export const ToolDatabaseSchema = z.object({
             const schemas = [
               z.literal('text'),
               z.literal('number'),
+              z.literal('percentage'),
               z.literal('boolean'),
               z.literal('date'),
               z.literal('date_range'),
@@ -7853,6 +7856,7 @@ export const EditForm = z.object({
             const schemas = [
               z.object({ type: z.literal('text') }),
               z.object({ type: z.literal('number') }),
+              z.object({ type: z.literal('percentage') }),
               z.object({ type: z.literal('boolean') }),
               z.object({ type: z.literal('date') }),
               z.object({ type: z.literal('date_range') }),
@@ -16731,6 +16735,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
               const schemas = [
                 z.object({ type: z.literal('text') }),
                 z.object({ type: z.literal('number') }),
+                z.object({ type: z.literal('percentage') }),
                 z.object({ type: z.literal('boolean') }),
                 z.object({ type: z.literal('date') }),
                 z.object({ type: z.literal('date_range') }),
@@ -17026,6 +17031,7 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.object({ type: z.literal('text') }),
                         z.object({ type: z.literal('number') }),
+                        z.object({ type: z.literal('percentage') }),
                         z.object({ type: z.literal('boolean') }),
                         z.object({ type: z.literal('date') }),
                         z.object({ type: z.literal('date_range') }),

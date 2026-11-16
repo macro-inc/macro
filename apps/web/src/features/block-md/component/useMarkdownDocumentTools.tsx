@@ -64,7 +64,7 @@ export function useMarkdownDocumentTools() {
   const { documentId, kind, element } = useMarkdownDocument();
   const history = useHistory();
   const { displayName } = useMarkdownName();
-  const copyAsMarkdown = useCopyDocumentAsMarkdown();
+  const copyAsMarkdown = useCopyDocumentAsMarkdown({ silent: true });
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
   const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
@@ -77,7 +77,8 @@ export function useMarkdownDocumentTools() {
     name: displayName() ?? '',
     fileType: 'md' as const,
   });
-  const copyBranchName = () => copyBranchNameToClipboard(documentId());
+  const copyBranchName = () =>
+    copyBranchNameToClipboard(documentId(), { silent: true });
 
   const fileOperations: FileOperation[] = [
     { op: 'copy' },
@@ -90,6 +91,7 @@ export function useMarkdownDocumentTools() {
             label: 'Copy Branch Name',
             icon: GitBranch,
             action: copyBranchName,
+            copy: true,
           },
         ] satisfies FileOperation[])
       : []),
@@ -100,6 +102,7 @@ export function useMarkdownDocumentTools() {
             label: 'Copy as markdown',
             icon: Copy,
             action: copyAsMarkdown,
+            copy: true,
           },
         ] satisfies FileOperation[])
       : []),

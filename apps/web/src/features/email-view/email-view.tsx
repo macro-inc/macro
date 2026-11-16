@@ -114,7 +114,7 @@ function EmailPanes(props: {
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        onSearchEscape={props.focusList}
+        focusSearchResults={props.focusList}
         registerSearch={search.registerListSearch}
       />
       <ViewTour tour={emailTour} />
@@ -281,6 +281,8 @@ function EmailViewRoot() {
       return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
+    hasSearch: () =>
+      canSearchEmailTab(state.tab) && state.search.trim().length > 0,
   });
 
   const savedViewKind = () => savedViews?.view().kind;

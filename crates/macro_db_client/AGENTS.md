@@ -81,6 +81,10 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+`password_import_activity` stores only per-batch source format and counts; its
+team foreign key cascades, and the passwords repository includes it in retained
+data checks and explicit vault purge. It does not depend on a successful item.
+
 ## Gotchas
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
@@ -164,3 +168,8 @@ only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
+
+`crm_email_thread_exclusions` stores one contributor's private thread exceptions;
+its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
+owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
+veto used by the shared eligibility function and mirrored in set-based ingestion.
