@@ -41,7 +41,7 @@ alwaysApply: false
 - Do not register an asset-caching service worker. Keep `public/sw.js` at its
   deployed URL so existing workers can update, clear their shell and asset
   caches, and unregister; it must not intercept requests.
-- Bind Lexical module exports once from the cached `rust-editor-model` boot choice; preload through EditorEngineProvider while the shell paints, prepare paste matchers afterward at idle, and construct editors only after EditorEngineBoundary opens.
+- Read the document engine only from `RUST_EDITOR_ENGINE`, the cached `rust-editor-model` boot choice, never the live flag; preload through EditorEngineProvider while the shell paints, prepare paste matchers afterward at idle, and wrap only native editor constructors in EditorEngineBoundary.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression
   limit; split it rather than raising the limit.
 - The build also fails if a chunk with source code has no source map or a map

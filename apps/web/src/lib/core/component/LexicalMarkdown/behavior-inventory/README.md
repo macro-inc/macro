@@ -271,9 +271,8 @@ Current results are flag OFF only. The browser config rejects
 `EDITOR_BEHAVIOR_ENGINE=ON` because this checkout does not provide the production
 compat initializer/resolver. Changing a flag alone does not switch these tests.
 
-Before claiming paired acceptance, wire the production
-`scripts/lexical-engine-switch.ts` resolver and real compat preload into both
-Vitest and this static build. Run the same assertions under each engine and
+Before claiming paired acceptance, build a production compat resolver (none is
+wired today) and real compat preload into both Vitest and this static build. Run the same assertions under each engine and
 record the actual compat/WASM identities. Never alias the core to a test double,
 use the older native view as compat, update expectations only for ON, or report
 OFF results as parity. Production saved-state equality and full native
