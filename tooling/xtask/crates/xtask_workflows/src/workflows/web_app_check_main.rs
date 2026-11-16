@@ -121,7 +121,7 @@ fn typescript() -> Job {
 /// installed tree and write only separate diagnostic outputs, so they run at
 /// once: in sequence they took about 106 s of a 179 s job. The SDK is built
 /// first, for the agent runtime.
-const TYPECHECKS: [(&str, &str, &str); 14] = [
+const TYPECHECKS: [(&str, &str, &str); 15] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -140,6 +140,12 @@ const TYPECHECKS: [(&str, &str, &str); 14] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check && bun scripts/generate-session-schema.ts --check",
+    ),
+    // Reads the document-session types installed above.
+    (
+        "Check Native Editor View Types",
+        "packages/lexical-wasm-view",
+        "bun run check",
     ),
     (
         "Check Observability Package",
