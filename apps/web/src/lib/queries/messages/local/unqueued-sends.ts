@@ -70,6 +70,21 @@ const pageLockName = (pageId: string) => `${KEY_PREFIX}page:${pageId}`;
 const entryKey = (senderId: string, messageId: string) =>
   `${KEY_PREFIX}${senderId}:${messageId}`;
 
+/** Forgets a noted send that reached the server some other way. */
+export function forgetUnqueuedSend(
+  senderId: string,
+  messageId: string,
+  deps: Pick<UnqueuedSendsDeps, 'storage'> = {}
+): void {
+  try {
+    (deps.storage ?? browserStorage())?.removeItem(
+      entryKey(senderId, messageId)
+    );
+  } catch {
+    // It is sent again at the next start, and the server recognises its id.
+  }
+}
+
 function browserStorage(): UnqueuedSendsDeps['storage'] {
   try {
     return globalThis.localStorage;
