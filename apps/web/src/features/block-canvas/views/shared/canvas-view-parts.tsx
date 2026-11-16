@@ -44,7 +44,10 @@ import type {
   CanvasState,
   CanvasTool,
 } from '../../primitives/create-canvas-state';
-import type { CanvasInsertState } from '../../primitives/create-insert-state';
+import type {
+  CanvasInsertLocation,
+  CanvasInsertState,
+} from '../../primitives/create-insert-state';
 import { pickCanvasMedia } from '../../primitives/pick-media';
 import { attachTextInput } from '../../primitives/text-input';
 import { useCanvasMediaSource } from '../../queries/media';
@@ -120,12 +123,22 @@ function createCanvasView(props: CanvasViewProps) {
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
 
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
-  /** Run `place` where the Attach menu was opened, and close the menu. */
-  const insertAt = (place: (world: Point) => void) => {
-    const location = props.insert.location();
-    if (!location) return;
-    place(location.world);
-    props.insert.close();
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  /**
+   * Run `place` where the Attach menu was opened and close the menu. A caller
+   * that answers later (a dropped file that had to be fetched) names the
+   * opening it belongs to, so it never lands where a newer menu was opened.
+   */
+  const insertAt = (
+    place: (world: Point) => void,
+    at = props.insert.location()
+  ) => {
+    if (!at) return;
+    place(at.world);
+    if (props.insert.location() === at) props.insert.close();
   };
   /**
    * What the Attach menu's choices do, at the place the menu was opened for.
@@ -140,21 +153,24 @@ function createCanvasView(props: CanvasViewProps) {
           fireAndForget(props.assets.media(asset, world), 'canvas-assets');
         else props.assets.document(asset, world, 'preview');
       }),
-    /** Files dropped on the menu. */
-    files: (files: File[]) =>
-      insertAt((world) =>
-        fireAndForget(props.assets.files(files, world), 'canvas-assets')
+    /** Files dropped on the menu that `at` was open for. */
+    files: (files: File[], at?: CanvasInsertLocation) =>
+      insertAt(
+        (world) =>
+          fireAndForget(props.assets.files(files, world), 'canvas-assets'),
+        at
       ),
     /**
      * Ask the device for images or videos. The menu closes at once; the files
-     * arrive whenever the picker answers.
+     * arrive whenever the picker answers, unless the canvas has gone by then.
      */
     upload: () =>
       insertAt((world) =>
         fireAndForget(
-          pickCanvasMedia((files) =>
-            fireAndForget(props.assets.files(files, world), 'canvas-assets')
-          ),
+          pickCanvasMedia((files) => {
+            if (disposed) return;
+            fireAndForget(props.assets.files(files, world), 'canvas-assets');
+          }),
           'canvas-assets'
         )
       ),

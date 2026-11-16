@@ -96,7 +96,7 @@ function CanvasInsert() {
         <CanvasInsertMenu
           location={location}
           onSelect={insert.select}
-          onFiles={insert.files}
+          onFiles={(files) => insert.files(files, location)}
           onUpload={insert.upload}
           onArtifact={insert.artifact()}
           onClose={insert.close}

@@ -15,6 +15,8 @@ const PICKER_HEIGHT = 70;
  * offers the device's own library, where a desktop offers a drop area.
  */
 function AssetPickerSheet(props: {
+  open: boolean;
+  /** The picker to show; it stays while the sheet slides away. */
   mode: CanvasInsertMode | undefined;
   onSelect: (asset: CanvasAsset, mode: CanvasInsertMode) => void;
   onUpload: () => void;
@@ -22,7 +24,7 @@ function AssetPickerSheet(props: {
 }) {
   return (
     <MobileDrawer
-      open={props.mode !== undefined}
+      open={props.open}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -36,7 +38,7 @@ function AssetPickerSheet(props: {
           }
         >
           <MobileDrawer.Handle />
-          <div class="flex min-h-0 flex-1 flex-col pb-(--mobile-sheet-safe-padding) text-sm">
+          <div class="flex min-h-0 flex-1 flex-col text-sm">
             <Show when={props.mode} keyed>
               {(mode) => (
                 <ErrorBoundary
@@ -128,7 +130,8 @@ export function MobileCanvasInsertMenu(props: {
         onArtifact={props.onArtifact}
       />
       <AssetPickerSheet
-        mode={mode()}
+        open={mode() !== undefined}
+        mode={picked()?.mode}
         onSelect={props.onSelect}
         onUpload={props.onUpload}
         onClose={props.onClose}

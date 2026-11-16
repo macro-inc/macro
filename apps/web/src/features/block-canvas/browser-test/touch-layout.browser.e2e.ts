@@ -319,6 +319,8 @@ test('Attach starts from its rows again after a picker was dismissed', async ({
   await page.touchscreen.tap(200, 40);
   await expect(picker).toBeHidden();
   await expect(attach).toHaveAttribute('aria-expanded', 'false');
+  // The keyboard is back on the canvas, for its shortcuts.
+  await expect(page.getByLabel('Graphics canvas')).toBeFocused();
 
   await attach.tap();
   await expect(rows).toBeVisible();
