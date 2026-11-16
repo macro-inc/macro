@@ -1,0 +1,45 @@
+import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
+import {
+  type CalendarNavigationContext,
+  CalendarNavigationProvider,
+} from '@app/features/calendar/context/calendar-navigation-context';
+import { Pager } from '@ui/components/Pager';
+import type { ParentProps } from 'solid-js';
+
+/** Adapts the grid pager to workspace navigation without exposing its renderer. */
+export function CalendarGridNavigation(props: ParentProps) {
+  const calendarPager = useCalendarPager();
+  const navigation: CalendarNavigationContext = {
+    periodView: calendarPager.periodView,
+    activeDate: () => calendarPager.activeDateInfo()?.view.calendar.getDate(),
+    navigationDate: calendarPager.navigationDate,
+    displayRange: () => {
+      const info = calendarPager.activeDateInfo();
+      return info ? { start: info.start, end: info.end } : undefined;
+    },
+    weekRange: () => {
+      const info = calendarPager.activeDateInfo();
+      return info?.view.type === 'timeGridWeek'
+        ? { start: info.start, end: info.end }
+        : undefined;
+    },
+    visibleRange: () => {
+      const range = calendarPager.visibleRange();
+      return range
+        ? { start: new Date(range.start), end: new Date(range.end) }
+        : undefined;
+    },
+    gotoDate: calendarPager.gotoDate,
+    navigateToDate: calendarPager.navigateToDate,
+    navigateToToday: calendarPager.navigateToToday,
+    previousPeriod: calendarPager.previousPeriod,
+    nextPeriod: calendarPager.nextPeriod,
+    changeView: calendarPager.changeView,
+  };
+
+  return (
+    <CalendarNavigationProvider value={navigation}>
+      <Pager.Root controller={calendarPager.pager}>{props.children}</Pager.Root>
+    </CalendarNavigationProvider>
+  );
+}

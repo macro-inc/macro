@@ -33,6 +33,7 @@ import {
   Switch,
 } from 'solid-js';
 import { CALENDAR_TOUR, calendarTour } from '../tour';
+import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
@@ -247,16 +248,6 @@ function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
   );
 }
 
-function CalendarPagerWorkspace(props: { headerLeading?: JSX.Element }) {
-  const calendarPager = useCalendarPager();
-
-  return (
-    <Pager.Root controller={calendarPager.pager}>
-      <WorkspaceContent headerLeading={props.headerLeading} />
-    </Pager.Root>
-  );
-}
-
 export function Workspace(props: { headerLeading?: JSX.Element }) {
   const calendarView = useCalendarView();
 
@@ -268,7 +259,9 @@ export function Workspace(props: { headerLeading?: JSX.Element }) {
       onNavigate={calendarView.closeEventDetails}
       onViewChange={calendarView.setPeriodView}
     >
-      <CalendarPagerWorkspace headerLeading={props.headerLeading} />
+      <CalendarGridNavigation>
+        <WorkspaceContent headerLeading={props.headerLeading} />
+      </CalendarGridNavigation>
     </CalendarPagerContextProvider>
   );
 }

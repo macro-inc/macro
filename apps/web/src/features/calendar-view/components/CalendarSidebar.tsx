@@ -4,10 +4,10 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type TeamOooWindow,
@@ -46,12 +46,10 @@ import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
 export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const initialDate = new Date();
 
-  const currentDate = createMemo(
-    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
-  );
+  const currentDate = createMemo(() => navigation.activeDate() ?? initialDate);
   const [focusedDay, setFocusedDay] = createSignal(currentDate());
   const [month, setMonth] = createSignal(currentDate());
   const gridStart = createMemo(() =>
@@ -69,11 +67,7 @@ export function CalendarMiniCalendar() {
   const markersByDay = createMemo(() =>
     miniMonthMarkers(data.visibleEvents(), gridStart(), gridEnd())
   );
-  const highlightedRange = createMemo(() => {
-    const dateInfo = calendarPager.activeDateInfo();
-    if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
-    return { end: dateInfo.end, start: dateInfo.start };
-  });
+  const highlightedRange = createMemo(navigation.weekRange);
 
   // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
@@ -100,7 +94,7 @@ export function CalendarMiniCalendar() {
       onValueChange={(date) => {
         if (!date) return;
         setMonth(date);
-        calendarPager.gotoDate(date);
+        navigation.gotoDate(date);
       }}
     />
   );
@@ -172,7 +166,7 @@ function TeamOooSkeleton() {
 }
 
 export function TeamOooUpcomingList() {
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const shell = useViewShell();
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
@@ -183,7 +177,7 @@ export function TeamOooUpcomingList() {
   const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
     const openOnRow = () =>
       calendarView.selectEvent(window.event, row, 'agenda');
-    calendarPager.gotoDate(window.start);
+    navigation.gotoDate(window.start);
     // With the overlay on, the absence also renders on the grid: open it on
     // its chip once the page shows it, as a navigation request does, so the
     // card never opens on the row and then jumps to the chip.

@@ -39,8 +39,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.touch }));
-vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({
+vi.mock('@app/features/calendar/context/calendar-navigation-context', () => ({
+  useCalendarNavigation: () => ({
     navigationDate: () => new Date(2026, 9, 20),
     previousPeriod: state.previous,
     nextPeriod: state.next,

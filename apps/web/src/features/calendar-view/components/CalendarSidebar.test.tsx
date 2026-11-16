@@ -90,8 +90,13 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
       sourceId === TEAM_OOO_SOURCE_ID ? overlayVisible() : true,
   }),
 }));
-vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({ activeDateInfo: () => undefined, gotoDate }),
+vi.mock('@app/features/calendar/context/calendar-navigation-context', () => ({
+  useCalendarNavigation: () => ({
+    activeDate: () => undefined,
+    periodView: () => 'timeGridDay',
+    weekRange: () => undefined,
+    gotoDate,
+  }),
 }));
 vi.mock('../calendar-focus-target', () => ({
   useCalendarFocus: () => ({ focusOccurrence }),

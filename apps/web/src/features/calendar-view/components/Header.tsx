@@ -1,11 +1,11 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
+import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
@@ -84,7 +84,7 @@ export function Header(props: {
   const panel = useSplitPanelOrThrow();
   // Inline previews use the host's shell, not Calendar's sidebar state.
   const shell = props.presentation === 'workspace' ? useViewShell() : undefined;
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const calendarView = useCalendarView();
   const initialDate = new Date();
   const [headerElement, setHeaderElement] = createSignal<HTMLElement>();
@@ -150,22 +150,22 @@ export function Header(props: {
     const interaction = beginInteraction('calendar.date.jump');
     try {
       setMonthPicker({ open: false, focusDateEntry: false });
-      calendarPager.navigateToDate(date);
+      navigation.navigateToDate(date);
     } finally {
       interaction.end();
     }
   };
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
-    changeView: calendarPager.changeView,
-    previousPeriod: calendarPager.previousPeriod,
-    nextPeriod: calendarPager.nextPeriod,
-    navigateToToday: calendarPager.navigateToToday,
+    changeView: navigation.changeView,
+    previousPeriod: navigation.previousPeriod,
+    nextPeriod: navigation.nextPeriod,
+    navigateToToday: navigation.navigateToToday,
     goToDate: isTouchDevice() ? undefined : goToDate,
   });
 
   const currentDate = createMemo(
-    () => calendarPager.navigationDate() ?? initialDate
+    () => navigation.navigationDate() ?? initialDate
   );
   const periodLabel = createMemo(() =>
     calendarPeriodLabel(calendarView.displaySettings.periodView).toLowerCase()
@@ -216,7 +216,7 @@ export function Header(props: {
         variant="ghost"
         size={compact ? 'icon-md' : 'icon-lg'}
         class="border-transparent bg-transparent"
-        onClick={calendarPager.previousPeriod}
+        onClick={navigation.previousPeriod}
       >
         <CaretLeftIcon class={compact ? 'size-4' : 'size-5'} />
       </Control>
@@ -234,7 +234,7 @@ export function Header(props: {
         variant="ghost"
         size={compact ? 'icon-md' : 'icon-lg'}
         class="border-transparent bg-transparent"
-        onClick={calendarPager.nextPeriod}
+        onClick={navigation.nextPeriod}
       >
         <CaretRightIcon class={compact ? 'size-4' : 'size-5'} />
       </Control>
@@ -261,7 +261,7 @@ export function Header(props: {
           !mobile && (compact ? 'px-2' : 'px-3'),
           !mobile && !compact && 'border-edge-button'
         )}
-        onClick={calendarPager.navigateToToday}
+        onClick={navigation.navigateToToday}
       >
         <Show when={mobile} fallback="Today">
           <CalendarBlankIcon

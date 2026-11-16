@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Button, CalendarMonthMenu, Dropdown, formatCalendarMonth } from '@ui';
 import { createSignal, Match, Switch } from 'solid-js';
-import { useCalendarPager } from './CalendarPagerContext';
+import { useCalendarNavigation } from '../context/calendar-navigation-context';
 
 type MonthDrawerProps = {
   month: Date;
@@ -15,17 +15,17 @@ const FORMAT_MONTH = new Intl.DateTimeFormat(undefined, { month: 'long' })
 
 /** Month selector that uses a dropdown on desktop and a drawer on touch. */
 export function MonthDrawer(props: MonthDrawerProps) {
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const [open, setOpen] = createSignal(false);
 
   const selectMonth = (month: Date) => {
     setOpen(false);
-    calendarPager.navigateToDate(month);
+    navigation.navigateToDate(month);
   };
 
   const goToToday = () => {
     setOpen(false);
-    calendarPager.navigateToToday();
+    navigation.navigateToToday();
   };
 
   const triggerContent = () => (

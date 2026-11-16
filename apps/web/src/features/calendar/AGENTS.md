@@ -8,8 +8,11 @@ host lives in `../block-calendar/`.
 
 ## Start here
 
-- `components/CalendarViewContext.tsx` and `CalendarPagerContext.tsx`: selection,
-  source visibility, display preferences, and period navigation.
+- `context/calendar-navigation-context.tsx`: host-neutral dates, visible ranges,
+  period selection, and navigation commands. `components/CalendarPagerContext.tsx`
+  retains FullCalendar handles, three-page transitions, and occurrence data;
+  `../calendar-view/views/grid-navigation/CalendarGridNavigation.tsx` adapts it at the host boundary.
+- `components/CalendarViewContext.tsx`: selection, source visibility, and display preferences.
 - `hooks/use-calendar-occurrence-data.ts`: range reads and event projection.
 - `components/composer/create-calendar-event-form-controller.ts` and
   `hooks/use-event-editor.ts`: draft validation, permissions, and submission.
@@ -30,7 +33,8 @@ host lives in `../block-calendar/`.
   `?ui=mobile-sheet-parts`.
 - The desktop month picker composes `components/month-picker/` parts and keeps
   its temporary year/date state in `primitives/create-month-picker.ts`; navigation
-  stays in the host's existing pager.
+  uses the workspace navigation context. Keep grid paging and scroll timing in
+  `CalendarPagerContext.tsx`.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,

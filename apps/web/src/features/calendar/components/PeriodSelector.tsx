@@ -13,9 +13,9 @@ import {
 } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { useCalendarNavigation } from '../context/calendar-navigation-context';
 import type { CalendarPeriodView } from '../types';
 import { calendarPeriodLabel } from '../utils/calendar-label';
-import { useCalendarPager } from './CalendarPagerContext';
 import { useCalendarView } from './CalendarViewContext';
 
 const CALENDAR_VIEWS = [
@@ -42,7 +42,7 @@ const CALENDAR_VIEWS = [
 
 function createCalendarPeriodControls(onSelect?: () => void) {
   const calendarView = useCalendarView();
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const initialDate = new Date();
   const [pickerState, setPickerState] = createStore({
     open: false,
@@ -50,18 +50,11 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     focusedDay: initialDate,
   });
 
-  const currentDate = createMemo(
-    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
-  );
+  const currentDate = createMemo(() => navigation.activeDate() ?? initialDate);
 
-  const activeView = calendarPager.periodView;
+  const activeView = navigation.periodView;
 
-  const highlightedRange = createMemo(() => {
-    const dateInfo = calendarPager.activeDateInfo();
-    return dateInfo?.view.type === 'timeGridWeek'
-      ? { end: dateInfo.end, start: dateInfo.start }
-      : undefined;
-  });
+  const highlightedRange = createMemo(navigation.weekRange);
 
   const syncCustomDatePicker = () => {
     const date = currentDate();
@@ -76,9 +69,9 @@ function createCalendarPeriodControls(onSelect?: () => void) {
   const changeView = (view: CalendarPeriodView) => {
     setPickerState('open', false);
     onSelect?.();
-    if (calendarPager.periodView() === view) return;
+    if (navigation.periodView() === view) return;
 
-    calendarPager.changeView(view);
+    navigation.changeView(view);
   };
 
   const navigateCustomDateMonth = (month: Date) => {
@@ -95,7 +88,7 @@ function createCalendarPeriodControls(onSelect?: () => void) {
     if (!date) return;
 
     setPickerState({ month: date, focusedDay: date, open: false });
-    calendarPager.gotoDate(date);
+    navigation.gotoDate(date);
     onSelect?.();
   };
 
