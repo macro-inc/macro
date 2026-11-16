@@ -1,13 +1,16 @@
 //! Team membership, CRM state and CRM people, through their owning crates.
 
 use crm::domain::{
-    companies_repo::CrmCompanyListSort, contact_listing::CrmContactListQuery, model::CrmError,
-    service::CrmService,
+    auth::CrmTeamReceipt, companies_repo::CrmCompanyListSort, contact_listing::CrmContactListQuery,
+    model::CrmError, service::CrmService,
 };
-use entity_access::domain::{models::AccessError, ports::EntityAccessService};
+use entity_access::domain::{
+    models::{AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType},
+    ports::EntityAccessService,
+};
 use filter_ast::Expr;
 use item_filters::ast::crm_contact::CrmContactLiteral;
-use macro_user_id::user_id::MacroUserId;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::{models::CrmPerson, ports::OwnerAccess};
@@ -47,23 +50,30 @@ where
 {
     type Err = OwnerAccessError;
 
-    async fn team_of(&self, user_id: &str) -> Result<Option<Uuid>, OwnerAccessError> {
-        let user = MacroUserId::parse_from_str(user_id)
-            .map_err(|_| OwnerAccessError::InvalidUser)?
-            .lowercase();
-        Ok(self
-            .entity_access
-            .get_user_team(&user)
-            .await?
-            .map(|team| team.team_id))
-    }
-
-    async fn crm_enabled(&self, team_id: Uuid) -> Result<bool, OwnerAccessError> {
-        Ok(self
+    async fn customers_team(&self, user_id: &str) -> Result<Option<Uuid>, OwnerAccessError> {
+        let user = MacroUserIdStr::try_from(user_id.to_owned())
+            .map_err(|_| OwnerAccessError::InvalidUser)?;
+        let Some(team) = self.entity_access.get_user_team(&user).await? else {
+            return Ok(None);
+        };
+        let receipt = EntityAccessReceipt::try_new_authenticated_user(
+            user,
+            Entity {
+                entity_id: team.team_id.to_string(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole { role: team.role },
+        )?;
+        // The CRM also refuses a member whose access an admin revoked.
+        match self
             .crm
-            .crm_scope_precheck(&team_id, &[], &[])
-            .await?
-            .crm_enabled)
+            .crm_scope_precheck(&CrmTeamReceipt::from_team_receipt(receipt)?, &[], &[])
+            .await
+        {
+            Ok(precheck) => Ok(precheck.crm_enabled.then_some(team.team_id)),
+            Err(CrmError::AccessDenied) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn people(

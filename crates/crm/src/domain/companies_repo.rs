@@ -45,7 +45,15 @@ pub struct CrmCompanySoupCursor {
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
-pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
+pub trait CompaniesRepository:
+    super::email_privacy::EmailPrivacyRepository + super::auth::CrmMemberAccess
+{
+    /// Current membership and effective CRM access, without a permission cache.
+    fn current_member_access(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<(uuid::Uuid, bool)>, CrmError>> + Send;
+
     /// List authorized contacts across the viewer's teams. Apply visibility and
     /// predicates before choosing one record per lowercased full email (latest
     /// interaction, then highest ID). Deduplicate before seeking/limiting. An
@@ -77,7 +85,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
 
     /// Previews of the companies in `company_ids` that `viewer_id` may open,
     /// each as [`Self::get_company_for_team`] titles it after the access
-    /// check: the viewer belongs to the company's team, and a hidden company
+    /// check: the viewer has current membership and effective CRM access on
+    /// the company's team, and a hidden company
     /// is visible only to that team's admins and owners. Others are left out.
     fn preview_companies(
         &self,
@@ -87,7 +96,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
 
     /// Previews of the contacts in `contact_ids` that `viewer_id` may open,
     /// with [`Self::get_contact_for_team`]'s visibility after the access
-    /// check: the viewer belongs to the contact's team, and a hidden contact,
+    /// check: the viewer has current membership and effective CRM access on
+    /// the contact's team, and a hidden contact,
     /// or one under a hidden company, is visible only to its admins and
     /// owners. Others are left out.
     fn preview_contacts(

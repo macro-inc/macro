@@ -40,8 +40,9 @@ pub(super) enum Creation {
     /// Nothing can go from the inbox in this pass: its next slot isn't near or
     /// it can't send. Its enrollments stay due.
     InboxWaits(Uuid),
-    /// The owner isn't in the enrollment's team now, or the team's Customers
-    /// is off. Their enrollments in that team stay due.
+    /// The owner can't use the enrollment's team's Customers now: they left
+    /// it, it is off, or their access was revoked. Their enrollments in that
+    /// team stay due.
     OwnerWaits,
 }
 
@@ -353,14 +354,12 @@ where
         if self.next_slot(&mut tx, due.link_id, now).await?.is_none() {
             return Ok(Creation::InboxWaits(due.link_id));
         }
-        let has_access = self.access.team_of(&due.owner_id).await.map_err(internal)?
-            == Some(due.team_id)
-            && self
-                .access
-                .crm_enabled(due.team_id)
-                .await
-                .map_err(internal)?;
-        if !has_access {
+        let team = self
+            .access
+            .customers_team(&due.owner_id)
+            .await
+            .map_err(internal)?;
+        if team != Some(due.team_id) {
             return Ok(Creation::OwnerWaits);
         }
         let Some(inbox) = self

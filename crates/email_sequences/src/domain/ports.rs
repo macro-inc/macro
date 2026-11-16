@@ -343,13 +343,12 @@ pub trait OwnerAccess: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The user's team.
-    fn team_of(
+    /// The team whose Customers the user can use now: their team, with CRM on
+    /// and their access to it not revoked.
+    fn customers_team(
         &self,
         user_id: &str,
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
-    /// Whether the team has CRM on.
-    fn crm_enabled(&self, team_id: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     /// The CRM people the user can see among `ids`.
     fn people(
         &self,

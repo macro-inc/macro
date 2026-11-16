@@ -47,7 +47,7 @@ people. The server owns all state; the browser only calls the API.
 ## Boundaries
 
 - Depends on: `email` (ports: `sequence_steps`), `entity_access` and `crm` (team
-  membership, `crm_enabled`, CRM people).
+  membership and the owner's own access to Customers, CRM people).
 - Used by: `services/email_service` (API, workers, inbox sync).
 
 ## Checks

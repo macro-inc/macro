@@ -760,3 +760,32 @@ CRM on for the team, the section and its links behave the same way.
 - **Contact card:** a contact's Overview lists its sequences for every teammate:
   sequence, owner, status, last and next send. The owner's sequence name
   opens it.
+
+## Member access API
+
+Existing and new members start with CRM access. An admin or owner can patch a
+team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
+change this setting, and admins and owners cannot be denied. Mailbox contribution
+consent stays unchanged. Preference mutations return 503 while the deployment
+rollout is disabled; existing access checks continue to enforce stored denials.
+`GET /crm/member-access` reports current access even
+when record routes return access denied. Clients holding CRM caches may request
+the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
+server memoization never applies to record checks or this fresh endpoint. The
+next opted-in request after expiry observes the change (or a missing hint that
+requires a fresh proof); idle/offline clients have no fixed retirement deadline.
+Settings controls and retirement of already-cached client content follow
+separately.
+
+After denial, company/contact routes and contact pages, CRM lists, search, CRM
+activity, references, and CRM-derived email thread grants require current access
+on each request. Batched record previews omit denied records too.
+Whole-team pipeline grants no longer apply. Individually or channel-shared
+pipelines retain their own values and opaque company/contact IDs, but resolving
+record names or opening records requires separate CRM access. Text previously
+copied into a pipeline cell remains visible as pipeline content.
+
+Delivered CRM discussion notifications retain their text, and a queued one can
+still arrive under the existing notification policy. Opening the record requires
+current access. Exercise denial and regrant through direct API and agent requests
+as well as the UI once the client follow-up is installed.

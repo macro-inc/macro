@@ -173,17 +173,15 @@ where
         }
     }
 
-    /// The caller as a sequence owner: in a team that has CRM on.
+    /// The caller as a sequence owner: someone who can use their team's
+    /// Customers.
     async fn owner(&self, user_id: &str) -> Result<Owner, SequenceError> {
         let team_id = self
             .access
-            .team_of(user_id)
+            .customers_team(user_id)
             .await
             .map_err(internal)?
             .ok_or(SequenceError::CrmUnavailable)?;
-        if !self.access.crm_enabled(team_id).await.map_err(internal)? {
-            return Err(SequenceError::CrmUnavailable);
-        }
         Ok(Owner {
             user_id: user_id.to_owned(),
             team_id,

@@ -34,12 +34,9 @@ struct Access {
 impl OwnerAccess for Access {
     type Err = std::convert::Infallible;
 
-    async fn team_of(&self, _: &str) -> Result<Option<Uuid>, Self::Err> {
-        Ok(self.member.load(Ordering::SeqCst).then_some(TEAM))
-    }
-
-    async fn crm_enabled(&self, _: Uuid) -> Result<bool, Self::Err> {
-        Ok(self.crm_on.load(Ordering::SeqCst))
+    async fn customers_team(&self, _: &str) -> Result<Option<Uuid>, Self::Err> {
+        let usable = self.member.load(Ordering::SeqCst) && self.crm_on.load(Ordering::SeqCst);
+        Ok(usable.then_some(TEAM))
     }
 
     async fn people(&self, _: &str, ids: &[Uuid]) -> Result<Vec<CrmPerson>, Self::Err> {

@@ -36,3 +36,40 @@ async fn an_archived_person_is_not_in_customers_even_for_an_admin(pool: sqlx::Pg
         vec![KEPT]
     );
 }
+
+/// Sequences need the owner's own access to their team's Customers.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/archived_people.sql")
+)]
+async fn customers_must_be_open_to_the_user(pool: sqlx::PgPool) {
+    const TEAM: Uuid = Uuid::from_u128(0xb);
+    const MEMBER: &str = "macro|member@example.com";
+    let access = CrmOwnerAccess::new(
+        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
+        CrmServiceImpl::new(
+            CompaniesRepositoryImpl::new(pool.clone()),
+            NoOpCompanyMetadataResolver,
+        ),
+    );
+    assert_eq!(access.customers_team(ADMIN).await.unwrap(), Some(TEAM));
+    assert_eq!(access.customers_team(MEMBER).await.unwrap(), Some(TEAM));
+    assert_eq!(
+        access
+            .customers_team("macro|stranger@example.com")
+            .await
+            .unwrap(),
+        None
+    );
+
+    // An admin revoked the member's access to Customers.
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = FALSE WHERE user_id = $1",
+        MEMBER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(access.customers_team(MEMBER).await.unwrap(), None);
+    assert_eq!(access.customers_team(ADMIN).await.unwrap(), Some(TEAM));
+}
