@@ -23,6 +23,8 @@ pub type SearchAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwt
 pub struct SearchHandlerState {
     /// Read-only database connection for search queries
     pub db: ReadOnlyPool,
+    /// Primary database for fresh CRM authorization.
+    pub crm_db: sqlx::PgPool,
     /// OpenSearch client for full-text search
     pub opensearch_client: Arc<OpensearchClient>,
     /// Resolves the caller's team membership to mint CRM capability receipts.
