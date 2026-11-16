@@ -19,7 +19,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@queries/notification/graphql/document-notifications', () => ({
-  createDocumentNotificationsQuery: mocks.createDocumentQuery,
+  useDocumentNotificationsQuery: mocks.createDocumentQuery,
 }));
 
 const notification = (
@@ -42,6 +42,7 @@ function graphqlSource(
     get _notificationsQuery(): never {
       return feedOnly();
     },
+    isEnabled: () => true,
     withLocalOverrides: (row: UnifiedNotification) => row,
     ...overrides,
   } as unknown as NotificationSource;
@@ -77,9 +78,13 @@ describe('useOpenEntityNotifications', () => {
         return data();
       },
     });
-    const notifications = read(graphqlSource());
+    const source = graphqlSource();
+    const notifications = read(source);
 
-    expect(mocks.createDocumentQuery).toHaveBeenCalledExactlyOnceWith('doc');
+    expect(mocks.createDocumentQuery).toHaveBeenCalledExactlyOnceWith(
+      'doc',
+      source.isEnabled
+    );
     expect(notifications()).toEqual([]);
     setData([notification('a'), notification('b', 'seen')]);
     expect(notifications().map(({ id }) => id)).toEqual(['a', 'b']);
@@ -91,6 +96,21 @@ describe('useOpenEntityNotifications', () => {
 
     expect(notifications()).toEqual([]);
     expect(mocks.createDocumentQuery).not.toHaveBeenCalled();
+  });
+
+  it('shows nothing from the edge while the session cannot read notifications', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.createDocumentQuery.mockReturnValue({ data: [notification('a')] });
+    const source = graphqlSource({ isEnabled: enabled });
+    const notifications = read(source);
+
+    expect(mocks.createDocumentQuery).toHaveBeenCalledExactlyOnceWith(
+      'doc',
+      enabled
+    );
+    expect(notifications()).toEqual([]);
+    setEnabled(true);
+    expect(notifications().map(({ id }) => id)).toEqual(['a']);
   });
 
   it('applies the source’s local seen and done intent to the edge', () => {

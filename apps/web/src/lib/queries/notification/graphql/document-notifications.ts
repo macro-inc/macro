@@ -13,7 +13,15 @@ import {
   type GraphqlNotificationPatch,
   subscribeToGraphqlNotificationPatches,
 } from '@service-storage/graphql-soup-websocket';
-import { onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createRoot,
+  createSignal,
+  onCleanup,
+  type Setter,
+} from 'solid-js';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import { registerNotificationReader } from '../revalidation';
 import { selectGraphqlNotifications } from './user-notifications';
@@ -57,7 +65,10 @@ export function patchChangesDocumentNotifications(
 }
 
 /** Complete, live notifications of one open document; never the global feed. */
-export function createDocumentNotificationsQuery(documentId: string) {
+export function createDocumentNotificationsQuery(
+  documentId: string,
+  enabled: Accessor<boolean>
+) {
   // The same variables as any other single-document read, so they share a request.
   const variables = {
     input: buildGraphqlEntitySoupInput('DOCUMENT', documentId)!,
@@ -68,6 +79,7 @@ export function createDocumentNotificationsQuery(documentId: string) {
     query: SoupNotificationsDocument,
     client: getGraphqlSoupClient(),
     variables,
+    enabled: enabled(),
     requestPolicy: 'cache-and-network',
     select,
   }));
@@ -76,17 +88,20 @@ export function createDocumentNotificationsQuery(documentId: string) {
   let inFlight: Promise<void> | undefined;
   let queued = false;
   const read = async () => {
-    try {
-      do {
-        queued = false;
+    let failure: { error: unknown } | undefined;
+    do {
+      queued = false;
+      try {
         await query.refetch({
           requestPolicy: 'network-only',
           throwOnError: true,
         });
-      } while (queued && !disposed);
-    } finally {
-      inFlight = undefined;
-    }
+      } catch (error) {
+        failure = { error };
+      }
+    } while (queued && !disposed);
+    inFlight = undefined;
+    if (failure) throw failure.error;
   };
   // A delivery during a read needs a read issued after it.
   const refresh = (): Promise<void> => {
@@ -98,31 +113,84 @@ export function createDocumentNotificationsQuery(documentId: string) {
     return inFlight;
   };
 
-  onCleanup(
-    registerNotificationReader({
-      client: getGraphqlSoupClient,
-      isEnabled: () => query.isEnabled,
-      // Rows render each notification's cached state.
-      cacheMaintained: hasGraphqlCacheHost,
-      refresh,
-    })
-  );
-  onCleanup(
-    subscribeToGraphqlNotificationPatches((patch) => {
-      if (
-        patchChangesDocumentNotifications(
-          patch,
-          documentId,
-          (query.data ?? []).map(({ id }) => id),
-          hasGraphqlCacheHost()
+  // A signed-out or unresolved session reads and listens for nothing.
+  const isEnabled = createMemo(enabled);
+  createEffect(() => {
+    if (!isEnabled()) return;
+    onCleanup(
+      registerNotificationReader({
+        client: getGraphqlSoupClient,
+        isEnabled: () => query.isEnabled,
+        // Rows render each notification's cached state.
+        cacheMaintained: hasGraphqlCacheHost,
+        refresh,
+      })
+    );
+    onCleanup(
+      subscribeToGraphqlNotificationPatches((patch) => {
+        if (
+          patchChangesDocumentNotifications(
+            patch,
+            documentId,
+            (query.data ?? []).map(({ id }) => id),
+            hasGraphqlCacheHost()
+          )
         )
-      )
-        fireAndForget(refresh(), 'document-notifications');
-    })
-  );
+          fireAndForget(refresh(), 'document-notifications');
+      })
+    );
+  });
   onCleanup(() => {
     disposed = true;
   });
 
   return query;
+}
+
+type DocumentNotificationsQuery = ReturnType<
+  typeof createDocumentNotificationsQuery
+>;
+type DocumentNotificationsHolder = { enabled: Accessor<boolean> };
+type SharedDocumentNotifications = {
+  query: DocumentNotificationsQuery;
+  setHolders: Setter<readonly DocumentNotificationsHolder[]>;
+  dispose: () => void;
+};
+
+const sharedQueries = new Map<string, SharedDocumentNotifications>();
+
+/**
+ * The open document's notifications, one live query per document however many
+ * readers (drawer, side panel, splits) show them. It ends with its last reader.
+ */
+export function useDocumentNotificationsQuery(
+  documentId: string,
+  enabled: Accessor<boolean>
+): DocumentNotificationsQuery {
+  let shared = sharedQueries.get(documentId);
+  if (!shared) {
+    // Under its own root, so the first reader to unmount does not end it.
+    shared = createRoot((dispose) => {
+      const [holders, setHolders] = createSignal<
+        readonly DocumentNotificationsHolder[]
+      >([]);
+      const query = createDocumentNotificationsQuery(documentId, () =>
+        holders().some((holder) => holder.enabled())
+      );
+      return { query, setHolders, dispose };
+    });
+    sharedQueries.set(documentId, shared);
+  }
+  const entry = shared;
+  const holder = { enabled };
+  entry.setHolders((holders) => [...holders, holder]);
+  onCleanup(() => {
+    const remaining = entry.setHolders((holders) =>
+      holders.filter((other) => other !== holder)
+    );
+    if (remaining.length > 0) return;
+    sharedQueries.delete(documentId);
+    entry.dispose();
+  });
+  return entry.query;
 }

@@ -3,9 +3,12 @@ import {
   type SoupNotificationsQuery,
 } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
-import { createRoot } from 'solid-js';
+import { type Accessor, createRoot, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDocumentNotificationsQuery } from '../graphql/document-notifications';
+import {
+  createDocumentNotificationsQuery,
+  useDocumentNotificationsQuery,
+} from '../graphql/document-notifications';
 import { revalidateNotificationReaders } from '../revalidation';
 
 type Row = {
@@ -22,6 +25,13 @@ const mocks = vi.hoisted(() => ({
   listeners: new Set<(patch: unknown) => void>(),
   cacheHost: vi.fn(() => true),
   client: { query: vi.fn() },
+  work: [] as unknown[],
+}));
+vi.mock('@core/util/fireAndForget', () => ({
+  fireAndForget: (work: unknown) => {
+    mocks.work.push(work);
+    Promise.resolve(work).catch(() => {});
+  },
 }));
 vi.mock('@app/lib/urql-solid', () => ({ createUrqlQuery: mocks.createQuery }));
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -50,6 +60,7 @@ afterEach(() => {
   dispose?.();
   vi.clearAllMocks();
   mocks.cacheHost.mockReturnValue(true);
+  mocks.work = [];
 });
 
 const row = (
@@ -65,7 +76,10 @@ const row = (
   ...overrides,
 });
 
-function setup(shown: { id: string }[] = []) {
+function setup(
+  shown: { id: string }[] = [],
+  enabled: Accessor<boolean> = () => true
+) {
   mocks.refetch.mockResolvedValue(undefined);
   mocks.createQuery.mockReturnValue({
     refetch: mocks.refetch,
@@ -74,7 +88,7 @@ function setup(shown: { id: string }[] = []) {
   });
   createRoot((cleanup) => {
     dispose = cleanup;
-    createDocumentNotificationsQuery('doc');
+    createDocumentNotificationsQuery('doc', enabled);
   });
   const options = mocks.createQuery.mock.calls[0][0]();
   const deliver = (patch: object) => {
@@ -200,6 +214,40 @@ describe('open document notifications', () => {
     await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(2));
   });
 
+  it('still reads a delivery queued behind a failed read, and reports the failure', async () => {
+    const f = setup();
+    const first = Promise.withResolvers<void>();
+    mocks.refetch.mockReturnValueOnce(first.promise);
+    f.notification('GraphqlNewNotification', 'a');
+    f.notification('GraphqlNewNotification', 'b');
+    const error = new Error('offline');
+    first.reject(error);
+
+    await vi.waitFor(() => expect(mocks.refetch).toHaveBeenCalledTimes(2));
+    expect(mocks.work[1]).toBe(mocks.work[0]);
+    await expect(mocks.work[0]).rejects.toBe(error);
+    f.notification('GraphqlNewNotification', 'c');
+    expect(mocks.refetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('reads, listens and registers nothing while the session cannot read notifications', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    const f = setup([], enabled);
+    expect(f.options.enabled).toBe(false);
+    expect(mocks.listeners.size).toBe(0);
+    await revalidateNotificationReaders(mocks.client as never);
+    expect(mocks.refetch).not.toHaveBeenCalled();
+
+    setEnabled(true);
+    expect(mocks.createQuery.mock.calls[0][0]().enabled).toBe(true);
+    expect(mocks.listeners.size).toBe(1);
+    await revalidateNotificationReaders(mocks.client as never);
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+
+    setEnabled(false);
+    expect(mocks.listeners.size).toBe(0);
+  });
+
   it('stops listening and reading when the document closes', async () => {
     const f = setup();
     dispose();
@@ -207,5 +255,76 @@ describe('open document notifications', () => {
     f.notification('GraphqlNewNotification', 'n');
     await revalidateNotificationReaders(mocks.client as never);
     expect(mocks.refetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared open document notifications', () => {
+  const holders: (() => void)[] = [];
+  afterEach(() => {
+    for (const release of holders.splice(0)) release();
+  });
+
+  function hold(documentId = 'doc', enabled: Accessor<boolean> = () => true) {
+    return createRoot((release) => {
+      holders.push(release);
+      return {
+        query: useDocumentNotificationsQuery(documentId, enabled),
+        release,
+      };
+    });
+  }
+
+  function mockQuery() {
+    const destroyed = vi.fn();
+    mocks.refetch.mockResolvedValue(undefined);
+    mocks.createQuery.mockImplementation(() => {
+      onCleanup(destroyed);
+      return { refetch: mocks.refetch, isEnabled: true, data: [] };
+    });
+    return destroyed;
+  }
+
+  it('gives every reader of a document one query and one listener, ended by the last', () => {
+    const destroyed = mockQuery();
+    const drawer = hold();
+    const sidePanel = hold();
+    expect(sidePanel.query).toBe(drawer.query);
+    expect(mocks.createQuery).toHaveBeenCalledOnce();
+    expect(mocks.listeners.size).toBe(1);
+
+    for (const listener of mocks.listeners)
+      listener({
+        __typename: 'GraphqlNewNotification',
+        notification: { id: 'n', entityId: 'doc' },
+      });
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+
+    drawer.release();
+    expect(destroyed).not.toHaveBeenCalled();
+    expect(mocks.listeners.size).toBe(1);
+    sidePanel.release();
+    expect(destroyed).toHaveBeenCalledOnce();
+    expect(mocks.listeners.size).toBe(0);
+
+    hold();
+    expect(mocks.createQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps separate documents apart', () => {
+    mockQuery();
+    expect(hold('a').query).not.toBe(hold('b').query);
+    expect(mocks.createQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads while any of its readers may', () => {
+    mockQuery();
+    const disabled = hold('doc', () => false);
+    const options = mocks.createQuery.mock.calls[0][0];
+    expect(options().enabled).toBe(false);
+    const enabled = hold('doc', () => true);
+    expect(options().enabled).toBe(true);
+    enabled.release();
+    expect(options().enabled).toBe(false);
+    disabled.release();
   });
 });

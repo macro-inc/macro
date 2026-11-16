@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
-import { createDocumentNotificationsQuery } from '@queries/notification/graphql/document-notifications';
+import { useDocumentNotificationsQuery } from '@queries/notification/graphql/document-notifications';
 import { type Accessor, createMemo, untrack } from 'solid-js';
 import type { NotificationSource } from './notification-source';
 import { compositeEntity, type UnifiedNotification } from './types';
@@ -18,7 +18,9 @@ export function useOpenEntityNotifications(
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const documentQuery = createMemo(() =>
     graphqlSoupFlag().enabled && entity.type === 'document'
-      ? untrack(() => createDocumentNotificationsQuery(entity.id))
+      ? untrack(() =>
+          useDocumentNotificationsQuery(entity.id, notificationSource.isEnabled)
+        )
       : undefined
   );
   return createMemo(() => {
@@ -32,6 +34,8 @@ export function useOpenEntityNotifications(
         []
       );
     }
+    // The feed shows nothing while the session cannot read notifications.
+    if (!notificationSource.isEnabled()) return [];
     const notifications = query.data ?? [];
     const withLocalOverrides = notificationSource.withLocalOverrides;
     return withLocalOverrides
