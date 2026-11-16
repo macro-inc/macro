@@ -31,7 +31,7 @@ export const CONVERT_CHECKBOXES_TO_TASKS: LexicalCommand<ConvertCheckboxesOption
 /**
  * Create a single task from a parsed checkbox
  */
-async function createTaskFromCheckbox(
+export async function createTaskFromCheckbox(
   checkbox: ParsedCheckbox,
   currentUserId?: string,
   parentTaskId?: string

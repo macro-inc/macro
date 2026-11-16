@@ -231,6 +231,12 @@ export default function RustMarkdownEditor(props: {
           runtime()?.overlays?.comments?.caretCommentIds(selection) ?? null,
       },
     },
+    tasks: {
+      view: () => runtime()?.view,
+      currentUserId: userId,
+      // Source MarkdownEditor: a task's checklist items become its subtasks.
+      parentTaskId: documentKind === 'task' ? documentId() : undefined,
+    },
     aiEdit: {
       documentId,
       view: () => runtime()?.view,
@@ -512,6 +518,12 @@ export default function RustMarkdownEditor(props: {
                   overlayLifecycle.add(creation.dispose);
                   const installed = installNativeMarkdownOverlays(view, {
                     canEdit,
+                    tasks: {
+                      currentUserId: userId,
+                      // Source MarkdownEditor: a task's checklist items become its subtasks.
+                      parentTaskId:
+                        kind() === 'task' ? documentId() : undefined,
+                    },
                     formatting: formatting.Overlay,
                     checklist: () => (
                       <NativeChecklistOverlay view={view} host={checklist} />

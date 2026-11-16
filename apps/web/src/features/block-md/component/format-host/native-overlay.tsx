@@ -13,6 +13,7 @@ import {
   Show,
 } from 'solid-js';
 import { CommentButton } from '../CommentButton';
+import type { BodyPopupSlot } from './body-popup-slots';
 import { createNativeAiEditSlot } from './native-ai-edit-slot';
 import {
   NativeBodyFormatPopup,
@@ -20,6 +21,7 @@ import {
 } from './native-body-popup';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import { NativeSnippetLinkControl } from './native-snippet';
+import { createNativeTaskSlot } from './native-task-slot';
 import { createNativeBodyTouchActions } from './native-touch-actions';
 
 /** Own only the optional body menu; the document owns its actual native view. */
@@ -49,6 +51,12 @@ export function createNativeBodyFormattingOverlay(options: {
       /** Source `$getMarkIdsAtCaret` for a selection of the mounted view. */
       caretCommentIds(selection: ViewSelection): readonly string[] | null;
     };
+  };
+  /** Source Task selection action (checklist items to tasks). */
+  tasks?: {
+    readonly view: Accessor<EditorView | undefined>;
+    readonly currentUserId: Accessor<string | undefined>;
+    readonly parentTaskId?: string;
   };
   /** Source AI edit selection action. */
   aiEdit?: {
@@ -91,6 +99,16 @@ export function createNativeBodyFormattingOverlay(options: {
       createNativeAiEditSlot({
         ...aiEdit,
         enabled: () => options.alive() && aiEdit.enabled(),
+      });
+    const taskOptions = options.tasks;
+    const task =
+      taskOptions &&
+      createNativeTaskSlot({
+        ...taskOptions,
+        canEdit: () => options.alive() && options.canEdit(),
+        selection: () => formatting.controller()?.host.selection(),
+        selectionText: () =>
+          formatting.controller()?.bodyPopup.selectionText() ?? '',
       });
     const touchOptions = options.touch;
     const touch =
@@ -149,7 +167,9 @@ export function createNativeBodyFormattingOverlay(options: {
                 host={controller().host}
                 popup={controller().bodyPopup}
                 commentAction={commentAction}
-                slots={ai ? [ai.slot] : []}
+                slots={[ai?.slot, task].filter(
+                  (slot): slot is BodyPopupSlot => slot !== undefined
+                )}
                 touch={touch}
                 onToolbarClosed={ai?.popupClosed}
                 snippetLinkAction={

@@ -10,6 +10,7 @@ import {
   Show,
 } from 'solid-js';
 import { registerNativeBlockNavigation } from '../plugins/block-decorator-navigation/native';
+import { registerNativeCheckboxToTaskShortcut } from '../plugins/checkbox-to-task/native';
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
 import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/native';
@@ -52,6 +53,11 @@ export function installNativeMarkdownOverlays(
   view: EditorView,
   options: {
     readonly canEdit: Accessor<boolean>;
+    /** Source checkbox-to-task conversion (Mod+Shift+O). */
+    readonly tasks?: {
+      readonly currentUserId: Accessor<string | undefined>;
+      readonly parentTaskId?: string;
+    };
     readonly emoji?: boolean;
     readonly mentions?: NativeUserMentionsOptions;
     readonly snippets?: NativeSnippetsOptions;
@@ -99,6 +105,8 @@ export function installNativeMarkdownOverlays(
     listeners.add(registerNativeTabIndentation(view));
     listeners.add(registerNativeWordNavigation(view));
     listeners.add(registerNativeChecklist(view));
+    if (options.tasks)
+      listeners.add(registerNativeCheckboxToTaskShortcut(view, options.tasks));
     listeners.add(registerNativeListSwipeIndent(view, options.canEdit));
     if (options.comments) {
       const installed = createNativeComments(view);
