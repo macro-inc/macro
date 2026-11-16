@@ -5,7 +5,12 @@ use chrono::DateTime;
 
 type Scan = (Option<DateTime<Utc>>, Option<DateTime<Utc>>, Option<bool>);
 
-async fn scan(pool: &PgPool, team: Uuid, link: Uuid, email: &str) -> anyhow::Result<Scan> {
+pub(super) async fn scan(
+    pool: &PgPool,
+    team: Uuid,
+    link: Uuid,
+    email: &str,
+) -> anyhow::Result<Scan> {
     let set_based = sqlx::query_file!(
         "src/outbound/companies_repo/email_privacy/interactions.sql",
         team,
@@ -72,7 +77,7 @@ async fn insert_draft(pool: &PgPool, link: Uuid, thread: Uuid) -> anyhow::Result
     Ok(())
 }
 
-async fn insert_member(pool: &PgPool, team: Uuid, user: &str) -> anyhow::Result<()> {
+pub(super) async fn insert_member(pool: &PgPool, team: Uuid, user: &str) -> anyhow::Result<()> {
     let macro_user = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",

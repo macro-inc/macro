@@ -90,6 +90,8 @@ export type FormColumn = {
   name: string;
   kind: FormColumnKind;
   options: FormOption[];
+  /** A Percentage column: Number storage, answered in percentage points. */
+  percentage?: boolean;
 };
 
 /** A select option, by id; the respond page only ever names options by id. */
