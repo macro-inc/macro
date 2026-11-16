@@ -1,5 +1,6 @@
-import { loadNaturalTimeForTest } from '@core/natural-time/tests/load-wasm';
+import naturalTimeWasm from 'wasm:natural-time';
 import type { NaturalTimeWasmModule } from '@core/natural-time/wasm-module';
+import { loadWasmForTest } from '@core/wasm/tests/load-for-test';
 import {
   afterEach,
   beforeAll,
@@ -14,7 +15,7 @@ import { readReminderPhrase } from './reminder-phrase';
 let reader: NaturalTimeWasmModule;
 
 beforeAll(async () => {
-  reader = await loadNaturalTimeForTest();
+  reader = await loadWasmForTest(naturalTimeWasm);
 });
 
 afterEach(() => {
