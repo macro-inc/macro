@@ -1,0 +1,265 @@
+crates/channels/src/inbound/teammate_dms_consumer.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 107-108,110,113
+  s_c40fd2f0323f22::t_1c0a76ea36d186 114
+  s_c40fd2f0323f22::t_a2ba086dee163d 99,101,104
+  s_c40fd2f0323f22::t_ae6bb54ca8c9fd 21
+crates/event_stream/src/domain/normalize.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 10,18,35-37
+  s_c40fd2f0323f22::t_1c0a76ea36d186 1,16
+crates/webhook/src/domain/ingestion/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 2063,2065
+crates/call/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 294
+  s_c40fd2f0323f22::t_0e9d7b0a902663 311-313,406-407
+  s_c40fd2f0323f22::t_ff4344140b4c48 296
+crates/event_stream/src/domain/fan_out/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 916-917,938-940
+  s_c40fd2f0323f22::t_4165bfec338984 1016
+crates/user_events/src/lib.rs
+  s_c40fd2f0323f22::t_4165bfec338984 12
+  s_c40fd2f0323f22::t_0e9d7b0a902663 53-54,64
+  s_c40fd2f0323f22::t_a2ba086dee163d 45,47,50
+  s_c40fd2f0323f22::t_bc73d61c8286b3 57
+crates/call/src/domain/notification_events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 142-143,159,161,192
+  s_c40fd2f0323f22::t_a2ba086dee163d 134,136,139
+  s_c40fd2f0323f22::t_4165bfec338984 6
+  s_c40fd2f0323f22::t_f8b509cdb7bccd 146
+crates/github/src/broker/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 29
+  s_c40fd2f0323f22::t_0e9d7b0a902663 65
+  s_c40fd2f0323f22::t_cb7a52bdfba351 1-2
+crates/github_pull_requests/src/broker.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 43,45,48
+  s_c40fd2f0323f22::t_0e9d7b0a902663 51-52,63,68
+  s_c40fd2f0323f22::t_784bc50d6c870b 6,55
+crates/bots/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 95,97,100
+  s_c40fd2f0323f22::t_0e9d7b0a902663 103-104,142
+  s_c40fd2f0323f22::t_1816693dde985d 10,107
+crates/properties/src/domain/events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 247-248,274,280,302,309,327,329
+  s_c40fd2f0323f22::t_a2ba086dee163d 239,241,244
+  s_c40fd2f0323f22::t_dba94c2ce9f49e 15,251
+crates/github_pull_requests/src/broker/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 17,48-49
+  s_c40fd2f0323f22::t_6abf236c92c8d0 1
+crates/webhook/src/domain/ingestion.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 603
+  s_c40fd2f0323f22::t_0e9d7b0a902663 29,31,621
+  s_c40fd2f0323f22::t_11d9f36d711824 30,79-80,82,89
+crates/channels/src/domain/broker_events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 215-216,264
+  s_c40fd2f0323f22::t_a2ba086dee163d 207,209,212
+  s_c40fd2f0323f22::t_42bb74e8d934bc 12,219
+docs/guides/add-kafka-event.md
+  s_c40fd2f0323f22::t_23a844cc0c5d04 114,191,196
+crates/macro_event_broker/AGENTS.md
+  s_c40fd2f0323f22::t_4d47665808f019 31,47-49
+crates/notification/src/domain/models/websocket_notification_event/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 47
+  s_c40fd2f0323f22::t_0e9d7b0a902663 48-49,134,238,250
+  s_c40fd2f0323f22::t_17851a2bc6af24 4-5
+crates/event_stream/AGENTS.md
+  s_c40fd2f0323f22::t_23a844cc0c5d04 26-27,49,55
+  s_c40fd2f0323f22::t_4d47665808f019 7,38
+crates/activity/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 138,140,143
+  s_c40fd2f0323f22::t_0e9d7b0a902663 146-147,161,171
+  s_c40fd2f0323f22::t_e37e4ee52f634e 15,150
+crates/event_access/src/lib.rs
+  s_c40fd2f0323f22::t_f88d43ed298933 2,4,6-28,40-71,76,83,392-394,405
+  s_c40fd2f0323f22::t_9c74743d5f9b71 387,402
+crates/forms/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 20-22,145
+  s_c40fd2f0323f22::t_efc301f00d6fd2 2
+crates/teams/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 589
+  s_c40fd2f0323f22::t_1c0a76ea36d186 567
+  s_c40fd2f0323f22::t_4392c639b55c74 560-561,585-586
+crates/calendar_events/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 34
+  s_c40fd2f0323f22::t_0e9d7b0a902663 62-63
+  s_c40fd2f0323f22::t_20f73c71026bfc 1-2
+crates/channels/src/domain/broker_events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 233,259,262,290
+  s_c40fd2f0323f22::t_55b32ee9402aa3 230,283
+crates/channels/src/domain/mention_events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 147,150-151,157
+  s_c40fd2f0323f22::t_1c0a76ea36d186 116
+  s_c40fd2f0323f22::t_c4ed63ac668f13 104
+rules/ast-grep-tests/rust-access-no-wildcard-arm-test.yml
+  s_c40fd2f0323f22::t_3aa1eda45bf69d 1-97
+crates/bots/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 258,262-263,305,311
+  s_c40fd2f0323f22::t_1c0a76ea36d186 261
+  s_c40fd2f0323f22::t_ada83f75447a1b 259
+crates/soup_realtime/src/domain/models.rs
+  s_c40fd2f0323f22::t_4165bfec338984 3
+  s_c40fd2f0323f22::t_0e9d7b0a902663 119-120,122,125
+  s_c40fd2f0323f22::t_a2ba086dee163d 111,113,116
+crates/call/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 224,226,229
+  s_c40fd2f0323f22::t_0e9d7b0a902663 232-233,249,277,304
+  s_c40fd2f0323f22::t_51e769c99908f2 11,236
+crates/projects/src/domain/events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 231-232,305,321
+  s_c40fd2f0323f22::t_a2ba086dee163d 223,225,228
+  s_c40fd2f0323f22::t_fc58c9d9d5a266 7,235
+crates/agent_session/src/domain/events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 444-445,496
+  s_c40fd2f0323f22::t_a2ba086dee163d 436,438,441
+  s_c40fd2f0323f22::t_1c0a76ea36d186 459
+  s_c40fd2f0323f22::t_2e194597a2f118 18,448
+crates/databases/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 261,263,266
+  s_c40fd2f0323f22::t_0e9d7b0a902663 269-270,352,359
+  s_c40fd2f0323f22::t_ebcf6d706f3fb5 7,273
+crates/messages/src/outbound/broker.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 53-54,70
+  s_c40fd2f0323f22::t_a2ba086dee163d 45,47,50
+  s_c40fd2f0323f22::t_bdfcc60d81488a 7,56
+crates/webhook/src/domain/models.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 19
+crates/projects/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 71
+  s_c40fd2f0323f22::t_0e9d7b0a902663 82-84,245-246
+  s_c40fd2f0323f22::t_5d46f1d28d9bf8 73
+crates/email/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 537,539,542
+  s_c40fd2f0323f22::t_0e9d7b0a902663 545-546,651,657
+  s_c40fd2f0323f22::t_fcbbbcff9edcf5 37,549
+crates/macro_event_broker/src/lib.rs
+  s_c40fd2f0323f22::t_902977a8d9b2f9 21-23
+crates/email/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 568,602,614,627,629
+  s_c40fd2f0323f22::t_1c0a76ea36d186 566-567
+  s_c40fd2f0323f22::t_fb70fa2bf1c080 562,611
+crates/event_stream/src/topics.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 104
+crates/webhook/README.md
+  s_c40fd2f0323f22::t_23a844cc0c5d04 88
+crates/macro_event_broker/src/domain/models/test.rs
+  s_c40fd2f0323f22::t_4165bfec338984 1
+  s_c40fd2f0323f22::t_a2ba086dee163d 27,29,32,145,147,150
+  s_c40fd2f0323f22::t_0e9d7b0a902663 35,153
+  s_c40fd2f0323f22::t_a6d5e39bfa609a 34,152
+crates/properties/src/domain/events/definitions.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 93
+  s_c40fd2f0323f22::t_0e9d7b0a902663 1,95,97,164,170,187,189
+  s_c40fd2f0323f22::t_82a6d29df889d6 6
+crates/github/src/broker.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 24,26,29
+  s_c40fd2f0323f22::t_0e9d7b0a902663 32-33,45
+  s_c40fd2f0323f22::t_faf9335f1968b1 7,36
+crates/forms/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 241,243,246
+  s_c40fd2f0323f22::t_0e9d7b0a902663 249-250,332,350
+  s_c40fd2f0323f22::t_9fe5721fe507f3 6,253
+crates/activity/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 183,188,196
+  s_c40fd2f0323f22::t_1c0a76ea36d186 143
+  s_c40fd2f0323f22::t_bf4119008ef640 137
+crates/properties/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 413-415,501-502,535,548-550,626,635,646-647,656
+  s_c40fd2f0323f22::t_1c0a76ea36d186 406,540
+  s_c40fd2f0323f22::t_4df43880d803df 409,543-544
+crates/documents/src/domain/events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 362-363,366,465,472,481
+  s_c40fd2f0323f22::t_a2ba086dee163d 354,356,359
+  s_c40fd2f0323f22::t_bb1be7bdd8d5d6 13
+crates/initiative/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 56
+  s_c40fd2f0323f22::t_0e9d7b0a902663 76-78,170
+  s_c40fd2f0323f22::t_617e507d10bb43 58
+crates/event_stream/src/inbound/log_writer.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 8
+crates/event_stream/src/domain/webhook_lifecycle.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 135,137,140
+  s_c40fd2f0323f22::t_0e9d7b0a902663 143-144,174,179
+  s_c40fd2f0323f22::t_e9b9d9bb25e0d9 15,147
+crates/initiative/src/domain/events.rs
+  s_c40fd2f0323f22::t_4165bfec338984 6
+  s_c40fd2f0323f22::t_a2ba086dee163d 145,147,150
+  s_c40fd2f0323f22::t_0e9d7b0a902663 153-154,191,207
+  s_c40fd2f0323f22::t_bc0d279e04cb59 157
+crates/teams/src/domain/events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 267-268,349
+  s_c40fd2f0323f22::t_a2ba086dee163d 259,261,264
+  s_c40fd2f0323f22::t_d9e334477de9da 13,271
+crates/chat/src/domain/events.rs
+  s_c40fd2f0323f22::t_a2ba086dee163d 291,293,296
+  s_c40fd2f0323f22::t_0e9d7b0a902663 299-300,375,380
+  s_c40fd2f0323f22::t_4165bfec338984 10
+  s_c40fd2f0323f22::t_2153a7f24716b2 303
+crates/chat/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 308-310,431
+  s_c40fd2f0323f22::t_1c0a76ea36d186 299
+  s_c40fd2f0323f22::t_501ac8d540b030 301
+crates/notification/src/domain/models/websocket_notification_event.rs
+  s_c40fd2f0323f22::t_999de6cae7b130 133,137
+  s_c40fd2f0323f22::t_0e9d7b0a902663 140,143-144,146,154,171,191,203
+  s_c40fd2f0323f22::t_59ae0be64ad8c2 6,135-136
+crates/event_stream/src/domain/log_writer.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 59,93,97,104,111
+crates/event_stream/src/lib.rs
+  s_c40fd2f0323f22::t_1c0a76ea36d186 5
+crates/databases/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 18-20,140
+  s_c40fd2f0323f22::t_b64833201661fe 1
+crates/macro_event_broker/src/domain/models.rs
+  s_c40fd2f0323f22::t_902977a8d9b2f9 5,17-22
+crates/agent_trigger/src/domain/broker_events.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 393-394,431,457,469
+  s_c40fd2f0323f22::t_a2ba086dee163d 385,387,390
+  s_c40fd2f0323f22::t_0013f6a80aa6dd 15,397
+rules/ast-grep/rust-access-no-wildcard-arm.yml
+  s_c40fd2f0323f22::t_3aa1eda45bf69d 1-42
+crates/event_access/src/test.rs
+  s_c40fd2f0323f22::t_9c74743d5f9b71 37
+crates/macro_event_broker/src/domain/service/test.rs
+  s_c40fd2f0323f22::t_4165bfec338984 1
+  s_c40fd2f0323f22::t_a2ba086dee163d 139,141,144,274,276,279
+  s_c40fd2f0323f22::t_0e9d7b0a902663 147,282
+  s_c40fd2f0323f22::t_5414bfa6e8ca5b 146,281
+crates/event_access/AGENTS.md
+  s_c40fd2f0323f22::t_23a844cc0c5d04 11,28,44-45
+crates/documents/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 343-345,493
+  s_c40fd2f0323f22::t_1c0a76ea36d186 329,411
+  s_c40fd2f0323f22::t_610af37050e0ec 1,335
+crates/macro_event_broker/examples/example_event.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 64-65,67
+  s_c40fd2f0323f22::t_4165bfec338984 1
+  s_c40fd2f0323f22::t_a2ba086dee163d 56,58,61
+crates/event_stream/src/domain/catalog/test.rs
+  s_c40fd2f0323f22::t_0e9d7b0a902663 95-97
+  s_c40fd2f0323f22::t_1c0a76ea36d186 76,86,175,206,213
+crates/calendar_events/src/domain/events.rs
+  s_c40fd2f0323f22::t_4165bfec338984 6
+  s_c40fd2f0323f22::t_a2ba086dee163d 69,71,74
+  s_c40fd2f0323f22::t_0e9d7b0a902663 77-78,104
+  s_c40fd2f0323f22::t_3e872655088e61 81
+crates/channels/src/domain/mention_events.rs
+  s_c40fd2f0323f22::t_4165bfec338984 14
+  s_c40fd2f0323f22::t_0e9d7b0a902663 81-82,85-86,95,104,110
+  s_c40fd2f0323f22::t_a2ba086dee163d 73,75,78
+rules/ast-grep-tests/__snapshots__/rust-access-no-wildcard-arm-snapshot.yml
+  s_c40fd2f0323f22::t_cd0b0ef5a0f988 1,4-36,38-39,44,46-65,67-68,70,72-73,77-78,81-82,84-86,88-90,95,97-99,101-106,108-110,112-114,117,119-131,134-135,137-139,141-142,147,149-155,157-158,160-162,164-165,168,170-182,184-185,187-189,191,196,198-200,202-207,209-211,213,216,218-229,231-232,234-236,238-239,244,246-248,250-255,257-259,261-262,265,267-279,281-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "04c91e1686e9d51c05c88853e19685fc5fbebc8d",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
