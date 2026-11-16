@@ -80,10 +80,13 @@ the gateway `/email` prefix.
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
   `pubsub_workers`. It requires no enrichment-provider key or selection flag.
 - `src/crm_population_worker.rs`: the lanes that attempt CRM population
-  requests from the ledger, `LANES` per process on their own small database
-  pool with statement and lock timeouts. Adding lanes or processes does not
-  raise the database load: the ledger's `FLEET_CONCURRENCY` does. `outbound/crm_population.rs` adapts
-  `CrmService` to the domain's populator port.
+  requests from the ledger, `LANES` per process. The ledger and the
+  populations each have a small database pool of their own with statement
+  and lock timeouts (`population_pool` for the CRM repository), apart from
+  the sync and backfill pools. Adding lanes or processes does not raise the
+  database load: the ledger's `FLEET_CONCURRENCY` does.
+  `outbound/crm_population.rs` adapts `CrmService` to the domain's populator
+  port.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
   contacts, drafts, commands, settings, watches) and `run_health`, the
   per-minute Outlook health snapshot.

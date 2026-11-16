@@ -407,14 +407,22 @@ async fn main() -> anyhow::Result<()> {
     // flow, so route them through `db_backfill` too.
     let crm_service_backfill = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db_backfill.clone()),
-        metadata_resolver,
+        metadata_resolver.clone(),
     );
 
     // CRM population has its own lanes: however many requests are pending,
     // this task runs at most `LANES` populations at once, the fleet at most
-    // the ledger's limit, and none of them on a backfill or sync worker.
-    let crm_population =
-        email_service::crm_population_worker::service(&db_backfill, crm_service_backfill.clone());
+    // the ledger's limit, and none of them on a backfill or sync worker or
+    // on their connections.
+    let crm_population = email_service::crm_population_worker::service(
+        &db_backfill,
+        crm::domain::service::CrmServiceImpl::new(
+            crm::outbound::companies_repo::CompaniesRepositoryImpl::new(
+                email_service::crm_population_worker::population_pool(&db_backfill),
+            ),
+            metadata_resolver.clone(),
+        ),
+    );
     for _ in 0..email_service::crm_population_worker::LANES {
         worker_tracker.spawn(email_service::crm_population_worker::run(
             crm_population.clone(),

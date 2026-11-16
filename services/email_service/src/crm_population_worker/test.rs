@@ -136,7 +136,7 @@ async fn a_recorded_request_reaches_the_crm_through_a_lane(pool: PgPool) -> anyh
     let service = Arc::new(CrmPopulationService {
         ledger: ledger(&pool),
         crm: CrmPopulationContacts(CrmServiceImpl::new(
-            CompaniesRepositoryImpl::new(pool.clone()),
+            CompaniesRepositoryImpl::new(population_pool(&pool)),
             NoOpCompanyMetadataResolver,
         )),
     });
@@ -168,5 +168,16 @@ async fn a_recorded_request_reaches_the_crm_through_a_lane(pool: PgPool) -> anyh
     .fetch_all(&pool)
     .await?;
     assert_eq!(contacts, [Some(CONTACT.to_owned())]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populations_run_on_connections_with_a_statement_timeout(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let limit = sqlx::query_scalar!("SELECT current_setting('statement_timeout')")
+        .fetch_one(&population_pool(&pool))
+        .await?;
+    assert_eq!(limit.as_deref(), Some("2min"));
     Ok(())
 }

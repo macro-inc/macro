@@ -10,7 +10,7 @@
 use crate::composition::workers::CrmServiceType;
 use crate::outbound::crm_population::CrmPopulationContacts;
 use email::domain::crm_population::{
-    ClaimedPopulation, CrmPopulationLedger, CrmPopulationService, CrmPopulator,
+    ATTEMPT_TIMEOUT, ClaimedPopulation, CrmPopulationLedger, CrmPopulationService, CrmPopulator,
 };
 use email::outbound::crm_population_pg::PgCrmPopulationLedger;
 use rand::Rng as _;
@@ -29,19 +29,43 @@ pub const LANES: usize = 1;
 const IDLE: Duration = Duration::from_secs(3);
 /// Pause of a lane whose claim failed.
 const CLAIM_RETRY: Duration = Duration::from_secs(15);
+/// Longest the server runs one statement of a population. An attempt the lane
+/// gives up on leaves its statement running there, no longer counted by the
+/// ledger; this ends it, and normally fails the attempt before the lane's own
+/// timeout does.
+const STATEMENT_TIMEOUT: Duration = Duration::from_secs(120);
+const _: () = assert!(STATEMENT_TIMEOUT.as_secs() * 2 <= ATTEMPT_TIMEOUT.as_secs());
 
 /// The ledger and the CRM the lanes of one process share.
 pub type PopulationService =
     CrmPopulationService<PgCrmPopulationLedger, CrmPopulationContacts<CrmServiceType>>;
 
-/// Build the lanes' service. The ledger gets connections of its own, one per
-/// lane, with a statement timeout: its bookkeeping neither waits behind the
-/// work on `db` nor can a claim run on.
+/// Build the lanes' service over `crm`, which should work on a
+/// [`population_pool`]. The ledger gets connections of its own, one per lane,
+/// with a statement timeout: its bookkeeping neither waits behind a
+/// population nor can a claim run on.
 pub fn service(db: &PgPool, crm: CrmServiceType) -> Arc<PopulationService> {
     Arc::new(CrmPopulationService {
         ledger: ledger(db),
         crm: CrmPopulationContacts(crm),
     })
+}
+
+/// Connections for the populations themselves, to the database `db` connects
+/// to. They are apart from every other worker's, so population neither takes
+/// their connections nor waits for one, and each ends a statement that runs
+/// past [`STATEMENT_TIMEOUT`]. Their number is the most backends this process
+/// can keep busy with population, whatever the ledger has handed out.
+pub fn population_pool(db: &PgPool) -> PgPool {
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(LANES as u32 * 2)
+        .connect_lazy_with((*db.connect_options()).clone().options([
+            ("lock_timeout", "5s".to_owned()),
+            (
+                "statement_timeout",
+                format!("{}s", STATEMENT_TIMEOUT.as_secs()),
+            ),
+        ]))
 }
 
 fn ledger(db: &PgPool) -> PgCrmPopulationLedger {

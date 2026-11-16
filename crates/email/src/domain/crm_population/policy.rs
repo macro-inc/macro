@@ -12,7 +12,9 @@ pub const MAX_POSTPONE: Duration = Duration::from_secs(120);
 /// How long an attempt holds its request before another worker may take it.
 pub const LEASE: Duration = Duration::from_secs(600);
 /// Longest one attempt may run. Shorter than [`LEASE`], so an attempt settles
-/// its own request before the lease lapses.
+/// its own request before the lease lapses. The populator must bound its own
+/// database statements well inside this: the timeout stops waiting for an
+/// attempt, it does not stop what the attempt left running.
 pub const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(240);
 /// Attempts in flight across every mailbox and worker process. A population
 /// that changes something scans its mailbox's eligible mail, so this is the
