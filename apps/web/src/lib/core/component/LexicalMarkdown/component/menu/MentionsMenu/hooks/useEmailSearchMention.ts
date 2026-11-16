@@ -17,10 +17,12 @@ import type { Accessor } from 'solid-js';
 const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
 
 /** The viewer's newest threads, for when Quick Access holds no emails. */
-const RECENT_EMAIL_THREADS_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 20, sort_method: 'updated_at' },
-  body: { ...QUERY_FILTERS_BASE, email_filters: {} },
-};
+function recentEmailThreadsArgs(): SoupItemsQueryArgs {
+  return {
+    params: { limit: 20, sort_method: 'updated_at' },
+    body: { ...QUERY_FILTERS_BASE, email_filters: {} },
+  };
+}
 
 function emailEntityItem(email: EntityData): EntityItem {
   return {
@@ -91,13 +93,10 @@ export function useEmailSearchMention(
     usesQuickAccess() &&
     !everyCachedEmail.items().some((item) => !item.data.isDraft);
   // Like the search below, asks again whenever it is shown.
-  const recentThreadsQuery = useSoupItemsQuery(
-    () => RECENT_EMAIL_THREADS_ARGS,
-    () => ({
-      enabled: usesRecentThreads() && listEnabled(),
-      staleTime: 0,
-    })
-  );
+  const recentThreadsQuery = useSoupItemsQuery(recentEmailThreadsArgs, () => ({
+    enabled: usesRecentThreads() && listEnabled(),
+    staleTime: 0,
+  }));
   const recentThreads = createLazyMemo((): EntityItem[] => {
     if (!recentThreadsQuery.isSuccess) return [];
     return recentThreadsQuery.data
