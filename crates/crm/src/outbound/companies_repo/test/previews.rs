@@ -300,6 +300,92 @@ async fn previews_answer_each_record_as_its_own_read(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("fixtures/previews.sql"))]
+async fn previews_and_contact_pages_follow_current_crm_access(pool: PgPool) {
+    let app = app(pool.clone());
+    let companies = ids(&[101]);
+    let contacts = ids(&[1001]);
+    let page_uri = format!("/companies/{}/contacts/page", companies[0]);
+
+    for enabled in [true, false, true] {
+        sqlx::query!(
+            "UPDATE team_user SET crm_access = $1 WHERE user_id = $2",
+            enabled,
+            MEMBER,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        for caller in [
+            Caller::User(MEMBER),
+            Caller::ApiKey(MEMBER),
+            Caller::Internal(Some(MEMBER)),
+        ] {
+            let (status, previews) = send_as(
+                &app,
+                caller,
+                "/previews",
+                Some(json!({ "companyIds": companies, "contactIds": contacts })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{caller:?}");
+            let expected = usize::from(enabled);
+            assert_eq!(
+                returned(&previews, "companies").len(),
+                expected,
+                "{caller:?}"
+            );
+            assert_eq!(
+                returned(&previews, "contacts").len(),
+                expected,
+                "{caller:?}"
+            );
+
+            let (company_reads, contact_reads) =
+                single_read_previews(&app, caller, &companies, &contacts).await;
+            assert_eq!(returned(&previews, "companies"), company_reads);
+            assert_eq!(returned(&previews, "contacts"), contact_reads);
+
+            let (page_status, page) = send_as(&app, caller, &page_uri, None).await;
+            if enabled {
+                assert_eq!(page_status, StatusCode::OK);
+                assert_eq!(page["contacts"].as_array().unwrap().len(), 1);
+            } else {
+                assert_eq!(page_status, StatusCode::UNAUTHORIZED);
+                assert!(page.get("contacts").is_none());
+            }
+        }
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("fixtures/previews.sql"))]
+async fn previews_preserve_privileged_access_when_the_stored_preference_is_denied(pool: PgPool) {
+    sqlx::query!("UPDATE team_user SET crm_access = false")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let app = app(pool);
+    let companies = ids(&[101, 106]);
+    let contacts = ids(&[1001, 1002, 1003]);
+    for user in [ADMIN, OWNER] {
+        let (status, previews) = send(
+            &app,
+            user,
+            "/previews",
+            Some(json!({ "companyIds": companies, "contactIds": contacts })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(returned(&previews, "companies").len(), 2);
+        assert_eq!(returned(&previews, "contacts").len(), 3);
+        let (expected_companies, expected_contacts) =
+            single_read_previews(&app, Caller::User(user), &companies, &contacts).await;
+        assert_eq!(returned(&previews, "companies"), expected_companies);
+        assert_eq!(returned(&previews, "contacts"), expected_contacts);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("fixtures/previews.sql"))]
 async fn internal_and_api_key_callers_see_what_their_user_reads(pool: PgPool) {
     let app = app(pool);
     let companies = ids(&[101, 102, 103, 104, 105, 106, 107, 201, 999]);

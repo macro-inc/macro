@@ -4,9 +4,13 @@ const mocks = vi.hoisted(() => ({
   isTauri: vi.fn(() => false),
   graphqlEnabled: vi.fn(() => true),
   isFeatureEnabled: vi.fn<(flag: string) => boolean | undefined>(),
+  unsupportedBrowserReason: vi.fn<() => string | undefined>(),
 }));
 
 vi.mock('@core/util/platform', () => ({ isTauri: mocks.isTauri }));
+vi.mock('./host/browser-support', () => ({
+  unsupportedBrowserReason: mocks.unsupportedBrowserReason,
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
   disableBrowserTursoCache: {
@@ -31,6 +35,7 @@ describe('browser Turso cache production gate', () => {
     mocks.isTauri.mockReturnValue(false);
     mocks.graphqlEnabled.mockReturnValue(true);
     mocks.isFeatureEnabled.mockReturnValue(undefined);
+    mocks.unsupportedBrowserReason.mockReturnValue(undefined);
   });
 
   it('enables browser cache with the GraphQL soup gate', () => {
@@ -38,6 +43,16 @@ describe('browser Turso cache production gate', () => {
       enabled: true,
       cohort: 'treatment',
       reason: 'graphql-transport-enabled',
+    });
+  });
+
+  it('keeps browsers without the cache APIs uncached', () => {
+    mocks.unsupportedBrowserReason.mockReturnValue(
+      'OPFS is not supported by this browser'
+    );
+    expect(getBrowserTursoCacheRolloutDecision()).toMatchObject({
+      enabled: false,
+      reason: 'browser-unsupported',
     });
   });
 

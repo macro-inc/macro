@@ -76,6 +76,7 @@ dependencies = [
  "channel_sender",
  "chrono",
  "chrono-tz",
+ "entity_access",
  "futures",
  "kafka_util",
  "macro_authorization",
@@ -350,6 +351,7 @@ dependencies = [
  "futures",
  "import",
  "jev",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -776,6 +778,7 @@ dependencies = [
  "onboarding",
  "opentelemetry",
  "pipedream_mcp",
+ "png",
  "prompt",
  "properties",
  "rate_limit",
@@ -6863,6 +6866,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "lexical_client",
  "lexical_mention_extractor",
+ "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -9401,6 +9405,7 @@ dependencies = [
  "activity",
  "async-graphql",
  "async-stream",
+ "axum",
  "chrono",
  "chrono-tz",
  "entity_access",
@@ -15439,6 +15444,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "password_import"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "csv",
+ "csv-core",
+ "insta",
+ "nom 8.0.0",
+ "password_import",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "url",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
 name = "passwords"
 version = "0.1.0"
 dependencies = [
@@ -15446,8 +15470,10 @@ dependencies = [
  "axum",
  "chrono",
  "feature_flags",
+ "futures",
  "jsonwebtoken 10.3.0",
  "lazy-regex",
+ "lru 0.16.4",
  "macro_authorization",
  "macro_db_client",
  "macro_db_migrator",

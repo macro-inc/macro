@@ -1443,3 +1443,6 @@ async fn board_positions_survive_reads_and_stay_with_the_authorized_pipeline(poo
         Err(PipelineError::NotFound)
     ));
 }
+
+#[path = "pipelines/member_access.rs"]
+mod member_access;
