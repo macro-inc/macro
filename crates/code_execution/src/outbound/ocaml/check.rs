@@ -42,7 +42,11 @@ impl OcamlChecker {
         })
     }
 
-    async fn run(&self, source: &str) -> Result<Vec<Diagnostic>, CheckError> {
+    async fn run(
+        &self,
+        source: &str,
+        deadline: tokio::time::Instant,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
         let directory = tempfile::Builder::new()
             .prefix("check-")
             .tempdir_in(&self.root)
@@ -56,7 +60,6 @@ impl OcamlChecker {
         tokio::fs::write(check.join(PROGRAM), source)
             .await
             .map_err(|_| CheckError::Internal)?;
-        let deadline = tokio::time::Instant::now() + CHECK_TIMEOUT;
         match self
             .bundle
             .compile(
@@ -122,16 +125,15 @@ impl ProgramChecker for OcamlChecker {
         {
             return Err(CheckError::InvalidSource);
         }
-        let checked = tokio::time::timeout(CHECK_TIMEOUT, async {
-            let _slot = self
-                .slots
-                .acquire()
-                .await
-                .map_err(|_| CheckError::Internal)?;
-            self.run(&file.source).await
-        })
-        .await
-        .map_err(|_| CheckError::Busy)??;
+        // One deadline for waiting and checking. The compile step stops
+        // (and reaps) its children at it; this future is never dropped
+        // while one runs.
+        let deadline = tokio::time::Instant::now() + CHECK_TIMEOUT;
+        let _slot = tokio::time::timeout_at(deadline, self.slots.acquire())
+            .await
+            .map_err(|_| CheckError::Busy)?
+            .map_err(|_| CheckError::Internal)?;
+        let checked = self.run(&file.source, deadline).await?;
         tracing::Span::current().record("diagnostics", checked.len());
         Ok(checked)
     }

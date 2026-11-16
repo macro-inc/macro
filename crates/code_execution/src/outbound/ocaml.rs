@@ -89,10 +89,13 @@ impl OcamlBundle {
     /// and `main.assets/`, keeping only the program's own modules there.
     /// With `typing_only`, stop after type checking and the policy check.
     /// `directory/tmp` and `directory/home` must exist.
+    // A program's compile errors are its author's, not the service's: they
+    // are recorded at info level.
     #[tracing::instrument(
         name = "code_execution.compile",
         skip_all,
-        fields(typing_only, outcome = tracing::field::Empty)
+        fields(typing_only, outcome = tracing::field::Empty),
+        err(level = "info")
     )]
     pub(crate) async fn compile(
         &self,
@@ -141,7 +144,7 @@ impl OcamlBundle {
         ocamlc.extend(["-c".into(), PROGRAM.into()]);
         let output = step.run("ocamlc", bin.join("ocamlc"), ocamlc).await?;
         if !output.status.success() {
-            return Err(compiler_diagnostics(&output.stderr));
+            return Err(compiler_diagnostics(&output.stderr, &self.root));
         }
 
         // 2. The policy check on the typed tree.
@@ -220,15 +223,19 @@ impl OcamlBundle {
 }
 
 /// Why a program didn't compile.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum CompileError {
     /// The compiler or the policy check refused it.
+    #[error("the program has {} compile errors", .0.len())]
     Diagnostics(Vec<Diagnostic>),
     /// Cancelled while compiling.
+    #[error("cancelled while compiling")]
     Cancelled,
     /// The deadline passed while compiling.
+    #[error("timed out while compiling")]
     TimedOut,
     /// A compile step failed for a reason other than the program.
+    #[error("a compile step failed to run")]
     Internal,
 }
 
@@ -276,7 +283,8 @@ impl Step<'_> {
     #[tracing::instrument(
         name = "code_execution.compile.step",
         skip_all,
-        fields(step = name, exit_code = tracing::field::Empty)
+        fields(step = name, exit_code = tracing::field::Empty),
+        err
     )]
     async fn run(
         &self,
@@ -303,10 +311,17 @@ impl Step<'_> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
+            // Its own process group, so stopping it also stops the binaryen
+            // tools wasm_of_ocaml runs through /bin/sh.
+            .process_group(0)
             .spawn()
             .map_err(internal)?;
+        let group = child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .and_then(rustix::process::Pid::from_raw);
         if super::deno::limit(&child, self.limits).is_err() {
-            super::deno::reap(&mut child).await;
+            stop(&mut child, group).await;
             return Err(CompileError::Internal);
         }
         let stdout = child.stdout.take().expect("piped child stdout");
@@ -336,7 +351,7 @@ impl Step<'_> {
             () = tokio::time::sleep_until(self.deadline) => Err(CompileError::TimedOut),
             output = finished => output,
         };
-        super::deno::reap(&mut child).await;
+        stop(&mut child, group).await;
         if let Ok(output) = &result
             && let Some(code) = output.status.code()
         {
@@ -346,12 +361,23 @@ impl Step<'_> {
     }
 }
 
+/// Kill a step's whole process group and reap its leader. The group's other
+/// members die with it; init reaps them.
+async fn stop(child: &mut tokio::process::Child, group: Option<rustix::process::Pid>) {
+    if let Some(group) = group {
+        // Nothing left to kill is fine.
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+    }
+    super::deno::reap(child).await;
+}
+
 /// `ocamlc` prints each problem as a block: `File "main.ml", line L,
 /// characters C1-C2:` (or `lines L1-L2`), the source lines with a marker,
 /// then `Error: …` or `Warning …`. Errors become diagnostics shaped like
 /// `DenoChecker`'s: the block's text ending in `at main.ml:<line>:<column>`.
-pub(crate) fn compiler_diagnostics(output: &[u8]) -> CompileError {
-    let text = String::from_utf8_lossy(output);
+pub(crate) fn compiler_diagnostics(output: &[u8], bundle: &Path) -> CompileError {
+    // Messages about the bundle's own files name them without its path.
+    let text = String::from_utf8_lossy(output).replace(&format!("{}/", bundle.display()), "");
     let mut blocks: Vec<Block> = Vec::new();
     for line in text.lines() {
         // A header outside the program (a bundle file) starts a block

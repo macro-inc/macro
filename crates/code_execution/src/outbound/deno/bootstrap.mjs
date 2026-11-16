@@ -1,8 +1,4 @@
 import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
-import * as nodeFs from "node:fs";
-import * as nodeFsPromises from "node:fs/promises";
-import * as nodePath from "node:path";
-import * as nodeTty from "node:tty";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -92,6 +88,9 @@ async function runOcaml(context, assets) {
   if (typeof WebAssembly.Suspending !== "function" || typeof WebAssembly.promising !== "function") {
     throw new Error("OCaml programs need JSPI (WebAssembly.Suspending and WebAssembly.promising), which this Deno lacks.");
   }
+  // Loaded here, not at the top, so JavaScript runs don't load them.
+  const [nodeFs, nodeFsPromises, nodePath, nodeTty] = await Promise.all(
+    ["node:fs", "node:fs/promises", "node:path", "node:tty"].map(name => import(name)));
   const loaderPath = new URL("./main.js", import.meta.url).pathname;
   const directory = nodePath.dirname(loaderPath);
   let frame;
