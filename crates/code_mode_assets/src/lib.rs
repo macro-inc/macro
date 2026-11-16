@@ -23,3 +23,10 @@ pub const HOSTS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/hosts.j
 /// The SDK's TypeScript declarations that routine code is type-checked
 /// against, with their fingerprint, as JSON.
 pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));
+
+/// Where code mode's prebuilt OCaml bundle is (`nix build .#code-mode-ocaml`,
+/// layout in `packages/sdk-ocaml/README.md`): `CODE_MODE_OCAML_DIR` when this
+/// crate was built. It is read from that path at run time, so the bundle must
+/// be there too. `None` in a build without it: OCaml programs then fail with
+/// a message saying so.
+pub const OCAML_BUNDLE: Option<&str> = option_env!("CODE_MODE_OCAML_DIR");

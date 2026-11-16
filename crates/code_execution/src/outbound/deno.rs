@@ -1,5 +1,8 @@
-//! Fresh JavaScript processes with run-only credentials and allowlisted API egress.
+//! Fresh JavaScript processes with run-only credentials and allowlisted API
+//! egress. OCaml programs are compiled to WebAssembly first
+//! (`super::ocaml`) and run by the same bootstrap.
 
+use super::ocaml::{OcamlBundle, PROGRAM as OCAML_PROGRAM};
 use crate::domain::*;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -8,6 +11,7 @@ use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
+    sync::Arc,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -18,6 +22,7 @@ use tokio_util::{
     codec::{FramedRead, LinesCodec},
     sync::CancellationToken,
 };
+use tracing::Instrument;
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
@@ -37,10 +42,14 @@ pub struct DenoRunner {
     binary: PathBuf,
     scratch: PathBuf,
     heap_mb: u32,
+    /// The bundle OCaml programs compile against; `None` in a build without
+    /// one (`code_mode_assets::OCAML_BUNDLE`).
+    ocaml: Option<Arc<OcamlBundle>>,
 }
 
 impl DenoRunner {
     /// Validate runtime availability and prepare a private scratch root.
+    /// Opens the OCaml bundle this build names, if any.
     #[tracing::instrument(skip_all, err)]
     pub async fn new(
         binary: PathBuf,
@@ -55,11 +64,19 @@ impl DenoRunner {
         let binary = pinned_deno(binary).await?;
         tokio::fs::create_dir_all(&scratch).await?;
         let scratch = tokio::fs::canonicalize(scratch).await?;
+        let ocaml = OcamlBundle::built_in().await?.map(Arc::new);
         Ok(Self {
             binary,
             scratch,
             heap_mb,
+            ocaml,
         })
+    }
+
+    /// The OCaml bundle programs compile against, to check them with
+    /// (`super::ocaml::check::OcamlChecker`) or report its fingerprint.
+    pub fn ocaml_bundle(&self) -> Option<&Arc<OcamlBundle>> {
+        self.ocaml.as_ref()
     }
 
     fn command(&self, root: &Path) -> Command {
@@ -97,11 +114,33 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
+        let language = job.request.language;
+        let ocaml = match language {
+            Language::Javascript => None,
+            Language::Ocaml => Some(self.ocaml.as_ref().ok_or_else(|| {
+                ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "OCaml programs are unavailable: this build has no OCaml bundle (CODE_MODE_OCAML_DIR)",
+                )
+            })?),
+        };
+        if ocaml.is_some()
+            && job
+                .environment
+                .unattended
+                .as_ref()
+                .is_some_and(|unattended| !unattended.arguments.is_empty())
+        {
+            return Err(ExecutionFailure::new(
+                FailureCode::Runtime,
+                "OCaml programs take no arguments yet",
+            ));
+        }
         // An unattended program is TypeScript; Deno strips its types on load.
-        let program = if job.environment.unattended.is_some() {
-            "main.ts"
-        } else {
-            "main.mjs"
+        let program = match (language, &job.environment.unattended) {
+            (Language::Ocaml, _) => OCAML_PROGRAM,
+            (Language::Javascript, Some(_)) => "main.ts",
+            (Language::Javascript, None) => "main.mjs",
         };
         tokio::fs::write(root.join(program), &job.request.source)
             .await
@@ -153,6 +192,19 @@ impl DenoRunner {
                 destinations.into_iter().collect::<Vec<_>>().join(",")
             )
         };
+        // Compiling counts toward the run's deadline and stops with it.
+        // An OCaml program's loader also reads the bundle's library modules.
+        let mut read = vec![root.to_owned()];
+        if let Some(bundle) = ocaml {
+            if let Err(error) = bundle
+                .compile(root, false, &job.limits, job.deadline, cancellation)
+                .await
+            {
+                return Ok(error.outcome());
+            }
+            read.push(bundle.assets());
+        }
+        let read: Vec<String> = read.iter().map(|path| path.display().to_string()).collect();
         let mut child = self
             .command(root)
             .args([
@@ -170,7 +222,7 @@ impl DenoRunner {
                 "--deny-import",
             ])
             .arg(network)
-            .arg(format!("--allow-read={}", root.display()))
+            .arg(format!("--allow-read={}", read.join(",")))
             .arg(format!(
                 "--import-map={}",
                 root.join("imports.json").display()
@@ -187,8 +239,20 @@ impl DenoRunner {
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
         let execution = async {
-            let candidate =
-                bridge(&job.environment, stdin, stdout, stderr, events, &job.limits).await?;
+            let candidate = bridge(
+                &job.environment,
+                ocaml.map(|bundle| bundle.assets()),
+                stdin,
+                stdout,
+                stderr,
+                events,
+                &job.limits,
+            )
+            .instrument(tracing::info_span!(
+                "code_execution.deno",
+                language = language.as_str()
+            ))
+            .await?;
             // Both streams have closed, so the process is exiting.
             let status = child.wait().await.map_err(internal)?;
             if std::os::unix::process::ExitStatusExt::signal(&status)
@@ -255,7 +319,7 @@ impl CodeRunner for DenoRunner {
 }
 
 /// Apply the per-process limits to a child that has just started.
-fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
+pub(super) fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
     let pid = child
         .id()
         .and_then(|id| i32::try_from(id).ok())
@@ -284,7 +348,7 @@ fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
 /// Niceness of background programs: below the host, above idle work.
 const BACKGROUND_NICENESS: i32 = 10;
 
-async fn reap(child: &mut Child) {
+pub(super) async fn reap(child: &mut Child) {
     let _ = child.start_kill();
     let _ = child.wait().await;
 }
@@ -301,6 +365,12 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
+    /// `ocaml` for a compiled OCaml program (main.js); absent for JavaScript.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<&'static str>,
+    /// The bundle's prebuilt library modules an OCaml program's loader reads.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ocaml_assets: Option<PathBuf>,
     /// For an unattended program, the catalog a dry run tells reads from
     /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -350,6 +420,7 @@ enum ChildFrame {
 
 async fn bridge(
     environment: &RunEnvironment,
+    ocaml_assets: Option<PathBuf>,
     mut stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
@@ -359,6 +430,8 @@ async fn bridge(
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
+        language: ocaml_assets.as_ref().map(|_| Language::Ocaml.as_str()),
+        ocaml_assets,
         operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
     })
     .map_err(internal)?;
