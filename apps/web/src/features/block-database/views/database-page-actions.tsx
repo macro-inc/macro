@@ -5,7 +5,6 @@ import { t } from '@app/lib/i18n';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
-import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import DuplicateIcon from '@icon/system/regular/copy.svg';
