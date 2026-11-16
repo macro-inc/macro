@@ -24,7 +24,11 @@ import {
   MobileCanvasActionsSheet,
   MobileCanvasViewSheet,
 } from './canvas-sheets';
-import { MobileCanvasToolbar } from './canvas-toolbar';
+import {
+  type CanvasToolGroupFaces,
+  createToolGroupFaces,
+  MobileCanvasToolbar,
+} from './canvas-toolbar';
 
 // Chrome widths, in px, at which the bar changes shape. One row holds the
 // zoom and history islands, the tools, and the selection's actions; the tools
@@ -42,6 +46,7 @@ const INSPECTOR_COLLAPSED_KEY = 'canvas-inspector-collapsed';
  * tools under the rest.
  */
 function MobileCanvasBottomBar(props: {
+  groupFaces: CanvasToolGroupFaces;
   styleOpen: boolean;
   onStyle: () => void;
   onView: () => void;
@@ -49,6 +54,18 @@ function MobileCanvasBottomBar(props: {
 }) {
   const view = useCanvasView();
   const { state, editor } = view;
+  // The bar is portaled out of the canvas, so a press on it misses the
+  // canvas's own handlers. It does what a press anywhere on the canvas does
+  // first: commit the text being edited and leave an embed.
+  const commitEditing = () => {
+    state.text.finish();
+    if (state.embeds.active()) state.embeds.exit();
+  };
+  /** Run an action, then hand the keyboard back to the canvas for its shortcuts. */
+  const thenFocus = (action: () => void) => () => {
+    action();
+    view.focus();
+  };
   const [bar, setBar] = createSignal<HTMLDivElement>();
   const size = createElementSize(bar);
   const width = () => size.width ?? 0;
@@ -65,8 +82,8 @@ function MobileCanvasBottomBar(props: {
       <MobileCanvasHistoryIsland
         canUndo={state.session().canUndo}
         canRedo={state.session().canRedo}
-        onUndo={() => editor.undo()}
-        onRedo={() => editor.redo()}
+        onUndo={thenFocus(() => editor.undo())}
+        onRedo={thenFocus(() => editor.redo())}
       />
     </div>
   );
@@ -75,8 +92,8 @@ function MobileCanvasBottomBar(props: {
       <MobileCanvasSelectionIsland
         styleOpen={props.styleOpen}
         onStyle={props.onStyle}
-        onDuplicate={state.duplicate}
-        onDelete={() => editor.deleteSelection()}
+        onDuplicate={thenFocus(state.duplicate)}
+        onDelete={thenFocus(() => editor.deleteSelection())}
         onMore={props.onMore}
       />
     </Show>
@@ -84,6 +101,7 @@ function MobileCanvasBottomBar(props: {
   const tools = (): JSX.Element => (
     <MobileCanvasToolbar
       everyTool={everyTool()}
+      groupFaces={props.groupFaces}
       tool={state.tool()}
       onTool={view.chooseTool}
       attachOpen={!!view.props.insert.location()}
@@ -96,12 +114,15 @@ function MobileCanvasBottomBar(props: {
       <div
         ref={setBar}
         class="flex w-full flex-col items-center gap-(--mobile-chrome-gutter)"
+        onPointerDown={commitEditing}
       >
         <Show
           when={oneRow()}
           fallback={
             <>
-              <div class="flex w-full items-center justify-between gap-(--mobile-chrome-gap)">
+              {/* The selection's actions drop to a row of their own on a
+                  phone too narrow to hold them beside zoom and history. */}
+              <div class="flex w-full flex-wrap items-center justify-between gap-(--mobile-chrome-gap)">
                 {canvasActions()}
                 {selectionActions()}
               </div>
@@ -153,6 +174,7 @@ function MobileCanvasLayout() {
       },
     }
   );
+  const groupFaces = createToolGroupFaces(state.tool);
   const hasSelection = () => state.selection().length > 0;
   const styleOpen = () => (isMobile() ? sheetOpen() : !panelCollapsed());
   const toggleStyle = () => {
@@ -180,15 +202,20 @@ function MobileCanvasLayout() {
       <Show when={!isMobile() && hasSelection() && !panelCollapsed()}>
         <MobileCanvasInspectorPanel />
       </Show>
-      {/* The browser's own long-press menu and callout have nothing to offer here. */}
+      {/* The browser's own long-press menu and callout have nothing to offer
+          on the scene. Text being edited and an embed keep theirs. */}
       <div
         class="absolute inset-0 select-none [-webkit-touch-callout:none]"
-        onContextMenu={(event) => event.preventDefault()}
+        onContextMenu={(event) => {
+          if (state.embeds.active() || state.text.draft()) return;
+          event.preventDefault();
+        }}
       >
         <CanvasViewParts.Surface longPress={longPress} />
       </div>
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar
+        groupFaces={groupFaces()}
         styleOpen={styleOpen()}
         onStyle={toggleStyle}
         onView={() => setViewOpen(true)}
@@ -226,7 +253,7 @@ function MobileCanvasLayout() {
         canGroup={state.canGroup()}
         canUngroup={state.canUngroup()}
         onCut={() => fireAndForget(props.clipboard.cut(), 'canvas-clipboard')}
-        onCopy={() => fireAndForget(props.clipboard.copy(), 'canvas-clipboard')}
+        onCopy={props.clipboard.copy}
         onPaste={() =>
           fireAndForget(props.clipboard.paste(), 'canvas-clipboard')
         }

@@ -12,7 +12,9 @@ import Scissors from '@icon/system/regular/scissors.svg';
 import SelectionAll from '@icon/system/regular/selection-all.svg';
 import SelectionPlus from '@icon/system/regular/selection-plus.svg';
 import SelectionSlash from '@icon/system/regular/selection-slash.svg';
-import Trash from '@icon/system/regular/trash.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
+import { CopyFeedback } from '@ui';
+import { createCopyState } from '@ui/utils/create-copy-state';
 import {
   type Component,
   type ComponentProps,
@@ -80,6 +82,25 @@ function SheetRow(
       <Show when={local.checked}>
         <Check class="size-5 shrink-0" />
       </Show>
+    </MobileDrawer.Item>
+  );
+}
+
+/**
+ * Copy leaves the sheet open and turns its icon into a check once the
+ * selection is on the clipboard, as copy actions do in every menu.
+ */
+function CopyRow(props: { disabled: boolean; onCopy: () => Promise<boolean> }) {
+  const { copy, copied } = createCopyState();
+  return (
+    <MobileDrawer.Item
+      disabled={props.disabled}
+      onClick={() => copy(props.onCopy)}
+    >
+      <CopyFeedback copied={copied()}>
+        <Copy class="size-5 shrink-0" />
+      </CopyFeedback>
+      <span class="min-w-0 flex-1 truncate">Copy</span>
     </MobileDrawer.Item>
   );
 }
@@ -188,7 +209,8 @@ export function MobileCanvasActionsSheet(props: {
   canGroup: boolean;
   canUngroup: boolean;
   onCut: () => void;
-  onCopy: () => void;
+  /** Resolves to whether the selection reached the clipboard. */
+  onCopy: () => Promise<boolean>;
   onPaste: () => void;
   onPasteInPlace: () => void;
   onDuplicate: () => void;
@@ -218,12 +240,7 @@ export function MobileCanvasActionsSheet(props: {
           disabled={!props.hasSelection}
           onClick={run(props.onCut)}
         />
-        <SheetRow
-          icon={Copy}
-          label="Copy"
-          disabled={!props.hasSelection}
-          onClick={run(props.onCopy)}
-        />
+        <CopyRow disabled={!props.hasSelection} onCopy={props.onCopy} />
         <SheetRow icon={Clipboard} label="Paste" onClick={run(props.onPaste)} />
         <SheetRow
           icon={ClipboardText}

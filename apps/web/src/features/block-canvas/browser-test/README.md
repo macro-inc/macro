@@ -19,6 +19,18 @@ selection awareness. Each case runs only in its applicable device project.
 rectangle and pencil tools after the first finger has started its gesture,
 two-finger pan, and the glide after a flick. `window.canvasFixture.setTool`
 switches the fixture's tool.
+
+`touch.html` mounts the editable canvas as a phone shows it: the real touch
+view (`views/mobile/canvas-view.tsx`) and the real float-region host, over a
+stand-in dock and a stand-in for the page's New button, with no session or
+services. `touch.html?chrome=none` leaves the host out, as a public link opened
+signed out does. `touch-layout.browser.e2e.ts` runs against it in the touch
+project: the tools above the dock, uncovered and at least 44px; the grouped
+tools; the selection's actions and their undo steps; the inspector sheet
+resting under the shape and closing with the selection kept; the long-press
+menu outliving the lift (and a drag not opening it); the zoom sheet; and the
+in-canvas placement without the app's chrome. The long-press cases advance
+Playwright's clock rather than waiting.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an installed Chromium.
 
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)

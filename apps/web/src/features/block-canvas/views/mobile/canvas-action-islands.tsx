@@ -5,17 +5,22 @@ import Redo from '@icon/system/regular/arrow-u-up-right.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Palette from '@icon/system/regular/palette.svg';
-import Trash from '@icon/system/regular/trash.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 
-/** An action in the canvas chrome, sized like the tools beside it. */
+/**
+ * An action in the canvas chrome: a dock button, which narrows on a small
+ * phone before its island would overflow, though never below the island
+ * minimum.
+ */
 function ActionButton(props: {
   icon: Component<{ class?: string }>;
   label: string;
   onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
   disabled?: boolean;
-  pressed?: boolean;
+  /** For a button that opens something: whether it is open. */
+  expanded?: boolean;
   class?: string;
 }) {
   return (
@@ -25,11 +30,8 @@ function ActionButton(props: {
       disabled={props.disabled}
       // A disabled action dims like an unselected dock button.
       active={props.disabled ? false : undefined}
-      aria-pressed={props.pressed}
-      class={cn(
-        'h-[44px] w-[46px] min-w-[40px] shrink aria-pressed:bg-ink/8',
-        props.class
-      )}
+      aria-expanded={props.expanded}
+      class={cn('min-w-[40px] shrink aria-expanded:bg-ink/8', props.class)}
       onClick={props.onClick}
     />
   );
@@ -46,7 +48,7 @@ export function MobileCanvasViewButton(props: {
         type="button"
         aria-label="Zoom options"
         aria-haspopup="dialog"
-        class="flex h-[44px] min-w-[60px] items-center justify-center rounded-full px-[12px] text-[15px] font-medium tabular-nums"
+        class="flex h-(--mobile-chrome-button-size) min-w-[60px] items-center justify-center rounded-full px-(--mobile-chrome-gutter) text-[15px] font-medium tabular-nums"
         onClick={props.onClick}
       >
         <output aria-label="Zoom level">
@@ -97,7 +99,7 @@ export function MobileCanvasSelectionIsland(props: {
         <ActionButton
           icon={Palette}
           label="Style"
-          pressed={props.styleOpen}
+          expanded={props.styleOpen}
           onClick={props.onStyle}
         />
         <ActionButton

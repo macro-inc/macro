@@ -120,12 +120,17 @@ an upright phone stacks the tools under the rest. Where there is no room to list
 every tool, Rectangle and Ellipse fold into one button and Arrow, Line and
 Connector into another: a tap picks the group's last tool, and a tap while it is
 picked opens the others. A read-only canvas offers zoom, Select and Hand. The
-chrome steps aside while the keyboard is up.
+chrome steps aside while the keyboard is up. A press on it first commits text
+being edited and leaves an embed, as a press on the canvas does, because the
+float region renders it outside the canvas's own root. On a page without the
+app's bottom chrome (a public link opened signed out) there is no float region,
+and the same islands sit at the bottom of the canvas instead.
 
 The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
 to selection, zoom levels, the dot grid and snapping. More, and a long press on
 the canvas with Select or Hand, open a sheet with every context-menu action:
-clipboard, duplicate, select all, group, layer order and delete. A long press
+clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
+sheet open and confirms with a check, as copy actions do in other menus. A long press
 first selects what is under the finger, as a right-click does, and cancels
 whatever the press had started; `longPress` on the graphics input reports it,
 half a second in, if the finger has drifted no more than 10px.
