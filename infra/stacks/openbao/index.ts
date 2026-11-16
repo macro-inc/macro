@@ -16,6 +16,8 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
+import { openbaoAccount } from './account';
+import { createJwtSigningKey } from './jwt-signing-key';
 import { API_PORT, DATA_MOUNT_PATH, renderServerConfig } from './server-config';
 
 if (stack !== 'dev') {
@@ -139,6 +141,15 @@ const sealKey = new aws.kms.Key(
   // Losing this key makes the Raft data unrecoverable.
   durable
 );
+const jwtSigningKey = createJwtSigningKey({
+  name: BASE_NAME,
+  stack,
+  openbaoAccount,
+  documentStorageRoleArn: cloudStorageService.requireOutput(
+    'cloudStorageServiceRoleArn'
+  ) as pulumi.Output<string>,
+  tags,
+});
 new aws.kms.Alias(`${BASE_NAME}-seal-key-alias`, {
   name: `alias/${BASE_NAME}-${stack}`,
   targetKeyId: sealKey.keyId,
@@ -582,6 +593,10 @@ new aws.cloudwatch.MetricAlarm(`${BASE_NAME}-unhealthy-alarm`, {
 export const address = API_ADDRESS;
 export const serviceName = service.service.name;
 export const sealKeyArn = sealKey.arn;
+/** DSS's `PASSWORDS_JWT_KMS_KEY_ID` (Doppler `dev`). */
+export const passwordsJwtKmsKeyArn = jwtSigningKey.key.arn;
+/** The public half every OpenBao JWT mount trusts (not a secret). */
+export const passwordsJwtPublicKeyPem = jwtSigningKey.publicKeyPem;
 export const fileSystemId = fileSystem.id;
 export const fileSystemArn = fileSystem.arn;
 export const backupRoleArn = backupRole.arn;

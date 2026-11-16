@@ -9,6 +9,8 @@ guide; [the Pulumi rule](../../../.agents/rules/infra/pulumi.md) covers deploys.
 ## Start here
 
 - `index.ts`: the whole stack.
+- `jwt-signing-key.ts`: the KMS key DSS signs its ES256 OpenBao logins with, in
+  the OpenBao account.
 - `server-config.ts`: the server HCL. Keep its request duration, Raft layout
   and audit device in step with the Passwords local OpenBao config.
 
@@ -26,6 +28,12 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
   `retainOnDelete`.
 - The health check asks for `uninitcode=200` so the first deploy settles before
   init (ALB matchers stop at 499); a sealed vault (503) must stay unhealthy.
+- The JWT key lives in the OpenBao AWS account behind the provider that assumes
+  `openbao:deployRoleArn`; never create it with the default (main-account)
+  provider. Only the document storage task role may `kms:Sign` with it, and only
+  `ECDSA_SHA_256`; the OpenBao account's root administers it without signing.
+  Never grant another principal. It is `protect` + `retainOnDelete` because every
+  namespace trusts its public key.
 - The `openbao` Doppler project has a dev config only and is created by hand.
   Don't add it to `doppler-projects`, which would also create `prd`.
 - The stack is not in `services-config.json`; deploys are manual.
