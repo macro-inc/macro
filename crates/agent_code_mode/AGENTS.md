@@ -7,8 +7,9 @@ attribution while using the explicitly selected `acting_as` account's API
 permissions. Credential issuance resolves and approves that selection before
 minting. ExecuteCode requires the originating prompt’s `turn_id`; admission and
 credential approval must reject a replacement turn before adopting its account.
-Saved execution retries must match both actor selection and original
-turn, so a later requester cannot inherit an earlier execution result.
+Saved execution retries must match the actor selection, the original
+turn and the language, so a later requester cannot inherit an earlier
+execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
 MCP, SDK documentation selection, saved execution records, and durable review
@@ -83,8 +84,21 @@ stacks. Process isolation belongs to
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
   carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
   carry areas whole. All of it is generated from the SDK; edit the TSDoc.
-- `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+- OCaml programs: a session whose owner has the backend flag
+  `enable-ocaml-code-mode` (`OcamlRollout`, the harness's `OcamlFlag`; off
+  when it can't be read) and whose harness build has the OCaml bundle
+  (`CodeModeService::with_ocaml`) may run `ExecuteCode` with
+  `language: "ocaml"` (`SessionCodeMode::ocaml_enabled`). Everyone else gets
+  today's tool unchanged (`toolset()`); `execute` refuses an OCaml request
+  without the rollout before minting a credential. A record keeps its
+  `language` (absent on older records: JavaScript) and, for OCaml, the
+  bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
+  so no migration. The flag must be created in PostHog at 0% before anyone
+  can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.
+- `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
+  for a session that may run OCaml (`session_toolset` picks; its description
+  adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one
+  example), `user_toolset()` for the public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
 
@@ -118,6 +132,8 @@ longer delivery state.
 
 - `cargo test -p agent_code_mode --lib` from the repository root, with live local
   database configuration and `SQLX_OFFLINE` unset.
+- Keep `toolset/session/ocaml.md`'s example compiling: it is the program
+  `code_execution`'s OCaml suite runs (`ocaml_tool_example_creates_and_reads_a_task`).
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,
