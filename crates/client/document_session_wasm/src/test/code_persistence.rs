@@ -161,10 +161,25 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
     // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2.
     before["root"]["$"]["documentMetadata"] =
         serde_json::json!({"version":10,"environmentTags":null});
+    // The writer's SetState replaced its open-time root id, so the stored root has none;
+    // the reader's edit open mints one, as Source ids the root at open.
+    let root_id = after["root"]["$"]["id"]
+        .as_str()
+        .expect("reader root id")
+        .to_owned();
+    assert!(
+        root_id.len() == 8
+            && root_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    );
+    assert_eq!(before["root"]["$"].get("id"), None);
+    before["root"]["$"]["id"] = serde_json::json!(root_id);
     assert_eq!(after, before);
     // Source's reopen of bare stored metadata writes the parsed environmentTags:null
-    // slot as one root map insert (table-reopen-b.json 0f0dba80), from the reader's peer.
+    // slot as one root map insert (table-reopen-b.json 0f0dba80), and the open stores
+    // the root id it minted: two ops from the reader's peer.
     let mut reopened = seeded.oplog_vv();
-    reopened.insert(77, 1);
+    reopened.insert(77, 2);
     assert_eq!(session.version(), reopened);
 }
