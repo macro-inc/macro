@@ -190,11 +190,16 @@ fn parse_sandbox_size(value: &str) -> anyhow::Result<SandboxSize> {
 
 /// The wire direction and JSON payload for a [`Message`].
 fn message_columns(message: &Message) -> anyhow::Result<(&'static str, serde_json::Value)> {
-    let (direction, mut content) = match message {
-        Message::Notification(message) => ("notification", serde_json::to_value(message)?),
-        Message::ToServer(message) => ("to_server", serde_json::to_value(message)?),
-        Message::ToRuntime(message) => ("to_runtime", serde_json::to_value(message)?),
+    let direction = match message {
+        Message::Notification(_) => "notification",
+        Message::ToServer(_) => "to_server",
+        Message::ToRuntime(_) => "to_runtime",
     };
+    // Through `Message`'s own serialization, which is what removes credentials.
+    let mut content = serde_json::to_value(message)?
+        .get_mut("content")
+        .map(serde_json::Value::take)
+        .ok_or_else(|| anyhow::anyhow!("a logged frame has no content"))?;
     // Postgres `jsonb` rejects U+0000, and a failed log insert stops the session.
     strip_json_nuls(&mut content);
     Ok((direction, content))

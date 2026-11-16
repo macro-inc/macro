@@ -14,6 +14,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::RequestId;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
 use bots::domain::ports::BotRepo;
@@ -22,6 +23,27 @@ use entity_access_db_utils::AccessLevel;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
+
+fn credential_session_new(id: AgentSessionId) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: id,
+        user_id: None,
+        content: Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::request(
+                "session/new".to_owned(),
+                serde_json::json!({
+                    "cwd": "/workspace",
+                    "mcpServers": [{"type": "http", "name": "macro", "url": "https://egress.example.test/mcp-macro", "headers": [{"name": "Authorization", "value": CREDENTIAL}]}]
+                }),
+                RequestId::Str("opening".to_owned()),
+            )
+            .expect("valid request"),
+        ))),
+        logged_at: None,
+    }
+}
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
@@ -3152,6 +3174,41 @@ fn log_json_drops_null_bytes_before_it_reaches_postgres() {
             serde_json::Value::String("plain".to_owned()),
         ])
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_opening_storage_removes_credentials_from_single_and_batch_writes(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+
+    let single = repo
+        .create_projected(credential_session_new(session.id), Some(&claim), None, None)
+        .await
+        .unwrap();
+    let batch_id = macro_uuid::generate_uuid_v7();
+    repo.create_batch_fenced(
+        vec![StoredAgentSessionLog {
+            id: batch_id,
+            created_at: chrono::Utc::now(),
+            entry: credential_session_new(session.id),
+        }],
+        &claim,
+    )
+    .await
+    .unwrap();
+
+    for id in [single.id, batch_id] {
+        let content =
+            sqlx::query_scalar!("SELECT content FROM agent_session_log WHERE id = $1", id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let encoded = serde_json::to_string(&content).unwrap();
+        assert!(!encoded.contains(CREDENTIAL));
+        assert_eq!(content["params"]["mcpServers"], serde_json::json!([]));
+    }
 }
 
 async fn channel_grant(pool: &PgPool, session: AgentSessionId, channel_id: Uuid) -> String {

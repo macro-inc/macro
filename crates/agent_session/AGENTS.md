@@ -175,6 +175,19 @@ skips the turn before any model call; unset or unreadable, summaries run.
 
 ## Gotchas
 
+- MCP credentials never enter the log. `Message`'s serialization applies
+  `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
+  go through, and `LiveSessionLogWriter` also redacts the frame it holds. Older
+  rows are not rewritten; readers that serialize `Message` redact them. The
+  session's live server list (`attached_mcp_servers`) and the frame sent to the
+  runtime keep them. A new
+  server-to-runtime method is stored without params until it is added to
+  `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
+  credential.
+- The session actor scrubs current MCP HTTP/SSE header values from inbound log
+  frames before telemetry, handshake retention, and storage. Keep the machine's
+  server list current when replacing MCP servers; outbound frames still need
+  their configured headers.
 - Persist `AcpReady` through the fenced session log before opening or restoring
   a session on an already-initialized shared runtime; MCP and model-gateway
   credentials remain revoked while the durable status is disconnected.

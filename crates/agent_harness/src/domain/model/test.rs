@@ -1,6 +1,71 @@
 use super::*;
 use bot_id::{CODEX_BOT_ID, CURSOR_BOT_ID};
 
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
+
+#[test]
+fn acp_server_lists_remain_available_to_runtime_but_not_to_log_serialization() {
+    use agent_egress::domain::model::{CustomMcpServerKey, CustomMcpServerListing, McpServerSlug};
+    use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
+    use agent_session::domain::model::Message;
+
+    for populated in [false, true] {
+        let egress = SandboxEgress {
+            base_url: "https://egress.example.test".to_owned(),
+            session_token: "placeholder-session-credential".to_owned(),
+            mcp_servers: if populated {
+                vec![McpServerSlug::parse("calendar").unwrap()]
+            } else {
+                Vec::new()
+            },
+            custom_servers: if populated {
+                vec![CustomMcpServerListing {
+                    key: CustomMcpServerKey::for_url("https://custom.example.test/mcp"),
+                    name: "custom".to_owned(),
+                }]
+            } else {
+                Vec::new()
+            },
+        };
+        let servers = egress.acp_servers();
+        let names: Vec<&str> = servers
+            .iter()
+            .map(|server| match server {
+                agent_client_protocol::schema::v1::McpServer::Http(server) => server.name.as_str(),
+                _ => panic!("expected HTTP server"),
+            })
+            .collect();
+        let expected = if populated {
+            vec![
+                "macro",
+                "macro_internal",
+                "macro-preview",
+                "calendar",
+                "custom",
+            ]
+        } else {
+            vec!["macro", "macro_internal", "macro-preview"]
+        };
+        assert_eq!(names, expected);
+        for server in &servers {
+            let encoded = serde_json::to_string(server).unwrap();
+            assert!(encoded.contains(CREDENTIAL));
+        }
+
+        let message: ToRuntimeMessage = serde_json::from_value(serde_json::json!({
+            "type": "acp", "jsonrpc": "2.0", "id": 1, "method": "session/new",
+            "params": {"cwd": "/workspace", "mcpServers": servers}
+        }))
+        .unwrap();
+        let logged = serde_json::to_value(Message::ToRuntime(message)).unwrap();
+        assert!(!logged.to_string().contains(CREDENTIAL));
+        assert_eq!(
+            logged["content"]["params"]["mcpServers"],
+            serde_json::json!([])
+        );
+    }
+}
+
 #[test]
 fn only_external_runtimes_prompt_by_default() {
     assert_eq!(
