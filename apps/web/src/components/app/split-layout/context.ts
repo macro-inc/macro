@@ -25,11 +25,17 @@ export type SplitBottomPanelRegistration = {
 };
 
 export type SplitFileMenuAction = {
+  /** Stable identity for a row while its metadata changes. */
+  id?: string;
   label: string | JSX.Element;
   icon?: Component;
-  action?: (e?: MouseEvent) => void;
+  action?: (e?: MouseEvent) => void | Promise<unknown>;
+  /** Clipboard actions acknowledge completion inline without dismissing the menu. */
+  copy?: boolean;
   children?: SplitFileMenuAction[];
   muteMenu?: NotificationMuteMenuProps;
+  /** Desktop-only composed item, such as an entity picker submenu. */
+  menuItem?: Component<{ onActionComplete?: () => void }>;
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;
