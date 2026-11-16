@@ -44,9 +44,11 @@ impl EventAccess for PasswordTopicEvent {
 }
 
 /// The public projection of [`PasswordTopicEvent`], delivered under the same
-/// event names: the metadata without its routing recipient.
+/// event names: the metadata without its routing recipient. Published under
+/// the topic's schema names, which the public API already uses.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = PasswordTopicEvent))]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum PasswordPublicEvent {
     /// An authorized human resolved, or revoked, an agent's access request.
@@ -58,6 +60,7 @@ pub enum PasswordPublicEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = AccessRequestResolvedMetadata))]
 pub struct PublicAccessRequestResolved {
     /// Team owning the item.
     pub team_id: Uuid,
