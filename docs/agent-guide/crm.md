@@ -741,6 +741,8 @@ record names or opening records requires separate CRM access. Text previously
 copied into a pipeline cell remains visible as pipeline content.
 The denied records screen keeps navigation to these pipelines available on
 desktop and phone, including when access is revoked while a record is open.
+An open pipeline record's denied state retains the desktop navigation control,
+so a collapsed sidebar can be reopened to return to the shared pipeline.
 Independently shared pipeline items retain their normal detail headers.
 A saved list route stays selected through denial and regrant.
 

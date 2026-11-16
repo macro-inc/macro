@@ -214,6 +214,23 @@ describe('CRM HTTP response admission', () => {
     expect(responseAuthorityGeneration(response)).toBe(generation);
   });
 
+  it('requires fresh proof to recover from a failed lookup even when the hint is unchanged', async () => {
+    await verifiedViewer();
+    mocks.proof.mockResolvedValue(err(new Error('offline')));
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow(
+      'Unable to verify CRM access'
+    );
+    expect(crmAccessAuthority.allowed()).toBe(false);
+    mocks.proof.mockResolvedValue(proof(true)).mockClear();
+    const observe = await prepareResponseObservers(
+      'http://localhost/dss/graphql'
+    );
+    const response = await observe(responseWithHint(true));
+    expect(mocks.proof).toHaveBeenCalledOnce();
+    expect(crmAccessAuthority.allowed()).toBe(true);
+    await expect(assertResponseAuthority(response)).resolves.toBeUndefined();
+  });
+
   it.each([true, false])(
     'rejects an in-flight response when fresh access changes from %s',
     async (allowed) => {

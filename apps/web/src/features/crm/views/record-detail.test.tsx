@@ -68,6 +68,9 @@ vi.mock('@components/app/side-panel', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => 1200,
+}));
 vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
 vi.mock('./record-details-section', () => ({
   RecordDetailsSection: () => null,
@@ -421,4 +424,48 @@ it('unmounts record content, breadcrumbs and task association on permission loss
     type: 'company',
     id: 'record-1',
   });
+});
+
+import { ViewNavigationControls, ViewShell } from '@app/components/view-shell';
+
+it('can reopen collapsed desktop navigation after a pipeline record is denied', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  const [recordOpen, setRecordOpen] = createSignal(true);
+  taskContext.canAccess = allowed;
+  const preference = 'macro:pref:view-sidebar:collapsed:crm-access-regression';
+  localStorage.setItem(preference, 'true');
+  const { container } = render(() => (
+    <ViewShell.Root asidePreferenceKey="crm-access-regression">
+      <ViewShell.Aside>
+        <button type="button" onClick={() => setRecordOpen(false)}>
+          Shared pipeline
+        </button>
+      </ViewShell.Aside>
+      <ViewShell.Main>
+        <Show when={recordOpen()} fallback={<p>Shared pipeline table</p>}>
+          <CrmRecordDetail
+            records={[
+              { type: 'company', id: 'record-1', name: 'Private record' },
+            ]}
+            section={undefined}
+            viewName="Shared pipeline"
+            onOpen={() => {}}
+            onSectionChange={() => {}}
+            onClose={() => setRecordOpen(false)}
+            navigation={<ViewNavigationControls />}
+          />
+        </Show>
+      </ViewShell.Main>
+    </ViewShell.Root>
+  ));
+  const aside = () => container.querySelector('[data-view-shell-aside]');
+  expect(aside()?.getAttribute('aria-hidden')).toBe('true');
+  setAllowed(false);
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  expect(screen.queryByText('Private record')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  expect(aside()?.getAttribute('aria-hidden')).toBe('false');
+  fireEvent.click(screen.getByRole('button', { name: 'Shared pipeline' }));
+  expect(screen.getByText('Shared pipeline table')).toBeTruthy();
+  localStorage.removeItem(preference);
 });

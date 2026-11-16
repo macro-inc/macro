@@ -1,4 +1,4 @@
-import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
@@ -85,7 +85,17 @@ type CrmRecordDetailProps = {
 export function CrmRecordDetail(props: CrmRecordDetailProps) {
   const { canAccess } = useCrmContext();
   return (
-    <Show when={canAccess()} fallback={<CrmAccessDenied />}>
+    <Show
+      when={canAccess()}
+      fallback={
+        <>
+          <Show when={!isTouchDevice()}>
+            <ViewShell.Header>{props.navigation}</ViewShell.Header>
+          </Show>
+          <CrmAccessDenied />
+        </>
+      }
+    >
       <CrmRecordDetailContent {...props} />
     </Show>
   );
