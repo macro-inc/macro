@@ -213,6 +213,8 @@ survive that cleanup and still open when the viewer is ready.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
+N counts the matches the search returned, at most ten per result for a document,
+chat, agent session or call, so `[10]` can mean ten or more.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
 opens the first content match, or opens the session normally for a title-only hit. These are
 ACP-backed sessions, distinct from legacy chat results. Legacy chat rename, delete,
