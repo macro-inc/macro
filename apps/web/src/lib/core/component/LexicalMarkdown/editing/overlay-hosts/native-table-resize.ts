@@ -44,6 +44,8 @@ export type NativeTableResizeHost = Omit<
   ): NativeTableResizeDrag | undefined;
   /** Resolves once every drag's queued inputs have settled; never rejects. */
   settled(): Promise<void>;
+  /** Drags the host still owns: those with queued or in-flight inputs. */
+  ownedDrags(): number;
   dispose(): void;
 };
 
@@ -144,9 +146,18 @@ export function createNativeTableResizeHost(
         pending = undefined;
         restoreRequested = false;
       };
-      drags.set(close, async () => {
+      const settledDrag = async () => {
         while (inFlight) await inFlight;
-      });
+      };
+      // Only a drag with queued or in-flight inputs is owned by the host, so a
+      // finished gesture keeps nothing alive; the next input re-registers it.
+      const track = () => {
+        if (!closed) drags.set(close, settledDrag);
+      };
+      const releaseIfIdle = () => {
+        if (!inFlight && pending === undefined && !restoreRequested)
+          drags.delete(close);
+      };
       /** Entry fence, read at each input's actual admission. */
       const admit = () =>
         !closed &&
@@ -180,7 +191,10 @@ export function createNativeTableResizeHost(
             admit
           );
         }
-        if (!next) return Promise.resolve();
+        if (!next) {
+          releaseIfIdle();
+          return Promise.resolve();
+        }
         const operation = next;
         inFlight = (async () => {
           const outcome = await operation;
@@ -196,17 +210,17 @@ export function createNativeTableResizeHost(
         apply(delta) {
           if (closed) return;
           pending = delta;
+          track();
           fireAndForget(pump(), 'native-table-resize');
         },
         restore() {
           if (closed) return;
           pending = undefined;
           restoreRequested = true;
+          track();
           fireAndForget(pump(), 'native-table-resize');
         },
-        async settled() {
-          while (inFlight) await inFlight;
-        },
+        settled: settledDrag,
         outcomes: () => outcomes.slice(),
       };
       return result;
@@ -275,6 +289,7 @@ export function createNativeTableResizeHost(
     async settled() {
       await Promise.all([...drags.values()].map((settled) => settled()));
     },
+    ownedDrags: () => drags.size,
     dispose() {
       if (disposed) return;
       disposed = true;

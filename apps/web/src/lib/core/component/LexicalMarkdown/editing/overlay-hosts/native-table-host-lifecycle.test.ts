@@ -4,6 +4,7 @@
  * fences, merge/restore eligibility from the input's own published evidence,
  * observer faults, dispose with inputs in flight, and listener ownership.
  */
+import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import type { NativeTableEditOutcome } from './native-table-edit';
 import { createNativeTableMoveHost } from './native-table-move';
@@ -252,4 +253,30 @@ test('move: refused without edit, and after dispose, with no input', async () =>
   expect(fixture.view.query.serializedState()).toBe(before);
   expect(host.elementFor({ index: 1, generation: 0 })).toBeUndefined();
   expect(host.rootElement()).toBeNull();
+});
+
+test('resize: a finished gesture is released, keeping its width, one undo step and the selection', async () => {
+  const fixture = mount();
+  fixture.port.command(CommandCode.ClearHistory);
+  const before = widths(fixture);
+  const selected = fixture.view.selection().selection;
+  const { host, drag } = resizeDrag(fixture);
+  expect(host.ownedDrags()).toBe(0);
+  drag.apply(40);
+  drag.apply(60);
+  expect(host.ownedDrags()).toBe(1);
+  await host.settled();
+  // The gesture ends with no queued input: the host no longer owns it.
+  expect(host.ownedDrags()).toBe(0);
+  const after = widths(fixture);
+  expect(after).not.toEqual(before);
+  expect(fixture.view.selection().selection).toEqual(selected);
+  // The whole gesture is one undo step back to the pre-drag widths.
+  fixture.port.command(CommandCode.Undo);
+  expect(widths(fixture)).toEqual(before);
+  // A later input re-registers the drag only while that input works.
+  drag.apply(10);
+  expect(host.ownedDrags()).toBe(1);
+  await host.settled();
+  expect(host.ownedDrags()).toBe(0);
 });
