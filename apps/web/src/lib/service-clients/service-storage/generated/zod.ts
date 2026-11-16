@@ -9213,10 +9213,27 @@ export const getCrmEmailPrivacyResponse = zod
   .describe('Current consent and exclusions, readable by any team member.');
 
 /**
- * @summary Apply one consent or domain-exclusion change as the authenticated member.
+ * @summary Apply one consent, domain, or thread exclusion change as the member.
  */
 export const updateCrmEmailPrivacyBody = zod
   .union([
+    zod
+      .object({
+        action: zod.enum(['set_thread_exclusion']),
+        excluded: zod
+          .boolean()
+          .describe(
+            'False removes this exception; consent and other exclusions still apply.'
+          ),
+        thread_id: zod
+          .uuid()
+          .describe(
+            'Must belong to a mailbox owned by the authenticated member.'
+          ),
+      })
+      .describe(
+        "Hold back or restore only the caller's contribution of one thread."
+      ),
     zod
       .object({
         action: zod.enum(['set_consent']),
@@ -9290,6 +9307,40 @@ export const updateCrmEmailPrivacyResponse = zod
       ),
   })
   .describe('Current consent and exclusions, readable by any team member.');
+
+/**
+ * @summary List only the authenticated member's thread exclusions.
+ */
+export const listCrmExcludedEmailThreadsQueryParams = zod.object({
+  after: zod.uuid().nullish().describe('Read entries after this thread ID.'),
+});
+
+export const listCrmExcludedEmailThreadsResponse = zod
+  .object({
+    next_cursor: zod
+      .uuid()
+      .nullish()
+      .describe('Pass as `after` to read the next page.'),
+    threads: zod
+      .array(
+        zod
+          .object({
+            link_id: zod.uuid().describe('Exact mailbox containing this copy.'),
+            subject: zod
+              .string()
+              .nullish()
+              .describe("Current subject, for the owner's privacy settings."),
+            thread_id: zod.uuid().describe('Mailbox-local thread identity.'),
+          })
+          .describe(
+            "One private thread from the caller's own mailbox, never a teammate's copy."
+          )
+      )
+      .describe('At most fifty exclusions.'),
+  })
+  .describe(
+    "A bounded page of the caller's private threads, ordered by thread ID."
+  );
 
 /**
  * @summary Read fresh authority without requiring CRM access.
@@ -11989,6 +12040,13 @@ export const applyCrmPipelineOpsBody = zod
                                       .describe('A number.'),
                                     zod
                                       .object({
+                                        type: zod.enum(['percentage']),
+                                      })
+                                      .describe(
+                                        'A number shown as a percent: 0.25 displays as 25%.'
+                                      ),
+                                    zod
+                                      .object({
                                         type: zod.enum(['boolean']),
                                       })
                                       .describe('A checkbox.'),
@@ -12192,6 +12250,13 @@ export const applyCrmPipelineOpsBody = zod
                                 type: zod.enum(['number']),
                               })
                               .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
                             zod
                               .object({
                                 type: zod.enum(['boolean']),
@@ -16131,9 +16196,22 @@ export const getCrmPipelineTableResponse = zod
                             ])
                             .describe("An expression over one row's cells."),
                           kind: zod.enum(['derived']),
+                          percentage: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether a number formula is shown as a percent.'
+                            ),
                         })
                         .describe(
                           "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                        ),
+                      zod
+                        .object({
+                          kind: zod.enum(['percentage']),
+                        })
+                        .describe(
+                          'A number shown as a percent: 0.25 displays as 25%.'
                         ),
                     ])
                     .describe(
@@ -17898,9 +17976,22 @@ export const getDatabaseResponse = zod
                                       "An expression over one row's cells."
                                     ),
                                   kind: zod.enum(['derived']),
+                                  percentage: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Whether a number formula is shown as a percent.'
+                                    ),
                                 })
                                 .describe(
                                   "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                                ),
+                              zod
+                                .object({
+                                  kind: zod.enum(['percentage']),
+                                })
+                                .describe(
+                                  'A number shown as a percent: 0.25 displays as 25%.'
                                 ),
                             ])
                             .describe(
@@ -19071,6 +19162,13 @@ export const applyDatabaseOpsBody = zod
                                       .describe('A number.'),
                                     zod
                                       .object({
+                                        type: zod.enum(['percentage']),
+                                      })
+                                      .describe(
+                                        'A number shown as a percent: 0.25 displays as 25%.'
+                                      ),
+                                    zod
+                                      .object({
                                         type: zod.enum(['boolean']),
                                       })
                                       .describe('A checkbox.'),
@@ -19274,6 +19372,13 @@ export const applyDatabaseOpsBody = zod
                                 type: zod.enum(['number']),
                               })
                               .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
                             zod
                               .object({
                                 type: zod.enum(['boolean']),
@@ -22593,6 +22698,10 @@ export const listDatabaseColumnCastsResponseItem = zod
     is_multi_select: zod
       .boolean()
       .describe('Whether the target holds several values.'),
+    percentage: zod
+      .boolean()
+      .optional()
+      .describe('Whether the target shows a number as a percent.'),
     reason: zod
       .string()
       .nullable()
@@ -22663,6 +22772,11 @@ export const convertDatabaseColumnBody = zod
             type: zod.enum(['number']),
           })
           .describe('A number.'),
+        zod
+          .object({
+            type: zod.enum(['percentage']),
+          })
+          .describe('A number shown as a percent: 0.25 displays as 25%.'),
         zod
           .object({
             type: zod.enum(['boolean']),
@@ -23046,9 +23160,22 @@ export const inferDatabaseColumnTypeResponse = zod
                         ])
                         .describe("An expression over one row's cells."),
                       kind: zod.enum(['derived']),
+                      percentage: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          'Whether a number formula is shown as a percent.'
+                        ),
                     })
                     .describe(
                       "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value."
+                    ),
+                  zod
+                    .object({
+                      kind: zod.enum(['percentage']),
+                    })
+                    .describe(
+                      'A number shown as a percent: 0.25 displays as 25%.'
                     ),
                 ])
                 .describe(
@@ -43134,6 +43261,13 @@ export const getFormResponse = zod
                               .describe('A number.'),
                             zod
                               .object({
+                                type: zod.enum(['percentage']),
+                              })
+                              .describe(
+                                'A number shown as a percent: 0.25 displays as 25%.'
+                              ),
+                            zod
+                              .object({
                                 type: zod.enum(['boolean']),
                               })
                               .describe('A checkbox.'),
@@ -44283,6 +44417,13 @@ export const collaborateFormResponse = zod
                                     type: zod.enum(['number']),
                                   })
                                   .describe('A number.'),
+                                zod
+                                  .object({
+                                    type: zod.enum(['percentage']),
+                                  })
+                                  .describe(
+                                    'A number shown as a percent: 0.25 displays as 25%.'
+                                  ),
                                 zod
                                   .object({
                                     type: zod.enum(['boolean']),
@@ -45726,6 +45867,13 @@ export const putFormLayoutResponse = zod
                                     type: zod.enum(['number']),
                                   })
                                   .describe('A number.'),
+                                zod
+                                  .object({
+                                    type: zod.enum(['percentage']),
+                                  })
+                                  .describe(
+                                    'A number shown as a percent: 0.25 displays as 25%.'
+                                  ),
                                 zod
                                   .object({
                                     type: zod.enum(['boolean']),

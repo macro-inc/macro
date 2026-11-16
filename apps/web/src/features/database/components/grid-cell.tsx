@@ -33,7 +33,9 @@ import {
   type DatabaseEntityType,
   type DatabaseMention,
   inferDatabaseNumber,
+  inferDatabasePercentage,
   parseMonetaryInput,
+  percentagePointsText,
 } from '../core/column-inference';
 import {
   type DatabaseCellValue,
@@ -211,7 +213,9 @@ export function GridCell(props: GridCellProps) {
   );
   const [editing, setEditing] = createSignal(startsEditing);
   const [draft, setDraft] = createSignal(
-    startsEditing && props.value !== null ? String(props.value) : ''
+    startsEditing && props.value !== null
+      ? numberEditorDraft(props.column, props.value)
+      : ''
   );
   const [selectAll, setSelectAll] = createSignal(true);
   const cellKind = createMemo<GridCellKind>(() =>
@@ -261,7 +265,7 @@ export function GridCell(props: GridCellProps) {
         ? seed
         : props.value === null
           ? ''
-          : String(props.value)
+          : numberEditorDraft(props.column, props.value)
     );
     setEditing(true);
     if (
@@ -920,15 +924,19 @@ function InlineEditor(props: {
   const errorId = createUniqueId();
   let finishing = false;
   const parseNumber = (value: string) =>
-    props.column.currencyColumnId
-      ? parseMonetaryInput(value)
-      : inferDatabaseNumber(value);
+    props.column.percentage
+      ? inferDatabasePercentage(value)
+      : props.column.currencyColumnId
+        ? parseMonetaryInput(value)
+        : inferDatabaseNumber(value);
   // An earlier row's save can settle this column's type while this editor is
   // focused. Keep its DOM for this edit; use the latest type when committing.
   const renderTextEditor =
     props.column.dataType === 'STRING' ? props.renderTextEditor : undefined;
   const initialDraft =
-    props.originalValue === null ? '' : String(props.originalValue);
+    props.originalValue === null
+      ? ''
+      : numberEditorDraft(props.column, props.originalValue);
   // The value's own height, weight and line height, so its lines wrap where
   // they did before the cell opened.
   const editorClass = () =>
@@ -1497,6 +1505,15 @@ function DateCell(props: GridCellProps) {
       </Dropdown>
     </Show>
   );
+}
+
+function numberEditorDraft(
+  column: DatabaseViewColumn,
+  value: DatabaseCellValue
+): string {
+  return column.percentage && typeof value === 'number'
+    ? percentagePointsText(value)
+    : String(value);
 }
 
 /**
