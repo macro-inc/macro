@@ -1,7 +1,9 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
-import { useBlockId } from '@core/block';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type AiHeaderProps, aiHeaderTools } from '../shared/ai-header-parts';
 
@@ -10,6 +12,8 @@ import { type AiHeaderProps, aiHeaderTools } from '../shared/ai-header-parts';
  * is viewing.
  */
 export function MobileAiHeader(props: AiHeaderProps) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const documentId = useBlockId();
   const title = useBlockDocumentName();
   const name = useBlockDocumentName('Illustration');
@@ -17,6 +21,9 @@ export function MobileAiHeader(props: AiHeaderProps) {
 
   return (
     <MobileBlockHeader
+      entityKind={entityKind}
+      permissions={permissions()}
+      badge={<SplitPermissionsBadge />}
       id={documentId}
       name={title() ?? ''}
       menuName={name() ?? ''}

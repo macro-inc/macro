@@ -1,7 +1,9 @@
 import { MobileBlockHeader } from '@components/app/mobile-header/mobile-block-header';
-import { useBlockId } from '@core/block';
+import { SplitPermissionsBadge } from '@components/app/split-layout/components/SplitLabel';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import { FileTypeChip } from '@core/component/FileTypeChip';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import {
   type PsdHeaderProps,
@@ -13,6 +15,8 @@ import {
  * is viewing.
  */
 export function MobilePsdHeader(props: PsdHeaderProps) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
   const documentId = useBlockId();
   const title = useBlockDocumentName();
   const name = useBlockDocumentName('Image');
@@ -20,6 +24,9 @@ export function MobilePsdHeader(props: PsdHeaderProps) {
 
   return (
     <MobileBlockHeader
+      entityKind={entityKind}
+      permissions={permissions()}
+      badge={<SplitPermissionsBadge />}
       id={documentId}
       name={title() ?? ''}
       menuName={name() ?? ''}
