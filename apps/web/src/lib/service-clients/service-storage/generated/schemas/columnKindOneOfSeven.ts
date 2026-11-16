@@ -7,7 +7,7 @@
 import type { ColumnKindOneOfSevenType } from './columnKindOneOfSevenType';
 
 /**
- * A date-time.
+ * A checkbox.
  */
 export type ColumnKindOneOfSeven = {
   type: ColumnKindOneOfSevenType;
