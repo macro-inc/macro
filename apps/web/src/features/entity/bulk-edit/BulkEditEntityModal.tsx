@@ -3,10 +3,16 @@ import {
   type BulkShareHandle,
 } from '@app/features/sharing/share-delivery/bulk-share';
 import { ShareDialog } from '@core/component/TopBar/ShareDialog';
+import { isMobile } from '@core/mobile/isMobile';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
-import { ActionDialogShell, Dialog } from '@ui';
-import { type Accessor, createSignal, Show } from 'solid-js';
+import {
+  ActionDialogShell,
+  Dialog,
+  type ManagedDialogProps,
+  openDialog,
+} from '@ui';
+import { type Accessor, createSignal, type Owner, Show } from 'solid-js';
 import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
 import {
   BulkMoveToProjectView,
@@ -25,6 +31,8 @@ const BulkEditEntityModalContent = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   const handleMoved = (folder: MovedFolder) => {
     const { onMoved } = props;
@@ -36,11 +44,29 @@ const BulkEditEntityModalContent = (props: {
     if (!open) (share?.dismiss ?? props.onCancel)();
   };
 
+  // The item chips come before the footer, and a chip's preview card opens on
+  // focus, so Kobalte's default autofocus would open a preview and Enter would
+  // open that item. Focus the dialog itself, then the Delete button so Enter
+  // confirms; Escape still cancels. Phone sheets stay on the dialog, so a
+  // screen reader starts there. Focus Delete after the opening keystroke
+  // finishes, as Kobalte does: a menu item chosen with Enter opens this dialog
+  // mid-keydown, and focusing Delete then would let that same keypress click it.
+  let content: HTMLDivElement | undefined;
+  let deleteButton: HTMLButtonElement | undefined;
+  const focusDialogOnDelete = (event: Event) => {
+    if (props.view !== 'delete') return;
+    event.preventDefault();
+    content?.focus();
+    if (!isMobile()) setTimeout(() => deleteButton?.focus(), 0);
+  };
+
   return (
     <Show
       when={props.view === 'share'}
       fallback={
         <Dialog
+          contentRef={(element) => (content = element)}
+          onOpenAutoFocus={focusDialogOnDelete}
           open={props.isOpen()}
           position={props.view === 'moveToProject' ? 'top' : 'center'}
           class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
@@ -60,6 +86,10 @@ const BulkEditEntityModalContent = (props: {
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
+                    deleteButtonRef={(el) => {
+                      deleteButton = el;
+                    }}
+                    note={props.note}
                     onPartialDelete={props.onPartialDelete}
                     entities={props.entities}
                     onFinish={props.onFinish}
@@ -102,6 +132,8 @@ type BulkEditSession = {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 };
 
 const [globalSession, setGlobalSession] = createSignal<BulkEditSession>();
@@ -133,8 +165,47 @@ export const GlobalBulkEditEntityModal = () => (
           onCancel={() => close(session.onCancel)}
           onError={session.onError}
           onPartialDelete={session.onPartialDelete}
+          note={session.note}
         />
       );
     }}
   </Show>
 );
+
+type OwnedBulkEditProps = ManagedDialogProps & { session: BulkEditSession };
+
+function OwnedBulkEditModal(props: OwnedBulkEditProps) {
+  const close = (then?: () => void) => {
+    props.onOpenChange(false);
+    then?.();
+  };
+  return (
+    <BulkEditEntityModalContent
+      isOpen={() => props.open}
+      view={props.session.view}
+      entities={props.session.entities}
+      onFinish={() => close(props.session.onFinish)}
+      onMoved={props.session.onMoved}
+      onCancel={() => close(props.session.onCancel)}
+      onError={props.session.onError}
+      onPartialDelete={props.session.onPartialDelete}
+      note={props.session.note}
+    />
+  );
+}
+
+/**
+ * The same dialog, opened under `owner`, for a caller that can sit in a
+ * sheet: the global modal starts its own dismiss stack, so its Cancel,
+ * Escape or Back would close the sheet beneath it too.
+ */
+export function openOwnedBulkEditModal(
+  session: BulkEditSession,
+  owner: Owner | null
+) {
+  return openDialog<OwnedBulkEditProps>(
+    OwnedBulkEditModal,
+    { session },
+    { owner }
+  );
+}

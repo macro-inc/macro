@@ -1,4 +1,11 @@
-import { $getRoot } from 'lexical';
+import { $createListItemNode, $createListNode } from '@lexical/list';
+import { $createImageNode } from '@macro-inc/lexical-core';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  type LexicalNode,
+} from 'lexical';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
@@ -600,3 +607,118 @@ it.each(['standalone', 'reply'] as const)(
     }
   }
 );
+
+function queuedReplyContext() {
+  const context = createComposeContext();
+  context.delivery.queueActive = () => true;
+  context.drafts.saveLocalDraft = vi.fn(
+    async (input): Promise<LocalDraft> => ({
+      key: input.clientHandles?.draftId ?? input.draft.db_id!,
+      draftId: input.clientHandles?.draftId ?? input.draft.db_id!,
+      threadId:
+        input.clientHandles?.threadId ?? input.draft.thread_db_id ?? undefined,
+      accountId: 'owner',
+      generation: 'local-generation',
+      revision: 1,
+      acknowledgedRevision: 0,
+      status: 'dirty',
+      updatedAt: Date.now(),
+      content: input.draft,
+      attachments: [],
+    })
+  );
+  return context;
+}
+
+// A reply whose first block has no text was taken for an empty draft: it was
+// never saved, so its send had no draft ids to queue under.
+it.each([
+  {
+    opening: 'an image',
+    blocks: (): LexicalNode[] => [
+      $createImageNode({
+        srcType: 'url',
+        url: 'https://example.com/chart.png',
+        alt: 'chart',
+      }),
+      $createParagraphNode().append($createTextNode('See the chart')),
+    ],
+  },
+  {
+    opening: 'an empty line before a list',
+    blocks: (): LexicalNode[] => [
+      $createParagraphNode(),
+      $createListNode('bullet').append(
+        $createListItemNode().append($createTextNode('First point'))
+      ),
+    ],
+  },
+  {
+    opening: 'an image alone',
+    blocks: (): LexicalNode[] => [
+      $createImageNode({
+        srcType: 'url',
+        url: 'https://example.com/chart.png',
+        alt: 'chart',
+      }),
+    ],
+  },
+])('sends a reply that opens with $opening', async ({ blocks }) => {
+  const context = queuedReplyContext();
+  const root = mountReplyComposer(context);
+  try {
+    root.editor.update(
+      () =>
+        $getRoot()
+          .clear()
+          .append(...blocks()),
+      { discrete: true }
+    );
+    root.onContentChange('');
+    await root.sendEmail();
+
+    expect(context.drafts.saveLocalDraft).toHaveBeenCalled();
+    expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientHandles: expect.objectContaining({ draftId: expect.any(String) }),
+      })
+    );
+  } finally {
+    root.dispose();
+  }
+});
+
+it.each(['queued', 'legacy'] as const)(
+  'refuses a %s reply with nothing written before reaching the outbox',
+  async (delivery) => {
+    const context =
+      delivery === 'queued' ? queuedReplyContext() : createComposeContext();
+    const root = mountReplyComposer(context);
+    try {
+      root.edit('');
+      await root.sendEmail();
+
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it('refuses a saved reply whose text was deleted before Send', async () => {
+  const context = queuedReplyContext();
+  const root = mountReplyComposer(context);
+  try {
+    root.edit('Draft text');
+    await vi.advanceTimersByTimeAsync(600);
+    root.edit('');
+    await root.sendEmail();
+
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});

@@ -341,6 +341,30 @@ describe('fetchWithToken refresh latch', () => {
     expect(refreshCalls()).toBe(1);
   });
 
+  test('a caller aborted during refresh is never replayed with the new session', async () => {
+    const refresh = deferred<Response>();
+    mockFetch.mockImplementation((input) =>
+      isRefresh(input) ? refresh.promise : Promise.resolve(jsonResponse(401))
+    );
+    const caller = new AbortController();
+    const request = fetchWithToken(RESOURCE_URL, {
+      method: 'POST',
+      signal: caller.signal,
+    });
+    await tick();
+    expect(refreshCalls()).toBe(1);
+    caller.abort();
+    refresh.resolve(jsonResponse(200));
+
+    const result = await request;
+
+    expect(result.isErr()).toBe(true);
+    const resourceCalls = mockFetch.mock.calls.filter(
+      ([input]) => !isRefresh(input)
+    );
+    expect(resourceCalls).toHaveLength(1);
+  });
+
   test('a successful refresh does not latch subsequent 401s', async () => {
     let refreshCount = 0;
     mockFetch.mockImplementation((input) => {

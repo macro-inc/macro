@@ -35,6 +35,15 @@ const CONTACT_CATEGORIES = new Set<EntitySearchCategory | 'commands'>([
   'people',
 ]);
 
+function sameIdSet(previous: ReadonlySet<string>, next: ReadonlySet<string>) {
+  if (previous.size !== next.size) return false;
+
+  for (const id of next) {
+    if (!previous.has(id)) return false;
+  }
+  return true;
+}
+
 function showInRecencyList(item: CommandMenuItem): boolean {
   return item.bucket !== 'crm_company' || item.timestamps.viewedAt != null;
 }
@@ -110,7 +119,9 @@ export function useEntitySearch(
       : []
   );
   const contactItemIds = createMemo(
-    () => new Set(contactItems().map((item) => item.id))
+    () => new Set(contactItems().map((item) => item.id)),
+    undefined,
+    { equals: sameIdSet }
   );
   const cachedItems = (): QuickAccessItem[] => activeList()?.items() ?? [];
   const withDiscovery = <T extends CommandMenuItem>(
@@ -134,7 +145,9 @@ export function useEntitySearch(
 
   const team = useTeamMembers(searchActive);
   const teammateIds = createMemo(
-    () => new Set(team.users().map((user) => user.id))
+    () => new Set(team.users().map((user) => user.id)),
+    undefined,
+    { equals: sameIdSet }
   );
   const rankItems = <T extends CommandMenuItem>(
     items: T[],
@@ -167,6 +180,9 @@ export function useEntitySearch(
     isLoadingEntities: () =>
       (!!activeList()?.isLoading() && activeList()?.items().length === 0) ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
+    // Rows from other sources can be listed before the cache has answered a
+    // typed query, so its documents are still to come.
+    isSearchingEntities: () => hasQuery() && !!activeList()?.isSearching?.(),
     pagination: {
       windowKey: () => {
         if (

@@ -20,6 +20,11 @@ Uncorrelated traffic does not query the mapping table. Unsigned correlation head
 are not accepted. Public read-only and asset services retain their existing auth;
 they do not produce activity-history events.
 
+Email builds its correlation state from the database pool and JWT validation
+arguments in [API startup composition](../../services/email_service/src/composition/api.rs).
+Its API context carries that state to the optional extractor; handlers do not
+compose a database/JWT verifier for each request.
+
 The accepted ID lives in request-local async context, independent of trace
 sampling. A validated code-mode request may also supply `x-macro-sdk-verb`, a
 display-only value from the closed SDK verb vocabulary. Unknown values are

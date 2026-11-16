@@ -204,7 +204,10 @@ export function createEmailSendDispatcher(options: {
     }
   }
   function wake() {
-    if (disposed || navigator.onLine === false) return;
+    // Never gate on navigator.onLine: native webviews can read offline while
+    // the API is reachable and never fire `online`. Offline attempts fail fast
+    // and back off through `nextAttemptAt`.
+    if (disposed) return;
     if (timer !== undefined) clearTimeout(timer);
     if (running) rerun = true;
     else running = run();

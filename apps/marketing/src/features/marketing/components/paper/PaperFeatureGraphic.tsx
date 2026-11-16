@@ -12,6 +12,8 @@ export function PaperFeatureGraphic(props: {
   height?: number;
   mobileHeight?: number;
   backdrop?: boolean;
+  /** The art has real controls: expose it as a group instead of one image. */
+  interactive?: boolean;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const size = createElementSize(viewport);
@@ -28,7 +30,7 @@ export function PaperFeatureGraphic(props: {
         ref={setViewport}
         class="paper-feature-viewport paper-feature-art"
         data-compact={compact()}
-        role="img"
+        role={props.interactive ? 'group' : 'img'}
         aria-label={props.label}
         style={{
           height: `${(compact() ? (props.mobileHeight ?? (props.mobile ? 360 : (props.height ?? 544))) : (props.height ?? 544)) * scale()}px`,
@@ -36,7 +38,7 @@ export function PaperFeatureGraphic(props: {
       >
         <div
           class="paper-feature-canvas"
-          aria-hidden="true"
+          aria-hidden={props.interactive ? undefined : 'true'}
           style={{
             width: `${artWidth()}px`,
             transform: `scale(${scale()})`,

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_run\n                 (session_id, suggestion_id, user_id, agent_id, action_id, started_at, state,\n                  state_changed_at, sends, claimed_until)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ec492d161c6c813f7f325ed3e986a21d141f2d508a77b93bb834919bf838e65"
+}

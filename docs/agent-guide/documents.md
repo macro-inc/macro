@@ -128,7 +128,7 @@ and Project when enabled. Defaults apply only without a saved pin list; customiz
 pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
-views. Successful copies briefly animate the icon to a solid green check-circle;
+views. Successful copies briefly blur and fade the icon to a plain green check;
 they do not show a success toast.
 
 Embedded code files, canvases, and PDFs in Markdown documents show their content
@@ -309,12 +309,46 @@ Click a tick or press Enter to jump immediately to its heading without closing i
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
 
+## Markdown wide mode
+
+The document's title menu has **Turn on wide mode** (desktop and tablet only;
+phones already use the whole screen). It lifts the 768px reading column so the
+text, tables and code blocks fill the pane. The side margins grow with the pane
+up to 64px, keeping the outline rail visible, so the column never narrows as a
+pane widens and matches the standard column below 896px. It is the viewer's own
+setting, saved in this browser, and applies to every Markdown document they
+open, including documents open side by side; it changes nothing for
+collaborators. Images keep their own size. With margin comments showing, the
+comments stay in their own column beside the text. The Discussion under the
+document keeps the standard column, centered under the text, so it looks the
+same with wide mode on or off. Toggling keeps the reader's place in the
+document. Version history keeps the standard column. The menu item then reads
+**Turn off wide mode**. The backend-free desktop/phone regression mounts the
+real document view, including a signed-in Discussion with a thread:
+`bunx playwright test --config src/features/block-md/browser-test/playwright.config.ts`.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
 Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
+
+## Collapsible sections
+
+Any top-level heading with content under it folds that content away, up to the
+next heading of the same or a higher level. Hover the heading to show a chevron
+in the left gutter (the drag handle steps one column further left, or, in a
+gutter too narrow for both, is not shown on that heading); the chevron
+stays while the section is folded and is always shown on touch. Mod+Enter in a
+heading toggles it. Folding is per person and per device (localStorage, keyed by
+the headings' node ids): it changes no document content, collaborators never see
+it, and it survives a reload. Hidden blocks carry the `md-folded` class, which
+applies only on screen, so copy, export, and print include them. Find, outline
+clicks, node and location links, and a caret moving into a folded section unfold
+it; folding the section holding the caret moves the caret to the heading. Code:
+`LexicalMarkdown/plugins/heading-folds`, controls in
+`component/misc/HeadingFoldControls.tsx`.
 
 ## Databases in documents
 
@@ -3099,8 +3133,15 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   Files-view title menu (three dots beside the breadcrumb) also lists `Copy as
   prompt` directly above `Download` for plain documents.
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
-  keeps the picker open for multiple selections. Reopen it to remove a tag.
+- `Tags` → `Add tags` opens the picker. On desktop, clicking a checkbox or pressing
+  Enter/Space while it is focused toggles that tag and keeps the picker open;
+  clicking its label toggles and saves all staged selections, then closes.
+  Shift-click and Shift+Enter also keep it open. Mobile retains Done.
+  In a More-menu submenu, a row pick or Escape closes only the tag picker and
+  leaves the parent menu available for another action.
+  During tag creation, the compact Back/title row shows the draft color beside
+  the heading. Back and Escape return from sharing to color, then to the name
+  search, preserving the name and chosen color.
   With GraphQL Soup enabled, applying the first tag refetches only that entity's
   properties; later edits update the existing assignment optimistically. Verify
   both the side panel and list-row chip, then reload to confirm persistence.

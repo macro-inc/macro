@@ -78,7 +78,6 @@ pub fn pg_admission_service(
         pool.clone(),
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
             roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
         ),
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
         enforcement,
@@ -92,7 +91,6 @@ pub fn pg_admission_service(
 pub type PgEntitlementSource = RolesTeamsEntitlementSource<
     roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
         roles_and_permissions::outbound::pgpool::MacroDB,
-        roles_and_permissions::outbound::pgpool::MacroDB,
     >,
     teams::outbound::team_repo::TeamRepositoryImpl,
 >;
@@ -104,7 +102,6 @@ pub fn pg_entitlement_source(pool: PgPool) -> PgEntitlementSource {
     RolesTeamsEntitlementSource::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
             roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
         ),
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
     )
@@ -115,7 +112,6 @@ pub fn pg_entitlement_source(pool: PgPool) -> PgEntitlementSource {
 pub type PgCreditGrantService = crate::domain::CreditGrantService<
     RolesTeamsEntitlementSource<
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
-            roles_and_permissions::outbound::pgpool::MacroDB,
             roles_and_permissions::outbound::pgpool::MacroDB,
         >,
         teams::outbound::team_repo::TeamRepositoryImpl,
@@ -130,7 +126,6 @@ pub fn pg_credit_grant_service(pool: PgPool) -> PgCreditGrantService {
     crate::domain::CreditGrantService::new(
         RolesTeamsEntitlementSource::new(
             roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-                roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
                 roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
             ),
             teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
@@ -181,7 +176,6 @@ pub fn pg_settling_recorder(
     settling_recorder(
         pool.clone(),
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
             roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
         ),
         teams::outbound::team_repo::TeamRepositoryImpl::new(pool),

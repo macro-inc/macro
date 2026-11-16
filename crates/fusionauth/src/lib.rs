@@ -1,6 +1,8 @@
 #![deny(missing_docs)]
 //! FusionAuth API client library.
 
+use macro_service_urls::{GoogleOauthRevokeUrl, GoogleOauthTokenUrl};
+
 /// Apple identity provider login.
 pub mod apple;
 /// FusionAuth error types.
@@ -95,6 +97,10 @@ pub struct FusionAuthClient {
     google_client_id: String,
     /// The client secret for Google identity provider
     google_client_secret: String,
+    /// Google's OAuth token endpoint.
+    google_token_url: String,
+    /// Google's OAuth token revocation endpoint.
+    google_revoke_url: String,
     /// Optional Microsoft OAuth credentials.
     microsoft_credentials: Option<microsoft::MicrosoftOAuthCredentials>,
 }
@@ -124,8 +130,19 @@ impl FusionAuthClient {
             unauth_client,
             google_client_id,
             google_client_secret,
+            google_token_url: GoogleOauthTokenUrl::unwrap_new().to_string(),
+            google_revoke_url: GoogleOauthRevokeUrl::unwrap_new().to_string(),
             microsoft_credentials: None,
         }
+    }
+
+    /// Sets the Google OAuth token and revocation endpoints, in place of
+    /// the ones `GoogleOauthTokenUrl` and `GoogleOauthRevokeUrl` name. For
+    /// tests that run against `crates/gmail_emulator`.
+    pub fn with_google_oauth_urls(mut self, token_url: String, revoke_url: String) -> Self {
+        self.google_token_url = token_url;
+        self.google_revoke_url = revoke_url;
+        self
     }
 
     /// Sets the browser-reachable FusionAuth base URL used to construct OAuth

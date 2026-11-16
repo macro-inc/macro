@@ -15,19 +15,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('registers reply-all for the latest or selected message and ignores an empty thread', () => {
+it('replies to the latest or selected message, and Enter replies all to the latest', () => {
   const state = navigationWithList(['first', 'last']);
   const handlers = state.handlers();
   try {
-    expect(handlers?.replyAllToFocusedMessage?.()).toBe(true);
+    expect(handlers?.replyToFocusedMessage()).toBe(true);
+    expect(state.context.replyRequest.messageId()).toBe('last');
+    expect(state.context.replyRequest.replyType()).toBe('reply');
+    expect(handlers?.activate()).toBe(true);
     expect(state.context.replyRequest.messageId()).toBe('last');
     expect(state.context.replyRequest.replyType()).toBe('reply-all');
     state.context.messages.setFocused('first');
-    expect(handlers?.replyAllToFocusedMessage?.()).toBe(true);
+    expect(handlers?.replyToFocusedMessage()).toBe(true);
     expect(state.context.replyRequest.messageId()).toBe('first');
     expect(state.context.messages.replyingToMessageId()).toBe('first');
     state.setSnapshot(thread([]));
-    expect(handlers?.replyAllToFocusedMessage?.()).toBe(false);
+    expect(handlers?.replyToFocusedMessage()).toBe(false);
   } finally {
     state.dispose();
   }

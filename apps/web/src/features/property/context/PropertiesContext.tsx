@@ -4,6 +4,7 @@ import {
   createContext,
   createEffect,
   createSignal,
+  on,
   onCleanup,
   type ParentProps,
   useContext,
@@ -45,6 +46,9 @@ interface PropertiesContextValue {
   addProperty?: (propertyDefinitionId: string) => Promise<void>;
   removeProperty?: (propertyId: string) => Promise<void>;
   saveHandler: PropertySaveHandler;
+  /** Previously assigned user IDs retained for re-adding within this record. */
+  retainedAssigneeIds: Accessor<readonly string[]>;
+  retainAssignees: (ids: readonly string[]) => void;
 
   // Specific modal state accessors
   datePickerModal: Accessor<DatePickerModalState | null>;
@@ -95,6 +99,19 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     createSignal<DatePickerModalState | null>(null);
   const [createPropertyModal, setCreatePropertyModal] =
     createSignal<CreatePropertyModalState | null>(null);
+  const [retainedAssigneeIds, setRetainedAssigneeIds] = createSignal<
+    readonly string[]
+  >([]);
+  createEffect(
+    on(
+      () => props.entityId,
+      () => setRetainedAssigneeIds([]),
+      { defer: true }
+    )
+  );
+  const retainAssignees = (ids: readonly string[]) => {
+    setRetainedAssigneeIds((current) => [...new Set([...current, ...ids])]);
+  };
 
   // Property Selector actions
   const openPropertySelector = () => {
@@ -220,6 +237,8 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     addProperty: props.addProperty,
     removeProperty: props.removeProperty,
     saveHandler: props.saveHandler,
+    retainedAssigneeIds,
+    retainAssignees,
     // Specific modal state
     datePickerModal,
     createPropertyModal,

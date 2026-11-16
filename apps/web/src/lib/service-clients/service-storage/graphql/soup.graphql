@@ -132,6 +132,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupInitiative {
+        appearance
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -140,6 +141,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupDocument {
+        appearance
 		documentName: name
 		ownerId
 		fileType
@@ -324,6 +326,10 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		ownerId
 		createdAt
 		updatedAt
+	}
+	... on GraphqlSoupTeam {
+		teamName: name
+		ownerId
 	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
@@ -652,6 +658,22 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
 	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
+	}
+	... on GraphqlComputerSetupMetadata {
+		computerSetupComputerId: computerId
+		computerSetupHarnessId: harnessId
+		computerSetupComputerName: computerName
+		computerSetupAgentUserId: agentUserId
+		computerSetupAgentName: agentName
+		computerSetupOutcome: outcome
+		computerSetupFailureReason: failureReason
+	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
 		inviteToTeamTeamId: teamId
@@ -686,6 +708,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventJoinRequestRequestId: requestId
 		calendarEventJoinRequestEventId: eventId
 		calendarEventJoinRequestTitle: title
+	}
+	... on GraphqlPasswordAccessRequestedMetadata {
+		passwordAccessRequestedRequestId: requestId
+		passwordAccessRequestedTeamId: teamId
+		passwordAccessRequestedItemId: itemId
+		passwordAccessRequestedItemName: itemName
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary

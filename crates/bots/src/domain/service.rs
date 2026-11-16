@@ -1,6 +1,7 @@
 //! Bot service implementation.
 
 mod agent_dm;
+mod harness_agents;
 
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
@@ -8,10 +9,10 @@ use super::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService, McpAppCatalog},
+    ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -20,19 +21,22 @@ use entity_access::domain::models::{
     BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     MemberParticipantRole, ParticipantRole,
 };
+use harnesses::domain::ports::HarnessTeamAgents;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
 ///
-/// `C` answers whether a Pipedream app slug is real. [`UncheckedMcpApps`]
-/// accepts every slug; hosts that configure agents from a conversation pass
-/// a directory-backed catalog instead.
+/// `T` answers which harnesses are agent teammates' computers, which no
+/// agent may be bound to. `C` answers whether a Pipedream app slug is real.
+/// [`UncheckedMcpApps`] accepts every slug; hosts that configure agents from
+/// a conversation pass a directory-backed catalog instead.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R, B, C = UncheckedMcpApps> {
+pub struct BotServiceImpl<R, B, T, C = UncheckedMcpApps> {
     repo: R,
     event_broker: B,
+    team_agents: T,
     mcp_apps: C,
 }
 
@@ -50,23 +54,26 @@ impl McpAppCatalog for UncheckedMcpApps {
     }
 }
 
-impl<R, B, C> BotServiceImpl<R, B, C> {
+impl<R, B, T, C> BotServiceImpl<R, B, T, C> {
     /// Swap the MCP app directory this service consults.
-    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, D> {
+    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, T, D> {
         BotServiceImpl {
             repo: self.repo,
             event_broker: self.event_broker,
+            team_agents: self.team_agents,
             mcp_apps,
         }
     }
 }
 
-impl<R, B> BotServiceImpl<R, B, UncheckedMcpApps> {
-    /// Create a bot service that does not check MCP app slugs against Pipedream.
-    pub fn new(repo: R, event_broker: B) -> Self {
+impl<R, B, T> BotServiceImpl<R, B, T, UncheckedMcpApps> {
+    /// Create a bot service that does not check MCP app slugs against
+    /// Pipedream, reading agent teammates' computers from `team_agents`.
+    pub fn new(repo: R, event_broker: B, team_agents: T) -> Self {
         Self {
             repo,
             event_broker,
+            team_agents,
             mcp_apps: UncheckedMcpApps,
         }
     }
@@ -248,10 +255,11 @@ struct ValidatedBotToken {
     token_id: Uuid,
 }
 
-impl<R, B, C> BotServiceImpl<R, B, C>
+impl<R, B, T, C> BotServiceImpl<R, B, T, C>
 where
     R: BotRepo,
     B: MacroEventBroker,
+    T: HarnessTeamAgents,
 {
     fn publish_bot_event(&self, event: &BotMacroEvent) {
         drop(self.event_broker.send_event(event).inspect_err(|error| {
@@ -303,7 +311,8 @@ where
         })
     }
 
-    /// Ensure the resolved agent owner may run agents on a registered harness.
+    /// Ensure the resolved agent owner may run agents on a registered harness,
+    /// returning the harness's facts when one is chosen.
     ///
     /// A team agent must run on a harness open to its whole team, so a
     /// teammate's mention can never execute on a machine shared only with some
@@ -313,9 +322,9 @@ where
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
-    ) -> Result<(), BotError> {
+    ) -> Result<Option<HarnessFacts>, BotError> {
         let Some(harness_id) = harness_id else {
-            return Ok(());
+            return Ok(None);
         };
         let harness_owner = self
             .repo
@@ -323,6 +332,17 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
+        // An agent teammate is reached by message, like any member; nothing
+        // else runs on its computer.
+        if self
+            .team_agents
+            .harness_team_agent(harness_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .is_some()
+        {
+            return Err(BotError::AgentTeammateComputer);
+        }
 
         validate_permission_bypass(
             harness_owner.allow_permission_bypass,
@@ -343,7 +363,7 @@ where
         if !usable {
             return Err(BotError::Unauthorized);
         }
-        Ok(())
+        Ok(Some(harness_owner))
     }
 
     async fn owner_for_agent_update(
@@ -442,7 +462,7 @@ where
             .repo
             .update_agent(current.id, owner, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?
+            .map_err(binding_error)?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
 
         self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
@@ -488,10 +508,11 @@ where
     }
 }
 
-impl<R, B, C> BotService for BotServiceImpl<R, B, C>
+impl<R, B, T, C> BotService for BotServiceImpl<R, B, T, C>
 where
     R: BotRepo,
     B: MacroEventBroker + Clone,
+    T: HarnessTeamAgents,
     C: McpAppCatalog,
 {
     async fn create_agent(
@@ -514,14 +535,23 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+        let harness = self
+            .ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
             .await?;
+        let mut req = req;
+        // A Macro computer is a sandbox the team bought for its agents, so an
+        // agent on one runs without asking unless the request says otherwise.
+        if req.auto_accept_permissions.is_none()
+            && harness.is_some_and(|facts| facts.on_computer && facts.allow_permission_bypass)
+        {
+            req.auto_accept_permissions = Some(true);
+        }
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
             .create_agent(owner, caller, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?;
+            .map_err(binding_error)?;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: agent.bot.id,
@@ -1004,6 +1034,16 @@ async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
 }
 
 /// A persona cannot override its harness operator's permission policy.
+/// A failed agent write, as a bad request when its harness was deleted while
+/// it was being bound.
+fn binding_error(err: impl Into<anyhow::Error>) -> BotError {
+    let err = err.into();
+    if err.is::<HarnessRemoved>() {
+        return BotError::BadRequest(HarnessRemoved.to_string());
+    }
+    BotError::Repo(err)
+}
+
 fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
     if requested == Some(true) && !allowed {
         return Err(BotError::BadRequest(
@@ -1014,4 +1054,4 @@ fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

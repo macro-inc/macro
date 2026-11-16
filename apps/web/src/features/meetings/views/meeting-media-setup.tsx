@@ -20,6 +20,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { MicrophoneLevelMeter } from '../components/microphone-level-meter';
 import type { createMeetingMedia } from '../primitives/meeting-media';
 
 export function MeetingMediaSetup(props: {
@@ -218,6 +219,10 @@ export function MeetingMediaSetup(props: {
           </div>
         </div>
       </div>
+      <MicrophoneLevelMeter
+        level={media.microphoneLevel()}
+        enabled={media.microphoneEnabled()}
+      />
       <div class="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
         <MediaDevicePicker
           label="Microphone"

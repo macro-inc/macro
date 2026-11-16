@@ -61,7 +61,8 @@ pub enum AiFeature {
     CallSummary,
     /// Channel bots.
     ChannelBot,
-    /// AI projection materialization.
+    /// Retired AI projection materialization; kept so historical usage rows
+    /// still parse.
     AiProjection,
     /// In-document AI editing (the ai-editing-worker).
     AiEditing,
@@ -98,6 +99,15 @@ pub fn normalize_model_id(model: &str) -> &str {
     match model.rsplit_once('/') {
         Some((_, bare)) if !bare.is_empty() => bare,
         _ => model,
+    }
+}
+
+/// The provider segment of a routing id (`fireworks` in `fireworks/kimi-k3`),
+/// or `None` for a bare id, whose provider the caller did not say.
+pub fn model_provider(model: &str) -> Option<&str> {
+    match model.split_once('/') {
+        Some((provider, bare)) if !provider.is_empty() && !bare.is_empty() => Some(provider),
+        _ => None,
     }
 }
 

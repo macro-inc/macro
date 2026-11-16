@@ -6,15 +6,13 @@
  */
 
 import type { NotifEventOneOfSixnineTag } from './notifEventOneOfSixnineTag';
-import type { RuntimeAccessRemovedMetadata } from './runtimeAccessRemovedMetadata';
+import type { RoutineRunFinishedMetadata } from './routineRunFinishedMetadata';
 
 /**
- * A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped.
+ * One of the user's routines finished a run, successfully or not.
  */
 export type NotifEventOneOfSixnine = {
-  /** A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped. */
-  content: RuntimeAccessRemovedMetadata;
+  /** One of the user's routines finished a run, successfully or not. */
+  content: RoutineRunFinishedMetadata;
   tag: NotifEventOneOfSixnineTag;
 };

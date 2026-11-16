@@ -69,6 +69,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
 Prompts to an external runtime pass `authorize_runtime` when accepted and
 `runtime_refusal` again when they dispatch, so a prompt queued before access was
 removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
@@ -151,6 +154,10 @@ Reconcile active leases against terminal log evidence too: an observer can miss 
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
 
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
+
 Each dial costs a replica a handshake, `session/list` and a reattach, so
 `inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,
 in-memory `DialBudget` (6 dials a minute, as a burst or one every 10 s) and
@@ -169,6 +176,11 @@ the lease. To debug a harness in Datadog, search `@harness:<id>` for
 harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
 disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
 
+Only directly authenticated users with edit access may answer ACP permissions or
+elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or
+cancel held tool calls, but cannot approve or approve and remember them; the
+HTTP boundary checks both agent attribution and the execution header.
+
 ## Checks
 
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
@@ -183,6 +195,9 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` opens with `<you>`, the
+  session bot's name and handle, so the agent can tell a message naming it
+  from one naming someone else.
 - Every composed prompt's `<m-agent-context>` states `<current_time>` in the
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source

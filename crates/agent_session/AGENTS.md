@@ -25,7 +25,9 @@ consumer talks to.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
   capped to 25 sessions before folding their logs. Served to the caller by
   `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
-  `ListAgentUpdates` tool by `/internal/coding-agents/updates`.
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`. In code mode,
+  `macro.agentSessions.updates()` reads the route and an `agentUpdates` view
+  draws the cards, only for sessions the viewer owns.
 - `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
   `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
   share `SessionTasks::link_task`.
@@ -61,7 +63,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. Only directly authenticated users with edit access may answer permissions or elicitations; agent programs and runtimes cannot answer. `link_task` returns a `mention` chip to paste when naming the task.
 
 `release_session` stops an idle actor silently (`CloseReason::Released`): the
 actor refuses with `SessionRelease::Busy` unless its machine is live with no
@@ -88,7 +90,9 @@ advance past unavailable sessions. Quiet batches bind to the actual prompt actio
 notification-only turns record `PrompterKind::System` and no human authority.
 Never expose notification metadata through public session controls. Notification
 sessions read original log frames across load boundaries to retain trusted event
-provenance when runtimes echo their prompt history. Queue reads discard legacy
+provenance when runtimes echo their prompt history. A log trigger records this
+once as `agent_session.has_trusted_notifications`; history reads test that flag,
+never the log's JSON. Queue reads discard legacy
 private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
@@ -146,6 +150,12 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity: `domain/lifecycle_activity.rs` maps lifecycle events for DSS's activity
+consumer. `opened` for a person-started session is their Created activity,
+which places it in Home's own work as soon as its row commits; `deleted` purges
+it. The harness publishes `opened` before provisioning the sandbox, so keep it
+there.
+
 Activity summaries: `domain/activity_summary.rs` is a turn observer the
 harness binds next to the queue. For each running turn it keeps one task that
 summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
@@ -167,7 +177,8 @@ skips the turn before any model call; unset or unreadable, summaries run.
 
 - MCP credentials never enter the log. `Message`'s serialization applies
   `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
-  go through, and `LiveSessionLogWriter` also redacts the frame it holds. The session's live server list
+  go through, and `LiveSessionLogWriter` also redacts the frame it holds. Rows
+  stored before this keep what they were written with. The session's live server list
   (`attached_mcp_servers`) and the frame sent to the runtime keep them. A new
   server-to-runtime method is stored without params until it is added to
   `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
@@ -176,6 +187,9 @@ skips the turn before any model call; unset or unreadable, summaries run.
   frames before telemetry, handshake retention, and storage. Keep the machine's
   server list current when replacing MCP servers; outbound frames still need
   their configured headers.
+- Persist `AcpReady` through the fenced session log before opening or restoring
+  a session on an already-initialized shared runtime; MCP and model-gateway
+  credentials remain revoked while the durable status is disconnected.
 - The scheduler's routine-session operations (`domain/routines.rs`,
   `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
   a session the scheduler opened for its owner, a routine's run (source
@@ -227,3 +241,9 @@ skips the turn before any model call; unset or unreadable, summaries run.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+- No session opens for a bot bound to an agent teammate's computer
+  (`BotFacts::on_team_agent_computer`): `persona_for_owner` and a runtime's
+  external create refuse it with `TeamAgentComputer` (409).
+- `RuntimeSessionLookup` resolves ACP ids for a supplied bot set; runtime wiring obtains assignments through the bots port.
+
+- Structured session activity additionally requires current access for CRM records, including acting-user bot credentials. Preserve the raw cursor when filtering denied rows; saved transcript text remains a received snapshot.

@@ -3,6 +3,7 @@ use super::*;
 #[tokio::test]
 async fn test_generate_upsert() {
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "AAA".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -48,6 +49,7 @@ async fn test_generate_upsert_with_sub_type() {
     use document_sub_type::DocumentSubType;
 
     let document_info = DocumentMetadata {
+        appearance: None,
         document_id: "BBB".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
@@ -82,6 +84,7 @@ async fn test_generate_upsert_with_sub_type() {
 
 fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
     DocumentMetadata {
+        appearance: None,
         document_id: "CCC".to_string(),
         document_version_id: 0,
         owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),

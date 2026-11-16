@@ -13,6 +13,7 @@ describe('browser Turso cache rollout policy', () => {
         const decision = resolveBrowserTursoCacheRollout({
           isTauri: false,
           graphqlTransportEnabled: true,
+          browserSupported: true,
           disableEnvOverride,
           posthogDisable,
         });
@@ -33,6 +34,7 @@ describe('browser Turso cache rollout policy', () => {
       resolveBrowserTursoCacheRollout({
         isTauri: false,
         graphqlTransportEnabled: true,
+        browserSupported: true,
         disableEnvOverride: undefined,
         posthogDisable: undefined,
       })
@@ -49,12 +51,30 @@ describe('browser Turso cache rollout policy', () => {
       resolveBrowserTursoCacheRollout({
         isTauri: false,
         graphqlTransportEnabled: false,
+        browserSupported: true,
         disableEnvOverride: false,
         posthogDisable: false,
       })
     ).toMatchObject({
       enabled: false,
       reason: 'graphql-transport-disabled',
+    });
+  });
+
+  it('keeps browsers without the cache APIs uncached', () => {
+    expect(
+      resolveBrowserTursoCacheRollout({
+        isTauri: false,
+        graphqlTransportEnabled: true,
+        browserSupported: false,
+        disableEnvOverride: undefined,
+        posthogDisable: undefined,
+      })
+    ).toEqual({
+      enabled: false,
+      cohort: 'unknown',
+      reason: 'browser-unsupported',
+      nativeCacheUnchanged: false,
     });
   });
 
@@ -65,6 +85,7 @@ describe('browser Turso cache rollout policy', () => {
         resolveBrowserTursoCacheRollout({
           isTauri: true,
           graphqlTransportEnabled,
+          browserSupported: false,
           // Browser emergency values are irrelevant on native.
           disableEnvOverride: true,
           posthogDisable: true,

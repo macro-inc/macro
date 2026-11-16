@@ -4,4 +4,5 @@
 //! schemas are kept here so that typegen and frontend rendering works.
 
 pub mod read;
+pub mod read_activity;
 pub mod subagent;

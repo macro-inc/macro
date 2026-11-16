@@ -4,6 +4,7 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
+import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -34,7 +35,15 @@ function crmContactByEmailQueryOptions(
         })
       );
       if (contact && !signal.aborted) {
-        deps.client.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
+        // The by-email answer carries no company summary; keep the cached
+        // one while it is still of the contact's company.
+        deps.client.setQueryData<CrmContactDetailResponse>(
+          crmKeys.contact(contact.id).queryKey,
+          (current) =>
+            current?.company && current.company.id === contact.companyId
+              ? { ...contact, company: current.company }
+              : contact
+        );
       }
       return contact;
     },
@@ -61,11 +70,11 @@ export function useCrmContactByEmailQuery(
 function contactQueryOptions(deps: CrmRecordDependencies, contactId: string) {
   return queryOptions({
     queryKey: crmKeys.contact(contactId).queryKey,
-    queryFn: () => {
+    queryFn: ({ signal }) => {
       if (!contactId) {
         throw new Error('contact id is required to fetch contact');
       }
-      return throwOnErr(() => deps.storage.getContact({ contactId }));
+      return throwOnErr(() => deps.storage.getContact({ contactId, signal }));
     },
     staleTime: CONTACT_STALE_TIME,
     enabled: !!contactId,
@@ -93,8 +102,8 @@ export function useContactQuery(
  * there is no global directory involved — `crm_contacts.name` is already
  * team-scoped, so the write is a plain overwrite. Optimistically updates the
  * contact detail cache (with rollback on error) so the title flips
- * immediately, then invalidates it plus the parent company (whose response
- * embeds the contact list) and soup so every listing picks up the new name.
+ * immediately, then invalidates it plus the parent company's Team list and
+ * soup so every listing picks up the new name.
  */
 export function useSetContactNameMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -140,7 +149,7 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
           }),
           companyId &&
             deps.client.invalidateQueries({
-              queryKey: crmKeys.company(companyId).queryKey,
+              queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);

@@ -10,6 +10,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
+import { Team } from '../teams/team';
 import { Company } from './company';
 import { Contact } from './contact';
 import { CrmPipeline } from './pipeline';
@@ -24,7 +25,7 @@ import { PipelineNamespace } from './pipelines';
  *
  * A pipeline is a board of deals. Each entry tracks one CRM company or contact and has its own fields: usually Stage, Owner and Revenue, plus any the team added. "Deal", "opportunity", "lead", "the pipeline", "move Acme to Negotiation" and "who's in Demo" all refer to pipeline entries. A pipeline is not a Macro database: work with it through the CRM pipeline methods, never database queries or SQL.
  *
- * Work with entries by name through the pipeline's own methods: `find` (filters by field name and stage label, with per-stage counts and number totals such as Revenue), `addRecords`, `updateEntries` (a stage by its label, a person as `'me'`), `removeRecords`, and `edit` for fields and stage options. `importCsv` / `exportCsv` move entries through CSV, and `crm.importCompaniesCsv` loads a companies list. `crm.pipelines.entriesFor` and `searchEntries` find a company's deals across pipelines. Reach for `applyOps` and column ids only for what these cannot express.
+ * Create a pipeline with its stages and fields in one `crm.pipelines.create` call. Work with entries by name through the pipeline's own methods: `find` (filters by field name and stage label, with per-stage counts and number totals such as Revenue), `addRecords`, `updateEntries` (a stage by its label, a person as `'me'`), `removeRecords`, and `edit` for fields and stage options. `importCsv` / `exportCsv` move entries through CSV, and `crm.importCompaniesCsv` loads a companies list. `crm.pipelines.entriesFor` and `searchEntries` find a company's deals across pipelines. Reach for `applyOps` and column ids only for what these cannot express.
  *
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
  */
@@ -34,6 +35,20 @@ export class CrmNamespace {
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
+  }
+
+  /**
+   * Read the caller's current CRM access, including when access is denied.
+   * Existing handles do not bypass the server's current permission checks.
+   *
+   * @readonly
+   */
+  async access(): Promise<{ team?: Team; allowed: boolean }> {
+    const access = unwrap(await this.client.storage.getCrmMemberAccess());
+    return {
+      team: access.team_id ? Team.byId(this.client, access.team_id) : undefined,
+      allowed: access.allowed,
+    };
   }
 
   /**
