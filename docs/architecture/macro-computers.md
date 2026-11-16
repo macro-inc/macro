@@ -351,7 +351,9 @@ attempt, so a busy database never fails a computer or abandons a removal.
   the snapshot without its memory, and `incus copy vm/snap new` refuses a
   stateful copy under a new name); `migration.stateful=true` refuses the data
   disk from a local pool; and an in-place restore (18–19 s) was no faster than
-  a cold boot of the same guest (~20 s).
+  a cold boot of the same guest (~20 s). Cloning a sealed, booted-once root
+  instead of the image reached the first claim only 2.3 s sooner (p50, 27.6 s
+  against 29.9 s), not worth a per-clone identity reset.
 - **Enrollment**: `Enrollment { computer_id, generation, pairing_id, device_secret, name, deployment, traceparent }`
   is the one-time `user.macro.enrollment` JSON or Docker file. `deployment`
   (agent harness, document storage, app and egress URLs) comes from the
