@@ -70,23 +70,31 @@ export function ListHeaderSearch(props: {
   const leave = (row: 'first' | 'current') => {
     // An empty field has no search to keep on screen.
     const collapses = !props.value.trim();
-    if (collapses) clear();
+    // Without a list to move to, a collapsed field hands focus to its button.
+    const collapseToButton = () => {
+      clear();
+      queueMicrotask(() => trigger?.focus());
+    };
 
     if (!props.focusResults) {
       input?.blur();
-      // Without a list to move to, a collapsed field hands focus to its button.
-      if (collapses) queueMicrotask(() => trigger?.focus());
+      if (collapses) collapseToButton();
       return;
     }
 
     props.focusResults();
     // A view whose results are not on screen (a tab without a list) has
-    // nowhere to send the keyboard, so the keys stay with the field.
+    // nowhere to send the keyboard: ArrowDown and Enter stay with the field,
+    // and Escape leaves it as it would without a list.
     if (document.activeElement === input) {
-      if (row === 'current') input?.blur();
+      if (row === 'first') return;
+
+      input?.blur();
+      if (collapses) collapseToButton();
       return;
     }
 
+    if (collapses) clear();
     // The list's own "go to first item" also scrolls that row into view.
     if (row !== 'first') return;
     const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);

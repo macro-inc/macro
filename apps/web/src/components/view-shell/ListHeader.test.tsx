@@ -328,3 +328,31 @@ it('leaves an Escape that cancels a composition to the field', () => {
   expect(focusResults).not.toHaveBeenCalled();
   expect(search()).toBe('budget');
 });
+
+it('keeps an empty field open when the view has no list on screen', async () => {
+  const [search, setSearch] = createSignal('');
+  const view = render(() => (
+    <ListHeaderSearch
+      label="Search routines"
+      value={search()}
+      onValueChange={setSearch}
+      // The tab on screen has no list to focus.
+      focusResults={() => {}}
+      registerFocus={() => {}}
+    />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Search routines' }));
+  await Promise.resolve();
+  const field = view.getByRole('searchbox', { name: 'Search routines' });
+
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'Escape');
+  await Promise.resolve();
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(document.activeElement).toBe(
+    view.getByRole('button', { name: 'Search routines' })
+  );
+});
