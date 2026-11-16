@@ -346,13 +346,22 @@ fn parse_webhook_request(
         ));
     }
 
-    if is_json_body(headers)
-        && let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body)
-    {
-        return Ok(ChannelWebhookRequest {
-            content: require_non_empty_content(request.content)?,
-            notification_policy: request.notification_policy,
-        });
+    if is_json_body(headers) {
+        if let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body) {
+            return Ok(ChannelWebhookRequest {
+                content: require_non_empty_content(request.content)?,
+                notification_policy: request.notification_policy,
+            });
+        }
+        // A body that asks for a policy must get it, never fall back to
+        // posting itself as text with the default, which notifies everyone.
+        if serde_json::from_slice::<serde_json::Value>(&body)
+            .is_ok_and(|value| value.get("notification_policy").is_some())
+        {
+            return Err(ChannelBotWebhookHandlerErr::BadRequest(
+                "notification_policy must be Default, MentionsOnly or Silent, with content",
+            ));
+        }
     }
 
     let content = std::str::from_utf8(&body)
