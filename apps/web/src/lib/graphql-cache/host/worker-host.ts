@@ -13,6 +13,7 @@ import { createPeopleCache } from '../people/host';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
+  CACHE_SUPERSEDED_ERROR_CODE,
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type CacheRequest,
@@ -56,6 +57,7 @@ import {
   type CacheTelemetryRecorderLike,
   type CacheTelemetrySink,
   classifyCacheError,
+  describeCacheError,
   isolateCacheTelemetry,
   operationCategoryForRequest,
 } from '../telemetry';
@@ -74,6 +76,7 @@ import {
   COORDINATOR_CONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
+import { unsupportedBrowserReason } from './browser-support';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
@@ -159,35 +162,6 @@ const DEFAULT_STORAGE_HEALTH_INTERVAL_MS = 5 * 60_000;
 const MIN_STORAGE_HEALTH_INTERVAL_MS = 1_000;
 const MAX_STORAGE_HEALTH_INTERVAL_MS = 15 * 60_000;
 
-function unsupportedBrowserReason(): string | undefined {
-  if (typeof SharedWorker !== 'function') {
-    return 'SharedWorker is not supported by this browser';
-  }
-  if (typeof Worker !== 'function') {
-    return 'DedicatedWorker is not supported by this browser';
-  }
-  if (typeof MessageChannel !== 'function') {
-    return 'MessageChannel is not supported by this browser';
-  }
-  if (
-    typeof navigator === 'undefined' ||
-    !navigator.locks ||
-    typeof navigator.locks.request !== 'function'
-  ) {
-    return 'Web Locks are not supported by this browser';
-  }
-  if (
-    !navigator.storage ||
-    typeof navigator.storage.getDirectory !== 'function'
-  ) {
-    return 'OPFS is not supported by this browser';
-  }
-  // Do not probe createSyncAccessHandle here: Chromium and Firefox expose it
-  // only inside DedicatedWorker. Engine initialization reports that async
-  // capability failure through the normal terminal-init path.
-  return undefined;
-}
-
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
@@ -208,7 +182,8 @@ const isOwnerEpochLoss = (error: unknown): error is CacheResponseError =>
 
 const isOwnerLockUnavailable = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
-  error.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+  (error.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+    error.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
 
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let pageTelemetry = options.telemetry
@@ -379,7 +354,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
-      if (isOwnerLockUnavailable(error)) retireUnavailable(msg.error);
+      if (isOwnerLockUnavailable(error))
+        retireUnavailable(msg.error, {
+          superseded: error.errorCode === CACHE_SUPERSEDED_ERROR_CODE,
+        });
       finishGracefulDisposeIfDrained();
       return;
     }
@@ -601,13 +579,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         if (error instanceof WorkerRestartedError) reconnectCoordinator(error);
         else failTransport(error);
       },
-      onCacheUnavailable: (reason) => {
-        if (adapter === created) retireUnavailable(reason);
+      onCacheUnavailable: (reason, supersededBuild) => {
+        if (adapter === created)
+          retireUnavailable(reason, { superseded: supersededBuild });
       },
       onCacheSuperseded: (reason) => {
         if (adapter !== created || superseded) return;
         superseded = true;
-        retireUnavailable(reason, true);
+        retireUnavailable(reason, {
+          superseded: true,
+          leaveForNewerBuild: true,
+        });
         options.onSuperseded?.();
       },
       telemetry,
@@ -680,7 +662,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
               name: 'graphql_cache.registration_retry',
               operationCategory: 'initialization',
               outcome: completed ? 'success' : 'abrupt',
-              errorCode: classifyCacheError(error),
+              ...describeCacheError(error),
               count: attempt + 1,
               durationMs: now() - retryStartedAt,
             });
@@ -795,7 +777,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       name: 'graphql_cache.host_ready',
       operationCategory: 'initialization',
       outcome: 'error',
-      errorCode: classifyCacheError(error),
+      ...describeCacheError(error),
       durationMs:
         initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
     });
@@ -832,9 +814,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    * tries again. A page handing the database to a newer build leaves like a
    * navigating page: its engine stops without counting as a lost owner, and
    * an enqueue already sent may have reached the durable queue, so it is
-   * reported uncertain rather than sent again.
+   * reported uncertain rather than sent again. Once a newer build took the
+   * database over (`superseded`), this build never gets it back, so the error
+   * says so and recovery does not retry it.
    */
-  function retireUnavailable(reason: string, leaveForNewerBuild = false): void {
+  function retireUnavailable(
+    reason: string,
+    {
+      superseded = false,
+      leaveForNewerBuild = false,
+    }: { superseded?: boolean; leaveForNewerBuild?: boolean } = {}
+  ): void {
     if (
       terminalFailureHandled ||
       state === 'failed' ||
@@ -846,14 +836,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     terminalFailureHandled = true;
     const error = new CacheResponseError(
       reason,
-      OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+      superseded
+        ? CACHE_SUPERSEDED_ERROR_CODE
+        : OWNER_LOCK_UNAVAILABLE_ERROR_CODE
     );
     if (state === 'initializing') {
       telemetry?.record({
         name: 'graphql_cache.host_ready',
         operationCategory: 'initialization',
         outcome: 'error',
-        errorCode: 'lock',
+        errorCode: superseded ? 'superseded' : 'lock',
         durationMs:
           initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
       });
@@ -1255,7 +1247,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         name: 'graphql_cache.origin_storage_pressure',
         operationCategory: 'storage',
         outcome: 'error',
-        errorCode: classifyCacheError(error),
+        ...describeCacheError(error),
         persistence: 'unknown',
       });
     }

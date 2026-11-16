@@ -579,6 +579,6 @@ generated at build time), and adds the direct tool it replaces to
    `ReadCanvas`, `apply(code, { expectedRevision })` over `ApplyCanvasEdits`
    (409 conflict and 422 rejection when nothing committed), `edit(instructions,
    { signal })` over `EditCanvas`, and `render()` returning a stored
-   `StaticImage`. Hides `ReadCanvas`, `EditCanvas` and `ApplyCanvasEdits`.
-   `RenderCanvas` stays direct: an `ExecuteCode` result can't carry an image
-   to the model.
+   `StaticImage`. Hides `ReadCanvas`, `EditCanvas`, `ApplyCanvasEdits` and
+   `RenderCanvas`: a program returns `images: [await canvas.render()]` and the
+   model sees their pixels with the `ExecuteCode` result.

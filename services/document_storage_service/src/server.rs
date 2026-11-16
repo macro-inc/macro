@@ -2490,9 +2490,7 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
         crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
             (*conn_gateway_client).clone(),
-            Arc::new(crate::service::saved_views::Membership(
-                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-            )),
+            Arc::new(crate::service::saved_views::Membership::new(db.clone())),
             event_broker_tracker.clone(),
         ),
     ));
@@ -2671,9 +2669,11 @@ async fn run_server() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
-                entity_access_service.clone(),
+                crate::service::activity::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
             ),
         )),
         graphql_entity_mutation_service,
