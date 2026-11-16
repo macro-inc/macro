@@ -65,6 +65,7 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
 const notifications = {
   notificationsByEntity: () => ({}),
   bulkMarkAsRead: async () => undefined,
+  _notificationsQuery: { transport: 'rest', isTransportPending: false },
 } as unknown as NotificationSource;
 const blocks = {} as BlockOrchestrator;
 

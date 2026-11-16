@@ -216,7 +216,9 @@ fn foreign_entity_filter_is_impossible(tree: Option<&Expr<ForeignEntityLiteral>>
 /// Which entity types this request can include. Soup-folded types drop when
 /// their own filter can never match or an active properties filter can never
 /// match them; domain-hydrated types additionally need their leg to be
-/// active for the request.
+/// active for the request. The web app's notification feed sends no filter and
+/// mirrors the unfiltered result in `GRAPHQL_FEED_ENTITY_TYPES`
+/// (apps/web/src/features/soup/entity-notifications.ts); change both together.
 pub(super) fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     let props = req.filter.and_then(|f| f.properties_filter.as_deref());
     let propertyless_ok = props.is_none_or(properties_filter_matches_propertyless);

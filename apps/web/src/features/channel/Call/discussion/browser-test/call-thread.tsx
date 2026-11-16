@@ -32,6 +32,7 @@ import { CallDiscussionContent } from '../CallDiscussionContent';
 const NO_NOTIFICATIONS = {
   notificationsByEntity: () => ({}),
   bulkMarkAsRead: async () => undefined,
+  _notificationsQuery: { transport: 'rest', isTransportPending: false },
 } as unknown as NotificationSource;
 const NO_BLOCKS = {} as BlockOrchestrator;
 
