@@ -3,12 +3,19 @@
 ## What it is
 
 Hosted OpenBao for Passwords, dev only. It runs as one Fargate task with Raft
-on EFS, and an internal ALB sits in front of it. `README.md` is the operations
+on EFS. Two vaults exist during the move to the `macro-openbao` account: the
+legacy one in the main account's shared VPC behind an internal ALB, which still
+serves DSS, and its replacement in the OpenBao account, behind an NLB that DSS
+reaches through PrivateLink. `README.md` is the operations
 guide; [the Pulumi rule](../../../.agents/rules/infra/pulumi.md) covers deploys.
 
 ## Start here
 
-- `index.ts`: the whole stack.
+- `index.ts`: the legacy vault, which calls `account.ts`.
+- `account.ts`: the replacement in the OpenBao account, plus its main-account
+  pieces (PrivateLink endpoint, certificate validation, logs destination).
+- `network.ts`: the replacement's VPC and AWS endpoints.
+- `constants.ts`: names and ports both vaults share.
 - `server-config.ts`: the server HCL. Keep its request duration, Raft layout
   and audit device in step with the Passwords local OpenBao config.
 - `image/Dockerfile`: our image, upstream OpenBao plus the AWS KMS seal plugin.
@@ -46,3 +53,14 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 - The ALB admits only the document storage service and the OpenBao task's own
   security group (the operator SSM tunnel, README "Operator tunnel"). Never add
   CIDR ingress.
+- In `account.ts`, every resource on the vault side passes the OpenBao account
+  provider. Main-account pieces use the default provider. Each IAM role gets
+  `path: ROLE_PATH` and `permissionsBoundary`, and each name includes the
+  environment: the deploy role can create nothing else. Never add an internet
+  or NAT gateway (the SCPs deny them anyway) or a `0.0.0.0/0` rule; a new AWS
+  API the task calls gets an endpoint in `network.ts`.
+- DSS's PrivateLink endpoint admits only the document storage service. The NLB
+  skips its own inbound rules for PrivateLink traffic, so that endpoint's
+  security group is the control.
+- PrivateLink zones match by zone ID (`ZONES` in `network.ts`). Zone names
+  differ between accounts.
