@@ -192,7 +192,7 @@ export async function beginAndroidEditorAccount(user: string) {
       );
     }
     async function menuOperation(
-      command: string,
+      command: 'menu_rows' | 'menu_commit',
       identity: MenuIdentity,
       payload: object
     ) {
