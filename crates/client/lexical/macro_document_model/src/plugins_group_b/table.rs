@@ -81,6 +81,17 @@ impl Plugin for Tables {
                 priority: CommandPriority::High,
                 placement: Placement::After,
             },
+            // Upstream $deleteCellHandler on DELETE_KEY_COMMANDS.
+            CommandRegistration {
+                command: CommandKind::Key(KeyCommand::Backspace),
+                priority: CommandPriority::High,
+                placement: Placement::After,
+            },
+            CommandRegistration {
+                command: CommandKind::Key(KeyCommand::Delete),
+                priority: CommandPriority::High,
+                placement: Placement::After,
+            },
             CommandRegistration {
                 command: CommandKind::DeleteCharacter,
                 priority: CommandPriority::Critical,
@@ -119,11 +130,29 @@ impl Plugin for Tables {
         let Some(selection) = tx.selection().cloned() else {
             return Ok(Handled::No);
         };
-        let anchor = match &selection {
-            Selection::Range(range) => range.anchor.key(),
-            Selection::Table(table) => table.anchor.key(),
+        let (anchor, focus) = match &selection {
+            Selection::Range(range) => (range.anchor.key(), range.focus.key()),
+            Selection::Table(table) => (table.anchor.key(), table.focus.key()),
             _ => return Ok(Handled::No),
         };
+        if let Command::Key {
+            command: KeyCommand::Backspace | KeyCommand::Delete,
+            ..
+        } = command
+        {
+            // Each upstream table observer checks its own table, so a range
+            // whose focus alone is in a table reaches that table's handler.
+            let Some(table) =
+                find_table_node(tx.view(), anchor).or_else(|| find_table_node(tx.view(), focus))
+            else {
+                return Ok(Handled::No);
+            };
+            return Ok(if delete_cell(tx, table)? == DeleteOutcome::NotHandled {
+                Handled::No
+            } else {
+                Handled::Yes
+            });
+        }
         let Some(table) = find_table_node(tx.view(), anchor) else {
             return Ok(Handled::No);
         };

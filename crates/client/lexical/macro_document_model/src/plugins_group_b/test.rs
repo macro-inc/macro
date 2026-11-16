@@ -477,3 +477,65 @@ fn select_all_in_table_first_selects_cells_then_propagates_to_document() -> Resu
     assert_eq!(editor.dispatch(&Command::SelectAll(None))?.0, Handled::No);
     Ok(())
 }
+
+// Source control (real Source editor): after dragging a table selection out
+// below the table, Backspace removes the whole table and the dragged-over text,
+// leaving only the paragraph above with the caret at its end. Upstream's
+// $deleteCellHandler (KEY_BACKSPACE/KEY_DELETE, HIGH) first widens a range
+// with one end inside the table so it starts at the block before the table
+// and returns false; base deletion does the rest. The range's table end is the
+// first cell in either form Source or native reports it in.
+#[test]
+fn backspace_widens_a_range_leaving_a_table_to_the_block_before_it() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    for text_anchor in [false, true] {
+        let mut editor =
+            surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+                .build()
+                .expect("surface");
+        let ((above, after), _) = editor.update(|tx| {
+            let above = tx.create(Paragraph::default())?;
+            let hello = tx.create_text("Hello world")?;
+            tx.append(above, &[hello.key()])?;
+            let table = create_table_node_with_dimensions(tx, 2, 2, IncludeHeaders::All(false))?;
+            let row = tx.first_child(table).expect("row");
+            let cell = tx.first_child(row).expect("cell");
+            let paragraph = tx.first_child(cell).expect("cell paragraph");
+            let text = tx.create_text("A1")?;
+            tx.append(paragraph, &[text.key()])?;
+            let below = tx.create(Paragraph::default())?;
+            let after = tx.create_text("after")?;
+            tx.append(below, &[after.key()])?;
+            tx.append(NodeKey::ROOT, &[above.key(), table.key(), below.key()])?;
+            let mut range = RangeSelection::collapsed(if text_anchor {
+                Point::text(text.key(), Utf16Offset(0))
+            } else {
+                Point::element(cell, ChildIndex(0))
+            });
+            range.focus = Point::text(after.key(), Utf16Offset(5));
+            tx.set_selection(Some(Selection::Range(range)))?;
+            Ok((above.key(), after.key()))
+        })?;
+        let (handled, _) = editor.dispatch(&Command::Key {
+            command: KeyCommand::Backspace,
+            event: Some(KeyEvent {
+                key: "Backspace".into(),
+                ..KeyEvent::default()
+            }),
+        })?;
+        assert_eq!(handled, Handled::No, "text anchor: {text_anchor}");
+        assert_eq!(
+            editor
+                .state()
+                .selection()
+                .and_then(Selection::as_range)
+                .map(|range| (range.anchor, range.focus)),
+            Some((
+                Point::element(above, ChildIndex(1)),
+                Point::text(after, Utf16Offset(5))
+            )),
+            "text anchor: {text_anchor}"
+        );
+    }
+    Ok(())
+}
