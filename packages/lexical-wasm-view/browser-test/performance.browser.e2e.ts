@@ -109,7 +109,23 @@ test('real native paste, reconcile and scroll export sampled facade spans withou
   await expect(page.locator('#editor')).not.toContainText(
     'Clipboard performance marker'
   );
-  expect(await page.evaluate(() => window.editorPerformance.model())).toBe(
-    before
+  // A Loro-driven import (here the undo) reads every storage-null key a node
+  // holds absent back as null, touched or not (Source undo/redo probe log
+  // 8803f2b1; the same rule as packages/collaboration history rows). The
+  // fixture's id-less root also takes native's first-undo id
+  // (C-ROOT-ID-FIRST-UNDO-01).
+  const undone = JSON.parse(
+    await page.evaluate(() => window.editorPerformance.model())
   );
+  const expected = JSON.parse(before);
+  expected.root.$ = { ...expected.root.$, id: undone.root.$.id };
+  for (const paragraph of expected.root.children) {
+    for (const key of ['direction', 'indent', 'textFormat', 'textStyle'])
+      if (!(key in paragraph)) paragraph[key] = null;
+    for (const text of paragraph.children)
+      for (const key of ['detail', 'format', 'style'])
+        if (!(key in text)) text[key] = null;
+  }
+  expect(undone.root.$.id).toEqual(expect.any(String));
+  expect(undone).toEqual(expected);
 });
