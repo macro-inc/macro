@@ -51,12 +51,28 @@ describe('buildTools', () => {
 
   test('an entity tool holds one hint class and sets every hint', () => {
     const tools = buildTools(catalog, 'entity');
+    const read = tools.find((tool) => tool.name === 'documents_read');
     const write = tools.find((tool) => tool.name === 'documents_write');
+    const create = tools.find((tool) => tool.name === 'tasks_write');
     const remove = tools.find((tool) => tool.name === 'documents_delete');
 
+    expect(read?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
+    // Edits can overwrite, and a change reaches collaborators.
     expect(write?.annotations).toMatchObject({
       readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    });
+    // Only creating something new isn't destructive.
+    expect([...(create?.operations.keys() ?? [])]).toEqual(['tasks.create']);
+    expect(create?.annotations).toMatchObject({
+      readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
     });
     expect(remove?.annotations).toMatchObject({
       readOnlyHint: false,
@@ -67,7 +83,7 @@ describe('buildTools', () => {
         expect(`${operation.group}_${operation.hint}`).toBe(tool.name);
   });
 
-  test('sending email is its own open-world tool, apart from deleting', () => {
+  test('sending email is its own destructive, open-world tool, apart from deleting', () => {
     const tools = buildTools(catalog, 'entity');
     const send = tools.find((tool) => tool.name === 'email_send');
     const remove = tools.find((tool) => tool.name === 'email_delete');
@@ -75,7 +91,7 @@ describe('buildTools', () => {
     expect(send?.annotations).toEqual({
       title: 'email: send',
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: true,
     });
