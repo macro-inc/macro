@@ -241,6 +241,7 @@ export function CardHiddenCount(props: {
       <Button
         size="sm"
         variant="ghost"
+        class="touch:min-h-11"
         onClick={(event: MouseEvent) => {
           event.stopPropagation();
           card?.expand();
