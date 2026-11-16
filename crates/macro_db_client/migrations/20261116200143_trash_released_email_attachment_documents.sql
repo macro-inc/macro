@@ -32,16 +32,23 @@ CREATE FUNCTION enqueue_released_email_attachment_documents()
     AS
 $$
     BEGIN
+        -- The transition table has no statistics. Without the OFFSET fences a
+        -- statement releasing many links under stale statistics on "Document"
+        -- hashed every live document; fenced, each check is a probe per id.
         INSERT INTO released_email_attachment_documents (document_id)
         SELECT DISTINCT released.document_id
         FROM released_links released
         WHERE NOT EXISTS (
-                SELECT 1 FROM document_email de WHERE de.document_id = released.document_id
+                SELECT 1
+                FROM document_email de
+                WHERE de.document_id = released.document_id
+                OFFSET 0
             )
             AND EXISTS (
                 SELECT 1
                 FROM "Document" d
                 WHERE d.id = released.document_id AND d."deletedAt" IS NULL
+                OFFSET 0
             )
         ON CONFLICT (document_id) DO NOTHING;
 
