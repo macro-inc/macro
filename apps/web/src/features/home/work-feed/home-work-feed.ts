@@ -6,7 +6,6 @@ import {
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type { EntityData, WithNotification } from '@entity';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   enableCalendarUi,
@@ -14,6 +13,7 @@ import {
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import type { EntityData, WithNotification } from '@entity';
 import { revalidateNotificationReaders } from '@queries/notification/revalidation';
 import {
   getGraphqlCacheHost,
