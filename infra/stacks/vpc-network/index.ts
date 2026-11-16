@@ -97,10 +97,10 @@ function attachEndpoints(key: string, routeTableId: pulumi.Input<string>) {
     vpcEndpointId: s3Endpoint.id,
     routeTableId,
   });
-  new aws.ec2.VpcEndpointRouteTableAssociation(
-    `${BASE_NAME}-dynamodb-${key}`,
-    { vpcEndpointId: DYNAMODB_ENDPOINT_ID, routeTableId }
-  );
+  new aws.ec2.VpcEndpointRouteTableAssociation(`${BASE_NAME}-dynamodb-${key}`, {
+    vpcEndpointId: DYNAMODB_ENDPOINT_ID,
+    routeTableId,
+  });
 }
 
 for (const routeTableId of SHARED_PRIVATE_ROUTE_TABLE_IDS) {
