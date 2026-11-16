@@ -971,6 +971,7 @@ dependencies = [
  "activity",
  "agent",
  "agent-client-protocol",
+ "agent_correlation",
  "agent_fold",
  "agent_runtime_protocol",
  "ai_billing",
