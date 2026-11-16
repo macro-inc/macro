@@ -115,6 +115,7 @@ const postReads = new Set([
   'storage.postItemsSoup',
   'storage.postItemsSoupAst',
   'storage.postItemsSoupAstGrouped',
+  'storage.previewCrmRecords',
   'storage.previewSmartTag',
   'storage.queryCrmPipelineRows',
   'storage.taskSimilaritySearchHandler',

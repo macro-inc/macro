@@ -182,7 +182,7 @@ where
                         owner: owner.clone(),
                         prompt: None,
                         profile: Some(profile),
-                        instructions: None,
+                        instructions: command.instructions,
                         model: selection.model.clone(),
                         source: command.source,
                         visibility: command.visibility,

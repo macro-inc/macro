@@ -377,3 +377,25 @@ async fn an_in_process_session_whose_row_is_gone_releases() {
         "nothing durable is left to differ from"
     );
 }
+
+/// Only a background session its opener gave instructions (a routine draft)
+/// goes unread; an accepted suggestion's run, a background session people
+/// open, still streams its reply.
+#[test]
+fn only_a_background_session_with_instructions_goes_unread() {
+    let owner = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|someone@example.com")
+        .expect("a user id");
+    let mut session = test_agent_session(AgentSessionId::new());
+    session.owner_id = model_owner::Owner::User(owner.clone());
+    session.source = agent_session::domain::model::SessionSource::User;
+    session.visibility = agent_session::domain::model::SessionVisibility::Hidden;
+    session.origin = trigger_context::TriggerOrigin::Requested { by: owner };
+    assert!(session.is_background());
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Streamed);
+
+    session.instructions = Some("Draft a routine".to_owned());
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Unseen);
+
+    session.visibility = agent_session::domain::model::SessionVisibility::Listed;
+    assert_eq!(reply_delivery(&session), ReplyDelivery::Streamed);
+}

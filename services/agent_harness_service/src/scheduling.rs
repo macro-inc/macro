@@ -18,10 +18,12 @@ use macro_authorization::{
 use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
+mod routine_drafting;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::finding::DraftFinding;
 use scheduled_action::domain::drafts::jobs::DraftJobs;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
@@ -286,6 +288,7 @@ where
                     by: action.owner.clone(),
                 },
                 billing: agent_session::domain::model::SessionBilling::Billable,
+                instructions: None,
             })
             .await
             .map_err(|error| RunStartError::NotStarted(rootcause::report!("{error:?}")))?;
@@ -471,6 +474,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
+    search: search_service_client::SearchServiceClient,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -694,59 +698,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
-    // AI drafts routines in hidden sessions of the in-process Macro agent on
-    // the model the person's Ask AI steps use, admitted and billed as their
-    // agent session usage. A draft's session hands its routine back by checking
-    // it; the check is kept on the draft's row, so any replica can read it.
+    let suggestion_code = Arc::clone(&code);
+    let draft_code = Arc::clone(&code);
+    // A draft's row: the check a session drafter hands back, and a
+    // background draft's state, so any replica can read either.
     let draft_rows = Arc::new(PgDraftHandBacks::new(db.clone()));
     let hand_backs: Arc<dyn DraftHandBacks> = Arc::clone(&draft_rows) as _;
-    let drafts = Arc::new(
-        RoutineDrafts::new(
-            Arc::clone(&code),
-            Arc::clone(&sessions),
-            Arc::clone(&hand_backs),
-            DraftAgent {
-                bot: bot_id::MACRO_NEW_BOT_ID,
-                // Generated from the SDK at build time, so it is always there.
-                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            },
-        )
-        .with_session_creations(Arc::new(ActivityCreations(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
-        )))
-        .with_conditions_enabled(conditions_enabled),
-    );
-    // Background drafts run here, on the replica they were started on, and
-    // keep their state on the same row, so a reload or any replica reads
-    // it. Shutdown fails the ones still drafting as interrupted.
-    let draft_jobs = Arc::new(DraftJobs::new(
-        Arc::clone(&drafts),
-        draft_rows as Arc<dyn DraftJobStore>,
-        draft_updates,
-        lifecycle.workers.clone(),
-        lifecycle.stop_workers.clone(),
-    ));
-    // Drafts a stopped process left behind lose their session and row, and
-    // background drafts whose drafter stopped fail.
-    {
-        let drafts = Arc::clone(&drafts);
-        let draft_jobs = Arc::clone(&draft_jobs);
-        let stop = lifecycle.stop_workers.clone();
-        lifecycle.workers.spawn(async move {
-            let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
-            loop {
-                tokio::select! {
-                    biased;
-                    _ = stop.cancelled() => return,
-                    _ = every.tick() => {}
-                }
-                // Logged by the sweeps' spans.
-                let _ = drafts.sweep().await;
-                let _ = draft_jobs.sweep().await;
-            }
-        });
-    }
-    let suggestion_code = Arc::clone(&code);
     // Which agent session a code-mode request came from, for drafts' checks
     // and suggestion sessions' suggestions.
     let correlation_sessions = Arc::new(CorrelationSessions(
@@ -764,7 +721,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
-        .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_draft_hand_backs(Arc::clone(&hand_backs), Arc::clone(&request_sessions))
         .with_run_sessions(Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
@@ -772,6 +729,71 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
+    // AI drafts routines in a hidden session of the in-process Macro agent.
+    // Before it starts, a fast call names the items the request refers to and
+    // the SDK areas it needs, and the existing name search finds those of
+    // the kinds it covers, so the session is given them and the reference
+    // it needs and writes one program that ends with the check; it looks up
+    // names of other kinds itself. The fast call is admitted
+    // and billed as the person's automation usage.
+    let drafts = Arc::new(
+        RoutineDrafts::new(
+            draft_code,
+            Arc::clone(&sessions),
+            hand_backs,
+            DraftAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                // Generated from the SDK at build time, so it is always there.
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            },
+        )
+        .with_session_creations(Arc::new(ActivityCreations(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+        )))
+        .with_conditions_enabled(conditions_enabled)
+        .with_finding(DraftFinding {
+            model: Arc::new(routine_drafting::RouterDraftModels {
+                admission: Arc::clone(&ai_admission),
+                recorder: ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            }),
+            names: Arc::new(routine_drafting::SearchNames::new(search)),
+        }),
+    );
+    // Background drafts run here, on the replica they were started on, and
+    // keep their state on the same row, so a reload or any replica reads
+    // it. Shutdown fails the ones still drafting as interrupted.
+    let draft_jobs = Arc::new(DraftJobs::new(
+        Arc::clone(&drafts),
+        draft_rows as Arc<dyn DraftJobStore>,
+        draft_updates,
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Drafts a stopped process left behind lose their session and row, and
+    // background drafts whose drafter stopped fail. Each sweep has a worker
+    // of its own, so one that stalls holds up no other. Logged by the sweeps'
+    // spans.
+    {
+        let drafts = Arc::clone(&drafts);
+        spawn_sweep(&lifecycle, DRAFT_SWEEP_INTERVAL, move || {
+            let drafts = Arc::clone(&drafts);
+            async move {
+                let _ = drafts.sweep().await;
+            }
+        });
+        let draft_jobs = Arc::clone(&draft_jobs);
+        spawn_sweep(&lifecycle, DRAFT_SWEEP_INTERVAL, move || {
+            let draft_jobs = Arc::clone(&draft_jobs);
+            async move {
+                let _ = draft_jobs.sweep().await;
+            }
+        });
+    }
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
@@ -1184,6 +1206,29 @@ fn start_event_tasks<C, F>(
         CONSUMER_RESTART_DELAY,
     ));
     lifecycle.workers.spawn(worker);
+}
+
+/// Run `sweep` at once and then every `interval` on a worker of its own
+/// until workers stop; a sweep under way finishes first. One that overran
+/// its ticks is followed by one late sweep, then a full interval.
+fn spawn_sweep<S, F>(lifecycle: &ServiceLifecycle, interval: Duration, mut sweep: S)
+where
+    S: FnMut() -> F + Send + 'static,
+    F: Future<Output = ()> + Send + 'static,
+{
+    let stop = lifecycle.stop_workers.clone();
+    lifecycle.workers.spawn(async move {
+        let mut every = tokio::time::interval(interval);
+        every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                _ = every.tick() => {}
+            }
+            sweep().await;
+        }
+    });
 }
 
 async fn supervise_consumer<F: Future<Output = Result<(), rootcause::Report>>>(
