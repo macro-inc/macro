@@ -39,6 +39,9 @@ mod markdown_paste;
 mod markdown_unwrap;
 mod media;
 mod media_properties;
+mod menu_insert;
+#[cfg(test)]
+mod menu_insert_test;
 mod paste_actions;
 mod pinned_properties;
 mod pr_mention_actions;
@@ -147,6 +150,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = pr_mention_actions::register(builder);
     let builder = booking_mention_actions::register(builder);
     let builder = document_find::register(builder);
+    let builder = menu_insert::register(builder);
     let builder = date_mention_actions::register(builder);
     let builder = agent_session_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
@@ -258,6 +262,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = booking_mention_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = menu_insert::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = date_mention_actions::decode(name, json, generation)? {
