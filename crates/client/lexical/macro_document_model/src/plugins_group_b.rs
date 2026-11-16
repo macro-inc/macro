@@ -19,6 +19,9 @@ mod database_query_actions;
 pub use database_create_actions::{
     DatabaseCaptureFailure, DatabaseCommandResult, DatabaseCommitCapture, DatabaseMainCommitResult,
 };
+mod checkbox_tasks;
+#[cfg(test)]
+mod checkbox_tasks_test;
 mod date_mention_actions;
 mod decorator_actions;
 mod decorator_content_actions;
@@ -151,6 +154,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = booking_mention_actions::register(builder);
     let builder = document_find::register(builder);
     let builder = menu_insert::register(builder);
+    let builder = checkbox_tasks::register(builder);
     let builder = date_mention_actions::register(builder);
     let builder = agent_session_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
@@ -267,6 +271,9 @@ pub fn decode_command(
     if let Some(command) = menu_insert::decode(name, json, generation)? {
         return Ok(Some(command));
     }
+    if let Some(command) = checkbox_tasks::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = date_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -343,6 +350,9 @@ pub fn query(
         return Ok(Some(reply));
     }
     if let Some(reply) = checklist_query::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
+    if let Some(reply) = checkbox_tasks::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
     if let Some(reply) = decorator_content_actions::query(name, data, generation, state)? {
