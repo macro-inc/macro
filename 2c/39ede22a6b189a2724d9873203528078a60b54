@@ -1,0 +1,21 @@
+services/agent_harness_service/src/main.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 927-941,947-950
+services/agent_harness_service/src/internal_mcp.rs
+  s_8b139b3d2541ba::t_911d0dd20791be 159-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2c39ede22a6b189a2724d9873203528078a60b54",
+  "prompts": {},
+  "sessions": {
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
