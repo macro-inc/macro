@@ -1336,6 +1336,7 @@ export * from './effectSpecShadowOptionsOneOfTransparency';
 export * from './effectSpecSoftEdgeOptions';
 export * from './effectSpecSoftEdgeOptionsOneOf';
 export * from './effectSpecSoftEdgeOptionsOneOfSizePt';
+export * from './emailAttachmentsTrashedMetadata';
 export * from './emailBlockScope';
 export * from './emailFilters';
 export * from './emailFiltersCalendarOnly';

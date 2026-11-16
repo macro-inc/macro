@@ -7557,6 +7557,14 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachments_trashed';
+    /**
+     * Email attachments whose mail is gone were moved to the Trash by the
+     * system, in one batch. Like the documents in a trashed folder, they are
+     * removed from open lists and trigger nothing per document.
+     */
+    metadata: EmailAttachmentsTrashedMetadata;
 };
 
 /**
@@ -9220,6 +9228,16 @@ export type EffectSpecSoftEdgeOptions = string | {
      * 5; 0 removes it).
      */
     sizePt?: number | null;
+};
+
+/**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsTrashed`].
+ */
+export type EmailAttachmentsTrashedMetadata = {
+    /**
+     * The documents moved to the Trash, at most one queue batch.
+     */
+    document_ids: Array<string>;
 };
 
 /**

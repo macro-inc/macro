@@ -40240,6 +40240,21 @@
                 "description": "A peer joined, left, or a periodic save occurred."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Email attachments whose mail is gone were moved to the Trash by the\nsystem, in one batch. Like the documents in a trashed folder, they are\nremoved from open lists and trigger nothing per document.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.email_attachments_trashed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/EmailAttachmentsTrashedMetadata",
+                "description": "Email attachments whose mail is gone were moved to the Trash by the\nsystem, in one batch. Like the documents in a trashed folder, they are\nremoved from open lists and trigger nothing per document."
+              }
+            }
           }
         ],
         "description": "Events that can be published to [`MacroDocumentsTopic`]."
@@ -43343,6 +43358,20 @@
           }
         ],
         "description": "One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options."
+      },
+      "EmailAttachmentsTrashedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::EmailAttachmentsTrashed`].",
+        "required": ["document_ids"],
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The documents moved to the Trash, at most one queue batch."
+          }
+        }
       },
       "EmailBlockScope": {
         "type": "string",
