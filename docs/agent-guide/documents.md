@@ -2776,8 +2776,14 @@ user. Editing a discussion comment keeps the attachment and send controls, with 
 trash button. Deleting a comment's first message deletes the whole discussion —
 the confirmation reads `Delete comment`, the replies under it go too, and an
 anchored comment's highlight clears from the document. Deleting a reply removes
-only that reply. On mobile, the new-comment composer is docked above the navigation bar,
-replacing New when commenting is available in documents and tasks.
+only that reply. On phones, tasks show the shared newest-comment card below their
+full description; tapping it opens the full-height Discussion sheet. Empty tasks
+show Add a comment, opening the sheet with keyboard focus. The thread shrinks and
+only its pinned input rises when the keyboard opens. Send appears only with text.
+Closing/reopening retains an unsent draft. Desktop tasks keep inline discussion;
+ordinary documents and tablet tasks retain the docked composer described below.
+On those touch surfaces, the new-comment composer sits above the navigation bar,
+replacing New when commenting is available.
 When the comment composer is unavailable, New remains available; these views
 have no floating Ask AI input.
 Tap `Leave a comment...`
@@ -2790,7 +2796,7 @@ While the main document editor is focused with the virtual keyboard
 open, the floating comment input is hidden; dismissing the keyboard or leaving
 the document editor restores it with any unsent draft intact. Comments remain in the
 Discussion section, and collapsing that section does not hide the docked composer.
-On touch devices, the Discussion section is hidden until it contains a comment;
+On touch surfaces with a docked composer, Discussion is hidden until it contains a comment;
 the floating **Leave a comment...** input remains available. If the discussion
 becomes empty again, the section disappears. Desktop keeps the empty section
 and inline input.

@@ -172,7 +172,7 @@ vi.mock('./contact-detail', () => ({
 vi.mock('./company-contacts-section', () => ({
   CompanyContactsSection: () => null,
 }));
-vi.mock('./company-discussion-section', () => ({
+vi.mock('../company-discussion-section', () => ({
   CompanyDiscussionSection: () => null,
 }));
 vi.mock('./company-emails-section', () => ({

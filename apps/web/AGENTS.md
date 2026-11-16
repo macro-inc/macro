@@ -1600,6 +1600,7 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 Use `MessageLoadError` for compact discussion/thread failures; missing resources
 show an unavailable state without a retry action or composer.
+Compose phone project, task, and company Discussion entries with `src/components/discussion/`; keep their existing conversation sources and desktop inline threads, and use `MobileDrawer.FixedContent` with `KeyboardFooter` for a stationary sheet above the keyboard.
 
 Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
 Flush pending text, catch up missing server history before publication, then
