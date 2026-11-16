@@ -328,7 +328,6 @@ fn help_overlay() {
 fn changes_timeline_200x56() {
     let mut app = app();
     app.key(Key::Char('8'));
-    app.key(Key::Char('t'));
     insta::assert_snapshot!(render(&mut app, 200, 56));
 }
 

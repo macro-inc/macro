@@ -31,16 +31,13 @@ times a second, and ticks at `fps` only while something animates.
   page also lists lifetime cost by agent), and error counts live in FAILURES.
   8 CHANGES (`ui/changes.rs`) shares the lower right with FAILURES; agent
   rows carry a PR badge and the drill-in lists the agent's PRs (`pr_line`).
-- `src/ui/changes/`: the CHANGES page. `page.rs` puts Branches (`b`) and
-  Timeline (`t`) tabs above repository, show/sort and search controls.
-  `branches.rs` lists branches and PRs with details alongside at 110+ columns;
-  Enter inspects the selection full-screen, Escape returns, `a` opens its agent.
-  PR URLs are shown in the details. `layout.rs` and `draw.rs` retain the timeline;
-  its zoom/pan controls sit immediately above it. `compact.rs` is the monitor
-  summary; `lane.rs` is the legacy lane page (`p`). Selection and repository
-  state live in `app.rs` (`ChangesCursor`); active work and attention sort are
-  the defaults. Branch rows include PRs without local checkouts, and all-work
-  mode includes finished branches and PRs. Counts describe the selected repo.
+- `src/ui/changes/`: the CHANGES timeline. `page.rs` draws a compact toolbar
+  for repository, landed visibility, sorting and search; show the search field
+  only while editing or filtering. `draw.rs` puts zoom/pan controls on the graph's
+  top border and selection/attention controls on its bottom border. `detail.rs`
+  shows the selected change full-screen with Enter; Escape returns and `a` opens
+  its agent. `compact.rs` is the monitor summary; `lane.rs` is the lane page (`p`).
+  Keep the timeline as the only main Changes view and minimize header rows.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
 - `src/theme.rs`: the design tokens (`Token`, a colour role such as `Alert`
   or `Rule`), the `Theme` that colours them, and the HUD dressing: thin
@@ -89,11 +86,11 @@ times a second, and ticks at `fps` only while something animates.
   board's tag. The map's now is quantised to its bucket, so it moves one
   column when a bucket ends, and commits glitch only when a delta brings
   them (`ViewState::fresh`), never after a snapshot.
-- On CHANGES, `b` / `t` select Branches / Timeline; `[` / `]` select a
-  repository (including Other PRs), `m` shows finished work, `s` changes sort,
-  `n` / `N` jump to attention, Enter inspects and `a` opens the selected agent.
-  `+ - < >` and Home control time only on Timeline; Home selects the first
-  branch on Branches. Place controls alongside their affected content.
+- On CHANGES, `[` / `]` select a repository (including Other PRs), `m` shows
+  landed work, `s` changes sort, `n` / `N` jump to attention, Enter inspects and
+  `a` opens the selected agent. `+ -` zoom, `< >` pan and Home returns to now.
+  Place controls alongside their affected content; let the toolbar wrap on
+  narrow terminals instead of hiding controls.
 - Blinking follows the clock's sub-second phase, so a frame at a whole second
   is the "on" phase.
 - `b` / `B` cycle the BODY figure forward / back on the monitor and BODY pages.

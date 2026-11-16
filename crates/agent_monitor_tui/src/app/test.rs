@@ -124,7 +124,6 @@ fn changes_app() -> App {
 #[test]
 fn changes_keys_move_lanes_commits_zoom_pan_and_toggles() {
     let mut app = changes_app();
-    app.key(Key::Char('t'));
     app.cursors.changes.hide_landed = false;
     app.cursors.changes.sort = LaneSort::Fork;
     assert_eq!(*app.page(), Page::Zoom(Pane::Changes));
@@ -228,39 +227,6 @@ fn spend_page_can_reach_every_agent_cost() {
 }
 
 #[test]
-fn branch_and_timeline_tabs_share_selection_and_filter_finished_work() {
-    let mut app = changes_app();
-    assert_eq!(app.cursors.changes.view, ChangesView::Branches);
-    assert!(!app.change_rows().contains(&ChangeRow::Trunk));
-    let active = app.change_rows();
-    app.key(Key::Char('m'));
-    assert!(app.change_rows().len() > active.len());
-    app.key(Key::End);
-    let selected = app.change_row();
-    assert_eq!(selected, app.change_rows().last().cloned());
-    app.key(Key::Enter);
-    assert!(app.cursors.changes.detail);
-    app.key(Key::Esc);
-    assert!(!app.cursors.changes.detail);
-    assert_eq!(selected, app.change_row());
-    app.key(Key::Char('t'));
-    assert_eq!(app.cursors.changes.view, ChangesView::Timeline);
-    assert!(app.change_rows().contains(&ChangeRow::Trunk));
-    app.key(Key::Char('b'));
-    assert_eq!(app.cursors.changes.view, ChangesView::Branches);
-    app.key(Key::Home);
-    assert_eq!(app.change_row(), app.change_rows().first().cloned());
-    let before = app.cursors.changes.pan;
-    app.key(Key::Char('<'));
-    assert_eq!(
-        app.cursors.changes.pan, before,
-        "the branch list has no time axis"
-    );
-    type_line(&mut app, "/nothing-matches-this-query");
-    assert!(app.change_rows().is_empty());
-}
-
-#[test]
 fn focused_changes_inspection_returns_with_one_escape() {
     let mut app = changes_app();
     app.key(Key::Tab);
@@ -290,7 +256,7 @@ fn monitor_keeps_finished_unmapped_prs_selectable() {
 }
 
 #[test]
-fn unmapped_prs_sort_by_branch_and_include_review_attention() {
+fn unmapped_prs_include_review_attention() {
     use agent_monitor::domain::model::{CiState, Mergeable, PrState, ReviewState};
     let mut app = changes_app();
     app.view.repos.clear();
@@ -306,9 +272,12 @@ fn unmapped_prs_sort_by_branch_and_include_review_attention() {
     pr.branch = Some(String::from("a-first"));
     let attention = ChangeRow::Pr(pr.id.clone());
     app.key(Key::Char('s'));
-    assert_eq!(app.change_rows().first(), Some(&attention));
-    app.key(Key::End);
-    assert_ne!(app.change_row(), Some(attention.clone()));
+    let other = app
+        .change_rows()
+        .into_iter()
+        .find(|row| *row != attention)
+        .expect("another PR");
+    app.cursors.changes.row = Some(other);
     app.key(Key::Char('n'));
     assert_eq!(app.change_row(), Some(attention));
 }

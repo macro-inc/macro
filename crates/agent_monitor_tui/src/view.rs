@@ -504,7 +504,7 @@ impl ViewState {
     }
 
     /// Pull requests for the PRS pane: failing CI first, then open ones
-    /// before merged and closed, each newest first. Filter words and the
+    /// before merged and closed, each newest first. The
     /// find query match the title, repository, branch, state or an agent's
     /// name.
     pub fn sorted_prs(&self, filter: &Filter) -> Vec<&Pr> {

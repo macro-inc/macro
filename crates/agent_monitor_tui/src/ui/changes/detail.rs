@@ -1,4 +1,4 @@
-//! Readable branch rows and the selected change's details.
+//! Full-screen details for the selected timeline change.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -46,108 +46,13 @@ fn review(pr: &Pr) -> &'static str {
     }
 }
 
-pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock) {
-    let [list, side] = if area.width >= 110 {
-        Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(area)
-    } else {
-        [area, Rect::default()]
-    };
-    let rows = app.change_rows();
-    let selected = app.change_row();
-    let selected = rows.iter().position(|row| Some(row) == selected.as_ref());
-    let block = theme::pane(
-        list,
-        "BRANCHES",
-        vec![Span::styled(
-            format!(" {} SHOWN ", rows.len()),
-            theme::ink(Token::TextDim),
-        )],
-        true,
-    )
-    .title(theme::hotkeys(&[("↑↓", "SELECT"), ("Enter", "INSPECT")]));
-    let inner = block.inner(list);
-    frame.render_widget(block, list);
-    if rows.is_empty() {
-        frame.render_widget(Paragraph::new(" No changes match this view."), inner);
-    } else {
-        let compact = inner.width < 60;
-        let items = rows.iter().map(|row| {
-            let (lane, pr) = data(app, row);
-            let branch = lane
-                .map(|lane| lane.branch.as_str())
-                .or_else(|| pr.and_then(|pr| pr.branch.as_deref()))
-                .unwrap_or("No local branch");
-            let subtitle = pr.map_or_else(
-                || String::from("No PR"),
-                |pr| {
-                    format!(
-                        "#{} {}",
-                        pr.number,
-                        pr.title.as_deref().unwrap_or("Untitled")
-                    )
-                },
-            );
-            let mut lines = vec![
-                Line::from(Span::styled(branch.to_owned(), theme::ink(Token::Text))),
-                Line::from(Span::styled(subtitle, theme::ink(Token::TextDim))),
-            ];
-            let (ci_text, ci_token) = pr.map_or(("--", Token::TextDim), ci);
-            let review_text = pr.map_or("--", review);
-            if compact {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("CI: {ci_text}"), theme::ink(ci_token)),
-                    Span::styled(
-                        format!("  Review: {review_text}"),
-                        theme::ink(Token::TextDim),
-                    ),
-                ]));
-                Row::new(vec![Cell::from(lines)]).height(3).bottom_margin(1)
-            } else {
-                Row::new(vec![
-                    Cell::from(lines),
-                    Cell::from(ci_text).style(theme::ink(ci_token)),
-                    Cell::from(review_text).style(theme::ink(Token::TextDim)),
-                ])
-                .height(2)
-                .bottom_margin(1)
-            }
-        });
-        let widths = if compact {
-            vec![Constraint::Min(0)]
-        } else {
-            vec![
-                Constraint::Min(18),
-                Constraint::Length(8),
-                Constraint::Length(17),
-            ]
-        };
-        let header = if compact {
-            Row::new(vec!["BRANCH / PR"])
-        } else {
-            Row::new(vec!["BRANCH / PR", "CI", "REVIEW"])
-        };
-        let table = Table::new(items, widths)
-            .header(header.style(theme::ink(Token::TextDim)).bottom_margin(1))
-            .row_highlight_style(theme::selected())
-            .highlight_symbol("> ");
-        let mut state = TableState::default()
-            .with_selected(selected)
-            .with_offset(app.cursors.changes.scroll);
-        frame.render_stateful_widget(table, inner, &mut state);
-        app.cursors.changes.scroll = state.offset();
-    }
-    if !side.is_empty() {
-        detail(frame, side, app, clock);
-    }
-}
-
 pub(super) fn detail(frame: &mut Frame<'_>, area: Rect, app: &App, clock: Clock) {
     let mut keys = vec![("←→", "COMMIT")];
     if app.change_agent().is_some() {
         keys.insert(0, ("a", "OPEN AGENT"));
     }
     if app.cursors.changes.detail {
-        keys.push(("Esc", "BACK TO LIST"));
+        keys.push(("Esc", "BACK"));
     }
     let block = theme::pane(area, "DETAILS", Vec::new(), false);
     let inner = block.inner(area);

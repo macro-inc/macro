@@ -204,7 +204,7 @@ fn draw_footer(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-const HELP: [(&str, &str); 20] = [
+const HELP: [(&str, &str); 19] = [
     (
         "0 … 8",
         "monitor, then the numbered pane full screen (5 = tree, 8 = changes)",
@@ -226,7 +226,6 @@ const HELP: [(&str, &str); 20] = [
     ("a", "list ended agents too, or only current ones"),
     ("b  B", "next / previous BODY figure (monitor and BODY)"),
     ("CTRL-T  `", "cycle themes: classic, ember, phosphor, dusk"),
-    ("8: b t", "changes: branch list / timeline"),
     (
         "8: + − < > HOME",
         "changes: zoom, pan, back to now; [ ] repository",

@@ -244,11 +244,12 @@ collector (`crates/agent_monitor`) over gRPC on `~/.macrod/monitor/monitor.sock`
   and text (`/`) filters; Agents and Wall can also include ended agents (`a`).
   Tape, Failures and Changes have their own text search. Reset (`x`) clears
   only the current page. Spend, Sources, BODY and agent/legacy lane detail pages have no filters.
-  Changes defaults to a branch/PR list with selected details beside it; `b` / `t`
-  switch between Branches and Timeline. Repository, show/sort and search controls
-  sit above the content; time controls sit above the timeline. Enter opens
-  details full-screen (also on narrow terminals), Escape returns, and `a` opens
-  the selected agent. PR URLs and commits appear inside the detail panel.
+  Changes opens directly to the timeline, with repository, landed visibility,
+  sort and search in one wrapping toolbar. The search field appears while editing
+  or filtering. Zoom/pan controls sit on the graph's top border; selection and
+  attention controls sit on its bottom border. Enter opens details full-screen,
+  Escape returns, and `a` opens the selected agent. PR URLs and commits appear
+  inside the detail panel.
   Enter keeps a filter edit; Escape cancels it. The AGENTS pane and page separate
   current status from 24-hour activity. SPEND owns cost figures (including
   lifetime cost by agent on its full page); FAILURES owns error totals.

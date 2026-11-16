@@ -14,7 +14,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use agent_monitor::domain::model::{Commit, Lane, LaneBase, Pr, PrState, RepoGraph, Status};
 
 use super::layout::{self, LaneRow, Scene, Viewport};
-use super::{ci_mark, distance, lane_tag, lane_token, review_mark, tab_spans};
+use super::{ci_mark, distance, lane_tag, lane_token, review_mark};
 use crate::app::{App, ChangeRow, SCALES};
 use crate::format;
 use crate::theme;
@@ -51,7 +51,15 @@ impl Board {
 
 /// Draws the page into `area`.
 pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clock, focused: bool) {
-    let block = theme::pane(area, "TIMELINE", Vec::new(), focused);
+    let mut block = theme::pane(area, "TIMELINE", Vec::new(), focused)
+        .title_bottom(theme::hotkeys(&[("↑↓", "SELECT"), ("n N", "ATTENTION")]));
+    if app.change_repo().is_some() {
+        block = block.title(theme::hotkeys(&[
+            ("- +", "ZOOM"),
+            ("< >", "PAN"),
+            ("Home", "NOW"),
+        ]));
+    }
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.width < 40 || inner.height < 8 {
@@ -90,12 +98,17 @@ pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clo
             .lanes
             .iter()
             .filter(|lane| lane.landed.is_some())
+            .filter(|lane| {
+                app.filter
+                    .matches_lane(lane, app.view.lane_pr(lane), |id| app.view.name_of(id))
+            })
             .collect()
     };
     let orphans: Vec<Pr> = app
         .view
         .orphan_prs(&graph, &app.filter)
         .into_iter()
+        .filter(|pr| !cursor.hide_landed || !pr.state.is_final())
         .cloned()
         .collect();
     let ours: HashSet<u32> = app
@@ -223,12 +236,13 @@ pub fn draw_transit(frame: &mut Frame<'_>, area: Rect, app: &mut App, clock: Clo
 fn draw_other_prs(buffer: &mut Buffer, inner: Rect, app: &mut App, clock: Clock) {
     let right = inner.right();
     let width = usize::from(inner.width);
-    write(buffer, inner.x, inner.y, right, &tab_spans(app));
     let prs: Vec<Pr> = app
-        .view
-        .unmapped_prs(&app.filter)
-        .into_iter()
-        .cloned()
+        .change_rows()
+        .iter()
+        .filter_map(|row| match row {
+            ChangeRow::Pr(id) => app.view.prs.get(id).cloned(),
+            _ => None,
+        })
         .collect();
     let note = if app.view.repos.is_empty() {
         "  no repository mapped: pull requests only"
@@ -238,12 +252,12 @@ fn draw_other_prs(buffer: &mut Buffer, inner: Rect, app: &mut App, clock: Clock)
     write(
         buffer,
         inner.x,
-        inner.y + 1,
+        inner.y,
         right,
         &[Span::styled(note, theme::ink(Token::Rule))],
     );
 
-    let list_y = inner.y + 2;
+    let list_y = inner.y + 1;
     let footer_y = inner.bottom().saturating_sub(2);
     let rows = usize::from(footer_y.saturating_sub(list_y));
     let selected = app.change_row();
@@ -274,12 +288,8 @@ fn draw_other_prs(buffer: &mut Buffer, inner: Rect, app: &mut App, clock: Clock)
     for x in inner.left()..right {
         put(buffer, x, footer_y, "┄", theme::ink(Token::InfoFaint));
     }
-    Paragraph::new(theme::hotkeys(&[
-        ("↑↓", "PR"),
-        ("Enter", "AGENT"),
-        ("[ ]", "REPO"),
-    ]))
-    .render(Rect::new(inner.x, footer_y + 1, inner.width, 1), buffer);
+    Paragraph::new(theme::hotkeys(&[("a", "OPEN AGENT"), ("Enter", "INSPECT")]))
+        .render(Rect::new(inner.x, footer_y + 1, inner.width, 1), buffer);
 }
 
 /// The scroll that keeps `cursor` in view, clamped to the list.
