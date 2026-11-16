@@ -193,6 +193,7 @@ async fn router_for_viewer() -> Router {
         instructions: None,
         mcp_servers: Default::default(),
         egress_token_hash: None,
+        billing: Default::default(),
     })
     .await
     .unwrap();
