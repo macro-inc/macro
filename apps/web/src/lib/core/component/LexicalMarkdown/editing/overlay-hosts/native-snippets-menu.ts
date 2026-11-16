@@ -47,12 +47,12 @@ export function createNativeSnippetMenuHost(
 ): { host: SnippetMenuHost; dispose: () => void } {
   const active = () => options.alive() && view.isMounted;
   const resolve = async (request: SnippetRequest) => {
-    const source = await fetchSnippetRaw({
-      documentId: request.documentId,
-    }).catch((error: unknown) => {
+    let source: Awaited<ReturnType<typeof fetchSnippetRaw>> | null = null;
+    try {
+      source = await fetchSnippetRaw({ documentId: request.documentId });
+    } catch (error) {
       Telemetry.error(error, { surface: 'native-snippet-fetch' });
-      return null;
-    });
+    }
     if (!active() || view.mirror.keyGeneration !== request.generation) return;
     dispatchApplicationCommandIfSessionEdit(
       view,
