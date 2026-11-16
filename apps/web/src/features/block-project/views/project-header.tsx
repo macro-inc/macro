@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -37,7 +38,7 @@ export function ProjectHeader() {
       </SplitHeaderLeft>
       <SplitHeaderRight size="md">
         <div class="order-[1000] flex items-center gap-2">
-          <HeaderActionGroup label="Folder actions" size="md">
+          <HeaderActionGroup label={t('entityActions.folderActions')} size="md">
             <Show when={!chat.condition || chat.condition()}>
               {chat.buttonComponent ? (
                 <chat.buttonComponent grouped />
