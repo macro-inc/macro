@@ -35,13 +35,15 @@ semantics and are not restricted.
 
 ## Regenerating fixtures
 
-`source-probe.mjs` runs the web editor's checklist `model.ts` and property
+`packages/lexical-conformance/corpus/checklist-plan-source.mjs` runs the web editor's checklist `model.ts` and property
 modules unchanged against `source-inputs.json`, verifying file hashes first.
-Run it from the repository root against a checkout of the web app with matching
-dependencies, once per committed time zone:
+Run it from the repository root against a checkout of this repository at the
+`sourceCommit` recorded in the fixtures, with its dependencies installed
+(`git worktree add <dir> <sourceCommit>`, then `bun install` there), once per
+committed time zone:
 
 ```sh
-SOURCE_CHECKLIST_ROOT=/path/to/checkout TZ=UTC bun crates/client/lexical/macro_document_model/src/plugins_group_b/checklist_plan/source-probe.mjs crates/client/lexical/macro_document_model/src/plugins_group_b/checklist_plan/source-utc.json
+SOURCE_CHECKLIST_ROOT=/path/to/checkout TZ=UTC bun packages/lexical-conformance/corpus/checklist-plan-source.mjs crates/client/lexical/macro_document_model/src/plugins_group_b/checklist_plan/source-utc.json
 ```
 
 Repeat with `TZ=America/New_York`, `Europe/Prague` and `Pacific/Kiritimati` for

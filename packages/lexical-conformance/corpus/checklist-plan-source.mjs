@@ -1,4 +1,6 @@
-// Reproduce pinned plain-data Source outputs without an editor or transformed source.
+// Reproduce the pinned checklist-plan Source outputs that
+// crates/client/lexical/macro_document_model/src/plugins_group_b/checklist_plan/test.rs compares against,
+// without an editor or transformed source.
 import { createHash } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -18,7 +20,9 @@ if (hash(await readFile(identifiers)) !== 'd89e276f5a9698ce7373529920b98dd00a51c
 const configSha = hash(await readFile(join(source, 'apps/web/tsconfig.json')));
 if (configSha !== '23a25b9e157ba5f0ee0a1e1da117cf28e5590b7163bcd56a54f8196a6b092b9a') throw new Error('Source tsconfig pin mismatch');
 const actual = await import(model);
-const inputBytes = await readFile(join(import.meta.dir, 'source-inputs.json'));
+const inputBytes = await readFile(
+  join(import.meta.dir, '../../../crates/client/lexical/macro_document_model/src/plugins_group_b/checklist_plan/source-inputs.json'),
+);
 const cases = JSON.parse(inputBytes);
 const dateFnsRoot = dirname(Bun.resolveSync('date-fns', model));
 const dateFnsFiles = {};
