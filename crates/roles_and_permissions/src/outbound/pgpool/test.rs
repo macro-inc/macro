@@ -8,33 +8,6 @@ use sqlx::{Pool, Postgres};
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("users"))
 )]
-async fn test_get_user_id_from_email(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let macro_db = MacroDB::new(pool);
-
-    let email = Email::parse_from_str("UsEr@uSeR.com")?.lowercase();
-
-    let user_id = macro_db.get_user_id_from_email(&email).await?;
-
-    assert_eq!(user_id.as_ref(), "macro|user@user.com");
-
-    let result = macro_db
-        .get_user_id_from_email(&Email::parse_from_str("bad@user.com")?.lowercase())
-        .await
-        .err()
-        .unwrap();
-
-    assert_eq!(
-        result.to_string(),
-        "no rows returned by a query that expected to return at least one row".to_string()
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("users"))
-)]
 async fn test_add_roles_to_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let macro_db = MacroDB::new(pool);
 

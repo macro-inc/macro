@@ -276,7 +276,7 @@ pub fn save(
     // FusionAuth alongside the rest (it needs only its own database).
     let mut fa = super::compose_cmd(instance, env);
     fa.args(["up", "-d", "fusionauth"]);
-    let fa_stage = stage.background();
+    let fa_stage = stage.background(super::telemetry::FUSIONAUTH_LANE);
     let fa_start = std::thread::spawn(move || fa_stage.run("Restarting FusionAuth", &mut fa));
     let mut up = super::compose_cmd(instance, env);
     up.args(["up", "-d", "--wait", "postgres", "search", "kafka"]);

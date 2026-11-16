@@ -87,9 +87,9 @@ impl<S, A: EntityAccessService, R> InitiativeToolContext<S, A, R> {
 fn failure(error: InitiativeError) -> ToolCallError {
     ToolCallError {
         description: match &error {
-            InitiativeError::BadRequest(message) | InitiativeError::Conflict(message) => {
-                message.clone()
-            }
+            InitiativeError::BadRequest(message)
+            | InitiativeError::Conflict(message)
+            | InitiativeError::Forbidden(message) => message.clone(),
             InitiativeError::Unauthorized => {
                 "You do not have permission to perform this project operation".into()
             }

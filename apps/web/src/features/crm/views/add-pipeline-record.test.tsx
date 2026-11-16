@@ -313,3 +313,70 @@ describe('AddPipelineRecordDialog', () => {
     expect(onCreate).not.toHaveBeenCalled();
   });
 });
+
+it('starts a deal Open in USD and submits an explicitly chosen outcome and currency', async () => {
+  const onCreate = vi.fn(async () => true);
+  const onClose = vi.fn();
+  const commercial: DatabaseViewColumn[] = [
+    ...columns,
+    {
+      id: 'outcome',
+      name: 'Outcome',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      writable: true,
+      fixedOptions: true,
+      defaultValue: 'Open',
+      options: [
+        { id: 'open', label: 'Open', color: null },
+        { id: 'lost', label: 'Lost', color: null },
+      ],
+    },
+    {
+      id: 'currency',
+      name: 'Amount currency',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      writable: true,
+      fixedOptions: true,
+      defaultValue: 'USD',
+      options: [
+        { id: 'usd', label: 'USD', color: null },
+        { id: 'eur', label: 'EUR', color: null },
+      ],
+    },
+  ];
+  render(() => (
+    <AddPipelineRecordDialog
+      pipeline={{ name: 'Sales', recordType: 'company' }}
+      columns={commercial}
+      initialValues={{ amount: 50 }}
+      onCreate={onCreate}
+      onClose={onClose}
+    />
+  ));
+  await userEvent.type(
+    screen.getByRole('combobox', { name: 'Find or add a company' }),
+    'acme'
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /Acme/ }));
+  await userEvent.click(screen.getByRole('button', { name: /Outcome: Open/ }));
+  await userEvent.click(await screen.findByRole('option', { name: 'Lost' }));
+  await userEvent.click(
+    screen.getByRole('button', { name: /Amount currency: USD/ })
+  );
+  await userEvent.click(await screen.findByRole('option', { name: 'EUR' }));
+  await userEvent.click(screen.getByRole('button', { name: /^Add deal/ }));
+  await waitFor(() =>
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        values: {
+          company: 'acme',
+          amount: 50,
+          outcome: 'Lost',
+          currency: 'EUR',
+        },
+      })
+    )
+  );
+});

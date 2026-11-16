@@ -557,10 +557,11 @@ export function useEmailDataSource(
 
   const usesServiceSearch = search.usesServiceSearch;
   const [refreshing, setRefreshing] = createSignal(false);
+  // A page of hits can leave no rows: membership, the tab (Archived keeps only
+  // done threads) or a client-side facet drops them. Page on until a row shows.
   const aliasAdvance = advanceEmptyAliasPages({
     scope,
-    enabled: () =>
-      sourceEnabled() && searchNeedsMembership() && usesServiceSearch(),
+    enabled: () => sourceEnabled() && usesServiceSearch(),
     ready: () =>
       filtersReady() &&
       search.searchQuery.isSuccess &&
@@ -579,6 +580,9 @@ export function useEmailDataSource(
   const hasMore = () => {
     if (!filtersReady()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
+    // A search the service has not run (still debouncing) lists
+    // no inbox rows, so the inbox's next page is not this list's next page.
+    if (search.isSearching()) return false;
     return !isListPending() && query.hasNextPage;
   };
 
@@ -626,7 +630,9 @@ export function useEmailDataSource(
       return (
         search.isLoading() || aliasSearchPending() || aliasAdvance.isFetching()
       );
-    return query.isLoading;
+    // Not `search.isLoading()`: it keeps the previous query's hits for a
+    // moment, which would read as "no results" before the spinner.
+    return search.isSearchServiceLoading();
   };
 
   return {
@@ -698,6 +704,7 @@ export function useEmailDataSource(
         await search.fetchNextPage();
         return;
       }
+      if (search.isSearching()) return;
       await query.fetchNextPage();
     },
     refresh: async () => {

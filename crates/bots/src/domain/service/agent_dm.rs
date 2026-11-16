@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::ports::AgentDmEligibility;
 
-impl<R: BotRepo, B: MacroEventBroker, C: McpAppCatalog> AgentDmEligibility
-    for BotServiceImpl<R, B, C>
+impl<R: BotRepo, B: MacroEventBroker, T: HarnessTeamAgents, C: McpAppCatalog> AgentDmEligibility
+    for BotServiceImpl<R, B, T, C>
 {
     async fn authorize_agent_dm(
         &self,

@@ -7,7 +7,10 @@ const COMPUTER_ID: ComputerId =
 fn config() -> DockerFleetConfig {
     DockerFleetConfig {
         control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-        image: GuestImage::try_new("macro-box:latest").unwrap(),
+        images: GuestImages {
+            regular: GuestImage::try_new("macro-box:latest").unwrap(),
+            agent: GuestImage::try_new("macro-box-agent:latest").unwrap(),
+        },
         network: "macro_services".to_owned(),
         enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
         host_name: "docker-local".to_owned(),

@@ -101,8 +101,17 @@ for each kind the filters show. It acts on the whole inbox, not only the
 loaded rows, and never on a kind the filters hide; under Unread the choices
 read **Clear today's unread** and **Clear all unread** and take unread rows
 only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
-archive email threads. A toast says how many were cleared and offers **Undo**,
-as does `⌘Z`/`Ctrl+Z`.
+archive email threads; a cleared email row stays gone until new mail arrives.
+The clear belongs to the server: it finishes even if the tab closes, the
+connection drops or the server restarts, and it takes only what had arrived
+when it started. Its rows leave at once, on the reader's other devices too. A
+toast says how many were cleared and offers **Undo**, as does `⌘Z`/`Ctrl+Z`; a
+large clear that is still at work says **so far; still clearing**, then
+announces its final count. Undo works while the clear is still at work and
+stops it. Undo, of a clear or of any Mark done, brings each notification back
+as it was: unread ones stay unread, and anything the reader changed since the
+clear is left alone. With every kind hidden by the filters, a clear takes
+nothing.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
@@ -380,6 +389,18 @@ the paste-the-code flow; see the
 without waiting days, set the computer's active `harness_account_logins` row's
 `expires_at` to within three days on a local stack: the notice arrives within a
 minute.
+
+`computer_setup` notifications (in-app notice, browser, and phone push) tell a
+computer's buyer that first-time setup finished ("Your computer is ready:
+connect your AI and finish setup") or failed ("<computer> could not be set
+up", with the failure reason the computer's status shows). They carry the
+computer id, name, and outcome; opening one reopens that computer's setup
+dialog on Bring your AI (see the Macro computers walkthrough in
+[settings.md](settings.md)). An agent teammate's computer notifies its
+inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
+with **Message <name>** and, for owners and admins, **Bring your AI**, or
+"<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
+Team → Members (see Agent teammates in [settings.md](settings.md)).
 
 ## Notification sounds
 

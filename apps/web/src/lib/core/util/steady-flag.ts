@@ -2,7 +2,8 @@ import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 /** A steadied view of a transient state, for status text that must not flash.
  * It turns on only after `source` has stayed on for `delay`, and once on it
- * stays on for at least `hold`, however briefly `source` goes off. */
+ * stays on for at least `hold`, however briefly `source` goes off. A blocked
+ * thread does not count as `source` staying on. */
 export function createSteadyFlag(
   source: Accessor<boolean>,
   delay = 300,
@@ -15,14 +16,21 @@ export function createSteadyFlag(
     clearTimeout(timer);
     timer = setTimeout(action, Math.max(0, wait));
   };
+  const turnOn = () => {
+    shownAt = Date.now();
+    setSteady(true);
+  };
   createEffect(() => {
     if (source()) {
-      if (steady()) clearTimeout(timer);
-      else
-        schedule(() => {
-          shownAt = Date.now();
-          setSteady(true);
-        }, delay);
+      if (steady()) {
+        clearTimeout(timer);
+        return;
+      }
+
+      // If the thread was blocked while the delay ran out, whatever turns
+      // `source` off is queued behind this timer. Turning on from a second
+      // timer lets it run first; the effect cancels that timer if it does.
+      schedule(() => schedule(turnOn, 0), delay);
       return;
     }
     if (steady()) schedule(() => setSteady(false), shownAt + hold - Date.now());

@@ -14,6 +14,13 @@ use crate::inbound::axum_router::{
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
+use crate::inbound::draft_job_router::{
+    __path_discard_draft_job, __path_get_draft_job, __path_list_draft_jobs, __path_start_draft_job,
+};
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
 use crate::inbound::draft_router::__path_draft_routine;
 #[expect(
     unused_imports,
@@ -59,8 +66,13 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::axum_router::catalog,
         crate::inbound::draft_router::draft_routine,
+        crate::inbound::draft_job_router::start_draft_job,
+        crate::inbound::draft_job_router::list_draft_jobs,
+        crate::inbound::draft_job_router::get_draft_job,
+        crate::inbound::draft_job_router::discard_draft_job,
         crate::inbound::suggestion_router::list_suggestions,
-        crate::inbound::suggestion_router::generate_suggestions,
+        crate::inbound::suggestion_router::review_suggestions,
+        crate::inbound::suggestion_router::retire_suggestion,
         crate::inbound::suggestion_router::dismiss_suggestion,
         crate::inbound::suggestion_router::suggest_routine,
         crate::inbound::template_router::share_template,
@@ -84,6 +96,10 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::suggestions::model::GenerationStatus,
             crate::domain::suggestions::model::SuggestRequest,
             crate::domain::suggestions::model::SuggestOutcome,
+            crate::domain::suggestions::model::SuggestionReview,
+            crate::domain::suggestions::model::ReviewedSuggestion,
+            crate::domain::suggestions::state::RoutineSuggestionState,
+            crate::domain::suggestions::model::RetireSuggestion,
             crate::inbound::draft_router::DraftRoutineRequest,
             crate::domain::drafts::DraftRequest,
             crate::domain::drafts::RoutineSoFar,
@@ -93,6 +109,18 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::drafts::DraftedRoutine,
             crate::domain::drafts::DraftedStep,
             crate::domain::drafts::StepProblem,
+            crate::domain::drafts::DraftCreated,
+            crate::inbound::draft_job_router::StartDraftJobRequest,
+            crate::domain::drafts::jobs::DraftJob,
+            crate::domain::drafts::jobs::DraftJobState,
+            crate::domain::drafts::jobs::DraftAsked,
+            crate::domain::drafts::jobs::DraftKind,
+            crate::domain::drafts::jobs::DraftUpdate,
+            crate::domain::drafts::jobs::DraftUpdateState,
+            crate::domain::drafts::progress::DraftJobProgress,
+            crate::domain::drafts::progress::DraftStage,
+            crate::domain::drafts::progress::CheckSummary,
+            crate::domain::drafts::progress::StepTitle,
             crate::domain::code_upgrade::CodeUpgrade,
             crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,

@@ -121,14 +121,19 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
+        // Named people get it on their own streams, team-scoped ones too: a
+        // runtime shared with a team streams team-scoped, and a requester's
+        // composer request is still theirs alone.
         TriggerAudience::People(people) => StreamAudience::Any(
             people
                 .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
-                })
+                .map(|person| person.to_string())
+                // A requested session also reaches its runtime's own stream,
+                // which authenticates as the harness owner rather than as
+                // whichever teammate asked. Only the live stream: persisted
+                // webhooks keep the requester alone.
+                .chain(requested_runtime_user(&event.event))
+                .map(|user_id| StreamAudience::Person { user_id })
                 .collect(),
         ),
     };
@@ -136,6 +141,17 @@ pub(crate) fn agent_trigger_stream_candidate(
         audience,
         event: normalized,
     })
+}
+
+/// The user a requested session's runtime streams as, when the producer
+/// named one.
+fn requested_runtime_user(event: &AgentTriggerTopicEvent) -> Option<String> {
+    match event {
+        AgentTriggerTopicEvent::New(new) => new
+            .requested()
+            .and_then(|requested| requested.runtime_user.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn agent_session_lifecycle_stream_candidate(

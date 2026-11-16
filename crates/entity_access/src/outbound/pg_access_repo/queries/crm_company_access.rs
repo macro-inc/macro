@@ -17,7 +17,7 @@ use uuid::Uuid;
 /// without trusting the user's default team. Returns `None` when the user is
 /// not on that team, or when the company is hidden and the user is a plain
 /// member.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn get_crm_company_access(
     pool: &PgPool,
     company_id: &Uuid,
