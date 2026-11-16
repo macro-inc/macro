@@ -10,7 +10,9 @@
 // (`MIN_FREE_BYTES` in services/convert_service/src/disk.rs), at 90% of the
 // 20 GiB disk or sooner if the filesystem keeps blocks in reserve, and ECS
 // replaces the task. The thresholds sit below that, so this notifies while
-// conversions still succeed.
+// conversions still succeed. It compares the highest reading in its window
+// rather than the average: a disk that fills within minutes is replaced
+// before an average catches up, and the leak would go unreported.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
@@ -48,7 +50,7 @@ const dashboard = new datadog.Dashboard('convert-service-alerts', {
 prodMonitor('convert-service-disk', {
   title: DISK_TITLE,
   service: 'convert-service',
-  query: `avg(last_15m):${DISK_SHARE} >= 80`,
+  query: `max(last_15m):${DISK_SHARE} >= 80`,
   monitorThresholds: { critical: '80', warning: '60' },
   pages: false,
   description:

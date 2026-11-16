@@ -395,8 +395,8 @@ onward.
 
 `monitors/convert-service.ts` adds **one monitor and one dashboard** for the
 disk of each convert-service task, from the ECS Fargate integration's
-ephemeral storage metrics. It warns at 60% and alerts at 80% over 15 minutes
-and does not page; [the runbook](../../../docs/runbooks/convert-service.md#disk-filling)
+ephemeral storage metrics. It warns at 60% and alerts at 80%, on the highest
+reading of the last 15 minutes, and does not page; [the runbook](../../../docs/runbooks/convert-service.md#disk-filling)
 covers it.
 
 The service fails its own health check with less than 2 GiB of its 20 GiB
