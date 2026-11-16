@@ -15,6 +15,12 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
   /** Recent searches to list: only while the field has focus. */
   listed: Accessor<string[]>;
   setFocused: (focused: boolean) => void;
+  /**
+   * A picked search has no results yet when the keyboard moves to the list,
+   * so the list takes its first row once they arrive. Typing again cancels.
+   */
+  awaitsPickedResults: Accessor<boolean>;
+  pickedResultsTaken: () => void;
 };
 
 /**
@@ -30,6 +36,7 @@ export function createEmailSearchSuggestions(options: {
   const [open, setOpen] = createSignal(false);
   const [focused, setFocusedState] = createSignal(false);
   const [active, setActive] = createSignal(-1);
+  const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 
   const listed = createMemo(() =>
     focused()
@@ -45,7 +52,8 @@ export function createEmailSearchSuggestions(options: {
     setOpen,
     listed,
     setFocused: (next) => {
-      if (!next) recent.add(options.search());
+      if (next) setAwaitsPickedResults(false);
+      else recent.add(options.search());
 
       setActive(-1);
       setFocusedState(next);
@@ -59,6 +67,9 @@ export function createEmailSearchSuggestions(options: {
       if (query === undefined) return;
 
       options.setSearch(query);
+      setAwaitsPickedResults(true);
     },
+    awaitsPickedResults,
+    pickedResultsTaken: () => setAwaitsPickedResults(false),
   };
 }

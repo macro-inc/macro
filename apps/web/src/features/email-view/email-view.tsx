@@ -25,9 +25,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
+  createEffect,
   createSignal,
   type JSX,
   Match,
+  on,
   onMount,
   type ParentProps,
   Show,
@@ -106,7 +108,7 @@ function EmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, setState, closeThread, list } = useEmailView();
+  const { state, setState, closeThread, list, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const recentSearches = createEmailSearchSuggestions({
@@ -114,6 +116,20 @@ function EmailPanes(props: {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
   });
+  const pickedResultsArrived = () =>
+    recentSearches.awaitsPickedResults() &&
+    !source.isLoading() &&
+    !source.isFetching() &&
+    !(source.showsPreviousRows?.() ?? false);
+  // The list is driven imperatively, so the arrival is an effect.
+  createEffect(
+    on(pickedResultsArrived, (arrived) => {
+      if (!arrived) return;
+
+      recentSearches.pickedResultsTaken();
+      list.navigate.toFirst();
+    })
+  );
   // A loading flag is not on: the compact field stays until it answers.
   const searchSuggestions = () =>
     wideSearchFlag().enabled ? recentSearches : undefined;

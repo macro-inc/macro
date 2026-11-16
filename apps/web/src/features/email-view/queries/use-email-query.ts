@@ -648,12 +648,25 @@ export function useEmailDataSource(
   // A search that is still loading keeps the rows it replaces on screen: a
   // blank list between two queries reads as "no results". The rows stay
   // until the new ones arrive, and never cross a tab change.
+  //
+  // "Still loading" asks for the search's own answer, not for a request in
+  // flight: between the debounce settling and the request starting nothing
+  // is fetching yet, and the list would blank for that moment.
+  const searchAnswered = () => {
+    if (search.isSettling() || aliasSearchPending()) return false;
+    if (!usesServiceSearch()) return true;
+
+    const answer = search.searchQuery;
+    if (answer.error) return true;
+    return answer.isSuccess && !answer.isPlaceholderData && !answer.isFetching;
+  };
   const shownRows = createMemo<ShownEmailRows>(
     (previous) => {
       const searching = search.isSearching();
+      const waits = searching ? !searchAnswered() : awaitsRows();
       const keepsPrevious =
         (options.keepRowsWhileSearching?.() ?? false) &&
-        awaitsRows() &&
+        waits &&
         previous.tab === state.tab &&
         previous.items.length > 0 &&
         (searching || previous.searching);

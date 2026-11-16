@@ -180,6 +180,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
       });
     const [searchHasMore, setSearchHasMore] = createSignal(true);
     const [searchFetching, setSearchFetching] = createSignal(false);
+    const [searchUnanswered, setSearchUnanswered] = createSignal(false);
     const searchNext = vi.fn(async () => {
       setSearchHasMore(false);
     });
@@ -202,7 +203,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
             return options?.().enabled ?? true;
           },
           get isSuccess() {
-            return discovery || !retentionLoading();
+            return discovery ? !searchUnanswered() : !retentionLoading();
           },
           isPlaceholderData: false,
           get isFetching() {
@@ -301,6 +302,7 @@ function mount(search = '', keepRowsWhileSearching = false) {
       searchNext,
       setSearchHasMore,
       setSearchFetching,
+      setSearchUnanswered,
       setState,
       setEntities,
       setDiscoveryEntities,
@@ -337,7 +339,14 @@ describe('Email list query transitions', () => {
       expect(root.source.showsPreviousRows?.()).toBe(true);
       expect(root.source.isLoading()).toBe(false);
 
+      // The request has settled its debounce but not started: nothing is
+      // fetching, and the rows still must not blank.
+      root.setSearchUnanswered(true);
       root.setSearchFetching(false);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+
+      root.setSearchUnanswered(false);
       expect(ids(root.source)).toEqual(['search']);
       expect(root.source.showsPreviousRows?.()).toBe(false);
 

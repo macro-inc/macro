@@ -69,3 +69,27 @@ it('runs the picked search and keeps the active row inside the list', () => {
     dispose();
   });
 });
+
+it('waits for a picked search until its results are taken or the field is used again', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup('budget');
+    suggestions.setFocused(true);
+    suggestions.setFocused(false);
+    setSearch('');
+    suggestions.setFocused(true);
+
+    suggestions.pick(0);
+    suggestions.setFocused(false);
+    expect(suggestions.awaitsPickedResults()).toBe(true);
+    suggestions.pickedResultsTaken();
+    expect(suggestions.awaitsPickedResults()).toBe(false);
+
+    setSearch('');
+    suggestions.setFocused(true);
+    suggestions.pick(0);
+    suggestions.setFocused(false);
+    suggestions.setFocused(true);
+    expect(suggestions.awaitsPickedResults()).toBe(false);
+    dispose();
+  });
+});
