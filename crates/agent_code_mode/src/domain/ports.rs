@@ -50,3 +50,10 @@ pub trait ExecutionStore: Send + Sync + 'static {
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
 }
+
+/// Whether a session owner may run OCaml programs: the backend rollout flag.
+#[async_trait]
+pub trait OcamlRollout: Send + Sync + 'static {
+    /// On for `owner`. A flag that cannot be read counts as off.
+    async fn enabled(&self, owner: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool;
+}
