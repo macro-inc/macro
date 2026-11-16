@@ -1,0 +1,19 @@
+; The code-mode program contract (code_mode.mli). Built only with
+; `--profile wasm`, like ../fetch: native `dune build` never needs
+; js_of_ocaml or wasm_of_ocaml.
+
+(library
+ (name code_mode)
+ (enabled_if
+  (= %{profile} wasm))
+ (libraries macro_sdk.runtime macro_sdk_fetch js_of_ocaml yojson))
+
+; JSPI, as in ../fetch: the transport's await needs it.
+
+(env
+ (_
+  (wasm_of_ocaml
+   (flags
+    (:standard --effects=jspi))
+   (build_runtime_flags
+    (:standard --effects=jspi)))))
