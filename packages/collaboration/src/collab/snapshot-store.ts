@@ -78,6 +78,8 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
 
   private async write<R>(operation: () => Promise<R>): Promise<R> {
     const locks = globalThis.navigator?.locks;
+    // Deliberate flag-OFF change: serialize legacy saves with native saves
+    // while ON and OFF tabs share this document during a flag transition.
     // The legacy path also runs on platforms where native sessions are unavailable.
     return locks
       ? locks.request(snapshotWriteLock(this.scopeId), operation)
