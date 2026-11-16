@@ -97,29 +97,25 @@ impl PreviewRepository for MemoryRepository {
             .cloned()
             .ok_or(PreviewError::Offline)
     }
-    async fn claim(&self, hash: [u8; 32], r: Uuid) -> Result<StoredPreview, PreviewError> {
+    async fn claim(&self, hash: [u8; 32], r: Uuid) -> Result<Option<StoredPreview>, PreviewError> {
         let mut d = self.0.lock().unwrap();
-        let (k, c) = d
-            .credentials
-            .get(&hash)
-            .cloned()
-            .ok_or(PreviewError::Denied)?;
+        let Some((k, c)) = d.credentials.get(&hash).cloned() else {
+            return Ok(None);
+        };
         if k != "ssh" || c.expires <= now() || !d.replicas.get(&r).is_some_and(|(_, e)| *e > now())
         {
-            return Err(PreviewError::Denied);
+            return Ok(None);
         }
         d.credentials.remove(&hash);
-        let p = d
-            .leases
-            .values_mut()
-            .find(|p| {
-                p.preview.id == c.preview
-                    && p.replica.is_none()
-                    && p.preview.status == PreviewStatus::Starting
-            })
-            .ok_or(PreviewError::Denied)?;
+        let Some(p) = d.leases.values_mut().find(|p| {
+            p.preview.id == c.preview
+                && p.replica.is_none()
+                && p.preview.status == PreviewStatus::Starting
+        }) else {
+            return Ok(None);
+        };
         p.replica = Some(r);
-        Ok(p.clone())
+        Ok(Some(p.clone()))
     }
     async fn status(
         &self,
