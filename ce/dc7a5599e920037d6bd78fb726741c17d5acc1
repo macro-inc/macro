@@ -1,0 +1,88 @@
+crates/agent_monitor_tui/src/ui/test.rs
+  s_564ae7a9b7392a::t_18d713636ae933 8
+crates/agent_monitor_tui/src/theme.rs
+  s_564ae7a9b7392a::t_524da4beaf8dcc 209-214,216,219-220,226-232,245-248
+  s_564ae7a9b7392a::t_b9f6fdda579554 234-244
+crates/agent_monitor_tui/src/ui/panes.rs
+  s_564ae7a9b7392a::t_570b1ac6d87205 37,66,70,79,82,527,530,586-592,594-597,600,602-606,608,610-611,619-622,625-626
+  s_564ae7a9b7392a::t_18d713636ae933 212,219-223,225-230,287,670,746,748
+  s_564ae7a9b7392a::t_b38bfe2af3c515 12-13,224,512,593,598-599,601,607,609,612-618,623-624,627,658,678,680,684,744-745,747,749-758,777,859,878
+crates/agent_monitor_tui/src/ui/agent_summary.rs
+  s_564ae7a9b7392a::t_18d713636ae933 1-31,33-42,44-46,48-52,54-58,60-61
+  s_564ae7a9b7392a::t_dfca1cef5d576d 32,43,47,53,59
+crates/agent_monitor_tui/src/ui/drill.rs
+  s_564ae7a9b7392a::t_570b1ac6d87205 150,193
+  s_564ae7a9b7392a::t_5a20ad396dbbf1 33-35,278,379,402-403,557,560,565,610,613,618,646
+crates/agent_monitor_tui/src/ui.rs
+  s_564ae7a9b7392a::t_62d6c2872bf1a5 20,145-157,159-162,164-173,175-176,179,184-185,187,191,197,201-204,207-209,211-212,214-217,219,222-228,294,305,307,309-327,329-331,333,335-336
+  s_564ae7a9b7392a::t_524da4beaf8dcc 1,3-4,6,16,22,63
+  s_564ae7a9b7392a::t_efb1cce383dffe 158,174,186,306,328,332,334
+crates/agent_monitor_tui/src/ui/wall.rs
+  s_564ae7a9b7392a::t_570b1ac6d87205 9
+  s_564ae7a9b7392a::t_c27eb265a0b1ec 42-43,45,50
+crates/agent_monitor_tui/src/app.rs
+  s_564ae7a9b7392a::t_cb4fb3d8834862 121
+  s_564ae7a9b7392a::t_1860ee96a389cd 36-37,527-530
+crates/agent_monitor_tui/src/lib.rs
+  s_564ae7a9b7392a::t_cb4fb3d8834862 112
+crates/agent_monitor_tui/src/app/test.rs
+  s_564ae7a9b7392a::t_90c0123a28bf28 200-214
+crates/agent_monitor_tui/AGENTS.md
+  s_564ae7a9b7392a::t_3a866efb12e296 25-29,121-122
+crates/agent_monitor_tui/src/ui/changes/compact.rs
+  s_564ae7a9b7392a::t_45dd2a98ffc84c 39
+crates/agent_monitor_tui/src/ui/changes/draw.rs
+  s_564ae7a9b7392a::t_774cf6e90f53b5 12,55,278-283,1069,1072,1077,1081-1082
+crates/agent_monitor_tui/src/ui/changes/lane.rs
+  s_564ae7a9b7392a::t_11b4a0225e15fa 44,189-190
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_200x56.snap
+  s_564ae7a9b7392a::t_e0bdfcdb3a3388 5,48-53,58,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_240x45.snap
+  s_564ae7a9b7392a::t_8070bc66733f0e 5,37-42,47,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_compact_80x24.snap
+  s_564ae7a9b7392a::t_f4e2803b29163a 5,20-22,28
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_failing_lane_selected_and_enter_drills_into_the_author.snap
+  s_564ae7a9b7392a::t_7a7ad209470a64 5,37-42,47,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_narrow_100x30.snap
+  s_564ae7a9b7392a::t_0e0db63351d9e6 5,11-19,23-25,32,34
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab.snap
+  s_564ae7a9b7392a::t_340cf1c3809d76 5,40-45,47,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_without_repositories_lists_the_prs_and_enter_opens_the_author.snap
+  s_564ae7a9b7392a::t_2eeb45cb21463d 5,40-45,47,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__drill_in_200x56.snap
+  s_564ae7a9b7392a::t_44554b1e7356a6 9-13,17-26,31-34,37-38,55-60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__lane_detail_200x56.snap
+  s_564ae7a9b7392a::t_4d4360770602cc 5,13-15,53-58,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_200x56.snap
+  s_564ae7a9b7392a::t_473e9485fcc31b 5-38,47-58,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_narrow_100x30.snap
+  s_564ae7a9b7392a::t_3fce72ee5fdf38 5-22,24-32,34
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_one_column_80x24.snap
+  s_564ae7a9b7392a::t_751d722e7a9b59 5-13,17,19,22-23,25,28
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_wide_240x60_grows_the_body.snap
+  s_564ae7a9b7392a::t_47bc05d2174961 5-40,50-62,64
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__tree_200x56.snap
+  s_564ae7a9b7392a::t_8da42470081d09 5-60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__wall_200x56.snap
+  s_564ae7a9b7392a::t_0f78c4a8472bc9 5,10,20,30,40,44-53,59-60
+crates/agent_monitor_tui/src/ui/tree.rs
+  s_564ae7a9b7392a::t_94b5c414da726a 78,81,86,125
+crates/coding_agent_worker/README.md
+  s_564ae7a9b7392a::t_7e092876d08ff2 242-246,293-294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cedc7a5599e920037d6bd78fb726741c17d5acc1",
+  "prompts": {},
+  "sessions": {
+    "s_564ae7a9b7392a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e266-9e70-7091-9ea4-3b7a56db33fe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
