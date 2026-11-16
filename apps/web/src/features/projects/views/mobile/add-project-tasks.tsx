@@ -43,16 +43,23 @@ export function MobileAddProjectTasks(props: AddProjectTasksViewProps) {
       </Show>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content>
-          <MobileDrawer.Handle />
+        <MobileDrawer.Content
+          targetHeight={props.mode === 'existing' ? 80 : undefined}
+        >
+          <MobileDrawer.Handle class="pt-3 pb-4" />
           <MobileDrawer.Title class="px-6 pb-3 text-lg font-semibold">
             {props.mode === 'choices' ? 'Add task' : 'Add existing tasks'}
           </MobileDrawer.Title>
-          <MobileDrawer.ScrollBody>
-            <Show
-              when={props.mode === 'choices'}
-              fallback={props.pickerFields()}
-            >
+          <Show
+            when={props.mode === 'choices'}
+            fallback={
+              <>
+                {props.pickerFields('sheet')}
+                {props.pickerFooter('sheet')}
+              </>
+            }
+          >
+            <MobileDrawer.ScrollBody>
               <MobileDrawer.Section>
                 <MobileDrawer.Item onClick={props.createTask}>
                   <PlusIcon class="size-5" /> New task
@@ -61,9 +68,8 @@ export function MobileAddProjectTasks(props: AddProjectTasksViewProps) {
                   <ListPlusIcon class="size-5" /> Add existing tasks
                 </MobileDrawer.Item>
               </MobileDrawer.Section>
-            </Show>
-          </MobileDrawer.ScrollBody>
-          <Show when={props.mode === 'existing'}>{props.pickerFooter()}</Show>
+            </MobileDrawer.ScrollBody>
+          </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

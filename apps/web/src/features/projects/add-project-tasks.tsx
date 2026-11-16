@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
@@ -109,16 +110,25 @@ export function AddProjectTasks(props: {
       if (request === generation) setState('saving', false);
     }
   };
-  const pickerFields = () => (
+  const pickerFields = (presentation?: 'sheet') => (
     <>
-      <div inert={state.saving} classList={{ 'opacity-50': state.saving }}>
+      <div
+        inert={state.saving}
+        classList={{
+          'opacity-50': state.saving,
+          'flex min-h-0 flex-1 flex-col': presentation === 'sheet',
+        }}
+      >
         <Suspense fallback={<p role="status">Loading tasks…</p>}>
           <PropertyEntitySelector
+            presentation={presentation}
             config={{
               specificEntityType: 'TASK',
               isMultiSelect: true,
               placeholder: 'Search tasks…',
               excludedIds,
+              fillHeight: presentation === 'sheet',
+              visibleCheckboxes: presentation === 'sheet',
             }}
             selectedOptions={() => new Set(state.selected)}
             setSelectedOptions={(ids) => {
@@ -137,27 +147,36 @@ export function AddProjectTasks(props: {
       </Show>
     </>
   );
-  const pickerFooter = () => (
+  const pickerFooter = (presentation?: 'sheet') => (
     <div
-      class="flex justify-end gap-2 border-t border-edge-muted p-2"
+      class={
+        presentation === 'sheet'
+          ? 'flex shrink-0 justify-end gap-4 px-4 pt-4'
+          : 'flex justify-end gap-2 border-t border-edge-muted p-2'
+      }
       onKeyDown={(event) => {
         // The selector owns list navigation; footer buttons keep native Enter behavior.
         if (['Enter', 'ArrowUp', 'ArrowDown'].includes(event.key))
           event.stopPropagation();
       }}
     >
-      <Button variant="ghost" size="sm" disabled={state.saving} onClick={close}>
-        Cancel
+      <Button
+        variant="ghost"
+        size={presentation === 'sheet' ? 'md' : 'sm'}
+        disabled={state.saving}
+        onClick={close}
+      >
+        {t('common.cancel')}
       </Button>
       <Button
-        size="sm"
+        size={presentation === 'sheet' ? 'md' : 'sm'}
         variant="primary"
         disabled={state.saving || !state.selected.length}
         onClick={() => fireAndForget(add(), 'projects')}
       >
         {state.saving
-          ? 'Adding tasks…'
-          : `Add ${state.selected.length || ''} ${state.selected.length === 1 ? 'task' : 'tasks'}`}
+          ? t('common.addingTasks')
+          : t('common.addTasks', { count: state.selected.length })}
       </Button>
     </div>
   );
@@ -212,6 +231,6 @@ export type AddProjectTasksViewProps = {
   chooseExisting(): void;
   openExisting(): void;
   picker(): JSX.Element;
-  pickerFields(): JSX.Element;
-  pickerFooter(): JSX.Element;
+  pickerFields(presentation?: 'sheet'): JSX.Element;
+  pickerFooter(presentation?: 'sheet'): JSX.Element;
 };

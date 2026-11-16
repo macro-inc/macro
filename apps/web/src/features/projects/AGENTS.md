@@ -33,6 +33,7 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - Reuse `components/discussion/` for the phone Discussion entry and fixed-height sheet; keep existing conversation queries, permissions, paging, and desktop inline threads.
 - Choose the task empty state from the authorized project's unfiltered task IDs before consulting layout queries; retain filtered-empty results when linked tasks exist. Center both project and task empty states in EmptyStatePanel with PROJECTS_DOCS_URL documentation; filtered project results offer Clear Filters without changing the built-in scope.
 - Keep existing-task assignment failures selected for retry and reject stale completion after the project or picker lifetime changes.
+- Keep the phone Add existing tasks search and actions pinned around a filling list; use accent InlineCheckbox rows, stable selection order, 16px group gaps, and no dividers.
 - Capture read-only property-cell clicks as project navigation before inert property triggers swallow the event; leave editable cells to their property editors.
 
 ## Checks

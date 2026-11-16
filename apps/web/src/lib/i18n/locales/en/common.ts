@@ -16,6 +16,8 @@ export default {
   discussionLoadError: 'Could not load discussion.',
   loadEarlierMessages: 'Load earlier messages',
   loadNewerMessages: 'Load newer messages',
+  addTasks: { one: 'Add {{count}} task', other: 'Add {{count}} tasks' },
+  addingTasks: 'Adding tasks…',
   showMore: 'Show more',
   showLess: 'Show less',
   dropToAdd: 'Drop to add',

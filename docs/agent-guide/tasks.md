@@ -1218,6 +1218,9 @@ description, grouped task scrolling, Back/Forward, Share, and Details.
 
 Choose `Add existing tasks` from Add task on desktop, or from the floating Task
 control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.
+The phone sheet pins the search above its filling task list and the Add/Cancel
+actions below it. Selections use accent checkboxes and keep the current row order;
+Add is disabled at zero selections. Groups have 16px spacing without divider lines.
 Next options/PageDown appends later loaded task pages. Escape or Cancel dismisses
 without assigning tasks. Tasks already in this project are excluded. Adding a task
 moves it from its previous project. Partial failures retain only failed tasks for
