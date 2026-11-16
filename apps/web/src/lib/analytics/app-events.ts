@@ -408,13 +408,12 @@ export type AppEvents = {
   // --- Notifications -------------------------------------------------------
   /**
    * A notification was opened: from the app's lists and stacks (`in_app`), a
-   * browser notification, a native iOS, Android or macOS notification tap
+   * browser notification, or a native iOS, Android or macOS notification tap
    * (`native_push`, counted once its navigation applies; `macro_device` tells
-   * the platforms apart), or a home recommendation that opens through its
-   * notification (`home_recommendation`, not a notification-driven open).
+   * the platforms apart).
    */
   notification_opened: {
-    source: 'in_app' | 'browser_push' | 'native_push' | 'home_recommendation';
+    source: 'in_app' | 'browser_push' | 'native_push';
     notificationType: string;
     entityType: string;
   };

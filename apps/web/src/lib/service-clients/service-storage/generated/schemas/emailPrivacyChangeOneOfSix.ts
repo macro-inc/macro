@@ -9,12 +9,12 @@ import type { EmailBlockScope } from './emailBlockScope';
 import type { EmailPrivacyChangeOneOfSixAction } from './emailPrivacyChangeOneOfSixAction';
 
 /**
- * Remove an exclusion; other exclusions still apply.
+ * Add a domain and its subdomains to an exclusion list.
  */
 export type EmailPrivacyChangeOneOfSix = {
   action: EmailPrivacyChangeOneOfSixAction;
   /** Bare company domain. */
   domain: string;
-  /** Which list to edit. */
+  /** Which contributions the exclusion affects. */
   scope: EmailBlockScope;
 };

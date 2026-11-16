@@ -215,6 +215,8 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-unavailable';
       reason: string;
+      /** A newer build took the database over, so retrying cannot help. */
+      superseded?: true;
     }
   | {
       /** A newer app build took the database over. The page stops using the
@@ -1217,6 +1219,19 @@ export function validateCoordinatorToTabEnvelope(
       }
       break;
     case 'cache-unavailable':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'reason',
+          'superseded',
+        ]) &&
+        isNonEmptyString(value.reason) &&
+        (value.superseded === undefined || value.superseded === true)
+      ) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
     case 'cache-superseded':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&

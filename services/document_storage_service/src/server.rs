@@ -433,12 +433,23 @@ async fn run_server() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Availability checks on interactive paths must fail closed promptly.
+        Duration::from_millis(300),
+        config.environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     // DSS only reads CRM rows — no-op resolver keeps reqwest/scraper
     // out of this binary.
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-    );
+    )
+    .with_thread_exclusion_gate(Arc::new(
+        crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(db.clone()),
@@ -908,14 +919,7 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder
         .with_voice_repo(PgVoiceRepo::new(db.clone()))
         .with_event_broker(macro_event_broker.clone());
-    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-        config.posthog_api_key.as_ref().to_owned(),
-        // Flag evaluation is on the call-start path; fall back promptly.
-        Duration::from_millis(300),
-        config.environment,
-    )
-    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+
     let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> = match (
         config.openbao_address.value(),
         config.passwords_jwt_issuer.value(),
@@ -934,31 +938,56 @@ async fn run_server() -> anyhow::Result<()> {
             "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
         ),
     };
-    let passwords_availability: Arc<dyn passwords::domain::ports::Availability> = match config
-        .environment
-    {
-        Environment::Local => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: passwords::outbound::availability::LocalPasswordsFlags,
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
-        _ => Arc::new(passwords::outbound::availability::PasswordAvailability {
-            flags: flags.clone(),
-            provider_configured: config.openbao_address.value().is_some(),
-        }),
+    let (passwords_availability, passwords_agent_availability): (
+        Arc<dyn passwords::domain::ports::Availability>,
+        Arc<dyn passwords::domain::agent::ports::AgentAvailability>,
+    ) = match config.environment {
+        Environment::Local => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: passwords::outbound::availability::LocalPasswordsFlags,
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
+        _ => {
+            let availability = Arc::new(passwords::outbound::availability::PasswordAvailability {
+                flags: flags.clone(),
+                provider_configured: config.openbao_address.value().is_some(),
+            });
+            (availability.clone(), availability)
+        }
     };
+    let passwords_repository = Arc::new(
+        passwords::outbound::postgres::PgRepository::new(db.clone())
+            .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
+    );
     let passwords_state = passwords::inbound::router::PasswordRouterState {
         service: Arc::new(passwords::domain::service::PasswordService {
-            repository: Arc::new(
-                passwords::outbound::postgres::PgRepository::new(db.clone())
-                    .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
-            ),
+            repository: passwords_repository.clone(),
             provider: passwords_provider,
             availability: passwords_availability,
         }),
         authorization: authorization_state.clone(),
     };
+    // The agent platform supplies the authoritative directory adapter; until it
+    // is composed, every agent call is `invalid_agent` with the flags on.
+    let passwords_agent_state = passwords::inbound::agent_router::AgentRouterState {
+        service: Arc::new(passwords::domain::agent::service::AgentVaultService {
+            vault: passwords_state.service.clone(),
+            agents: passwords_repository,
+            directory: Arc::new(passwords::outbound::agent_directory::NoAgents),
+            availability: passwords_agent_availability,
+            events: Arc::new(crate::outbound::passwords_access::PasswordAccessDelivery {
+                ingress: notification_ingress_service.clone(),
+                broker: macro_event_broker.clone(),
+            }),
+            clock: Arc::new(chrono::Utc::now),
+        }),
+        authorization: authorization_state.clone(),
+    };
     consumer_tracker.spawn(crate::passwords_cleanup::run(
         passwords_state.service.clone(),
+        passwords_agent_state.service.clone(),
         consumer_cancellation_token.clone(),
     ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
@@ -2483,9 +2512,7 @@ async fn run_server() -> anyhow::Result<()> {
         db.clone(),
         crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
             (*conn_gateway_client).clone(),
-            Arc::new(crate::service::saved_views::Membership(
-                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
-            )),
+            Arc::new(crate::service::saved_views::Membership::new(db.clone())),
             event_broker_tracker.clone(),
         ),
     ));
@@ -2664,9 +2691,11 @@ async fn run_server() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
-                entity_access_service.clone(),
+                crate::service::activity::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
             ),
         )),
         graphql_entity_mutation_service,
@@ -2691,6 +2720,7 @@ async fn run_server() -> anyhow::Result<()> {
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
         passwords_state,
+        passwords_agent_state,
         authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,

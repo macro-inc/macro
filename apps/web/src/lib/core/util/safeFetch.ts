@@ -295,6 +295,7 @@ export async function safeFetch<
   let lastError: Result<T, ResultError<ErrorCode>[]> | undefined;
 
   for (let attempt = 1; attempt <= maxTries; attempt++) {
+    let responded = false;
     try {
       const response = await tracedFetch(
         input,
@@ -314,6 +315,7 @@ export async function safeFetch<
         },
         trace
       );
+      responded = true;
 
       if (!response.ok) {
         if (errorResponseHandler) {
@@ -349,10 +351,16 @@ export async function safeFetch<
         return ok(data as T);
       }
     } catch (error) {
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        lastError = fetchErr([
+      // Fetch rejects every network failure with a TypeError, whose message
+      // differs by browser ("Failed to fetch", "Load failed") and transport.
+      // Once a response arrived the server may have acted on the request, so
+      // a failure reading it is not retried.
+      if (error instanceof TypeError) {
+        const failure = fetchErr([
           { code: 'NETWORK_ERROR', message: 'Network error occurred' },
         ]);
+        if (responded) return failure;
+        lastError = failure;
       } else if (error instanceof SyntaxError) {
         return fetchErr([
           { code: 'INVALID_JSON', message: 'Invalid JSON in response' },

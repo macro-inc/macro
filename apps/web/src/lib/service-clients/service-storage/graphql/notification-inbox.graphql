@@ -110,6 +110,7 @@ mutation UndoNotificationInboxClear($input: UndoNotificationInboxClearInput!) {
 
 query NotificationInboxClears($clearId: ID) {
 	user {
+		id
 		notificationInboxClears(clearId: $clearId) {
 			...NotificationInboxClearFields
 		}

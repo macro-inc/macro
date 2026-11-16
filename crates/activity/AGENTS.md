@@ -46,6 +46,8 @@ distribution.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
   `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `ai_tools` reads `SubjectActivityPresence` so memory skips days without
+  activity.
 
 ## Recipes
 
@@ -71,3 +73,5 @@ distribution.
 - The session read is one scan of `activity_events_agent_session_idx`. A trigger stamps `agent_session_id` from the row's correlation on insert, so writers never set it; reads (`opened`) are left out of both the read and session delivery.
 - Correlated rows publish a separate `SessionRecorded` activity-topic event even when no subject or entity viewer is addressable. The realtime consumer broadcasts those rows to session subscribers; the GraphQL adapter resolves correlation ownership through the existing agent correlation repository.
 - The activity topic schema is v2 for the session event; older realtime consumers skip v2 frames during a rolling deployment, and new consumers skip v1 frames. Both feeds recover missed frames through authorized reads on reconnect.
+
+- `domain/visible_reads.rs` owns current project and CRM visibility for personal/team/range reads and overview references. Compose it with the primary-backed `outbound/entity_access_audience` adapter. Keep raw cursors when filtering denied rows; subscription adapters also recheck retained events before emission.

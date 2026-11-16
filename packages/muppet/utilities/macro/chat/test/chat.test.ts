@@ -165,33 +165,37 @@ describe('chat', () => {
 describe('typing', () => {
   test('keeps resending start until stopped, then sends stop once', async () => {
     const sent: string[] = [];
+    const { promise: thirdStart, resolve } = Promise.withResolvers<void>();
     const indicator = typing({
       send: async (channelId, action) => {
         sent.push(`${channelId} ${action}`);
+        if (sent.filter((line) => line === 'c1 start').length === 3) resolve();
       },
       every: 20,
     });
     indicator.start('c1');
-    await Bun.sleep(70);
+    await thirdStart;
     await indicator.stop('c1');
     await indicator.stop('c1');
-    expect(sent.filter((line) => line === 'c1 start').length).toBeGreaterThan(
-      2
-    );
+    expect(
+      sent.filter((line) => line === 'c1 start').length
+    ).toBeGreaterThanOrEqual(3);
     expect(sent.filter((line) => line === 'c1 stop')).toEqual(['c1 stop']);
     expect(sent.at(-1)).toBe('c1 stop');
   });
 
   test('stops by itself after the longest it may type', async () => {
     const sent: string[] = [];
+    const { promise: stopped, resolve } = Promise.withResolvers<void>();
     typing({
       send: async (_, action) => {
         sent.push(action);
+        if (action === 'stop') resolve();
       },
       every: 1_000,
       most: 30,
     }).start('c1');
-    await Bun.sleep(60);
+    await stopped;
     expect(sent).toEqual(['start', 'stop']);
   });
 });
