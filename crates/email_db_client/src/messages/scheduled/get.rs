@@ -168,7 +168,7 @@ pub async fn get_scheduled_db_messages_by_link_id(
           AND m.is_sent = false
           AND sm.sent = false
           -- A pending sequence step is not the user's scheduled send; a failed one is listed so the user can fix it.
-          AND (sm.source IS NULL OR sm.delivery_status = 'failed')
+          AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = sm.message_id)
         ORDER BY m.created_at DESC
         LIMIT $2 OFFSET $3
         "#,

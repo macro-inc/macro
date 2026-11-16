@@ -81,7 +81,7 @@ pub(crate) async fn other_inbox_preview_cursor(
               AND NOT EXISTS (
                   SELECT 1 FROM email_messages m JOIN email_message_mailbox_facts mf ON mf.id = m.id
                   WHERE m.thread_id = t.id AND mf.is_present AND (mf.in_junk OR mf.in_trash OR (m.is_draft
-                      AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')))
+                      AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = m.id)))
               )
               
               AND (($3::timestamptz IS NULL) OR (

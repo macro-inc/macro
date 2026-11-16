@@ -33,8 +33,7 @@ pub async fn get_parsed_search_message_by_id(
         JOIN email_links l ON m.link_id = l.id
         WHERE m.id = $1
         -- A pending sequence step is not the user's mail until it is sent or fails.
-        AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
-            AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+        AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = m.id)
         "#,
         message_id,
     )
@@ -115,8 +114,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
         FROM email_messages
         WHERE thread_id = ANY($1)
           -- A pending sequence step is not the user's mail until it is sent or fails.
-          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = email_messages.id
-              AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+          AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = email_messages.id)
         ORDER BY internal_date_ts DESC NULLS LAST
         "#,
         thread_ids
@@ -208,8 +206,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
         FROM email_messages
         WHERE thread_id = $1
           -- A pending sequence step is not the user's mail until it is sent or fails.
-          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = email_messages.id
-              AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+          AND NOT EXISTS (SELECT 1 FROM email_pending_sequence_steps step WHERE step.message_id = email_messages.id)
         ORDER BY internal_date_ts DESC NULLS LAST
         LIMIT $2 OFFSET $3
         "#,
