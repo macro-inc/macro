@@ -592,6 +592,7 @@ fn caller(origin: macro_authorization::CredentialOrigin) -> MacroUserAuthenticat
         origin,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
         macro_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(user_id.to_string())
             .expect("valid user id"),
         user_context: UserContext {
