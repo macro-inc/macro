@@ -1,5 +1,3 @@
-import { waitForFeatureFlag } from '@app/lib/analytics/wait-for-feature-flag';
-import { rustEditorModel } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { NOOP_SPAN, type Span } from '@macro-inc/observability';
 import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
@@ -27,7 +25,6 @@ export async function loadMarkdownDocument(
   parentSpan: Span = NOOP_SPAN
 ): Promise<MarkdownDocumentData> {
   return parentSpan.span('doc.load', async (loadSpan) => {
-    const rustEditorEnabled = await waitForFeatureFlag(rustEditorModel);
     const context = await loadSpan.span('doc.load.context', () =>
       throwOnErr(() => fetchSyncDocumentOpenContext(documentId))
     );
@@ -61,12 +58,7 @@ export async function loadMarkdownDocument(
       }));
 
     return {
-      connection: await createMarkdownConnection(
-        documentId,
-        context,
-        parentSpan,
-        rustEditorEnabled
-      ),
+      connection: createMarkdownConnection(documentId, context, parentSpan),
       metadata: documentMetadata,
       userAccessLevel,
       permissions,
