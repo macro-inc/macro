@@ -1,0 +1,23 @@
+services/mcp-chatgpt-worker/plugin/README.md
+  s_8c8730c08d5e2b::t_529e722b33d06a 24-25
+services/mcp-chatgpt-worker/plugin/plugin.json
+  s_8c8730c08d5e2b::t_8a3554b04a0025 4,50
+services/mcp-chatgpt-worker/plugin/skills/get-started/SKILL.md
+  s_8c8730c08d5e2b::t_b4af45e5ebd0d7 9-10,15-16,21-22,26-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "af99b26869ac9c7720436223630a422a25344396",
+  "prompts": {},
+  "sessions": {
+    "s_8c8730c08d5e2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c600d448-418a-4335-8e4d-4d2c4092e5a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
