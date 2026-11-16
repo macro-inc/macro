@@ -232,11 +232,14 @@ export function createNativeDocumentFormattingHost(
         const table = readTables();
         const convertible = actions.canConvertList();
         const textSelection = view.selection().selection;
+        // Source popupPlugin takes getTextContent() of a range or a
+        // TableSelection; MarkdownPopup's Task action keys off that text.
         selectionText =
-          textSelection.kind === 'range' &&
-          (textSelection.anchor.key !== textSelection.focus.key ||
-            textSelection.anchor.offset !== textSelection.focus.offset ||
-            textSelection.anchor.type !== textSelection.focus.type)
+          textSelection.kind === 'table' ||
+          (textSelection.kind === 'range' &&
+            (textSelection.anchor.key !== textSelection.focus.key ||
+              textSelection.anchor.offset !== textSelection.focus.offset ||
+              textSelection.anchor.type !== textSelection.focus.type))
             ? readNativeSelectionText(view)
             : '';
         setText(selectionText);

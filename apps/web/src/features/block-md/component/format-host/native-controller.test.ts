@@ -520,3 +520,98 @@ test('body popup rectangle rejects another real editor range while its own model
     second.root.remove();
   }
 });
+
+// Source popupPlugin $enhanceTableSelection: a TableSelection's popup text is
+// TableSelection.getTextContent(), so MarkdownPopup offers Task over cells.
+test('a native table selection publishes its cell text as the body popup selection text', async () => {
+  let controller:
+    | ReturnType<typeof createNativeDocumentFormattingHost>
+    | undefined;
+  let links: ReturnType<typeof createNativeDocumentLinkMenuHost> | undefined;
+  const runtime = mount([
+    {
+      published(view) {
+        controller?.observer.published(view);
+      },
+      unavailable(reason) {
+        controller?.observer.unavailable(reason);
+        links?.retire();
+      },
+      retired() {
+        controller?.observer.retired();
+        links?.retire();
+      },
+    },
+  ]);
+  let dispose = () => {};
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      links = createNativeDocumentLinkMenuHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+      });
+      controller = createNativeDocumentFormattingHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+        links,
+      });
+    });
+    const cell = (text: string) => ({
+      type: 'tablecell',
+      version: 1,
+      children: [
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text }],
+        },
+      ],
+    });
+    runtime.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'table',
+              version: 1,
+              children: [
+                {
+                  type: 'tablerow',
+                  version: 1,
+                  children: [cell('A1'), cell('A2')],
+                },
+                {
+                  type: 'tablerow',
+                  version: 1,
+                  children: [cell('B1'), cell('B2')],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    const nodes = [...runtime.view.mirror.values()];
+    const table = nodes.find((node) => node.type === 'table');
+    const cells = nodes.filter((node) => node.type === 'tablecell');
+    const first = cells[0];
+    const last = cells.at(-1);
+    if (!table || !first || !last) throw new Error('Missing native table');
+    runtime.port.selectionFromView({
+      kind: 'table',
+      table: table.key,
+      anchorCell: first.key,
+      focusCell: last.key,
+    });
+    expect(controller?.bodyPopup.selectionText()).toBe('A1\tA2\nB1\tB2\n');
+  } finally {
+    controller?.dispose();
+    links?.dispose();
+    dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
