@@ -20,7 +20,7 @@ const FOLDERS_UP: &str = include_str!(concat!(
 ));
 const SYNCS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../macro_db_client/migrations/20261106084644_database_syncs.down.sql"
+    "/../macro_db_client/migrations/20261116224728_database_syncs.down.sql"
 ));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
