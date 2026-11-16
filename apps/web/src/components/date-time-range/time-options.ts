@@ -1,6 +1,7 @@
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { minutesInDay, minutesInHour } from 'date-fns/constants';
+import { type ClockFormat, formatClockTime } from './primitives/clock-format';
 
 /** Granularity of every time picker. */
 const SLOT_MINUTES = 15;
@@ -10,11 +11,6 @@ const SLOT_MINUTES = 15;
  * short of a full day, so a same-start end time is never listed twice.
  */
 const MAX_RANGE_MINUTES = minutesInDay - SLOT_MINUTES;
-
-const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
 
 /** One selectable clock time in a time picker. */
 export interface TimeOption {
@@ -51,17 +47,21 @@ export function parseTimeValue(value: string): number | undefined {
 }
 
 /** Localized clock label for an `HH:mm` value. */
-export function formatTimeValue(value: string): string | undefined {
+export function formatTimeValue(
+  value: string,
+  format?: ClockFormat
+): string | undefined {
   const minutesOfDay = parseTimeValue(value);
   if (minutesOfDay === undefined) return undefined;
-  return timeLabelFormatter.format(
+  return formatClockTime(
     new Date(
       2000,
       0,
       1,
       Math.floor(minutesOfDay / minutesInHour),
       minutesOfDay % minutesInHour
-    )
+    ),
+    format
   );
 }
 
@@ -73,31 +73,44 @@ export function formatDuration(minutes: number): string {
   return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}min`;
 }
 
-function timeOption(minutesOfDay: number, dayOffset: number, detail?: string) {
+function timeOption(
+  minutesOfDay: number,
+  dayOffset: number,
+  detail?: string,
+  format?: ClockFormat
+) {
   const value = timeValue(minutesOfDay);
   return {
     id: optionId(dayOffset, value),
     value,
-    label: formatTimeValue(value) ?? value,
+    label: formatTimeValue(value, format) ?? value,
     dayOffset,
     ...(detail ? { detail } : {}),
   };
 }
 
-/** Every quarter-hour in a day, used wherever no start anchors the choice. */
-export const DAY_TIME_OPTIONS: TimeOption[] = Array.from(
-  { length: minutesInDay / SLOT_MINUTES },
-  (_, index) => timeOption(index * SLOT_MINUTES, 0)
-);
+/** Every quarter-hour in a day, in the requested clock format. */
+export function dayTimeOptions(format?: ClockFormat): TimeOption[] {
+  return Array.from({ length: minutesInDay / SLOT_MINUTES }, (_, index) =>
+    timeOption(index * SLOT_MINUTES, 0, undefined, format)
+  );
+}
+
+export const DAY_TIME_OPTIONS: TimeOption[] = dayTimeOptions();
 
 /**
  * Quarter-hours from 15 minutes to 23h45min after `startTime`, each labelled
  * with the duration it produces. Options past midnight carry the day offset
  * they land on, so the end date follows the chosen time.
  */
-export function endTimeOptions(startTime: string): TimeOption[] {
+export function endTimeOptions(
+  startTime: string,
+  format?: ClockFormat
+): TimeOption[] {
   const startMinutes = parseTimeValue(startTime);
-  if (startMinutes === undefined) return DAY_TIME_OPTIONS;
+  if (startMinutes === undefined) {
+    return format === undefined ? DAY_TIME_OPTIONS : dayTimeOptions(format);
+  }
 
   const options: TimeOption[] = [];
   for (
@@ -110,7 +123,8 @@ export function endTimeOptions(startTime: string): TimeOption[] {
       timeOption(
         total % minutesInDay,
         Math.floor(total / minutesInDay),
-        formatDuration(duration)
+        formatDuration(duration),
+        format
       )
     );
   }

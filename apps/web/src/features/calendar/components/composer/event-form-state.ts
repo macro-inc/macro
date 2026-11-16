@@ -3,6 +3,7 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import type { CalendarUpdateScope } from '@service-email/client';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, createUniqueId } from 'solid-js';
+import type { CalendarTimeFormat } from '../../types';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import type { EventGuestPolicyRowProps } from './EventGuestPolicyRow';
 import type { EventComposerGuestsPillProps } from './EventPropertyPills';
@@ -16,6 +17,7 @@ export interface EventFormProps {
   controller: CalendarEventFormController;
   /** Whether this host can create and attach Macro call links. */
   macroCallsEnabled: boolean;
+  timeFormat?: CalendarTimeFormat;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   /** The viewer may add guests but not remove the event's current ones. */
@@ -93,6 +95,9 @@ export function createEventForm(props: EventFormProps) {
   /** The event's start and end, bound for either range layout. */
   const range: DateTimeRangeProps = {
     subject: 'event',
+    get timeFormat() {
+      return props.timeFormat;
+    },
     get start() {
       return state().start;
     },

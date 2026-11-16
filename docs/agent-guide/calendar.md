@@ -34,6 +34,21 @@ Moving the start date or time moves the end with it, keeping the event's length
 after that the end stays put, and a start past it shows the end-before-start
 error.
 
+Calendar time fields follow the calendar's 12/24-hour display preference without
+changing their stored local times. The explicit 12-hour display uses `11:30am`
+and `2pm` in compact summaries; the 24-hour display uses `09:00`, including
+`00:00` at midnight. Event details and forwarded summaries join the date and
+compact time with `@`, for example `Fri, Nov 13 @ 2 – 3pm`. A range that crosses
+noon or midnight keeps both meridiems. Changing the preference also updates an
+open standalone or agent event composer; shared date/time fields outside the
+calendar retain their locale default unless their host supplies a preference.
+
+Calendar foundation examples are in the UI gallery: `?ui=time-input`,
+`?ui=date-tile`, `?ui=calendar-swatch`, `?ui=value-pill`, and
+`?ui=mobile-sheet-parts` under `/app/component/ui`. The sheet example keeps its
+footer outside the scroller and removes the footer fade at the end. Shared
+sheet handles use 12px above and 16px below the 36×4px grabber.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An

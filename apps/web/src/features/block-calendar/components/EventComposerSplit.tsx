@@ -18,6 +18,7 @@ import {
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
@@ -109,6 +110,7 @@ function EventComposerContent(
   }
 ) {
   const panel = useSplitPanelOrThrow();
+  const [preferences] = useCalendarPreferences();
   const macroCallsEnabled = props.macroCallsEnabled;
   const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const close = () => panel.handle.close();
@@ -173,6 +175,7 @@ function EventComposerContent(
   return (
     <div ref={attachHotkeys} class="flex h-full min-h-0 flex-col p-4 text-ink">
       <PanelEventForm
+        timeFormat={preferences.timeFormat}
         controller={controller}
         status={
           <Show when={suggesting()}>

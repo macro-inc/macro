@@ -2,7 +2,7 @@ import { extractTypeSource } from './source';
 import { type ComponentDoc, DOC_CATEGORIES, type DocCategory } from './types';
 
 /**
- * Every `.docs.tsx` file under `components/ui`, discovered at build time.
+ * UI, shared date/time, and calendar component docs, discovered at build time.
  * Adding a page is adding a file — there is no list to keep up to date.
  *
  * Modules load eagerly because the sidebar needs each doc's name and category
@@ -14,12 +14,22 @@ import { type ComponentDoc, DOC_CATEGORIES, type DocCategory } from './types';
  * are relative (same constraint as IconGallery).
  */
 const docModules = import.meta.glob<{ default: ComponentDoc }>(
-  '../../components/ui/**/*.docs.tsx',
+  [
+    '../../components/ui/**/*.docs.tsx',
+    '../../components/date-time-range/**/*.docs.tsx',
+    '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../features/calendar/components/**/*.docs.tsx',
+  ],
   { eager: true }
 );
 
 const docSources = import.meta.glob<string>(
-  '../../components/ui/**/*.docs.tsx',
+  [
+    '../../components/ui/**/*.docs.tsx',
+    '../../components/date-time-range/**/*.docs.tsx',
+    '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../features/calendar/components/**/*.docs.tsx',
+  ],
   { query: '?raw', import: 'default' }
 );
 

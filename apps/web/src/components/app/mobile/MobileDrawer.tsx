@@ -236,7 +236,7 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
   return (
     <Dynamic
       component={local.as ?? 'div'}
-      class={cn('flex justify-center pt-2 pb-3 shrink-0', local.class)}
+      class={cn('flex justify-center pt-3 pb-4 shrink-0', local.class)}
       {...rest}
     >
       {local.children ?? <div class="w-9 h-1 rounded-full bg-ink/15" />}

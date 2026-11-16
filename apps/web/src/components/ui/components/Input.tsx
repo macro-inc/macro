@@ -8,7 +8,7 @@ import type { ButtonSize } from './Button';
 type NativeInputSize = number;
 
 /** Text-bearing Button sizes that also make sense for an input. */
-export type InputSize = Exclude<ButtonSize, `icon-${string}`>;
+export type InputSize = Exclude<ButtonSize, `icon-${string}` | 'sheet'>;
 
 // Single-line inputs are pills like Buttons on desktop, so their text sits further in.
 const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {

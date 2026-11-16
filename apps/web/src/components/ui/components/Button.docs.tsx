@@ -14,6 +14,7 @@ const VARIANTS: ButtonVariant[] = [
   'primary',
   'accent',
   'secondary',
+  'value',
   'outline',
   'ghost',
   'danger',
@@ -52,7 +53,7 @@ function SizesDemo() {
   return (
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-4">
-        <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
+        <For each={['xs', 'sm', 'md', 'lg', 'xl', 'sheet'] as const}>
           {(size) => (
             <Button variant="secondary" size={size}>
               {size}

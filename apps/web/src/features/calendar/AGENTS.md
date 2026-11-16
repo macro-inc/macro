@@ -23,6 +23,11 @@ host lives in `../block-calendar/`.
   [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Extend `../../components/date-time-range/` for shared date/time fields and
   arithmetic instead of creating a calendar-only implementation.
+- Pass the calendar clock preference into shared date/time controls from their
+  host; generic fields must not import calendar preferences.
+- Browse calendar foundations at `/app/component/ui?ui=date-tile`,
+  `?ui=calendar-swatch`, `?ui=value-pill`, and `?ui=time-input`; sheet parts use
+  `?ui=mobile-sheet-parts`.
 - Reuse `../../lib/queries/calendar/` for account-scoped reads, optimistic writes,
   and REST/GraphQL handoff; never add a parallel event cache.
 

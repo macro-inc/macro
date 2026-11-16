@@ -3,9 +3,11 @@ import {
   completedTypedTime,
   DAY_TIME_OPTIONS,
   dayOffsetBetween,
+  dayTimeOptions,
   endTimeOptions,
   endValueFor,
   formatDuration,
+  formatTimeValue,
   matchTypedTime,
   parseTimeValue,
   selectedTimeOptionId,
@@ -26,6 +28,32 @@ describe('DAY_TIME_OPTIONS', () => {
     expect(
       DAY_TIME_OPTIONS.every((option) => option.detail === undefined)
     ).toBe(true);
+  });
+});
+
+describe('explicit clock preference', () => {
+  it('uses the requested display without changing option values or rollover', () => {
+    const options = endTimeOptions('22:00', '24-hour');
+    expect(dayTimeOptions('24-hour')[0]).toMatchObject({
+      value: '00:00',
+      label: '00:00',
+    });
+    expect(options.find((option) => option.value === '00:00')).toMatchObject({
+      label: '00:00',
+      dayOffset: 1,
+      detail: '2h',
+    });
+    expect(formatTimeValue('15:30', '12-hour')).toBe('3:30pm');
+    expect(formatTimeValue('15:30', '24-hour')).toBe('15:30');
+  });
+
+  it('keeps typed interpretation independent of the displayed clock', () => {
+    expect(
+      typedTimeOption(endTimeOptions('20:00', '24-hour'), '9p')
+    ).toMatchObject({ value: '21:00', dayOffset: 0 });
+    expect(
+      typedTimeOption(endTimeOptions('20:00', '12-hour'), '9a')
+    ).toMatchObject({ value: '09:00', dayOffset: 1 });
   });
 });
 

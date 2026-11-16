@@ -6,6 +6,7 @@ import { Checkbox } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
+import { CalendarSwatch } from './calendar-swatch/CalendarSwatch';
 
 interface SourceControlsProps {
   ref?: (element: HTMLUListElement) => void;
@@ -63,16 +64,14 @@ export function SourceControls(props: SourceControlsProps) {
                 >
                   <Checkbox.Control />
                   <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 font-medium">
-                    <span
-                      aria-hidden="true"
-                      class="size-2.5 shrink-0 rounded-sm"
-                      style={{
-                        'background-color': (
+                    <CalendarSwatch
+                      color={
+                        (
                           group.calendars.find(
                             (calendar) => calendar.isPrimary
                           ) ?? group.calendars[0]
-                        )?.color,
-                      }}
+                        )?.color ?? 'var(--color-calendar)'
+                      }
                     />
                     <span class="min-w-0 flex-1 truncate">
                       {group.emailAddress}
@@ -106,11 +105,7 @@ export function SourceControls(props: SourceControlsProps) {
                       >
                         <Checkbox.Control />
                         <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                          <span
-                            aria-hidden="true"
-                            class="size-2.5 shrink-0 rounded-sm"
-                            style={{ 'background-color': source.color }}
-                          />
+                          <CalendarSwatch color={source.color} />
                           <span class="min-w-0 flex-1 truncate">
                             {source.name}
                           </span>

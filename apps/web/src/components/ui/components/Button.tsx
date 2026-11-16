@@ -23,6 +23,7 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
+  value: 'bg-ink/6 text-ink border-transparent shadow-none',
   accent:
     'bg-button-accent-bg text-button-accent-ink border-transparent shadow-button',
   secondary: cn(
@@ -54,6 +55,11 @@ const buttonStyles = createVariants(
       primary: cn(
         buttonFrames.primary,
         'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed popup-open:bg-button-primary-pressed popup-open:not-data-disabled:hover:bg-button-primary-pressed',
+        buttonPressedStyles
+      ),
+      value: cn(
+        buttonFrames.value,
+        'px-2.5 not-touch:not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-hover popup-open:ring-[1.5px] popup-open:ring-accent',
         buttonPressedStyles
       ),
       accent: cn(
@@ -103,6 +109,7 @@ const buttonStyles = createVariants(
       'icon-xs': iconControlSizes.xs,
       'icon-sm': iconControlSizes.sm,
       'icon-md': iconControlSizes.md,
+      sheet: 'min-h-11 px-4 py-2 text-[15px] leading-5',
       'icon-lg': iconControlSizes.lg,
       'icon-xl': iconControlSizes.xl,
     },
@@ -126,7 +133,9 @@ export type ButtonClassOptions = {
 };
 
 function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
-  if (finish === 'flat' || variant === 'outline') return 'shadow-none';
+  if (finish === 'flat' || variant === 'outline' || variant === 'value') {
+    return 'shadow-none';
+  }
   if (
     finish !== 'raised' &&
     (variant === 'ghost' || variant === 'danger-ghost' || variant === 'link')
@@ -192,6 +201,7 @@ export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
 /**
  * Actions use Button; navigation uses anchors. Framed variants adapt to the device.
  * @do Use primary for solid neutral emphasis and accent for explicit theme-color emphasis.
+ * @do Use value for quiet editable values, and sheet size for 44px sheet actions.
  * @do Set aria-label for icon-only actions and use an explicit icon-* size.
  * @do Use tooltip strings for content only, or options for hotkeys and placement.
  * @dont Use Button for links or size descendant icons through the control.

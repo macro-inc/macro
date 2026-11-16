@@ -5,9 +5,10 @@ import { Input } from '@ui/components/Input';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
+import type { ClockFormat } from './primitives/clock-format';
 import {
   completedTypedTime,
-  DAY_TIME_OPTIONS,
+  dayTimeOptions,
   formatTimeValue,
   matchTypedTime,
   selectedTimeOptionId,
@@ -27,6 +28,8 @@ interface TimeInputProps {
   label: string;
   /** `HH:mm`, or empty. */
   value: string;
+  /** Explicit calendar clock preference; omitted keeps the locale's default. */
+  timeFormat?: ClockFormat;
   /** Selectable times; defaults to every quarter-hour in a day. */
   options?: TimeOption[];
   /** Highlighted option; defaults to `value` on the anchor day. */
@@ -57,7 +60,9 @@ export function TimeInput(props: TimeInputProps) {
   let input!: HTMLInputElement;
   let list: HTMLDivElement | undefined;
 
-  const options = createMemo(() => props.options ?? DAY_TIME_OPTIONS);
+  const options = createMemo(
+    () => props.options ?? dayTimeOptions(props.timeFormat)
+  );
   const selectedId = () =>
     props.selectedId ?? selectedTimeOptionId(props.value);
   const optionDomId = (option: TimeOption) =>
@@ -186,7 +191,7 @@ export function TimeInput(props: TimeInputProps) {
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         disabled={props.disabled}
-        value={shown() ?? formatTimeValue(props.value) ?? ''}
+        value={shown() ?? formatTimeValue(props.value, props.timeFormat) ?? ''}
         placeholder="Time"
         size="sm"
         class={cn('w-[4.75rem] shrink-0', props.class)}

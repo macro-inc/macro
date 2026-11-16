@@ -38,6 +38,32 @@ function renderTime(initial: string, options?: TimeOption[]) {
 }
 
 describe('TimeInput', () => {
+  it('updates the clock display without changing the selected local time', async () => {
+    const onChange = vi.fn();
+    const [timeFormat, setTimeFormat] = createSignal<'12-hour' | '24-hour'>(
+      '24-hour'
+    );
+    render(() => (
+      <TimeInput
+        id="preference-time"
+        label="Time format example"
+        value="15:30"
+        timeFormat={timeFormat()}
+        onChange={onChange}
+      />
+    ));
+    const field = screen.getByRole<HTMLInputElement>('combobox');
+    expect(field.value).toBe('15:30');
+    setTimeFormat('12-hour');
+    expect(field.value).toBe('3:30pm');
+    await userEvent.click(field);
+    expect(
+      screen
+        .getByRole('option', { name: '3:30pm' })
+        .getAttribute('aria-selected')
+    ).toBe('true');
+    expect(onChange).not.toHaveBeenCalled();
+  });
   it('fills in the time being typed and commits it on Enter', async () => {
     const { field, onChange } = renderTime('09:00');
     expect(field.value).toBe('9:00 AM');

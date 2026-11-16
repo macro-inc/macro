@@ -54,7 +54,7 @@ describe('eventForwardSummary', () => {
     expect(summary).toBe(
       [
         'Design review',
-        'When: Fri, October 23 · 10:00 AM–11:00 AM (EDT)',
+        'When: Fri, Oct 23 @ 10 – 11am (EDT)',
         'Where: Room 4',
         'Organizer: Jacob Lee <jacob@example.com>',
         '',
@@ -81,7 +81,7 @@ describe('eventForwardSummary', () => {
     expect(summary).toBe(
       [
         'Untitled event',
-        'When: Mon, October 26 · All day',
+        'When: Mon, Oct 26 · All day',
         'Repeats: Weekly on Monday',
         '',
         'Bring a laptop',

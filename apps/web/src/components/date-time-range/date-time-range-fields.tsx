@@ -16,10 +16,11 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import type { ClockFormat } from './primitives/clock-format';
 import { dateLabelFormatter, TimeInput } from './time-input';
 import {
-  DAY_TIME_OPTIONS,
   dayOffsetBetween,
+  dayTimeOptions,
   endTimeOptions,
   endValueFor,
   selectedTimeOptionId,
@@ -121,6 +122,8 @@ export interface DateTimeRangeProps {
   start: string;
   end: string;
   allDay: boolean;
+  /** Explicit display preference; omitted preserves other hosts' locale default. */
+  timeFormat?: ClockFormat;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
   startDisabled?: boolean;
@@ -173,6 +176,7 @@ function Start() {
           id={`range-start-time-${fieldId}`}
           label={`${range.subject} start time`}
           value={parts().time}
+          timeFormat={range.timeFormat}
           onChange={(option) =>
             range.onStartChange(withLocalTime(range.start, option.value))
           }
@@ -204,8 +208,8 @@ function End() {
   const endOptions = () => {
     const start = endAnchor();
     return start
-      ? endTimeOptions(splitLocalDateTime(start).time)
-      : DAY_TIME_OPTIONS;
+      ? endTimeOptions(splitLocalDateTime(start).time, range.timeFormat)
+      : dayTimeOptions(range.timeFormat);
   };
   const endSelectedId = () => {
     const start = endAnchor();
@@ -244,6 +248,7 @@ function End() {
           id={`range-end-time-${fieldId}`}
           label={`${range.subject} end time`}
           value={parts().time}
+          timeFormat={range.timeFormat}
           options={endOptions()}
           selectedId={endSelectedId()}
           onChange={changeEndTime}

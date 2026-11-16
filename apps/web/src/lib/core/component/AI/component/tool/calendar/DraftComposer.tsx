@@ -18,6 +18,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -98,6 +99,7 @@ function CalendarDraftComposerFallback() {
 }
 
 function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
+  const [preferences] = useCalendarPreferences();
   const calendarsQuery = useVisibleCalendarsQuery();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
@@ -322,6 +324,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             </div>
           </Show>
           <EventForm
+            timeFormat={preferences.timeFormat}
             controller={controller}
             macroCallsEnabled={macroCallsEnabled()}
             guestPolicyEditable={guestInvitesEnabled()}

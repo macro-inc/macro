@@ -98,7 +98,7 @@ it('keeps the button neutral after copying and colors only the check', async () 
   expect(copied.querySelector('svg.text-success')).toBeTruthy();
   expect(screen.getByRole('status').textContent).toBe('Availability copied');
   expect(mocks.writeClipboardData).toHaveBeenCalledWith({
-    'text/plain': expect.stringContaining('Mon, Aug 24: 10:00 AM – 11:00 AM'),
+    'text/plain': expect.stringContaining('Mon, Aug 24: 10:00am – 11:00am'),
   });
   expect(mocks.refreshRange).toHaveBeenCalledWith('today');
 });
