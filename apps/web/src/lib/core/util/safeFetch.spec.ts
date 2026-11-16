@@ -89,6 +89,26 @@ describe('safeFetch', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
+  test('does not resend a request whose response failed to read', async () => {
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.reject(new TypeError('network error')),
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+      } as Response)
+    );
+
+    const result = await safeFetch<{ data: string }>('https://localhost/data', {
+      method: 'POST',
+      retry: { maxTries: 2, delay: 0 },
+    });
+
+    expect(result._unsafeUnwrapErr()).toEqual([
+      { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+    ]);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   test('handle invalid JSON', async () => {
     mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
