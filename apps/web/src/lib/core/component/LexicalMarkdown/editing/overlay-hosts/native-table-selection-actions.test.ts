@@ -71,36 +71,10 @@ const tableKey = (fixture: Fixture) => {
   if (!table) throw new Error('Missing table');
   return table.key;
 };
-function cellElement(fixture: Fixture, index: number) {
-  const cell = fixture.root.querySelectorAll('td,th')[index];
-  if (!(cell instanceof HTMLElement)) throw new Error('Missing cell element');
-  return cell;
-}
 const rowTexts = (fixture: Fixture) =>
   [...fixture.root.querySelectorAll('tr')].map((row) =>
     [...row.querySelectorAll('td,th')].map((cell) => cell.textContent ?? '')
   );
-function serializedTable(fixture: Fixture) {
-  const state: unknown = JSON.parse(fixture.view.query.serializedState());
-  if (
-    !state ||
-    typeof state !== 'object' ||
-    !('root' in state) ||
-    !state.root ||
-    typeof state.root !== 'object' ||
-    !('children' in state.root) ||
-    !Array.isArray(state.root.children)
-  )
-    throw new Error('Unexpected serialized state');
-  const table: unknown = state.root.children[0];
-  if (!table || typeof table !== 'object')
-    throw new Error('Missing serialized table');
-  return table;
-}
-const widths = (fixture: Fixture) => {
-  const table = serializedTable(fixture);
-  return 'colWidths' in table ? table.colWidths : 'missing';
-};
 function textIn(fixture: Fixture, cell: number) {
   const text = [...fixture.view.mirror.values()].find(
     (node) =>
