@@ -1,3 +1,4 @@
+import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
@@ -211,18 +212,13 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
       <MobileDrawer.Section class="flex shrink-0 flex-col">
         <For each={CALENDAR_VIEWS}>
           {(view) => (
-            <MobileDrawer.Item
-              aria-pressed={controls.activeView() === view.value}
-              onClick={() => controls.changeView(view.value)}
+            <MobileFilterDrawer.Option
+              selectionMode="single"
+              checked={controls.activeView() === view.value}
+              onChange={() => controls.changeView(view.value)}
             >
-              <span class="flex-1">{view.label}</span>
-              <CheckIcon
-                class="size-4 shrink-0 text-accent"
-                classList={{
-                  invisible: controls.activeView() !== view.value,
-                }}
-              />
-            </MobileDrawer.Item>
+              {view.label}
+            </MobileFilterDrawer.Option>
           )}
         </For>
       </MobileDrawer.Section>
