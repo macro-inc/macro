@@ -11,6 +11,21 @@ import {
 } from 'solid-js';
 import { useViewShellInternal } from './view-shell-context';
 
+/** A narrow sheet's share of the screen, so its rows read at a glance. */
+const NARROW_SHEET_SCREEN_SHARE = 0.75;
+const NARROW_SHEET_MIN_WIDTH = 256;
+
+/** Three quarters of the screen, at least 256px, within the workspace. */
+function narrowSheetWidth(workspaceWidth: number) {
+  return Math.min(
+    workspaceWidth,
+    Math.max(
+      NARROW_SHEET_MIN_WIDTH,
+      window.innerWidth * NARROW_SHEET_SCREEN_SHARE
+    )
+  );
+}
+
 /** Sub-view navigation never takes a column away from a touch collection. */
 export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
@@ -38,9 +53,7 @@ export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
     setBounds({
       left,
       top,
-      width: ws.collectionLayout()
-        ? width
-        : Math.min(width, ws.aside.layout().width),
+      width: ws.collectionLayout() ? width : narrowSheetWidth(width),
       height,
     });
   };

@@ -111,7 +111,8 @@ standalone header from block-free parts (`EntitySplitLabel`,
 
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow
-layouts it retains the configured navigation width, capped by the workspace.
+layouts it takes three quarters of the screen, at least 256px, capped by the
+workspace.
 Narrow touch item routing is unchanged, including Chat's full-frame feed without
 a sidebar control. Wide touch retains the desktop 1px list/detail dividers.
 
