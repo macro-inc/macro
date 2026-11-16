@@ -51,7 +51,7 @@ export function NeedsReplyList() {
     <>
       <Switch>
         <Match when={rows().length > 0}>
-          <ul class="flex flex-col gap-2">
+          <ul class="flex flex-col gap-1">
             <Key each={rows()} by="id">
               {(event) => <NeedsReplyRow event={event()} />}
             </Key>

@@ -15,7 +15,10 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { miniMonthMarkers } from '@app/features/calendar/primitives/mini-month-markers';
-import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import {
+  DEFAULT_CALENDAR_SOURCE,
+  TEAM_OOO_SOURCE_ID,
+} from '@app/features/calendar/types';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
@@ -124,7 +127,11 @@ function CalendarSourcesSection() {
   const [open, setOpen] = createSignal(true);
 
   return (
-    <Show when={calendarView.sources().length > 1}>
+    <Show
+      when={calendarView
+        .sources()
+        .some((source) => source.id !== DEFAULT_CALENDAR_SOURCE.id)}
+    >
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Trigger>
           <span class="min-w-0 truncate">Calendars</span>

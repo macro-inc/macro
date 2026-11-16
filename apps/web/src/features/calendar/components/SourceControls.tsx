@@ -3,6 +3,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import RssIcon from '@icon/system/regular/rss.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import { Checkbox } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
@@ -17,24 +18,18 @@ interface SourceControlsProps {
 }
 
 /**
- * Controls which calendar sources are visible, folded under a collapsible
- * header per connected account. The header checkbox shows or hides all of the
- * account's calendars at once.
+ * Controls which calendar sources are visible, grouped by connected account.
+ * Accounts start open; the header checkbox changes every calendar together.
  */
 export function SourceControls(props: SourceControlsProps) {
   const groups = () => groupCalendarSourcesByAccount(props.sources);
-  // Accounts start folded; expanding one only reveals its calendars, which
-  // stay visible on the grid whether or not the group is expanded.
-  const [expandedKeys, setExpandedKeys] = createSignal<ReadonlySet<string>>(
-    new Set()
-  );
+  const [collapsedKeys, setCollapsedKeys] = createSignal<readonly string[]>([]);
   const toggleExpanded = (key: string) =>
-    setExpandedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setCollapsedKeys((current) =>
+      current.includes(key)
+        ? current.filter((collapsed) => collapsed !== key)
+        : [...current, key]
+    );
 
   return (
     <ul ref={props.ref} class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
@@ -45,7 +40,7 @@ export function SourceControls(props: SourceControlsProps) {
               .length;
           const allVisible = () => visibleCount() === group.calendars.length;
           const someVisible = () => visibleCount() > 0 && !allVisible();
-          const expanded = () => expandedKeys().has(group.key);
+          const expanded = () => !collapsedKeys().includes(group.key);
           const setGroupVisible = (visible: boolean) =>
             props.onGroupVisibilityChange(
               group.calendars.map((calendar) => calendar.id),
@@ -56,7 +51,7 @@ export function SourceControls(props: SourceControlsProps) {
             <li class="min-w-0">
               <div class="relative min-w-0">
                 <Checkbox
-                  size="sm"
+                  size="md"
                   checked={allVisible()}
                   indeterminate={someVisible()}
                   onChange={setGroupVisible}
@@ -91,12 +86,12 @@ export function SourceControls(props: SourceControlsProps) {
                   </ViewSidebar.Control>
                 </span>
               </div>
-              <ViewSidebar.Branch open={expanded()}>
+              <CollapseTransition open={expanded()}>
                 <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
                   <For each={group.calendars}>
                     {(source) => (
                       <Checkbox
-                        size="sm"
+                        size="md"
                         checked={props.isVisible(source.id)}
                         onChange={(checked) =>
                           props.onVisibilityChange(source.id, checked)
@@ -140,7 +135,7 @@ export function SourceControls(props: SourceControlsProps) {
                     )}
                   </For>
                 </div>
-              </ViewSidebar.Branch>
+              </CollapseTransition>
             </li>
           );
         }}

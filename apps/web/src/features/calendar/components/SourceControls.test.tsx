@@ -50,11 +50,12 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-function renderControls() {
+function renderControls(initialSources = SOURCES) {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
   const onGroupVisibilityChange =
     vi.fn<(ids: string[], visible: boolean) => void>();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const [sources, setSources] = createSignal(initialSources);
   const changeVisibility = (ids: readonly string[], visible: boolean) =>
     setHidden((current) => {
       const next = new Set(current);
@@ -66,7 +67,7 @@ function renderControls() {
     });
   const result = render(() => (
     <SourceControls
-      sources={SOURCES}
+      sources={sources()}
       isVisible={(id) => !hidden().has(id)}
       onVisibilityChange={(id, visible) => {
         onVisibilityChange(id, visible);
@@ -78,8 +79,10 @@ function renderControls() {
       }}
     />
   ));
-  const expandAccount = (email: string) =>
-    fireEvent.click(result.getByRole('button', { name: `Expand ${email}` }));
+  const expandAccount = (email: string) => {
+    const control = result.queryByRole('button', { name: `Expand ${email}` });
+    if (control) fireEvent.click(control);
+  };
   const headerFor = (email: string) => {
     // Resolve the row from the account, not the disclosure button's wrappers.
     const caret =
@@ -97,22 +100,25 @@ function renderControls() {
     onGroupVisibilityChange,
     headerFor,
     expandAccount,
+    setSources,
   };
 }
 
 describe('SourceControls', () => {
-  it('folds each account collapsed by default', () => {
-    const { getByRole, queryByText } = renderControls();
-    // Every account renders a collapse control, but its calendars stay hidden.
-    expect(getByRole('button', { name: 'Expand gab@macro.com' })).toBeTruthy();
+  it('shows connected calendars by default', () => {
+    const { getByRole, getByText } = renderControls();
     expect(
-      getByRole('button', { name: 'Expand gabtest1@macro.com' })
+      getByRole('button', { name: 'Collapse gab@macro.com' })
     ).toBeTruthy();
-    expect(queryByText('Holidays in United States')).toBeNull();
+    expect(
+      getByRole('button', { name: 'Collapse gabtest1@macro.com' })
+    ).toBeTruthy();
+    expect(getByText('Holidays in United States')).toBeTruthy();
   });
 
   it('shows the primary calendar color on the collapsed account header', () => {
-    const { headerFor } = renderControls();
+    const { getByRole, headerFor } = renderControls();
+    fireEvent.click(getByRole('button', { name: 'Collapse gab@macro.com' }));
     const swatch = headerFor('gab@macro.com').querySelector<HTMLElement>(
       '[aria-hidden="true"][style]'
     );
@@ -136,6 +142,7 @@ describe('SourceControls', () => {
         headerCheckbox.compareDocumentPosition(headerText) &
           Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+    fireEvent.click(getByRole('button', { name: 'Collapse gab@macro.com' }));
     const disclosure = getByRole('button', { name: 'Expand gab@macro.com' });
     expect(disclosure.getAttribute('aria-expanded')).toBe('false');
     expandAccount('gab@macro.com');
@@ -153,7 +160,8 @@ describe('SourceControls', () => {
     ).toBeTruthy();
   });
   it('reveals an account calendars once expanded', () => {
-    const { expandAccount, getByText } = renderControls();
+    const { expandAccount, getByRole, getByText } = renderControls();
+    fireEvent.click(getByRole('button', { name: 'Collapse gab@macro.com' }));
     expandAccount('gab@macro.com');
     expect(getByText('Holidays in United States')).toBeTruthy();
   });
@@ -197,11 +205,28 @@ describe('SourceControls', () => {
   });
 
   it('leaves a healthy calendar unbadged', () => {
-    const { expandAccount, container } = renderControls();
+    const { expandAccount, container } = renderControls(SOURCES.slice(0, 2));
     expandAccount('gab@macro.com');
     expect(
       container.querySelector('[title^="Calendar needs attention:"]')
     ).toBeNull();
+  });
+
+  it('opens a newly connected account without reopening a collapsed account', () => {
+    const { getByRole, setSources, onGroupVisibilityChange } = renderControls(
+      SOURCES.slice(0, 2)
+    );
+    fireEvent.click(
+      getByRole('button', { name: `Collapse ${SOURCES[0].emailAddress}` })
+    );
+    setSources(SOURCES);
+    expect(
+      getByRole('button', { name: `Expand ${SOURCES[0].emailAddress}` })
+    ).toBeTruthy();
+    expect(
+      getByRole('button', { name: `Collapse ${SOURCES[2].emailAddress}` })
+    ).toBeTruthy();
+    expect(onGroupVisibilityChange).not.toHaveBeenCalled();
   });
 
   it('collapses an account again to hide its calendars', () => {

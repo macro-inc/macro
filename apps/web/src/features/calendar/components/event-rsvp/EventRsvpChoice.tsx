@@ -1,4 +1,4 @@
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { useEventRsvp } from '../../context/event-rsvp-context';
 import type { CalendarRsvpResponse } from '../../hooks/create-calendar-rsvp-controller';
@@ -7,7 +7,7 @@ import type { CalendarRsvpResponse } from '../../hooks/create-calendar-rsvp-cont
 export function EventRsvpChoice(
   props: ParentProps<{
     response: CalendarRsvpResponse;
-    size?: 'sm' | 'md';
+    size?: 'xs' | 'sm' | 'md';
   }>
 ) {
   const response = useEventRsvp();
@@ -15,7 +15,10 @@ export function EventRsvpChoice(
     <Button
       variant="ghost"
       size={props.size ?? 'sm'}
-      class="bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11"
+      class={cn(
+        'bg-ink/5 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11',
+        props.size !== 'xs' && 'px-3'
+      )}
       aria-pressed={response.selfAttendee()?.responseStatus === props.response}
       disabled={!response.canRespond()}
       onClick={() => response.rsvp.respond(props.response)}

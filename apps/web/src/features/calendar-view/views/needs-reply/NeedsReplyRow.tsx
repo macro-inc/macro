@@ -31,7 +31,7 @@ export function NeedsReplyRow(props: { event: CalendarEvent }) {
 
   return (
     <EventRsvpRoot event={props.event}>
-      <li ref={element} class="min-w-0 rounded-lg px-1 py-1">
+      <li ref={element} class="min-w-0 rounded-lg py-0.5">
         <div class="flex min-w-0 items-center gap-1">
           <Button
             variant="ghost"
@@ -56,10 +56,10 @@ export function NeedsReplyRow(props: { event: CalendarEvent }) {
           </Button>
           <EventRsvpRow class="shrink-0 gap-x-1">
             <EventRsvpStatus />
-            <EventRsvpChoice response="accepted">
+            <EventRsvpChoice response="accepted" size="xs">
               {t('calendar.replyYes')}
             </EventRsvpChoice>
-            <EventRsvpChoice response="declined">
+            <EventRsvpChoice response="declined" size="xs">
               {t('calendar.replyNo')}
             </EventRsvpChoice>
           </EventRsvpRow>

@@ -350,10 +350,11 @@ Copying rechecks the occurrences and current time, so changes since opening do
 not enter the copied text. The option keeps its width while a left spinner and
 `Copying…` crossfade to `Copied` with a green check icon; the button keeps its
 neutral styling. Reduced-motion preferences skip the crossfade and spin.
-Collapsible `Needs reply` and `Calendars` sections follow; calendar
-account rows use Drive-style trailing disclosure buttons and animated nested
-branches. Their 14px visibility checkboxes precede the swatch and label, with
-separate account and individual-calendar visibility controls. `Team out of office`
+Collapsible `Needs reply` and `Calendars` sections follow. Connected accounts
+start expanded, with trailing disclosure buttons and animated collapse. Calendar
+rows align with their account controls and use 16px visibility checkboxes before
+the swatch and label. Account and individual-calendar visibility remain separate;
+a single connected calendar is still listed. `Team out of office`
 is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
@@ -375,9 +376,11 @@ it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 progressive upcoming-calendar source. It searches 14 days first and extends through
 30, 90, 180, 365, then 729 days only while fewer than five invitations match. This is
 a bounded upcoming list, not an all-time invitation count. Each row opens the event
-or sends `Yes` / `No` through the shared RSVP mutation. Recurring invitations ask
-`This event` or `All events`; a responding row stays visible until the request
-settles so its selection, pending state, and failure remain visible. Failed writes
+or sends `Yes` / `No` through the shared RSVP mutation. Desktop sidebar replies
+use compact 24px Yes/No controls while retaining the shared pending indicator,
+recurring-scope choice, and error feedback. Recurring invitations ask `This event`
+or `All events`; a responding row stays visible until the request settles so its
+selection, pending state, and failure remain visible. Failed writes
 restore the invitation. Switching accounts or hiding its source removes the row
 immediately. Loading, empty, and error/retry states are distinct.
 A failed background refresh keeps the last loaded invitations visible alongside

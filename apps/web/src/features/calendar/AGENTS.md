@@ -17,6 +17,8 @@ host lives in `../block-calendar/`.
   and composable choices, feedback, and recurring-scope controls for event rows and cards.
 - `../calendar-view/views/needs-reply/`: calendar-only invitation list over the existing
   progressive occurrence source; keep the shared call sidebar unchanged.
+- `components/SourceControls.tsx`: connected accounts start expanded; disclosure
+  changes layout only, while account and calendar checkboxes control visibility.
 - `hooks/use-calendar-occurrence-data.ts`: range reads and event projection.
 - `components/composer/create-calendar-event-form-controller.ts` and
   `hooks/use-event-editor.ts`: draft validation, permissions, and submission.
@@ -58,9 +60,10 @@ host lives in `../block-calendar/`.
 From `apps/web`:
 
 - `bun run test src/features/calendar src/features/calendar-view src/components/date-time-range`
-- `bun run check`
-- Exercise changed layouts and interactions on desktop and touch, including
-  keyboard focus and reduced motion; follow the
+- Run affected tests and `just check` for small fixes; run `bun run check` and the
+  full audit at the phase checkpoint.
+- Batch signed-in frame comparisons per coherent UI piece, not per small tweak;
+  include desktop/touch keyboard focus and reduced motion. Follow the
   [calendar walkthrough](../../../../../docs/agent-guide/calendar.md).
 
 From the repository root: `just check`.
