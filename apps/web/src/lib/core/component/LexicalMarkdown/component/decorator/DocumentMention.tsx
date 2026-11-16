@@ -45,6 +45,7 @@ import { Button, Tooltip } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import type { JSX } from 'solid-js';
 import {
+  createEffect,
   createMemo,
   createSignal,
   Match,
@@ -57,6 +58,7 @@ import {
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import type { DocumentMentionHost } from '../../decorator-host/document-mention-host';
 import { createLexicalDocumentMentionHost } from '../../decorator-host/lexical-document-mention';
+import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { DocumentMentionInner } from './DocumentMentionInner';
 

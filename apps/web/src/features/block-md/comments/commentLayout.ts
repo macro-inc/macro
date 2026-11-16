@@ -14,7 +14,13 @@ import {
 import { visibleAnchor } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 

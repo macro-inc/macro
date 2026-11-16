@@ -1,4 +1,4 @@
-import { TaskListBar } from '@core/component/LexicalMarkdown/component/task-list/TaskListControls';
+import { TaskListBar } from '@core/component/LexicalMarkdown/component/task-list/TaskListBar';
 import { useTaskListAssigneeNames } from '@core/component/LexicalMarkdown/component/task-list/task-list-assignee-names';
 import {
   type EffectiveItem,
@@ -33,12 +33,19 @@ export function TaskListLabelFixture() {
       assignees: refs().map((id) => ({ id, name: name(id) })),
     },
   ]);
+  const plan = createMemo(() => planChecklist(items(), settings(), new Date()));
   return (
     <main class="p-6 bg-page text-ink min-h-screen">
       <TaskListBar
         items={items}
         settings={settings}
-        plan={() => planChecklist(items(), settings(), new Date())}
+        progress={() => plan().progress}
+        progressPercentage={() => {
+          const progress = plan().progress;
+          if (progress.total === 0) return '0%';
+          return `${Math.round((progress.done / progress.total) * 100)}%`;
+        }}
+        filterCount={() => 0}
         hasTasks={() => true}
         hovered={() => true}
         update={(patch) => setSettings((value) => ({ ...value, ...patch }))}
