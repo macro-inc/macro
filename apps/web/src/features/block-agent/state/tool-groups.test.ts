@@ -192,6 +192,26 @@ describe('segmentParts', () => {
     ]);
   });
 
+  it('keeps a run whole across a blank line between its calls', () => {
+    const blank: MessagePart = { kind: 'text', text: '\n\n' };
+    expect(
+      segmentParts([tool(), tool(), blank, thought(), blank, tool(), text()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 6 },
+      { kind: 'part', start: 6, end: 7 },
+    ]);
+  });
+
+  it('does not make a group of blank lines and thoughts alone', () => {
+    const blank: MessagePart = { kind: 'text', text: ' ' };
+    expect(segmentParts([text(), blank, thought(), text()])).toEqual([
+      { kind: 'part', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+      { kind: 'part', start: 3, end: 4 },
+    ]);
+  });
+
   it('keeps a thought-only run as individual visible parts', () => {
     expect(
       segmentParts([text(), thought(), thought(), thought(), text()])

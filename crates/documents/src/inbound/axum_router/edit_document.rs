@@ -67,6 +67,10 @@ pub async fn edit_document_handler<
     }
 
     let args = project.into_inner();
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(args.share_permission.is_some())
+        .map_err(|refused| DocumentError::Forbidden(refused.to_string()))?;
 
     state
         .service

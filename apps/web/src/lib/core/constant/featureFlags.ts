@@ -213,6 +213,16 @@ export const enableMacroComputers = defineFlag({
   env: 'ENABLE_MACRO_COMPUTERS',
 });
 
+/**
+ * Agent teammates: team admins invite an AI agent, with its own account and
+ * Macro computer, from Settings → Team → Members.
+ */
+export const enableAgentTeammates = defineFlag({
+  key: 'enable-agent-teammates',
+  env: 'ENABLE_AGENT_TEAMMATES',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
@@ -1032,6 +1042,14 @@ export const enableRoutineSuggestions = defineFlag({
 export const enableRoutineBackgroundDrafts = defineFlag({
   key: 'enable-routine-background-drafts',
   env: 'ENABLE_ROUTINE_BACKGROUND_DRAFTS',
+  default: onInDev,
+});
+
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
   default: onInDev,
 });
 

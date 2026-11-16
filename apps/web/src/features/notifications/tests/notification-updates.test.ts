@@ -24,6 +24,40 @@ vi.mock('@queries/soup/normalized-cache', () => ({
 
 beforeEach(() => vi.clearAllMocks());
 
+it('refreshes the computers and runtimes on a computer setup notification', async () => {
+  const { queryClient } = await import('@queries/client');
+  const { computerKeys } = await import('@queries/computers/keys');
+  const { harnessKeys } = await import('@queries/harnesses/keys');
+  const notification: UnifiedNotification = {
+    id: 'setup-1',
+    entity_id: 'team-1',
+    entity_type: 'team',
+    created_at: '2026-11-13T09:00:00Z',
+    updated_at: '2026-11-13T09:00:00Z',
+    state: 'unseen',
+    sent: true,
+    notification_event_type: 'computer_setup',
+    notification_metadata: {
+      tag: 'computer_setup',
+      content: {
+        computerId: 'computer-1',
+        harnessId: 'harness-1',
+        computerName: "Maya's Agent Box",
+        outcome: { kind: 'ready' },
+      },
+    },
+  };
+
+  handleNotificationUpdate(notification);
+
+  expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: computerKeys.list.queryKey,
+  });
+  expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: harnessKeys.list.queryKey,
+  });
+});
+
 it.each([undefined, 'thread-1'])(
   'refreshes the reaction thread row (threadId: %s)',
   (threadId) => {

@@ -18,7 +18,7 @@ use uuid::Uuid;
 /// not on that team, or when the contact (or its parent company, if it has
 /// one) is hidden and the user is a plain member — hiding a company
 /// cascades to its contacts, so either flag suppresses access.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, user_id))]
 pub async fn get_crm_contact_access(
     pool: &PgPool,
     contact_id: &Uuid,

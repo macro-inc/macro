@@ -14,3 +14,4 @@ pub use verb::AgentVerb;
 pub mod inbound;
 #[cfg(feature = "postgres")]
 pub mod outbound;
+pub mod scope;

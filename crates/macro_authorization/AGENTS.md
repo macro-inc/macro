@@ -50,8 +50,8 @@ by policy.
 
 `ValidatedIdentity` contains identity facts; `ValidatedCredential` and
 `MacroUserAuthentication` additionally carry `CredentialOrigin` (session, Macro API
-JWT, user API key, or the acting user of a bot, harness or internal caller), set
-where the credential is verified. Every `JwtValidator` implements
+JWT, scoped Macro API JWT, user API key, or the acting user of a bot, harness or
+internal caller), set where the credential is verified. Every `JwtValidator` implements
 `validate_credential` (`validate` derives from it) and every
 `MacroAuthorizationService` implements `authorize_identity`; neither has a default
 that assumes a session. Session-only fakes use `ValidatedCredential::session`. The
@@ -65,8 +65,10 @@ does not turn a user credential into bot authority or change endpoint policies.
 An account manager's credential arrives as a normal `x-macro-user-api-key` and
 authenticates as the managed account, with `CredentialOrigin::AccountManager`
 naming the grant and the agent holding it. `AccountHolderOrInternal` is
-`UserOrInternal` minus that credential: use it on anything that mints credentials,
-changes who can sign in, deletes the account, or changes its managers.
+`UserOrInternal` minus that credential and `ScopedMacroApiJwt` (a Macro API token
+that signs `agent_scope`, held by a scoped code-mode run): use it on anything that
+mints credentials, changes who can sign in, deletes the account, or changes its
+managers.
 
 ## Gotchas
 

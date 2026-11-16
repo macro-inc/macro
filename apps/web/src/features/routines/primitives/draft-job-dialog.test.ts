@@ -51,6 +51,7 @@ function openDialog(
     setJobs((list) => list.filter((job) => job.id !== id))
   );
   const start = vi.fn(options.start ?? (async () => drafting('started')));
+  const report = vi.fn((_job: DraftJob) => {});
   return createRoot((dispose) => {
     const dialog = createDraftJobDialog({
       jobs,
@@ -59,14 +60,15 @@ function openDialog(
       start,
       open,
       discard,
+      report,
     });
     return {
       dialog,
       setJobs,
-
       onScreen,
       open,
       discard,
+      report,
       start,
       dispose,
     };
@@ -199,6 +201,7 @@ describe('createDraftJobDialog', () => {
         start: async () => 'unused',
         open: () => undefined,
         discard,
+        report: () => {},
       }),
       dispose,
     }));
@@ -241,5 +244,39 @@ describe('createDraftJobDialog', () => {
       'dialog'
     );
     dispose();
+  });
+
+  it('stops reporting a draft on screen once a newer one takes its place', () => {
+    const { setJobs, onScreen, dispose } = openDialog([drafting('a')]);
+    // Started in another tab: the newer draft is the one shown.
+    setJobs([drafting('b'), drafting('a')]);
+    expect(onScreen.isShown('b')).toBe(true);
+    expect(onScreen.isShown('a')).toBe(false);
+    // So the pill and its toast report it when it's ready.
+    setJobs([drafting('b'), ready('a')]);
+    expect(onScreen.isShown('a')).toBe(false);
+    dispose();
+  });
+
+  it('hands a start that finishes after it closed to the pill and toasts', async () => {
+    const ran = Promise.withResolvers<DraftJob>();
+    const refused = Promise.withResolvers<DraftJob>();
+    const answers = [ran.promise, refused.promise];
+    const { dialog, open, discard, report, dispose } = openDialog([], {
+      start: async () => (await answers.shift()) ?? 'none',
+    });
+    const first = dialog.describe(REQUEST);
+    const second = dialog.describe(REQUEST);
+    dispose();
+    ran.resolve(ready('ran'));
+    refused.resolve(failed('refused'));
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+    expect(open).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+    expect(report.mock.calls.map(([job]) => job.id)).toEqual([
+      'ran',
+      'refused',
+    ]);
   });
 });
