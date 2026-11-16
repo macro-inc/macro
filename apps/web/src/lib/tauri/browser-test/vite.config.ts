@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../scripts/wasm-modules.ts';
 
 const DIRECTORY = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIRECTORY = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -13,6 +14,7 @@ export default defineConfig({
   root: DIRECTORY,
   cacheDir: `${DIRECTORY}/.vite`,
   plugins: [
+    wasmModules(),
     solidPlugin(),
     tsconfigPaths({ projects: [`${WEB_DIRECTORY}/tsconfig.json`] }),
   ],

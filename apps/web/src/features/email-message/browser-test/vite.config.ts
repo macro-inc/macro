@@ -4,12 +4,14 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../scripts/wasm-modules.ts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const webDirectory = fileURLToPath(new URL('../../../../', import.meta.url));
 export default defineConfig({
   root: directory,
   plugins: [
+    wasmModules(),
     tailwindcss(),
     solid(),
     solidSvg({ defaultAsComponent: true }),

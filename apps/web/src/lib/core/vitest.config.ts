@@ -4,9 +4,11 @@ import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
+import { wasmModules } from '../../../scripts/wasm-modules.ts';
 
 export default defineConfig({
   plugins: [
+    wasmModules(),
     tsconfigPaths(),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),

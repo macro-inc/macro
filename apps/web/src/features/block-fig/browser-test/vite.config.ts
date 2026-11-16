@@ -5,6 +5,7 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../scripts/wasm-modules.ts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const webDirectory = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -36,6 +37,7 @@ export default defineConfig({
   },
   cacheDir: `${directory}/.vite`,
   plugins: [
+    wasmModules(),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
@@ -58,6 +60,7 @@ export default defineConfig({
   worker: {
     format: 'es',
     plugins: () => [
+      wasmModules(),
       tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
     ],
   },
