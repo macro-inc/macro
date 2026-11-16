@@ -1120,6 +1120,30 @@ describe('normalizedCacheExchange', () => {
     });
   });
 
+  it('delivers an uncached subscription without writing it to the cache', async () => {
+    const data = {
+      activityUpdates: { __typename: 'GraphqlActivityEvent', id: 'event-1' },
+    };
+    const uncached = makeSubscriptionOp(23);
+    const { ops, results } = harness(
+      host,
+      (op) => (op.kind === 'subscription' ? { data } : {}),
+      { isUncachedSubscription: (op) => op.key === uncached.key }
+    );
+
+    ops.next(uncached);
+    ops.next(makeSubscriptionOp(24));
+    await tick();
+
+    expect(results.map((result) => result.data)).toEqual([data, data]);
+    expect(host.writes).toHaveLength(1);
+    expect(normalizedCacheResultMetadata(results[0]!)).toBeUndefined();
+    expect(normalizedCacheResultMetadata(results[1]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
+  });
+
   it('deletes the exact normalized key from subscription patches', async () => {
     const data = {
       soupUpdates: [
@@ -2299,6 +2323,53 @@ describe('normalizedCacheExchange', () => {
     ]);
   });
 
+  it('rereads a background reader at ordinary rank, behind mounted views', async () => {
+    const background = (
+      key: number,
+      requestPolicy: 'cache-first' | 'cache-and-network'
+    ) => {
+      const op = makeOp(key, requestPolicy);
+      return makeOperation('query', op, {
+        ...op.context,
+        backgroundReader: true,
+      });
+    };
+    host.scriptRead({ kind: 'hit', data: { from: 'cache' } });
+    const { ops, client } = harness(host);
+    ops.next(background(11, 'cache-first'));
+    await tick();
+    vi.mocked(client.reexecuteOperation).mockImplementation((reissued) => {
+      ops.next(reissued);
+    });
+    host.pushAffected([11]);
+    await tick();
+    expect(host.reads).toHaveLength(2);
+    expect(host.reads[1]?.priority).toBeUndefined();
+
+    // A revalidation by key carries no context of its own.
+    ops.next(makeOp(11, 'cache-first'));
+    await tick();
+    host.pushAffected([11]);
+    await tick();
+    expect(host.reads).toHaveLength(4);
+    expect(host.reads[3]?.priority).toBeUndefined();
+  });
+
+  it('rereads a background reader at ordinary rank while its request is in flight', async () => {
+    host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
+    const { ops } = controlledQueryHarness(host);
+    const op = makeOp(13, 'cache-and-network');
+    ops.next(
+      makeOperation('query', op, { ...op.context, backgroundReader: true })
+    );
+    await tick();
+
+    host.scriptRead({ kind: 'hit', data: { status: 'Completed' } });
+    host.pushAffected([13]);
+    await tick();
+    expect(host.reads.at(-1)?.priority).toBeUndefined();
+  });
+
   it('emits an affected cache result while an authoritative query remains in flight', async () => {
     host.scriptRead({ kind: 'hit', data: { status: 'In Review' } });
     const { ops, results, forwarded, client } = controlledQueryHarness(host);
@@ -3064,6 +3135,30 @@ describe('normalizedCacheExchange', () => {
         expect(results).toEqual([]);
         expect(host.writes).toEqual([]);
         expect(forwarded).toHaveLength(2);
+      }
+    );
+
+    it.each([false, true])(
+      'fences pre-existing reads after a REST write is acknowledged (hydration=%s)',
+      async (hydration) => {
+        let externalMutationVersion = 0;
+        const { ops, network, forwarded, results } = controlledQueryHarness(
+          host,
+          {
+            externalMutationVersion: () => externalMutationVersion,
+          }
+        );
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        externalMutationVersion += 1;
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        network.next(queryResult(forwarded[1], { from: 'fresh' }));
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ from: 'fresh' });
       }
     );
 

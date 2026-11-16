@@ -72,7 +72,7 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
-import { isExcludedEmailFolder } from '../constants';
+import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -565,6 +565,10 @@ export function EmailList(props: EmailListProps) {
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
+  // The tutorial introduces the inbox; search results are not the inbox.
+  const showsTutorial = () =>
+    state.tab === 'important' &&
+    !(canSearchEmailTab(state.tab) && state.search.trim());
 
   function showsEmptyViewport() {
     return (
@@ -777,18 +781,12 @@ export function EmailList(props: EmailListProps) {
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
                   {/* New inboxes start empty, which is when the tutorial
-                      matters most. The row then takes the touch top inset. */}
-                  <Show
-                    when={state.tab === 'important'}
-                    fallback={<EmailEmptyState />}
-                  >
-                    <div class="touch:pt-(--mobile-content-inset-top)">
-                      <TutorialRow tutorial="mail" />
-                    </div>
-                    <div class="contents touch:[--mobile-content-inset-top:0px]">
-                      <EmailEmptyState />
-                    </div>
+                      matters most. Touch devices show no tutorial, so there
+                      the empty state keeps its own top inset. */}
+                  <Show when={showsTutorial()}>
+                    <TutorialRow tutorial="mail" />
                   </Show>
+                  <EmailEmptyState />
                 </div>
               </Match>
 
@@ -806,7 +804,7 @@ export function EmailList(props: EmailListProps) {
                       aria-hidden="true"
                       class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
-                    <Show when={state.tab === 'important'}>
+                    <Show when={showsTutorial()}>
                       <TutorialRow tutorial="mail" />
                     </Show>
                   </div>
@@ -1089,7 +1087,6 @@ export function EmailList(props: EmailListProps) {
           >
             <Show when={isExcludedEmailFolder(state.tab)}>
               <Button
-                size="sm"
                 disabled={restoreFolder.isPending}
                 onClick={() =>
                   fireAndForget(

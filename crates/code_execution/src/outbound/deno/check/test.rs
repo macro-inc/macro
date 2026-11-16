@@ -165,3 +165,43 @@ async fn file_names_are_plain_typescript_modules() {
         ));
     }
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn reports_problems_in_the_declarations() {
+    let (_root, checker) = checker().await;
+    let declarations = format!("{CONTEXT}\ndeclare global {{ type Broken = MissingName; }}\n");
+    let source = "export async function main({ macro }: StepContext) { return 1; }\n";
+    let diagnostics = checker.check(source, &declarations).await.unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("Cannot find name 'MissingName'")
+    );
+}
+
+/// Checks skip declaration files, so this is where the SDK's are checked
+/// under the pinned Deno.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn the_sdk_declarations_type_check() {
+    let (root, checker) = checker().await;
+    let output = Command::new(&checker.binary)
+        .env_clear()
+        .env("DENO_DIR", root.path().join("cache"))
+        .env("HOME", root.path())
+        .env("NO_COLOR", "1")
+        .current_dir(&checker.types)
+        .args(["check", "--quiet", "--no-config"])
+        .args(OFFLINE)
+        .arg("src/macro.d.ts")
+        .output()
+        .await
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

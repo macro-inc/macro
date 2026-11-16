@@ -325,7 +325,10 @@ where
     F: ForeignEntityService,
     R: GithubPullRequestListingRepository,
 {
-    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
+    #[tracing::instrument(
+        err,
+        skip(self, requesting_user, source_ids, query, github_pull_request_filter)
+    )]
     async fn list_pull_requests(
         &self,
         requesting_user: Option<String>,

@@ -1,6 +1,8 @@
 /* Upright workspace cards with open conversation bubbles, as on the homepage. */
 .feature-demo-art {
   --feature-glow: #7abde5;
+  --feature-frame-radius: 26.25px;
+  --feature-frame-inset: 12px;
   position: relative;
   isolation: isolate;
   padding: 36px 0 28px;
@@ -33,7 +35,7 @@
   --product-demo-fade-tail: 0px;
   padding-bottom: 0;
   border: 0;
-  border-radius: 26.25px;
+  border-radius: var(--feature-frame-radius, 26.25px);
   mask-image: none;
   -webkit-mask-image: none;
   background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
@@ -61,7 +63,7 @@
 .feature-demo-art .mail-sharing-splits > .mail-sharing-email { height: 450px; overflow: hidden; }
 .feature-demo-art .mail-sharing-splits > .mail-sharing-chat {
   width: min(680px, 100%);
-  height: 340px;
+  height: 400px;
   margin: 0 auto;
   background: transparent;
   border: 0;
@@ -105,14 +107,19 @@
 /* A 12px glass surround keeps the onboarding texture outside the UI. */
 .feature-demo-art[data-glass-frame] > .feature-demo-primary {
   box-sizing: border-box;
-  width: calc(100% + 24px);
-  margin: -12px;
-  padding: 12px;
-  border-radius: 38px;
+  width: calc(100% + 2 * var(--feature-frame-inset));
+  margin: calc(-1 * var(--feature-frame-inset));
+  padding: var(--feature-frame-inset);
+  border-radius: calc(var(--feature-frame-radius) + var(--feature-frame-inset));
   background: linear-gradient(135deg, #ffffff0c, #ffffff03 55%, #65d8ac08);
   box-shadow: inset 0 0 0 1px #ffffff14, 0 16px 48px -24px #0008;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+/* Custom app windows share the same concentric corners as ProductDemo. */
+.feature-page .feature-demo-art[data-glass-frame]
+  :is(.email-feature-demo:not(.mail-sharing-demo) .mail-app, .homepage-pipeline-demo, .booking-story-card, .workspace-feature-scene) {
+  border-radius: var(--feature-frame-radius);
 }
 .feature-page .feature-demo-art[data-glass-frame] .product-demo,
 .feature-page .product-page .feature-page-section .product-demo {
@@ -142,7 +149,7 @@
 .feature-page .feature-page-section .product-demo-stage::after { display: none; }
 .feature-page .product-page .feature-page-section .product-demo {
   --product-demo-fade-tail: 0px;
-  padding-bottom: 0; border: 0; border-radius: 26.25px;
+  padding-bottom: 0; border: 0; border-radius: var(--feature-frame-radius, 26.25px);
   mask-image: none; -webkit-mask-image: none;
 }
 /* Compact channel controls retain the normal top-bar height. */

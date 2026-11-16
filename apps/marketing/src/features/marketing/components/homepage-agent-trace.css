@@ -7,6 +7,8 @@
 .homepage-agent-reply-label { display: block; font-size: 11px; line-height: 1.5; color: var(--color-ink-extra-muted); }
 .homepage-agent-reply-label { margin: 0 0 8px 2px; }
 .homepage-agent-pr-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; vertical-align: baseline; border-radius: 4px; color: var(--color-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--color-ink) 30%, transparent); text-underline-offset: 3px; }
+.homepage-message-body .homepage-agent-pr-link { align-items: baseline; padding: 0; font: inherit; }
+.homepage-message-body .homepage-agent-pr-link > svg { align-self: center; }
 .homepage-agent-pr-link:hover { text-decoration-color: currentColor; }
 .homepage-agent-pr-link:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .homepage-agent-chip { border-radius: 14px; }
@@ -24,3 +26,16 @@
   .homepage-agent-dialog-tabs { padding: 8px 16px; }
   .homepage-agent-dialog-body { padding: 20px 16px 28px; }
 }
+
+/* Match the email preview's surface and leave breathing room around actions. */
+.homepage-agent-chip .demo-cursor-card { position: relative; padding: 16px; border: 0; border-radius: 26.25px; background: oklch(0.17 0.002 250); box-shadow: 0 10px 40px -8px #0004; }
+.homepage-agent-chip .demo-cursor-card::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; border: 1px solid #ffffff08; background: linear-gradient(135deg, #ffffff18, transparent 45%) border-box; mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); mask-composite: exclude; padding: 1px; }
+.homepage-agent-chip :is(.homepage-agent-merge, .demo-cursor-open) { font-size: 11px; font-weight: 400; line-height: 14px; height: 22px; padding: 3px 10px; }
+@media (max-width: 639px) { .homepage-agent-chip .demo-cursor-card { padding: 12px; } }
+
+.homepage-agent-chip [data-magic-chip-header] { height: 22px; gap: 6px; }
+.homepage-agent-chip [data-magic-chip-agent],
+.homepage-agent-chip .demo-cursor-model { font-size: 11px; line-height: 14px; }
+.homepage-agent-chip .demo-cursor-status { padding: 2px 7px; font-size: 10px; line-height: 14px; }
+.homepage-agent-chip .demo-cursor-check { width: 14px; height: 14px; }
+.homepage-agent-chip .demo-cursor-check svg { width: 9px; height: 9px; }

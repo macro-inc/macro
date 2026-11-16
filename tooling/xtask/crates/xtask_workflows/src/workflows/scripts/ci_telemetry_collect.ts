@@ -6,7 +6,7 @@
 // branch names, actors, titles or file paths.
 
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const API = 'https://api.github.com';
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
@@ -21,8 +21,6 @@ const COLD_VOLUME_SECONDS = 30;
 const MAX_PUSH_LAG_SECONDS = 600;
 // Below this a step is noise, and it stays visible in the trace.
 const MIN_STEP_SECONDS = 1;
-// Stop before the exporter's own traces start failing for lack of API budget.
-const MIN_RATE_REMAINING = 100;
 const MAX_FILE_PAGES = 3;
 // Roll-up jobs finish last by design, so they never say what held a push up.
 const ROLL_UP_JOB = /status[ -]check/i;
@@ -67,6 +65,24 @@ export type Run = {
 
 export type PullRequest = { created_at: string; draft?: boolean };
 
+/**
+ * What the preflight leaves for this step: the API budget it saw, its own calls,
+ * whether the trace step will run and why not, and the run's jobs. No jobs means the
+ * budget was already down to the share kept for other workflows.
+ */
+export type Listing = {
+  limit: number;
+  remaining: number;
+  reserve: number;
+  calls: number;
+  trace: boolean;
+  untraced: string | null;
+  jobs: Job[] | null;
+};
+
+// The pinned trace exporter gets the run attempt and lists its jobs.
+const TRACE_CALLS = 2;
+
 type Interval = [Date, Date];
 type Attributes = Record<string, string | number | boolean>;
 
@@ -105,22 +121,37 @@ export class HttpError extends Error {
   }
 }
 
-/** Counts its own calls and stops before exhausting the shared token budget. */
-class Github implements GithubApi {
+export class BudgetError extends Error {}
+
+/**
+ * Counts its own calls and stops at the share of the shared budget kept for other
+ * workflows. Without the preflight's reading of the budget it makes no calls.
+ */
+export class Github implements GithubApi {
   repo: string;
   token: string;
+  reserve: number;
   calls = 0;
   rateLimit: number | null = null;
   rateRemaining: number | null = null;
 
-  constructor(repo: string, token: string) {
+  constructor(
+    repo: string,
+    token: string,
+    budget: Pick<Listing, 'limit' | 'remaining' | 'reserve'> | null
+  ) {
     this.repo = repo;
     this.token = token;
+    this.reserve = budget?.reserve ?? Infinity;
+    if (budget) {
+      this.rateLimit = budget.limit;
+      this.rateRemaining = budget.remaining;
+    }
   }
 
   async get(path: string, params: Record<string, string | number> = {}) {
-    if (this.rateRemaining !== null && this.rateRemaining < MIN_RATE_REMAINING) {
-      throw new Error('GitHub API budget is low');
+    if (this.rateRemaining === null || this.rateRemaining < this.reserve) {
+      throw new BudgetError('GitHub API budget is low');
     }
     const query = new URLSearchParams(
       Object.entries(params).map(([key, value]): [string, string] => [key, String(value)])
@@ -447,11 +478,15 @@ async function changedFiles(github: GithubApi, number: number) {
   return paths;
 }
 
-/** The push event once this completion is the last one, otherwise null. */
+/**
+ * The push event once this completion is the last one, otherwise null. `jobs` are
+ * this run's, which the preflight already listed.
+ */
 export async function collectPush(
   github: GithubApi,
   repo: string,
-  run: Run
+  run: Run,
+  jobs: Job[]
 ): Promise<TelemetryEvent | null> {
   if (!PR_EVENTS.has(run.event)) return null;
   const listing: { workflow_runs: Run[] } = await github.get('actions/runs', {
@@ -462,22 +497,20 @@ export async function collectPush(
     (candidate) => PR_EVENTS.has(candidate.event) && !NOT_A_CHECK.has(candidate.name)
   );
   const [runs, repeat] = sameTriggerRuns(checks, run);
-  if (runs.length === 0 || runs.some((candidate) => candidate.status !== 'completed')) {
+  // A lone workflow means CI didn't run, and every report leaves such pushes out.
+  if (runs.length < 2 || runs.some((candidate) => candidate.status !== 'completed')) {
     return null;
   }
   const jobsByRun = new Map<number, Job[]>();
   for (const candidate of runs) {
-    jobsByRun.set(
-      candidate.id,
-      candidate.conclusion === 'skipped'
-        ? []
-        : (
-            await github.get(
-              `actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs`,
-              { per_page: 100 }
-            )
-          ).jobs
-    );
+    if (candidate.id === run.id && candidate.run_attempt === run.run_attempt) {
+      jobsByRun.set(candidate.id, jobs);
+    } else if (candidate.conclusion === 'skipped') {
+      jobsByRun.set(candidate.id, []);
+    } else {
+      const path = `actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs`;
+      jobsByRun.set(candidate.id, (await github.get(path, { per_page: 100 })).jobs);
+    }
   }
   // GitHub leaves `pull_requests` empty on some runs, so ask the group when this is one.
   const head = run.pull_requests?.length
@@ -527,15 +560,10 @@ export function toOtlp(events: TelemetryEvent[], now: Date) {
   };
 }
 
-export async function collect(github: GithubApi, repo: string, run: Run) {
-  const events: TelemetryEvent[] = [];
+export async function collect(github: GithubApi, repo: string, run: Run, jobs: Job[]) {
+  const events: TelemetryEvent[] = jobEvents(repo, run, jobs);
   try {
-    const { jobs } = await github.get(
-      `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
-      { per_page: 100 }
-    );
-    events.push(...jobEvents(repo, run, jobs));
-    const push = await collectPush(github, repo, run);
+    const push = await collectPush(github, repo, run, jobs);
     if (push) events.push(push);
   } catch (error) {
     // A partial export still helps. The class and status can't carry a token or a payload.
@@ -559,16 +587,22 @@ async function runCollection() {
   const started = performance.now();
   const repo = required('GITHUB_REPOSITORY');
   const run: Run = JSON.parse(readFileSync(required('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
-  const github = new Github(repo, required('GITHUB_TOKEN'));
-  const events = await collect(github, repo, run);
+  // No listing means the preflight failed before it had one; this step won't call either.
+  const path = required('CI_TELEMETRY_JOBS');
+  const listing: Listing | null = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+  const github = new Github(repo, required('GITHUB_TOKEN'), listing);
+  const events = listing?.jobs ? await collect(github, repo, run, listing.jobs) : [];
   const now = new Date();
   const counts: Attributes = {
     event: 'export',
     ...runAttributes(run),
     events: events.length,
-    api_calls: github.calls,
+    // Every call this exporter run makes: the preflight's, this step's and the trace's.
+    api_calls: (listing?.calls ?? 0) + github.calls + (listing?.trace ? TRACE_CALLS : 0),
     collect_seconds: Math.round((performance.now() - started) / 1000),
   };
+  if (!listing?.jobs) counts.skipped = listing ? 'budget' : 'no_listing';
+  if (listing?.untraced) counts.untraced = listing.untraced;
   if (github.rateRemaining !== null) counts.rate_remaining = github.rateRemaining;
   if (github.rateLimit) counts.rate_limit = github.rateLimit;
   events.push({

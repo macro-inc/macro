@@ -1,5 +1,7 @@
 # This machine's macrod config. The TUI and `macrod service` both read
-# ~/.macrod/macrod.toml unless given `--config <path>`.
+# ~/.macrod/macrod.toml unless given `--config <path>`. Another runtime on the
+# same machine is a named profile: `--profile <name>` reads
+# ~/.macrod/profiles/<name>.toml, and `macrod profiles` lists them.
 #
 # This example omits credentials, so `macrod` starts in Quickstart. Pairing
 # shows a code for approval in the web app, then adds a `[credentials]` table
@@ -9,6 +11,7 @@
 # not set here: change them on the web at Settings → Machines.
 
 # Optional development overrides. Every key defaults to production.
+# Macro computer enrollment may set egress_url to its fleet-reachable gateway.
 # [macro]
 # # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # # gateway the daemon connects to on startup.

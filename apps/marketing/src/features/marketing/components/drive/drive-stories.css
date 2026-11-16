@@ -1,0 +1,128 @@
+/* Drive graphics: the app's file list, its bar, and the things that feed it. */
+.drive-story { margin: 20px 24px; color: var(--color-ui-content-primary, #fff); font: 400 13px/18px 'Inter Variable', Inter, sans-serif; text-align: left; }
+.drive-story svg { flex: none; width: 14px; height: 14px; }
+
+/* Entity colours, as the app's file icons use them. */
+.drive-icon { flex: none; width: 16px !important; height: 16px !important; color: var(--color-ui-content-secondary, #a8a8a8); }
+.drive-icon[data-kind=note], .drive-icon[data-kind=snippet] { color: var(--color-note, #a78bfa); }
+.drive-icon[data-kind=sheet] { color: var(--color-success, #58ae83); }
+.drive-icon[data-kind=pdf] { color: var(--color-pdf, #f87171); }
+.drive-icon[data-kind=slides] { color: var(--color-orange, #fb923c); }
+.drive-icon[data-kind=video] { color: var(--color-video, #a78bfa); }
+.drive-icon[data-kind=design] { color: var(--color-amber, #fbbf24); }
+.drive-icon[data-kind=image] { color: var(--color-image, #facc15); }
+.drive-icon[data-kind=folder] { color: var(--color-folder, #60a5fa); }
+.drive-icon[data-kind=skill] { color: var(--color-chat, #22d3ee); }
+
+/* The artboard clears backgrounds and radii two levels down; these name their parent to keep theirs. */
+.drive-story > .drive-frame { overflow: hidden; border: 1px solid #ffffff1a; border-radius: 14px; background: #060607; }
+.drive-bar { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-bottom: 1px solid #ffffff12; }
+.drive-bar strong { font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+.drive-bar-mark { width: 16px !important; height: 16px !important; color: var(--color-folder, #60a5fa); }
+.drive-crumb { color: #737373; }
+.drive-pill { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 999px; background: #ffffff0d; color: #b4b4b4; white-space: nowrap; }
+.drive-pill[data-active] { background: #ffffff1f; color: #fff; font-weight: 500; }
+.drive-pill i { width: 7px; height: 7px; border-radius: 50%; }
+.drive-bar-tools { margin-left: auto; }
+.drive-count { margin: 0; padding: 9px 14px 11px; color: #8f8f8f; font-size: 12px; }
+
+.drive-rows { padding: 4px; }
+.drive-row { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: 12px; }
+.drive-row[data-fresh] { background: #ffffff0f; animation: drive-arrive 320ms cubic-bezier(.2, .8, .2, 1) both; }
+.drive-row-name { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.drive-row-source { display: flex; flex: none; align-items: center; gap: 4px; color: #8f8f8f; font-size: 12px; }
+.drive-row-source svg { width: 12px; height: 12px; }
+.drive-row-detail { flex: none; color: #8f8f8f; font-size: 12px; }
+.drive-row-owner { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+.drive-row-time { flex: none; width: 54px; color: #8f8f8f; font-size: 12px; text-align: right; }
+@keyframes drive-arrive { from { opacity: 0; transform: translateY(-6px); } }
+
+/* Arrivals: the email and the channel message, then the list they feed. */
+.drive-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.drive-source { display: flex; flex-direction: column; gap: 6px; padding: 11px 12px; border: 1px solid #ffffff14; border-radius: 14px; background: #ffffff08; transition: opacity 240ms ease; }
+.drive-source[data-sent=true] { opacity: .55; }
+.drive-source header { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.drive-source header img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+.drive-source header strong { font-weight: 500; white-space: nowrap; }
+.drive-source header span { margin-left: auto; overflow: hidden; color: #8f8f8f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.drive-source-mail { width: 16px !important; height: 16px !important; color: var(--color-email, #7abde5); }
+.drive-source p { margin: 0; overflow: hidden; color: #c8c8c8; text-overflow: ellipsis; white-space: nowrap; }
+.drive-chip { display: flex; align-items: center; align-self: flex-start; gap: 6px; max-width: 100%; padding: 4px 9px; border: 1px solid #ffffff1a; border-radius: 9px; background: #00000059; font-size: 12px; white-space: nowrap; }
+.drive-arrivals .drive-rows { height: 200px; overflow: hidden; box-sizing: content-box; }
+
+/* File types: a tab per open file over the viewer. */
+.drive-tabs { display: flex; gap: 4px; padding: 8px 8px 0; border-bottom: 1px solid #ffffff12; }
+.drive-tab { display: flex; align-items: center; gap: 7px; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: 9px 9px 0 0; background: none; color: #a8a8a8; font: inherit; }
+.drive-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-tab[aria-pressed=true] { flex: none; background: #ffffff12; color: #fff; }
+.drive-tab:focus-visible { outline: 2px solid #a8a8a8; outline-offset: -2px; }
+.drive-preview { display: grid; place-items: center; height: 250px; padding: 18px; box-sizing: border-box; background: #0b0b0d; }
+.drive-preview small { color: #8f8f8f; font-size: 11px; }
+.drive-preview h4 { margin: 4px 0 8px; font: 500 17px/22px 'Inter Variable', Inter, sans-serif; }
+.drive-preview p { margin: 0 0 10px; }
+.drive-page { width: 250px; height: 100%; box-sizing: border-box; padding: 16px 18px; border-radius: 4px; background: #f6f5f1; color: #1c1c1e; font-size: 11.5px; line-height: 16px; }
+.drive-page small { color: #77767a; }
+.drive-swatches { display: flex; gap: 6px; margin-bottom: 10px; }
+.drive-swatches i { flex: 1; height: 26px; border-radius: 4px; background: #1c1c1e; }
+.drive-swatches i:nth-child(2) { background: #7abde5; }
+.drive-swatches i:nth-child(3) { background: #e8e4da; box-shadow: inset 0 0 0 1px #0000001a; }
+.drive-swatches i:nth-child(4) { background: #f4c65c; }
+.drive-deck { display: flex; gap: 12px; width: 100%; height: 100%; }
+.drive-thumbs { display: flex; flex: none; flex-direction: column; gap: 6px; width: 54px; }
+.drive-thumbs i { height: 31px; border-radius: 4px; background: #ffffff14; }
+.drive-thumbs i[data-current] { box-shadow: 0 0 0 2px #fb923c; }
+.drive-slide { flex: 1; min-width: 0; box-sizing: border-box; padding: 22px 26px; border-radius: 6px; background: linear-gradient(135deg, #1d2431, #101319); }
+.drive-slide h4 { margin: 6px 0 12px; font-size: 22px; line-height: 28px; }
+.drive-slide ul { margin: 0; padding-left: 18px; color: #d4d4d4; line-height: 24px; }
+.drive-canvas { display: flex; align-items: flex-start; justify-content: center; gap: 22px; width: 100%; height: 100%; background-image: radial-gradient(#ffffff14 1px, transparent 1px); background-size: 16px 16px; }
+.drive-artboard { display: flex; flex-direction: column; gap: 5px; width: 250px; }
+.drive-artboard[data-phone] { width: 92px; }
+.drive-artboard > div { display: flex; flex-direction: column; gap: 9px; height: 176px; padding: 14px; box-sizing: border-box; border-radius: 4px; background: #17181c; box-shadow: 0 0 0 1px #fbbf2466; }
+.drive-artboard b { width: 62%; height: 14px; border-radius: 3px; background: #fff; }
+.drive-artboard i { height: 7px; border-radius: 3px; background: #ffffff33; }
+.drive-artboard i:nth-of-type(2) { width: 78%; }
+.drive-artboard span { width: 64px; max-width: 100%; height: 20px; margin-top: 4px; border-radius: 999px; background: #7abde5; }
+.drive-video { position: relative; display: grid; place-items: center; width: 100%; height: 100%; border-radius: 6px; background: linear-gradient(160deg, #2a2440, #0f1016 70%); }
+.drive-video-play { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #ffffff26; backdrop-filter: blur(6px); }
+.drive-video-play svg { width: 20px; height: 20px; }
+.drive-video-bar { position: absolute; right: 14px; bottom: 12px; left: 14px; display: flex; align-items: center; gap: 10px; color: #d4d4d4; font-size: 11px; font-variant-numeric: tabular-nums; }
+.drive-video-bar i { position: relative; flex: 1; height: 3px; border-radius: 2px; background: #ffffff33; }
+.drive-video-bar i::after { content: ''; position: absolute; inset: 0 59% 0 0; border-radius: 2px; background: #fff; }
+
+/* Folders and databases: the folder tree, and the same files as records. */
+.drive-views .database-views-body { height: 252px; mask-image: none; }
+.drive-views .database-views-row { grid-template-columns: 28px minmax(0, 1.5fr) 112px minmax(0, 1.2fr) 86px; }
+.drive-views .database-views-row > span { white-space: nowrap; }
+.drive-folder, .drive-folder-file { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px; border-bottom: 1px solid var(--database-views-line); }
+.drive-folder i { width: 0; height: 0; border: 4px solid transparent; border-left-color: #8f8f8f; border-right: 0; }
+.drive-folder[data-open=true] i { transform: rotate(90deg); }
+.drive-folder strong { font-weight: 500; }
+.drive-folder span, .drive-folder-file small { margin-left: auto; color: var(--color-ui-content-tertiary); font-size: 12px; }
+.drive-folder-file { padding-left: 38px; }
+.drive-folder-file span { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The agent's session and the record's Files tab keep their own app frames. */
+.drive-agent { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+
+/* Phone artboard. */
+.paper-feature-art[data-compact=true] .drive-story { margin: 10px; }
+.paper-feature-art[data-compact=true] .drive-sources { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.paper-feature-art[data-compact=true] .drive-source p,
+.paper-feature-art[data-compact=true] .drive-row-source,
+.paper-feature-art[data-compact=true] .drive-row-owner,
+.paper-feature-art[data-compact=true] .drive-tags-wide,
+.paper-feature-art[data-compact=true] .drive-views-wide { display: none; }
+.paper-feature-art[data-compact=true] .drive-row-time { width: 50px; }
+.paper-feature-art[data-compact=true] .drive-rows .mail-row-tags > :nth-child(n + 2) { display: none; }
+.paper-feature-art[data-compact=true] .drive-tab { padding: 0 9px; }
+.paper-feature-art[data-compact=true] .drive-tab:not([aria-pressed=true]) span { display: none; }
+.paper-feature-art[data-compact=true] .drive-page { width: 220px; }
+.paper-feature-art[data-compact=true] .drive-artboard { width: 168px; }
+.paper-feature-art[data-compact=true] .drive-slide { padding: 16px 16px; }
+.paper-feature-art[data-compact=true] .drive-slide h4 { font-size: 18px; line-height: 24px; }
+.paper-feature-art[data-compact=true] .drive-views .database-views-row { grid-template-columns: 24px minmax(0, 1fr) 106px 92px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-row[data-fresh] { animation: none; }
+  .drive-source { transition: none; }
+}

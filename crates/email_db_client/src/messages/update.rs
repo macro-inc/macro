@@ -48,7 +48,6 @@ pub async fn set_flags_from_labels(
 }
 
 /// Update the read status of a single message, scoped to the inbox that owns it.
-#[tracing::instrument(skip(tx), err)]
 pub async fn update_message_read_status(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
@@ -73,14 +72,6 @@ pub async fn update_message_read_status(
     .fetch_optional(tx)
     .await?;
 
-    if result.is_none() {
-        tracing::warn!(
-            message_id = %message_id,
-            link_id = %link_id,
-            "No message was updated - message may not exist or doesn't belong to the inbox"
-        );
-    }
-
     // Return the ID of the updated message, or None if no message was updated
     Ok(result.map(|r| r.id))
 }
@@ -92,7 +83,6 @@ pub async fn update_message_read_status(
 /// caller acting on it, so scoping by the caller would match no rows.
 ///
 /// Returns the count of messages that were successfully updated.
-#[tracing::instrument(skip(executor), err)]
 pub async fn update_message_read_status_batch<'e, E>(
     executor: E,
     message_ids: Vec<Uuid>,
@@ -102,10 +92,6 @@ pub async fn update_message_read_status_batch<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    if message_ids.is_empty() {
-        return Ok(0);
-    }
-
     let result = sqlx::query!(
         r#"
         UPDATE email_messages
@@ -124,32 +110,11 @@ where
     .fetch_all(executor)
     .await?;
 
-    let updated_count = result.len();
-
-    // Matching nothing means the ids and the link disagree, which is a scoping bug
-    // rather than a race. Fail loudly instead of leaving is_read silently diverged.
-    if updated_count == 0 {
-        anyhow::bail!(
-            "no messages updated for link {link_id}: none of the {} requested ids belong to it",
-            message_ids.len()
-        );
-    }
-
-    if updated_count < message_ids.len() {
-        tracing::warn!(
-            requested_count = message_ids.len(),
-            updated_count = updated_count,
-            link_id = %link_id,
-            "Some messages were not updated - they may not exist or don't belong to the inbox"
-        );
-    }
-
-    Ok(updated_count)
+    Ok(result.len())
 }
 
 /// Update the starred status of multiple messages at once, scoped by owning inbox.
 /// See [`update_message_read_status_batch`] for why this is not scoped by caller.
-#[tracing::instrument(skip(executor), err)]
 pub async fn update_message_starred_status_batch<'e, E>(
     executor: E,
     message_ids: Vec<Uuid>,
@@ -159,10 +124,6 @@ pub async fn update_message_starred_status_batch<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    if message_ids.is_empty() {
-        return Ok(0);
-    }
-
     let result = sqlx::query!(
         r#"
         UPDATE email_messages
@@ -181,18 +142,7 @@ where
     .fetch_all(executor)
     .await?;
 
-    let updated_count = result.len();
-
-    if updated_count < message_ids.len() {
-        tracing::warn!(
-            requested_count = message_ids.len(),
-            updated_count = updated_count,
-            link_id = %link_id,
-            "Some messages were not updated - they may not exist or don't belong to the inbox"
-        );
-    }
-
-    Ok(updated_count)
+    Ok(result.len())
 }
 
 /// Finalize a provider-accepted send and populate its provider IDs.

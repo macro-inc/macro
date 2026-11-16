@@ -20,6 +20,7 @@ vi.mock('../use-call-again', () => ({
   useCallAgain: () => ({
     canCallAgain: () => mocks.canCallAgain,
     callAgain: mocks.callAgain,
+    joinCall: mocks.callAgain,
   }),
 }));
 vi.mock('@channel/Call/CallContext', () => ({

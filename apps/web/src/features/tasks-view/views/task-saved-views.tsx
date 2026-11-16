@@ -56,6 +56,15 @@ import { useTasksView } from '../tasks-view-context';
 
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
 
+function sortDirectionLabel(sort: TaskSavedViewConfig['sort'][number]) {
+  if (sort.id.startsWith('due_date_')) return 'missing last';
+  if (sort.id === 'status' || sort.id === 'priority')
+    return sort.reversed ? 'reverse order' : 'option order';
+  if (sort.id === 'title')
+    return sort.reversed ? t('viewMenus.sortZToA') : t('viewMenus.sortAToZ');
+  return sort.reversed ? 'oldest first' : 'newest first';
+}
+
 function TaskSavedViewSummary(props: {
   config: TaskSavedViewConfig;
   omittedFilters?: TaskSavedViewIssue[];
@@ -125,7 +134,7 @@ function TaskSavedViewSummary(props: {
         {props.config.sort
           .map(
             (sort) =>
-              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.id.startsWith('due_date_') ? 'missing last' : sort.id === 'status' || sort.id === 'priority' ? (sort.reversed ? 'reverse order' : 'option order') : sort.reversed ? 'oldest first' : 'newest first'})`
+              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sortDirectionLabel(sort)})`
           )
           .join(', ') || 'Default'}
       </p>
@@ -703,7 +712,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
         <Show
           when={savedViews?.view().kind === 'new'}
           fallback={
-            <HeaderActionGroup label="Saved view actions">
+            <HeaderActionGroup label="Saved view actions" size="md">
               <Show when={selected()?.record.ownerId === viewerId()}>
                 <ButtonGroup.Button
                   variant="primary"
@@ -740,7 +749,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
       </Show>
       <Show when={failure()}>
         {(error) => (
-          <HeaderActionGroup label="Saved view save error">
+          <HeaderActionGroup label="Saved view save error" size="md">
             <span
               role="alert"
               class="max-w-48 truncate text-xs text-failure-ink"

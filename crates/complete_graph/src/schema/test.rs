@@ -47,6 +47,7 @@ use uuid::Uuid;
 use super::*;
 
 mod calendar;
+mod channel;
 mod contacts;
 mod crm_record;
 mod database_activity;
@@ -131,6 +132,7 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
 
 fn soup_initiative(id: Uuid) -> SoupItem<()> {
     SoupItem::Initiative(SoupInitiative {
+        appearance: None,
         id,
         name: "Launch project".to_string(),
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -173,6 +175,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
 
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
@@ -401,6 +404,15 @@ impl email::domain::ports::EmailThreadPreviewService for CountingEmailService {
         // Only the email crate constructs previews; this fake observes which
         // receipts reached the read.
         Ok(Vec::new())
+    }
+
+    async fn get_owned_email_thread_preview(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<Option<EnrichedEmailThreadPreview>, EmailErr> {
+        // Mutation replies read through `EmailMutationThreadReader` here.
+        Ok(None)
     }
 }
 
@@ -1779,6 +1791,33 @@ async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
     );
     assert_eq!(data["user"]["soupEntity"]["id"], document_id.to_string());
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_entity_rejects_outside_soup_without_reading_soup() {
+    let harness = harness();
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(Uuid::from_u128(10))]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: OUTSIDE_SOUP, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(10)
+        ))
+        .await;
+
+    assert_eq!(
+        response.errors[0].message,
+        "OUTSIDE_SOUP is not a Soup entity type"
+    );
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_calls
+            .load(Ordering::SeqCst),
+        0
+    );
 }
 
 #[tokio::test]

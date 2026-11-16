@@ -15,6 +15,15 @@ alwaysApply: false
   import one into a shared hub (`Root`, `Layout`, `AppProviders`,
   `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block
   `definition.ts`, Lexical `init.ts`).
+- A `route-views.tsx` imports the view it renders statically. The warm-up and
+  the router preload only the route's own chunk, so a view behind a second
+  `lazy()` stays cold and its first open shows the route skeleton however long
+  the app has been running. Keep a `lazy()` there only for a view the route
+  rarely picks, with an `ast-grep-ignore` comment that says why. Enforced by
+  ast-grep `tsx-route-views-static-view`, CI error.
+- Web warms `LIKELY_NEXT_VIEWS` at idle. The native apps read chunks from their
+  own bundle, so they also warm `OTHER_APP_VIEWS`; add a new app view to one of
+  the two lists in `routes/lazy-route-views.ts`.
 - Each top-level route picks its shell in `app-router-view.tsx`
   (`routes/shells.tsx`): `authRoute` pages and booking links render without app
   chrome, and `appRoute` renders `AppShell` — the app's providers
@@ -34,7 +43,12 @@ alwaysApply: false
   caches, and unregister; it must not intercept requests.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression
   limit; split it rather than raising the limit.
-- The build also fails if a chunk has no source map or a map exceeds PostHog's
-  25 MB symbolication limit. `startupChunks()` in `vite.base.ts` splits the
-  code the entry loads into `app`, `vendor`, and `api-schemas` chunks so each
-  map stays under it; it moves only modules the entry already imports.
+- The build also fails if a chunk with source code has no source map or a map
+  exceeds PostHog's 25 MB symbolication limit. `startupChunks()` in
+  `vite.base.ts` splits the code each HTML entry loads into `vendor-<n>`,
+  `api-schemas-<n>`, and `startup-<entries>-<n>` chunks of about
+  `STARTUP_PART_CODE_BYTES` of module code (a single module or an import cycle
+  stays whole), cut along the import order so they never import each other in
+  a cycle; the build fails if they do. It moves only modules an entry already
+  imports. Don't use Rolldown's `maxSize` for startup groups; its parts import
+  each other in cycles.

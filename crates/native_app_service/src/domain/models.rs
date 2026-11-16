@@ -103,6 +103,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Android)) => Some(builds.android),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Ios)) => Some(builds.ios),
+            // Desktop keeps the shared minimum; its release numbers come from
+            // hand-typed tags, so they cannot gate updater capabilities.
+            (3, Some(_), AllTargets::Desktop(_)) => Some(self.min_native_build),
             _ => None,
         }
     }
@@ -165,6 +168,9 @@ pub struct BundleUpdateRequest {
     pub current_bundle_build: u64,
     /// the native app build number
     pub native_build: u64,
+    /// The newest bundle manifest schema the updater reads. Desktop updaters
+    /// that predate schema 3 send none and reject it after downloading.
+    pub manifest_schema: Option<u64>,
 }
 
 /// Server-side compatibility and revocation rules for JS bundle updates.

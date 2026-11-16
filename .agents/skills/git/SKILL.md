@@ -86,6 +86,8 @@ PR_TITLE="fix(x): ..." just pr-privacy body.md    # plus the PR title and body y
 
 To fix a hit, edit the PR title or body, or reword the commit on your branch.
 
+Run commit hooks in an isolated candidate checkout, or freeze all writers first, when sharing a worktree; prek parks and restores unstaged changes.
+
 ## Before pushing
 
 Run what applies to the files you changed, and fix failures before pushing:
