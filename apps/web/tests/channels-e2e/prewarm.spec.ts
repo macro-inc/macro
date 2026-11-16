@@ -188,13 +188,15 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   // again would count as opening it on the later day.
   await findRow(page, looked[0]);
   await openFromList(page, looked[0]);
+  // Twenty channels looked at since: a device fetches the twenty its person
+  // looked at last, and fetching one again counts as opening it that day.
+  for (const channel of looked) await haveViewed('ben', channel.id);
   // The device's clock is moved on: the suite cannot wait a month.
   await page.clock.install({ time: today + 2 * DAY });
   await page.reload();
   const second = await readAndReturn(page, recent, looked[0]);
   await expectShown(second, ['opened twenty-nine days ago']);
-  // Twenty channels looked at since, so that the device does not fetch
-  // either of the two again as one its person looked at last.
+  // And again, now that the second channel has been looked at.
   await findRow(page, looked[0]);
   await openFromList(page, looked[0]);
   for (const channel of looked) await haveViewed('ben', channel.id);
