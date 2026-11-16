@@ -244,8 +244,9 @@ guests on a copy they can change. A solo entry listing the user's inbox as its
 organizer, as Macro writes on a primary calendar, and the mailbox organizer row
 Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
 saves at once and restores itself with a toast when the save fails. Phones reach
-the same rows from the mobile Settings sheet's **Calendar** page; the calendar
-view's own phone settings sheet lists accounts, not calendars.
+the same rows from the mobile Settings sheet's **Calendar** page. The calendar
+view's own phone settings sheet (the header gear) shows and hides single
+calendars like the desktop sidebar (below) and, like it, has no Busy switch.
 
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
@@ -535,6 +536,14 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
+Phones have no sidebar, so the header gear's settings sheet carries the same list under
+`Calendars`, between Period and Display: each account row shows or hides all of its
+calendars (a minus when only some show), and its trailing caret (`Expand <address>`)
+opens one check row per calendar with the same swatch, warning and RSS marks. Accounts
+start collapsed each time the sheet opens. The rows write the same browser-local
+visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
+expanded the sheet scrolls under its pinned handle. The dropdown form of the header
+gear, which only a tablet's inline Calendar preview shows, still lists accounts only.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
