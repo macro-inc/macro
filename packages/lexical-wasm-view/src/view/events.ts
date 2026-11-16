@@ -6,6 +6,7 @@ import { wordKeyCommand } from './word-key-command';
  */
 
 import {
+  Access,
   CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
@@ -284,7 +285,7 @@ export function registerEvents(view: EditorView): {
       : readSelection(view);
   }
   // DOM-origin submissions are admitted only under current Edit authority.
-  const domRefused = () => {};
+  const domRefused = () => view.restoreDOMText();
   function command(
     command: number,
     text = '',
@@ -315,7 +316,8 @@ export function registerEvents(view: EditorView): {
       }),
       completion?.after,
       undefined,
-      domRefused
+      // Click updates selection even when the session cannot edit content.
+      command === CommandCode.Click ? undefined : domRefused
     );
   }
   listen('keydown', (event) => {
@@ -795,7 +797,8 @@ export function registerEvents(view: EditorView): {
     composingKey = null;
     if (
       /AppleWebKit/.test(navigator.userAgent) &&
-      !/Chrome/.test(navigator.userAgent)
+      !/Chrome/.test(navigator.userAgent) &&
+      (view.port.effectiveAccess?.() ?? Access.Edit) === Access.Edit
     ) {
       pendingEnd = { key, data: event.data };
       return;

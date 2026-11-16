@@ -1037,6 +1037,43 @@ export class EditorView implements ViewSink {
     if (keys.length)
       for (const listener of this.decoratorListeners) listener(keys);
   }
+  /** A refused browser edit must not leave text outside the session model. */
+  restoreDOMText(): void {
+    if (!this.isMounted) return;
+    const active = this.root.ownerDocument.activeElement;
+    const selection = this.root.ownerDocument.getSelection();
+    const ownsSelection =
+      active &&
+      this.ownsSelection(active) &&
+      selection?.anchorNode &&
+      selection.focusNode &&
+      this.ownsSelection(selection.anchorNode) &&
+      this.ownsSelection(selection.focusNode);
+    const records = this.observer.takeRecords();
+    this.observer.disconnect();
+    try {
+      for (const record of records) {
+        const owner = EditorView.fromDOM(record.target);
+        if (owner && owner !== this) continue;
+        if (record.type !== 'childList') continue;
+        const key = this.keyFromDOM(record.target);
+        const node = key === null ? null : this.node(key);
+        if (node?.kind === 'element' || node?.kind === 'root')
+          this.reconcileChildren(node.key);
+      }
+      for (const node of this.mirror.values()) {
+        if (node.kind !== 'text') continue;
+        const dom = this.dom.get(node.key);
+        if (!dom) continue;
+        const leaf = textLeaf(dom);
+        if (!leaf) this.replace(node, node, dom);
+        else if (leaf.nodeValue !== node.text) leaf.nodeValue = node.text;
+      }
+      if (ownsSelection) writeSelection(this, this.selectionInfo.selection);
+    } finally {
+      this.observe();
+    }
+  }
   submitText(
     key: NodeKey,
     compositionEnd = false,
@@ -1057,7 +1094,7 @@ export class EditorView implements ViewSink {
         compositionData,
       },
       // DOM text is DOM-origin input; a refusal is never acknowledged.
-      () => {}
+      () => this.restoreDOMText()
     );
   }
   private scheduleRemoveEmptyText(key: NodeKey, delay: number): void {

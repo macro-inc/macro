@@ -258,6 +258,118 @@ for (const [label, comment, access] of [
         );
       }));
 
+    test('a composition started before demotion repairs its final browser text', async () => {
+      const r = mount();
+      try {
+        r.moveDomCaret(2);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionstart', { data: '', bubbles: true })
+        );
+        r.authorize(false, comment);
+        const before = r.view.query.serializedState();
+        r.leaf().nodeValue = 'bokdy';
+        r.moveDomCaret(3);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionend', { data: 'k', bubbles: true })
+        );
+        expect(r.errors).toEqual([]);
+        expect(r.view.query.serializedState()).toBe(before);
+        expect(r.root.textContent).toBe('body');
+        r.expectHealthyEdit();
+      } finally {
+        await r.close();
+      }
+    });
+
+    test('a refused composition rebuilds a browser-replaced text leaf', () =>
+      demoted((r) => {
+        r.moveDomCaret(2);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionstart', { data: '', bubbles: true })
+        );
+        const leaf = r.leaf();
+        leaf.parentElement?.replaceChildren(
+          document.createTextNode('outside'),
+          document.createTextNode('replacement')
+        );
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionend', { data: 'k', bubbles: true })
+        );
+      }));
+
+    test('a refused composition preserves a foreign DOM selection', async () => {
+      const r = mount();
+      const other = document.createElement('div');
+      other.setAttribute('contenteditable', 'true');
+      other.tabIndex = 0;
+      other.textContent = 'other';
+      document.body.append(other);
+      try {
+        r.moveDomCaret(2);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionstart', { data: '', bubbles: true })
+        );
+        r.authorize(false, comment);
+        const before = r.view.query.serializedState();
+        const foreign = other.firstChild;
+        if (!foreign) throw new Error('Missing foreign text');
+        other.focus();
+        document.getSelection()?.setBaseAndExtent(foreign, 2, foreign, 2);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionend', { data: '', bubbles: true })
+        );
+        expect(r.errors).toEqual([]);
+        expect(r.view.query.serializedState()).toBe(before);
+        expect(document.getSelection()?.anchorNode).toBe(foreign);
+        expect(document.getSelection()?.anchorOffset).toBe(2);
+        expect(document.activeElement).toBe(other);
+      } finally {
+        await r.close();
+        other.remove();
+      }
+    });
+
+    test('a refused composition does not disturb an external input caret', async () => {
+      const r = mount();
+      const input = document.createElement('input');
+      input.value = 'other';
+      document.body.append(input);
+      try {
+        const key = r.view.keyFromDOM(r.leaf());
+        if (key === null) throw new Error('Missing text key');
+        r.port.selectionFromView({
+          kind: 'range',
+          anchor: { key, offset: 4, type: 'text' },
+          focus: { key, offset: 4, type: 'text' },
+        });
+        r.moveDomCaret(2);
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionstart', { data: '', bubbles: true })
+        );
+        r.authorize(false, comment);
+        input.focus();
+        input.setSelectionRange(1, 3);
+        // Input selection and the document's retained range are independent.
+        r.moveDomCaret(1);
+        expect(document.activeElement).toBe(input);
+        const selection = document.getSelection();
+        const anchor = selection?.anchorNode;
+        const offset = selection?.anchorOffset;
+        r.root.dispatchEvent(
+          new CompositionEvent('compositionend', { data: '', bubbles: true })
+        );
+        expect(r.errors).toEqual([]);
+        expect(document.activeElement).toBe(input);
+        expect(input.selectionStart).toBe(1);
+        expect(input.selectionEnd).toBe(3);
+        expect(document.getSelection()?.anchorNode).toBe(anchor);
+        expect(document.getSelection()?.anchorOffset).toBe(offset);
+      } finally {
+        await r.close();
+        input.remove();
+      }
+    });
+
     test('cut still exports the selection but does not remove it', () =>
       demoted((r) => {
         const node = r.leaf();

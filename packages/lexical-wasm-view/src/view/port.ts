@@ -1,4 +1,5 @@
 import type {
+  Access,
   EditorInputMsg,
   IClipboardMsg,
   IEditorApplication,
@@ -141,6 +142,8 @@ export type InputSettlement = (
 ) & { readonly mainCommit?: InputCommitEvidence };
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
+  /** Native session authority, distinct from the UI editability effect. */
+  effectiveAccess?(): Access;
   readonly nativeEnter?: NativeEnterPort;
   readonly nativeEscape?: NativeEscapePort;
   readonly nativeBlockNavigation?: NativeBlockNavigationPort;

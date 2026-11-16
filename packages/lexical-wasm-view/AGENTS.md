@@ -17,6 +17,8 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 ## Boundaries
 
+- Restore authoritative mirror text and selection when current session access refuses a browser mutation while UI editability is still stale.
+
 - Restore cached ranges around programmatic DOM focus, use the current range after focus callbacks, and preserve mounted, read-only and decorator-input guards; retain Source boundary selectionchange admission without extra content commits.
 
 - Keep browser clipboard selection walking and themed export in Rust; serialize the exported tree through the owner document DOM/CSSOM, preserving template content, raw fragment context and foreign namespaces. Keep headless clipboard exports independent.
