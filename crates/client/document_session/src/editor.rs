@@ -124,6 +124,8 @@ pub struct EditorSurface {
     pub(crate) projection_fault_writes: Vec<crate::ProjectionFaultWrite>,
     #[cfg(test)]
     pub(crate) fail_next_remote: bool,
+    #[cfg(test)]
+    pub(crate) fail_after_next_local_commit: bool,
     #[cfg(feature = "test-faults")]
     pub(crate) fail_load_refresh_after_writes: Option<usize>,
 }
@@ -174,6 +176,8 @@ impl EditorSurface {
             projection_fault_writes: Vec::new(),
             #[cfg(test)]
             fail_next_remote: false,
+            #[cfg(test)]
+            fail_after_next_local_commit: false,
             #[cfg(feature = "test-faults")]
             fail_load_refresh_after_writes: None,
         })

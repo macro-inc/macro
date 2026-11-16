@@ -466,19 +466,17 @@ impl<S: Surface> DocumentSession<S> {
                         }
                     }
                 }
-                match applied {
-                    Ok(changed) => {
-                        if changed || self.doc.oplog_vv() != before {
-                            self.sync_input(now, SyncInput::LocalChanged);
-                        }
-                        self.sync_input(
-                            now,
-                            SyncInput::SetPresence(self.surface.presence(&self.doc)),
-                        );
-                        Ok(())
-                    }
-                    Err(error) => Err(error),
+                // Failed inputs can commit before they fail; the core must still
+                // persist and push those operations.
+                if matches!(applied, Ok(true)) || self.doc.oplog_vv() != before {
+                    self.sync_input(now, SyncInput::LocalChanged);
                 }
+                applied.map(|_| {
+                    self.sync_input(
+                        now,
+                        SyncInput::SetPresence(self.surface.presence(&self.doc)),
+                    );
+                })
             }
         };
         if let Err(error) = result {
@@ -973,6 +971,9 @@ impl DocumentSession<EditorSurface> {
     }
     pub(crate) fn fail_next_projection(&mut self) {
         self.surface.fail_next_remote = true;
+    }
+    pub(crate) fn fail_after_next_local_commit(&mut self) {
+        self.surface.fail_after_next_local_commit = true;
     }
     pub(crate) fn assert_projection_consistent(&self) {
         self.surface

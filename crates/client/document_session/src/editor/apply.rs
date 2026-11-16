@@ -189,6 +189,10 @@ impl EditorSurface {
         } else {
             false
         };
+        #[cfg(test)]
+        if changed && std::mem::take(&mut self.fail_after_next_local_commit) {
+            return Err(SessionError::Configuration("injected failure after a local commit"));
+        }
         #[cfg(feature = "test-faults")]
         if changed && let Some(fault) = fault {
             self.inject_projection_type_write(doc, fault)?;

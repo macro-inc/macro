@@ -2158,6 +2158,32 @@ mod checklist_presentation;
 mod database_commit;
 
 #[test]
+fn a_local_commit_followed_by_an_error_still_reaches_the_sync_core() {
+    let (_, snapshot) = editor_seed();
+    let mut session = session_editor(Access::Edit, TransportKind::None, snapshot);
+    let key = text_key(&session);
+    session.fail_after_next_local_commit();
+    let out = session.handle(
+        time(4),
+        SessionInput::Editor(Input::Command {
+            command: Command::InsertText("x".into()),
+            selection: ViewSelection::Range {
+                anchor: Point::text(key, Utf16Offset(4)),
+                focus: Point::text(key, Utf16Offset(4)),
+                resolution_dirty: false,
+            },
+        }),
+    );
+    assert!(
+        out.view
+            .iter()
+            .any(|view| matches!(view, ViewEffect::Error(SessionError::Configuration(_))))
+    );
+    // The coalesce timer is armed only when the core learns of the local change.
+    assert_eq!(out.wake_at, Some(Millis(4 + 25)));
+    assert_eq!(&*session.surface().state().root_text_content(), "a😀bx");
+}
+#[test]
 fn comment_only_publication_never_writes_initial_hook_repairs() {
     let source = Editor::builder(EditorMode::Headless)
         .initial_state(serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[
