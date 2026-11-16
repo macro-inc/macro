@@ -64,7 +64,7 @@ export function MobileDiscussion(props: {
   const open = () => {
     const interaction = beginInteraction('discussion.open');
     try {
-      const focusComposer = props.canWrite && preview().count === 0;
+      const focusComposer = props.canWrite && !preview().hasComments;
       if (focusComposer)
         triggerFocusInput(() =>
           footer()?.querySelector<HTMLElement>('[contenteditable="true"]')
@@ -117,7 +117,7 @@ export function MobileDiscussion(props: {
           <Show
             when={
               !props.conversation.unavailable() &&
-              (!props.conversation.failed() || preview().count > 0)
+              (!props.conversation.failed() || preview().hasComments)
             }
             fallback={
               <Show when={!props.conversation.unavailable()}>
@@ -130,7 +130,6 @@ export function MobileDiscussion(props: {
             <StaticMarkdownContext>
               <DiscussionEntry
                 preview={preview()}
-                incomplete={props.conversation.hasEarlier()}
                 onOpen={open}
                 triggerRef={setTrigger}
               />
@@ -157,11 +156,7 @@ export function MobileDiscussion(props: {
           <MobileDrawer.FixedContent targetHeight={100}>
             <MobileDrawer.Handle />
             <MobileDrawer.Title class="shrink-0 px-5 pb-3 text-lg font-semibold">
-              {t('common.discussion')}{' '}
-              <span class="ml-1 font-normal text-ink-muted">
-                {preview().count}
-                {props.conversation.hasEarlier() ? '+' : ''}
-              </span>
+              {t('common.discussion')}
             </MobileDrawer.Title>
             <MobileDrawer.ScrollBody
               ref={(element: HTMLDivElement) => {

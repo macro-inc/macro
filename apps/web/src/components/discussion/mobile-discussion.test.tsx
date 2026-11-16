@@ -4,7 +4,13 @@ import {
   setVirtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import type { MessageListItem } from '@service-storage/messages';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal, For } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileDiscussion } from './mobile-discussion';
@@ -110,7 +116,6 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
     targetRequestKey: () => undefined,
     pending: () => false,
     unavailable: () => false,
-    hasEarlier: () => messages().length === 1,
     failed: () => false,
     retry: () => {},
     content: () => (
@@ -145,7 +150,9 @@ it('preserves paging and linked-comment positions while keeping keyboard scrolli
   await Promise.resolve();
   for (const observer of resizeObservers) observer.deliver(thread);
   expect(screen.getByText('Older comment')).toBeTruthy();
-  expect(sheet.textContent).toContain('Discussion 2');
+  expect(
+    within(sheet).getByRole('heading', { name: 'Discussion' })
+  ).toBeTruthy();
   expect(thread.scrollTop).toBe(240);
 
   window.visualViewport?.dispatchEvent(new Event('resize'));

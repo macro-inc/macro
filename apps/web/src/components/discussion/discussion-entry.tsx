@@ -11,14 +11,9 @@ import type { discussionPreview } from './discussion-preview';
 
 export function DiscussionEntry(props: {
   preview: ReturnType<typeof discussionPreview>;
-  incomplete?: boolean;
   onOpen(): void;
   triggerRef?: (element: HTMLButtonElement) => void;
 }) {
-  const countLabel = () =>
-    props.incomplete
-      ? t('common.discussionCommentsLoaded', { count: props.preview.count })
-      : t('common.discussionComments', { count: props.preview.count });
   return (
     <button
       type="button"
@@ -61,7 +56,7 @@ export function DiscussionEntry(props: {
         )}
       </Show>
       <Show
-        when={props.preview.count > 0}
+        when={props.preview.hasComments}
         fallback={
           <span class="flex min-h-6 items-center gap-3 text-sm text-ink-muted">
             <ChatCircleIcon class="size-4" />
@@ -91,7 +86,7 @@ export function DiscussionEntry(props: {
               </Show>
             </AvatarGroup>
           </Show>
-          <span>{countLabel()}</span>
+          <span>{t('common.viewDiscussion')}</span>
           <CaretRightIcon class="size-4" />
         </div>
       </Show>

@@ -13,14 +13,15 @@ export function discussionPreview(messages: readonly MessageListItem[]) {
         b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
     )[0];
   const commenters = new Map<string, MessageData>();
-  let count = 0;
   for (const root of roots.toReversed()) {
-    count += (root.deleted_at ? 0 : 1) + root.thread.reply_count;
     if (!root.deleted_at) commenters.set(root.sender_id, root);
     for (const reply of root.thread.preview) {
       if (reply.deleted_at) continue;
       commenters.set(reply.sender_id, reply);
     }
   }
-  return { newest, count, commenters: [...commenters.values()] };
+  const hasComments = roots.some(
+    (root) => !root.deleted_at || root.thread.reply_count > 0
+  );
+  return { newest, hasComments, commenters: [...commenters.values()] };
 }

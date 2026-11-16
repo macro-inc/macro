@@ -29,19 +29,19 @@ describe('discussion entry data', () => {
   it('represents an empty discussion', () => {
     expect(discussionPreview([])).toEqual({
       newest: undefined,
-      count: 0,
+      hasComments: false,
       commenters: [],
     });
   });
 
-  it('uses the newest live root and counts replies without loading full threads', () => {
+  it('uses the newest live root and commenters from loaded threads', () => {
     const old = root('old', 'author-a', '2026-10-01T00:00:00Z');
     const newest = root('new', 'author-b', '2026-10-03T00:00:00Z');
     old.thread.reply_count = 4;
     old.thread.preview = [root('reply', 'author-b', '2026-10-02T00:00:00Z')];
     const preview = discussionPreview([old, newest]);
     expect(preview.newest?.id).toBe('new');
-    expect(preview.count).toBe(6);
+    expect(preview.hasComments).toBe(true);
     expect(preview.commenters.map((commenter) => commenter.sender_id)).toEqual([
       'author-b',
       'author-a',
@@ -64,7 +64,7 @@ describe('discussion entry data', () => {
       visible,
     ]);
     expect(preview.newest?.id).toBe('visible');
-    expect(preview.count).toBe(3);
+    expect(preview.hasComments).toBe(true);
     expect(preview.commenters.map((commenter) => commenter.sender_id)).toEqual([
       'author-c',
     ]);

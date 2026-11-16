@@ -20,6 +20,8 @@ it('opens the empty discussion to add a comment', () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: /Add a comment/ }));
   expect(open).toHaveBeenCalledOnce();
+  expect(screen.queryByText('M')).toBeNull();
+  expect(screen.queryByText('View discussion')).toBeNull();
 });
 
 it('opens the thread from the newest comment card', () => {
@@ -50,9 +52,13 @@ it('opens the thread from the newest comment card', () => {
     </StaticMarkdownContext>
   ));
   fireEvent.click(
-    screen.getByRole('button', { name: /Latest project update.*2 comments/ })
+    screen.getByRole('button', {
+      name: /Latest project update.*View discussion/,
+    })
   );
   expect(open).toHaveBeenCalledOnce();
+  expect(screen.getAllByText('M')).toHaveLength(2);
+  expect(screen.queryByText(/^\d+\+? comments?$/)).toBeNull();
 });
 
 it('keeps surviving replies reachable when their root is deleted', () => {
@@ -83,12 +89,12 @@ it('keeps surviving replies reachable when their root is deleted', () => {
       <DiscussionEntry preview={discussionPreview([message()])} onOpen={open} />
     </StaticMarkdownContext>
   ));
-  expect(screen.getByText('3 comments')).toBeTruthy();
+  expect(screen.getByText('View discussion')).toBeTruthy();
 
   setMessage({ ...root, deleted_at: '2026-10-02T12:00:00Z' });
   expect(screen.queryByText('Root comment')).toBeNull();
   expect(screen.queryByText('Add a comment')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /2 comments/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'View discussion' }));
   expect(open).toHaveBeenCalledOnce();
 
   setMessage({
@@ -96,5 +102,5 @@ it('keeps surviving replies reachable when their root is deleted', () => {
     state: { ...root.state, deleted_at: '2026-10-02T12:00:00Z' },
   });
   expect(screen.getByText('Add a comment')).toBeTruthy();
-  expect(screen.queryByText('2 comments')).toBeNull();
+  expect(screen.queryByText('View discussion')).toBeNull();
 });

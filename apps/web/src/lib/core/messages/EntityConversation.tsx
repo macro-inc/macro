@@ -112,7 +112,6 @@ export type ConversationPresentation = {
   targetRequestKey: Accessor<string | number | undefined>;
   pending: Accessor<boolean>;
   unavailable: Accessor<boolean>;
-  hasEarlier: Accessor<boolean>;
   failed: Accessor<boolean>;
   retry(): void;
   content: () => JSX.Element;
@@ -285,10 +284,6 @@ export function EntityConversation(props: EntityConversationProps) {
           retry: () => {
             fireAndForget(previewQuery().refetch(), 'entity-conversation');
           },
-          hasEarlier: () =>
-            Boolean(
-              previewQuery().hasNextPage || previewQuery().hasPreviousPage
-            ),
           content: () => <Show when={!previewUnavailable()}>{content()}</Show>,
         });
       }}

@@ -9,11 +9,7 @@ export default {
   progressAllDone: 'All done',
   progressTasksDone: { other: '{{completed}} of {{count}} done' },
   discussion: 'Discussion',
-  discussionComments: { one: '{{count}} comment', other: '{{count}} comments' },
-  discussionCommentsLoaded: {
-    one: '{{count}}+ comment',
-    other: '{{count}}+ comments',
-  },
+  viewDiscussion: 'View discussion',
   addComment: 'Add a comment',
   showMore: 'Show more',
   showLess: 'Show less',

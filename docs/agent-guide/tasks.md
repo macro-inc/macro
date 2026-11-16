@@ -1264,12 +1264,13 @@ Desktop Discussion at the bottom of Overview uses the shared conversations syste
 Comments appear oldest to newest, with the comment input below them. The heading
 collapses the section, and Load earlier comments adds older comments at the top.
 On phones, the newest root appears in a two-line card above a commenter avatar
-group and comment count. Empty discussions show Add a comment. Tap to open the
-full-height Discussion sheet; Add a comment also raises the keyboard. The sheet
-stays fixed while only the pinned composer rises above the keyboard and the thread
-shrinks. The send action appears with text. Closing/reopening retains the draft.
-Counts show a plus suffix while unloaded timeline pages remain. Comments, replies,
-and reactions stay attached to the project identity.
+group, View discussion, and a caret. Avatars come from loaded comments; neither
+the entry nor the Discussion sheet heading shows an overall comment count.
+Empty discussions show Add a comment without avatars. Tap to open the full-height
+Discussion sheet; Add a comment also raises the keyboard. The sheet stays fixed
+while only the pinned composer rises above the keyboard and the thread shrinks.
+The send action appears with text. Closing/reopening retains the draft.
+Comments, replies, and reactions stay attached to the project identity.
 Notification links open Overview at the relevant discussion. Existing `activity`
 URLs also open Overview and preserve the target discussion. Project history is
 not included in this discussion section.
