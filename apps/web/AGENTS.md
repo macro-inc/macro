@@ -57,9 +57,11 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions stay local:
-partial sync returns partial local results; unavailable or older hosts never fall
-back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+window, never an authorization error. Interactive contact suggestions read locally:
+partial sync returns partial local results. Only a tab with no usable local cache
+(none, retired, unsupported, unbound or older host) reads bounded server
+`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
+server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -1105,7 +1107,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
+- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve

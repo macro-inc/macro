@@ -20,17 +20,24 @@ WITH scope AS MATERIALIZED (
         SELECT $2::uuid
     ) AS teams
 ), companies AS MATERIALIZED (
+    -- Fence companies too so stale statistics cannot scan other teams.
     SELECT co.id, co.team_id
-    FROM crm_companies co, scope
-    WHERE co.team_id = ANY(scope.teams) AND NOT co.hidden
+    FROM scope
+    CROSS JOIN LATERAL (
+        SELECT co.id, co.team_id
+        FROM crm_companies co
+        WHERE co.team_id = ANY(scope.teams) AND NOT co.hidden
+        OFFSET 0
+    ) co
 ), contacts AS MATERIALIZED (
-    -- Without a company, or under a visible company of its own team. The fence
-    -- keeps the team index the only access path: matched with `NOT hidden`, the
-    -- planner also bitmap-reads all of `crm_contacts_visible_company_id_idx`.
+    -- Fence the contact lookup inside the scope join so stale statistics cannot
+    -- start it from every team's contacts. Apply visibility after the team lookup
+    -- to avoid bitmap-reading all of `crm_contacts_visible_company_id_idx`.
     SELECT ct.id
-    FROM (
+    FROM scope
+    CROSS JOIN LATERAL (
         SELECT ct.id, ct.team_id, ct.company_id, ct.hidden
-        FROM crm_contacts ct, scope
+        FROM crm_contacts ct
         WHERE ct.team_id = ANY(scope.teams)
         OFFSET 0
     ) ct
