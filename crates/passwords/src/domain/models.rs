@@ -31,7 +31,7 @@ pub struct Actor {
 }
 
 /// Owned sensitive text. Deliberately does not implement Debug or Display.
-#[derive(Clone, Serialize, Deserialize, Zeroize, ZeroizeOnDrop, utoipa::ToSchema)]
+#[derive(Clone, Default, Serialize, Deserialize, Zeroize, ZeroizeOnDrop, utoipa::ToSchema)]
 #[serde(transparent)]
 #[schema(as=PasswordSecretString)]
 pub struct SecretString(

@@ -525,3 +525,31 @@ it('tells an unreachable vault from a server error and a rejected batch', async 
     reason: 'unreachable',
   });
 });
+
+it('keeps username failure visible and records its fixed code on the action span', async () => {
+  mocks.fetch.mockResolvedValue(
+    new Response(JSON.stringify({ code: PasswordErrorCode.version_conflict }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+  const result = await createPasswordSource('team', CURRENT).username('item');
+  expect(result.isErr()).toBe(true);
+  expect(mocks.attributes).toHaveBeenCalledWith(
+    'passwords.error_code',
+    PasswordErrorCode.version_conflict
+  );
+  expect(mocks.spanError).toHaveBeenCalledWith('passwords.username failed');
+});
+
+it('accepts an empty username response without a failure', async () => {
+  mocks.fetch.mockResolvedValue(
+    new Response(JSON.stringify({ username: '', version: 1 }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+  const result = await createPasswordSource('team', CURRENT).username('item');
+  expect(result.isOk() && result.value).toEqual({ username: '', version: 1 });
+  expect(mocks.spanError).not.toHaveBeenCalled();
+});

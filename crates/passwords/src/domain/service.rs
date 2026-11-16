@@ -238,7 +238,7 @@ impl PasswordService {
             .await
     }
     /// Resolve the current account identifier after normal human view authorization.
-    #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy))]
+    #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy,outcome=tracing::field::Empty))]
     pub async fn username(
         &self,
         actor: &Actor,
@@ -246,6 +246,7 @@ impl PasswordService {
         item: ItemId,
         copy: bool,
     ) -> Result<Username, Error> {
+        tracing::Span::current().record("outcome", "failed");
         let _lock = if copy {
             Some(self.admit(actor, team, item).await?)
         } else {
@@ -267,6 +268,14 @@ impl PasswordService {
                 .audit(team, item, actor, Action::Copy, Uuid::now_v7())
                 .await?;
         }
+        tracing::Span::current().record(
+            "outcome",
+            if username.0.is_empty() {
+                "empty"
+            } else {
+                "present"
+            },
+        );
         Ok(Username {
             username,
             version: record.metadata.version,
