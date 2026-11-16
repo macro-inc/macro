@@ -1037,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -4053,6 +4057,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
