@@ -93,6 +93,22 @@ it('stops an axis that hit a bound and keeps the other going', () => {
   expect(moves.slice(1).every((move) => move.x === 0 && move.y > 0)).toBe(true);
 });
 
+it('stops at once when the move itself cancels the glide', () => {
+  // Moving the content can tear down whatever is gliding.
+  const move = vi.fn((delta: { x: number; y: number }) => {
+    glide.cancel();
+    return delta;
+  });
+  const glide = createGlide(move);
+  glide.track({ x: 0, y: 0 }, 0);
+  glide.track({ x: 100, y: 0 }, 100);
+
+  glide.release();
+  vi.advanceTimersByTime(500);
+
+  expect(move).toHaveBeenCalledTimes(1);
+});
+
 it('stops when cancelled', () => {
   const move = vi.fn((delta: { x: number; y: number }) => delta);
   const glide = createGlide(move);

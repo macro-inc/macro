@@ -54,6 +54,8 @@ export function attachTouchNavigation(
   let recent: { time: number; center: Point; spread: number }[] = [];
   let selectionBefore: readonly string[] = [];
   let voiding = false;
+  // The system took a finger away mid-gesture, which is not a flick.
+  let cancelled = false;
   // Pens and mice pressed on the surface.
   const otherPointers = new Set<number>();
   let longPress:
@@ -194,6 +196,7 @@ export function attachTouchNavigation(
       navigating = false;
       pair = undefined;
     }
+    if (!touches.size) cancelled = false;
     if (!touches.size) selectionBefore = editor.getSession().selectedIds;
 
     const point = { x: event.clientX, y: event.clientY };
@@ -258,6 +261,7 @@ export function attachTouchNavigation(
     }
 
     swallow(event);
+    if (event.type === 'pointercancel') cancelled = true;
     if (pair?.ids.includes(event.pointerId)) {
       // Take the lifting finger's last position (a cancelled touch reports
       // none), then hand over to the next pair if a third finger is still down.
@@ -275,18 +279,24 @@ export function attachTouchNavigation(
 
     navigating = false;
     const flicked =
-      event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS && !wasPinching();
+      !cancelled &&
+      event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS &&
+      !wasPinching();
     if (flicked && options.navigation !== 'centered-image') glide.release();
     else glide.reset();
   };
 
   const wheel = () => glide.cancel();
+  // A press released in another window never reports its release here. Forget
+  // it, or a mouse that went away pressed would keep fingers from navigating.
+  const blur = () => otherPointers.clear();
 
   window.addEventListener('pointerdown', pointerDown, true);
   window.addEventListener('pointermove', pointerMove, true);
   window.addEventListener('pointerup', pointerEnd, true);
   window.addEventListener('pointercancel', pointerEnd, true);
   element.addEventListener('wheel', wheel, { passive: true });
+  window.addEventListener('blur', blur);
 
   return {
     /** Touches are down on the surface, so a WebKit gesture event duplicates them. */
@@ -299,6 +309,7 @@ export function attachTouchNavigation(
       window.removeEventListener('pointerup', pointerEnd, true);
       window.removeEventListener('pointercancel', pointerEnd, true);
       element.removeEventListener('wheel', wheel);
+      window.removeEventListener('blur', blur);
     },
   };
 }

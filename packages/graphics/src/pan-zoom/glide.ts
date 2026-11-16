@@ -29,8 +29,12 @@ type Sample = Point & { time: number };
 export function createGlide(move: (delta: Point) => Point) {
   let samples: Sample[] = [];
   let frame: number | undefined;
+  // Counts glides started or stopped, so a frame can tell it was cancelled
+  // while it ran: `move` may tear down whatever is gliding.
+  let run = 0;
 
   const cancel = () => {
+    run++;
     if (frame === undefined) return;
     cancelAnimationFrame(frame);
     frame = undefined;
@@ -70,6 +74,7 @@ export function createGlide(move: (delta: Point) => Point) {
       vy *= MAX_SPEED / speed;
     }
 
+    const thisRun = run;
     let previous = performance.now();
     const step = () => {
       const now = performance.now();
@@ -78,6 +83,7 @@ export function createGlide(move: (delta: Point) => Point) {
 
       const attempted = { x: vx * elapsed, y: vy * elapsed };
       const moved = move(attempted);
+      if (run !== thisRun) return;
       if (Math.abs(attempted.x) > STALLED_PX && Math.abs(moved.x) < STALLED_PX)
         vx = 0;
       if (Math.abs(attempted.y) > STALLED_PX && Math.abs(moved.y) < STALLED_PX)
