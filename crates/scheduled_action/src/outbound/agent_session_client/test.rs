@@ -298,6 +298,27 @@ async fn malformed_and_ambiguous_prompt_responses_never_replay() {
     }
 }
 
+/// A harness nothing listens for refuses the connection, and never got the
+/// prompt: that is a definite failure, safe to send again.
+#[tokio::test]
+async fn a_prompt_the_harness_never_connected_for_was_not_delivered() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    drop(listener);
+    let client = AgentSessionClient::new(&url, KEY).unwrap();
+
+    let error = client
+        .prompt(PromptRoutineSession {
+            action: identity(),
+            prompt: "task".into(),
+            context: None,
+        })
+        .await
+        .unwrap_err();
+
+    assert_eq!(error, RoutineSessionError::RuntimeUnavailable);
+}
+
 #[tokio::test]
 async fn proxy_errors_map_without_exposing_response_body() {
     for (status, expected) in [
