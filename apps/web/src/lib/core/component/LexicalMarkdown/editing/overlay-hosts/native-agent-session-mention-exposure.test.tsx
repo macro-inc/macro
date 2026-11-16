@@ -679,14 +679,15 @@ function renderNative(
 function useCase(name: string, mobile: boolean) {
   const lifetime = caseLifetime(name);
   const output = process.env.AGENT_SESSION_EXPOSURE_OUT;
-  if (!output) throw new Error('AGENT_SESSION_EXPOSURE_OUT is required');
   const slug = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
-  record = (engine, phase, data) =>
+  record = (engine, phase, data) => {
+    if (!output) return;
     writeFileSync(
       `${output}/${slug}--${engine}--${phase}.json`,
       `${JSON.stringify({ case: name, engine, phase, ...data }, null, 1)}\n`,
       { flag: 'wx' }
     );
+  };
   hosts.selects.length = 0;
   takeProvider();
   trackMention.mockClear();
