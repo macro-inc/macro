@@ -339,6 +339,7 @@ async fn a_later_relation_protects_an_inserted_row_from_undo(pool: PgPool) {
                     column: wedding.name,
                     value: CellValue::Text("New guest".into()),
                 }]],
+                ids: None,
             },
         }],
     )
@@ -570,6 +571,7 @@ async fn undo_restores_required_column_metadata_and_its_cells(pool: PgPool) {
                     column: wedding.name,
                     value: CellValue::Text("Sam".into()),
                 }]],
+                ids: None,
             },
         }],
     )

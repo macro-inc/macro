@@ -13,6 +13,12 @@ pub trait RequestTransaction: Send {
         &mut self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<AccessRequest>, RequestError>> + Send;
+    /// Whether two people share a team.
+    fn shares_team(
+        &mut self,
+        a: &MacroUserIdStr<'_>,
+        b: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, RequestError>> + Send;
     /// An entity-scoped request identity.
     fn request(
         &mut self,
@@ -40,6 +46,13 @@ pub trait RequestTransaction: Send {
         level: Option<AccessLevel>,
         upgrade_only: bool,
     ) -> impl Future<Output = Result<(), RequestError>> + Send;
+    /// The person's agents living on this runtime that may not run there now,
+    /// read inside the transaction so they reflect its changes. Empty for
+    /// every other entity type.
+    fn stopped_residents(
+        &mut self,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Resident>, RequestError>> + Send;
     /// Queue notifications/cache invalidations and attach prior notifications to complete.
     fn enqueue(
         &mut self,

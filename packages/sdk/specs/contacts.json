@@ -98,6 +98,77 @@
           }
         }
       }
+    },
+    "/contacts/search": {
+      "get": {
+        "tags": ["contacts"],
+        "summary": "GET /contacts/search handler: ranked search of the viewer's contacts and team.",
+        "operationId": "search_people",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Text matched against email and name. Under two characters after\ntrimming returns no people; over 512 bytes is rejected.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results: default 20, values over 50 are capped at 50, zero is rejected.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchPeopleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -124,6 +195,43 @@
               "type": "string"
             },
             "description": "The list of contact user IDs."
+          }
+        }
+      },
+      "SearchPeopleResponse": {
+        "type": "object",
+        "description": "Response body for GET /contacts/search.",
+        "required": ["people"],
+        "properties": {
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchedPerson"
+            },
+            "description": "Matches ranked teammates first, then prefix matches, then by name or email."
+          }
+        }
+      },
+      "SearchedPerson": {
+        "type": "object",
+        "description": "One ranked person in a GET /contacts/search response.",
+        "required": ["userId", "isTeammate", "isAgent"],
+        "properties": {
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the person is an agent rather than a human; false for non-Macro contacts."
+          },
+          "isTeammate": {
+            "type": "boolean",
+            "description": "Whether the person is on the viewer's current team."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Resolved name, as the contact directory shows it; null when unknown."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The person's user ID (`macro|<email>`)."
           }
         }
       }

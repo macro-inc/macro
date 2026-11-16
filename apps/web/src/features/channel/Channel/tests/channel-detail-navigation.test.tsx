@@ -38,7 +38,7 @@ vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
-  ChatWithAgentButton: () => null,
+  openChatWithAgent: vi.fn(),
 }));
 vi.mock('@channel/Attachments/ChannelAttachmentsTab', () => ({
   ChannelAttachmentsTab: () => null,

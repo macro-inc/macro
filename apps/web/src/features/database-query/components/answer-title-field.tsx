@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { match } from 'ts-pattern';
 
 /**
@@ -19,7 +20,7 @@ export function AnswerTitleField(props: {
           input.select();
         })
       }
-      aria-label="Answer title"
+      aria-label={t('databaseAnswers.answerTitle')}
       class={match(props.placement)
         .with(
           'inline',

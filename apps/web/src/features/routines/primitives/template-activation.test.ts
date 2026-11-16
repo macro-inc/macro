@@ -14,6 +14,7 @@ const TEMPLATE: RoutineTemplate = {
   active_count: 0,
   created_at: '2026-10-20T00:00:00Z',
   updated_at: '2026-10-20T00:00:00Z',
+  appearance: {},
   trigger: { type: 'cron', schedule: '0 0 9 * * 2', timezone: 'UTC' },
   task: { model: 'model', prompt: '', user_prompt: `Read ${DOC}` },
   variables: [

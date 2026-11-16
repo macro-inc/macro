@@ -32,6 +32,8 @@ inbound = [
   "messages/schema",
   "ports",
   "rate_limit/axum",
+  "user_events/schema",
+  "password_events/schema",
 ]
 ingestion = [
   "dep:agent_session",
@@ -41,6 +43,8 @@ ingestion = [
   "dep:documents",
   "dep:entity_access",
   "dep:futures",
+  "dep:user_events",
+  "dep:password_events",
   "dep:uuid",
   "ports",
 ]
@@ -106,6 +110,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
+user_events = { path = "../user_events", optional = true }
+password_events = { path = "../password_events", optional = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }

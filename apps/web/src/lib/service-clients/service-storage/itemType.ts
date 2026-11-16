@@ -14,6 +14,8 @@ export type ItemType =
   | 'form'
   | 'agent_session'
   | 'routine'
+  | 'harness'
+  | 'team'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'

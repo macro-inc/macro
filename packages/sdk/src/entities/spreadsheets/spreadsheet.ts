@@ -126,6 +126,8 @@ export class Spreadsheet extends Document {
    * const { ranges } = await sheet.read({ sheet: sheets[0], ranges: [sheets[0].usedRange] });
    * return { data: ranges[0].cells.filter((cell) => cell.formula?.startsWith('=SUM')) };
    * ```
+   *
+   * @readonly
    */
   async read(options: SpreadsheetReadOptions = {}): Promise<SpreadsheetRead> {
     const response = unwrap(
@@ -163,6 +165,8 @@ export class Spreadsheet extends Document {
    * });
    * return { data: results[0].display };
    * ```
+   *
+   * @readonly
    */
   async calculate(
     formulas: (string | SpreadsheetFormula)[],
@@ -223,6 +227,8 @@ export class Spreadsheet extends Document {
    * );
    * return { data: { warnings, webUrl } };
    * ```
+   *
+   * @write
    */
   async applyEdits(
     operations: SpreadsheetOperation[],
@@ -280,6 +286,8 @@ export class Spreadsheet extends Document {
    * );
    * return { data: { changes, warnings, webUrl } };
    * ```
+   *
+   * @write
    */
   override async edit(
     instructions: string,
@@ -306,7 +314,11 @@ export class Spreadsheet extends Document {
     return { ...unwrap(result), webUrl: this.webUrl() };
   }
 
-  /** The spreadsheet's URL in the Macro web app. */
+  /**
+   * The spreadsheet's URL in the Macro web app.
+   *
+   * @readonly
+   */
   override webUrl(): string {
     return `${this.client.webAppUrl}/app/spreadsheet/${this.id}`;
   }

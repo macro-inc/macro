@@ -19,7 +19,7 @@ export function SearchDraft(props: {
   const filters = createMemo(() =>
     resolveSearchFilters(
       props.state.fields().searchFilters,
-      props.actions.people(),
+      props.actions.person,
       props.actions.searchChannels(),
       props.actions.inboxes()
     )

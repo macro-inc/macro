@@ -1,7 +1,10 @@
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import { t } from '@app/lib/i18n';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dropdown } from '@ui';
 import { Show } from 'solid-js';
 
@@ -10,8 +13,12 @@ export function SavedViewMenuItems(props: {
   disabled?: boolean;
   onEdit: () => void;
   onDuplicate: () => void;
-  onCopyLink: () => void;
+  /** Offered only by consumers whose links can open the view for someone. */
+  onCopyLink?: () => void | boolean | Promise<void | boolean>;
   onDelete: () => void;
+  /** Present only in lists the viewer can reorder; absent at either end. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   return (
     <div class="flex w-full flex-col divide-y divide-edge-divider">
@@ -26,11 +33,38 @@ export function SavedViewMenuItems(props: {
           <CopyIcon class="size-4" />
           Duplicate
         </Dropdown.Item>
-        <Dropdown.Item onSelect={props.onCopyLink}>
-          <LinkIcon class="size-4" />
-          Copy link
-        </Dropdown.Item>
+        <Show when={props.onCopyLink}>
+          {(onCopyLink) => (
+            <Dropdown.CopyItem
+              icon={<LinkIcon class="size-4" />}
+              disabled={props.disabled}
+              onCopy={onCopyLink()}
+            >
+              Copy link
+            </Dropdown.CopyItem>
+          )}
+        </Show>
       </Dropdown.Group>
+      <Show when={props.onMoveUp || props.onMoveDown}>
+        <Dropdown.Group>
+          <Show when={props.onMoveUp}>
+            {(onMoveUp) => (
+              <Dropdown.Item disabled={props.disabled} onSelect={onMoveUp()}>
+                <ArrowUpIcon class="size-4" />
+                {t('viewMenus.moveUp')}
+              </Dropdown.Item>
+            )}
+          </Show>
+          <Show when={props.onMoveDown}>
+            {(onMoveDown) => (
+              <Dropdown.Item disabled={props.disabled} onSelect={onMoveDown()}>
+                <ArrowDownIcon class="size-4" />
+                {t('viewMenus.moveDown')}
+              </Dropdown.Item>
+            )}
+          </Show>
+        </Dropdown.Group>
+      </Show>
       <Show when={props.owned}>
         <Dropdown.Group>
           <Dropdown.Item

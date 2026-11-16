@@ -7,6 +7,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { useAppLinkOpener } from './app-link-opener';
 
 false && floatWithElement;
 
@@ -23,6 +24,7 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
   });
 
   const [unfurlData] = useUnfurl(props.url);
+  const openAppLink = useAppLinkOpener();
 
   let linkRef: HTMLAnchorElement | undefined;
 
@@ -35,10 +37,12 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
         class={cn(props.class)}
         onClick={(e) => {
           // Modified/middle clicks keep native anchor behavior (background
-          // tab etc.); plain clicks go through openExternalUrl so macro
-          // links open in-app under Tauri.
+          // tab etc.). Plain clicks open in the app where the surface says
+          // so, otherwise through openExternalUrl, so macro links open
+          // in-app under Tauri.
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
+          if (openAppLink?.(props.url)) return;
           openExternalUrl(props.url);
         }}
         onMouseEnter={() => {

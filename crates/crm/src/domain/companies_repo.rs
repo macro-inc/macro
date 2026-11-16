@@ -1,9 +1,9 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
-    CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
-    DomainMetadata,
+    CrmBlockedDomain, CrmCompanyContactsPage, CrmCompanyContactsQuery, CrmCompanyForSoup,
+    CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError, CrmScopePrecheck,
+    CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 
@@ -45,7 +45,15 @@ pub struct CrmCompanySoupCursor {
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
-pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
+pub trait CompaniesRepository:
+    super::email_privacy::EmailPrivacyRepository + super::auth::CrmMemberAccess
+{
+    /// Current membership and effective CRM access, without a permission cache.
+    fn current_member_access(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<(uuid::Uuid, bool)>, CrmError>> + Send;
+
     /// List authorized contacts across the viewer's teams. Apply visibility and
     /// predicates before choosing one record per lowercased full email (latest
     /// interaction, then highest ID). Deduplicate before seeking/limiting. An
@@ -74,6 +82,39 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         &self,
         scope: super::contact_listing::CrmContactListScope<'_>,
     ) -> impl Future<Output = Result<super::association::CrmRecordAssociation, CrmError>> + Send;
+
+    /// Previews of the companies in `company_ids` that `viewer_id` may open,
+    /// each as [`Self::get_company_for_team`] titles it after the access
+    /// check: the viewer has current membership and effective CRM access on
+    /// the company's team, and a hidden company
+    /// is visible only to that team's admins and owners. Others are left out.
+    fn preview_companies(
+        &self,
+        viewer_id: &str,
+        company_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmCompanyPreview>, CrmError>> + Send;
+
+    /// Previews of the contacts in `contact_ids` that `viewer_id` may open,
+    /// with [`Self::get_contact_for_team`]'s visibility after the access
+    /// check: the viewer has current membership and effective CRM access on
+    /// the contact's team, and a hidden contact,
+    /// or one under a hidden company, is visible only to its admins and
+    /// owners. Others are left out.
+    fn preview_contacts(
+        &self,
+        viewer_id: &str,
+        contact_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<super::previews::CrmContactPreview>, CrmError>> + Send;
+
+    /// The items of `entity_types` whose Companies property names a company,
+    /// or whose Contacts property names a contact, of the activity scope that
+    /// [`Self::resolve_activity`] reads. Not authorized: each item reaches a
+    /// caller only through its own source query.
+    fn activity_property_edges(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        entity_types: &[models_properties::EntityType],
+    ) -> impl Future<Output = Result<Vec<super::association::CrmActivityEdge>, CrmError>> + Send;
 
     /// Idempotently ingest eligible stored mailbox history for a contact.
     /// The transaction rechecks current team membership, explicit consent for
@@ -493,7 +534,8 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         include_hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Add a missing email or link/switch a personal-provider contact company.
+    /// Add, remove or choose the primary of a contact's addresses, link or
+    /// switch a personal-provider contact's company, or unlink a company.
     /// Validate the domain command against the locked current record.
     /// Preserve history, sources and visibility; protect manually edited records
     /// from sync orphan cleanup. Reject same-team email conflicts and inaccessible
@@ -570,6 +612,20 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
+    /// One page of `company_id`'s Team list, in
+    /// [`Self::list_contacts_for_company`]'s order, holding the contacts
+    /// `query` selects. Company and contact visibility follow
+    /// `include_hidden` as there; under an archived company every contact
+    /// counts as archived. Returns [`CrmError::CompanyNotFoundForTeam`]
+    /// when the company isn't visible.
+    fn list_company_contacts_page(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+        query: &CrmCompanyContactsQuery,
+    ) -> impl Future<Output = Result<CrmCompanyContactsPage, CrmError>> + Send;
+
     /// Fetches a single CRM contact by id, scoped to `team_id` via the
     /// contact's company. Returns `Ok(None)` when the contact doesn't
     /// exist, belongs to a different team, or — for non-admin viewers
@@ -583,6 +639,18 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// [`Self::get_contact_for_team`] with the contact's company summary,
+    /// in one statement. The summary's name and domain resolve as
+    /// [`Self::get_company_for_team`] resolves them; it is `None` when the
+    /// contact has no company. Visibility is the contact read's: a member
+    /// never reaches a contact under a hidden company.
+    fn get_contact_detail_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmContactDetail>, CrmError>> + Send;
 
     /// Searches the team's contacts whose email or name contains `query`
     /// (case-insensitive), most recently interacted first, at most `limit`
@@ -615,8 +683,9 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
     /// Fetches a single CRM company by id, scoped to `team_id`,
     /// hydrated with all domains (ordered by `created_at ASC` —
     /// primary first), the primary domain's `crm_domain_directory`
-    /// display metadata (name + description), and the company's full
-    /// contact list (subject to `include_hidden`). Returns `Ok(None)`
+    /// display metadata (name + description), and, when
+    /// `include_contacts`, the company's full contact list (subject to
+    /// `include_hidden`; empty otherwise). Returns `Ok(None)`
     /// when the company doesn't exist, belongs to a different team,
     /// or — for non-admin viewers (`include_hidden = false`) — the
     /// company is hidden. With `include_hidden = true` (admin/owner)
@@ -627,6 +696,7 @@ pub trait CompaniesRepository: super::email_privacy::EmailPrivacyRepository {
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
         include_hidden: bool,
+        include_contacts: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Read the team's CRM configuration from `team_crm_settings`.

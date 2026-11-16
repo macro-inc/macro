@@ -1,3 +1,4 @@
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createEffect,
@@ -53,7 +54,12 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
-  const teamDirectory = context.createTeamDirectory();
+  const teamDirectory = context.createTeamDirectory({
+    domain: () => undefined,
+    ownEmail: () => undefined,
+  });
+  // The work step offers Outlook beside Google; Read more then covers both.
+  const outlookAvailable = context.createOutlookAvailability();
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
@@ -79,15 +85,16 @@ export function OnboardingFlowView(props: {
     finishing: finish.finishing,
   });
 
-  // AI starts suggesting routines for the last step as soon as an inbox is
-  // connected; the server runs it once per person, so once here is enough.
+  // The person's first generation starts as soon as an inbox is connected,
+  // whether or not the flow ends with the routines step; the server runs it
+  // once per person, so once here is enough.
   let generationStarted = false;
   createEffect(() => {
-    if (generationStarted || !context.routineSuggestionsEnabled()) return;
+    if (generationStarted || !context.suggestionGenerationEnabled()) return;
     const accounts = emailAccounts.accounts();
     if (accounts.t !== 'ready' || accounts.value.length === 0) return;
     generationStarted = true;
-    context.generateRoutineSuggestions();
+    context.startSuggestionGeneration();
   });
 
   // Leaving is the host's decision; the flow only reports why.
@@ -193,7 +200,9 @@ export function OnboardingFlowView(props: {
       wide
       onBack={back()}
       overlay={
-        <Show when={canBypassOnboarding(viewerEmail()) && step()}>
+        <Show
+          when={(LOCAL_ONLY || canBypassOnboarding(viewerEmail())) && step()}
+        >
           {(current) => (
             <BypassButton
               disabled={finish.finishing()}
@@ -223,6 +232,7 @@ export function OnboardingFlowView(props: {
           step() === 'personal' ? (
           <OnboardingTrustDetails
             topic={step() === 'security' ? 'security' : 'google'}
+            microsoft={step() === 'work' && outlookAvailable()}
           />
         ) : undefined
       }
@@ -248,6 +258,9 @@ export function OnboardingFlowView(props: {
           <Match when={step() === 'work' || step() === 'personal'}>
             <EmailStep
               mode={step() === 'personal' ? 'personal' : 'work'}
+              signupProvider={
+                step() === 'work' ? flow.signupProvider() : undefined
+              }
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />

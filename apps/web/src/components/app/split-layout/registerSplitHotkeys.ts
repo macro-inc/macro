@@ -6,6 +6,19 @@ import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
 
+/**
+ * A focused control that uses Shift+Arrow itself keeps those keys: sliders,
+ * and controls marked `data-owns-arrow-keys` (the database grid, the slide
+ * stage and rail). App hotkeys see keys before the focused element does.
+ */
+function focusOwnsArrowKeys(event: KeyboardEvent | undefined) {
+  if (!event?.key.startsWith('Arrow')) return false;
+
+  return !!document.activeElement?.closest(
+    '[data-owns-arrow-keys], [role="slider"]'
+  );
+}
+
 export function registerSplitHotkeys(args: {
   splitHotkeyScope: string;
   insertSplit: (content: SplitContent) => void;
@@ -102,7 +115,8 @@ export function registerSplitHotkeys(args: {
     scopeId: splitHotkeyScope,
     description: () => t('commands.focusSplitRight'),
     condition: () => getSplitCount() > 1,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (focusOwnsArrowKeys(event)) return false;
       focusAdjacentSplit('right');
       return true;
     },
@@ -115,8 +129,37 @@ export function registerSplitHotkeys(args: {
     scopeId: splitHotkeyScope,
     description: () => t('commands.focusSplitLeft'),
     condition: () => getSplitCount() > 1,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (focusOwnsArrowKeys(event)) return false;
       focusAdjacentSplit('left');
+      return true;
+    },
+    registrationType: 'add',
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.window.focusSplitDown,
+    hotkey: ['shift+j', 'shift+arrowdown'],
+    scopeId: splitHotkeyScope,
+    description: () => t('commands.focusSplitDown'),
+    condition: () => getSplitCount() > 1,
+    keyDownHandler: (event) => {
+      if (focusOwnsArrowKeys(event)) return false;
+      focusAdjacentSplit('down');
+      return true;
+    },
+    registrationType: 'add',
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.window.focusSplitUp,
+    hotkey: ['shift+k', 'shift+arrowup'],
+    scopeId: splitHotkeyScope,
+    description: () => t('commands.focusSplitUp'),
+    condition: () => getSplitCount() > 1,
+    keyDownHandler: (event) => {
+      if (focusOwnsArrowKeys(event)) return false;
+      focusAdjacentSplit('up');
       return true;
     },
     registrationType: 'add',

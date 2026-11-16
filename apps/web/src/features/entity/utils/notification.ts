@@ -1,6 +1,7 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
+import { stoppedAgentsText } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ItemEntity } from '@queries/preview';
@@ -247,6 +248,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('initiative_discussion', () => 'commented')
     .with('entity_access_requested', () => 'requested access')
     .with('entity_access_granted', () => 'granted access')
+    .with('runtime_access_removed', () => 'removed access')
     .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('channel_access_requested', () => 'asked to join')
@@ -274,6 +276,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
     .with('calendar_event_join_request', () => 'asked to join')
+    .with('password_access_requested', () => 'requested access to')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
@@ -284,6 +287,20 @@ export function getNotificationActionText(n: Notification): string {
         meta.content.outcome === 'failed'
         ? 'failed'
         : 'finished';
+    })
+    .with('agent_sign_in_expiry', () => {
+      const meta = n.notification_metadata;
+      return meta.tag === 'agent_sign_in_expiry' &&
+        meta.content.stage === 'expired'
+        ? 'expired'
+        : 'expiring';
+    })
+    .with('computer_setup', () => {
+      const meta = n.notification_metadata;
+      return meta.tag === 'computer_setup' &&
+        meta.content.outcome.kind === 'failed'
+        ? 'failed'
+        : 'ready';
     })
     .exhaustive(() => 'notified');
 }
@@ -316,6 +333,9 @@ export function extractMessageContent(notification: Notification): string {
     .with(
       { tag: P.union('entity_access_requested', 'entity_access_granted') },
       (m) => `${m.content.accessLevel} access to ${m.content.entityName}`
+    )
+    .with({ tag: 'runtime_access_removed' }, (m) =>
+      stoppedAgentsText(m.content.agents, m.content.runtimeName)
     )
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
     .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')
@@ -363,6 +383,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
+    .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },
@@ -371,6 +392,11 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
+    .with({ tag: 'agent_sign_in_expiry' }, (m) => m.content.computerName)
+    .with(
+      { tag: 'computer_setup' },
+      (m) => m.content.agent?.name ?? m.content.computerName
+    )
     .exhaustive(() => '');
 }
 

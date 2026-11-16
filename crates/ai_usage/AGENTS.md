@@ -31,7 +31,7 @@ flexible admin query API.
 
 - Depends on: none notable outside the workspace-hack set.
 - Used by: `agent`, `agent_session`, `agent_harness`, `agent_trigger`,
-  `ai_billing`, `ai_tools`, `ai_projections`, `anthropic`, `call`,
+  `ai_billing`, `ai_tools`, `anthropic`, `call`,
   `documents`, `import`, `image_generation`, `memory`, `channel_bots`,
   `agent_inmem`, `dictation`, `task_dedup`, `jev`.
 
@@ -59,6 +59,11 @@ flexible admin query API.
 - `UsageContext::with_agent_api_key` marks usage an agent's own API key paid
   for: it is stored with `agent_api_key_id` and never counted. Set it only
   on calls that actually authenticate with that key.
+- `UsageContext::with_agent_session` stores the agent session a call is part
+  of in `agent_session_id`. A session's tools get a recorder wrapped in
+  `for_agent_session`, which stamps the session on any event that names
+  none. A service that keeps the recorder it was built with (image
+  generation) gets no stamp and must carry the session in its request.
 
 ## Related
 

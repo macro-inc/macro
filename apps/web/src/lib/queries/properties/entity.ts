@@ -273,6 +273,8 @@ function optimisticUpdateSoupEntityProperties(
     current.tag === 'foreignEntity' ||
     current.tag === 'channelThread' ||
     current.tag === 'calendarEvent' ||
+    current.tag === 'harness' ||
+    current.tag === 'team' ||
     !current.data.properties
   ) {
     return undefined;

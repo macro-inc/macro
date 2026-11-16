@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_audience (user_id, timezone, seen_at, next_run_at)\n               VALUES ($1, $2, $3, $4)\n               ON CONFLICT (user_id) DO UPDATE SET\n                   seen_at = EXCLUDED.seen_at,\n                   timezone = EXCLUDED.timezone,\n                   next_run_at = CASE WHEN suggestion_audience.timezone = EXCLUDED.timezone\n                                           AND suggestion_audience.next_run_at IS NOT NULL\n                                      THEN suggestion_audience.next_run_at\n                                      ELSE EXCLUDED.next_run_at END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2807ce0078cf85c871add60d9464dd28a4f73e742d626acf43ef931ff1d1d911"
+}

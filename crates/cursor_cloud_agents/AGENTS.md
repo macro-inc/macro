@@ -68,6 +68,11 @@ or image bytes. Images are journaled as ACP image blocks for live display and re
   of four old migrations into `20260906060601_cursor_session_replay`; don't
   reset or DOWN-migrate a database that already has journal history without
   reading it first.
+- Cursor answers transient statuses (429, 408, 5xx such as `503 Server at
+  capacity`) on any call. JSON reads and the run list retry them through
+  `get_for_text` (`READ_RETRY_BACKOFF`); the run poll and SSE stream keep
+  their own recovery. Of the POSTs only the two that start a turn retry
+  (`TURN_START_RETRY_BACKOFF`), so cancel and archive fail fast.
 - `#![deny(missing_docs)]` applies to every public item.
 - Translation is a pure state machine fed one event at a time — keep new
   logic in `domain/translate.rs`, not in `api.rs` or `inbound/acp.rs`.

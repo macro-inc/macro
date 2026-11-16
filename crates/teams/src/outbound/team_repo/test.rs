@@ -6,6 +6,7 @@ use sqlx::{Pool, Postgres, Row};
 use super::*;
 use crate::domain::model::SeatPlan;
 
+mod crm_member_access;
 mod delete_team;
 mod invite_link;
 
@@ -199,6 +200,66 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .unwrap();
 
     assert!(err.to_string().contains("team name is invalid"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_create_team_rejects_a_user_already_on_a_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team1_user = |role: &'static str| {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT user_id FROM team_user
+            WHERE team_id = '11111111-1111-1111-1111-111111111111' AND team_role = $1::team_role
+            "#,
+        )
+        .bind(role)
+        .fetch_one(&pool)
+    };
+
+    // A member of team1 who owns no team.
+    let member_id = team1_user("member").await?;
+    let member = MacroUserIdStr::parse_from_str(&member_id)?;
+    let error = team_repo
+        .create_team(
+            &member,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team member cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let owner_id = team1_user("owner").await?;
+    let owner = MacroUserIdStr::parse_from_str(&owner_id)?;
+    let error = team_repo
+        .create_team(
+            &owner,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team owner cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let second_team_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM team WHERE name = 'Second Team'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(second_team_count, 0);
 
     Ok(())
 }
@@ -1181,14 +1242,15 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
         .await?;
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
-    assert_eq!(removed_member.role, TeamRole::Admin);
+    assert_eq!(removed_member.member.role, TeamRole::Admin);
 
     team_repo
-        .rollback_remove_user_from_team(&removed_member)
+        .rollback_remove_user_from_team(&removed_member, false)
         .await?;
 
     let member = team_repo.get_team_member(&team_id, &user_id).await?;
     assert_eq!(member.role, TeamRole::Admin);
+    assert!(!team_repo.is_seat_included(&team_id, &user_id).await?);
 
     let team = sqlx::query(r#"SELECT seat_count FROM team WHERE id = $1"#)
         .bind(team_id)
@@ -1444,6 +1506,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
     let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("New Name".to_string()),
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
@@ -1474,6 +1537,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
     let team_repo = TeamRepositoryImpl::new(pool.clone());
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Should Not Apply".to_string()),
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
@@ -1503,6 +1567,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
     let team_repo = TeamRepositoryImpl::new(pool);
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
@@ -1531,6 +1596,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // Providing a value updates it.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: None,
@@ -1543,6 +1609,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // Omitting the field leaves it unchanged.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: Some("Renamed".to_string()),
         slug: None,
         user_role_updates: None,
@@ -1555,6 +1622,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 
     // An explicit null turns default link sharing off.
     let req = PatchTeamRequest {
+        member_crm_access: None,
         name: None,
         slug: None,
         user_role_updates: None,
@@ -1806,13 +1874,14 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     );
 
     let member = team_repo
-        .add_user_to_team(&team_id, &user_id)
+        .add_user_to_team(&team_id, &user_id, false)
         .await?
         .expect("user should have been added");
 
     assert_eq!(member.team_id, team_id);
     assert_eq!(member.user_id.as_ref(), user_id.as_ref());
     assert_eq!(member.role, TeamRole::Member);
+    assert!(!team_repo.is_seat_included(&team_id, &user_id).await?);
 
     let role = team_repo.get_team_role(&team_id, &user_id).await?;
     assert_eq!(role, Some(TeamRole::Member));
@@ -1824,11 +1893,68 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert!(!invites_after.iter().any(|invite| invite.team_id == team_id));
 
     // Adding again is a no-op: no member returned, no extra seat counted.
-    let member = team_repo.add_user_to_team(&team_id, &user_id).await?;
+    let member = team_repo
+        .add_user_to_team(&team_id, &user_id, false)
+        .await?;
     assert!(member.is_none());
 
     let seat_count = team_repo.get_team_seat_count(&team_id).await?;
     assert_eq!(seat_count, seat_count_before + 1);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_included_seat_survives_remove_and_rollback(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let agent_macro_user_id = uuid::Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0a11);
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, 'agent@example.com', 'agent@example.com', 'cus_agent_test')
+        "#,
+        agent_macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id, "isAgent") VALUES ('macro|agent@example.com', 'agent@example.com', $1, TRUE)"#,
+        agent_macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let agent_id = MacroUserIdStr::parse_from_str("macro|agent@example.com")?;
+    let billed_member_id = MacroUserIdStr::parse_from_str("macro|not-a-member@example.com")?;
+
+    assert!(!team_repo.is_seat_included(&team_id, &agent_id).await?);
+
+    let member = team_repo
+        .add_user_to_team(&team_id, &agent_id, true)
+        .await?
+        .expect("agent should have been added");
+    assert_eq!(member.role, TeamRole::Member);
+    assert!(team_repo.is_seat_included(&team_id, &agent_id).await?);
+    assert!(
+        !team_repo
+            .is_seat_included(&team_id, &billed_member_id)
+            .await?
+    );
+
+    let removed_member = team_repo.remove_user_from_team(&team_id, &agent_id).await?;
+    assert_eq!(removed_member.member.user_id.as_ref(), agent_id.as_ref());
+    assert!(!team_repo.is_seat_included(&team_id, &agent_id).await?);
+
+    team_repo
+        .rollback_remove_user_from_team(&removed_member, true)
+        .await?;
+    assert!(team_repo.is_seat_included(&team_id, &agent_id).await?);
 
     Ok(())
 }

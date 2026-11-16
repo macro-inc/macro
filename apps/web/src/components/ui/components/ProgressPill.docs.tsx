@@ -1,7 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { createSignal } from 'solid-js';
 import { Button } from './Button';
-import { ProgressPill } from './ProgressPill';
+import { ProgressPill, ProgressRing } from './ProgressPill';
 
 // #region demo:states
 function StatesDemo() {
@@ -38,11 +38,22 @@ function ReactiveDemo() {
 }
 // #endregion
 
+// #region demo:rings
+function RingSizesDemo() {
+  return (
+    <div class="flex items-center gap-3">
+      <ProgressRing fraction={0.4} size="sm" />
+      <ProgressRing fraction={0.4} />
+      <ProgressRing fraction={0.4} size="lg" />
+    </div>
+  );
+}
+// #endregion
 export default defineDoc({
   name: 'ProgressPill',
   category: 'Data Display',
   description:
-    'A compact, borderless property with caller-supplied progress text and a 12px ring. Standalone rings default to 16px; zero totals show an empty ring.',
+    'A compact, borderless property with caller-supplied progress text and a 12px ring. Standalone rings default to 16px, with a 44px option for playback controls; zero totals show an empty ring.',
   status: 'stable',
   exports: ['ProgressPill', 'ProgressRing'],
   import: "import { ProgressPill, ProgressRing } from '@ui';",
@@ -50,5 +61,6 @@ export default defineDoc({
   demos: [
     { id: 'states', title: 'Empty, partial, and complete', render: StatesDemo },
     { id: 'reactive', title: 'Reactive progress', render: ReactiveDemo },
+    { id: 'rings', title: 'Ring sizes', render: RingSizesDemo },
   ],
 });

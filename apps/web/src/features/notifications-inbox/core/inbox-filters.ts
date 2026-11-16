@@ -17,6 +17,7 @@ export const ALL_INBOX_ROW_TYPES: readonly InboxRowType[] = [
   'calendar_join_request',
   'access_requested',
   'access_granted',
+  'access_removed',
 ];
 
 /** The kinds of notification a reader filters by. */
@@ -58,7 +59,12 @@ export const rowCategory = (type: InboxRowType): InboxCategory =>
     .with('task', () => 'tasks' as const)
     .with('pull_request', () => 'pull_requests' as const)
     .with('calendar_event', 'calendar_join_request', () => 'calendar' as const)
-    .with('access_requested', 'access_granted', () => 'access' as const)
+    .with(
+      'access_requested',
+      'access_granted',
+      'access_removed',
+      () => 'access' as const
+    )
     .exhaustive();
 
 /** Which rows a reader wants: by read state, and the categories they hide. */

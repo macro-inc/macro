@@ -27,7 +27,11 @@ const CHANNEL_PAGE_SIZE = 100;
  * That message is the poll, and the card shares it with the channel. Never add a form chip, `/respond` link, `form:` link, or a second copy.
  */
 export class ChannelNamespace {
-  /** Recent channel activity, with channel and user handles. */
+  /**
+   * Recent channel activity, with channel and user handles.
+   *
+   * @readonly
+   */
   async activity(): Promise<ChannelActivity[]> {
     return unwrap(await this.client.storage.getActivity()).map(
       (record) =>
@@ -53,6 +57,9 @@ export class ChannelNamespace {
   /**
    * Open (creating if needed) the user's 1:1 direct message with one person.
    * For several people, use {@link private}.
+   *
+   * @write
+   * @idempotent
    */
   async dm(recipient: User): Promise<Channel> {
     return Channel.dm(this.client, recipient);
@@ -61,12 +68,19 @@ export class ChannelNamespace {
   /**
    * Open (creating if needed) the group direct message with exactly these
    * people, excluding the user. For one person, use {@link dm}.
+   *
+   * @write
+   * @idempotent
    */
   async private(recipients: User[]): Promise<Channel> {
     return Channel.private(this.client, recipients);
   }
 
-  /** Create a channel. The caller becomes the owner. */
+  /**
+   * Create a channel. The caller becomes the owner.
+   *
+   * @write
+   */
   async create(opts: {
     type: ChannelType;
     name?: string;
@@ -81,6 +95,8 @@ export class ChannelNamespace {
   /**
    * Every channel the authenticated user is a member of, auto-paginated.
    * Iterate with `for await`; collect with `Array.fromAsync`.
+   *
+   * @readonly
    */
   async *list(): AsyncGenerator<Channel> {
     for await (const record of this.records()) {
@@ -91,6 +107,8 @@ export class ChannelNamespace {
   /**
    * Search channels by name (case-insensitive substring match over every
    * channel the user is a member of) or by content (server-side unified search).
+   *
+   * @readonly
    */
   async *search(query: string, opts?: SearchOpts): AsyncGenerator<Channel> {
     if (!opts?.searchOn || opts.searchOn === 'name') {

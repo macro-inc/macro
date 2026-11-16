@@ -370,3 +370,29 @@ fn a_mentioned_copy_reads_as_a_snapshot_an_invitation_or_an_event() {
         );
     }
 }
+
+#[test]
+fn a_calendar_listing_without_the_availability_setting_counts_it() {
+    let calendar = VisibleCalendar {
+        id: Uuid::from_u128(1),
+        email_link_id: Uuid::from_u128(2),
+        email_address: "host@example.com".into(),
+        name: "Coworker".into(),
+        color: None,
+        is_primary: false,
+        is_writable: false,
+        is_subscription: false,
+        contributes_to_availability: false,
+        sync_error: None,
+        provider: CalendarProvider::Google,
+        capabilities: CalendarCapabilities::google(),
+        default_reminders: Vec::new(),
+    };
+    let mut listed = serde_json::to_value(&calendar).unwrap();
+    listed
+        .as_object_mut()
+        .unwrap()
+        .remove("contributesToAvailability");
+    let read: VisibleCalendar = serde_json::from_value(listed).unwrap();
+    assert!(read.contributes_to_availability);
+}

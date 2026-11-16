@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { CacheReadAvailability } from './read-availability';
+import {
+  CacheReadAvailability,
+  isReadOnlyCacheRequest,
+} from './read-availability';
 
 it('interrupts a read waiting for initialization without interrupting a write or replaying either', async () => {
   const availability = new CacheReadAvailability();
@@ -17,6 +20,14 @@ it('interrupts a read waiting for initialization without interrupting a write or
   await write;
   await availability.waitUntilReady(() => initialized.promise, true);
 });
+
+it.each(['people-context', 'people-search', 'people-references'] as const)(
+  'classifies %s as a read-only request',
+  (kind) => {
+    expect(isReadOnlyCacheRequest(kind)).toBe(true);
+    expect(isReadOnlyCacheRequest('people-update')).toBe(false);
+  }
+);
 
 it('preserves read/write startup continuation order', async () => {
   const availability = new CacheReadAvailability();

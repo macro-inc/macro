@@ -1,8 +1,14 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { TraceFlow } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { enableAiUsageBilling, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  enableAiUsageBilling,
+  enableMacroComputers,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import {
   useLicenseStatus,
@@ -14,6 +20,7 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
+  useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
   useSubscriptionStatusQuery,
   useTrialEligibilityQuery,
@@ -21,13 +28,18 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
-import { stripeServiceClient } from '@service-stripe/client';
-import { createMemo, type JSX, Suspense } from 'solid-js';
+import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { BillingSettingsView } from './components/billing-settings-view';
+import { BillingComputers } from './computers/views/BillingComputers';
 import {
   getBillingState,
   getFreePlanCheckoutRequest,
 } from './core/billing-state';
+
+const ConnectedTeamBillingBreakdown = lazyNamed(
+  () => import('./views/team-billing-breakdown'),
+  'ConnectedTeamBillingBreakdown'
+);
 
 const BillingPreview =
   import.meta.env.DEV && LOCAL_ONLY
@@ -56,8 +68,10 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const macroComputers = useFeatureFlag(enableMacroComputers);
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
+  const portal = useCreateBillingPortalMutation();
   const effectiveHasPaid = () =>
     hasPaid() || (summary.isSuccess && summary.data.tier !== 'free');
   const trialEligibility = useTrialEligibilityQuery({
@@ -88,6 +102,11 @@ function LiveBilling(props: { controls?: JSX.Element }) {
 
     return team.owner_id === uid ? 'owner' : 'member';
   });
+
+  const billingAttributes = () => {
+    const current = userTeam();
+    return current ? { 'team.id': current.id } : undefined;
+  };
 
   const state = () =>
     getBillingState({
@@ -162,7 +181,9 @@ function LiveBilling(props: { controls?: JSX.Element }) {
 
   const handleManage = async () => {
     try {
-      const url = await stripeServiceClient.createPortalSession();
+      const url = await portal.mutateAsync({
+        returnUrl: `${window.location.origin}/app`,
+      });
       window.location.href = url;
     } catch (error) {
       console.error(error);
@@ -183,6 +204,35 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         queryReadyGate(subscriptionStatus)
           ? (subscriptionStatus.data.scheduledChange ?? undefined)
           : undefined
+      }
+      computers={
+        // Flag off: nothing to wait for, so no loading line flashes by.
+        <Show when={macroComputers().enabled}>
+          <Suspense
+            fallback={<p role="status">{t('settingsBilling.loading')}</p>}
+          >
+            <Show
+              when={
+                queryReadyGate(subscriptionStatus)
+                  ? subscriptionStatus.data.billing
+                  : undefined
+              }
+              fallback={<BillingComputers />}
+            >
+              {(billing) => (
+                <TraceFlow
+                  name="team.billing.breakdown"
+                  attributes={billingAttributes()}
+                >
+                  <ConnectedTeamBillingBreakdown
+                    billing={billing()}
+                    teamId={userTeam()?.id}
+                  />
+                </TraceFlow>
+              )}
+            </Show>
+          </Suspense>
+        </Show>
       }
       subscriptionStatusFailed={subscriptionStatus.isError}
       onRefreshStatus={() =>

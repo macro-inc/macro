@@ -96,6 +96,11 @@ type ViewShellInternal = ViewShellLayout & {
 
 const RESIZE_GUTTER = 1;
 
+/** Where a shell with `asidePreferenceKey` saves whether its navigation is hidden. */
+export function asideCollapsedPreferenceKey(app: string) {
+  return `macro:pref:view-sidebar:collapsed:${app}`;
+}
+
 const ViewShellContext = createContext<ViewShellInternal>();
 
 function useViewShellInternal(): ViewShellInternal {
@@ -212,10 +217,9 @@ function Root(props: ViewShellRootProps) {
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
     ? (panel?.navigationCollapsed ?? createSignal(true))
     : local.asidePreferenceKey
-      ? usePreference(
-          `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
-          { default: false }
-        )
+      ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
+          default: false,
+        })
       : createSignal(false);
   // A width the user dragged to wins over the configured default.
   const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey
@@ -827,6 +831,29 @@ function Main(props: ViewShellMainProps) {
     }
     return { kind: 'px' as const, px: width };
   };
+  // The detail joins with a share of its own, which would otherwise shrink
+  // Main's. Holding the width through automatic layouts leaves the detail
+  // what is left; in a tight shell Main gives way before the aside does.
+  const widthBesideDetail = () => {
+    const width = layout().width;
+    const shellWidth = ws.width();
+    if (
+      ws.detail.placement() !== 'inline' ||
+      width === undefined ||
+      shellWidth === undefined
+    ) {
+      return undefined;
+    }
+
+    const asideDocked = ws.aside.mode() === 'docked' && !ws.aside.isOverlay();
+    const asideWidth = asideDocked
+      ? ws.aside.layout().width + RESIZE_GUTTER
+      : 0;
+    const availableForMain =
+      shellWidth - asideWidth - RESIZE_GUTTER - ws.detail.layout().min;
+
+    return Math.min(width, Math.max(layout().min, availableForMain));
+  };
 
   return (
     <Resize.Panel
@@ -834,6 +861,7 @@ function Main(props: ViewShellMainProps) {
       index={1}
       minSize={layout().min}
       maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
+      redistributionPreferredSize={widthBesideDetail()}
       target={target()}
       onSizeChangeEnd={local.onWidthChangeEnd}
     >

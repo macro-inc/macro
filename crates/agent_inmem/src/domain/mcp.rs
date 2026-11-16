@@ -101,3 +101,20 @@ impl McpToolConnector for NoMcpServers {
         None
     }
 }
+
+/// The internal MCP tools every code-mode turn needs.
+pub const CODE_MODE_MCP_TOOLS: &[&str] = &[
+    "mcp__macro_internal__ExecuteCode",
+    "mcp__macro_internal__DescribeCodeTools",
+    "mcp__macro_internal__ReadCodeDocs",
+];
+
+/// Whether `tools` list every one of [`CODE_MODE_MCP_TOOLS`].
+pub fn has_code_mode_tools(tools: Option<&RemoteMcpToolSet>) -> bool {
+    tools.is_some_and(|tools| {
+        let catalog = <RemoteMcpToolSet as ai_toolset::ToolSet<()>>::searchable_catalog(tools);
+        CODE_MODE_MCP_TOOLS
+            .iter()
+            .all(|name| catalog.iter().any(|tool| tool.name == *name))
+    })
+}

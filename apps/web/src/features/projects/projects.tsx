@@ -12,10 +12,13 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableGantt, enableProjects } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableGantt,
+  enableProjects,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
@@ -35,6 +38,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -57,7 +61,8 @@ function createProjectReadGate() {
   return () => flag().enabled;
 }
 
-function createProjectsContext() {
+/** The production capabilities, for hosts outside the Projects view. */
+export function createProjectsContext() {
   const userId = useUserId();
   return createProjectSources(
     initiativeClient,
@@ -166,8 +171,10 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
       return selected;
     },
   };
-  const copyLink = makeCopyLinkAction();
-  const copyId = makeCopyEntityIdAction();
+  const copyLink = makeCopyLinkAction({ silent: true });
+  const copyId = makeCopyEntityIdAction({ silent: true });
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [sharing, setSharing] = createSignal<string>();
   return (
     <>
@@ -195,11 +202,21 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         canOpenInNewSplit={() =>
           globalSplitManager()?.canAppendSplit() ?? false
         }
-        onCopyLink={(id) =>
-          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
-        }
-        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
+        onCopyLink={(id) => copyLink.executeByBlock(id, 'initiative')}
+        onCopyId={(id) => copyId.executeById(id)}
         onShare={(projectId) => setSharing(projectId)}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (project) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: project.id,
+                  name: project.name,
+                  ownerId: '',
+                  appearance: project.appearance,
+                })
+            : undefined
+        }
       />
       <Show when={sharing()} keyed>
         {(projectId) => (

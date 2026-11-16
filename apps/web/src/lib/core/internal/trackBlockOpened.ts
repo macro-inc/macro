@@ -36,6 +36,8 @@ function isSoupEntityTag(
       'crm_contact',
       'crm_pipeline',
       'initiative',
+      'harness',
+      'team',
       () => false
     )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)

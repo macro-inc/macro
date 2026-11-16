@@ -1,4 +1,4 @@
-use crate::handler::{fetch_inactive_link_ids, fetch_unused_link_ids};
+use crate::outbound::postgres::{fetch_inactive_link_ids, fetch_unused_link_ids};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};

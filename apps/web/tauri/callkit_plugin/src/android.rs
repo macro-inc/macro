@@ -46,12 +46,14 @@ command!(get_voip_token, "getVoipToken");
 command!(end_active_call, "endActiveCall");
 command!(get_pending_answered_call, "getPendingAnsweredCall");
 command!(get_active_call_state, "getActiveCallState");
+command!(get_audio_output, "getAudioOutput");
 command!(switch_camera, "switchCamera");
 command!(can_use_full_screen_intent, "canUseFullScreenIntent");
 command!(
     open_full_screen_intent_settings,
     "openFullScreenIntentSettings"
 );
+command!(open_microphone_settings, "openMicrophoneSettings");
 
 #[derive(Serialize)]
 struct WatchArgs {
@@ -75,6 +77,7 @@ macro_rules! watch {
 watch!(watch_call_answered, "watchCallAnswered");
 watch!(watch_call_ended, "watchCallEnded");
 watch!(watch_connection_state, "watchConnectionState");
+watch!(watch_audio_output, "watchAudioOutput");
 watch!(watch_drawer_opened, "watchDrawerOpened");
 watch!(watch_participant_identities, "watchParticipantIdentities");
 
@@ -245,6 +248,26 @@ pub(crate) async fn abort_join<R: Runtime>(app: AppHandle<R>, lease: String) -> 
     app.state::<Calls<R>>()
         .0
         .run_mobile_plugin_async("abortJoin", AbortJoinArgs { lease })
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectAudioOutputArgs {
+    call_id: String,
+    id: String,
+}
+
+#[tauri::command]
+pub(crate) async fn select_audio_output<R: Runtime>(
+    app: AppHandle<R>,
+    call_id: String,
+    id: String,
+) -> Result<Value, String> {
+    app.state::<Calls<R>>()
+        .0
+        .run_mobile_plugin_async("selectAudioOutput", SelectAudioOutputArgs { call_id, id })
         .await
         .map_err(|e| e.to_string())
 }

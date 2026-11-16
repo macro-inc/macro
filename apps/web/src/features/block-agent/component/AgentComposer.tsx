@@ -22,6 +22,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
@@ -97,7 +98,9 @@ export function AgentComposer(props: {
     if (readOnly()) return;
     try {
       const result = await issue(action);
-      if (result?.isErr()) toast.failure(failure);
+      // A stopped agent says why in the transcript instead.
+      if (result?.isErr() && !result.error.some(isNoRuntimeAccessError))
+        toast.failure(failure);
     } catch {
       toast.failure(failure);
     }
@@ -252,10 +255,9 @@ export function AgentComposer(props: {
             <QueuedPrompts
               items={queuedItems()}
               disabled={readOnly()}
-              onEdit={(actionId, prompt) => {
-                if (!readOnly())
-                  fireAndForget(queue.edit(actionId, prompt), 'agent-composer');
-              }}
+              onEdit={(actionId, prompt) =>
+                readOnly() ? undefined : queue.edit(actionId, prompt)
+              }
               onRemove={(actionId) => {
                 if (!readOnly())
                   fireAndForget(queue.remove(actionId), 'agent-composer');

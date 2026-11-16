@@ -73,7 +73,9 @@ fn subscribes_to_all_ingestion_topics() {
             "macro.messages",
             "macro.webhooks",
             "macro.agent_sessions",
-            "macro.agent_session_lifecycle"
+            "macro.agent_session_lifecycle",
+            "macro.users",
+            "macro.passwords"
         ]
     );
 }
@@ -229,6 +231,20 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_agent_session_lifecycle_event(
         &self,
         _event: Event<agent_session::domain::events::AgentSessionLifecycleEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
+
+    async fn ingest_user_event(
+        &self,
+        _event: Event<user_events::UserTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
+
+    async fn ingest_password_event(
+        &self,
+        _event: Event<password_events::PasswordTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

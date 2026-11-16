@@ -43,4 +43,7 @@ the durable notification/realtime dispatcher.
   and preserves the deadline. Approval clears it for a further upgrade, while
   denial replaces it with the 24-hour cooldown.
 
+- `ShareEntityType::Harness` is limited to the owner's teammates in the domain
+  service, and the HTTP adapter rejects resolving and direct grants from anything
+  but the owner's own session, so an agent can ask but never decide.
 - `ShareEntityType::ExternalChat` uses the generic direct-access/request workflow; viewing requires no provider account.

@@ -6,6 +6,7 @@ use access_requests::domain::{
 use connection::domain::ports::ConnectionGateway;
 use model_notifications::{
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
+    RuntimeAccessRemovedMetadata, StoppedAgent,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use notification::domain::{
@@ -95,6 +96,37 @@ impl<
                 }
                 RequestStatus::Denied | RequestStatus::Cancelled => {}
             }
+        }
+        // Its own notification: "you have Read now" says nothing of the
+        // agents that stopped with it, which is what the owner has to act on.
+        if let Some(stopped) = &event.stopped {
+            self.ingress
+                .send_notification(
+                    SendNotificationRequestBuilder {
+                        notification_entity: model_entity::EntityType::from(
+                            event.entity.entity_type,
+                        )
+                        .with_entity_string(event.entity.entity_id.to_string()),
+                        secondary_notification_entity: None,
+                        sender_id: Some(event.actor.clone()),
+                        recipient_ids: HashSet::from([stopped.owner.clone()]),
+                        notification: RuntimeAccessRemovedMetadata {
+                            runtime_name: event.entity_name.clone(),
+                            agents: stopped
+                                .agents
+                                .iter()
+                                .map(|agent| StoppedAgent {
+                                    bot_id: agent.bot_id,
+                                    name: agent.name.clone(),
+                                })
+                                .collect(),
+                        },
+                    }
+                    .into_request_with_id(event.id)
+                    .with_apns()
+                    .with_conn_gateway(),
+                )
+                .await?;
         }
         for (id, recipients) in &event.superseded {
             self.withdrawal.withdraw(*id).await?;

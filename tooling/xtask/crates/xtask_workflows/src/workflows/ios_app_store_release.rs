@@ -98,11 +98,13 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/ios_native_tree.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
             include_str!("scripts/merge_result_native_check.sh"),
-            include_str!("scripts/ios_release_preconditions.sh")
+            include_str!("scripts/ios_release_preconditions.sh"),
+            include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
     .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
     .add_env(("WAIT_MINUTES", "30"))
+    .add_env(("RELEASE_LABEL", "ios-update"))
 }
 
 /// The pre-build steps run outside the Nix dev shell (it isn't installed

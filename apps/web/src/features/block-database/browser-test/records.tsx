@@ -1,4 +1,6 @@
 import '@app/index.css';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { createSignal, onMount, Show } from 'solid-js';
 import { Portal, render } from 'solid-js/web';
@@ -10,13 +12,57 @@ import type {
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { optimisticRows } from '../../database/core/table';
 import { DatabaseRecordsView } from '../../database/views/database-records-view';
+import {
+  DatabaseLinkValue,
+  DatabaseTextEditor,
+  DatabaseTextValue,
+} from '../database-mentions';
+
+const MULTILINE_ROWS = [
+  {
+    rowId: 'wrapped',
+    cells: {
+      name: 'Wrapped',
+      notes:
+        'Long note: ' +
+        'they asked about pricing tiers, onboarding timelines and security reviews before renewal. '.repeat(
+          3
+        ),
+    },
+  },
+  {
+    rowId: 'lines',
+    cells: { name: 'Lines', notes: 'Line one\nLine two\nLine three' },
+  },
+  { rowId: 'last', cells: { name: 'Last', notes: 'Last note' } },
+  {
+    rowId: 'mention',
+    cells: {
+      name: 'Mention',
+      notes:
+        'Renewal call: ' +
+        'they want the security review and the onboarding plan before the call. '.repeat(
+          2
+        ) +
+        encodeCellMention({
+          type: 'date',
+          date: '2026-11-20T00:00:00.000Z',
+          displayFormat: 'Nov 20, 2026',
+        }),
+    },
+  },
+];
 
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {
   const references = new URLSearchParams(location.search).has('references');
   const [opened, setOpened] = createSignal('');
   const rapid = new URLSearchParams(location.search).has('rapid');
+  const links = new URLSearchParams(location.search).has('links');
   const holdWrites = new URLSearchParams(location.search).has('holdWrites');
+  // The app's text editor and value renderers over wrapped and multi-line notes.
+  const multiline = new URLSearchParams(location.search).has('multiline');
+  const multilineEditor = multiline ? DatabaseTextEditor : undefined;
   let releaseWrites!: () => void;
   const writeGate = holdWrites
     ? new Promise<void>((resolve) => {
@@ -41,6 +87,13 @@ function RecordsFixture() {
       dataType: 'ENTITY',
       specificEntityType: 'DOCUMENT',
     });
+  if (links)
+    initialColumns.push(
+      { ...initialColumns[0], id: 'notes', name: 'Notes' },
+      { ...initialColumns[0], id: 'website', name: 'Website', dataType: 'LINK' }
+    );
+  if (multiline)
+    initialColumns.push({ ...initialColumns[0], id: 'notes', name: 'Notes' });
   if (rapid)
     initialColumns.push(
       ...['notes', 'detail'].map((id) => ({
@@ -57,8 +110,16 @@ function RecordsFixture() {
         cells: {
           name: 'First record',
           ...(references ? { file: 'project-plan' } : {}),
+          ...(links
+            ? {
+                notes: 'Spec at https://example.com/spec',
+                website: 'example.com',
+              }
+            : {}),
+          ...(multiline ? { notes: 'Follow up' } : {}),
         },
       },
+      ...(multiline ? MULTILINE_ROWS : []),
     ],
     retained: [],
     version: 1,
@@ -137,6 +198,11 @@ function RecordsFixture() {
         <section class="flex min-w-0 flex-1 flex-col">
           <DatabaseRecordsView
             name="Embedded records"
+            contentClass={
+              multiline
+                ? 'mx-4 mb-4 mt-1 rounded-xl border border-edge-muted'
+                : undefined
+            }
             source={source}
             canEdit={canEdit()}
             onOpenDocumentMention={setOpened}
@@ -146,6 +212,14 @@ function RecordsFixture() {
               </span>
             )}
             renderMentionPicker={(picker) => <ReferencePicker {...picker} />}
+            renderTextValue={
+              links || multiline
+                ? (value) => <DatabaseTextValue value={value} />
+                : undefined
+            }
+            renderLinkValue={
+              links ? (url) => <DatabaseLinkValue url={url} /> : undefined
+            }
             renderTextEditor={
               rapid
                 ? (props) => (
@@ -155,7 +229,7 @@ function RecordsFixture() {
                       renderMenu={() => null}
                     />
                   )
-                : undefined
+                : multilineEditor
             }
             view={{
               query: { filter: null },
@@ -229,4 +303,11 @@ function ReferencePicker(
   );
 }
 
-render(() => <RecordsFixture />, document.getElementById('root')!);
+render(
+  () => (
+    <StaticMarkdownContext>
+      <RecordsFixture />
+    </StaticMarkdownContext>
+  ),
+  document.getElementById('root')!
+);

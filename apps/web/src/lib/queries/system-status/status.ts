@@ -21,17 +21,24 @@ export const SYSTEM_STATUS_MESSAGE_TYPE = 'system_status';
 // Broadcasts keep open apps current; the interval only covers a missed one.
 const STATUS_REFETCH_INTERVAL_MS = 5 * 60_000;
 
+const idSchema = z.string().nullish();
 const updatedAtSchema = z.string().nullish();
 const currentSystemStatusSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('operational'), updatedAt: updatedAtSchema }),
+  z.object({
+    status: z.literal('operational'),
+    id: idSchema,
+    updatedAt: updatedAtSchema,
+  }),
   z.object({
     status: z.literal('degraded'),
     message: z.string(),
+    id: idSchema,
     updatedAt: updatedAtSchema,
   }),
   z.object({
     status: z.literal('major_outage'),
     message: z.string(),
+    id: idSchema,
     updatedAt: updatedAtSchema,
   }),
 ]);

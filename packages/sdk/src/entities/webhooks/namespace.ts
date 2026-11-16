@@ -19,6 +19,9 @@ export class WebhooksNamespace {
    * workspace's webhooks (the endpoint returns 409 on a clash) and cannot be
    * changed later. `filters` must be non-empty (each entry matches event
    * names, optionally narrowed to entity ids); `scope` defaults to `'user'`.
+   *
+   * @write
+   * @openworld
    */
   create(opts: {
     url: string;
@@ -39,6 +42,8 @@ export class WebhooksNamespace {
   /**
    * The caller's webhooks across their personal and team workspaces, newest
    * first. Each returned handle already holds its record.
+   *
+   * @readonly
    */
   async list(): Promise<Webhook[]> {
     const { webhooks } = unwrap(await this.client.storage.listWebhooks());

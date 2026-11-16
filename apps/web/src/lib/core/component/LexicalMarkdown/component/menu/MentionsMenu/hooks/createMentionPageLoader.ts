@@ -6,6 +6,7 @@ type Frontier = {
   query: string;
   selectedIndex: number;
   itemCount: number;
+  windowKey?: string;
 };
 
 /** Don't restart an exhausted scan just because its loading flag flips back.
@@ -15,7 +16,7 @@ export function createMentionPageLoader() {
   return (input: {
     bucket?: Pick<
       BucketConfig,
-      'id' | 'hasMore' | 'isLoadingMore' | 'loadMore'
+      'id' | 'hasMore' | 'isLoadingMore' | 'loadMore' | 'windowKey'
     >;
     query: string;
     selectedIndex: number;
@@ -33,13 +34,27 @@ export function createMentionPageLoader() {
     )
       return;
     if (
+      itemCount === 0 &&
+      lastRequested?.itemCount === 0 &&
+      lastRequested.bucketId === bucket.id &&
+      lastRequested.query === query
+    )
+      return;
+    if (
       lastRequested?.bucketId === bucket.id &&
       lastRequested.query === query &&
       lastRequested.selectedIndex === selectedIndex &&
-      lastRequested.itemCount === itemCount
+      lastRequested.itemCount === itemCount &&
+      lastRequested.windowKey === bucket.windowKey?.()
     )
       return;
-    lastRequested = { bucketId: bucket.id, query, selectedIndex, itemCount };
+    lastRequested = {
+      bucketId: bucket.id,
+      query,
+      selectedIndex,
+      itemCount,
+      windowKey: bucket.windowKey?.(),
+    };
     fireAndForget(bucket.loadMore?.(), 'mentions-menu');
   };
 }

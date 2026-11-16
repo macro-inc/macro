@@ -44,7 +44,7 @@ vi.mock('./connections/integrations-view', () => ({
 vi.mock('./Harness', () => ({
   Harness: (props: { onBack?: () => void; backLabel?: string }) => (
     <div>
-      <h1>Runtimes</h1>
+      <h1>Machines</h1>
       <button type="button" onClick={props.onBack}>
         {props.backLabel}
       </button>
@@ -60,7 +60,7 @@ afterEach(() => {
 it('returns local-agent setup to Integrations without opening the Agents settings route', () => {
   render(() => <IntegrationsPage />);
   fireEvent.click(screen.getByRole('button', { name: 'Set up local agents' }));
-  expect(screen.getByRole('heading', { name: 'Runtimes' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Machines' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Integrations' }));
   expect(screen.getByRole('heading', { name: 'Integrations' })).toBeTruthy();
   expect(openSettings).not.toHaveBeenCalled();
@@ -77,6 +77,6 @@ it('leaves inline runtime setup when the runtime tab becomes unavailable', () =>
   render(() => <IntegrationsPage />);
   fireEvent.click(screen.getByRole('button', { name: 'Set up local agents' }));
   setRuntimesAvailable(false);
-  expect(screen.queryByRole('heading', { name: 'Runtimes' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Machines' })).toBeNull();
   expect(screen.getByRole('heading', { name: 'Integrations' })).toBeTruthy();
 });

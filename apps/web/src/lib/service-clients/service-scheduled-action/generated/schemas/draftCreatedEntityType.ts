@@ -26,6 +26,7 @@ export type DraftCreatedEntityType =
   | 'crm_contact'
   | 'crm_pipeline'
   | 'reminder'
+  | 'harness'
   | 'skill'
   | 'agent_session'
   | 'scheduled_action'

@@ -65,7 +65,11 @@ function validateFilter(expression: unknown, path: string): void {
   });
 }
 
-/** @internal */
+/**
+ * @internal
+ *
+ * @mcp-exclude Internal query-building helper, not reachable from the `Macro` client.
+ */
 export class WorkspaceQuery {
   private tagSets?: Promise<TagSetResponse[]>;
   constructor(private readonly client: MacroClient) {}
@@ -265,7 +269,7 @@ export class WorkspaceQuery {
     }
     // Agent sessions are opt-in on the wire: a query without `asf` gets none.
     if (!includeTypes?.length || includeTypes.includes('agent_session'))
-      body.asf = and(options.asf, { l: { inc: true } });
+      body.asf = and(options.asf, { l: 'inc' });
     const selected = await this.tags(options.tags, options.tagsMatch);
     if (selected.length) {
       const expressions = selected.map((tag) => ({

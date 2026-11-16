@@ -149,6 +149,36 @@ fn to_typed_row_channel_access_requested() {
 }
 
 #[test]
+fn to_typed_row_runtime_access_removed() {
+    let metadata = serde_json::json!({
+        "runtimeName": "Studio Mac",
+        "agents": [{ "botId": "00000000-0000-0000-0000-000000000002", "name": "Scout" }]
+    });
+    let row = make_row("runtime_access_removed", metadata);
+    let typed = to_typed_row(row).expect("should deserialize runtime_access_removed");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::RuntimeAccessRemoved(_)
+    ));
+}
+
+#[test]
+fn to_typed_row_computer_setup() {
+    let metadata = serde_json::json!({
+        "computerId": "00000000-0000-0000-0000-000000000001",
+        "harnessId": null,
+        "computerName": "Build box",
+        "outcome": { "kind": "failed", "failureReason": "The computer kept crashing." }
+    });
+    let row = make_row("computer_setup", metadata);
+    let typed = to_typed_row(row).expect("should deserialize computer_setup");
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ComputerSetup(_)
+    ));
+}
+
+#[test]
 fn to_typed_row_new_email() {
     let metadata = serde_json::json!({
         "sender": "ext@example.com",
