@@ -88,7 +88,11 @@ login cannot receive an earlier login's write outcome.
 
 Coordinator protocol 18 and the native permission commands must ship with this
 web bundle. Older native binaries require an app update; there is no unguarded
-cache fallback. Keep preference changes disabled until the client rollout is
+cache fallback for the new bundle. New native binaries preserve the legacy cache
+contract for older bundles that omit the whole `authority` argument; supplied
+claims with missing or stale generations still fail closed. This reverse
+compatibility supports native upgrades and web rollbacks, but does not add
+retirement to an older bundle. Keep preference changes disabled until the client rollout is
 complete, including already-open older builds. The server API cannot erase
 content already downloaded by an older client.
 

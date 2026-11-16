@@ -19,6 +19,57 @@ async fn bind(handle: &EngineHandle) {
 }
 
 #[test]
+fn native_legacy_wire_calls_without_authority_preserve_cache_reads_and_writes() {
+    block_on(async {
+        let handle = spawn_handle();
+        // The deployed JS sends these top-level write arguments without authority.
+        let wire = json!({
+            "query": QUERY,
+            "operationName": "Soup",
+            "variables": variables(),
+            "data": soup_data(false),
+            "identity": "user-1"
+        });
+        assert!(wire.get("authority").is_none());
+        let admission: Option<AuthorityAdmission> =
+            serde_json::from_value(wire["authority"].clone()).unwrap();
+        let legacy = handle.clone().with_authority(admission);
+        legacy
+            .write(WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: wire["query"].as_str().unwrap().into(),
+                operation_name: Some(wire["operationName"].as_str().unwrap().into()),
+                variables: wire["variables"].as_object().unwrap().clone(),
+                data: wire["data"].clone(),
+                identity: Some(wire["identity"].as_str().unwrap().into()),
+            })
+            .await
+            .expect("an omitted authority argument must keep the deployed write contract");
+        let result = legacy
+            .read(None, QUERY.into(), Some("Soup".into()), variables(), vec![])
+            .await
+            .expect("an omitted authority argument must keep the deployed read contract");
+        assert!(matches!(result, ReadResultWire::Hit { data } if data == soup_data(false)));
+        assert!(matches!(
+            legacy
+                .watch(
+                    "legacy:watch".into(),
+                    QUERY.into(),
+                    Some("Soup".into()),
+                    variables(),
+                    vec![],
+                    None
+                )
+                .await
+                .unwrap(),
+            cache_core::engine::watch_query::QueryUpdate::Hit { .. }
+        ));
+        legacy.teardown("legacy:watch".into()).await.unwrap();
+    });
+}
+
+#[test]
 fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_commands() {
     block_on(async {
         let handle = spawn_handle();
@@ -56,10 +107,41 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
             .as_object()
             .unwrap()
             .clone();
-        for (index, admitted) in [old, handle.clone().with_authority(None)]
-            .into_iter()
-            .enumerate()
+        for (index, admitted) in [
+            old,
+            handle
+                .clone()
+                .with_authority(Some(AuthorityAdmission::protected(None))),
+        ]
+        .into_iter()
+        .enumerate()
         {
+            assert!(
+                admitted
+                    .read(
+                        None,
+                        QUERY.into(),
+                        Some("Soup".into()),
+                        super::variables(),
+                        vec![]
+                    )
+                    .await
+                    .is_err()
+            );
+            assert!(
+                admitted
+                    .write(WriteRequest {
+                        origin_op_id: None,
+                        registration: None,
+                        query: QUERY.into(),
+                        operation_name: Some("Soup".into()),
+                        variables: super::variables(),
+                        data: soup_data(false),
+                        identity: Some("viewer".into()),
+                    })
+                    .await
+                    .is_err()
+            );
             let enqueued = admitted
                 .enqueue_optimistic_mutation(
                     None,

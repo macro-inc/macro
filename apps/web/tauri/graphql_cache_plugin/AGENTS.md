@@ -38,3 +38,4 @@ From the repository root:
   deployed unscoped command after a guarded-write failure. Register new commands
   in `../src-tauri/src/lib.rs` as well as defining their plugin handler.
 - Keep `apps/web/tauri/Cargo.lock` current when shared client dependencies change.
+- Preserve the legacy command contract when an older web bundle omits `authority`; check every supplied claim, including a missing or stale generation. New bundles always supply claims and require the permission commands. Native build floors protect new bundles on old binaries, not old bundles on new binaries.

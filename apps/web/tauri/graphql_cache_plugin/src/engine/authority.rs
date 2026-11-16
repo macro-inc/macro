@@ -7,13 +7,11 @@ use cache_core::engine::authority::CacheAuthority;
 use uuid::Uuid;
 
 impl EngineHandle {
-    /// Bind admission to this command's cloned handle. Missing fields from an
-    /// older frontend never turn into a bypass of permission checks.
+    /// Bind admission to this command's cloned handle. Older web bundles omit
+    /// the entire claim and retain their legacy contract; a supplied claim is
+    /// always checked, including one with a missing or stale generation.
     pub fn with_authority(mut self, admission: Option<AuthorityAdmission>) -> Self {
-        self.admission = Some(admission.unwrap_or(AuthorityAdmission {
-            generation: None,
-            require_proof: true,
-        }));
+        self.admission = admission;
         self
     }
 

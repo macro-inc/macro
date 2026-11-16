@@ -174,6 +174,19 @@ UIKit bridge; device verification must include notification launches after
 termination/WebContent eviction and ordinary icon resume, as well as auth
 failures, account switching, and rapid successive taps.
 
+### CRM cache command compatibility
+
+New bundles pass an `authority` claim on cache commands and require the native
+permission commands. A supplied claim with a missing or stale generation fails
+closed. Older bundles omit the whole argument; the new native plugin preserves
+the deployed cache contract for those calls, including reads, watches and writes.
+The native plugin regression exercises the old bundle's argument shape. This
+keeps an older production bundle functional on a newer binary during rollback;
+the minimum native build only protects the reverse combination. Older bundles
+do not acquire CRM cache retirement by upgrading native code alone. Keep CRM
+access changes disabled until all access consumers are upgraded, as described
+in [CRM email privacy](../../../docs/CRM_EMAIL_PRIVACY.md#member-access).
+
 ## What counts as native code
 
 Two things:
