@@ -1,0 +1,21 @@
+packages/sdk-ocaml/shell.nix
+  s_10c67a472f88f0::t_4faa4f83a1bdc3 3-4,18,46
+packages/sdk-ocaml/nix/deno.nix
+  s_10c67a472f88f0::t_4faa4f83a1bdc3 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "28d016e76bd1567fe7310ae3e4ccd95a99858b90",
+  "prompts": {},
+  "sessions": {
+    "s_10c67a472f88f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b8a53bc-f5f2-4b55-951b-9e87a11bb2ea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
