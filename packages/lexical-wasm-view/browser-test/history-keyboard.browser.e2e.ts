@@ -68,8 +68,22 @@ for (const engine of ['upstream', 'native'] as const) {
         (engine) => window.inputParity.snapshot(engine),
         engine
       );
-      expect(redone.json).toEqual(typed.json);
       if (engine === 'native') {
+        // Native behaviour, not Source equality: the fixture installs an
+        // id-less root, and native's post-Loro pass ids it on the first undo
+        // (as Source's CollabProvider queues $updateAllNodeIds after a Loro
+        // reconcile, C-ROOT-ID-RECONCILE-01). In this exact scenario real
+        // Source loses that first undo (C-ROOT-ID-FIRST-UNDO-01); native
+        // keeps it, so the redone state is the typed one plus that root id.
+        expect(typed.json.root.$.id).toBeUndefined();
+        expect(undone.json.root.$.id).toEqual(expect.any(String));
+        expect(redone.json).toEqual({
+          ...typed.json,
+          root: {
+            ...typed.json.root,
+            $: { ...typed.json.root.$, id: undone.json.root.$.id },
+          },
+        });
         // Collaborative Loro history restores the surviving paragraph caret,
         // unlike the standalone Source snapshot-history fixture above.
         expect(redone.selection).toEqual({
@@ -81,6 +95,7 @@ for (const engine of ['upstream', 'native'] as const) {
           focus: { path: [0], offset: 0 },
         });
       } else {
+        expect(redone.json).toEqual(typed.json);
         expect(redone.selection).toEqual(typed.selection);
         expect(redone.domSelection).toEqual(typed.domSelection);
       }
@@ -173,7 +188,20 @@ for (const redo of ['Control+Shift+z', 'Control+y']) {
       const redone = await page.evaluate(() =>
         window.inputParity.snapshot('native')
       );
-      expect(redone.json).toEqual(typed.json);
+      // Native ids the fixture's id-less root on the first Loro undo (see
+      // the rows above, C-ROOT-ID-FIRST-UNDO-01); the id then stays stable
+      // over every later cycle.
+      expect(typed.json.root.$.id).toBeUndefined();
+      expect(undone.json.root.$.id).toEqual(expect.any(String));
+      expect(redone.json).toEqual({
+        ...typed.json,
+        root: {
+          ...typed.json.root,
+          $: { ...typed.json.root.$, id: undone.json.root.$.id },
+        },
+      });
+      for (const earlier of cycles)
+        expect(earlier.undone.json.root.$.id).toBe(undone.json.root.$.id);
       // Pin the actual collaborative Source redo policy, not snapshot history.
       expect(redone.selection).toEqual({
         anchor: { path: [0, 0], offset: 0, type: 'text' },
