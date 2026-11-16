@@ -1,0 +1,284 @@
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import {
+  attachGlobalDOMScope,
+  registerHotkey,
+  useHotKeyRoot,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
+import { setActiveScope } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
+import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
+import { fireEvent, render } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { afterEach, expect, it, vi } from 'vitest';
+import { ViewSidebar } from './ViewSidebar';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => false,
+}));
+
+afterEach(() => setActiveScope('global'));
+
+function press(key: string) {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+}
+
+// The hotkey engine tracks held keys, so every press is released.
+function type(field: HTMLElement, key: string, init: KeyboardEventInit = {}) {
+  fireEvent.keyDown(field, { key, ...init });
+  fireEvent.keyUp(field, { key });
+}
+
+function setup(
+  options: {
+    search?: string;
+    selected?: number;
+    /** The sidebar keeps its search open itself, as Chat does. */
+    controlled?: boolean;
+    withoutList?: boolean;
+  } = {}
+) {
+  const [search, setSearch] = createSignal(options.search ?? '');
+  const [open, setOpen] = createSignal(Boolean(options.search));
+  const [selected, setSelected] = createSignal(options.selected ?? 0);
+  const focusResults = vi.fn();
+  const goToFirst = vi.fn(() => true);
+  const leaveView = vi.fn(() => true);
+  let list!: HTMLDivElement;
+
+  function Sidebar(props: { scopeId: string }) {
+    return (
+      <SplitPanelContext.Provider
+        value={
+          {
+            isPanelActive: () => true,
+            splitHotkeyScope: props.scopeId,
+          } as unknown as SplitPanelContextType
+        }
+      >
+        <ViewSidebar.Header
+          searchLabel="Search Home"
+          searchOpen={options.controlled ? open() : undefined}
+          onSearchOpenChange={(next) => {
+            setOpen(next);
+            if (options.controlled && !next) setSearch('');
+          }}
+          collapseControl={<span />}
+          search={() => (
+            <ViewSidebar.Search
+              label="Search Home"
+              value={search()}
+              onValueChange={setSearch}
+              focusResults={
+                options.withoutList
+                  ? undefined
+                  : () => {
+                      focusResults();
+                      list.focus();
+                    }
+              }
+            />
+          )}
+        >
+          Home
+        </ViewSidebar.Header>
+      </SplitPanelContext.Provider>
+    );
+  }
+
+  function Harness() {
+    useHotKeyRoot();
+    const [attachSplit, splitScope] = useHotkeyDOMScope('home-split');
+    // The list's own keys, as use-list-interactions registers them: jump to
+    // the first row, and clear a selection before anything else.
+    registerHotkey({
+      hotkey: 'home',
+      hotkeyToken: TOKENS.entity.jump.home,
+      scopeId: splitScope,
+      description: 'Go to first item',
+      keyDownHandler: goToFirst,
+    });
+    registerHotkey({
+      hotkey: 'escape',
+      scopeId: splitScope,
+      description: 'Clear selection',
+      condition: () => selected() > 0,
+      keyDownHandler: () => {
+        setSelected(0);
+        return true;
+      },
+      registrationType: 'add',
+      handlerPriority: HOTKEY_PRIORITY_HIGH,
+    });
+    registerHotkey({
+      hotkey: 'escape',
+      scopeId: splitScope,
+      description: 'Leave the view',
+      condition: () => selected() === 0 && !search().trim(),
+      keyDownHandler: leaveView,
+      registrationType: 'add',
+    });
+
+    return (
+      <div ref={(element) => attachGlobalDOMScope(element)}>
+        <div
+          ref={(element) => {
+            list = element;
+            attachSplit(element);
+          }}
+          tabIndex={0}
+        >
+          <Sidebar scopeId={splitScope} />
+        </div>
+      </div>
+    );
+  }
+
+  const view = render(() => <Harness />);
+  const button = () => view.getByRole('button', { name: 'Search Home' });
+  const field = () => view.getByRole('searchbox', { name: 'Search Home' });
+  const openField = async () => {
+    fireEvent.click(button());
+    await Promise.resolve();
+    return field();
+  };
+  return {
+    view,
+    button,
+    field,
+    openField,
+    search,
+    open,
+    selected,
+    focusResults,
+    goToFirst,
+    leaveView,
+    list: () => list,
+  };
+}
+
+it('moves from the field to the first result on ArrowDown and on Enter', async () => {
+  const { openField, search, goToFirst, list } = setup();
+  const field = await openField();
+  fireEvent.input(field, { target: { value: 'hello' } });
+  expect(search()).toBe('hello');
+
+  field.focus();
+  type(field, 'ArrowDown');
+  expect(document.activeElement).toBe(list());
+  expect(goToFirst).toHaveBeenCalledTimes(1);
+
+  field.focus();
+  type(field, 'Enter');
+  expect(document.activeElement).toBe(list());
+  expect(goToFirst).toHaveBeenCalledTimes(2);
+  expect(search()).toBe('hello');
+});
+
+it('turns off the browser history popup that would take the arrow keys', async () => {
+  const { openField } = setup();
+
+  expect((await openField()).getAttribute('autocomplete')).toBe('off');
+});
+
+it('leaves modified and composing keys to the field', async () => {
+  const { openField, focusResults } = setup({ search: 'hello' });
+  const field = await openField();
+
+  field.focus();
+  type(field, 'Enter', { isComposing: true });
+  type(field, 'ArrowDown', { shiftKey: true });
+  expect(focusResults).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(field);
+});
+
+it('keeps the search when Escape leaves the field for the list', async () => {
+  const { openField, field, search, goToFirst, list } = setup({
+    search: 'hello',
+  });
+  (await openField()).focus();
+
+  type(field(), 'Escape');
+
+  expect(search()).toBe('hello');
+  // The list keeps the row it was on.
+  expect(goToFirst).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(list());
+  expect(field()).toBeTruthy();
+});
+
+it('clears the search on Escape in the list, after a selection, then collapses the field', async () => {
+  const { view, openField, search, selected, leaveView, list } = setup({
+    search: 'hello',
+    selected: 2,
+  });
+  await openField();
+  list().focus();
+
+  press('Escape');
+  expect(selected()).toBe(0);
+  expect(search()).toBe('hello');
+
+  press('Escape');
+  expect(search()).toBe('');
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(leaveView).not.toHaveBeenCalled();
+
+  press('Escape');
+  expect(leaveView).toHaveBeenCalledOnce();
+});
+
+it('closes a search the sidebar keeps open itself', async () => {
+  const { view, field, search, open, list } = setup({
+    search: 'gab',
+    controlled: true,
+  });
+  expect(field()).toBeTruthy();
+  list().focus();
+
+  press('Escape');
+  expect(open()).toBe(false);
+  expect(search()).toBe('');
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
+it('collapses an empty field on Escape into the list', async () => {
+  const { view, openField, focusResults, list } = setup();
+  const field = await openField();
+
+  type(field, 'Escape');
+
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(focusResults).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(list());
+});
+
+it('returns an empty field to the search button when no list takes the keyboard', async () => {
+  const { view, openField, button } = setup({ withoutList: true });
+  const field = await openField();
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'ArrowDown');
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'Escape');
+  await Promise.resolve();
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(document.activeElement).toBe(button());
+});
+
+it('leaves an Escape that cancels a composition to the field', async () => {
+  const { openField, search, focusResults } = setup({ search: 'hello' });
+  const field = await openField();
+
+  field.focus();
+  type(field, 'Escape', { isComposing: true });
+
+  expect(document.activeElement).toBe(field);
+  expect(focusResults).not.toHaveBeenCalled();
+  expect(search()).toBe('hello');
+});

@@ -2,6 +2,9 @@ import { expect, type Page, test } from '@playwright/test';
 
 const fixture = '/src/components/view-shell/browser-test/list-search.html';
 
+// The same keys hold in a list header and in a sidebar that is the list.
+const SURFACES = ['', '?surface=sidebar'];
+
 async function open(page: Page, query = '') {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -18,10 +21,11 @@ async function open(page: Page, query = '') {
   };
 }
 
-test('moves from the search field into the results and back out', async ({
+for (const surface of SURFACES) {
+test(`moves from the search field into the results and back out${surface}`, async ({
   page,
 }) => {
-  const { field, grid, rows } = await open(page);
+  const { field, grid, rows } = await open(page, surface);
 
   await field.pressSequentially('budget');
   await expect(rows).toHaveCount(3);
@@ -48,16 +52,24 @@ test('moves from the search field into the results and back out', async ({
   await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget notes');
 });
 
-test('keeps the search on Escape in the field and clears it from the list', async ({
+test(`keeps the search on Escape in the field and clears it from the list${surface}`, async ({
   page,
 }) => {
-  const { field, grid, rows } = await open(page);
+  const { field, grid, rows } = await open(page, surface);
   await field.pressSequentially('budget');
 
   await page.keyboard.press('Escape');
   await expect(grid).toBeFocused();
   await expect(field).toHaveValue('budget');
   await expect(rows).toHaveCount(3);
+
+  // A sidebar's field stays beside the detail, whose Escape it leaves alone.
+  if (surface) {
+    await page.getByRole('button', { name: 'Open detail' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveValue('budget');
+    await grid.focus();
+  }
 
   // A selection is the innermost level, then the search, then the tab.
   await page.keyboard.press('j');
@@ -75,6 +87,7 @@ test('keeps the search on Escape in the field and clears it from the list', asyn
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('tab')).toHaveText('Inbox');
 });
+}
 
 test('a wide field owns the header and runs a recent search from the keyboard', async ({
   page,

@@ -16,6 +16,7 @@ import {
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListHeaderSearch } from '../ListHeader';
+import { ViewSidebar } from '../ViewSidebar';
 
 const RECENT = ['budget', 'roadmap'];
 
@@ -27,8 +28,14 @@ const FILES = [
   'Roadmap',
 ];
 
-/** The real field, hotkey engine and list controller, over local rows. */
+/**
+ * The real field, hotkey engine and list controller, over local rows.
+ * `?surface=sidebar` puts the field in a sidebar header, as Home and Chat
+ * have it, instead of a list header.
+ */
 function Fixture() {
+  const inSidebar =
+    new URLSearchParams(location.search).get('surface') === 'sidebar';
   useHotKeyRoot();
   const [attachSplit, scopeId] = useHotkeyDOMScope('files-split');
   const [search, setSearch] = createSignal('');
@@ -86,6 +93,8 @@ function Fixture() {
       class="min-h-screen bg-page p-8 text-ink"
     >
       <div ref={attachSplit} class="max-w-2xl rounded-xl bg-panel p-4">
+        {/* As in a view, the sidebar holds the field and its list. */}
+        <div data-view-shell-aside="">
         <div class="flex items-center justify-between gap-2">
           <h1 class="text-sm font-medium" data-testid="tab">
             {tab()}
@@ -94,26 +103,48 @@ function Fixture() {
             <button type="button">New</button>
           </Show>
           <SplitPanelContext.Provider value={panel}>
-            <ListHeaderSearch
-              label="Search files"
-              value={search()}
-              onValueChange={setSearch}
-              focusResults={() => grid.focus()}
-              registerFocus={() => {}}
-              wide={wide}
-              onOpenChange={setOpen}
-              onFocusChange={setFocused}
-              suggestions={
-                wide
-                  ? {
-                      count: () => recent().length,
-                      active,
-                      setActive,
-                      pick: (index) => setSearch(recent()[index] ?? ''),
-                    }
-                  : undefined
+            <Show
+              when={inSidebar}
+              fallback={
+                <ListHeaderSearch
+                  label="Search files"
+                  value={search()}
+                  onValueChange={setSearch}
+                  focusResults={() => grid.focus()}
+                  registerFocus={() => {}}
+                  wide={wide}
+                  onOpenChange={setOpen}
+                  onFocusChange={setFocused}
+                  suggestions={
+                    wide
+                      ? {
+                          count: () => recent().length,
+                          active,
+                          setActive,
+                          pick: (index) => setSearch(recent()[index] ?? ''),
+                        }
+                      : undefined
+                  }
+                />
               }
-            />
+            >
+              <div class="w-72">
+                <ViewSidebar.Header
+                  searchLabel="Search files"
+                  collapseControl={<span />}
+                  search={() => (
+                    <ViewSidebar.Search
+                      label="Search files"
+                      value={search()}
+                      onValueChange={setSearch}
+                      focusResults={() => grid.focus()}
+                    />
+                  )}
+                >
+                  Files
+                </ViewSidebar.Header>
+              </div>
+            </Show>
           </SplitPanelContext.Provider>
         </div>
         <div role="listbox" aria-label="Recent searches">
@@ -147,6 +178,11 @@ function Fixture() {
             )}
           </For>
         </div>
+        </div>
+        {/* The detail the list opened, beside the sidebar. */}
+        <button type="button" class="mt-3 text-sm">
+          Open detail
+        </button>
       </div>
     </div>
   );
