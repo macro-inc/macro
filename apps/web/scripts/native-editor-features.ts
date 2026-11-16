@@ -71,6 +71,9 @@ export function assertNativeEditorGraph(
     if (features.has('dev-probes')) {
       throw new Error(`Native editor graph enables development probes: ${line}`);
     }
+    if (features.has('test-faults')) {
+      throw new Error(`Native editor graph enables test fault hooks: ${line}`);
+    }
     if (
       ((name === 'document_session' || name === 'document_session_wasm') &&
         features.has('compatibility')) ||
