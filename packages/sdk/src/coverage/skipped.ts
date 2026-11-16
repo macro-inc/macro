@@ -114,7 +114,6 @@ export const authExcluded = [
   'passwordLogin',
   'passwordlessCallback',
   'passwordlessLogin',
-  'patchTeam',
   'patchTeamCrmSettings',
   'patchTeamMemberPlan',
   'patchUserGroup',
@@ -446,7 +445,9 @@ export const storageExcluded = [
   'passwordsFolders',
   'passwordsGrants',
   'passwordsHistory',
+  'passwordsImportBatch',
   'passwordsList',
+  'passwordsMatch',
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
@@ -493,6 +494,7 @@ export const storageExcluded = [
 export const storageBacklog = [
   // CRM privacy settings use the generated client.
   'getCrmEmailPrivacy',
+  'listCrmExcludedEmailThreads',
   'updateCrmEmailPrivacy',
 ] as const satisfies readonly (keyof StorageSdk)[];
 

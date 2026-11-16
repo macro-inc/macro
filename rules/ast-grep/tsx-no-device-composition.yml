@@ -26,6 +26,7 @@ ignores:
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-md/component/Block.tsx
   - apps/web/src/features/task-composer/compose-task.tsx
+  - apps/web/src/features/entity-appearance/appearance-menu.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx

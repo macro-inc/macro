@@ -2,7 +2,7 @@ use super::CompaniesRepositoryImpl;
 use crate::domain::{
     email_privacy::{
         EmailBlockScope, EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyRepository,
-        EmailPrivacySettings,
+        EmailPrivacySettings, ExcludedEmailThread, ExcludedEmailThreads,
     },
     model::CrmError,
 };
@@ -112,6 +112,60 @@ impl CompaniesRepositoryImpl {
 
 impl EmailPrivacyRepository for CompaniesRepositoryImpl {
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]
+    async fn excluded_email_threads(
+        &self,
+        team: Uuid,
+        user: &str,
+        after: Option<Uuid>,
+    ) -> Result<ExcludedEmailThreads, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // Page the member's indexed exceptions before loading thread metadata.
+        let mut threads = sqlx::query_as!(
+            ExcludedEmailThread,
+            r#"SELECT e.thread_id, e.link_id, message.subject
+               FROM (
+                   SELECT thread_id, link_id FROM crm_email_thread_exclusions
+                   WHERE team_id = $1 AND user_id = $2
+                     AND thread_id > COALESCE($3, '00000000-0000-0000-0000-000000000000'::uuid)
+                   ORDER BY thread_id LIMIT 51
+               ) e
+               JOIN email_links l ON l.id = e.link_id AND l.macro_id = $2
+               LEFT JOIN LATERAL (
+                   SELECT subject FROM email_messages WHERE thread_id = e.thread_id
+                   ORDER BY internal_date_ts DESC LIMIT 1
+               ) message ON TRUE
+               ORDER BY e.thread_id"#,
+            team,
+            user,
+            after
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let next_cursor = if threads.len() > 50 {
+            threads.truncate(50);
+            threads.last().map(|thread| thread.thread_id)
+        } else {
+            None
+        };
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(ExcludedEmailThreads {
+            threads,
+            next_cursor,
+        })
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
     async fn contribution_mailbox(
         &self,
         team: Uuid,
@@ -156,6 +210,15 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         team: Uuid,
         user: &str,
     ) -> Result<EmailPrivacySettings, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let mailbox = sqlx::query!(
             r#"SELECT l.id, l.email_address, COALESCE(c.enabled, FALSE) AS "enabled!"
                FROM email_links l LEFT JOIN crm_email_consent c
@@ -164,17 +227,22 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             team,
             user
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // The company team predicate lets the partial disabled-company index
+        // drive this reload, including after an individual thread toggle.
         let team_domains = sqlx::query_scalar!(
             r#"SELECT domain AS "domain!" FROM crm_blocked_domains WHERE team_id = $1
                UNION SELECT lower(d.domain) FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id
-               WHERE d.team_id = $1 AND NOT c.email_sync ORDER BY 1"#, team
-        ).fetch_all(&self.pool).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+               WHERE d.team_id = $1 AND c.team_id = $1 AND NOT c.email_sync ORDER BY 1"#, team
+        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let personal_domains = sqlx::query_scalar!(
             "SELECT domain FROM crm_personal_email_blocklist WHERE team_id = $1 AND user_id = $2 ORDER BY domain", team, user
-        ).fetch_all(&self.pool).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(EmailPrivacySettings {
             enabled: mailbox.as_ref().is_some_and(|m| m.enabled),
             mailbox_link_id: mailbox.as_ref().map(|m| m.id),
@@ -185,7 +253,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         })
     }
 
-    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %team, thread_id = tracing::field::Empty), err)]
     async fn change_email_privacy(
         &self,
         team: Uuid,
@@ -197,10 +265,71 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Self::lock_email_privacy(&mut tx, team, true).await?;
         let mut backfill_team = false;
         let backfill_user;
         match change {
+            EmailPrivacyChange::SetThreadExclusion {
+                thread_id,
+                excluded,
+            } => {
+                tracing::Span::current().record("thread_id", tracing::field::display(thread_id));
+                // Even clearing an exception requires ownership. Lock the live
+                // mailbox and membership before the thread, matching lifecycle
+                // writers; no caller can supply another contributor's identity.
+                let link = sqlx::query_scalar!(
+                    r#"SELECT l.id FROM email_links l
+                       JOIN team_user member ON member.user_id = l.macro_id AND member.team_id = $1
+                       WHERE l.macro_id = $2 AND l.deleting_at IS NULL
+                         AND l.id = (SELECT link_id FROM email_threads WHERE id = $3)
+                       FOR SHARE OF l FOR KEY SHARE OF member"#,
+                    team,
+                    user,
+                    thread_id
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?
+                .ok_or_else(|| {
+                    CrmError::InvalidRequest("select a thread in your own mailbox".into())
+                })?;
+                let owned = sqlx::query_scalar!(
+                    "SELECT id FROM email_threads WHERE id = $1 AND link_id = $2 FOR KEY SHARE",
+                    thread_id,
+                    link
+                )
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                if owned.is_none() {
+                    return Err(CrmError::InvalidRequest(
+                        "select a thread in your own mailbox".into(),
+                    ));
+                }
+                if excluded {
+                    sqlx::query!(
+                        "INSERT INTO crm_email_thread_exclusions (team_id, user_id, link_id, thread_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+                        team, user, link, thread_id
+                    ).execute(&mut *tx).await
+                        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                    backfill_user = false;
+                } else {
+                    let removed = sqlx::query!(
+                        "DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND user_id = $2 AND thread_id = $3 AND link_id = $4",
+                        team, user, thread_id, link
+                    ).execute(&mut *tx).await
+                        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                    backfill_user = removed.rows_affected() > 0;
+                }
+            }
             EmailPrivacyChange::SetConsent { enabled: false, .. } => {
                 // Withdrawal is independent of the current connection state.
                 sqlx::query!("UPDATE crm_email_consent SET enabled = FALSE, updated_at = now() WHERE team_id = $1 AND user_id = $2", team, user)

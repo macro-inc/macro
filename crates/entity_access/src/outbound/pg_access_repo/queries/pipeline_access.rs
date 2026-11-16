@@ -33,11 +33,55 @@ pub async fn get_pipeline_access(
     id: Uuid,
     sources: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
     let levels = sqlx::query_scalar!(
-        "SELECT access_level::text FROM entity_access WHERE entity_id = $1 AND entity_type = 'crm_pipeline' AND source_id = ANY($2)",
-        id, &sources.0,
-    ).fetch_all(pool).await?;
+        "SELECT ea.access_level::text FROM entity_access ea
+         WHERE ea.entity_id = $1 AND ea.entity_type = 'crm_pipeline' AND ea.source_id = ANY($2)",
+        id,
+        &sources.0,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
     super::database_access::highest_access_level(&levels)
+}
+
+/// Fresh sharing sources for a CRM pipeline read. Team grants follow current
+/// CRM authority; direct and channel grants remain independent of that setting.
+#[tracing::instrument(skip_all, err)]
+pub async fn user_sources(pool: &PgPool, viewer: Option<&str>) -> Result<SourceIds, sqlx::Error> {
+    let Some(viewer) = viewer else {
+        return Ok(SourceIds(Vec::new()));
+    };
+    let mut tx = Box::pin(pool.begin()).await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+    // Parameterize the channel lookup through one viewer so stale statistics
+    // cannot turn a frequently seen user's request into a membership-table scan.
+    let sources = sqlx::query_scalar!(
+        r#"SELECT cp.channel_id::text AS "source_id!"
+           FROM (SELECT $1::text AS user_id OFFSET 0) viewer
+           CROSS JOIN LATERAL (
+               SELECT cp.channel_id
+               FROM comms_channel_participants cp
+               WHERE cp.user_id = viewer.user_id AND cp.left_at IS NULL
+               OFFSET 0
+           ) cp
+           UNION ALL
+           SELECT tu.team_id::text FROM team_user tu
+           WHERE tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
+           UNION ALL
+           SELECT $1"#,
+        viewer,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(SourceIds(sources))
 }
 
 /// Highest grant on each of `ids`, reading only those pipelines' grants.

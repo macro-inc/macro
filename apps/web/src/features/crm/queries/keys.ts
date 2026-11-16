@@ -5,6 +5,12 @@ export const crmKeys = createQueryKeys('crm', {
     teamId,
     userId,
   ],
+  excludedEmailThreads: (
+    teamId: string | undefined,
+    userId: string | undefined,
+    session: number | undefined,
+    after: string | undefined
+  ) => [teamId, userId, session, after],
   // One `/saved_views` read serves CRM lists and personal views.
   savedViews: null,
   pipelines: (teamId: string | undefined) => [teamId],

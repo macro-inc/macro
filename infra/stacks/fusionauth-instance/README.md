@@ -38,8 +38,15 @@ api-key: bf69486b-4733-4954-a44e-2e1b5f2c8a91
 
 `update-theme-message.ts` sets `[IdentityProviderValidationException]` to
 conditional sign-in recovery guidance. It replaces or adds this one single-line
-entry, preserving the rest of `defaultMessages`. The PATCH sends no templates
-or other theme settings. Authentication and reconciliation are unchanged.
+entry, preserving the rest of `defaultMessages`. Authentication and
+reconciliation are unchanged.
+
+FusionAuth rejects any save of a theme that lacks a message key or page
+template its version requires, which happens to a theme copied before an
+upgrade. The updater therefore also adds whatever the theme lacks, unchanged
+from FusionAuth's built-in theme, in the same PATCH; the preview lists each
+key and template it would add. Existing entries and templates are never
+modified.
 The updater and Pulumi configuration share the theme IDs in `theme-ids.ts`.
 Before applying, save any existing value of this entry for rollback.
 
