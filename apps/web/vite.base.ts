@@ -112,11 +112,13 @@ function pureGeneratedZodSchemas(): Plugin {
  */
 const WEB_HOSTED_FILE = /\.(mp4|webm|mov)$/i;
 
-function assetFileNames(pattern: string) {
+// Hosted names keep their hash even in NO_MINIFY builds: a native bundle
+// always loads the web deploy's copy, which is hashed.
+function assetFileNames(bundledPattern: string) {
   return (asset: Rolldown.PreRenderedAsset) =>
     asset.names.some((name) => WEB_HOSTED_FILE.test(name))
-      ? `web-hosted/${pattern}`
-      : `assets/${pattern}`;
+      ? 'web-hosted/[name]-[hash][extname]'
+      : `assets/${bundledPattern}`;
 }
 
 /**

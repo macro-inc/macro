@@ -2,12 +2,20 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, type Rolldown } from 'vite';
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createAppViteConfig } from '../vite.base';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-it('writes tutorial videos to web-hosted/ and keeps posters in assets/', async () => {
+afterEach(() => vi.unstubAllEnvs());
+
+// NO_MINIFY drops hashes from bundled names, but a native bundle loads hosted
+// videos from the web deploy, whose names are hashed.
+it.each([
+  'false',
+  'true',
+])('writes tutorial videos to web-hosted/ with hashed names and keeps posters in assets/ (NO_MINIFY=%s)', async (noMinify) => {
+  vi.stubEnv('NO_MINIFY', noMinify);
   const config = await createAppViteConfig()({
     command: 'build',
     mode: 'production',
