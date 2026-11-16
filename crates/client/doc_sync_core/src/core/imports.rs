@@ -762,7 +762,7 @@ impl SyncCore {
         let (snapshot, confirmed_base) = if self.has_private_rows() {
             let Some((recovered, confirmed_base)) = self.recovery_snapshot(&snapshot, peer, doc)
             else {
-                self.finish_reset(false, rebase, now, out);
+                self.finish_reset(false, rebase, now, doc, out);
                 return;
             };
             (recovered, Some(confirmed_base))
@@ -801,16 +801,23 @@ impl SyncCore {
                     );
                 }
                 out.events.push(SyncEvent::Replaced);
-                self.finish_reset(true, rebase, now, out);
+                self.finish_reset(true, rebase, now, doc, out);
             }
             Err(_) => {
                 self.phase = Phase::Running;
-                self.finish_reset(false, rebase, now, out);
+                self.finish_reset(false, rebase, now, doc, out);
             }
         }
     }
 
-    pub(super) fn finish_reset(&mut self, ok: bool, rebase: bool, now: Now, out: &mut SyncOutput) {
+    pub(super) fn finish_reset(
+        &mut self,
+        ok: bool,
+        rebase: bool,
+        now: Now,
+        doc: &mut impl SyncDoc,
+        out: &mut SyncOutput,
+    ) {
         self.reset = None;
         self.phase = Phase::Running;
         self.rebase_active = false;
@@ -825,6 +832,13 @@ impl SyncCore {
         if rebase && self.rebase_rerun {
             self.rebase_rerun = false;
             self.schedule_rebase(now, out);
+        }
+        // A replaced document answers recoveries requested against the old one;
+        // after a failure they still need their own reset.
+        if ok {
+            self.reset_requested = false;
+        } else if self.reset_requested {
+            self.begin_reset(now, doc, false, false, out);
         }
     }
 

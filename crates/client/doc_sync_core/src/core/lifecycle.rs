@@ -20,6 +20,15 @@ impl SyncCore {
         let was_live = self.connection.opened();
         if self.config.transport == TransportKind::Direct {
             self.connection.tick(now, &mut out.io);
+        } else if let Connection::AwaitingInitialSync { deadline, .. } = self.connection.state
+            && self.config.transport == TransportKind::Routed
+            && now.mono >= deadline
+        {
+            // The router confirmed the route but the document never synced.
+            self.connection.state = Connection::Idle;
+            out.io.push(IoEffect::RouteReconnect {
+                doc: self.config.doc.clone(),
+            });
         }
         if self.connect_span.is_none()
             && matches!(
@@ -287,10 +296,12 @@ impl SyncCore {
             return self.storage.values().map(|p| p.deadline).min();
         }
         let mut deadlines = vec![
-            if self.config.transport == TransportKind::Direct {
-                self.connection.wake_at()
-            } else {
-                None
+            match (&self.config.transport, &self.connection.state) {
+                (TransportKind::Direct, _) => self.connection.wake_at(),
+                (TransportKind::Routed, Connection::AwaitingInitialSync { deadline, .. }) => {
+                    Some(*deadline)
+                }
+                _ => None,
             },
             self.wal.append_due,
             self.push.as_ref().map(|p| p.deadline),

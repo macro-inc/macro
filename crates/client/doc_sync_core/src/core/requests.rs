@@ -418,7 +418,7 @@ impl SyncCore {
             }
         }
         if reset_timed_out {
-            self.finish_reset(false, self.rebase_active, now, out);
+            self.finish_reset(false, self.rebase_active, now, doc, out);
         }
         let mut pending = Vec::new();
         for comment in self.comments.drain(..) {
@@ -432,6 +432,5 @@ impl SyncCore {
             }
         }
         self.comments = pending;
-        let _ = doc;
     }
 }

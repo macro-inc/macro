@@ -148,7 +148,7 @@ fn s7_013_fourth_corruption_reset_closes_session() {
     let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
     for _ in 0..3 {
         h.send(SyncInput::ImportFailed(corrupt()));
-        h.core.finish_reset(false, false, now(0), &mut h.out);
+        h.core.finish_reset(false, false, now(0), &mut h.doc, &mut h.out);
     }
     h.send(SyncInput::ImportFailed(corrupt()));
     assert!(matches!(
@@ -164,7 +164,7 @@ fn s7_016_outdated_rebase_is_unbudgeted_and_rate_limited() {
     h.send(SyncInput::Tick);
     assert!(h.core.rebase_active);
     assert!(h.core.reset_times.is_empty());
-    h.core.finish_reset(true, true, now(0), &mut h.out);
+    h.core.finish_reset(true, true, now(0), &mut h.doc, &mut h.out);
     h.at(1, SyncInput::ImportFailed(ImportFailure::Outdated));
     assert_eq!(h.core.rebase_due, Some(Millis(10000)));
 }
@@ -1134,4 +1134,42 @@ fn invalid_recovery_bytes_or_row_checksum_preserve_live_private_history() {
             SaveState::Unsaved(UnsavedReason::ReadOnly)
         );
     }
+}
+#[test]
+fn a_recovery_requested_during_a_failed_reset_starts_another_reset() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.add_peer_ids([2, 3]).unwrap();
+    h.doc.edit("keep");
+    h.doc.replace_fails = true;
+    h.send(SyncInput::Reset);
+    assert_eq!(h.core.phase, Phase::Resetting);
+    h.send(SyncInput::ImportFailed(ImportFailure::Projection(
+        rootcause::report!("test projection error"),
+    )));
+    h.at(5000, SyncInput::Tick);
+    let request_vv = h.core.since.back().unwrap().vv.clone();
+    h.remote(sync_protocol::FromRemote::RemoteUpdateSince {
+        vv: SliceWrapper::from_cooked(&request_vv),
+        update: SliceWrapper::from_cooked(&[]),
+    });
+    assert_eq!(h.core.phase, Phase::Resetting);
+    assert!(!h.core.reset_requested);
+}
+#[test]
+fn a_routed_subscription_without_an_initial_sync_reconnects_at_its_deadline() {
+    let mut h = Harness::running(TransportKind::Routed, Persistence::Memory);
+    h.send(SyncInput::Route(RouteEvent::Subscribed {
+        conn: ConnId(1),
+        access: WriteAccess::Full,
+    }));
+    let deadline = Timeouts::default().initial_sync.0;
+    assert!(h.out.wake_at.is_some_and(|at| at.0 <= deadline));
+    h.at(deadline, SyncInput::Tick);
+    assert!(
+        h.out
+            .io
+            .iter()
+            .any(|e| matches!(e, IoEffect::RouteReconnect { .. }))
+    );
 }
