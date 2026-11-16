@@ -433,7 +433,12 @@ cargo tauri android build
 
 The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
-according to `tauri.conf.json`.
+according to `tauri.conf.json`. Tauri embeds every file in `dist`, so
+`build-tauri` (and `build-tauri-dev`) delete the source maps first; the OTA
+archive leaves them out too. Native crash reports still symbolicate:
+`rewriteNativeFrameUrls` (`src/lib/analytics/exceptionList.ts`) points their
+frames at the public web copies, whose maps stay published. Web Inspector on a
+native build shows minified code and a failed source map load.
 
 From `apps/web`, use `just ios-build` for a release build or
 `just ios-build --no-update` to disable automatic bundle updates.

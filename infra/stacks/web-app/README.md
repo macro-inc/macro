@@ -29,6 +29,11 @@ old WASM pruning → retained-build pruning
   only after the assets and managed native archive are ready. The stable
   `app-archive.zip` is managed separately with `no-store`.
 
+The native archive (`app-archive.zip`, the OTA bundle) is staged from its own
+copy of the build without the cache WASM Brotli sidecar or source maps. Native
+crash frames are rewritten to the public web copies, so the maps published with
+the web assets (and uploaded to Datadog by the deploy workflow) still apply.
+
 The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
 response, including preview failures, uses `no-store`. Pruning waits for the
