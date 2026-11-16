@@ -23,6 +23,14 @@ struct LookupFailed;
 impl MembershipPort for FixtureTeam {
     type Err = LookupFailed;
 
+    async fn denied_view_kinds(
+        &self,
+        _: &str,
+        _: &HashSet<String>,
+    ) -> Result<HashSet<String>, Self::Err> {
+        Ok(HashSet::new())
+    }
+
     async fn viewer_teams(&self, _viewer: &str) -> Result<Vec<Uuid>, Self::Err> {
         Ok(vec![TEAM])
     }
