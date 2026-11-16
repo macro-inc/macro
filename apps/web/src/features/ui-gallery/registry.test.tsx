@@ -45,6 +45,19 @@ describe('doc registry', () => {
     expect(filterEntries(DOC_ENTRIES, 'zzzznope')).toHaveLength(0);
   });
 
+  it('loads implementations for shared date/time and calendar docs', async () => {
+    for (const slug of [
+      'time-input',
+      'date-tile',
+      'busy-indicator',
+      'calendar-swatch',
+      'value-pill',
+    ]) {
+      const entry = DOC_ENTRIES.find((entry) => entry.slug === slug);
+      expect(entry?.loadComponentSource, slug).not.toBeNull();
+      expect(await entry?.loadComponentSource?.(), slug).toContain('Props');
+    }
+  });
   it('reports coverage for every ui component file', () => {
     const rows = coverageRows();
     expect(rows.length).toBeGreaterThan(0);

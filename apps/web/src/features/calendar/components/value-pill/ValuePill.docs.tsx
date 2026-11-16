@@ -23,10 +23,7 @@ export default defineDoc({
   category: 'Inputs',
   description:
     'Quiet editable values, with an accent ring for open menus and plain read-only text.',
-  guidelines: {
-    do: ['Use a menu caret only for dropdown values.'],
-    dont: ['Give read-only values an editable fill.'],
-  },
+  propTypes: ['ValuePillProps'],
   demos: [
     {
       id: 'states',

@@ -26,10 +26,7 @@ export default defineDoc({
   name: 'Calendar swatch',
   category: 'Data Display',
   description: 'A resolved calendar color beside its title or source name.',
-  guidelines: {
-    do: ['Pair the swatch with a text label.'],
-    dont: ['Fetch source data inside the swatch.'],
-  },
+  propTypes: ['CalendarSwatchProps'],
   demos: [
     {
       id: 'colors',

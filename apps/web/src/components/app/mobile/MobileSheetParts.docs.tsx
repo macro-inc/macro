@@ -44,6 +44,7 @@ export default defineDoc({
   category: 'Layout',
   description:
     'Composable sheet groups, icon-aligned rows, and pinned footer fade.',
+  propTypes: ['SheetGroupProps', 'SheetRowProps', 'SheetFooterProps'],
   guidelines: {
     do: ['Keep one scroller and the footer outside it.'],
     dont: ['Put a second scroll container inside a field group.'],

@@ -37,6 +37,7 @@ export default defineDoc({
   category: 'Inputs',
   description:
     'Typed or selected local clock times with an explicit display preference.',
+  propTypes: ['TimeInputProps'],
   guidelines: {
     do: ['Supply the calendar clock preference from the host.'],
     dont: ['Change local values when the display format changes.'],

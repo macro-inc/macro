@@ -19,10 +19,7 @@ export default defineDoc({
   category: 'Data Display',
   description:
     'A calendar-colored date marker with same-month range and compact search variants.',
-  guidelines: {
-    do: ['Keep full date and time in the event text.'],
-    dont: ['Show an exclusive end date as an occupied day.'],
-  },
+  propTypes: ['DateTileProps'],
   demos: [
     {
       id: 'ranges',

@@ -44,10 +44,13 @@ open standalone or agent event composer; shared date/time fields outside the
 calendar retain their locale default unless their host supplies a preference.
 
 Calendar foundation examples are in the UI gallery: `?ui=time-input`,
-`?ui=date-tile`, `?ui=calendar-swatch`, `?ui=value-pill`, and
+`?ui=date-tile`, `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and
 `?ui=mobile-sheet-parts` under `/app/component/ui`. The sheet example keeps its
 footer outside the scroller and removes the footer fade at the end. Shared
 sheet handles use 12px above and 16px below the 36×4px grabber.
+The busy-indicator example distinguishes a confirmed conflict from free and
+unknown availability. Live guest indicators remain absent until the existing
+authorized team-availability source is adapted; external guests have no source.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
