@@ -11,7 +11,7 @@ use crate::domain::{
         SequenceStepStore, StepState,
     },
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::PgConnection;
 use uuid::Uuid;
 

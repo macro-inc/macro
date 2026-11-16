@@ -225,6 +225,7 @@ async fn pending_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::R
     .fetch_one(&pool)
     .await?;
     assert_eq!(schedule.source.as_deref(), Some("sequence"));
+    let mut conn = pool.acquire().await?;
     assert_eq!(
         schedule.list_unsubscribe_url.as_deref(),
         Some("https://example.com/u/token")

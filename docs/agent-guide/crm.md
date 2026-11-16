@@ -729,21 +729,24 @@ CRM on for the team, the section and its links behave the same way.
   first sends at the start; each later one waits days after the previous and
   can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
   `{{email}}` at the caret) and the footer; the server adds an unsubscribe
-  link. Edits save on their own (**Saving…** shows beside the status), and
-  **Activate** starts it; Delete is in the ⋯ menu. A sequence can be edited
-  while active; edits reach every email not yet created (each is rendered
-  about a minute before it sends). A save that would leave an active sequence
-  incomplete (an emptied subject, say) is refused: the message shows above the
-  editor and the local edits stay. Pending emails stay out of Mail; a failed one
-  shows there like any failed send.
+  link. A draft or paused sequence saves on its own (**Saving…** shows beside
+  the status), and **Activate** starts it; Delete is in the ⋯ menu. An active
+  sequence can be edited too, but its emails keep using the saved version
+  until you press **Save changes** (**Discard** drops the edits, and so does
+  leaving); a saved edit reaches every email not yet created (each is
+  rendered about a minute before it sends). A save that would leave an active
+  sequence incomplete (an emptied subject or an unknown `{{token}}`, say) is
+  refused: the message shows above the editor and the local edits stay.
+  Pending emails stay out of Mail; a failed one shows there like any failed
+  send. One inbox sends a sequence email at most every 3 minutes.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
   takes a start time in your time zone. People can be added before activating;
   nothing sends until the sequence is active. Selected People or
   Companies rows also offer **Add to sequence** in their right-click and
   selection command menus; a company brings all its people, so filter or group
   Companies by Stage to add a pipeline stage. Past 50 people, only the first
-  50 are selected. Skipped people (no email, unsubscribed, already added) are
-  listed with why.
+  50 are selected. Skipped people (no email, unsubscribed, already added, or
+  the sequence already holds 1,000 people) are listed with why.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused
   (also while the sequence is a draft or paused), Needs attention (an email
   didn't go out: check it in Mail, then resume or stop; sending it from Mail
