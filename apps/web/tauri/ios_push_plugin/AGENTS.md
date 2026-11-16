@@ -24,11 +24,14 @@ and owns durable notification-tap delivery across cold launches/WebView reloads.
 - Let the authenticated frontend validate the payload recipient and access.
   `configure_recipient` clears stale intents on logout/account changes.
 - A neutral view covers the WebView only while a tap is pending: from a tap
-  that opens the app (it was not on screen when tapped), or a page load that
-  boots into a pending tap, until the destination draws. iOS opens the app
-  from a notification on its launch screen, not its last snapshot; the cover
-  matches it, so the previous page never shows in between. A tap on an app the
-  person is looking at navigates in place. Never cover on lifecycle changes;
+  that arrives while the app is not active, or a page load that boots into a
+  pending tap, until the destination draws. iOS opens the app from a
+  notification on its launch screen, not its last snapshot; the cover matches
+  it, so the previous page never shows in between. Only a tap on an active app
+  whose page has booted navigates in place; read the app state when the
+  response arrives, not after a main-queue hop, by which time an opening tap
+  can already be active. `phase=capture covered=` logs the decision. Never
+  cover on lifecycle changes;
   the app switcher and system overlays must show the app's real content.
   Auth/error screens use `release_notification_cover` without
   consuming the intent. A hidden bootstrap must never wait for foregrounding.

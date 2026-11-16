@@ -295,13 +295,15 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
             completionHandler()
             return
         }
+        // Read before the hop below: by the time it runs, a tap that opened the
+        // app may already have made it active. UIKit state is main-thread only.
+        let active = Thread.isMainThread && UIApplication.shared.applicationState == .active
         DispatchQueue.main.async {
             defer { completionHandler() }
             let notification = response.notification
             let payload = Self.stringPayload(notification.request.content.userInfo)
                 .filter { ["notificationId", "recipientId", "navigation"].contains($0.key) }
             guard let notificationId = payload["notificationId"], !notificationId.isEmpty else { return }
-            let active = UIApplication.shared.applicationState == .active
             let event = PendingPush(
                 type: active ? "FOREGROUND_TAP" : "BACKGROUND_TAP",
                 payload: payload, deliveryId: UUID().uuidString, receivedAtMs: Self.nowMs
@@ -309,12 +311,13 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
             let sourceId = "\(notification.request.identifier):\(notification.date.timeIntervalSince1970)"
             do {
                 guard let captured = try self.store().capture(sourceId: sourceId, event: event) else { return }
-                // A tap on an app the person is looking at navigates in place.
-                // Any other tap opens the app covered until its destination draws.
-                self.suppressPendingCover = active && self.cover == nil
+                // Only a tap on a booted page the person is looking at navigates
+                // in place. Any other tap stays covered until its destination
+                // draws; before the page boots, the boot adds the cover.
+                self.suppressPendingCover = active && self.frontendReady && self.cover == nil
                 self.showCover()
                 self.deliverTap(captured)
-                Logger.info("[notification-open] phase=capture delivery_id=\(captured.deliveryId) timestamp_ms=\(captured.receivedAtMs)")
+                Logger.info("[notification-open] phase=capture covered=\(self.cover != nil) delivery_id=\(captured.deliveryId) timestamp_ms=\(captured.receivedAtMs)")
             } catch {
                 self.reveal()
                 self.send(event)
