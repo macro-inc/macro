@@ -326,13 +326,15 @@ impl<'a> TeamRead<'a> {
         self.push_stream(&mut builder, stream, sort_ts_field);
         // The checks run per streamed thread, in order: `OFFSET 0` keeps the
         // planner from turning them into a join over the whole stream, and
-        // the ORDER BY, already the stream's, keeps it from sorting.
+        // the ORDER BY, already the stream's, keeps it from sorting. They
+        // read only the thread's id and inbox, which the stream already
+        // holds, so no thread is fetched again.
         builder.push(
             r#"
                 ) AS stream
                 WHERE EXISTS (
-                    SELECT 1 FROM email_threads t
-                    WHERE t.id = stream.id"#,
+                    SELECT 1 FROM (SELECT stream.id, stream.link_id) AS t
+                    WHERE TRUE"#,
         );
         self.push_checks(&mut builder);
         // A better copy is any copy in the inboxes that passes the same
@@ -471,10 +473,16 @@ impl<'a> TeamRead<'a> {
     ) {
         match stream {
             Stream::Superset => {
+                // Each superset thread by its id: as a semi-join the planner
+                // hashes the superset against every thread of the inboxes,
+                // which reads all of them before the sort.
                 self.push_stream_select(builder, sort_ts_field);
-                builder.push("t.link_id = ANY(");
+                builder.push(
+                    "t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads)) \
+                     AND t.link_id = ANY(",
+                );
                 builder.push_bind(self.inboxes.clone());
-                builder.push(") AND t.id IN (SELECT thread_id FROM matching_threads)");
+                builder.push(")");
                 self.push_stream_filters(builder, sort_ts_field);
                 builder.push(
                     r#"

@@ -1,4 +1,4 @@
-use super::predicate;
+use super::{PropertyProbe, predicate};
 use filter_ast::Expr;
 use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue};
 use uuid::{Uuid, uuid};
@@ -44,7 +44,7 @@ fn options_of_one_definition_share_one_exists() {
         Expr::or(status(NOT_STARTED), status(IN_PROGRESS)),
     );
     assert_eq!(
-        squash(&predicate(&expr, "d.id")),
+        squash(&predicate(&expr, "d.id", PropertyProbe::Planned)),
         exists(
             "",
             STATUS,
@@ -56,7 +56,7 @@ fn options_of_one_definition_share_one_exists() {
 #[test]
 fn a_lone_option_keeps_its_key_test() {
     assert_eq!(
-        squash(&predicate(&status(BLOCKED), "d.id")),
+        squash(&predicate(&status(BLOCKED), "d.id", PropertyProbe::Planned)),
         exists("", STATUS, &format!("? '{BLOCKED}'"))
     );
 }
@@ -65,7 +65,7 @@ fn a_lone_option_keeps_its_key_test() {
 fn a_repeated_option_keeps_its_key_test() {
     let expr = Expr::or(status(BLOCKED), status(BLOCKED));
     assert_eq!(
-        squash(&predicate(&expr, "d.id")),
+        squash(&predicate(&expr, "d.id", PropertyProbe::Planned)),
         exists("", STATUS, &format!("? '{BLOCKED}'"))
     );
 }
@@ -81,7 +81,7 @@ fn options_group_by_definition_and_entity_type() {
         ),
     );
     assert_eq!(
-        squash(&predicate(&expr, "d.id")),
+        squash(&predicate(&expr, "d.id", PropertyProbe::Planned)),
         format!(
             "({} OR {} OR {})",
             exists(
@@ -103,7 +103,7 @@ fn options_group_by_definition_and_entity_type() {
 fn negation_and_conjunction_close_the_or_region() {
     let not_both = Expr::is_not(Expr::or(status(BLOCKED), status(NOT_STARTED)));
     assert_eq!(
-        squash(&predicate(&not_both, "d.id")),
+        squash(&predicate(&not_both, "d.id", PropertyProbe::Planned)),
         format!(
             "(NOT {})",
             exists(
@@ -118,7 +118,7 @@ fn negation_and_conjunction_close_the_or_region() {
         status(NOT_STARTED),
     );
     assert_eq!(
-        squash(&predicate(&split, "d.id")),
+        squash(&predicate(&split, "d.id", PropertyProbe::Planned)),
         format!(
             "(({} AND {}) OR {})",
             exists("", STATUS, &format!("? '{BLOCKED}'")),
@@ -126,4 +126,18 @@ fn negation_and_conjunction_close_the_or_region() {
             exists("", STATUS, &format!("? '{NOT_STARTED}'")),
         )
     );
+}
+
+#[test]
+fn per_candidate_probes_fence_every_exists() {
+    let expr = Expr::or(
+        Expr::or(status(BLOCKED), status(NOT_STARTED)),
+        option(PRIORITY, None, LOW),
+    );
+    let planned = squash(&predicate(&expr, "d.id", PropertyProbe::Planned));
+    let fenced = squash(&predicate(&expr, "d.id", PropertyProbe::PerCandidate));
+    assert!(!planned.contains("OFFSET"));
+    assert_eq!(fenced.matches("EXISTS").count(), 2);
+    assert_eq!(fenced.matches("OFFSET 0 )").count(), 2);
+    assert_eq!(fenced.replace(" OFFSET 0 )", " )"), planned);
 }
