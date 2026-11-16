@@ -53,6 +53,7 @@ import { EmailSidebar } from './components/EmailSidebar';
 import { canSearchEmailTab, EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
+import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { emailTour } from './tour';
@@ -267,21 +268,20 @@ function EmailMobileLayout(props: ParentProps) {
     setSearch: (query) => setState('search', query),
   });
   let searchInput: HTMLInputElement | undefined;
-  // A view restored with a search opens on its results.
-  const [searchOpen, setSearchOpen] = createSignal(state.search.trim() !== '');
-  const searching = () =>
-    wideSearchFlag().enabled && searchOpen() && canSearchEmailTab(state.tab);
+  const mobileSearch = createEmailMobileSearch({
+    available: () => wideSearchFlag().enabled && canSearchEmailTab(state.tab),
+    search: () => state.search,
+    setSearch: (search) => setState('search', search),
+  });
+  const searching = mobileSearch.searching;
 
   const openSearch = () => {
-    setSearchOpen(true);
+    mobileSearch.open();
     // iOS raises the keyboard only for a focus inside the tap, and the field
     // mounts after it.
     triggerFocusInput(() => searchInput);
   };
-  const closeSearch = () => {
-    setState('search', '');
-    setSearchOpen(false);
-  };
+  const closeSearch = mobileSearch.close;
   useAndroidBackNavigation(() => {
     if (!searching()) return false;
 

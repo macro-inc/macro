@@ -15,7 +15,10 @@ the Soup-backed thread list, and saved email views (flag
 - `views/mobile/email-search.tsx`: the phone search page's header (field and
   Cancel, composed with `MobileHeader`) and recent searches; the mobile layout
   in `email-view.tsx` opens it from the search pill and keeps the list mounted
-  below it.
+  below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+  open, and ends its search whenever it closes.
+- `primitives/create-search-scroll-reset.ts`: a new search starts at the top
+  once its own results replace the rows kept on screen.
 - `search/`: recent searches (`recent-searches.ts`, per person in browser
   storage) and the suggestions the header's search field lists
   (`create-email-search-suggestions.ts`), behind `enable-email-wide-search`.

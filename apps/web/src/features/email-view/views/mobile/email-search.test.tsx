@@ -75,6 +75,11 @@ it('searches as you type and lists matching recent searches while focused', () =
 it('runs a picked recent search and drops the keyboard to show its results', () => {
   const { field, search } = renderPage();
   field.focus();
+  // A press on a row keeps the field's focus (and the iOS keyboard) up to
+  // the pick; iOS still sends mousedown after a cancelled pointerdown.
+  const row = screen.getByRole('option', { name: 'budget' });
+  expect(fireEvent.pointerDown(row)).toBe(false);
+  expect(fireEvent.mouseDown(row)).toBe(false);
 
   fireEvent.click(screen.getByRole('option', { name: 'budget' }));
 
@@ -86,14 +91,18 @@ it('clears the field without leaving it, and Cancel or Escape leaves the page', 
   const { field, search, onCancel } = renderPage('budget');
   field.focus();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+  const clear = screen.getByRole('button', { name: 'Clear search' });
+  expect(fireEvent.pointerDown(clear)).toBe(false);
+  expect(fireEvent.mouseDown(clear)).toBe(false);
+  fireEvent.click(clear);
   expect(search()).toBe('');
   expect(document.activeElement).toBe(field);
 
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(onCancel).toHaveBeenCalledOnce();
 
-  fireEvent.keyDown(field, { key: 'Escape' });
+  // Android Back arrives as this Escape; it must be marked handled.
+  expect(fireEvent.keyDown(field, { key: 'Escape' })).toBe(false);
   expect(onCancel).toHaveBeenCalledTimes(2);
 });
 
@@ -111,4 +120,15 @@ it('remembers the search it is left with', () => {
     'budget',
     'invoice',
   ]);
+});
+
+it('keeps the keyboard up for the Enter that commits a composition', () => {
+  const { field } = renderPage('zhong');
+  field.focus();
+
+  fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 });
+  expect(document.activeElement).toBe(field);
+
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(document.activeElement).not.toBe(field);
 });

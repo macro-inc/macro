@@ -30,7 +30,7 @@ export function EmailMobileSearch(props: {
       <MobileHeader>
         {/* The header's left slot is only as wide as its content, so the row
             takes the header's width less its gutters, as the pill row does. */}
-        <div class="flex w-[calc(100cqw_-_2*var(--mobile-chrome-gutter))] min-w-0 items-center gap-2">
+        <div class="flex w-[calc(100cqw_-_2*var(--mobile-chrome-gutter))] max-w-none flex-none items-center gap-2">
           <MobileHeader.Island class="min-w-0 flex-1 gap-2 pr-1">
             <SearchIcon
               aria-hidden="true"
@@ -54,11 +54,18 @@ export function EmailMobileSearch(props: {
               onFocus={() => props.suggestions.setFocused(true)}
               onBlur={() => props.suggestions.setFocused(false)}
               onKeyDown={(event) => {
-                if (event.isComposing) return;
-                // Search drops the keyboard to show the results; Escape
-                // leaves the page, as Cancel does.
+                // Safari reports the Enter that commits a composition as not
+                // composing; its key code still marks it.
+                if (event.isComposing || event.keyCode === 229) return;
+                // Search drops the keyboard to show the results.
                 if (event.key === 'Enter') input?.blur();
-                if (event.key === 'Escape') props.onCancel();
+                // Escape leaves the page, as Cancel does. Android Back arrives
+                // as this Escape, so it is marked handled or the app would
+                // also go back.
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  props.onCancel();
+                }
               }}
             />
             <Show when={props.search}>

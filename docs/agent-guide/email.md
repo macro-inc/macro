@@ -79,7 +79,8 @@ widens the field across the list header; Filters, the view actions and New are
 hidden until the search is closed (the X, `Escape` on an empty field, or
 `Escape` in the list). Results still update as you type. While a new query
 loads, the rows already on screen stay, dimmed, instead of a blank list and a
-spinner. With the field focused, up to five recent searches containing the
+spinner. Once its own results arrive, a new search starts at the top of the list,
+wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
 result. A search is remembered when the field is left with it, at most eight
@@ -97,7 +98,9 @@ keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
 keeps the keyboard; Cancel (or Android Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
-its results. The dock's app-wide search is unchanged. Check at 390px with touch
+its results. If the flag turns off or the tab changes to one that cannot be
+searched while the page is open, the page closes and its search ends. The
+dock's app-wide search is unchanged. Check at 390px with touch
 emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
 
