@@ -7,11 +7,14 @@ verified against that name. For every provisioned team namespace it copies the
 `passwords` KV v2 mount version by version, so each item keeps the version
 numbers the document storage service's metadata points at.
 
-It only appends: a version already in the destination is checked against the
-source, never rewritten, and an item whose destination history differs from the
-source is reported and left alone. Runs are idempotent; a repeat run copies only
-versions written since. `--dry-run` writes nothing and reports what a run would
-copy. Output is counts and item ids only, never values.
+It only moves the destination forward. A version it already has is checked
+against the source and never rewritten; a version the source has destroyed or
+deleted since is destroyed or deleted there too. A destination that is ahead
+(written to after the name moved) is fine as long as the versions both have
+match. Anything else is reported as diverged and left alone. Runs are
+idempotent; a repeat run copies only what changed. `--dry-run` writes nothing
+and reports what a run would do. Output is counts and item ids only, never
+values.
 
 TOTP seeds are write-only in OpenBao, so they can't be copied; the report counts
 them per team.
@@ -90,48 +93,67 @@ def write_version(client, namespace, path, version, state, value):
     }, namespace)["data"]["version"]
     if written != version:
         raise CopyError(f"{namespace}/{path}: destination wrote version {written}, expected {version}")
+    apply_state(client, namespace, path, version, state)
+
+
+# The state changes the destination may follow: a value can be erased later,
+# never brought back.
+FORWARD = {("live", "destroyed"), ("live", "deleted"), ("deleted", "destroyed"), ("live", "pruned")}
+
+
+def plan_item(source, destination, namespace, path, source_metadata, destination_metadata):
+    """What the destination needs: the first version to copy, state changes, and
+    whether it is ahead. None when the shared versions differ."""
+    present = 0 if destination_metadata is None else destination_metadata["current_version"]
+    current = source_metadata["current_version"]
+    changes = []
+    for version in range(1, min(present, current) + 1):
+        wanted = version_state(source_metadata, version)
+        have = version_state(destination_metadata, version)
+        if have == "pruned" and wanted in ("pruned", "destroyed"):
+            continue
+        if (have, wanted) in FORWARD:
+            changes.append((version, wanted))
+        elif have != wanted:
+            return None
+        elif wanted == "live" and (
+            read_version(source, namespace, path, version)
+            != read_version(destination, namespace, path, version)
+        ):
+            return None
+    return {"first": present + 1, "changes": changes, "ahead": present > current}
+
+
+def apply_state(client, namespace, path, version, state):
     if state in ("destroyed", "pruned"):
         client.request("POST", f"{MOUNT}/destroy/{path}", {"versions": [version]}, namespace)
     elif state == "deleted":
         client.request("POST", f"{MOUNT}/delete/{path}", {"versions": [version]}, namespace)
 
 
-def compare_item(source, destination, namespace, path, source_metadata, destination_metadata):
-    """The first version to copy, or None when the destination has diverged."""
-    copied = 0 if destination_metadata is None else destination_metadata["current_version"]
-    if copied > source_metadata["current_version"]:
-        return None
-    for version in range(1, copied + 1):
-        state = version_state(source_metadata, version)
-        if state == "pruned":
-            continue
-        if version_state(destination_metadata, version) != state:
-            return None
-        if state == "live" and (
-            read_version(source, namespace, path, version)
-            != read_version(destination, namespace, path, version)
-        ):
-            return None
-    return copied + 1
-
-
 def copy_team(source, destination, namespace, dry_run):
     """Copy one namespace; returns counts and the ids of items left alone."""
-    report = {"items": 0, "versions_copied": 0, "versions_present": 0, "diverged": [],
+    report = {"items": 0, "versions_copied": 0, "versions_present": 0, "states_changed": 0,
+              "ahead": 0, "diverged": [],
               "totp_keys": len(list_keys(source, f"{TOTP_MOUNT}/keys", namespace))}
     for path in item_paths(source, namespace):
         report["items"] += 1
         source_metadata = metadata(source, namespace, path)
         destination_metadata = metadata(destination, namespace, path)
-        first = compare_item(source, destination, namespace, path, source_metadata, destination_metadata)
-        if first is None:
+        plan = plan_item(source, destination, namespace, path, source_metadata, destination_metadata)
+        if plan is None:
             report["diverged"].append(path)
             continue
-        report["versions_present"] += first - 1
-        for version in range(first, source_metadata["current_version"] + 1):
-            report["versions_copied"] += 1
-            if dry_run:
-                continue
+        report["ahead"] += plan["ahead"]
+        report["versions_present"] += min(plan["first"] - 1, source_metadata["current_version"])
+        report["states_changed"] += len(plan["changes"])
+        missing = range(plan["first"], source_metadata["current_version"] + 1)
+        report["versions_copied"] += len(missing)
+        if dry_run:
+            continue
+        for version, state in plan["changes"]:
+            apply_state(destination, namespace, path, version, state)
+        for version in missing:
             state = version_state(source_metadata, version)
             value = read_version(source, namespace, path, version) if state == "live" else PLACEHOLDER
             write_version(destination, namespace, path, version, state, value)
@@ -139,20 +161,18 @@ def copy_team(source, destination, namespace, dry_run):
 
 
 def verify_team(source, destination, namespace):
-    """Item ids whose destination history differs from the source's."""
+    """Item ids still out of step, and how many items only the destination has."""
     source_paths = item_paths(source, namespace)
     known = set(source_paths)
-    mismatched = [path for path in item_paths(destination, namespace) if path not in known]
+    only_in_destination = sum(path not in known for path in item_paths(destination, namespace))
+    mismatched = []
     for path in source_paths:
         source_metadata = metadata(source, namespace, path)
         destination_metadata = metadata(destination, namespace, path)
-        if (
-            destination_metadata is None
-            or destination_metadata["current_version"] != source_metadata["current_version"]
-            or compare_item(source, destination, namespace, path, source_metadata, destination_metadata) is None
-        ):
+        plan = plan_item(source, destination, namespace, path, source_metadata, destination_metadata)
+        if plan is None or plan["changes"] or plan["first"] <= source_metadata["current_version"]:
             mismatched.append(path)
-    return mismatched
+    return mismatched, only_in_destination
 
 
 def check_vaults(source, destination, namespaces):
@@ -196,10 +216,15 @@ def main():
     failed = False
     for namespace in namespaces:
         report = copy_team(source, destination, namespace, arguments.dry_run)
-        mismatched = [] if arguments.dry_run else verify_team(source, destination, namespace)
+        mismatched, only_in_destination = (
+            ([], 0) if arguments.dry_run else verify_team(source, destination, namespace)
+        )
         verb = "would copy" if arguments.dry_run else "copied"
         print(f"{namespace}: {report['items']} items, {verb} {report['versions_copied']} versions, "
               f"{report['versions_present']} already present, "
+              f"{report['states_changed']} versions erased since, "
+              f"{report['ahead']} items ahead in the destination, "
+              f"{only_in_destination} items only in the destination, "
               f"{report['totp_keys']} TOTP keys not copyable")
         for path in report["diverged"]:
             print(f"  diverged, left alone: {path}")

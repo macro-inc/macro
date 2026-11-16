@@ -68,10 +68,16 @@ to its replacement in the OpenBao account. It is one step of the move in the
 - **Version numbers stay the same,** because the document storage service's
   metadata points at them. Destroyed and pruned versions are written as
   placeholders and destroyed again.
-- **It only appends.** It checks the versions the destination already has
-  against the source and never rewrites one. An item written on both sides is
-  reported as diverged and left alone.
-- **It is idempotent.** A repeat run copies only newer versions.
+- **It only moves the destination forward.**
+  - It checks the versions the destination already has against the source and
+    never rewrites one.
+  - A version the source has erased since is erased there too.
+  - A destination that is ahead (written to after the name moved) is accepted
+    if the versions both have match.
+  - An item written differently on both sides is reported as diverged and left
+    alone.
+- **It is idempotent.** A repeat run copies only what changed, and also cleans
+  up after a run that stopped partway.
 - **It checks its work.** After copying, it compares each team's items, current
   versions and values.
 - **It refuses** one vault on both tunnels, and teams the destination hasn't
