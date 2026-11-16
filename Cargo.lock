@@ -797,6 +797,7 @@ dependencies = [
  "static_file",
  "static_file_service_client",
  "stream",
+ "strum 0.27.2",
  "suggestion_generation",
  "suggestions",
  "sync_service_client",
