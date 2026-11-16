@@ -1,5 +1,4 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { hasLoginCookie } from '@core/util/cookies';
 import { isTauri } from '@core/util/platform';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
@@ -54,12 +53,6 @@ export function createQueryPersistenceScopes(
   ]) {
     channels.remove(hashKey(key));
   }
-  // Email thread messages are no longer persisted, and logout only clears the
-  // listed scopes, so drop what earlier versions saved.
-  fireAndForget(
-    createPerQueryIDBStore({ dbName: scopedKey('email-threads') }).clear(),
-    'query-persistence'
-  );
 
   return [
     {
@@ -68,6 +61,15 @@ export function createQueryPersistenceScopes(
       buster,
       shouldPersist: shouldPersistChannelQuery,
       shouldRestore: hasLoginCookie,
+    },
+    {
+      // Email thread messages are no longer persisted. The scope stays listed
+      // so logout still wipes what earlier versions saved here.
+      store: createPerQueryIDBStore({ dbName: scopedKey('email-threads') }),
+      maxAge: { value: 7, unit: 'd' },
+      buster,
+      shouldPersist: () => false,
+      shouldRestore: () => false,
     },
     ...(isNativeMobilePlatform()
       ? [
