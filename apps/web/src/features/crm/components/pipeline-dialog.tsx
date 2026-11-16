@@ -1,8 +1,8 @@
+import { CreateMenuRadioItem } from '@app/components/view-shell/CreateMenuItem';
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
 import TableIcon from '@icon/system/regular/table.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -18,6 +18,9 @@ const RECORD_TYPES = [
     get label() {
       return t('crm.pipelineTrackCompanies');
     },
+    get description() {
+      return t('crm.pipelineTrackCompaniesDescription');
+    },
   },
   {
     value: 'contact',
@@ -25,12 +28,18 @@ const RECORD_TYPES = [
     get label() {
       return t('crm.pipelineTrackContacts');
     },
+    get description() {
+      return t('crm.pipelineTrackContactsDescription');
+    },
   },
   {
     value: 'generic',
     icon: TableIcon,
     get label() {
       return t('crm.pipelineTrackGeneric');
+    },
+    get description() {
+      return t('crm.pipelineTrackGenericDescription');
     },
   },
 ] as const;
@@ -136,7 +145,7 @@ export function PipelineDialog(props: {
                       {tracked().label}
                       <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
                     </Dropdown.Trigger>
-                    <Dropdown.Content class="min-w-40">
+                    <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
                       <Dropdown.Group>
                         <Dropdown.GroupLabel>
                           {t('crm.pipelineTrack')}
@@ -147,19 +156,13 @@ export function PipelineDialog(props: {
                         >
                           <For each={RECORD_TYPES}>
                             {(type) => (
-                              <Dropdown.RadioItem
+                              <CreateMenuRadioItem
                                 value={type.value}
+                                icon={type.icon}
+                                title={type.label}
+                                description={type.description}
                                 closeOnSelect
-                              >
-                                <Dynamic
-                                  component={type.icon}
-                                  class="size-4 shrink-0"
-                                />
-                                <span class="flex-1">{type.label}</span>
-                                <Dropdown.ItemIndicator>
-                                  <CheckIcon class="size-3.5 text-accent" />
-                                </Dropdown.ItemIndicator>
-                              </Dropdown.RadioItem>
+                              />
                             )}
                           </For>
                         </Dropdown.RadioGroup>

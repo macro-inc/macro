@@ -32,8 +32,10 @@ export function NativeChecklistFacts(props: { host: NativeChecklistPlanHost }) {
   );
 }
 function ChecklistProvider(props: { host: NativeChecklistPlanHost }) {
-  const { nameById } = createTaskListNames();
   const tasks = createTaskListTaskInfo(props.host.taskIds);
+  const { nameById } = createTaskListNames(() =>
+    Object.values(tasks()).flatMap((task) => task.assigneeIds)
+  );
   createEffect(() =>
     props.host.updateFacts({ tasks: tasks(), names: nameById() })
   );

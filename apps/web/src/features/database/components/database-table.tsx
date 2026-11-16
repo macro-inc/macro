@@ -49,6 +49,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type { DatabaseViewColumn } from '../core/database-view';
@@ -154,7 +155,7 @@ export type DatabaseTableProps = {
   onDuplicate?: (rowId: string) => Promise<boolean>;
   onRequestDelete?: (rowId: string) => void;
   onClearCells?: (rowIds: string[], columnIds: string[]) => Promise<boolean>;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onChangeColumnType?: (
     columnId: string,
@@ -761,7 +762,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (
       !(target instanceof HTMLElement) ||
       target.closest(
-        'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
+        'input:not([type="checkbox"]), textarea, [contenteditable="true"], a[href]'
       )
     )
       return false;
@@ -818,6 +819,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           aria-rowcount={props.hasMoreRows ? -1 : rows().length + 2}
           aria-colcount={columns().length + 1 + Number(hasAddColumn())}
           data-grid
+          data-owns-arrow-keys
           data-grid-saved-rows={summaryRows().length}
           class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}

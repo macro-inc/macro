@@ -34,6 +34,13 @@ Keep admitted document-reference nulls and view-less preview payloads in
 decorator props while leaving serialized authoring types narrow; JSON import
 preserves the raw values and object order.
 
+GitHub comment and PR bodies go through `normalizeGithubMarkdown`
+(`utils/github-markdown.ts`) before import: it rewrites GitHub's raw HTML into
+Markdown and keeps `<details>` for `transformers/details.ts`. `DetailsNode` is
+registered only in `StaticRenderNodeTypes` (read-only renderers); the details
+transformer is in every set but does nothing in an editor without the node, so
+editors and services keep `<details>` as text.
+
 Human user mention Markdown requires only a nonempty string `userId`; the importer
 derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.
@@ -45,7 +52,9 @@ as models sometimes write it, a bare ISO date or timestamp;
 
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
-literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
+literal URLs; escapes of `*`, `_`, `` ` `` and `~` alone don't make a URL
+literal, because Lexical's export adds them to unlinked URL text (see
+`README.md`). Keep unlink state through both Markdown and Lexical JSON saves.
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 

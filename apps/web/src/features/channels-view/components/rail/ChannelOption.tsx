@@ -9,13 +9,14 @@ import {
 } from '@thisbeyond/solid-dnd';
 import { cn, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { CHANNELS_TOUR } from '../../tour';
 import { formatDetailedTimestamp } from '../../utils';
+import { ChannelMentionCount } from './ChannelCountPill';
+import { ChannelLiveCallBadge } from './ChannelLiveCallBadge';
 import {
   ChannelAvatar,
-  ChannelCallIndicator,
   ChannelRailItemContextMenu,
   IncomingCallActions,
   isPrimaryMouseDown,
@@ -29,6 +30,8 @@ import {
 } from './ChannelsRailContext';
 import { useChannelRailItemState } from './hooks/useChannelRailState';
 import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
+
+import { JoinChannelButton } from './next/JoinChannelButton';
 
 /**
  * Drag a channel between labels. Registered once per Channels-section row: a
@@ -100,10 +103,14 @@ export function ChannelOption(props: {
   labelId?: string;
   /** Make an eligible named channel draggable between sections. */
   draggable?: boolean;
+  /** Team context for cross-team discovery results. */
+  teamName?: string;
 }) {
   const rail = useChannelsRail();
   const rowId = () => props.rowId ?? rowKeyForChannel(props.channel.id);
   const item = useChannelRailItemState(() => props.channel.id, rowId);
+  const unjoined = () =>
+    rail.sectionsEnabled() && props.channel.isParticipant === false;
   const timestamp = () =>
     props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
   // Whether a row participates in drag and drop is fixed per mount.
@@ -187,19 +194,37 @@ export function ChannelOption(props: {
           <ViewSidebar.Icon>
             <ChannelAvatar channel={props.channel} />
           </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
+          <span
+            class={cn(
+              'min-w-0 flex-1 truncate',
+              unjoined() && 'text-ink-extra-muted'
+            )}
+          >
+            {props.channel.name}
+          </span>
+          <Show when={props.teamName}>
+            {(name) => (
+              <Tooltip
+                label={name()}
+                class="max-w-24 truncate text-xs text-ink-extra-muted"
+              >
+                {name()}
+              </Tooltip>
+            )}
+          </Show>
+          <Show when={unjoined()}>
+            <JoinChannelButton channelId={props.channel.id} hoverOnly />
+          </Show>
           <span class="flex shrink-0 items-center gap-2">
-            <ChannelMutedIndicator muted={item().muted} />
-            <ChannelCallIndicator
-              status={item().incomingCallId ? undefined : item().callStatus}
-            />
-            <Show when={item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
-            </Show>
-            <Show when={!item().incomingCallId && timestamp()}>
+            {/* The hover timestamp leads so call and unread indicators stay put. */}
+            <Show
+              when={
+                !unjoined() &&
+                !item().incomingCallId &&
+                !item().callStatus &&
+                timestamp()
+              }
+            >
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
                   <span
@@ -225,6 +250,25 @@ export function ChannelOption(props: {
                   </Tooltip>
                 </span>
               )}
+            </Show>
+            <ChannelMutedIndicator muted={item().muted} />
+            <Show
+              when={!item().incomingCallId && item().callStatus === 'active'}
+            >
+              <ChannelLiveCallBadge channelId={props.channel.id} />
+            </Show>
+            <Show when={!unjoined()}>
+              <Switch>
+                <Match when={item().mentions > 0}>
+                  <ChannelMentionCount count={item().mentions} />
+                </Match>
+                <Match when={item().unread}>
+                  <span
+                    aria-label="Unread"
+                    class="size-2 shrink-0 rounded-full bg-accent"
+                  />
+                </Match>
+              </Switch>
             </Show>
           </span>
           <IncomingCallActions

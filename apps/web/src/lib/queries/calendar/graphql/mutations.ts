@@ -13,7 +13,6 @@ import {
   CalendarEventFieldsFragmentDoc,
   type CalendarMutationPayloadFieldsFragment,
   type CalendarOccurrenceItemFieldsFragment,
-  CalendarOccurrenceItemFieldsFragmentDoc,
   CalendarsDocument,
   CreateCalendarEventDocument,
   type CreateCalendarEventMutation,
@@ -58,7 +57,7 @@ import {
   withInvitedGuests,
   withRsvp,
 } from './optimistic';
-import { epochDay } from './range';
+import { epochDay, readOccurrenceRecords } from './range';
 
 export type CalendarMutationHost = Pick<
   CacheHost,
@@ -103,9 +102,6 @@ const ALL_TIME = {
 const eventKey = (id: string) => `${EVENT_TYPENAME}:${id}`;
 
 const eventSelection = selectRecords(CalendarEventFieldsFragmentDoc);
-const occurrenceSelection = selectRecords(
-  CalendarOccurrenceItemFieldsFragmentDoc
-);
 
 /** Events created while offline, until their create settles. */
 const pendingCreates = new Set<string>();
@@ -156,11 +152,7 @@ async function cachedOccurrences(
   if (range.kind === 'unsupported' || range.occurrenceKeys.length === 0) {
     return [];
   }
-  const { records } = await readRecordsByKeys(
-    host,
-    occurrenceSelection,
-    range.occurrenceKeys
-  );
+  const records = await readOccurrenceRecords(host, range.occurrenceKeys);
   return records.map(({ record }) => record);
 }
 

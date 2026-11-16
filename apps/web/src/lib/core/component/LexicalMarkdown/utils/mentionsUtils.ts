@@ -8,7 +8,6 @@ import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { AgentSessionEntity, EmailEntity } from '@entity';
 import type { UserMentionInfo } from '@macro-inc/lexical-core';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
 import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { UploadSuccess } from '@service-storage/util/upload';
@@ -298,7 +297,7 @@ export async function documentUploadToItem(upload: UploadSuccess) {
     };
   }
 
-  const projectId = await waitBulkUploadStatus(upload.requestId);
+  const projectId = await upload.projectId;
   if (!projectId) return;
 
   return {

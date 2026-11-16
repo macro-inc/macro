@@ -127,6 +127,11 @@ impl<const DIMS: usize> RerankModel<DIMS> for CohereReranker {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
+            genai_telemetry::provider_account::report_provider_error(
+                "cohere",
+                Some(status.as_u16()),
+                &body,
+            );
             anyhow::bail!("Cohere rerank returned {status}: {body}");
         }
 

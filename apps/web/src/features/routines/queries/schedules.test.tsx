@@ -198,10 +198,12 @@ describe('routine analytics', () => {
     createSchedule.mockResolvedValue(ok(agentRoutine));
     const mutations = mountRoutineMutations();
 
-    await mutations.create.mutateAsync(request);
-    await mutations.duplicate.mutateAsync(request);
+    await mutations.create.mutateAsync({ body: request });
+    await mutations.duplicate.mutateAsync({ body: request });
     createSchedule.mockResolvedValueOnce(err([{ message: 'Invalid' }]));
-    await expect(mutations.create.mutateAsync(request)).rejects.toBeDefined();
+    await expect(
+      mutations.create.mutateAsync({ body: request })
+    ).rejects.toBeDefined();
 
     expect(track.mock.calls).toEqual([
       [

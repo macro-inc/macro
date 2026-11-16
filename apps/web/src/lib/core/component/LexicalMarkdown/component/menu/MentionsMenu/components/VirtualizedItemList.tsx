@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { createVirtualizer } from '@tanstack/solid-virtual';
-import { createEffect, For, Show, untrack } from 'solid-js';
+import { Button } from '@ui';
+import { createEffect, For, on, Show, untrack } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { MentionsMenuItem } from './MentionsMenuItem';
 
@@ -14,6 +16,7 @@ export function VirtualizedItemList(props: {
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
+  windowKey?: string;
   hasMore: boolean;
   isLoadingMore: boolean;
   onEndReached: () => void;
@@ -29,6 +32,21 @@ export function VirtualizedItemList(props: {
     overscan: 5,
   });
 
+  createEffect(
+    on(
+      () => props.windowKey,
+      (key, previous) => {
+        if (
+          key !== undefined &&
+          previous !== undefined &&
+          key !== previous &&
+          scrollContainerRef
+        )
+          scrollContainerRef.scrollTop = 0;
+      }
+    )
+  );
+
   // Scroll selected item into view
   createEffect(() => {
     const index = props.selectedIndex;
@@ -42,7 +60,8 @@ export function VirtualizedItemList(props: {
     <div
       ref={scrollContainerRef}
       onScroll={(event) => {
-        if (!props.hasMore || props.isLoadingMore) return;
+        if (!props.items.length || !props.hasMore || props.isLoadingMore)
+          return;
         const target = event.currentTarget;
         const remaining =
           target.scrollHeight - target.scrollTop - target.clientHeight;
@@ -95,6 +114,20 @@ export function VirtualizedItemList(props: {
           }}
         </For>
       </div>
+      <Show
+        when={
+          props.items.every((item) => item.kind === 'group') && props.hasMore
+        }
+      >
+        <div
+          on:pointerdown={(event) => event.preventDefault()}
+          on:mousedown={(event) => event.preventDefault()}
+        >
+          <Button disabled={props.isLoadingMore} onClick={props.onEndReached}>
+            {t('viewMenus.nextOptions')}
+          </Button>
+        </div>
+      </Show>
     </div>
   );
 }

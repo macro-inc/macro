@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM saved_view_position p USING saved_view v\n             WHERE p.saved_view_id = v.id AND p.user_id = $1 AND v.config->>'kind' = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "558732a9342b385035595b2499bf22297f25c55050e22dbae51ef8f6e9f83f02"
+}

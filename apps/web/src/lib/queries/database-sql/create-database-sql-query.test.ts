@@ -18,6 +18,7 @@ import {
   CombinedError,
   createClient,
   type Exchange,
+  fetchExchange,
   type Operation,
 } from '@urql/core';
 import { ok } from 'neverthrow';
@@ -26,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { empty, fromPromise, fromValue, mergeMap, pipe } from 'wonka';
 import {
   createDatabaseSqlQuery,
+  type DatabaseSqlQueryCapabilities,
   readDatabaseSql,
 } from './create-database-sql-query';
 
@@ -126,6 +128,17 @@ const names: OpenEngine = async () => {
   };
 };
 
+const localExecution: Pick<
+  DatabaseSqlQueryCapabilities,
+  'account' | 'describe'
+> = {
+  account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+  describe: async (catalog) => ({
+    readTables: catalog.tables.map((table) => table.id),
+    columns: [],
+  }),
+};
+
 let dispose: (() => void) | undefined;
 
 beforeEach(() => {
@@ -150,7 +163,11 @@ describe('createDatabaseSqlQuery', () => {
           client: () =>
             createClient({ url: 'http://test.invalid', exchanges: [] }),
           cacheHost: () => undefined,
-          people: async () => [],
+          account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+          describe: async (catalog) => ({
+            readTables: catalog.tables.map((table) => table.id),
+            columns: [],
+          }),
           catalog: build,
           open,
         }
@@ -232,7 +249,7 @@ describe('createDatabaseSqlQuery', () => {
               entityFilter: vi.fn(),
               readRecordsByKeys: vi.fn(),
             }),
-            people: async () => [],
+            ...localExecution,
             catalog: async () => catalog,
             open: names,
           }
@@ -260,6 +277,126 @@ describe('createDatabaseSqlQuery', () => {
       expect(loadingStates).toEqual([true, false]);
     }
   );
+
+  it('shows cached rows when a refresh starts before the opening cache read lands', async () => {
+    let finishNetwork: (() => void) | undefined;
+    const policies: string[] = [];
+    const exchange: Exchange = () => (incoming) =>
+      pipe(
+        incoming,
+        mergeMap((operation) => {
+          if (operation.kind === 'teardown') return empty;
+          policies.push(operation.context.requestPolicy);
+          const response = {
+            operation,
+            data: {
+              user: {
+                id: 'macro|viewer@databases.test',
+                soup: { items: [globex], nextCursor: null },
+              },
+            },
+            stale: false,
+            hasNext: false,
+          };
+          return fromPromise(
+            new Promise<typeof response>((resolve) => {
+              finishNetwork = () => resolve(response);
+            })
+          );
+        })
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [exchange],
+    });
+    const query = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createDatabaseSqlQuery(
+        () => ({ schema, sql: 'SELECT name FROM crm.deals' }),
+        {
+          client: () => client,
+          cacheHost: () => ({
+            readQuery: async (): Promise<ReadResult> => ({
+              kind: 'hit',
+              data: {
+                user: {
+                  id: 'macro|viewer@databases.test',
+                  soup: { items: [acme], nextCursor: null },
+                },
+              },
+            }),
+            onCacheChanged: () => () => {},
+            entityFilter: vi.fn(),
+            readRecordsByKeys: vi.fn(),
+          }),
+          ...localExecution,
+          catalog: async () => catalog,
+          open: names,
+        }
+      );
+    });
+    const refreshed = query.refresh('refresh');
+    await vi.waitFor(() =>
+      expect(query.outcome()?.rows).toEqual([[{ type: 'text', value: 'Acme' }]])
+    );
+    expect(query.loading()).toBe(true);
+    await vi.waitFor(() => expect(finishNetwork).toBeDefined());
+    finishNetwork?.();
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rows).toEqual([
+      [{ type: 'text', value: 'Globex' }],
+    ]);
+    expect(query.loading()).toBe(false);
+    expect(policies).toEqual(['network-only']);
+  });
+
+  it('reads again when a refresh replaces a read still in flight', async () => {
+    const answers: ((item: SoupItem) => void)[] = [];
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [fetchExchange],
+      fetch: (_url, init) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError'))
+          );
+          answers.push((item) =>
+            resolve(
+              Response.json({
+                data: {
+                  user: {
+                    id: 'macro|viewer@databases.test',
+                    soup: { items: [item], nextCursor: null },
+                  },
+                },
+              })
+            )
+          );
+        }),
+    });
+    const query = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createDatabaseSqlQuery(
+        () => ({ schema, sql: 'SELECT name FROM crm.deals' }),
+        {
+          client: () => client,
+          cacheHost: () => undefined,
+          ...localExecution,
+          catalog: async () => catalog,
+          open: names,
+        }
+      );
+    });
+    await vi.waitFor(() => expect(answers).toHaveLength(1));
+    const refreshed = query.refresh('websocket');
+    await vi.waitFor(() => expect(answers).toHaveLength(2));
+    answers[0](acme);
+    answers[1](globex);
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rows).toEqual([
+      [{ type: 'text', value: 'Globex' }],
+    ]);
+  });
 
   it('lands an after-write refresh while its initial cache probe is still pending', async () => {
     let finishCache!: (result: ReadResult) => void;
@@ -305,7 +442,7 @@ describe('createDatabaseSqlQuery', () => {
             entityFilter: vi.fn(),
             readRecordsByKeys: vi.fn(),
           }),
-          people: async () => [],
+          ...localExecution,
           catalog: async () => catalog,
           open: names,
         }
@@ -395,7 +532,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => host,
-          people: async () => [],
+          ...localExecution,
           catalog: async () => catalog,
           open: names,
         }
@@ -463,7 +600,7 @@ describe('createDatabaseSqlQuery', () => {
         client: () =>
           createClient({ url: 'http://test.invalid', exchanges: [] }),
         cacheHost: () => undefined,
-        people: async () => [],
+        ...localExecution,
         catalog: async () => catalog,
         open,
       });
@@ -531,7 +668,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => undefined,
-          people: async () => [],
+          ...localExecution,
           catalog: async () => catalog,
           open: names,
         }
@@ -636,7 +773,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => host,
-          people: async () => [],
+          ...localExecution,
           catalog: async () => catalog,
           open: names,
         }
@@ -699,7 +836,7 @@ describe('a refresh another run replaced', () => {
       return createDatabaseSqlQuery(() => ({ schema, sql: sql() }), {
         client: () => client,
         cacheHost: () => undefined,
-        people: async () => [],
+        ...localExecution,
         catalog: async () => catalog,
         open: names,
       });
@@ -792,13 +929,20 @@ describe('readDatabaseSql over macro.people', () => {
       {
         client: () => createClient({ url: 'http://test', exchanges: [] }),
         cacheHost: () => undefined,
-        people: async () => [
-          {
-            id: 'macro|ada@databases.test',
-            name: 'Ada',
-            email: 'ada@databases.test',
-          },
-        ],
+        ...localExecution,
+        describe: async () => ({
+          readTables: [PEOPLE],
+          columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
+        }),
+        localRead: async () => ({
+          columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
+          rows: [[{ type: 'text', value: 'Ada' }]],
+          rowIds: [],
+          readTables: [PEOPLE],
+          truncated: false,
+          insertedRowIds: [],
+          changesApplied: 0,
+        }),
         catalog: catalogOf,
         open: peopleNames,
       }

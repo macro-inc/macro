@@ -42,8 +42,6 @@ export function TaskListControlsRenderer(props: {
   editor: LexicalEditor;
   data: ChecklistControlsData;
 }) {
-  const { resolveName } = createTaskListNames();
-
   const taskIds = createMemo(() => {
     const ids = new Set<string>();
     for (const meta of Object.values(props.data.meta)) {
@@ -55,6 +53,9 @@ export function TaskListControlsRenderer(props: {
   });
 
   const taskInfo = createTaskListTaskInfo(taskIds);
+  const { resolveName } = createTaskListNames(() =>
+    Object.values(taskInfo()).flatMap((task) => task.assigneeIds)
+  );
 
   const lists = createMemo(() =>
     Object.values(props.data.mounts).filter(

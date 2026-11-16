@@ -1,3 +1,4 @@
+import { QuestionCardSkeleton } from '@app/features/database-query/components/answer-skeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
 import {
@@ -170,8 +171,19 @@ export function DatabaseQuery(
       node.remove();
     });
   };
+  // Until its code loads, a block keeps the card's place in the document.
+  const loading = () => (
+    <Show when={props.displayMode !== 'scalar'} fallback={placeholder()}>
+      <QuestionCardSkeleton
+        title={props.title || props.chart?.title || 'Database answer'}
+        displayMode={props.displayMode}
+        height={props.height}
+        resizable={canEdit()}
+      />
+    </Show>
+  );
   const liveAnswer = () => (
-    <Suspense fallback={placeholder()}>
+    <Suspense fallback={loading()}>
       <LiveQuestion
         source={source}
         onSave={canEdit() ? save : undefined}
@@ -182,9 +194,7 @@ export function DatabaseQuery(
   const answer = () => (
     <Show
       when={!props.queryId}
-      fallback={
-        <LazyDecorator placeholder={placeholder()} render={liveAnswer} />
-      }
+      fallback={<LazyDecorator placeholder={loading()} render={liveAnswer} />}
     >
       {liveAnswer()}
     </Show>

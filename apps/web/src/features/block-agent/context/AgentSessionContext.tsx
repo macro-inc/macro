@@ -71,6 +71,12 @@ export type AgentSessionState = {
    * has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /**
+   * Why the last prompt could not run: the agent may not run on its
+   * registered runtime. Shown in the transcript; cleared by a prompt that is
+   * accepted.
+   */
+  runtimeRefusal: Accessor<string | undefined>;
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**

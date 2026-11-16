@@ -19,9 +19,6 @@ const USER_IDS = MOCK_USERS.map((u) => u.id);
 const SIZE_LABELS = ['sm', 'md', 'lg'] as const;
 type GroupSize = 'sm' | 'md' | 'lg';
 
-// Seed mock display names so tooltips work
-seedMockDisplayNames(MOCK_USERS);
-
 function Section(props: { title: string; children: any }) {
   return (
     <div class="space-y-3">
@@ -40,6 +37,7 @@ function SizeLabel(props: { size: string }) {
 }
 
 export default function UserIconDemo() {
+  seedMockDisplayNames(MOCK_USERS);
   return (
     <div class="p-8 space-y-12 bg-surface min-h-full overflow-auto">
       <div>

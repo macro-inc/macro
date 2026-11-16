@@ -230,6 +230,7 @@ pub(crate) fn database_error(error: DatabaseError) -> ToolCallError {
             "The user does not have permission to do that to this database.".to_string()
         }
         DatabaseError::InvalidSchemaOperation(reason) => reason.to_string(),
+        DatabaseError::InvalidAppearance(reason) => reason.clone(),
         DatabaseError::InvalidSharing(reason) => reason.to_string(),
         DatabaseError::VersionConflict => {
             "The table changed since it was described. Call DescribeDatabase for its current \

@@ -7,7 +7,7 @@ use super::permission_token::encode_receipt_permission_token;
 use super::ports::editing::{EditMode, EditingWorkerService, EditorName};
 use ai_billing::domain::admission::AiAdmissionError;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType, RequiredPermission,
 };
 use macro_sync_service_jwt::DocumentPermissionToken;
 use model::document::{DocumentBasic, FileType};
@@ -45,8 +45,9 @@ pub enum DocumentAiEditError {
     Failed(anyhow::Error),
 }
 
-fn ensure_markdown(
-    access: &EntityAccessReceipt<EditAccessLevel>,
+/// Refuse a receipt for another entity, or a document that is not markdown.
+pub(super) fn ensure_markdown<Level: RequiredPermission>(
+    access: &EntityAccessReceipt<Level>,
     document: &DocumentBasic,
 ) -> Result<(), DocumentError> {
     if access.entity().entity_type != EntityType::Document
@@ -62,13 +63,14 @@ fn ensure_markdown(
     Ok(())
 }
 
-/// Mint the worker token and cursor name for an edit receipt: the caller's
-/// user and bot, as `EditDocument` attributes its edits.
-fn edit_token(
-    access: &EntityAccessReceipt<EditAccessLevel>,
+/// Mint the worker token at `access_level` and the cursor name for a receipt:
+/// the caller's user and bot, as `EditDocument` attributes its edits.
+pub(super) fn worker_token<Level: RequiredPermission>(
+    access: &EntityAccessReceipt<Level>,
+    access_level: AccessLevel,
     jwt_secret: &str,
 ) -> Result<(DocumentPermissionToken, Option<EditorName>), DocumentError> {
-    let document_token = encode_receipt_permission_token(access, AccessLevel::Edit, jwt_secret)?;
+    let document_token = encode_receipt_permission_token(access, access_level, jwt_secret)?;
     let editor = match access.auth() {
         EntityAccessAuth::Bot(bot) => {
             bot_id::system_bot(bot.bot_id()).and_then(|bot| EditorName::new(bot.name))
@@ -106,7 +108,7 @@ pub async fn edit_with_instructions<Worker: EditingWorkerService>(
         .acting_user_id()
         .cloned()
         .ok_or(DocumentError::Unauthorized)?;
-    let (document_token, editor) = edit_token(&access, jwt_secret)?;
+    let (document_token, editor) = worker_token(&access, AccessLevel::Edit, jwt_secret)?;
     let mode = if fast {
         EditMode::Fast
     } else {

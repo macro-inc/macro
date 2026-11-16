@@ -28,6 +28,7 @@ import type { MarkdownDocumentKind } from '@block-md/types';
 import {
   ChannelDetail,
   type ChannelDetailContext,
+  type ChannelDetailProps,
   ChannelDetailTopBar,
 } from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
@@ -72,6 +73,11 @@ export type EntityDetailProps = {
   target: EntityDetailTarget;
   previewHeaderLeading?: JSX.Element;
   navigationRequest?: number | string;
+  /** Composer focus and Esc for a conversation; see {@link ChannelDetailProps}. */
+  channel?: Pick<
+    ChannelDetailProps,
+    'autofocus' | 'composerFocusRequest' | 'onEscapeToList'
+  >;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
@@ -245,6 +251,9 @@ export function EntityDetail(props: EntityDetailProps) {
             target={channel().target}
             navigationRequest={props.navigationRequest}
             fallbackName={channel().fallbackName}
+            autofocus={props.channel?.autofocus}
+            composerFocusRequest={props.channel?.composerFocusRequest}
+            onEscapeToList={props.channel?.onEscapeToList}
           >
             {(context) => (
               <ResolvedEntityDetailChildren

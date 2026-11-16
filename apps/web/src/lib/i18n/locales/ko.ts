@@ -730,7 +730,7 @@ export default {
     tabMobileApp: '모바일 앱',
     tabTags: '태그',
     tabIntegrations: '통합',
-    tabRuntimes: '런타임',
+    tabRuntimes: '머신',
     tabMcpServer: 'MCP 서버',
     tabApiKeys: 'API 키',
     tabBots: '봇',

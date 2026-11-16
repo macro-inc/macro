@@ -49,6 +49,41 @@ fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
 }
 
 #[test]
+fn each_term_fetches_only_the_navigation_fields_of_matching_messages() {
+    let query = build_query(&args(AgentSessionSearchMode::Content), "partial")
+        .unwrap()
+        .build()
+        .to_json();
+    let terms = query["bool"]["should"][0]["bool"]["must"]
+        .as_array()
+        .unwrap();
+    assert_eq!(terms.len(), 2);
+    for (index, term) in terms.iter().enumerate() {
+        let inner_hits = &term["has_child"]["inner_hits"];
+        assert_eq!(inner_hits["name"], format!("agent_term_{index}"));
+        assert_eq!(inner_hits["size"], INNER_HITS_PER_TERM);
+        assert_eq!(
+            inner_hits["_source"],
+            serde_json::json!(["message_turn", "author"])
+        );
+        assert!(inner_hits["highlight"]["fields"]["content"].is_object());
+    }
+}
+
+#[test]
+fn requested_message_fields_are_enough_to_decode_a_navigation_target() {
+    let source: serde_json::Map<String, serde_json::Value> = MESSAGE_SOURCE_FIELDS
+        .into_iter()
+        .zip([serde_json::json!(7), serde_json::json!("user")])
+        .map(|(field, value)| (field.to_owned(), value))
+        .collect();
+    let goto: SearchGotoAgentSession =
+        serde_json::from_value(serde_json::Value::Object(source)).unwrap();
+    assert_eq!(goto.message_turn, 7);
+    assert_eq!(goto.author, super::super::model::AgentSessionAuthor::User);
+}
+
+#[test]
 fn folded_hits_keep_turn_author_and_deduplicate_across_terms() {
     let message = serde_json::json!({
         "_id":"session:3:agent", "_score":2.0,

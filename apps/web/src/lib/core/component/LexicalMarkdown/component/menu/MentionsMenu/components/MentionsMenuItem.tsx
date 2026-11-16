@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { AgentOfflineBadge } from '@core/component/AgentOfflineBadge';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
@@ -49,6 +50,7 @@ export function MentionsMenuItem(props: {
         return (
           <UserIcon
             id={props.item.id}
+            name={props.item.data.name}
             size="sm"
             isDeleted={false}
             photoUrl={props.item.data.photoUrl}
@@ -104,6 +106,11 @@ export function MentionsMenuItem(props: {
         return (
           <EntityIcon
             targetType={getBlockNameFromEntity(props.item)}
+            appearance={
+              supportsEntityAppearance(props.item.data)
+                ? props.item.data.appearance
+                : undefined
+            }
             size="xs"
           />
         );

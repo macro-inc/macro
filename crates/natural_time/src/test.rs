@@ -771,3 +771,32 @@ fn a_default_time_applies_to_any_pick() {
         "2026-11-13 15:00"
     );
 }
+
+#[test]
+fn the_other_meridiem_turns_only_a_guess() {
+    let now = NaiveDateTime::parse_from_str(FRIDAY, "%Y-%m-%d %H:%M").unwrap();
+    let nine = NaiveTime::from_hms_opt(9, 0, 0);
+    let failures: Vec<String> = [
+        ("tmrw at 3", "2026-11-07 03:00 [meridiem]"),
+        ("tomorrow at 9", "2026-11-07 21:00 [meridiem]"),
+        ("tomorrow at 12", "2026-11-07 00:00 [meridiem]"),
+        ("next thurs at 3:30", "2026-11-12 03:30 [meridiem]"),
+        // 3am today has passed, so a time alone moves to tomorrow.
+        ("at 3", "2026-11-07 03:00 [meridiem]"),
+        ("at 11", "2026-11-06 23:00 [meridiem]"),
+        // Written am, pm or 24-hour times have nothing to turn.
+        ("tomorrow at 3pm", "2026-11-07 15:00"),
+        ("tomorrow at 15:00", "2026-11-07 15:00"),
+        ("tomorrow", "2026-11-07 09:00 [time]"),
+        // A side that says am or pm still settles the other.
+        ("tomorrow 2-3pm", "2026-11-07 14:00"),
+        ("every friday at 3", "error: Repeating"),
+    ]
+    .iter()
+    .filter_map(|(phrase, want)| {
+        let got = show(read_other_meridiem(phrase, now, Pick::Start, nine));
+        (got != *want).then(|| format!("{phrase:?}: want {want}, got {got}"))
+    })
+    .collect();
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}

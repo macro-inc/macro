@@ -1,0 +1,25 @@
+# A template: bin/setup writes it to ~/.config/systemd/user/, named for the
+# agent's directory, with this checkout's path and name filled in.
+[Unit]
+Description=@NAME@: the browser it shares from, Chromium on a virtual display (bin/agent serveScreen)
+After=network-online.target
+
+[Service]
+WorkingDirectory=@ROOT@
+Environment=PATH=%h/.nix-profile/bin:/etc/profiles/per-user/%u/bin:/run/current-system/sw/bin:/run/wrappers/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin
+# bin/agent enters the flake's shell, which is where Xvfb, chromium, ffmpeg-x11grab and the fonts come from.
+ExecStart=@ROOT@/bin/agent serveScreen
+# serveScreen restarts Xvfb and Chromium itself; this is for when it dies, or the display is held.
+Restart=always
+RestartSec=5
+# SIGTERM is its stop: it kills both children and returns.
+TimeoutStopSec=15
+# Chromium is chatty; the journal bounds it, this keeps it from drowning everything else there.
+LogRateLimitIntervalSec=60
+LogRateLimitBurst=50
+# A browser's runaway page stops here, well short of the calls on this machine.
+MemoryMax=16G
+CPUQuota=800%
+
+[Install]
+WantedBy=default.target

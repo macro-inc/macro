@@ -118,16 +118,23 @@ Queued local edits never enter the team projection cache.
 Browsing and availability answer different questions. The availability tool
 computes a person's busy time from:
 
-- Their directly connected primary calendars by default.
-- Additional calendars they explicitly include in availability settings.
-- Events on any eligible source where one of their owned email addresses is an
-  attendee, even if that source calendar is otherwise excluded.
+- Every calendar they can see through their own or delegated inboxes, until they
+  turn its **Busy** switch off in Settings → Calendar.
+- Meetings on any eligible source where one of their owned email addresses is a
+  guest, or organizes it with other guests on a writable copy, even if that
+  source calendar is otherwise excluded.
 
-Secondary calendars require explicit inclusion because the current source model
-does not prove Google data ownership. Merely subscribing to or managing a
-coworker's calendar must not mark the subscriber busy. Delegated addresses do not
-establish the user's personal attendance. Provider `self` flags alone are also
-insufficient on subscribed calendars.
+Booking links have always counted every calendar, and one switch serves booking,
+team availability and agents, so the default follows booking: turning a
+calendar off is the user's choice, and nothing that blocked their booking links
+stops blocking them on its own. The source model does not prove Google data
+ownership, so a coworker's calendar the user subscribes to or manages counts
+until they turn it off. (Before November 2026 team availability counted only
+primary calendars by default, behind the `enable-calendar-team-sharing` flag.)
+Delegated addresses do not establish the user's personal attendance. Provider
+`self` flags alone are also insufficient on subscribed calendars. A solo entry
+naming the user as its organizer, and the mailbox organizer row Microsoft Graph
+puts on every event of a read-only calendar, are not meetings.
 
 Cancelled, transparent, declined, birthday, and working-location entries do not
 block time. Instance cancellation, attendee responses, and transparency override
@@ -159,8 +166,9 @@ Larger selections return guidance to supply a smaller `userIds` list.
 The requester's own setting of `none` does not prevent reading their direct
 calendar sources for their own availability.
 
-The domain computes merged busy intervals and coverage; the AI adapter forwards
-one service call. Its result contains no event titles or meeting metadata.
+The domain computes merged busy intervals and coverage; the AI adapter and
+`POST /calendar-events/team/availability` (the SDK's
+`calendar.teamAvailability`) each forward one service call. Its result contains no event titles or meeting metadata.
 `freeWindows` is omitted unless every requested person and the entire requested
 range have complete coverage. Hidden sharing, absent calendars, incomplete or
 stale sync, access changes awaiting resync, unknown IDs, invalid all-day zones,

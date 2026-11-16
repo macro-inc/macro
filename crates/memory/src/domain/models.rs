@@ -15,6 +15,7 @@ use strum::{AsRefStr, Display, EnumString};
     Serialize,
     Deserialize,
     JsonSchema,
+    utoipa::ToSchema,
     AsRefStr,
     Display,
     EnumString,
@@ -29,7 +30,7 @@ pub enum Granularity {
 }
 
 /// A privacy-reviewed activity report; period_end is inclusive.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Activity {
     pub granularity: Granularity,
@@ -38,8 +39,14 @@ pub struct Activity {
     pub content: String,
 }
 
+/// Activity reports for one user, ordered by period.
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
+pub struct ActivityReports {
+    pub reports: Vec<Activity>,
+}
+
 /// A private explicit memory document and its optimistic concurrency token.
-#[derive(Debug, Clone, Default, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExplicitMemory {
     pub content: String,
@@ -48,7 +55,7 @@ pub struct ExplicitMemory {
 
 /// An edit to one one-based line. A revision is required to prevent replay
 /// or concurrent edits from inserting twice or deleting a different line.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum MemoryEdit {
     Insert { line: usize, content: String },

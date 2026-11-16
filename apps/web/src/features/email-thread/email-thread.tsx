@@ -1,24 +1,16 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useInboxEmail } from '@queries/email/inbox-email';
 import type { ThreadQueryTransport } from '@queries/email/thread';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  onCleanup,
-  Suspense,
-} from 'solid-js';
+import { type Accessor, createEffect, onCleanup, Suspense } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
-import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import {
   createEmailAttachmentOpener,
   downloadEmailAttachment,
@@ -66,7 +58,6 @@ export function EmailThread(props: EmailThreadProps) {
   // The host's load gate already owns the live query. Reuse its source so
   // mounting the body does not start a second disk read/network request.
   const [calendarPreferences] = useCalendarPreferences();
-  const contacts = useContacts();
   const user = useUserContext();
   const compose = createEmailComposeContext({
     threadTransport: props.threadTransport,
@@ -78,9 +69,9 @@ export function EmailThread(props: EmailThreadProps) {
     viewerEmail,
     viewerLoading: user.isLoading,
     isTouch: isTouchDevice,
-    recipients: createMemo(() =>
-      contacts().map((contact) => convertContactInfoToEmailRecipient(contact))
-    ),
+    // Thread addresses remain scoped to the thread; personal suggestions come
+    // from each open composer's directory source, not a retained address book.
+    recipients: () => [],
     createCommands: (snapshot) =>
       createThreadActionAdapter(source.id, snapshot),
   };

@@ -30,6 +30,7 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         purpose: agent_session::domain::model::SessionPurpose::Standalone,
         repo_branch: None,

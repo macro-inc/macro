@@ -64,11 +64,11 @@
       assetFilter =
         path: _type:
         builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
-      # `crates/routine_program` embeds its starter programs with `include_str!`.
+      # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
-      routineStartersFilter =
-        path: _type: builtins.match ".*/crates/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
+      routineCatalogFilter =
+        path: _type: builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
       # Rust templates (askama, minijinja) include their stylesheets, such as
       # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
       # stylesheets under Rust crates and services: matching every `.css` would
@@ -79,15 +79,28 @@
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
+      # agent_git embeds the starter agent across the crate boundary, every
+      # file but its installed packages, which are not Cargo sources or
+      # generic assets.
+      starterAgentRoot = toString ../packages/starter-agent;
+      starterAgentFilter =
+        path: _type:
+        pkgs.lib.hasPrefix (starterAgentRoot + "/") (toString path)
+        && !(pkgs.lib.hasPrefix (starterAgentRoot + "/node_modules") (toString path));
+      starterAgentSrc = pkgs.lib.cleanSourceWith {
+        src = ../packages/starter-agent;
+        filter = path: type: starterAgentFilter path type;
+      };
       srcFilter =
         path: type:
         (sqlxFilter path type)
         || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
-        || (routineStartersFilter path type)
+        || (routineCatalogFilter path type)
         || (templateCssFilter path type)
         || (binFilter path type)
+        || (starterAgentFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
@@ -155,6 +168,7 @@
           || (rel == "vendor")
           || (pkgs.lib.any (directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel) [
             "vendor/utoipa-swagger-ui"
+            "vendor/chrono-tz"
             "vendor/regress"
             "vendor/loro-editor"
             "vendor/loro-server"
@@ -188,6 +202,12 @@
           chmod -R +w $out
           cp -rfT ${rootDepsSrc} $out
           chmod -R +w $out
+          ${pkgs.lib.optionalString (builtins.elem "crates/agent_git" dirs) ''
+            mkdir -p $out/packages
+            rm -rf $out/packages/starter-agent
+            cp -rT ${starterAgentSrc} $out/packages/starter-agent
+            chmod -R +w $out/packages/starter-agent
+          ''}
           ${overlays}
         '';
 
@@ -1127,6 +1147,7 @@
           rustToolchain
           python3
         ]
+        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker
@@ -1148,8 +1169,18 @@
           grep -q "fn update_many" "$pruned_src/vendor/loro-server/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
           grep -q "pub struct LoroDoc" "$pruned_src/vendor/loro-server/loro/src/lib.rs"
           test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
+          grep -q "IANA_TZDB_VERSION" "$pruned_src/vendor/chrono-tz/src/prebuilt/directory.rs"
           touch $out
         '';
+        pruned-deploy-src-starter-agent =
+          pkgs.runCommand "cloud-storage-pruned-starter-agent"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              diff -r ${starterAgentSrc} ${src}/packages/starter-agent
+              diff -r ${starterAgentSrc} \
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/packages/starter-agent
+              touch $out
+            '';
         fmt = craneLib.cargoFmt {
           inherit src;
           pname = "cloud-storage";
@@ -1260,10 +1291,10 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
+              # CI needs sccache to cache every crate. It loads this shell through
+              # setup-nix-dev-shell, so these attributes reach its build steps.
+              # The shellHook switches local shells to incremental builds.
               CARGO_INCREMENTAL = "0";
-              SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
               # configure state behind; CMake then drops its command-line cache
@@ -1271,6 +1302,27 @@
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
               shellHook = ''
+                # Default the sccache size in the hook, not as an attribute: an
+                # attribute replaces the caller's value, while a machine with a
+                # dedicated cache disk (SCCACHE_DIR) sets its own size. CI gets
+                # the default too, since print-dev-env output evaluates this hook.
+                export SCCACHE_CACHE_SIZE="''${SCCACHE_CACHE_SIZE:-30G}"
+                # Local rebuilds after an edit are mostly workspace crates, which
+                # incremental compilation reuses and sccache misses across
+                # worktrees anyway. Third-party crates still go through sccache.
+                # Line tables keep backtrace locations while shrinking test
+                # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
+                if [ -z "''${CI:-}" ]; then
+                  unset CARGO_INCREMENTAL
+                  export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
+                  ${pkgs.lib.optionalString isLinux ''
+                    # Link host binaries with mold. Scoped to the host target, so
+                    # wasm and musl builds keep their own linkers; zig cc (cargo
+                    # zigbuild) ignores the flag. An exported RUSTFLAGS replaces
+                    # it, as cargo does.
+                    export CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS="''${CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS:--C link-arg=-fuse-ld=mold}"
+                  ''}
+                fi
                 if command -v prek >/dev/null 2>&1; then
                   repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
                   if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then

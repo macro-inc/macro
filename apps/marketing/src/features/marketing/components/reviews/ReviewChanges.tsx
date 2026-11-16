@@ -1,6 +1,6 @@
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
-import X from '@phosphor/x.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import signInHtml from '../../assets/github-signin-0.html?raw';

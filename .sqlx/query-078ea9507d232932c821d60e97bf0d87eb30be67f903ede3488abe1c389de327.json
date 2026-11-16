@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT suggestion_id AS \"suggestion_id!\" FROM scheduled_action\n               WHERE owner = $1 AND suggestion_id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "suggestion_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "078ea9507d232932c821d60e97bf0d87eb30be67f903ede3488abe1c389de327"
+}

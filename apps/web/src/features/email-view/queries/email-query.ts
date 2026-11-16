@@ -11,8 +11,23 @@ import {
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
 import { isExcludedEmailFolder } from '../constants';
-import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
-import type { EmailTab } from '../types';
+import {
+  EMAIL_ATTACHMENT_KINDS,
+  EMAIL_FACETS,
+  type EmailFacetContext,
+} from '../filters/email-facets';
+import type {
+  EmailParticipantField,
+  EmailTab,
+  EmailViewConditions,
+} from '../types';
+
+/** A saved view's conditions with its relative parts resolved for one query. */
+export type EmailSavedViewScope = {
+  conditions: EmailViewConditions;
+  /** Start of the received window, when the view has one. */
+  receivedSince?: string;
+};
 
 export type EmailQueryContext = {
   tab: EmailTab;
@@ -23,6 +38,8 @@ export type EmailQueryContext = {
   facetContext: EmailFacetContext;
   /** Macro favorite IDs used only by the separate text-search service. */
   favoriteThreadIds?: readonly string[];
+  /** An open saved view replaces the tab's own slice of the mailbox. */
+  savedView?: EmailSavedViewScope;
 };
 
 /**
@@ -56,13 +73,91 @@ const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
 
 // Preserve a shallow tree through both the REST and GraphQL AST compilers.
 // A flat 100-way clause.or becomes a linear tree and exceeds JSON ingress depth.
+function balancedOr(clauses: readonly TargetExpr[]): TargetExpr | undefined {
+  if (clauses.length < 2) return clauses[0];
+  const middle = Math.floor(clauses.length / 2);
+  const left = balancedOr(clauses.slice(0, middle));
+  const right = balancedOr(clauses.slice(middle));
+  return left && right ? clause.or(left, right) : (left ?? right);
+}
+
 function threadIdsClause(ids: readonly string[]): TargetExpr {
-  if (ids.length < 2) return clause.eq('threadId', ids[0] ?? NIL_UUID);
-  const middle = Math.floor(ids.length / 2);
-  return clause.or(
-    threadIdsClause(ids.slice(0, middle)),
-    threadIdsClause(ids.slice(middle))
+  return (
+    balancedOr(ids.map((id) => clause.eq('threadId', id))) ??
+    clause.eq('threadId', NIL_UUID)
   );
+}
+
+const ADDRESS_FIELDS = {
+  from: 'emailSenderAddress',
+  to: 'emailRecipientAddress',
+  cc: 'emailCcAddress',
+  bcc: 'emailBccAddress',
+} as const satisfies Record<EmailParticipantField, string>;
+
+const DOMAIN_FIELDS = {
+  from: 'emailSenderDomain',
+  to: 'emailRecipientDomain',
+  cc: 'emailCcDomain',
+  bcc: 'emailBccDomain',
+} as const satisfies Record<EmailParticipantField, string>;
+
+/** Any chosen person in any chosen field. */
+function participantsClause(scope: EmailSavedViewScope): TargetExpr {
+  const { participants, participantFields } = scope.conditions;
+  const addresses = new Set<string>();
+  const domains = new Set<string>();
+  for (const person of participants) {
+    match(person)
+      .with({ type: 'address' }, ({ email }) =>
+        addresses.add(email.toLowerCase())
+      )
+      .with({ type: 'domain' }, ({ domain }) =>
+        domains.add(domain.toLowerCase())
+      )
+      // A person kind this build doesn't know adds no one.
+      .exhaustive(() => undefined);
+  }
+  const leaves = participantFields.flatMap((field) => [
+    ...[...addresses].map((address) =>
+      clause.eq(ADDRESS_FIELDS[field], address)
+    ),
+    ...[...domains].map((domain) => clause.eq(DOMAIN_FIELDS[field], domain)),
+  ]);
+  return balancedOr(leaves) ?? clause.eq('threadId', NIL_UUID);
+}
+
+const isAttachmentFilter = (
+  id: string
+): id is keyof typeof EMAIL_ATTACHMENT_KINDS => id in EMAIL_ATTACHMENT_KINDS;
+
+/** Each condition narrows the view; alternatives within one are OR'd. */
+function savedViewClause(
+  scope: EmailSavedViewScope,
+  facets: EmailQueryContext['facets']
+): TargetExpr {
+  const { conditions } = scope;
+  const expressions: TargetExpr[] = [clause.eq('emailShared', 'exclude')];
+  if (conditions.importance)
+    expressions.push(
+      clause.eq('emailImportance', conditions.importance === 'signal')
+    );
+  if (conditions.participants.length > 0)
+    expressions.push(participantsClause(scope));
+  const subject = balancedOr(
+    conditions.subject.map((keyword) => clause.eq('emailSubject', keyword))
+  );
+  if (subject) expressions.push(subject);
+  if (scope.receivedSince)
+    expressions.push(clause.eq('emailUpdatedAt', { gte: scope.receivedSince }));
+  // Pages would come back short if attachments only refined them locally.
+  const attachments = balancedOr(
+    (facets.attachments ?? [])
+      .filter(isAttachmentFilter)
+      .map((id) => clause.eq('emailAttachment', EMAIL_ATTACHMENT_KINDS[id]))
+  );
+  if (attachments) expressions.push(attachments);
+  return clause.and(...expressions);
 }
 
 // Deliberately no `!isDraft` exclusion here: `isDraft` is thread-level, so
@@ -131,7 +226,11 @@ export function buildEmailQuery(
   context: EmailQueryContext,
   admittedIds?: readonly string[]
 ): SoupAstItemsQueryArgs {
-  const expressions = [tabClause(context)];
+  const expressions = [
+    context.savedView
+      ? savedViewClause(context.savedView, context.facets)
+      : tabClause(context),
+  ];
   if (admittedIds) {
     expressions.push(threadIdsClause(admittedIds));
   }
@@ -157,17 +256,21 @@ export function buildEmailQuery(
     EMAIL_FACETS,
     context.facetContext
   );
+  const favoritesOnly = context.savedView
+    ? context.savedView.conditions.starred
+    : context.tab === 'favorites';
   const body: SoupAstBody = {
     ...mergeAst(base, refinements),
-    emailView: emailViewForTab(context.tab),
-    ...(context.tab === 'favorites' ? { favorites_only: true } : {}),
+    emailView: context.savedView ? 'all' : emailViewForTab(context.tab),
+    ...(favoritesOnly ? { favorites_only: true } : {}),
   };
 
   // Newest activity first: `updated_at` is the thread's latest message time.
   return {
+    // Address, domain, and subject conditions, as aliases do, use GraphQL.
     ...(isExcludedEmailFolder(context.tab)
       ? { transport: 'rest' as const }
-      : context.aliasFilter
+      : context.aliasFilter || context.savedView
         ? { transport: 'graphql' as const }
         : {}),
     params: {

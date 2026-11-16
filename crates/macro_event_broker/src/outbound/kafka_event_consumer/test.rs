@@ -6,6 +6,14 @@ use crate::{EventBrokerError, MessageParts};
 struct TestEvents;
 
 impl MacroEventCollection for TestEvents {
+    fn agent_correlation_id(&self) -> Option<uuid::Uuid> {
+        None
+    }
+
+    fn agent_verb(&self) -> Option<agent_correlation::AgentVerb> {
+        None
+    }
+
     fn decode<T: MessageParts>(_message: &T) -> Result<Self, EventBrokerError> {
         unreachable!("compile-time adapter assertion does not decode messages")
     }

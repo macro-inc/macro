@@ -1,6 +1,7 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { DocumentEntity } from '@entity';
 import {
   createLoroManager,
   type LoroManager,
@@ -187,6 +188,7 @@ async function ingestS3Snapshot(
 type MarkdownDocumentProps = {
   documentId: string;
   kind: MarkdownDocumentKind;
+  entity?: DocumentEntity;
   state?: MarkdownDocumentState;
   documentSource: MarkdownDocumentSource;
   permissions: {
@@ -207,6 +209,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
     documentId: () => props.documentId,
     kind: () => props.kind,
     documentSource: () => props.documentSource,
+    entity: () => props.entity,
     permissions: {
       canComment: () => props.permissions.canComment,
       canEdit: () => props.permissions.canEdit,

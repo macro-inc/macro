@@ -6,7 +6,6 @@ import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import {
-  getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
@@ -209,13 +208,6 @@ export function InlineTaskProperties() {
                   defaultDefinitionIds().includes(
                     property().propertyDefinitionId
                   )
-                }
-                canRemove={
-                  !property().propertyId.startsWith('pending:') &&
-                  (documentKind !== 'task' ||
-                    !getBuiltinPropertyIds('task').includes(
-                      property().propertyDefinitionId
-                    ))
                 }
               />
             )}

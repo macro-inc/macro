@@ -94,6 +94,17 @@ impl TargetPath {
             entity_id: self.entity_id,
         }
     }
+    /// A runtime's access decides who runs code on someone's computer, so it
+    /// takes the owner in person: an agent or API token can ask, never decide.
+    fn require_decider(
+        &self,
+        authorization: &macro_authorization::MacroUserAuthentication,
+    ) -> Result<(), RequestError> {
+        if self.entity_type == ShareEntityType::Harness && !authorization.is_human_session() {
+            return Err(RequestError::Forbidden);
+        }
+        Ok(())
+    }
     fn recipient(&self) -> Result<MacroUserIdStr<'static>, RequestError> {
         MacroUserIdStr::try_from(self.user_id.clone().ok_or(RequestError::NotFound)?)
             .map_err(|_| RequestError::NotFound)
@@ -183,7 +194,12 @@ where
     Ok(Json(
         state
             .service
-            .submit(user.authorization.macro_user_id, path.entity(), body)
+            .submit(
+                user.authorization.macro_user_id,
+                path.entity(),
+                body,
+                user.authorization.agent_id.map(|agent| agent.as_uuid()),
+            )
             .await?,
     ))
 }
@@ -235,6 +251,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service
@@ -290,6 +307,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service
@@ -319,6 +337,7 @@ where
     C: Clock,
     Auth: MacroAuthorizationService,
 {
+    path.require_decider(&user.authorization)?;
     Ok(Json(
         state
             .service

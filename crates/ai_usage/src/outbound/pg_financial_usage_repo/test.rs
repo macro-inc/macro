@@ -386,6 +386,7 @@ async fn legacy_analytics_writes_and_repricing_leave_financial_evidence_unchange
                 user: SYSTEM_USER_ID.clone(),
                 entity: None,
                 agent_api_key_id: None,
+                agent_session_id: None,
                 cost: Usage {
                     amount,
                     model: "test-model".into(),

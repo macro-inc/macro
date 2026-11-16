@@ -65,7 +65,10 @@ const PROMPTS: &[(&str, &[&str])] = &[
         "Write a project brief for the onboarding revamp",
         &["documents"],
     ),
-    ("Fix the formulas in the budget spreadsheet", &["documents"]),
+    (
+        "Fix the formulas in the budget spreadsheet",
+        &["documents", "spreadsheets"],
+    ),
     (
         "Arrange the boxes on the roadmap canvas into a flowchart",
         &["canvases"],
@@ -171,7 +174,10 @@ async fn entity_route_evaluation() {
         for run in 0..RUNS {
             let ranking = rank_entities(
                 &owner,
-                prompt,
+                RoutingRequest {
+                    latest: prompt,
+                    previous: None,
+                },
                 docs,
                 Some(&cognition),
                 Duration::from_secs(5),

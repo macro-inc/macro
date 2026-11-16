@@ -1,9 +1,9 @@
-import BuildingOffice from '@phosphor/building-office.svg';
-import Clock from '@phosphor/clock.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
-import HashStraight from '@phosphor/hash-straight.svg';
-import ListChecks from '@phosphor/list-checks.svg';
+import BuildingOffice from '@icon/system/regular/building-office.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import File from '@icon/system/regular/file.svg';
+import HashStraight from '@icon/system/regular/hash-straight.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
 import { type Component, type ComponentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { homepagePeople } from '../../core/homepage-demo-people';

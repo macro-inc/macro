@@ -30,9 +30,17 @@ pub enum DocumentError {
     /// The requested document was not found.
     #[error("document not found: {0}")]
     NotFound(String),
+    /// The email attachment an import names no longer exists, e.g. its
+    /// message was deleted after the attachment was queued.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
     /// The user is not authorized to perform this action.
     #[error("unauthorized")]
     Unauthorized,
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     /// The document does not exist in storage (S3/sync service).
     #[error("document does not exist in storage")]
     Gone,
@@ -530,8 +538,8 @@ pub struct PropertyInput {
     pub value: SetPropertyValue,
 }
 
-fn default_true() -> bool {
-    true
+fn default_share_with_team() -> bool {
+    agent_correlation::context::may_share()
 }
 
 /// Request body for creating a markdown document whose content is initialized
@@ -606,7 +614,8 @@ pub struct CreateTaskRequest {
     pub property_values: Option<Vec<PropertyInput>>,
     /// Whether to share the task with your team or not
     /// Defaults to true
-    #[serde(default = "default_true")]
+    // An agent session that may not share gets a private task by default.
+    #[serde(default = "default_share_with_team")]
     pub share_with_team: bool,
 }
 

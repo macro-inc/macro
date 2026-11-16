@@ -85,6 +85,11 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   client input bytes remain reproducible. Editor/session peers use the root
   1.17.1 catalog; verify their interoperability in sync_sim. A test-driver
   upgrade changes the corpus and requires its own explicit compatibility decision.
+
+- Preserve the Docker worker's empty OTLP default and explicit launcher `--var` forwarding; local tracing policy and shell-precedence controls are documented in `docs/development/running-locally.md`.
+
+- Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
+  `Cargo.lock`, and this directory's `package-lock.json` — update all three.
 - Durable Object in-memory state (including the loro document) evicts after
   10s of inactivity even with open connections; the alarm-based heartbeat in
   `src/keepalive.rs` is what keeps it warm, not WebSocket traffic.

@@ -38,6 +38,9 @@ word docs, Illustrator/Photoshop files).
 - `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
   serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
   from live collaborative storage, not the legacy S3 export.
+- `axum_router/appearance.rs` edits ordinary Markdown/snippet appearance through
+  Edit receipts with atomic attributed history; copies and metadata reads retain
+  overrides without changing content dates.
 - `src/domain/ai_edit.rs`: SDK editing of markdown documents and tasks by
   instructions. `POST /{id}/ai-edit` runs EditDocument's `AiEditingService`
   (admission, models, metering) with a token minted like EditDocument's: 422
@@ -68,6 +71,15 @@ word docs, Illustrator/Photoshop files).
   an acting user; a bot caller's id rides in the worker token as the actor.
   Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
   readers' errors) are 400s.
+- `src/domain/markdown_body.rs`: `GET`/`PUT /{id}/markdown`, the SDK's
+  `contentWithRevision`/`setContent`. The worker's `POST /markdown` reads the
+  body with sync-service's revision and commits a write only at the revision
+  the caller read (409 `revision_conflict` otherwise). No model, no billing.
+- `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
+  by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
+  `Document.commentOnText`). Markdown places the mark first and removes it if
+  the post fails; 422 `quote_not_placed` is an ambiguous or missing quote. Word
+  posts with the quote for the editor to place.
 - `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
   and runs UploadFile's `DocumentCreator::upload_file`, minting the project
   receipt from the caller like the tool. It exists for clients that cannot PUT
@@ -123,10 +135,15 @@ word docs, Illustrator/Photoshop files).
 Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
 [route-switch configuration](../lexical_client/README.md).
 
+Appearance writes use `activity::AppearanceUpdate` in the repository transaction;
+realtime appearance events do not re-ingest history.
+
 ## Checks
 
 - `cargo test -p documents --all-features` (`SQLX_OFFLINE` unset; needs a
   migrated local MacroDB for `outbound`/`document_create_adapters` tests).
+- Point `REDIS_URL` at the local Redis endpoint for editing-session tests;
+  the default is `redis://127.0.0.1:6379`.
 - `just -f crates/documents/justfile check` for an all-features `cargo check`.
 
 ## Gotchas
@@ -137,6 +154,16 @@ Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`
   recipes require a typed confirmation before writing.
+- `edit_document.rs` refuses a share permission change from a scoped agent
+  session (`agent_correlation::context::refuse_sharing`, 403); a new sharing
+  field that isn't a grant joins that check. Grants are checked where they are
+  written (`entity_access_db_utils::scoped_grants`); creating or moving a
+  document into a folder calls `project_grants::refuse_filing(_in)` in the
+  transaction that writes `projectId`, because the folder's grants are
+  inherited after commit; a document whose id isn't a UUID calls
+  `project_grants::refuse_unregistered_filing` instead, before the write.
+  Under such a scope a task defaults to unshared but
+  keeps its team number (`CreateTaskRequest::share_with_team`).
 
 ## Related
 

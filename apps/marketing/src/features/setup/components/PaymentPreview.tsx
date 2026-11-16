@@ -1,5 +1,5 @@
 import GoogleIcon from '@icon/macro-google.svg';
-import CardIcon from '@phosphor/credit-card.svg';
+import CardIcon from '@icon/system/regular/credit-card.svg';
 import AppleIcon from '@phosphor-fill/apple-logo-fill.svg';
 import { createSignal, For, Show } from 'solid-js';
 

@@ -1,5 +1,5 @@
-import Search from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Dialog } from '@ui/components/Dialog';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { createSignal, For, type JSX, Show } from 'solid-js';

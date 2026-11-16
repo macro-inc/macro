@@ -1,3 +1,5 @@
+mod page;
+mod people_search;
 #[cfg(test)]
 mod test;
 

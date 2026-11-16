@@ -67,7 +67,8 @@ async function fetchRecentlyViewed(
       item.tag === 'foreignEntity' ||
       item.tag === 'channelThread' ||
       item.tag === 'calendarEvent' ||
-      item.tag === 'databaseRow'
+      item.tag === 'databaseRow' ||
+      item.tag === 'harness'
     ) {
       return [];
     }

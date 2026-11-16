@@ -1,5 +1,4 @@
 import type { Component } from 'solid-js';
-import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteDpa.css';
 import './RouteLegal.css';
@@ -10,7 +9,7 @@ import './RouteLegal.css';
  * ours, with one deliberate correction: clause 1.7 reads "all l and regulations"
  * in the source, and is published here as "all laws and regulations".
  *
- * Formatted to sit alongside /terms and /privacy: their 56rem measure, their
+ * Formatted to sit alongside /terms and /privacy: the shared reading measure,
  * paragraph metrics, and a solid rule above each section heading. Clause
  * numbers are CSS counters following the Word numbering scheme (1, 1.1, (a)),
  * set inline at the head of each clause so a numbered clause reads as one
@@ -73,7 +72,7 @@ export const RouteDpa: Component = () => {
 
   return (
     <>
-      <main class="dpa">
+      <main class="legal-doc dpa">
         <div class="dpa-doc">
           {/* Wordmark eyebrow, title, then the version line — the same header
               shape /terms and /privacy get from UtilPlainText. */}
@@ -1343,9 +1342,6 @@ export const RouteDpa: Component = () => {
           </section>
         </div>
       </main>
-      <div class="legal-doc-footer">
-        <SectionMoreFeatures currentPath="/dpa" footerOnly />
-      </div>
     </>
   );
 };

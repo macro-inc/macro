@@ -1,4 +1,7 @@
-import type { CalendarRangeCacheArgs } from '@graphql-cache/index';
+import {
+  type CalendarRangeCacheArgs,
+  validateRecordSelectionKeys,
+} from '@graphql-cache/index';
 import type {
   CalendarEventFieldsFragment,
   CalendarMutationPayloadFieldsFragment,
@@ -68,9 +71,10 @@ function fakeHost(
       revision: '2' as never,
       changed: [],
     })),
+    // Bounded like the worker and native hosts.
     readRecordsByKeys: vi.fn(async ({ keys }: { keys: string[] }) => ({
       revision: '1' as never,
-      records: keys.flatMap((recordKey) => {
+      records: validateRecordSelectionKeys(keys).flatMap((recordKey) => {
         const record = records.get(recordKey);
         return record ? [{ recordKey, record }] : [];
       }),
@@ -527,6 +531,37 @@ describe('executeGraphqlDelete', () => {
     expect(calls[0]?.variables.input).toMatchObject({
       scope: 'THIS_AND_FOLLOWING',
     });
+  });
+
+  it('cancels one occurrence of a series cached past one selection page', async () => {
+    const occurrences = Array.from({ length: 600 }, (_, day) => {
+      const startsAt = new Date(Date.UTC(2026, 0, 1 + day, 9)).toISOString();
+      return graphqlOccurrence({
+        id: `event-1:${startsAt}`,
+        occurrenceKey: startsAt,
+      });
+    });
+    const host = fakeHost(graphqlEvent(), occurrences);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlDelete(
+      host,
+      {
+        eventId: 'event-1',
+        scope: 'this_event',
+        recurrenceId: 'r600',
+        occurrenceKey: '2027-08-23T09:00:00.000Z',
+      },
+      client
+    );
+
+    expect(response(calls[0]!).occurrences).toEqual([
+      {
+        __typename: 'GraphqlCalendarOccurrence',
+        id: 'event-1:2027-08-23T09:00:00.000Z',
+        isCancelled: true,
+      },
+    ]);
   });
 
   it('drops one copy of a multi-calendar event and re-projects the next', async () => {

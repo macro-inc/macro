@@ -18,6 +18,7 @@ axum = { workspace = true, optional = true }
 base64.workspace = true
 bot_id = { path = "../bot_id" }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"], optional = true }
+genai_telemetry = { path = "../genai_telemetry" }
 image.workspace = true
 lexical_client = { path = "../lexical_client" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

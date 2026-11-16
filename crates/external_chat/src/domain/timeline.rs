@@ -39,6 +39,10 @@ pub struct ExternalChatSummary {
     pub backfill: Option<Backfill>,
     /// The community (a WhatsApp community) this group belongs to, if any.
     pub community: Option<CommunityReference>,
+    /// The group's picture, or a direct chat's person's, as the owner's
+    /// account sees it: a static file id; `null` when hidden, unset or not
+    /// fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 /// Full chat detail and current viewer capabilities.
 #[derive(Debug, Clone, Serialize)]
@@ -94,6 +98,9 @@ pub struct ExternalChatParticipant {
     pub name: String,
     /// Group admin.
     pub admin: bool,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 
 /// Message sender from protocol-verified identity evidence.
@@ -107,6 +114,9 @@ pub struct ExternalChatSender {
     pub user_id: Option<String>,
     /// Display name, never authentication evidence.
     pub name: String,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 /// Grouped reactions.
 #[derive(Debug, Clone, Serialize)]
@@ -115,8 +125,8 @@ pub struct ExternalChatSender {
 pub struct ExternalChatReaction {
     /// Emoji.
     pub emoji: String,
-    /// Number of reacting people.
-    pub count: i64,
+    /// The people who reacted with it, earliest first.
+    pub reactors: Vec<ExternalChatPersonRef>,
     /// Caller has this reaction.
     pub mine: bool,
 }
@@ -180,6 +190,9 @@ pub struct ExternalChatPersonRef {
     pub name: String,
     /// Verified Macro user, if any.
     pub user_id: Option<String>,
+    /// Their profile picture as the chat owner's account sees it: a static
+    /// file id; `null` when hidden, unset or not fetched yet.
+    pub picture_file_id: Option<Uuid>,
 }
 
 /// An @-mention in a message body.
@@ -318,6 +331,7 @@ impl ChatFacts {
         self,
         send_reason: Option<ReplyBlock>,
         community: Option<CommunityReference>,
+        picture_file_id: Option<Uuid>,
     ) -> ExternalChatSummary {
         ExternalChatSummary {
             id: self.id,
@@ -331,6 +345,7 @@ impl ChatFacts {
             send_reason,
             backfill: self.backfill,
             community,
+            picture_file_id,
         }
     }
 }
@@ -343,6 +358,26 @@ pub struct VisibleChat {
     pub chat: ChatRef,
 }
 
+/// A person of a chat as stored, before the provider names them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredPerson {
+    /// External person identity.
+    pub person_id: Uuid,
+    /// Verified Macro user association, if present.
+    pub user_id: Option<String>,
+}
+
+/// One emoji's reactions on a stored message.
+#[derive(Debug, Clone)]
+pub struct StoredReaction {
+    /// Emoji.
+    pub emoji: String,
+    /// The people who reacted with it, earliest first.
+    pub reactors: Vec<StoredPerson>,
+    /// Caller has this reaction.
+    pub mine: bool,
+}
+
 /// One stored message of a timeline page, before the provider names the
 /// people in it and the viewer's delivery state is added.
 #[derive(Debug, Clone)]
@@ -350,7 +385,7 @@ pub struct StoredMessage {
     /// Stable message id.
     pub id: Uuid,
     /// Sender.
-    pub sender: view::StoredPerson,
+    pub sender: StoredPerson,
     /// Plain text; empty once deleted.
     pub body: String,
     /// Message quoted by this one.
@@ -364,7 +399,7 @@ pub struct StoredMessage {
     /// Deleted for everyone.
     pub deleted: bool,
     /// Reactions grouped by emoji.
-    pub reactions: Vec<ExternalChatReaction>,
+    pub reactions: Vec<StoredReaction>,
     /// Imported or pending attachments.
     pub attachments: Vec<Attachment>,
     /// A message, or a system line.

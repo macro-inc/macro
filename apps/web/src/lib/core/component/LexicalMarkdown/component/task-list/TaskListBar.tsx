@@ -114,6 +114,7 @@ export function TaskListBar(props: {
                   icon: () => (
                     <UserIcon
                       id={option.id}
+                      name={option.name}
                       size="sm"
                       class="size-3.5"
                       suppressClick

@@ -25,19 +25,23 @@ impl<P: ChatProvider> ExternalChatService<P> {
             }
             _ => vec![],
         };
-        let communities = if chats.is_empty() {
-            vec![]
+        let (communities, pictures) = if chats.is_empty() {
+            (vec![], vec![])
         } else {
-            self.provider.communities(&chats).await?
+            (
+                self.provider.communities(&chats).await?,
+                self.provider.pictures(&chats).await?,
+            )
         };
         let mut sending = sending.into_iter();
         Ok(records
             .into_iter()
             .zip(communities)
-            .map(|(record, community)| {
+            .zip(pictures)
+            .map(|((record, community), picture)| {
                 let facts = sending.next();
                 let reason = reply_block(account.as_ref(), &record.chat, facts.as_ref());
-                record.facts.summary(reason, community)
+                record.facts.summary(reason, community, picture)
             })
             .collect())
     }
@@ -72,9 +76,15 @@ impl<P: ChatProvider> ExternalChatService<P> {
             .await?
             .pop()
             .flatten();
+        let picture = self
+            .provider
+            .pictures(std::slice::from_ref(&chat))
+            .await?
+            .pop()
+            .flatten();
         let members = self.provider.members(&chat).await?;
         Ok(ExternalChatDetail {
-            chat: facts.summary(reason, community),
+            chat: facts.summary(reason, community, picture),
             share_permission: self.timeline.permissions(id).await?,
             access_level,
             disappearing_seconds: members.as_ref().and_then(|m| m.disappearing_seconds),
@@ -138,27 +148,17 @@ impl<P: ChatProvider> ExternalChatService<P> {
         messages: Vec<StoredMessage>,
     ) -> ExternalChatResult<Vec<ExternalChatMessage>> {
         let mut named = vec![];
-        let mut unnamed = vec![];
+        let mut persons = vec![];
         for message in &messages {
             if let Some(RichContent::System(line)) = &message.rich {
                 named.extend(line.participants.iter().cloned());
             }
             named.extend(message.mentions.iter().cloned());
-            unnamed.extend(
-                std::iter::once(&message.sender)
-                    .chain(message.votes.iter().map(|vote| &vote.voter))
-                    .filter(|person| {
-                        person
-                            .name
-                            .as_deref()
-                            .is_none_or(|name| name.trim().is_empty())
-                    })
-                    .map(|person| person.person_id),
-            );
+            persons.extend(view::stored_people(message));
         }
-        unnamed.sort();
-        unnamed.dedup();
-        let people = self.provider.people(chat, &named, &unnamed).await?;
+        persons.sort_unstable();
+        persons.dedup();
+        let people = self.provider.people(chat, &named, &persons).await?;
         let ids: Vec<Uuid> = messages.iter().map(|message| message.id).collect();
         let deliveries = if ids.is_empty() {
             vec![]

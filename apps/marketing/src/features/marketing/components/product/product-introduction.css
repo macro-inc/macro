@@ -1,0 +1,15 @@
+.product-introduction {
+  width: min(640px, calc(100% - 64px));
+  margin: 48px auto 64px;
+}
+
+.product-introduction p { margin: 0; }
+.product-introduction p + p { margin-top: 20px; }
+
+@media (max-width: 699px) {
+  .product-introduction {
+    width: calc(100% - 48px);
+    margin-block: 32px;
+  }
+  .product-page .product-introduction { width: calc(100% - 16px); }
+}

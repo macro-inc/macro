@@ -27,6 +27,15 @@ enum Written {
     Loose { hour: u32, minute: u32 },
 }
 
+/// How an hour written without am or pm is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Guess {
+    /// Business hours: 1–7 is pm, 8–11 am and 12 noon.
+    BusinessHours,
+    /// The other half of the day from business hours.
+    Opposite,
+}
+
 /// How a time that already passed today moves forward.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Roll {
@@ -72,6 +81,7 @@ pub(crate) fn resolve(
     now: NaiveDateTime,
     pick: Pick,
     default_time: Option<NaiveTime>,
+    guess: Guess,
 ) -> Result<Reading, Error> {
     let mut assumed = Assumed::default();
     if let Some(minutes) = phrase.offset {
@@ -100,6 +110,7 @@ pub(crate) fn resolve(
     let (start_wall, end_wall) = walls(
         phrase.start.time.as_ref(),
         phrase.end.as_ref().and_then(|side| side.time.as_ref()),
+        guess,
         &mut assumed,
     )?;
     let start_wall = match (start_wall, default_time) {
@@ -440,6 +451,7 @@ fn point(date: NaiveDate, wall: Option<Wall>) -> Result<Point, Error> {
 fn walls(
     start: Option<&Time>,
     end: Option<&Time>,
+    guess: Guess,
     assumed: &mut Assumed,
 ) -> Result<(Option<Wall>, Option<Wall>), Error> {
     let start = start.map(written).transpose()?;
@@ -449,23 +461,27 @@ fn walls(
             (Some(before(hour, minute, end)?), Some(end))
         }
         (Some(start), Some(Written::Loose { hour, minute })) => {
-            let start = settle(start, assumed)?;
+            let start = settle(start, guess, assumed)?;
             (Some(start), Some(after(hour, minute, start)?))
         }
         (start, end) => (
-            start.map(|start| settle(start, assumed)).transpose()?,
-            end.map(|end| settle(end, assumed)).transpose()?,
+            start
+                .map(|start| settle(start, guess, assumed))
+                .transpose()?,
+            end.map(|end| settle(end, guess, assumed)).transpose()?,
         ),
     })
 }
 
-fn settle(written: Written, assumed: &mut Assumed) -> Result<Wall, Error> {
+fn settle(written: Written, guess: Guess, assumed: &mut Assumed) -> Result<Wall, Error> {
     match written {
         Written::Fixed(wall) => Ok(wall),
         Written::Loose { hour, minute } => {
             assumed.meridiem = true;
             // 1–7 is pm, 8–11 am, 12 noon.
-            let hour = if hour <= 7 { hour + 12 } else { hour };
+            let business_pm = hour <= 7 || hour == 12;
+            let pm = business_pm == (guess == Guess::BusinessHours);
+            let hour = if pm { hour % 12 + 12 } else { hour % 12 };
             Ok(Wall {
                 time: clock(hour, minute)?,
                 next_day: false,

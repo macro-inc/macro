@@ -46,6 +46,11 @@ unit tests. Standalone pure-logic crates need no database setup.
 `SQLX_OFFLINE=true` is allowed for `cargo check`, `cargo build`, and `cargo clippy`
 when the cache is current. Do not export it for a session that will run tests.
 
+Local `nix develop` shells build workspace crates incrementally, keep only line
+tables as debug info, and link with mold on Linux, which makes rebuilds after an
+edit much faster. To use a debugger, run `export CARGO_PROFILE_DEV_DEBUG=full`
+first. CI sets `CI` and keeps none of these.
+
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas
@@ -53,6 +58,16 @@ have the same build requirements.
 
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
+
+## Time zone data
+
+Rust code resolves IANA zones with `chrono-tz`, which the workspace patches to
+[`vendor/chrono-tz`](../../vendor/chrono-tz/README-MACRO.md) so it bundles a
+recent IANA tzdata release. When IANA changes the rules for zones Macro's users
+are in, move to the new release with `vendor/chrono-tz/update-tzdata.sh`.
+SQL `AT TIME ZONE` uses the database server's own tz data instead: on RDS it
+changes only with a Postgres minor version upgrade, and in local and CI
+containers with the image's `tzdata` package.
 
 ## Test the affected packages
 

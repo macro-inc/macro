@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id FROM comms_channels c\n                   LEFT JOIN comms_channel_participants p ON p.channel_id = c.id\n                       AND p.user_id = $1 AND p.left_at IS NULL\n                   WHERE (p.user_id IS NOT NULL OR ($4 AND c.channel_type = 'team'\n                       AND c.team_id = $3 AND EXISTS (\n                           SELECT 1 FROM team_user tu WHERE tu.team_id = $3 AND tu.user_id = $1)))\n                     AND (($3::uuid IS NULL AND c.channel_type IN ('team', 'public', 'private'))\n                          OR (c.channel_type = 'team' AND c.team_id = $3))\n                     AND strpos(lower(c.name), lower($2)) > 0\n                   ORDER BY c.id FOR SHARE OF c",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e6e9995342cc3e60900a93cecdabb9da2f9ab1ffebf98dacf60c3807be1f6925"
+}

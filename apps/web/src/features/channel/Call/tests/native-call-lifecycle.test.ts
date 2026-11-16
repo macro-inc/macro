@@ -58,6 +58,15 @@ function setup(initial: NativeCallSnapshot | null = first) {
         started: false,
         shareToken: null,
       })),
+      startCall: vi.fn(async () => ({
+        ...identity(first),
+        roomName: 'room-1',
+        token: 'token',
+        serverUrl: 'ws://localhost',
+        participantId: 'macro|test@example.com',
+        started: true,
+        shareToken: null,
+      })),
       connect: vi.fn(async () => {}),
       disconnect: vi.fn<
         Parameters<typeof createCallLifecycle>[0]['disconnect']
@@ -75,6 +84,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
       beginJoin: vi.fn(),
       rollbackJoin: vi.fn(),
       setError: vi.fn(),
+      microphoneBlocked: vi.fn(),
       watch: vi.fn((_call, _onDisconnect, onNativeEnd: () => void) => {
         nativeEnded = onNativeEnd;
         return unwatch;
@@ -610,8 +620,6 @@ describe('native snapshot events and call ownership', () => {
       const cleanup = deferred();
       ports.connect.mockReturnValueOnce(connection.promise);
       ports.leave.mockReturnValueOnce(cleanup.promise);
-      if (result instanceof Error) ports.lookup.mockRejectedValueOnce(result);
-      else ports.lookup.mockResolvedValueOnce(result);
       const cancelled = expect(lifecycle.join(first.channelId)).rejects.toThrow(
         'cancelled'
       );
@@ -620,6 +628,8 @@ describe('native snapshot events and call ownership', () => {
       native.setSnapshot(null);
       await cancelled;
       await vi.advanceTimersByTimeAsync(0);
+      if (result instanceof Error) ports.lookup.mockRejectedValueOnce(result);
+      else ports.lookup.mockResolvedValueOnce(result);
       native.setSnapshot(first);
       cleanup.resolve();
       await vi.advanceTimersByTimeAsync(300);
@@ -789,9 +799,7 @@ describe('native snapshot events and call ownership', () => {
       const joining = lifecycle.join(first.channelId);
       await vi.advanceTimersByTimeAsync(300);
       await joining;
-      expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(
-        first.channelId
-      );
+      expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(first.callId);
       expect(ports.connect).toHaveBeenCalledOnce();
       expect(lifecycle.getState()).toEqual({
         t: 'active',

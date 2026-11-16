@@ -30,6 +30,10 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
+  AgentRuntime: () => null,
+}));
+
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
@@ -297,7 +301,7 @@ describe('UserTooltip settings action', () => {
     await user.click(screen.getByRole('button', { name: 'Settings' }));
 
     expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
-    expect(agentSettingsRequest()?.agentId).toBe(agentId);
+    expect(agentSettingsRequest()).toMatchObject({ type: 'edit', agentId });
     expect(mocks.onClose).toHaveBeenCalledOnce();
   });
 

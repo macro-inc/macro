@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::db_types::{DbLink, DbUserProvider};
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn link_by_fusionauth_and_macro_id(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -43,7 +43,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, email_address))]
 pub(super) async fn link_by_fusionauth_email_provider(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -77,7 +77,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
@@ -111,7 +111,7 @@ pub(super) async fn owned_link_for_thread(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,
@@ -245,7 +245,7 @@ impl DbInboxDetailsRow {
 
 /// Fetch and map the enriched, user-scoped inbox details used by inbound
 /// email catalog adapters.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inbox_details_for_macro_id(
     pool: &PgPool,
     macro_id: &MacroUserIdStr<'_>,
@@ -267,7 +267,7 @@ pub(super) async fn inbox_details_for_macro_id(
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
                        THEN 'InProgress'::email_backfill_job_status
                    ELSE 'Complete'::email_backfill_job_status END
                ELSE bj.status END as "latest_backfill_status?: _",

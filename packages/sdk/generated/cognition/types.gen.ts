@@ -10,6 +10,33 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export type Activity = {
+    content: string;
+    granularity: Granularity;
+    periodEnd: string;
+    periodStart: string;
+};
+
+/**
+ * Error body for activity reads.
+ */
+export type ActivityErrorBody = {
+    /**
+     * Error description.
+     */
+    error: string;
+};
+
+/**
+ * Activity reports for one user, ordered by period.
+ */
+export type ActivityReports = {
+    reports: Array<Activity>;
+};
+
+/**
  * Request body for adding a new MCP server.
  */
 export type AddServerRequest = {
@@ -27,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'agent_activity_summary' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -624,7 +651,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -651,6 +678,14 @@ export type ErrorResponse = {
  * How long a projection remains active without being requested.
  */
 export type Expiry = 'day' | 'week' | 'month';
+
+/**
+ * A private explicit memory document and its optimistic concurrency token.
+ */
+export type ExplicitMemory = {
+    content: string;
+    revision: number;
+};
 
 /**
  * Recorded invocations and total for one feature.
@@ -827,6 +862,11 @@ export type GetChatsForAttachmentResponse = {
 };
 
 /**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
+
+/**
  * HTTP request payload for sending a chat message.
  * Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
  */
@@ -859,6 +899,16 @@ export type HttpSendChatMessageRequest = {
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
+};
+
+/**
+ * The caller's ledger rows.
+ */
+export type ImportEntitiesResponse = {
+    /**
+     * The caller's own rows and their team's imported rows, newest first.
+     */
+    entities: Array<ImportEntity>;
 };
 
 /**
@@ -949,6 +999,35 @@ export type ImportEntity = {
  * Linear issue, are tracked and deduplicated separately.
  */
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+
+/**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    page: string;
+};
+
+/**
+ * The outcome of importing a Notion page, with its ledger row.
+ */
+export type ImportNotionPageResponse = {
+    /**
+     * The row behind the outcome; `entity_id` is the document once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportNotionPageResult;
+};
+
+/**
+ * What importing one Notion page did.
+ */
+export type ImportNotionPageResult = 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
 
 /**
  * Discovery-run state for one user × source.
@@ -1061,6 +1140,23 @@ export type LinearIssueMeta = {
 export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroUserIdStr = string;
+
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit = {
+    action: 'insert';
+    content: string;
+    line: number;
+} | {
+    action: 'replace';
+    content: string;
+    line: number;
+} | {
+    action: 'delete';
+    line: number;
+};
 
 export type MemoryErrorBody = {
     /**
@@ -1708,6 +1804,20 @@ export type ProjectionStateResponse = {
 export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
 
 /**
+ * Response from [`ReadActivity`].
+ */
+export type ReadActivityResponse = {
+    /**
+     * Matching activity events, newest first.
+     */
+    activities: Array<ToolActivityEvent>;
+    /**
+     * Whether more than 100 events matched the requested range.
+     */
+    truncated: boolean;
+};
+
+/**
  * How frequently an active projection is regenerated.
  */
 export type RefreshCadence = 'high' | 'medium' | 'low';
@@ -2155,6 +2265,114 @@ export type StructuredToolActivity = {
  */
 export type TargetType = 'user' | 'team';
 
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction = {
+    type: 'created';
+} | {
+    type: 'edited';
+} | {
+    type: 'opened';
+} | {
+    type: 'deleted';
+} | {
+    type: 'messaged';
+} | {
+    type: 'sent';
+} | {
+    type: 'responded';
+} | {
+    /**
+     * The previous value, when known.
+     */
+    from?: unknown;
+    /**
+     * Previous select/tag option ids resolved to display labels.
+     */
+    from_labels?: Array<string> | null;
+    /**
+     * The property definition id.
+     */
+    property: string;
+    /**
+     * The property definition's human-readable display name, when it is
+     * still visible to the caller.
+     */
+    property_name?: string | null;
+    /**
+     * The property's canonical data type, including `tag` for tag sets.
+     */
+    property_type?: string | null;
+    /**
+     * The new value, or `None` when cleared.
+     */
+    to?: unknown;
+    /**
+     * New select/tag option ids resolved to display labels.
+     */
+    to_labels?: Array<string> | null;
+    type: 'propertyChanged';
+} | {
+    /**
+     * The added principal.
+     */
+    participant: string;
+    type: 'participantAdded';
+} | {
+    /**
+     * The removed principal.
+     */
+    participant: string;
+    type: 'participantRemoved';
+} | {
+    /**
+     * The started call's id.
+     */
+    call_id: string;
+    type: 'callStarted';
+} | {
+    type: 'taskAdded';
+} | {
+    type: 'taskRemoved';
+} | {
+    /**
+     * The stored payload, verbatim.
+     */
+    payload?: unknown;
+    /**
+     * The stored action tag.
+     */
+    tag: string;
+    type: 'unknown';
+};
+
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export type ToolActivityEvent = {
+    /**
+     * What the principal did.
+     */
+    action: ToolActivityAction;
+    /**
+     * The principal that mechanically performed the action.
+     */
+    actorId: string;
+    /**
+     * The entity acted on.
+     */
+    entityId: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entityType: string;
+    /**
+     * When the action occurred.
+     */
+    occurredAt: string;
+};
+
 export type ToolOutcome = {
     changes: DatabaseChange;
     status: 'succeeded';
@@ -2172,6 +2390,62 @@ export type ToolSet = {
     type: 'databases_read_only';
 };
 
+/**
+ * Body for tracking one external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity created from the item; required when `status` is
+     * `imported`.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+     * `{title, url?, summary?}`; Slack: `{name, …}`.
+     */
+    metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
+    /**
+     * `staged` to propose the item, `imported` to record an entity already
+     * created from it.
+     */
+    status: TrackImportStatus;
+};
+
+/**
+ * The outcome of tracking an item, with its ledger row.
+ */
+export type TrackImportEntityResponse = {
+    /**
+     * The row behind the outcome.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: TrackImportOutcome;
+};
+
+/**
+ * What tracking an item did.
+ */
+export type TrackImportOutcome = 'staged' | 'recorded_imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
+
+/**
+ * Whether a tracked item is a candidate or an import already made.
+ */
+export type TrackImportStatus = 'staged' | 'imported';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2183,6 +2457,20 @@ export type UpdateChannelSharePermission = {
      * You can add, remove or replace and existing permission
      */
     operation: UpdateOperation;
+};
+
+/**
+ * One explicit memory edit at the revision it was based on.
+ */
+export type UpdateExplicitMemoryRequest = {
+    /**
+     * The one-based line edit to apply.
+     */
+    edit: MemoryEdit;
+    /**
+     * The revision returned by the last read or successful edit.
+     */
+    revision: number;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -2549,6 +2837,44 @@ export type WebSearchTopic = 'general' | 'news';
 export type WithChatId = {
     chat_id: string;
 };
+
+export type ReadMyActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive start, RFC 3339.
+         */
+        from: string;
+        /**
+         * Exclusive end, RFC 3339; must be after `from`.
+         */
+        to: string;
+    };
+    url: '/activity';
+};
+
+export type ReadMyActivityErrors = {
+    /**
+     * `from` is not before `to`
+     */
+    400: ActivityErrorBody;
+    /**
+     * Internal server error
+     */
+    500: ActivityErrorBody;
+};
+
+export type ReadMyActivityError = ReadMyActivityErrors[keyof ReadMyActivityErrors];
+
+export type ReadMyActivityResponses = {
+    /**
+     * Activity in the range
+     */
+    200: ReadActivityResponse;
+};
+
+export type ReadMyActivityResponse = ReadMyActivityResponses[keyof ReadMyActivityResponses];
 
 export type SetPricingHandlerData = {
     body: SetPricingRequest;
@@ -3292,6 +3618,99 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListImportEntitiesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListImportEntitiesErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListImportEntitiesResponses = {
+    200: ImportEntitiesResponse;
+};
+
+export type ListImportEntitiesResponse = ListImportEntitiesResponses[keyof ListImportEntitiesResponses];
+
+export type TrackImportEntityData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackImportEntityErrors = {
+    /**
+     * Invalid item or metadata
+     */
+    400: unknown;
+    /**
+     * The import service refused the item
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackImportEntityResponses = {
+    200: TrackImportEntityResponse;
+};
+
+export type TrackImportEntityResponse2 = TrackImportEntityResponses[keyof TrackImportEntityResponses];
+
+export type DeclineImportEntityData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DeclineImportEntityErrors = {
+    /**
+     * No such row belongs to the caller
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DeclineImportEntityResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DeclineImportEntityResponse = DeclineImportEntityResponses[keyof DeclineImportEntityResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3334,6 +3753,34 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageErrors = {
+    /**
+     * No page given
+     */
+    400: unknown;
+    /**
+     * Not a page that can be imported, or Notion is not connected
+     */
+    422: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageResponses = {
+    200: ImportNotionPageResponse;
+};
+
+export type ImportNotionPageResponse2 = ImportNotionPageResponses[keyof ImportNotionPageResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -3633,6 +4080,114 @@ export type GetMemoryHandlerResponses = {
 };
 
 export type GetMemoryHandlerResponse = GetMemoryHandlerResponses[keyof GetMemoryHandlerResponses];
+
+export type GetUserActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * A `macro|` user id; omit for the caller.
+         */
+        user?: string;
+        /**
+         * Inclusive first UTC date.
+         */
+        start: string;
+        /**
+         * Inclusive last UTC date, at most 366 days after `start`.
+         */
+        end: string;
+    };
+    url: '/memory/activity';
+};
+
+export type GetUserActivityErrors = {
+    /**
+     * Invalid user id or date range
+     */
+    400: MemoryErrorBody;
+    /**
+     * The user is not the caller or a current teammate
+     */
+    403: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type GetUserActivityError = GetUserActivityErrors[keyof GetUserActivityErrors];
+
+export type GetUserActivityResponses = {
+    /**
+     * Activity reports in the range
+     */
+    200: ActivityReports;
+};
+
+export type GetUserActivityResponse = GetUserActivityResponses[keyof GetUserActivityResponses];
+
+export type ReadExplicitMemoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type ReadExplicitMemoryErrors = {
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type ReadExplicitMemoryError = ReadExplicitMemoryErrors[keyof ReadExplicitMemoryErrors];
+
+export type ReadExplicitMemoryResponses = {
+    /**
+     * The caller's explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type ReadExplicitMemoryResponse = ReadExplicitMemoryResponses[keyof ReadExplicitMemoryResponses];
+
+export type EditExplicitMemoryData = {
+    body: UpdateExplicitMemoryRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type EditExplicitMemoryErrors = {
+    /**
+     * Invalid line or content
+     */
+    400: MemoryErrorBody;
+    /**
+     * The revision is stale
+     */
+    409: MemoryErrorBody;
+    /**
+     * Rejected by privacy review
+     */
+    422: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
+
+export type EditExplicitMemoryResponses = {
+    /**
+     * The edited explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type EditExplicitMemoryResponse = EditExplicitMemoryResponses[keyof EditExplicitMemoryResponses];
 
 export type GetStateHandler2Data = {
     body?: never;
@@ -4189,6 +4744,10 @@ export type FetchWebPageErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web fetch is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * The page could not be read
      */
     422: WebErrorBody;
@@ -4201,7 +4760,7 @@ export type FetchWebPageErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web fetch unconfigured, busy, or usage validation unavailable
+     * Web fetch busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };
@@ -4238,6 +4797,10 @@ export type SearchWebErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web search is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * Per-user hourly rate limit exceeded
      */
     429: unknown;
@@ -4246,7 +4809,7 @@ export type SearchWebErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web search unconfigured, busy, or usage validation unavailable
+     * Web search busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };

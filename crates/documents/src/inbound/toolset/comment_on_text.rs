@@ -3,24 +3,16 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::models::EntityAccessReceipt;
 use entity_access::domain::ports::EntityAccessService;
-use macro_sync_service_jwt::DocumentPermissionToken;
-use messages::domain::models::{NewThreadAnchor, PostMessage, PostMessageNotificationPolicy};
-use messages::domain::service::MessageWrite;
-use model::document::FileType;
-use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{DocumentToolContext, comment_error};
-use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
-    DocumentService,
-    create::DocumentCreationService,
-    editing::{CommentMarkPlacement, EditingWorkerService},
+    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
+use crate::domain::text_comment::{TextCommentError, TextCommentRequest, comment_on_text};
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -82,200 +74,58 @@ where
         ctx: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        if self.occurrence == Some(0) {
-            return Err(ToolCallError {
-                description:
-                    "occurrence counts from 1: pass 1 for the first appearance of the text"
-                        .to_string(),
-                internal_error: anyhow::anyhow!("occurrence 0"),
-            });
-        }
         let access = ctx
             .require_comment_write(&request_context, self.document_id)
             .await?;
-        let document_id = self.document_id.to_string();
-
         let document = ctx
             .service
-            .internal_get_basic_document(&document_id)
+            .internal_get_basic_document(&self.document_id.to_string())
             .await
             .map_err(|e| ToolCallError {
                 description: "unable to look up this document".to_string(),
                 internal_error: e.into(),
             })?;
-        match document.try_file_type() {
-            Some(FileType::Md) => {}
-            Some(FileType::Docx) => return self.comment_on_docx_text(&ctx, access).await,
-            _ => {
-                return Err(ToolCallError {
-                    description: "inline comments anchor to text in Macro markdown and Word documents only; use Comment to comment on this document as a whole".to_string(),
-                    internal_error: anyhow::anyhow!(
-                        "document file type {:?} does not support inline comments",
-                        document.file_type
-                    ),
-                });
-            }
-        }
-
-        // Placing the mark is a content change, but the one a commenter makes
-        // whenever they comment on a selection, so comment access suffices, as
-        // it does for the web composer and the sync service.
-        let document_token = encode_permission_token(
-            Some(request_context.user_id.to_string()),
-            document_id.clone(),
-            AccessLevel::Comment,
+        let comment = comment_on_text(
+            ctx.editing.as_ref(),
+            ctx.messages.as_ref(),
             &ctx.document_permission_jwt_secret,
-            Some(ctx.actor.into_storage_id().to_string()),
+            access,
+            &document,
+            ctx.attribution(),
+            TextCommentRequest {
+                content: &self.content,
+                mentions: vec![],
+                quote: &self.quote,
+                occurrence: self.occurrence,
+            },
         )
-        .map_err(|e| ToolCallError {
-            description: "failed to mint document token".to_string(),
-            internal_error: e.into(),
-        })?;
-
-        // The mark goes in first: refusing an ambiguous or missing passage is
-        // the likely failure, and it then leaves nothing behind, where a thread
-        // posted first would already have notified people of a comment that
-        // cannot be placed.
-        let mark_id = Uuid::now_v7();
-        let placement = match ctx
-            .editing
-            .add_comment_mark(
-                &document_id,
-                &document_token,
-                mark_id,
-                &self.quote,
-                self.occurrence,
-            )
-            .await
-        {
-            Ok(placement) => placement,
-            Err(err) => {
-                // The worker may have pushed the mark before the failure reached
-                // us, as when the sync service never acknowledged it.
-                remove_mark(ctx.editing.as_ref(), &document_id, &document_token, mark_id).await;
-                return Err(ToolCallError {
-                    description: "unable to anchor the comment to the text".to_string(),
-                    internal_error: err,
-                });
-            }
-        };
-        let marked_text = match placement {
-            CommentMarkPlacement::Placed { marked_text } => marked_text,
-            CommentMarkPlacement::Refused(reason) => {
-                return Err(ToolCallError {
-                    description: reason.clone(),
-                    internal_error: anyhow::anyhow!("comment mark refused: {reason}"),
-                });
-            }
-        };
-
-        let posted = ctx
-            .messages
-            .post(
-                access,
-                PostMessage {
-                    id: None,
-                    attribution: ctx.attribution(),
-                    notification_policy: PostMessageNotificationPolicy::Default,
-                    content: self.content.clone(),
-                    thread_id: None,
-                    anchor: Some(NewThreadAnchor::Markdown {
-                        mark_id,
-                        marked_text: Some(marked_text.clone()),
-                    }),
-                    mentions: vec![],
-                    attachments: vec![],
-                    nonce: None,
-                },
-            )
-            .await;
-        let message = match posted {
-            Ok(message) => message,
-            Err(err) => {
-                remove_mark(ctx.editing.as_ref(), &document_id, &document_token, mark_id).await;
-                return Err(comment_error("unable to post the comment")(err));
-            }
-        };
-
-        Ok(CommentOnTextResponse {
-            document_id: self.document_id,
-            thread_id: message.id,
-            comment_id: message.id,
-            marked_text,
-        })
-    }
-}
-
-impl CommentOnText {
-    /// A Word document keeps its comment marks beside its collaborative
-    /// blocks, where the editor places a thread by the text it quotes and pins
-    /// it with a mark. The thread is posted with that quote and a fresh mark id;
-    /// a quote the editor cannot find shows with the comments on changed text.
-    async fn comment_on_docx_text<DSvc, ESvc, EDSvc>(
-        &self,
-        ctx: &ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
-        access: EntityAccessReceipt<MessageWrite>,
-    ) -> ToolResult<CommentOnTextResponse>
-    where
-        DSvc: DocumentService + DocumentCreationService,
-        ESvc: EntityAccessService,
-        EDSvc: EditingWorkerService,
-    {
-        if self.occurrence.is_some_and(|occurrence| occurrence > 1) {
-            return Err(ToolCallError {
-                description: "comments on a Word document attach to the first appearance of the quoted text; quote a longer passage that appears only once".to_string(),
-                internal_error: anyhow::anyhow!("occurrence {:?} on a docx", self.occurrence),
-            });
-        }
-        let marked_text = self.quote.trim();
-        if marked_text.is_empty() {
-            return Err(ToolCallError {
-                description: "quote the passage to comment on".to_string(),
-                internal_error: anyhow::anyhow!("empty quote"),
-            });
-        }
-        let message = ctx
-            .messages
-            .post(
-                access,
-                PostMessage {
-                    id: None,
-                    attribution: ctx.attribution(),
-                    notification_policy: PostMessageNotificationPolicy::Default,
-                    content: self.content.clone(),
-                    thread_id: None,
-                    anchor: Some(NewThreadAnchor::Markdown {
-                        mark_id: Uuid::now_v7(),
-                        marked_text: Some(marked_text.to_owned()),
-                    }),
-                    mentions: vec![],
-                    attachments: vec![],
-                    nonce: None,
-                },
-            )
-            .await
-            .map_err(comment_error("unable to post the comment"))?;
-        Ok(CommentOnTextResponse {
-            document_id: self.document_id,
-            thread_id: message.id,
-            comment_id: message.id,
-            marked_text: marked_text.to_owned(),
-        })
-    }
-}
-
-/// Best-effort removal of a mark whose thread was never posted: left in place
-/// it would highlight text nobody commented on.
-async fn remove_mark<EDSvc: EditingWorkerService>(
-    editing: &EDSvc,
-    document_id: &str,
-    document_token: &DocumentPermissionToken,
-    mark_id: Uuid,
-) {
-    if let Err(error) = editing
-        .remove_comment_mark(document_id, document_token, mark_id)
         .await
-    {
-        tracing::error!(error = ?error, %mark_id, "comment mark left without its thread");
+        .map_err(tool_error)?;
+        Ok(CommentOnTextResponse {
+            document_id: self.document_id,
+            thread_id: comment.message.id,
+            comment_id: comment.message.id,
+            marked_text: comment.marked_text,
+        })
+    }
+}
+
+fn tool_error(error: TextCommentError) -> ToolCallError {
+    match error {
+        TextCommentError::Invalid(description) | TextCommentError::Refused(description) => {
+            ToolCallError {
+                internal_error: anyhow::anyhow!("comment on text refused: {description}"),
+                description,
+            }
+        }
+        TextCommentError::Anchor(error) => ToolCallError {
+            description: "unable to anchor the comment to the text".to_string(),
+            internal_error: error,
+        },
+        TextCommentError::Message(error) => comment_error("unable to post the comment")(error),
+        TextCommentError::Document(error) => ToolCallError {
+            description: "unable to comment on this document".to_string(),
+            internal_error: error.into(),
+        },
     }
 }

@@ -2,8 +2,11 @@ import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableChatSidebarSectionResize } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -32,7 +35,6 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -43,11 +45,7 @@ import {
   rowKeyForSection,
   useChannelsRail,
 } from '../ChannelsRailContext';
-import {
-  RailListError,
-  RailListLoading,
-  RailListLoadingMore,
-} from '../ChannelsRailSection';
+import { RailListError, RailListLoadingMore } from '../ChannelsRailSection';
 import {
   type ChannelRailSectionRows,
   groupChannelRailSections,
@@ -70,10 +68,11 @@ import {
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
 import { ResizableRailSection } from './ResizableRailSection';
+import { ExpandedSearchResults } from './SectionSearchResults';
 import { useFavoriteReorder } from './useFavoriteReorder';
 import { useSectionReorder } from './useSectionReorder';
 
-type ChannelRailSearch = {
+export type ChannelRailSearch = {
   isOpen: Accessor<boolean>;
   query: Accessor<string>;
   results: Accessor<readonly ChannelEntity[]>;
@@ -139,6 +138,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      <SidebarRoutineSuggestions
+        surface="chat"
+        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+      />
       <Show when={rail.labelsFailed()}>
         <div
           class="flex items-center gap-2 px-3 text-xs text-ink-muted"
@@ -321,8 +324,10 @@ function BrowseSection(props: {
   sectionKey: ChannelSectionKey;
   section: ChannelRailSectionRows;
   maxHeight: number;
+  resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
   layoutVersion: number;
+  sectionStart: number;
   sectionOrder: readonly ChannelSectionKey[];
   scrollVersion: number;
   savedScrollTop: number;
@@ -341,9 +346,10 @@ function BrowseSection(props: {
   const [resizing, setResizing] = createSignal(false);
   const [startMargin, setStartMargin] = createSignal(0);
   const outerScroll = () =>
-    props.maxHeight === Number.POSITIVE_INFINITY &&
-    rail.sectionPreferences(props.sectionKey).height === undefined &&
-    !resizing();
+    !props.resizingEnabled ||
+    (props.maxHeight === Number.POSITIVE_INFINITY &&
+      rail.sectionPreferences(props.sectionKey).height === undefined &&
+      !resizing());
   const rowsScrollRoot = () =>
     outerScroll() ? props.outerScrollRoot : scrollRoot();
   const droppable = createDroppable(
@@ -368,6 +374,7 @@ function BrowseSection(props: {
         scrollRoot,
         outerScroll,
         () => props.layoutVersion,
+        () => props.sectionStart,
         () => props.sectionOrder,
         () => size.height,
       ],
@@ -512,6 +519,8 @@ function BrowseSection(props: {
       section={props.sectionKey}
       label={label()}
       open={open()}
+      showCollapsedRows={!open() && itemCount() > 0}
+      resizingEnabled={props.resizingEnabled}
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
@@ -609,6 +618,7 @@ function BrowseSection(props: {
 
 function ExpandedBrowse() {
   const rail = useChannelsRail();
+  const resizeFlag = useFeatureFlag(enableChatSidebarSectionResize);
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
@@ -857,15 +867,17 @@ function ExpandedBrowse() {
             keepMounted={keepSections()}
             overscan={3}
           >
-            {(key) => (
+            {(key, start) => (
               <Show when={sections().get(key)}>
                 {(section) => (
                   <BrowseSection
                     sectionKey={key}
                     section={section()}
                     maxHeight={maximumHeight(key)}
+                    resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
                     layoutVersion={stackSize.height ?? 0}
+                    sectionStart={start()}
                     sectionOrder={keys()}
                     scrollVersion={scrollVersion()}
                     savedScrollTop={scrollOffsets.get(key) ?? 0}
@@ -885,94 +897,6 @@ function ExpandedBrowse() {
   );
 }
 
-function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
-  const rail = useChannelsRail();
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  let virtualizer: ChannelRailVirtualizerHandle | undefined;
-  let unregister: (() => void) | undefined;
-
-  onCleanup(() => unregister?.());
-
-  const channelsById = createMemo(
-    () =>
-      new Map(props.search.results().map((channel) => [channel.id, channel]))
-  );
-
-  const keepMounted = () => {
-    const row = rail.list.focus.item();
-    if (row?.kind !== 'conversation') return [];
-
-    const index = props.search
-      .results()
-      .findIndex(({ id }) => id === row.channel.id);
-    return index >= 0 ? [index] : [];
-  };
-
-  const loadMoreNearEnd = () => {
-    const metrics = virtualizer?.scrollMetrics();
-    const source = rail.sources.search;
-
-    if (
-      metrics &&
-      metrics.size - metrics.offset - metrics.viewport < 300 &&
-      source.hasMore() &&
-      !source.isFetching() &&
-      !source.error()
-    ) {
-      fireAndForget(source.loadMore(), 'channels-view');
-    }
-  };
-
-  createScrollTopFade(scrollRoot);
-
-  return (
-    <div
-      ref={setScrollRoot}
-      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
-    >
-      <Show
-        when={props.search.isLoading() && props.search.results().length === 0}
-      >
-        <RailListLoading />
-      </Show>
-      <Show when={props.search.error()}>
-        <RailListError retry={props.search.retry} />
-      </Show>
-      <ChannelRailVirtualizer
-        ref={(current) => {
-          unregister?.();
-          unregister = undefined;
-          virtualizer = current;
-          if (current) unregister = rail.registerVirtualizer('search', current);
-        }}
-        keys={[...channelsById().keys()]}
-        scrollRoot={scrollRoot()}
-        scrollPadding={CHANNEL_SECTION_ROW_HEIGHT * 2}
-        estimateSize={CHANNEL_SECTION_ROW_HEIGHT}
-        keepMounted={keepMounted()}
-        onRangeChange={loadMoreNearEnd}
-      >
-        {(id) => (
-          <Show when={channelsById().get(id)}>
-            {(channel) => <ChannelOption channel={channel()} />}
-          </Show>
-        )}
-      </ChannelRailVirtualizer>
-      <Show
-        when={
-          !props.search.isLoading() &&
-          !props.search.error() &&
-          props.search.results().length === 0
-        }
-      >
-        <p class="px-2 py-6 text-center text-sm text-ink-muted">
-          {t('channelSections.noResults')}
-        </p>
-      </Show>
-    </div>
-  );
-}
-
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const listTarget = tourTarget(CHANNELS_TOUR.list);
@@ -980,7 +904,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

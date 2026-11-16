@@ -5,12 +5,16 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { DraftCreated } from './draftCreated';
 import type { RoutineStep } from './routineStep';
 
 /**
  * A drafted step.
  */
 export interface DraftedStep {
+  /** What AI created while drafting the step. These exist whether or not
+the step is saved. */
+  created: DraftCreated[];
   /** What the type checker still finds in its code. */
   problems: string[];
   /** Why AI made a step it chose code or Ask AI, in a few words; empty

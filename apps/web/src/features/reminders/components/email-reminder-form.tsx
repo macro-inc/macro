@@ -26,6 +26,8 @@ export function EmailReminderForm(
     condition: EmailReminderCondition;
     onConditionChange: (value: EmailReminderCondition) => void;
     times: readonly ReminderTimeOption[];
+    /** Why the typed text offers no time, shown when nothing else matches. */
+    reason?: string;
     pending: boolean;
     ready?: boolean;
     error?: string;
@@ -110,13 +112,15 @@ export function EmailReminderForm(
                 <span class="flex-1 font-medium">{option.label}</span>
                 <span class="text-xs font-normal text-ink-muted">
                   {formatReminderInstant(option.date)}
+                  <Show when={option.note}>{(note) => ` · ${note()}`}</Show>
                 </span>
               </div>
             )}
           </CommandMenuList>
           <Show when={!props.times.length}>
             <CommandMenuEmptyState>
-              Enter a future time, like in 2 hours or tomorrow 9am.
+              {props.reason ??
+                'Enter a future time, like in 2 hours or tomorrow 9am.'}
             </CommandMenuEmptyState>
           </Show>
           <Show when={props.error}>

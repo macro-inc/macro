@@ -43,6 +43,11 @@ export default {
     one: 'and {{count}} more',
     other: 'and {{count}} more',
   },
+  stackShowMore: {
+    one: '{{count}} more',
+    other: '{{count}} more',
+  },
+  stackHideShort: 'Hide',
   markedDone: {
     one: 'Marked as done',
     other: 'Marked {{count}} notifications as done',
@@ -64,6 +69,10 @@ export default {
   cleared: {
     one: 'Cleared {{count}} notification',
     other: 'Cleared {{count}} notifications',
+  },
+  stillClearing: {
+    one: 'Cleared {{count}} notification so far; still clearing',
+    other: 'Cleared {{count}} notifications so far; still clearing',
   },
   clearedNothing: 'Nothing to clear',
   clearFailed: 'Couldn’t clear notifications',

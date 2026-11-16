@@ -33,6 +33,7 @@ import {
   type DatabaseColumnCastsSource,
   type DatabaseColumnConversion,
   type DatabaseColumnTypeChange,
+  type DatabaseRelationTargets,
   type DatabaseSchemaChange,
 } from '../core/column-schema';
 import { type DatabaseViewColumn, isOptionColumn } from '../core/database-view';
@@ -63,7 +64,7 @@ export type DatabaseColumnHeaderProps = {
     conversion: DatabaseColumnConversion
   ) => DatabaseSchemaChange<string>;
   onDelete?: (columnId: string) => DatabaseSchemaChange;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   /** The type menu's dry run; without it every type is offered as is. */
   columnCasts?: DatabaseColumnCastsSource;
   dragHandle?: JSX.HTMLAttributes<HTMLDivElement>;
@@ -122,7 +123,8 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
     mounted = false;
     props.registerRename?.(undefined);
   });
-  const canRename = () => !!props.canRename && !!props.onRename;
+  const canRename = () =>
+    !props.column.fixedOptions && !!props.canRename && !!props.onRename;
   const focusHeader = () => header?.isConnected && header.focus();
   const restoreFocus = () => queueMicrotask(focusHeader);
   const columnRename = createInlineRename({

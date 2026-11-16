@@ -771,7 +771,7 @@ export default {
     tabMobileApp: 'Mobile App',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationen',
-    tabRuntimes: 'Laufzeitumgebungen',
+    tabRuntimes: 'Rechner',
     tabMcpServer: 'MCP-Server',
     tabApiKeys: 'API-Schlüssel',
     tabBots: 'Bots',

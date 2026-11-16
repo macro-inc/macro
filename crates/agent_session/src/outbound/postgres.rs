@@ -419,6 +419,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             mcp_servers,
             egress_token_hash,
             origin,
+            billing,
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
@@ -469,9 +470,10 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id
+                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id,
+                billing
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING
                 id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
@@ -510,6 +512,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             <&str>::from(purpose.source()),
             <&str>::from(visibility),
             source_id,
+            <&str>::from(billing),
         )
         .fetch_one(&mut *transaction)
         .await
@@ -602,6 +605,39 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(
+                turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                    OR (turn_state = 'disconnected' AND turn_interrupted),
+                false
+            ) AS "unfinished!"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's turn state")?
+        .ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        let billing = sqlx::query_scalar!(
+            "SELECT billing FROM agent_session WHERE id = $1",
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's billing")?
+        .ok_or(AgentSessionError::NotFound(id))?;
+        Ok(billing
+            .parse()
+            .map_err(|_| anyhow::anyhow!("unknown agent_session billing {billing:?}"))?)
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -939,11 +975,13 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         sqlx::query!(
-            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1",
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4, turn_prompter_client = $5 WHERE id = $1",
             id.as_uuid(),
             prompter.action_id.as_uuid(),
             prompter.user.as_ref().filter(|_| prompter.kind != crate::domain::model::PrompterKind::System).map(|user| user.as_ref()),
             prompter.kind.as_ref(),
+            // A tab only stands beside a person who prompted from it.
+            prompter.client.filter(|_| prompter.acting_user().is_some()).map(crate::domain::model::UiClientId::as_uuid),
         )
         .execute(&self.pool)
         .await
@@ -970,7 +1008,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         let row = sqlx::query!(
             r#"
-            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>", turn_prompter_client
             FROM agent_session
             WHERE id = $1
             "#,
@@ -990,6 +1028,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                     action_id,
                 ),
                 user: row.turn_prompter,
+                client: row
+                    .turn_prompter_client
+                    .map(crate::domain::model::UiClientId::from_uuid),
             })
         }))
     }
@@ -1831,6 +1872,13 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                 r#"
                 UPDATE agent_session
                 SET turn_state = $2,
+                    turn_interrupted = CASE
+                        WHEN $2 = 'disconnected' THEN COALESCE(
+                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),
+                            false
+                        )
+                        ELSE false
+                    END,
                     modified_at = CASE WHEN $3 THEN now() ELSE modified_at END
                 WHERE id = $1 AND turn_state IS DISTINCT FROM $2
                 "#,
@@ -1875,18 +1923,10 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                   SELECT COALESCE(boundary.created_at, '-infinity'::timestamptz),
                          COALESCE(boundary.id, '00000000-0000-0000-0000-000000000000'::uuid)
                   FROM agent_session AS session
-                  LEFT JOIN LATERAL (
-                    SELECT id, created_at FROM agent_session_log
-                    WHERE id = session.history_start_log_id
-                      AND agent_session_id = $1
-                      AND NOT EXISTS (
-                          SELECT 1 FROM agent_session_log AS trusted
-                          WHERE trusted.agent_session_id = $1
-                            AND trusted.direction IN ('notification', 'to_runtime')
-                            AND trusted.content->'params'->'_meta' ? 'macro.dev/notifications'
-                      )
-                    LIMIT 1
-                  ) AS boundary ON true
+                  LEFT JOIN agent_session_log AS boundary
+                    ON boundary.id = session.history_start_log_id
+                   AND boundary.agent_session_id = session.id
+                   AND NOT session.has_trusted_notifications
                   WHERE session.id = $1
               )
             ORDER BY log.created_at ASC, log.id ASC

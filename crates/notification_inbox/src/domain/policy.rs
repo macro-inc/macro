@@ -27,7 +27,7 @@ const GITHUB_PULL_REQUEST_SOURCE: &str = "github_pull_request";
 
 /// The entities inbox groups are filed under. Channel threads are never
 /// their own group: a channel's group holds its threads.
-pub const CANDIDATE_TYPES: [EntityType; 11] = [
+pub const CANDIDATE_TYPES: [EntityType; 12] = [
     EntityType::Document,
     EntityType::Chat,
     EntityType::Project,
@@ -39,6 +39,7 @@ pub const CANDIDATE_TYPES: [EntityType; 11] = [
     EntityType::Initiative,
     EntityType::CrmCompany,
     EntityType::CrmContact,
+    EntityType::Harness,
 ];
 
 /// The inbox membership filter.

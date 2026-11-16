@@ -65,9 +65,12 @@ impl CodingAgentUpdatesRepo for () {
     }
 }
 
-/// A kind of action or inactivity the user should see.
+/// A kind of action or inactivity the user should see: `permission` to run a tool, an
+/// `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+/// activity for over 20 minutes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AgentUpdateKind {
     Permission,
@@ -79,29 +82,44 @@ pub enum AgentUpdateKind {
 /// One pending interaction, or one stalled session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentUpdate {
+    /// The session.
     pub session_id: Uuid,
+    /// The session's name.
     pub session_name: String,
+    /// The runtime the session runs on.
     pub harness: String,
+    /// The session's pull request, if it has one.
     pub pull_request_url: Option<String>,
+    /// What the session is waiting for.
     pub kind: AgentUpdateKind,
+    /// What is asked, or why the session looks stalled, in at most 240 characters.
     pub summary: String,
+    /// When the request was made, or the session's last activity.
     pub since: DateTime<Utc>,
+    /// The choices a permission request offers; empty for other kinds.
     pub options: Vec<String>,
 }
 
 /// Bounded results; truncation means older qualifying sessions were not folded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentUpdates {
+    /// One entry per pending request or stalled session, newest session activity first.
     pub items: Vec<AgentUpdate>,
+    /// Whether qualifying sessions beyond the 25 most recent were left out.
     pub truncated: bool,
+    /// Says what was left out, when truncated.
     pub truncation_notice: Option<String>,
 }
 
 /// Read the owner's recent blocked or stalled sessions and fold only blocked logs.
+// `owner_count` is constant, never recorded again.
+// ast-grep-ignore: rust-span-field-recorded-once
 #[tracing::instrument(
     name = "agent_session.list_updates",
     skip(repo, owner),

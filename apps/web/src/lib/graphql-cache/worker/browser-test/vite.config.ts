@@ -35,7 +35,7 @@ export default defineConfig(({ command }) => ({
     emptyOutDir: true,
     sourcemap: true,
     assetsInlineLimit: 0,
-    rollupOptions: {
+    rolldownOptions: {
       input: Object.fromEntries(
         [
           'calendar-points.html',
@@ -59,6 +59,7 @@ export default defineConfig(({ command }) => ({
           'query-write-scope.html',
           'email-participants.html',
           'search-buckets.html',
+          'people-references.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

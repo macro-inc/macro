@@ -36,7 +36,13 @@ export class Label extends MacroEntity<ApiLabel> {
     return new Label(client, label.id);
   }
 
-  /** Delete this label. */
+  /**
+   * Delete this label.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async delete(): Promise<void> {
     unwrap(await this.client.email.deleteLabel({ path: { id: this.id } }));
   }

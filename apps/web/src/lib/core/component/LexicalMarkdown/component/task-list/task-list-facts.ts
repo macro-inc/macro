@@ -1,16 +1,18 @@
-import { combine, literal, NIL_UUID } from '@app/features/soup';
+import { combine, literal, NIL_UUID } from '@app/features/soup/filters/facets';
+import {
+  isTaskEntity,
+  type TaskEntityWithProperties,
+} from '@entity/types/entity';
 import {
   getTaskAssigneeIds,
   getTaskDueDate,
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
-  isTaskEntity,
-  type TaskEntityWithProperties,
-} from '@entity';
-import { useContacts } from '@queries/contacts/contacts';
+} from '@entity/utils/task-properties';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 import type { TaskInfo } from '../../plugins/checklist-controls/model';
+import { useTaskListAssigneeNames } from './task-list-assignee-names';
 
 /** Pin every non-document soup target so the query returns tasks only. */
 const NON_TASK_TARGETS = {
@@ -25,13 +27,12 @@ const NON_TASK_TARGETS = {
   pf: literal('pid', NIL_UUID),
 };
 
-/** Shared real contact projection, independent of either editor graph. */
-export function createTaskListNames() {
-  const contacts = useContacts();
+/** Names for the assignees the list references, independent of either editor graph. */
+export function createTaskListNames(referenced: Accessor<readonly string[]>) {
+  const resolveName = useTaskListAssigneeNames(referenced);
   const nameById = createMemo(
-    () => new Map(contacts().map((user) => [user.id, user.name ?? user.email]))
+    () => new Map(referenced().map((id) => [id, resolveName(id)]))
   );
-  const resolveName = (id: string) => nameById().get(id) ?? 'Unknown';
   return { nameById, resolveName };
 }
 

@@ -93,6 +93,15 @@ fn embedded_bundle_build() -> u64 {
         .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
 }
 
+/// When this native binary was compiled, in Unix milliseconds. Unlike the
+/// JavaScript build time, OTA bundle updates do not change it.
+#[tauri::command]
+fn get_native_build_time() -> u64 {
+    env!("MACRO_NATIVE_BUILD_TIME_MS")
+        .parse()
+        .expect("MACRO_NATIVE_BUILD_TIME_MS must be an unsigned integer")
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -138,8 +147,8 @@ pub fn run() {
 
 /// The startup window as configured, for runtimes without extra window options.
 fn configured_window<'a>(
-    window: tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
-) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>> {
+    window: tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>> {
     window
 }
 
@@ -153,8 +162,8 @@ pub type AppRuntime = tauri::DynRuntime;
 /// Applies runtime-specific options to each startup window before it is built.
 pub type ConfigureWindow =
     for<'a> fn(
-        tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
-    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>;
+        tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>;
 
 /// Runs the app on a builder whose webview runtime is already selected.
 /// `desktop-cef` passes a Chromium builder and its window options; every other
@@ -249,8 +258,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         // single instance plugin should always be the first registered
         tracing::debug!("register single instance plugin");
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+            .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
                 tracing::debug!("single instance callback with argv: {argv:?}");
+                desktop::main_window::reveal(app);
             }))
             .plugin(window_state::plugin());
     }
@@ -323,6 +333,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
                 .build(),
         )
         .plugin(navigation.clone())
+        .manage(navigation.clone())
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
                 AppEnvironment::current()
@@ -392,6 +403,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,
             diagnostics::record_frontend_diagnostic,
+            open_external_url,
             #[cfg(target_os = "linux")]
             linux_notification::send_linux_notification,
             #[cfg(target_os = "linux")]
@@ -416,12 +428,20 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_watch,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
+            graphql_cache_plugin::commands::graphql_cache_people_context,
+            graphql_cache_plugin::commands::graphql_cache_people_update,
+            graphql_cache_plugin::commands::graphql_cache_people_search,
+            graphql_cache_plugin::commands::graphql_cache_people_resolve_references,
+            graphql_cache_plugin::commands::graphql_cache_people_read_sql,
+            graphql_cache_plugin::commands::graphql_cache_contact_snapshot,
+            graphql_cache_plugin::commands::graphql_cache_contact_reconcile,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
             graphql_cache_plugin::commands::graphql_cache_entity_filter_resume,
             graphql_cache_plugin::commands::graphql_cache_calendar_range,
             graphql_cache_plugin::commands::graphql_cache_calendar_commit,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
+            graphql_cache_plugin::commands::graphql_cache_hydrate_scoped,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
             graphql_cache_plugin::commands::graphql_cache_inspect_mutations,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
@@ -443,6 +463,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             is_ipad,
+            get_native_build_time,
             get_pending_share_filenames,
             pop_shared_files,
             clear_shared_files,
@@ -466,12 +487,14 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         ])
         .setup(move |app| {
             #[cfg(desktop)]
-            for config in &startup_windows {
-                let navigation = navigation.clone();
-                let handle = app.handle().clone();
-                let window = tauri::WebviewWindowBuilder::from_config(app, config)?
-                    .on_new_window(move |url, _features| navigation.on_new_window(&handle, &url));
-                configure_window(window).build()?;
+            {
+                let windows = desktop::main_window::StartupWindows::new(
+                    startup_windows,
+                    navigation.clone(),
+                    configure_window,
+                );
+                desktop::main_window::create_all(app.handle(), &windows)?;
+                app.manage(windows);
             }
             #[cfg(desktop)]
             desktop_update::setup(app, recording)?;
@@ -663,6 +686,19 @@ enum LaunchState {
     PendingNavigation(Url),
     /// Frontend is ready; links emit directly.
     Ready,
+}
+
+/// Opens a URL from `openExternalUrl` on desktop through the navigation
+/// policy, without a popup request (which WebKitGTK drops once the click's
+/// user gesture has expired) or a page navigation (which runs `beforeunload`).
+/// Returns false when the page must open it as a popup itself.
+#[tauri::command]
+fn open_external_url(
+    app: AppHandle<AppRuntime>,
+    navigation: tauri::State<'_, MacroNavigationPlugin>,
+    url: Url,
+) -> bool {
+    navigation.open_external(&app, &url)
 }
 
 /// Convert a deep link url into a `navigate` event for the frontend router.

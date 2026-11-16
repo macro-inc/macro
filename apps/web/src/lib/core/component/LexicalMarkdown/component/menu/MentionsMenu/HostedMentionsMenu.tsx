@@ -2,12 +2,14 @@ import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useMaybeBlockId } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
+  disableCrmContactSearch,
   enableCrm,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -18,23 +20,27 @@ import {
   useQuickAccess,
 } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { Telemetry } from '@macro-inc/observability';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { Surface } from '@ui';
+import { Button, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -96,12 +102,16 @@ export function HostedMentionsMenu(props: HostedMentionsMenuProps) {
 function MentionsMenuInner(props: HostedMentionsMenuProps) {
   const analytics = useAnalytics();
 
-  const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
+  const [searchTerm, flushSearchTerm] = flushableDebouncedDependent(
+    props.menu.searchTerm,
+    60
+  );
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
   const sessionsEnabled = () =>
     !hasCustomEntities() &&
+    props.menu.isOpen() &&
     (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
   const sessionList = quickAccess?.useList({
@@ -116,23 +126,29 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     }))
   );
 
-  const allItems = props.entities ?? quickAccess!.useList().items;
+  const allItems =
+    props.entities ?? quickAccess!.useList(...exclude('person')).items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
+  const userMention = useUsersMention({
+    users: props.users,
+    transformUsers: props.transformUsers,
+    searchTerm,
+    isChannelBlock: props.block === 'channel',
+    enabled: () =>
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('users')),
+  });
   const {
     usersAndGroups,
     groups,
     isLoading: isLoadingUsers,
     error: errorUsers,
-  } = useUsersMention({
-    users: props.users,
-    searchTerm,
-    isChannelBlock: props.block === 'channel',
-  });
+  } = userMention;
 
   const customDocs = props.entities
     ? useEntityMentionFromList({
@@ -164,6 +180,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     useEntityMention({
       buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const docs = docsMention.entities;
 
@@ -172,6 +189,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     useEntityMention({
       buckets: ['channel', 'dm'],
       searchTerm: activeSearchTerm,
+      enabled: props.menu.isOpen,
     });
   const channels = channelsMention.entities;
 
@@ -182,22 +200,31 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
       useEntityMention({
         buckets: ['crm_company'],
         searchTerm: activeSearchTerm,
+        enabled: props.menu.isOpen,
       }))
     : undefined;
   const sourceEnabled = (source: MentionBucketId) =>
     !props.sources || props.sources.includes(source);
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const contactsEnabled = () =>
-    props.includeContacts !== false && sourceEnabled('crm');
+    props.includeContacts !== false &&
+    sourceEnabled('crm') &&
+    !contactSearchDisabled().enabled;
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
-      ? useEntityMentionFromList({
-          items: props.entities,
-          buckets: ['crm_contact'],
-          searchTerm,
-        })
+      ? {
+          ...useEntityMentionFromList({
+            items: props.entities,
+            buckets: ['crm_contact'],
+            searchTerm,
+          }),
+          users: () => [],
+          windowKey: () => undefined,
+        }
       : useCrmContactMentionSource(
           activeSearchTerm,
-          () => props.menu.isOpen() && contactsEnabled()
+          () => props.menu.isOpen() && contactsEnabled(),
+          () => false
         )
     : undefined;
 
@@ -254,7 +281,9 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
       }
     : useEmailSearchMention({
         searchTerm: activeSearchTerm,
-        enabled: () => !props.sources || props.sources.includes('emails'),
+        enabled: () =>
+          props.menu.isOpen() &&
+          (!props.sources || props.sources.includes('emails')),
       });
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only
@@ -371,6 +400,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -379,6 +409,20 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     (usersAndGroups() ?? []).filter(
       (item) => props.includeGroups !== false || item.kind !== 'group'
     );
+  const peopleWindowKey = () => {
+    if (userMention.isLoading()) return;
+    return userMention.windowKey();
+  };
+  // "No results" is a statement about the typed term. Until the list has
+  // caught up with it and the slower sources have answered, say so instead.
+  const stillSearching = () =>
+    searchTerm() !== props.menu.searchTerm() ||
+    (sourceEnabled('users') && userMention.isLoading()) ||
+    (sourceEnabled('emails') && isLoadingMoreEmails()) ||
+    (contactsEnabled() &&
+      !!contactMention &&
+      'isLoading' in contactMention &&
+      contactMention.isLoading());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -407,6 +451,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
         {
           id: 'all',
           label: 'All',
+          windowKey: peopleWindowKey,
           getData: mobileAllItems,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
@@ -421,17 +466,20 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
+            (sourceEnabled('users') && userMention.hasMore()) ||
             (sourceEnabled('documents') && docsMention.hasMore()) ||
             (sourceEnabled('channels') && channelsMention.hasMore()) ||
             (sourceEnabled('crm') && crmMention.hasMore()) ||
             (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
+            (sourceEnabled('users') && userMention.isLoadingMore()) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
             (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
             (sourceEnabled('crm') && crmMention.isLoadingMore()) ||
             (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
+              sourceEnabled('users') && userMention.loadMore(),
               sourceEnabled('documents') && docsMention.loadMore(),
               sourceEnabled('channels') && channelsMention.loadMore(),
               sourceEnabled('crm') && crmMention.loadMore(),
@@ -451,12 +499,16 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
       },
       {
         id: 'users',
+        windowKey: peopleWindowKey,
         label:
           props.includeGroups !== false && groups().length > 0
             ? 'People & Groups'
             : 'People',
         getData: mentionUsers,
         getFullCount: () => mentionUsers().length,
+        hasMore: userMention.hasMore,
+        isLoadingMore: userMention.isLoadingMore,
+        loadMore: userMention.loadMore,
       },
       {
         id: 'documents',
@@ -540,13 +592,42 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
       ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
-    return filtered.filter((bucket) => bucket.getFullCount() > 0);
+    return filtered.filter(
+      (bucket) => bucket.getFullCount() > 0 || bucket.hasMore?.()
+    );
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
     ignoredIds: () => (blockId ? [blockId] : []),
     targetItems: TARGET_ITEMS,
   });
+
+  // Sources answer within tens of milliseconds of most keystrokes. The
+  // searching label appears only for a search that is really taking a while,
+  // then stays long enough to read; until then the previous label stays, so
+  // nothing flashes between keystrokes.
+  const searchingShown = createSteadyFlag(stillSearching);
+  const emptyLabel = createMemo<string>((shown) => {
+    // A label belongs to one run of empty lists. Once rows are listed or the
+    // menu closes, the next empty list starts without it.
+    if (!menuOpen() || controller.combinedItems().length > 0) return '\u00a0';
+    if (searchingShown()) return t('commandMenu.searching');
+    return stillSearching() ? shown : t('commandMenu.noResults');
+  }, '\u00a0');
+
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
+  );
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null
@@ -603,9 +684,11 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     isActive: () => !props.nativePresentation && menuOpen(),
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {
@@ -627,6 +710,9 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
       }
     },
     onSelect: () => {
+      // The list trails the typed term by the debounce. Bring it up to date
+      // and act at once: a deferred pick is lost if the person keeps typing.
+      flushSearchTerm();
       const selectedItem = controller.selectedItem();
       // Keep the menu open on an offline agent so Enter reads as "not that
       // one" rather than silently dismissing with nothing inserted.
@@ -727,7 +813,9 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     let cumulativeIndex = 0;
 
     return bucketConfigs()
-      .filter((config) => (currentBins[config.id] || 0) > 0)
+      .filter(
+        (config) => (currentBins[config.id] || 0) > 0 || config.hasMore?.()
+      )
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
         const bucketItems: ReturnType<typeof config.getData> = [];
@@ -881,9 +969,9 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
               when={controller.viewAllMode()}
               fallback={
                 <Show
-                  when={controller.combinedItems().length > 0}
+                  when={visibleBuckets().length > 0}
                   fallback={
-                    <div class="px-2 text-ink-extra-muted">No results</div>
+                    <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
                   }
                 >
                   <div>
@@ -960,7 +1048,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
                 </div>
               </Show>
               <Show when={controller.combinedItems().length === 0}>
-                <div class="px-2 text-ink-extra-muted">No results</div>
+                <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
               </Show>
               <VirtualizedItemList
                 items={controller.combinedItems()}
@@ -970,6 +1058,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
+                windowKey={activeViewAllBucket()?.windowKey?.()}
                 hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
                 isLoadingMore={
                   activeViewAllBucket()?.isLoadingMore?.() ?? false

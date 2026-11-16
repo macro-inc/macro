@@ -1,4 +1,5 @@
 import { DocumentOutline } from '@app/components/DocumentOutline';
+import { FOLDED_BLOCK_CLASS } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type { OutlineHeading, OutlineSource } from './outline-source';
 
@@ -92,6 +93,8 @@ type MarkdownOutlineState = ReturnType<typeof useMarkdownOutline>;
 
 export function MarkdownOutline(props: {
   source: Accessor<OutlineSource | undefined>;
+  /** Unfolds any collapsed section hiding the heading before scrolling to it. */
+  revealHeading?: (key: string) => void;
   outline: MarkdownOutlineState;
   portalMount: Accessor<HTMLElement>;
   scrollContainer: Accessor<HTMLElement | undefined>;
@@ -137,9 +140,11 @@ export function MarkdownOutline(props: {
       );
       const renderedHeadings = currentHeadings.flatMap((heading) => {
         const element = source.getElementByKey(heading.key);
-        return element
-          ? [{ key: heading.key, top: element.getBoundingClientRect().top }]
-          : [];
+        // Headings inside a folded section take no space on screen.
+        if (!element || element.classList.contains(FOLDED_BLOCK_CLASS)) {
+          return [];
+        }
+        return [{ key: heading.key, top: element.getBoundingClientRect().top }];
       });
       const indexes = getVisibleHeadingIndexes(
         renderedHeadings.map((heading) => heading.top),
@@ -200,6 +205,7 @@ export function MarkdownOutline(props: {
   };
 
   const scrollToHeading = (heading: OutlineHeading) => {
+    props.revealHeading?.(heading.key);
     const headingElement = props.source()?.getElementByKey(heading.key);
     if (!headingElement) return;
 

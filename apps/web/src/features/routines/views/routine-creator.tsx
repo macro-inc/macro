@@ -1,7 +1,7 @@
 import ClockIcon from '@icon/system/regular/clock.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer } from '@ui';
-import type { Accessor, JSX } from 'solid-js';
+import { type Accessor, children, type JSX, Show } from 'solid-js';
 import { RoutineStart } from '../components/routine-start';
 import type { ScheduleDraft } from '../core/draft';
 import { clampDescription } from '../core/routine-draft';
@@ -9,7 +9,6 @@ import {
   availableTemplates,
   newRoutineDraft,
   type RoutineTemplate,
-  type StarterSteps,
 } from '../core/routine-templates';
 
 /**
@@ -23,20 +22,24 @@ export function RoutineCreatorView(props: {
   decisionsEnabled: boolean;
   /** Macro's built-in templates are offered (`enable-routine-starter-templates`). */
   templatesEnabled: boolean;
-  /** The scheduler's code for templates that are code. */
-  starters: StarterSteps;
+  /** The scheduler's catalog routines. */
+  catalog: RoutineTemplate[];
+  /** Templates start with their code (`enable-routine-code-steps`). */
+  codeSteps: boolean;
   /** Drafts the routine from a description; absent where that is unavailable. */
   renderComposer?: (
     apply: (draft: ScheduleDraft, description: string) => void,
     current: Accessor<ScheduleDraft>,
     initialDescription: string | undefined
   ) => JSX.Element;
+  /** A draft under way, shown in place of the describe box and templates. */
+  drafting?: JSX.Element;
   onStart(draft: ScheduleDraft): void;
   onClose(): void;
 }) {
   const context = () => ({
     defaultModel: props.defaultModel,
-    starters: props.starters,
+    codeSteps: props.codeSteps,
   });
   const blank = () => newRoutineDraft(undefined, context());
   // A drafted routine is described by what was asked for.
@@ -48,6 +51,7 @@ export function RoutineCreatorView(props: {
     );
   const startFrom = (template: RoutineTemplate) =>
     props.onStart(newRoutineDraft(template, context()));
+  const drafting = children(() => props.drafting);
   return (
     <EntityComposer.Root class="w-full h-auto max-h-[80vh]">
       <EntityComposer.Header class="items-start">
@@ -77,15 +81,22 @@ export function RoutineCreatorView(props: {
         </Button>
       </EntityComposer.Header>
       <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-2">
-        <RoutineStart
-          describe={props.renderComposer?.(drafted, blank, undefined)}
-          templates={
-            props.templatesEnabled
-              ? availableTemplates(props.decisionsEnabled)
-              : []
+        <Show
+          when={drafting()}
+          fallback={
+            <RoutineStart
+              describe={props.renderComposer?.(drafted, blank, undefined)}
+              templates={
+                props.templatesEnabled
+                  ? availableTemplates(props.catalog, props.decisionsEnabled)
+                  : []
+              }
+              onTemplate={startFrom}
+            />
           }
-          onTemplate={startFrom}
-        />
+        >
+          <div class="grid min-w-0 pb-4">{drafting()}</div>
+        </Show>
       </div>
     </EntityComposer.Root>
   );

@@ -24,6 +24,8 @@ export class DatabaseRow {
    * Every committed change that touched the row, newest first: who made it,
    * when, how, and the values of the columns it touched before and after.
    * A removed row's history still reads.
+   *
+   * @readonly
    */
   history(): Promise<RowHistoryEntry[]> {
     return this.table.database.rowHistory(this);

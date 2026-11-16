@@ -1,3 +1,4 @@
+import { DatabaseCardSkeleton } from '@app/features/block-database/component/DatabaseCardSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
 import {
@@ -55,7 +56,11 @@ export function DatabaseCard(props: DocumentCardProps) {
       when={enabled().enabled && !host.skipPreviewFetch}
       fallback={placeholder()}
     >
-      <Suspense fallback={placeholder()}>
+      <Suspense
+        fallback={
+          <DatabaseCardSkeleton name={props.documentName || 'Database'} />
+        }
+      >
         <LexicalInteractiveBoundary>
           <DocumentDatabase
             databaseId={props.documentId}

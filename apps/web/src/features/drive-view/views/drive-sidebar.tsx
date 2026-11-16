@@ -9,12 +9,13 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DatabaseIcon from '@icon/system/regular/database.svg';
+import { EntityIcon } from '@entity/extractors/entity-icon';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
@@ -57,7 +58,9 @@ function DriveDatabases(props: { onNavigate?: () => void }) {
               }}
             >
               <ViewSidebar.Icon>
-                <DatabaseIcon class="size-4" />
+                <span class="size-4">
+                  <EntityIcon entity={database} />
+                </span>
               </ViewSidebar.Icon>
               <span class="truncate">{database.name}</span>
             </ViewSidebar.Item>
@@ -302,8 +305,28 @@ function DriveImportPromotion() {
   );
 }
 
+/**
+ * Drive's tutorials: Docs, and Spreadsheets and Databases where they're
+ * rolled out. Drive's own video is its list's row. Among several, each item
+ * names its block.
+ */
+function DriveTutorials() {
+  const { tutorials } = useDriveView();
+  return (
+    <ViewSidebar.Nav
+      aria-label={t('tutorials.watchTutorial')}
+      class="empty:hidden"
+    >
+      <For each={tutorials()}>
+        {(id) => (
+          <TutorialSidebarItem tutorial={id} named={tutorials().length > 1} />
+        )}
+      </For>
+    </ViewSidebar.Nav>
+  );
+}
+
 export function DriveSidebar() {
-  const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
   // A long folder tree scrolls under a drag held at its edge.
   if (useDragDropContext()) {
@@ -311,17 +334,7 @@ export function DriveSidebar() {
   }
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
-      <ViewSidebar.Header
-        searchLabel="Search files"
-        search={() => (
-          <SearchBar
-            label="Search files"
-            placeholder="Search files"
-            value={state.value().search}
-            onValueChange={state.setSearch}
-          />
-        )}
-      >
+      <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Drive</ViewSidebar.Title>
@@ -331,13 +344,8 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
-        {/* Drive's list carries Drive's tutorial row; Docs, listed in Drive, takes the sidebar. */}
-        <ViewSidebar.Nav
-          aria-label={t('tutorials.watchTutorial')}
-          class="empty:hidden"
-        >
-          <TutorialSidebarItem tutorial="docs" />
-        </ViewSidebar.Nav>
+        <SidebarRoutineSuggestions surface="files" />
+        <DriveTutorials />
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

@@ -6,9 +6,11 @@ import {
   driveMobileTabLocation,
 } from '../core/types';
 import { DriveFilterDrawer } from './drive-filter-drawer';
+import { useDriveFolderHierarchyVisible } from './drive-folder-hierarchy';
 
 export function DriveMobileTabs() {
   const { state } = useDriveView();
+  const folderHierarchy = useDriveFolderHierarchyVisible();
 
   const items = (): PillTabItem<DriveMobileTab>[] =>
     DRIVE_MOBILE_TABS.map((tab) => ({ value: tab.id, label: tab.label }));
@@ -27,7 +29,7 @@ export function DriveMobileTabs() {
         scrollable
         class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
         contentClass="px-(--mobile-chrome-gutter)"
-        leading={<DriveFilterDrawer />}
+        leading={folderHierarchy() ? undefined : <DriveFilterDrawer />}
         items={items()}
         value={activeTab()}
         onChange={(tab) => state.navigate(driveMobileTabLocation(tab))}

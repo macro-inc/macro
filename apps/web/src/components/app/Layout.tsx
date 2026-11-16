@@ -76,7 +76,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -88,6 +87,7 @@ import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
+import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
@@ -152,6 +152,7 @@ export function RootFrame(props: ParentProps) {
   // Here rather than in GlobalShortcuts so zoom also works on the pages that
   // render without app chrome (login, booking, meetings).
   useDesktopZoom();
+  useCloseTabShortcut();
 
   // save last_path to cookie
   createEffect(() => {
@@ -171,7 +172,6 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
-    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -274,6 +274,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -286,7 +291,8 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
-  const systemStatus = useBannerStatus();
+  const { status: systemStatus, dismiss: dismissSystemStatus } =
+    useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -355,7 +361,9 @@ export function AppChrome(props: ParentProps) {
         </Show>
       </Suspense>
       <Show when={systemStatus()}>
-        {(status) => <StatusBanner {...status()} />}
+        {(status) => (
+          <StatusBanner {...status()} onDismiss={dismissSystemStatus} />
+        )}
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div
@@ -382,6 +390,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <EditorEngineBoundary>
             <UserCardDrawer />

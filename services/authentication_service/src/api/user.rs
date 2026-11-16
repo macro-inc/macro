@@ -22,6 +22,7 @@ pub(in crate::api) mod patch_user_onboarding;
 pub(in crate::api) mod post_get_names;
 pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
+pub(in crate::api) mod profile_picture_change;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
 pub(in crate::api) mod put_profile_picture_file;

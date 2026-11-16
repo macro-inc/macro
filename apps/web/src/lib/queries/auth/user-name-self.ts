@@ -4,7 +4,9 @@ import { authServiceClient } from '@service-auth/client';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { assertQueryAccount, type QueryAccount } from './account-scope';
 import { authKeys } from './keys';
+import { useQueryAccount } from './use-query-account';
 
 const OWN_USER_NAME_STALE_TIME = 15_000;
 
@@ -12,20 +14,28 @@ const OWN_USER_NAME_STALE_TIME = 15_000;
  * The current user's own editable first/last name — the fields Account
  * settings reads and writes via getUserName/putUserName. Distinct from
  * userInfo().name (the legacy identity-provider display name) and from
- * useUserNamesQuery (other users, batched by macro id).
+ * useUserNames (viewer-scoped labels, batched by macro id).
  */
 export function useOwnUserNameQuery() {
-  return useQuery(ownUserNameQueryOptions);
+  const account = useQueryAccount();
+  return useQuery(() => ownUserNameQueryOptions(account()));
 }
 
-function fetchOwnUserName() {
-  return throwOnErr(() => authServiceClient.getUserName());
-}
-
-function ownUserNameQueryOptions() {
+export function ownUserNameQueryOptions(account: QueryAccount | undefined) {
   return queryOptions({
-    queryKey: authKeys.userNameSelf.queryKey,
-    queryFn: fetchOwnUserName,
+    queryKey: authKeys.userNameSelf(
+      account?.userId ?? '',
+      account?.session ?? -1
+    ).queryKey,
+    enabled: !!account,
+    queryFn: async ({ signal }) => {
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      const name = await throwOnErr(() => authServiceClient.getUserName());
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      return name;
+    },
     staleTime: OWN_USER_NAME_STALE_TIME,
     refetchOnWindowFocus: 'always',
   });
@@ -54,7 +64,7 @@ export function useOwnUserName(): Accessor<UserName | undefined> {
  */
 export function invalidateOwnUserName() {
   return queryClient.invalidateQueries({
-    queryKey: authKeys.userNameSelf.queryKey,
+    queryKey: authKeys.userNameSelf._def,
   });
 }
 

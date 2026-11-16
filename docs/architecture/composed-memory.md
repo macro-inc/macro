@@ -16,6 +16,12 @@ write; deletion always remains possible. A replay of a successful edit fails wit
 a revision conflict instead of applying it twice. User corrections take precedence
 over generated context. Generation cannot invoke memory mutation tools.
 
+Cognition serves the same operations over HTTP for the SDK (`macro.memory.read()`,
+`macro.memory.edit()`, `User.activity()`): `GET`/`PATCH /memory/explicit` and
+`GET /memory/activity`. They admit any principal with an acting user, including
+code-mode agent tokens, and act as that user. A stale revision answers 409 and a
+rejected addition 422. Code mode hides the three tools in favour of the SDK.
+
 `GetUserActivity` reads a bounded date interval for the caller or a current
 teammate, including reviewed professional history from before they joined the
 same team. Team associations record generation provenance; they do not restrict

@@ -3,7 +3,9 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    assert_eq!(bins.len(), 16, "{bins:?}");
+    assert_eq!(bins.len(), 18, "{bins:?}");
+    assert!(bins.contains(&"gmail_emulator"));
+    assert!(bins.contains(&"outlook_emulator"));
     assert!(bins.contains(&"whatsapp_session_service"));
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
@@ -102,4 +104,32 @@ fn agent_features_share_the_harness_process() {
                 .all(|service| service.compose_name != name)
         );
     }
+}
+
+#[test]
+fn services_are_named_by_compose_name_or_binary() {
+    let by_bin = services_named(Mode::Local, &["contacts_service".to_owned()]).unwrap();
+    assert_eq!(by_bin[0].cargo_bin, "contacts_service");
+    let auth = RUST_SERVICES
+        .iter()
+        .find(|s| s.cargo_bin == "authentication_service")
+        .unwrap();
+    let both = services_named(
+        Mode::Local,
+        &[
+            auth.compose_name.to_owned(),
+            "authentication_service".to_owned(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(both.len(), 1, "a service named twice is built once");
+}
+
+#[test]
+fn an_unknown_service_name_lists_the_known_ones() {
+    let err = services_named(Mode::Local, &["contact".to_owned()]).unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("no local service named contact"));
+    assert!(msg.contains("contacts_service"));
+    assert!(services_named(Mode::Local, &[]).is_err());
 }

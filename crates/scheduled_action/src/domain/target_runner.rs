@@ -57,6 +57,8 @@ impl<Sessions: RoutineSessions> RoutineAgents for TargetRunner<Sessions> {
         let prepared = self
             .sessions
             .prepare(PrepareRoutineSession {
+                billing: Default::default(),
+                instructions: None,
                 selection: ValidateRoutineSession {
                     owner: identity.owner.clone(),
                     bot_id,

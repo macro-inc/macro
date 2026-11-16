@@ -5,7 +5,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { idToDisplayName, idToEmail } from '@core/user/util';
+import { idToDisplayName } from '@core/user/util';
+import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -20,7 +21,6 @@ import {
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
@@ -45,6 +45,7 @@ import {
   userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import { match } from 'ts-pattern';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
   OnboardingContext,
@@ -56,6 +57,13 @@ import {
   onboardingToolState,
 } from './queries/connected-tools';
 import { loadableQuery } from './queries/loadable-query';
+import { createAppOutlookAvailability } from './queries/outlook-availability';
+import {
+  createAppRoutinesStep,
+  generateRoutineSuggestions,
+  useRoutineSuggestionsEnabled,
+} from './queries/routine-suggestions';
+import { useTeamContacts } from './queries/team-contacts';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
 
@@ -160,6 +168,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const connectTool = createOnboardingToolConnect();
   const createInviteLink = useCreateTeamInviteLinkMutation();
   const sendReferrals = useSendReferralInvitesMutation();
+  const routineSuggestionsEnabled = useRoutineSuggestionsEnabled();
   // A team created on this step: its optimistic placeholder is in the teams
   // cache until creation settles, so the invite link waits for the real id.
   let createdTeam: Promise<string | undefined> | undefined;
@@ -218,7 +227,16 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => {
+      if (!provider) return startAddInbox();
+      return match(provider)
+        .with('google', () => startAddInbox({ provider: 'GMAIL' }))
+        .with('microsoft', () =>
+          startAddInbox({ provider: 'OUTLOOK', scopes: 'gmail_and_calendar' })
+        )
+        .exhaustive();
+    },
+    createOutlookAvailability: createAppOutlookAvailability,
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {
@@ -277,10 +295,10 @@ export function createAppOnboardingContext(): OnboardingContext {
       );
     },
 
-    createTeamDirectory: () => {
+    createTeamDirectory: (input) => {
       const teams = useUserTeamsQuery();
       const invites = useUserInvitesQuery();
-      const contacts = useContactsQuery();
+      const suggestions = useTeamContacts(input.domain, input.ownEmail);
       return {
         teams: () =>
           loadableQuery(teams, (data) =>
@@ -293,11 +311,11 @@ export function createAppOnboardingContext(): OnboardingContext {
               invitedBy: idToDisplayName(invite.invited_by),
             }))
           ),
-        contacts: () =>
-          loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
+        contacts: suggestions.contacts,
         retry: () => {
           fireAndForget(teams.refetch(), 'onboarding');
           fireAndForget(invites.refetch(), 'onboarding');
+          fireAndForget(suggestions.retry(), 'onboarding');
         },
       };
     },
@@ -407,6 +425,17 @@ export function createAppOnboardingContext(): OnboardingContext {
       await completeTutorial.mutateAsync();
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled,
+    generateRoutineSuggestions: () =>
+      fireAndForget(
+        Telemetry.span('onboarding.routines.generate', async (span) => {
+          const answer = await generateRoutineSuggestions(getDefaultTimezone());
+          span.setAttr('routines.status', answer.status);
+          span.setAttr('routines.suggestions', answer.suggestions.length);
+        }),
+        'onboarding.routines'
+      ),
+    createRoutinesStep: createAppRoutinesStep,
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
     },

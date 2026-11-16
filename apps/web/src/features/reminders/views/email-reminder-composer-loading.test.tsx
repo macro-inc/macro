@@ -18,6 +18,15 @@ vi.mock('@queries/reminders/email-followup', () => ({
 vi.mock('@queries/undo', () => ({
   useMutationUndoContext: () => ({ pushUndo: vi.fn() }),
 }));
+// The browser loader can't run under the test runner; hand over the real
+// reader it would load.
+vi.mock('@core/natural-time/wasm-module', async () => {
+  const { loadNaturalTimeForTest } = await import(
+    '@core/natural-time/tests/load-wasm'
+  );
+  const reader = await loadNaturalTimeForTest();
+  return { loadNaturalTimeWasm: async () => reader };
+});
 
 const reminder: EmailFollowup = {
   threadId: 'thread',
@@ -62,6 +71,7 @@ it('opens the time picker immediately and keeps its input and focus when the loo
   expect(screen.getByRole('option', { name: /In 30m/ })).toBeTruthy();
   await waitFor(() => expect(document.activeElement).toBe(input));
   fireEvent.input(input, { target: { value: 'in 2 hours' } });
+  await screen.findByRole('option', { name: /in 2 hours/ });
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(mocks.execute).not.toHaveBeenCalled();
 
@@ -101,6 +111,7 @@ it('keeps the same picker on failure and retry, without permitting an unchecked 
   const { query, setQuery } = setup();
   const input = screen.getByRole('combobox');
   fireEvent.input(input, { target: { value: 'in 2 hours' } });
+  await screen.findByRole('option', { name: /in 2 hours/ });
   setQuery({ isError: true });
   expect(screen.getByRole('alert').textContent).toContain('Couldn’t load');
   fireEvent.keyDown(input, { key: 'Enter' });

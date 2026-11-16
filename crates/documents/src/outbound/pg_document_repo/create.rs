@@ -354,11 +354,26 @@ pub async fn link_document_email(
     Ok(())
 }
 
+/// Maps a failed [`link_document_email`]. An attachment row deleted before the
+/// link commits, e.g. by its message's delete cascade, is not found rather
+/// than an internal error.
+pub fn email_link_error(error: sqlx::Error) -> DocumentError {
+    match &error {
+        sqlx::Error::Database(db_err)
+            if db_err.is_foreign_key_violation()
+                && db_err.constraint() == Some("document_email_email_attachment_id_fkey") =>
+        {
+            DocumentError::EmailAttachmentNotFound
+        }
+        _ => error.into(),
+    }
+}
+
 /// Serializes first-time creates of the same `(owner, sha)` email document.
 ///
 /// Callers should try unlocked reuse first. This lock is only needed when a
 /// concurrent import might insert the first document for this key.
-#[tracing::instrument(skip(transaction), err)]
+#[tracing::instrument(skip(transaction))]
 pub async fn reuse_email_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     owner: &str,
@@ -466,6 +481,16 @@ pub async fn insert_new_document<B: BotFacts>(
         )
         .await
         .map_err(|error| DocumentError::Internal(error.into()))?;
+
+    if let Some(project_id) = project_id.as_ref() {
+        entity_access_db_utils::project_grants::refuse_filing(
+            transaction,
+            &document_id,
+            model_entity::EntityType::Document,
+            project_id,
+        )
+        .await?;
+    }
 
     if share_with_team {
         let document_id_string = document_id.to_string();
