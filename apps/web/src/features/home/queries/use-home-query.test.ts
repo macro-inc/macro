@@ -52,6 +52,7 @@ const workFeedSource = vi.hoisted(() => ({
   enabled: undefined as (() => boolean) | undefined,
   items: () => [] as unknown[],
   entities: () => [] as unknown[],
+  loading: false,
   delegate: { canComplete: () => undefined, prepare: () => undefined },
 }));
 vi.mock('../work-feed/home-work-feed', () => ({
@@ -63,7 +64,7 @@ vi.mock('../work-feed/home-work-feed', () => ({
     return {
       items: () => workFeedSource.items(),
       entities: () => workFeedSource.entities(),
-      isLoading: () => false,
+      isLoading: () => workFeedSource.loading,
       isFetching: () => false,
       isLoadingMore: () => false,
       hasMore: () => false,
@@ -535,6 +536,7 @@ describe('Home work feed', () => {
     workFeedSource.entities = () => [];
     serviceSearch.hits = [];
     serviceSearch.failed = false;
+    workFeedSource.loading = false;
     workFeedSource.items = () => [
       {
         kind: 'entity',
@@ -594,6 +596,21 @@ describe('Home work feed', () => {
 
     setState('search', '');
     expect(ids(source)).toEqual(['from-work-feed']);
+  });
+
+  it('stays loading while a search waits for the feed that holds its matches', () => {
+    workFeedSource.entities = () => [];
+    workFeedSource.loading = true;
+    const { source, setState } = mount(
+      makeQuery([], false),
+      makeQuery([], false)
+    );
+
+    setState('search', 'plan');
+    expect(source.isLoading()).toBe(true);
+
+    workFeedSource.loading = false;
+    expect(source.isLoading()).toBe(false);
   });
 
   it('keeps the matching feed rows when the search service fails', () => {

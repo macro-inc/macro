@@ -254,6 +254,7 @@ export function useHomeDataSource(
   const soup = useSoupHomeDataSource(state, {
     enabled: () => !usesWorkFeed(),
     listed: () => (listsWorkFeed() ? workFeed.entities() : undefined),
+    listedLoading: () => listsWorkFeed() && workFeed.isLoading(),
   });
   const active = (): HomeDataSource => (usesWorkFeed() ? workFeed : soup);
 
@@ -280,6 +281,7 @@ function useSoupHomeDataSource(
     enabled: () => boolean;
     /** The rows a server-listed Home shows, which search must find. */
     listed?: () => WithNotification<EntityData>[] | undefined;
+    listedLoading?: () => boolean;
   }
 ): HomeDataSource {
   const {
@@ -467,6 +469,7 @@ function useSoupHomeDataSource(
       );
     }
     if (shownEntities().length > 0) return false;
+    if (options.listedLoading?.()) return true;
     if (usesServiceSearch()) return search.isLoading();
     return notificationsLoading();
   };
