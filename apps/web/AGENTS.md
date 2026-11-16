@@ -1694,9 +1694,36 @@ left in the output directory, and builds restore unchanged packages from
 
 Desktop releases run Vite directly and do not call `just build-tauri` or
 `build-wasm`; `nix/tauri-desktop.nix` builds each manifest module before Vite
-runs and checks that its glue and binary appear in the output. Without them,
-Vite leaves the loader's relative imports unchanged and Tauri serves HTML for
-the missing module, so that file type fails to open on desktop.
+runs and checks that its glue and binary appear in the output. Without them
+the `wasm:` plugin fails the build, naming the package.
+
+## Loading a wasm module
+
+Import a module listed in `wasm-modules.json` as `wasm:<name>` (`import
+naturalTimeWasm from 'wasm:natural-time'`) and call its `load()`; never build a
+`new URL(...wasm...)` or import a glue file yourself. The plugin
+(`scripts/wasm-modules.ts`) emits the binary as an asset and gives the glue its
+URL; the loader (`src/lib/core/wasm/define-wasm-module.ts`) memoizes the
+instance and retries a failed load, streams the compile under `wasm.load`
+spans, and offers `compiled()` to hand a `WebAssembly.Module` to workers
+(`load({ module })` there) and `discard()` to restart after a trap
+(`isWasmTrap` in `src/lib/core/wasm/`). A `thread: 'worker'` module refuses to
+`load()` outside a worker.
+
+- A package that isn't built fails a production build, and every load in dev
+  and Vitest, with the `just ensure-wasm <name>` to run.
+- `wasm:<name>` is typed from the package's wasm-bindgen `.d.ts`, copied into
+  `src/lib/core/wasm/generated/` and checked in, so type checking needs no wasm
+  build. The dev server and Vitest rewrite the copies; a production build fails
+  when one is stale. After changing a module's exports or the manifest, run
+  `bun scripts/wasm-types.ts` and commit the result. The declarations type
+  serde values `any`: keep their specta or hand-written types in the feature's
+  `wasm-module.ts` and assign the loaded module to that type, which the
+  compiler checks against the generated declarations.
+- Vitest loads a module from disk with `loadWasmForTest(module)` from
+  `src/lib/core/wasm/tests/load-for-test.ts`; the app's own `load()` then
+  shares that instance. A standalone Vite config that reaches a `wasm:` import
+  needs `wasmModules()` in its plugins.
 
 ## Videos stay out of native bundles
 
