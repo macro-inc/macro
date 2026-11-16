@@ -24,6 +24,9 @@ pub use builder::{
     with_session_plugins_with_id_state,
 };
 static PLAIN: PlainPolicy = PlainPolicy;
+/// Tag on the update that restores a selection from history awareness; it is
+/// never a history entry of its own.
+const COLLAB_SELECTION_TAG: &str = "collab-selection";
 
 /// History grouping time. Source's merge rule and Loro's merge interval both read Date.now
 /// (collaboration/undo.ts getMergeAction, `changeTime < prevChangeTime + delay`), so a
@@ -514,7 +517,7 @@ impl EditorSurface {
                 || commit.tags.contains(&UpdateTag::Collaboration)
                 || commit
                     .tags
-                    .contains(&UpdateTag::Custom("collab-selection".into()))
+                    .contains(&UpdateTag::Custom(COLLAB_SELECTION_TAG.into()))
             {
                 continue;
             }

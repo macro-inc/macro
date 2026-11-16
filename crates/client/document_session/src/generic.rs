@@ -214,6 +214,7 @@ pub(super) fn scalar(value: &DocValue) -> Result<LoroValue, DocError> {
         DocValue::NewContainer(_) => return Err(DocError::NestedContainer),
     })
 }
+#[tracing::instrument(name = "doc.generic.apply", skip_all, fields(ops = ops.len()), err)]
 pub(super) fn apply(doc: &LoroDoc, ops: &[DocOp], timestamp: i64) -> Result<bool, SessionError> {
     validate::validate(doc, ops)?;
     let before = doc.oplog_vv();
@@ -292,7 +293,7 @@ pub(super) fn apply(doc: &LoroDoc, ops: &[DocOp], timestamp: i64) -> Result<bool
     }
     doc.commit_with(
         loro::CommitOptions::new()
-            .origin("to-loro")
+            .origin(lexical_loro::LOCAL_ORIGIN)
             .timestamp(timestamp),
     );
     Ok(before != doc.oplog_vv())

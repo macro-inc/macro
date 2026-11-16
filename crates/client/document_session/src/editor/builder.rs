@@ -680,7 +680,7 @@ impl Plugin for RestoreHistoryAwareness {
         let Some(restore) = command.payload(&RESTORE_HISTORY_AWARENESS) else {
             return Ok(Handled::No);
         };
-        tx.add_tag(UpdateTag::Custom("collab-selection".into()));
+        tx.add_tag(UpdateTag::Custom(COLLAB_SELECTION_TAG.into()));
         tx.add_tag(UpdateTag::SkipScrollIntoView);
         if !restore.focused {
             tx.add_tag(UpdateTag::SkipDomSelection);
