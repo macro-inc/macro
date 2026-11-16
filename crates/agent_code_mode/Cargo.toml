@@ -22,6 +22,7 @@ email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
 import = { path = "../import" }
+lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
@@ -38,6 +39,7 @@ specta = { workspace = true }
 specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
 sqlx = { workspace = true, features = ["json"] }
+system_skills = { path = "../system_skills" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-util = { workspace = true, features = ["rt"] }

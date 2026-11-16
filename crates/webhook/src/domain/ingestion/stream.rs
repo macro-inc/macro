@@ -4,7 +4,8 @@ use super::{
     LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
     normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
     normalized_call_notification_event, normalized_channel_event, normalized_document_event,
-    normalized_message_event, normalized_user_event, normalized_webhook_event,
+    normalized_message_event, normalized_password_event, normalized_user_event,
+    normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -18,6 +19,7 @@ use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::EntityType;
 use macro_event_broker::Event;
 use messages::outbound::broker::MessageTopicEvent;
+use password_events::PasswordTopicEvent;
 use user_events::UserTopicEvent;
 
 pub(crate) fn document_stream_candidate(
@@ -80,6 +82,19 @@ pub(crate) fn message_stream_candidate(
 /// `team_workspace_ids` are the user's team workspaces (resolved once per
 /// event by the consumer); the user and their contacts are matched per
 /// subscriber through [`StreamAudience::ContactsOf`].
+/// A vault fact streams only to the account it is addressed to.
+pub(crate) fn password_stream_candidate(
+    event: &Event<PasswordTopicEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, recipient) = normalized_password_event(event)?;
+    Ok(StreamCandidateEvent {
+        audience: StreamAudience::User {
+            user_id: recipient.as_ref().to_string(),
+        },
+        event: normalized,
+    })
+}
+
 pub(crate) fn user_stream_candidate(
     event: &Event<UserTopicEvent>,
     team_workspace_ids: Vec<String>,
@@ -121,14 +136,19 @@ pub(crate) fn agent_trigger_stream_candidate(
             entity_id,
             entity_type,
         },
-        // Named people subscribe from their own workspaces, as a departed
-        // session's owner does.
+        // Named people get it on their own streams, team-scoped ones too: a
+        // runtime shared with a team streams team-scoped, and a requester's
+        // composer request is still theirs alone.
         TriggerAudience::People(people) => StreamAudience::Any(
             people
                 .into_iter()
-                .map(|person| StreamAudience::Workspace {
-                    workspace_id: person.to_string(),
-                })
+                .map(|person| person.to_string())
+                // A requested session also reaches its runtime's own stream,
+                // which authenticates as the harness owner rather than as
+                // whichever teammate asked. Only the live stream: persisted
+                // webhooks keep the requester alone.
+                .chain(requested_runtime_user(&event.event))
+                .map(|user_id| StreamAudience::Person { user_id })
                 .collect(),
         ),
     };
@@ -136,6 +156,17 @@ pub(crate) fn agent_trigger_stream_candidate(
         audience,
         event: normalized,
     })
+}
+
+/// The user a requested session's runtime streams as, when the producer
+/// named one.
+fn requested_runtime_user(event: &AgentTriggerTopicEvent) -> Option<String> {
+    match event {
+        AgentTriggerTopicEvent::New(new) => new
+            .requested()
+            .and_then(|requested| requested.runtime_user.clone()),
+        _ => None,
+    }
 }
 
 pub(crate) fn agent_session_lifecycle_stream_candidate(

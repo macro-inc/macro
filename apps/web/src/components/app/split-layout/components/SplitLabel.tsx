@@ -3,6 +3,8 @@ import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
   ContextMenuContent,
+  CopyMenuItem,
+  dismissContextMenu,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -25,19 +27,22 @@ import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   createSignal,
-  For,
   type JSX,
+  Match,
   onCleanup,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Dynamic, Portal } from 'solid-js/web';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
@@ -247,6 +252,13 @@ export function BlockItemSplitLabel(props: {
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
+  const suppliedIcon = children(() => props.icon);
+  const appearance = () => {
+    const metadata = blockMetadataSignal();
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
+      : undefined;
+  };
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -271,16 +283,17 @@ export function BlockItemSplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
                 targetType={targetType()}
+                appearance={appearance()}
                 size="xs"
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show
@@ -326,6 +339,7 @@ export function BlockItemSplitLabel(props: {
 }
 
 function SplitLabelContextMenu(props: ParentProps) {
+  const [open, setOpen] = createSignal(false);
   const panel = useSplitPanelOrThrow();
   const actions = () => panel.titleFileMenuActions();
   const sections = createMemo(() => {
@@ -334,32 +348,59 @@ function SplitLabelContextMenu(props: ParentProps) {
   });
   const hasActions = createMemo(() => sections().length > 0);
 
-  const item = (action: SplitFileMenuAction) => {
-    if (action.muteMenu) return <NotificationMuteMenu {...action.muteMenu} />;
-    const children = () => action.children?.filter(Boolean) ?? [];
-
+  const item = (action: () => SplitFileMenuAction) => {
+    const children = () => action().children?.filter(Boolean) ?? [];
     return (
-      <Show
-        when={children().length > 0}
-        fallback={
+      <Switch>
+        <Match when={action().menuItem}>
+          {(component) => (
+            <Dynamic
+              component={component()}
+              onActionComplete={() => {
+                if (open()) dismissContextMenu();
+              }}
+            />
+          )}
+        </Match>
+        <Match when={action().muteMenu}>
+          {(menu) => <NotificationMuteMenu {...menu()} />}
+        </Match>
+        <Match when={action().copy}>
+          <CopyMenuItem
+            icon={
+              action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            text={action().label}
+            hotkeyToken={action().hotkeyToken}
+            onCopy={async () => (await action().action?.()) !== false}
+          />
+        </Match>
+        <Match when={children().length > 0}>
+          <ContextMenu.Sub>
+            <SubTrigger
+              icon={
+                action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+              }
+              text={action().label}
+            />
+            <ContextMenuContent submenu class="w-64">
+              <Key each={children()} by={(child) => child.id ?? child.label}>
+                {item}
+              </Key>
+            </ContextMenuContent>
+          </ContextMenu.Sub>
+        </Match>
+        <Match when={true}>
           <MenuItem
-            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-            text={action.label}
-            hotkeyToken={action.hotkeyToken}
-            onClick={() => action.action?.()}
+            icon={
+              action().icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+            }
+            text={action().label}
+            hotkeyToken={action().hotkeyToken}
+            onClick={() => action().action?.()}
           />
-        }
-      >
-        <ContextMenu.Sub>
-          <SubTrigger
-            icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-            text={action.label}
-          />
-          <ContextMenuContent submenu class="w-64">
-            <For each={children()}>{item}</For>
-          </ContextMenuContent>
-        </ContextMenu.Sub>
-      </Show>
+        </Match>
+      </Switch>
     );
   };
 
@@ -382,22 +423,27 @@ function SplitLabelContextMenu(props: ParentProps) {
 
   return (
     <Show when={hasActions()} fallback={props.children}>
-      <ContextMenu>
+      <ContextMenu onOpenChange={setOpen}>
         <ContextMenu.Trigger class="contents" onDblClick={openOnDoubleClick}>
           {props.children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenuContent class="w-64">
-            <For each={sections()}>
+            <Key each={sections()} by="key">
               {(section, index) => (
                 <>
                   <Show when={index() > 0}>
                     <MenuSeparator />
                   </Show>
-                  <For each={section.actions}>{item}</For>
+                  <Key
+                    each={section().actions}
+                    by={(action) => action.id ?? action.label}
+                  >
+                    {item}
+                  </Key>
                 </>
               )}
-            </For>
+            </Key>
           </ContextMenuContent>
         </ContextMenu.Portal>
       </ContextMenu>

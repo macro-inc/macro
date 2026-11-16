@@ -8,7 +8,9 @@ import {
   useNotificationSounds,
 } from '@app/features/notification-sounds/use-notification-sounds';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
+import { RoutineDraftsHost } from '@app/features/routines/routine-drafts-host';
 import { SearchProvider } from '@app/features/soup/search/context';
+import { usePosthog } from '@app/lib/analytics/posthog';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
@@ -40,6 +42,7 @@ import {
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
+import { useResumeFolderUploads } from '@service-storage/util/pendingFolderUploads';
 import { ImperativeDialogHost } from '@ui';
 import type { ParentProps } from 'solid-js';
 
@@ -103,9 +106,11 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 
   const blockOrchestrator = createBlockOrchestrator();
   const userInfo = useUserInfo();
+  const posthog = usePosthog();
   usePendingNotificationNavigationEffect(
     notificationSource,
-    () => userInfo()?.userId
+    () => userInfo()?.userId,
+    posthog.flagsLoaded
   );
 
   return (
@@ -128,6 +133,7 @@ export function AppProviders(props: ParentProps) {
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);
+  useResumeFolderUploads(userId);
   useGlobalAttachableHistory();
   useInterfaceLanguageSync();
 
@@ -140,7 +146,7 @@ export function AppProviders(props: ParentProps) {
               {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
               <ImperativeDialogHost />
               <AgentNavigationProvider>
-                {props.children}
+                <RoutineDraftsHost>{props.children}</RoutineDraftsHost>
               </AgentNavigationProvider>
             </IncomingMeetingInvitationsProvider>
           </SearchProvider>

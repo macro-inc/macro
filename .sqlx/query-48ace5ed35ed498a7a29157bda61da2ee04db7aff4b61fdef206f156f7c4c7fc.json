@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                       SELECT 1 FROM suggestion_prompt p\n                       JOIN suggestion_run r ON r.suggestion_id = p.suggestion_id AND r.settled_at IS NULL\n                       WHERE p.suggestion_id = $1\n                         AND (p.prompt IS DISTINCT FROM $2 OR p.sends IS DISTINCT FROM $3)\n                   ) AS \"run_going!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "run_going!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "48ace5ed35ed498a7a29157bda61da2ee04db7aff4b61fdef206f156f7c4c7fc"
+}

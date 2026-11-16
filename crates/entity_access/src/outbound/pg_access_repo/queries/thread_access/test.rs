@@ -1,3 +1,5 @@
+mod thread_exclusions;
+
 #[allow(unused_imports)]
 use super::*;
 use crate::domain::models::AccessLevel;
@@ -1464,3 +1466,5 @@ async fn no_project_grant_when_thread_has_no_project(pool: PgPool) -> anyhow::Re
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
+
+mod member_access;

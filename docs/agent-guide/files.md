@@ -120,7 +120,8 @@ approves the review itself (a `DecideReview` submit, the card's own approve with
 card's choices), and the card's run state adds **Started by the agent at your
 request** ("at the owner's request" for other viewers). A message from anyone
 but the owner never approves, and a plan still being made cannot be approved
-yet. Filter
+yet. On desktop the run also shows in the corner's
+[import tray](setup-cards.md#import-tray) from planning to done. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.
@@ -192,7 +193,11 @@ the submenu cancels the pending close. While the mouse heads toward an open
 submenu, including one that opens to the left, the categories it crosses on the
 way do not take over. A category the mouse moves to directly, or rests on for
 300 ms, opens in its place. Escape and outside clicks still dismiss immediately.
-`Sort files` offers modified, created, and viewed dates.
+`Sort files` offers modified, created, and viewed dates, plus **Name**, which
+reads A to Z case-insensitively, punctuation before digits before letters and accented letters beside their base letter, with unnamed rows last. A name-sorted page
+comes from one Soup query over its own entities, so a folder sorted by Name
+lists files, chats, and subfolders without filed email threads; the date sorts
+still show them.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
 and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
@@ -302,3 +307,49 @@ extension with the original. Repeat at 390px with touch enabled and at tablet
 width. Exercise a failed request, retry, cancellation, and changing selection.
 Native save/share dialogs require physical iOS/Android verification in addition
 to browser emulation.
+
+## Uploading folders
+
+Upload a folder with **Upload folders** in Cmd+K, Drive's **New** menu
+(**Upload folder**), or by dropping it on Drive or a folder. A folder may hold up
+to 10,000 files and 3 GB; past either limit a toast names the folder and the limit
+before anything is read. The app zips the folder without compression, streaming
+the picked files from disk, so in a browser memory stays flat however large the
+folder is. The desktop and mobile apps still send the zip through the native
+HTTP client, which holds it in memory while it uploads.
+
+The upload indicator above the toasts follows one folder through every stage:
+
+- **Preparing &lt;folder&gt;** with a percentage while the files are read and hashed.
+- **Uploading &lt;folder&gt;** with a percentage while the zip is sent.
+- **Processing &lt;folder&gt;** while the server unpacks it: a spinner until the
+  extractor has counted the files, then the share of files stored.
+- It ends in a toast: **Uploaded &lt;folder&gt;**; **Uploaded &lt;folder&gt;, but N of
+  M files could not be uploaded**; **Failed to upload &lt;folder&gt;**; or, when the
+  server cannot say or nothing has changed for longer than the extractor can run
+  (16 minutes), **Couldn't confirm that &lt;folder&gt; finished uploading**. It never
+  reports a failure just because processing is slow.
+
+The indicator polls the upload's status
+(`GET /projects/upload_extract/{request_id}`) as well as listening for the
+`bulk_upload` websocket result, so a dropped socket still ends in the true
+state. Once a folder is sent, the browser remembers it for the signed-in account
+until its end toast shows. After a reload or a crash, and in every other tab of
+the same account, whether opened while it processes or already open when it was
+sent, the indicator shows **Processing &lt;folder&gt;** and ends in the same
+toasts; each tab shows a folder's end once. Signing out keeps the record, and
+the folder resumes when that account signs in again; another account never
+sees it. A reload while a folder
+is still preparing or uploading cancels that upload. A folder sent more than a
+day earlier is dropped without a toast, and one still unfinished 90 minutes
+after it was sent, past every extractor retry, ends at once in **Couldn't
+confirm**.
+
+Verification: the shared headless Chrome runs in Docker and cannot read files on
+the host, so feed real folders through a private Playwright Chromium on the same
+machine: open **Upload folders**, catch the file chooser and pass the folder's
+path to `fileChooser.setFiles`. Check each stage's label and percentage, the
+end toast, and the uploaded tree in Drive. To check resuming, reload during
+**Processing**, open a second tab of the same account, and keep a tab of that
+account open while another sends a folder. Delete the uploaded folders
+afterwards.

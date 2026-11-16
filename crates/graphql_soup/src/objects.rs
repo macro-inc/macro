@@ -15,7 +15,10 @@ use models_soup::{
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
-    comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
+    comms::{
+        ChannelMessage, ChannelParticipant, ChannelType, SoupAgentDmProfile, SoupChannel,
+        SoupChannelThread,
+    },
     crm_company::SoupCrmCompany,
     database_row::SoupDatabaseRow,
     document::{SoupDocument, SoupDocumentSubType},
@@ -28,6 +31,7 @@ use models_soup::{
     initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
+    team::SoupTeam,
 };
 use predicate_index::RecordKey;
 use serde_json::Value;
@@ -316,6 +320,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
             Self::Harness(entity) => entity.2 = score,
+            Self::Team(entity) => entity.2 = score,
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -338,7 +343,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
             | Self::DatabaseRow(_)
-            | Self::Harness(_) => {}
+            | Self::Harness(_)
+            | Self::Team(_) => {}
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -473,6 +479,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
     /// Paired runtime, listed only by attention feeds.
     Harness(GraphqlSoupHarness<E>),
+    /// Team, listed only by attention feeds.
+    Team(GraphqlSoupTeam<E>),
     /// Removed reminder entity, never constructed.
     Reminder(GraphqlSoupReminder<E>),
 }
@@ -503,6 +511,8 @@ where
                 GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
                 GraphqlSoupEntityType::DatabaseRow => GraphqlSoupDatabaseRow::<E>::type_name(),
                 GraphqlSoupEntityType::Harness => GraphqlSoupHarness::<E>::type_name(),
+                GraphqlSoupEntityType::Team => GraphqlSoupTeam::<E>::type_name(),
+                GraphqlSoupEntityType::OutsideSoup => return None,
             }
             .into_owned(),
         )
@@ -631,6 +641,12 @@ where
                     model_entity::EntityType::Harness.with_entity_string(item.id.to_string()),
                 );
                 Self::Harness(GraphqlSoupHarness(item, edges, None))
+            }
+            SoupItem::Team(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Team.with_entity_string(item.id.to_string()),
+                );
+                Self::Team(GraphqlSoupTeam(item, edges, None))
             }
         }
     }
@@ -772,6 +788,11 @@ where
     /// Opaque authoritative server-only projection facts.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
         self.3.clone()
+    }
+
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
     }
 
     /// User-visible display name.
@@ -1047,6 +1068,11 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         None
     }
 
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
+    }
+
     /// User-visible project name.
     async fn display_name(&self) -> Option<String> {
         Some(self.0.name.clone())
@@ -1238,6 +1264,68 @@ impl<E: SoupEntityEdges> GraphqlSoupHarness<E> {
     /// The updated timestamp in RFC 3339 format.
     async fn updated_at(&self) -> String {
         self.0.updated_at.to_rfc3339()
+    }
+
+    /// Common entity edges.
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL team entity.
+pub struct GraphqlSoupTeam<E: SoupEntityEdges>(SoupTeam, E, Option<f64>);
+
+/// A team. Only attention feeds list it, for team-scoped notifications filed
+/// under it, such as a vault access request.
+#[Object(name = "GraphqlSoupTeam")]
+impl<E: SoupEntityEdges> GraphqlSoupTeam<E> {
+    /// The team identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Team
+    }
+
+    /// Server-only projection facts are unavailable for teams.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// The team's name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common team metadata; teams record no timestamps.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.clone()),
+            owner_type: Some(GraphqlOwnerType::User),
+            parent: None,
+            created_at: None,
+            updated_at: None,
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The team's name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The user who owns the team.
+    async fn owner_id(&self) -> &str {
+        &self.0.owner_id
     }
 
     /// Common entity edges.
@@ -2013,6 +2101,33 @@ impl GraphqlSoupChannelMessagePreview {
     }
 }
 
+/// Persona of the viewer's DM with an agent, embedded in its channel.
+///
+/// It has no `id`: `botId` refers to the persona rather than identifying this
+/// value, and a viewer has at most one DM per persona.
+pub struct GraphqlSoupChannelAgentDm(SoupAgentDmProfile);
+
+/// The persona an agent DM shows, as the channel list reads it. Embedded in its
+/// channel, with no `id`. The name is "Unavailable agent" when the persona has no
+/// profile.
+#[Object]
+impl GraphqlSoupChannelAgentDm {
+    /// The persona's bot identifier.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    /// The persona's display name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The persona's avatar URL, when it has one.
+    async fn avatar_url(&self) -> Option<&str> {
+        self.0.avatar_url.as_deref()
+    }
+}
+
 /// GraphQL channel entity.
 pub struct GraphqlSoupChannel<E: SoupEntityEdges>(SoupChannel, E, Option<f64>);
 
@@ -2072,7 +2187,9 @@ where
         }
     }
 
-    /// The name.
+    /// The name the viewer sees: the stored name, or for an unnamed channel
+    /// one derived for the viewer (a DM shows the other participant, a group
+    /// its other participants). An agent DM shows its persona's name.
     async fn name(&self) -> Option<&str> {
         self.0.channel.channel.name.as_deref()
     }
@@ -2100,6 +2217,17 @@ where
     /// The identifier of the team.
     async fn team_id(&self) -> Option<ID> {
         self.0.channel.channel.team_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Whether members of the channel's team join it automatically.
+    async fn auto_join_team(&self) -> bool {
+        self.0.channel.channel.auto_join_team
+    }
+
+    /// The persona, when this is the viewer's private conversation with an
+    /// agent; null for every other channel.
+    async fn agent_dm(&self) -> Option<GraphqlSoupChannelAgentDm> {
+        self.0.agent_dm.clone().map(GraphqlSoupChannelAgentDm)
     }
 
     /// The created timestamp in RFC 3339 format.
@@ -2764,6 +2892,7 @@ impl_common_interface_edges!(
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
     GraphqlSoupHarness,
+    GraphqlSoupTeam,
     GraphqlSoupReminder,
 );
 
@@ -2801,12 +2930,17 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
 
     /// Hydrate an updated entity through the existing viewer-scoped Soup service.
     /// Missing items are logged and omitted; service failures remain errors.
-    /// Neither outcome is interpreted as a deletion.
+    /// Neither outcome is interpreted as a deletion. Entity kinds Soup does not
+    /// represent, such as databases, have no record to patch and are omitted.
     pub async fn hydrate_updated(
         user_id: MacroUserIdStr<'static>,
         entity: Entity<'static>,
         loader: Option<&SoupItemDataLoader>,
     ) -> async_graphql::Result<Option<Self>> {
+        if GraphqlSoupEntityType::try_new(entity.entity_type).is_none() {
+            return Ok(None);
+        }
+
         let loader = loader.ok_or_else(|| {
             async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
         })?;

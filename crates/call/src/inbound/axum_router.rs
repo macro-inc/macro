@@ -37,7 +37,7 @@ use entity_access::{
     },
 };
 use macro_authorization::{
-    CODE_EXECUTION_HEADER, CredentialOrigin, MacroAuthorizationExtractor,
+    CODE_EXECUTION_HEADER, CredentialAttribution, CredentialOrigin, MacroAuthorizationExtractor,
     MacroAuthorizationService, MacroAuthorizationState, UserOrInternal, is_agent_run,
 };
 use model_error_response::ErrorResponse;
@@ -431,7 +431,7 @@ pub async fn get_or_create_call_handler<
     headers: HeaderMap,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+    if is_agent_run(user.authorization.user.attribution(), &headers) {
         return Err(CallError::Forbidden(
             "an agent-attributed start requires approval".to_string(),
         ));
@@ -468,7 +468,9 @@ pub(super) fn refuse_code_execution_token(headers: &HeaderMap) -> Result<(), Cal
 fn credential_is_program(origin: &CredentialOrigin) -> bool {
     matches!(
         origin,
-        CredentialOrigin::UserApiKey | CredentialOrigin::MacroApiJwt
+        CredentialOrigin::UserApiKey
+            | CredentialOrigin::MacroApiJwt
+            | CredentialOrigin::ScopedMacroApiJwt
     )
 }
 
@@ -496,7 +498,7 @@ pub async fn start_call_handler<
     {
         return Err(CallError::NotFound("call".to_string()));
     }
-    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+    if is_agent_run(user.authorization.user.attribution(), &headers) {
         return Err(CallError::Forbidden(
             "an agent-attributed start requires approval".to_string(),
         ));
@@ -533,10 +535,11 @@ pub async fn join_call_handler<
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
-    if !state
-        .service
-        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
-        .await
+    if !user.authorization.user.is_human_session()
+        && !state
+            .service
+            .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+            .await
     {
         return Err(CallError::NotFound("call".to_string()));
     }
@@ -860,6 +863,12 @@ pub async fn edit_call_record_handler<
     access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
     Json(request): Json<EditCallRecordRequest>,
 ) -> Result<StatusCode, CallError> {
+    // A scoped session shares nothing; this route's path can't say whether
+    // its body does.
+    agent_correlation::context::refuse_sharing(
+        request.share_permission.is_some() || request.share_with_team.is_some(),
+    )
+    .map_err(|refused| CallError::Forbidden(refused.to_string()))?;
     state
         .service
         .edit_call_record(access.entity_access_receipt, request)

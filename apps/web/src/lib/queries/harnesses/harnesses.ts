@@ -13,7 +13,9 @@ import {
   storageServiceClient,
 } from '@service-storage/client';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { harnessKeys } from './keys';
+import { runnableHarnesses } from './runnable';
 
 export type ApproveHarnessPairingParams = {
   allowPermissionBypass?: boolean;
@@ -54,17 +56,51 @@ export function useHarnessesQuery() {
   return useQuery(() => harnessesQueryOptions);
 }
 
+/**
+ * The same list without agent teammates' computers: for everything that
+ * starts an agent or binds one to a runtime. Their agent is reached by
+ * message instead.
+ */
+export function useRunnableHarnessesQuery() {
+  return useQuery(() => ({
+    ...harnessesQueryOptions,
+    select: runnableHarnesses,
+  }));
+}
+
+/** The same list, for code outside components; fresh data is reused. */
+export function fetchHarnesses(): Promise<Harness[]> {
+  return queryClient.fetchQuery(harnessesQueryOptions);
+}
+
 const harnessDirectoryQueryOptions = queryOptions({
   queryKey: harnessKeys.directory.queryKey,
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnessDirectory()),
   staleTime: 15_000,
+  reconcile: 'id',
   throwOnError: false,
 });
 
 /** Every runtime of the viewer's teammates, usable by the viewer or not. */
-export function useHarnessDirectoryQuery() {
-  return useQuery(() => harnessDirectoryQueryOptions);
+export function useHarnessDirectoryQuery(
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQuery(() => ({
+    ...harnessDirectoryQueryOptions,
+    enabled: enabled(),
+  }));
+}
+
+/** The directory without agent teammates' computers, which run only their agent. */
+export function useRunnableHarnessDirectoryQuery(
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQuery(() => ({
+    ...harnessDirectoryQueryOptions,
+    enabled: enabled(),
+    select: runnableHarnesses,
+  }));
 }
 
 function harnessResidentsQueryOptions(harnessId: string, enabled: boolean) {

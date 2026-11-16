@@ -118,6 +118,36 @@ describe('database answer rollout', () => {
     }
   });
 
+  it('holds a saved block’s place with its card until the answer code loads', () => {
+    control.enabled = () => true;
+    control.deferSaved = true;
+    try {
+      const saved = render(() => (
+        <DatabaseQuery
+          key="saved"
+          theme={{}}
+          queryId="saved"
+          prompt=""
+          displayMode="table"
+          title="Meetings"
+          height={240}
+        />
+      ));
+      expect(saved.getByText('Meetings')).toBeTruthy();
+      expect(
+        saved.getByRole('status', { name: 'Loading answer' })
+      ).toBeTruthy();
+      const viewport = saved.container.querySelector<HTMLElement>(
+        '[data-answer-viewport]'
+      );
+      expect(viewport?.style.height).toBe('240px');
+      expect(saved.queryByText('Interactive answer')).toBeNull();
+      saved.unmount();
+    } finally {
+      control.deferSaved = false;
+    }
+  });
+
   it('keeps the saved title without mounting live query wiring when disabled', async () => {
     const [enabled, setEnabled] = createSignal(false);
     control.enabled = enabled;
@@ -378,7 +408,9 @@ describe('pressing a database answer block', () => {
         cancelable: true,
         button: 0,
       });
-      (await rendered.findByText(name)).dispatchEvent(press);
+      // The loading card also says Details; press the loaded answer's.
+      await rendered.findByText('Diwali Dinner');
+      rendered.getByText(name).dispatchEvent(press);
       expect(press.defaultPrevented).toBe(false);
       expect(selected(test.editor)).toEqual({ text: 'Above' });
       rendered.unmount();

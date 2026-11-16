@@ -9,6 +9,9 @@ use models_email::service::pubsub::DeletionReason;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+mod deleted_user;
+pub use deleted_user::{InboxDeletionQueue, UserInboxDeletionError};
+
 #[derive(Debug, thiserror::Error)]
 pub enum InboxLifecycleError {
     #[error("inbox not found")]

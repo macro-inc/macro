@@ -1,4 +1,5 @@
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import type { CallJoinIntent } from '@channel/Call/call-lifecycle';
 import { getMeetingPath } from '@channel/Call/call-link';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { toast } from '@core/component/Toast/Toast';
@@ -8,7 +9,7 @@ import { useCallLinkQuery } from '@queries/call/meetings';
 import { useNavigate } from '@solidjs/router';
 import type { Accessor } from 'solid-js';
 
-/** Rejoin a channel call or open the invitation for a standalone meeting. */
+/** Keep live Join separate from Call again, which may start a new session. */
 export function useCallAgain(
   callId: Accessor<string>,
   channelId: Accessor<string | null | undefined>
@@ -24,23 +25,27 @@ export function useCallAgain(
       ? meeting.data?.shareToken
       : undefined;
   const canCallAgain = () => Boolean(channelId() || shareToken());
-  const rejoin = async (channel: string) => {
+  const rejoin = async (channel: string, intent: CallJoinIntent) => {
     try {
-      await joinChannelCall(channel);
+      await joinChannelCall(channel, intent);
     } catch (error) {
       toast.failure('Failed to join call');
       Telemetry.error(error, { surface: 'call-again' });
     }
   };
-  const callAgain = () => {
+  const connect = (intent: CallJoinIntent) => {
     const channel = channelId();
     if (channel) {
-      fireAndForget(rejoin(channel), 'call-again');
+      fireAndForget(rejoin(channel, intent), 'call-again');
       return;
     }
     const token = shareToken();
     if (token) navigate(getMeetingPath(token));
   };
 
-  return { canCallAgain, callAgain };
+  return {
+    canCallAgain,
+    callAgain: () => connect({ kind: 'start' }),
+    joinCall: () => connect({ kind: 'join', callId: callId() }),
+  };
 }

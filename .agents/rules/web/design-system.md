@@ -25,6 +25,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Several short values picked from suggestions or typed (domains, people and companies) | `ChipCombobox`; message recipients use `RecipientSelector` | A comma-separated text `Input` |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
+| A card in a page or chat (agent tool cards, For you, routines) | `Card` (`variant="filled" depth={3}`) composed of `Card.Header` with an `Item`, `Card.Body`, `Card.Footer`; a block nested in one is `Card variant="filled" offset={1}` | A `rounded-xl border bg-panel` frame, hand-built tiles or pills, or a `primary` button inside the card |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
 | Transient notification or persistent notice | `toast` from `@core/component/Toast/Toast` | A second toast service or hand-built global notification overlay |
 
@@ -44,8 +45,13 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   view tabs on the left; islands on the right in the order filters, view
   options, New, Search (detail views: entity actions, sharing, navigation,
   detail toggle). Detail-header groups use `sm` labelled segments and `icon-sm`
-  icon-only segments (28px controls); Drive and Tasks list-header groups use
-  `md` / `icon-md`, matching Tabs, New, and Search. Keep 8px between islands. Filter, sort, group, and download live in the header, never
+  icon-only segments, and detail-header `Tabs` use `size="sm"` (28px controls);
+  list-header groups and Tabs (any header with New or Search) use `md` /
+  `icon-md`, matching New and Search; so does a bar whose tabs are a 32px
+  `TabSelector` (the routine header). A labelled
+  action outside an island (`HeaderActionButton`, `ChatWithAgentButton`) is
+  32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`.
+  Keep 8px between islands. Filter, sort, group, and download live in the header, never
   in a second toolbar row; only active filter chips sit below it.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
   `fullWidth`); `class` on a control is for placement (margin,

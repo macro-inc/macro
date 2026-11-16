@@ -408,13 +408,12 @@ export type AppEvents = {
   // --- Notifications -------------------------------------------------------
   /**
    * A notification was opened: from the app's lists and stacks (`in_app`), a
-   * browser notification, a native iOS, Android or macOS notification tap
+   * browser notification, or a native iOS, Android or macOS notification tap
    * (`native_push`, counted once its navigation applies; `macro_device` tells
-   * the platforms apart), or a home recommendation that opens through its
-   * notification (`home_recommendation`, not a notification-driven open).
+   * the platforms apart).
    */
   notification_opened: {
-    source: 'in_app' | 'browser_push' | 'native_push' | 'home_recommendation';
+    source: 'in_app' | 'browser_push' | 'native_push';
     notificationType: string;
     entityType: string;
   };
@@ -511,7 +510,7 @@ type RoutineSuggestionEvent = {
   suggestionId: string;
   /** The sidebar's surface, or the suggestion's main one on the Routines page. */
   surface: string;
-  placement: 'sidebar' | 'routines';
+  placement: 'sidebar' | 'routines' | 'forYou';
   /** `for_you` from AI, `macro` for Macro's templates. */
   from: 'for_you' | 'macro';
   /** A catalog routine with AI's values, or a routine AI drafted. */

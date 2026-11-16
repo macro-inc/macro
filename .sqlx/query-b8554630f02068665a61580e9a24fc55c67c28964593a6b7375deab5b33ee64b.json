@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.\"deletedAt\" AS \"deleted_at!\"\n            FROM \"Document\" d\n            WHERE d.\"deletedAt\" IS NOT NULL\n              AND d.\"deletedAt\" <= $1\n              AND (d.\"deletedAt\", d.id) > (COALESCE($2, '-infinity'::timestamp), COALESCE($3, ''))\n            ORDER BY d.\"deletedAt\", d.id\n            LIMIT $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted_at!",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Timestamp",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "b8554630f02068665a61580e9a24fc55c67c28964593a6b7375deab5b33ee64b"
+}

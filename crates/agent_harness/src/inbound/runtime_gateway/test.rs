@@ -31,6 +31,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -66,6 +67,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,

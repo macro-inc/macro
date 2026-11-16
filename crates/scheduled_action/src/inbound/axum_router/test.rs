@@ -163,6 +163,7 @@ impl MacroAuthorizationService for FakeAuth {
                     MacroUserAuthentication {
                         agent_id: None,
                         agent_via: None,
+                        routine_id: None,
                         origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),
@@ -347,7 +348,7 @@ impl EntityAccessService for FakeEntityAccessService {
     }
 }
 
-fn router(events: bool) -> Router {
+pub(crate) fn router(events: bool) -> Router {
     router_with(service(events), FakeEntityAccessService::owner_only())
 }
 
@@ -669,6 +670,12 @@ async fn maps_typed_errors_and_sanitizes_internal_failures() {
             StatusCode::CONFLICT,
         ),
         (
+            anyhow::Error::from(ActionPolicyError::InvalidAppearance(
+                "Choose a single emoji".into(),
+            )),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             anyhow::Error::from(AlreadyRunningError {
                 action_id: macro_uuid::generate_uuid_v7(),
             }),
@@ -772,7 +779,10 @@ async fn target_configuration_is_validated_through_http_and_gate_defaults_off() 
 #[tokio::test]
 async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable() {
     use crate::domain::{
-        service::test::{FakeExecutor, FakeGrants, FakeRepo, TestService},
+        service::{
+            ScheduledActionServiceImpl,
+            test::{FakeExecutor, FakeGrants, FakeRepo},
+        },
         target_validation::{
             TargetValidation,
             test::{Sessions, agent_task},
@@ -782,7 +792,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,

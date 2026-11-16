@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM harness_runtime_connection\n                WHERE harness_id = $1 AND lease_expires_at > statement_timestamp()\n            ) AS \"connected!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3eca62d798d1ade5e923ad44a3a0d6abb32afb2145f7ad473e7d58a5b2aa8432"
+}

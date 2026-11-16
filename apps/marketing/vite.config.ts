@@ -27,7 +27,7 @@ export default defineConfig({
     target: 'esnext',
     manifest: true,
     modulePreload: { polyfill: false },
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         site: path.resolve(import.meta.dirname, 'index.html'),
         start: path.resolve(import.meta.dirname, 'start.html'),

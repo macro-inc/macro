@@ -21,20 +21,27 @@ export type CallPanelState = {
   onClose: () => void;
 };
 
+export type CallDiscussionAccess =
+  | { kind: 'member' }
+  | {
+      kind: 'guest';
+      session: { token: string; participantId: string };
+    };
+
 /**
- * The one place a signed-in call chooses its discussion. Nothing below it
+ * The one place a call chooses its discussion. Nothing below it
  * knows there is another kind. The record polls and returns a new object each
  * time, so these stay unkeyed: remounting would lose scroll and focus.
  */
 export function CallDiscussionContent(props: {
   discussion: Accessor<CallDiscussion | undefined>;
+  access: CallDiscussionAccess;
   panel: CallPanelState;
   onViewChannel: (channelId: string) => void;
   onOutsideCountChange?: (count: number) => void;
   /**
-   * The app state a discussion needs, for a host that doesn't already provide
-   * it. Messages need it as much as the channel does. The host renders the
-   * discussion itself: one created out here would not see its providers.
+   * The app state a channel needs when its host does not provide it. The host
+   * renders the channel itself so it can see those providers.
    */
   host?: (discussion: () => JSX.Element) => JSX.Element;
 }) {
@@ -47,35 +54,32 @@ export function CallDiscussionContent(props: {
     return discussion?.kind === 'call_chat' ? discussion : undefined;
   };
 
-  const hosted = (discussion: () => JSX.Element) =>
-    props.host ? props.host(discussion) : discussion();
-
   return (
     <Suspense>
       <Switch>
-        <Match when={channelThread()}>
-          {(thread) =>
-            hosted(() => (
+        <Match when={props.access.kind === 'member' && channelThread()}>
+          {(thread) => {
+            const panel = () => (
               <ChannelCallPanel
                 channelId={thread().channel_id}
                 rootId={thread().root_id}
                 onViewChannel={() => props.onViewChannel(thread().channel_id)}
                 onOutsideCountChange={props.onOutsideCountChange}
               />
-            ))
-          }
+            );
+            return props.host ? props.host(panel) : panel();
+          }}
         </Match>
         <Match when={callChat()}>
-          {(chat) =>
-            hosted(() => (
-              <CallChat
-                callId={chat().call_id}
-                open={props.panel.open}
-                focusOnOpen={props.panel.focusOnOpen}
-                onClose={props.panel.onClose}
-              />
-            ))
-          }
+          {(chat) => (
+            <CallChat
+              callId={chat().call_id}
+              access={props.access}
+              open={props.panel.open}
+              focusOnOpen={props.panel.focusOnOpen}
+              onClose={props.panel.onClose}
+            />
+          )}
         </Match>
       </Switch>
     </Suspense>

@@ -104,8 +104,7 @@ function TileArt(props: { tutorial: ShelfTutorial }) {
 /**
  * Shown over the bottom of the video once it ends: "More videos from Macro",
  * a Replay action, and a row of the other tutorials that scrolls sideways
- * (arrows when it overflows, or a swipe on touch). Arrow keys move
- * between cards.
+ * (arrows when it overflows). Arrow keys move between cards.
  */
 export function TutorialShelf(props: {
   tutorials: readonly ShelfTutorial[];

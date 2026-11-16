@@ -4,14 +4,21 @@ import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { formatRelativeDate } from '@core/util/time';
 import { formatDateAndTime } from '@entity';
+import ShareIcon from '@icon/share.svg';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
-import ShareIcon from '@icon/system/regular/share-network.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { CodeReviewNotice } from '../components/routine-code-review';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
@@ -121,8 +128,10 @@ export function RoutineDetailView(props: {
   onRename(name: string): void;
   onBack(): void;
   onDelete(): void;
-  onCopyPrompt(prompt: string): Promise<void>;
+  onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
+  appearanceMenu?: JSX.Element;
+  identityIcon?: JSX.Element;
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
@@ -160,7 +169,8 @@ export function RoutineDetailView(props: {
     return draft ? draftPrompt(draft) : '';
   };
   const copyPrompt = async () => {
-    if (prompt()) await props.onCopyPrompt(prompt());
+    if (!prompt()) return false;
+    return props.onCopyPrompt(prompt());
   };
   /** Why the Enabled switch can't change right now. */
   const activationHint = () => {
@@ -186,6 +196,7 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          identityIcon={props.identityIcon}
           {...routineSections({
             draft: state,
             onChange: setState,
@@ -242,7 +253,7 @@ export function RoutineDetailView(props: {
                   copyDisabled={!prompt()}
                   onRun={runNow}
                   onEnabled={(enabled) => props.source.setEnabled(enabled)}
-                  onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
+                  onCopyPrompt={copyPrompt}
                 />
               </>
             )
@@ -259,6 +270,7 @@ export function RoutineDetailView(props: {
                 </Dropdown.Trigger>
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
+                    {props.appearanceMenu}
                     <Dropdown.Item
                       disabled={!state() || props.source.duplicationPending()}
                       onSelect={() => props.source.duplicate()}

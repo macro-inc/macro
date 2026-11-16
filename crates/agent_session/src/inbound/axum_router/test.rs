@@ -107,6 +107,7 @@ impl JwtValidator for FakeJwtValidator {
             identity: ValidatedIdentity {
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 user_id: jwt.to_string(),
                 fusion_user_id: "fusion-user".to_string(),
                 organization_id: None,
@@ -138,6 +139,7 @@ impl BotAuthorizer for SelfBotAuthorizer {
                     origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     agent_via: None,
+                    routine_id: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -187,6 +189,7 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
                 agent_via: None,
+                routine_id: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -320,6 +323,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -337,6 +341,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "macrod".to_owned(),
@@ -358,6 +363,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -379,6 +385,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
                     model: "persona-model".to_owned(),
                     harness: "in-memory".to_owned(),
@@ -400,6 +407,7 @@ impl OneBotDirectory {
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -418,6 +426,7 @@ impl OneBotDirectory {
                 owner_user_id: None,
                 owner_team_id: None,
                 harness_id: None,
+                on_team_agent_computer: false,
                 managed_profile: None,
                 selected_channels: false,
             },
@@ -458,6 +467,8 @@ struct RecordingRequester {
     requested: Mutex<Vec<RequestedExternalSession>>,
     /// No runtime answers, as when the operator's macrod is not running.
     unavailable: bool,
+    /// The id already names someone else's session.
+    foreign: bool,
 }
 
 impl RecordingRequester {
@@ -466,6 +477,7 @@ impl RecordingRequester {
         Self {
             requested: Mutex::default(),
             unavailable: true,
+            foreign: false,
         }
     }
 }
@@ -489,7 +501,11 @@ impl ExternalSessionRequester for RecordingRequester {
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             archived: None,
-            owner_id: Owner::User(request.owner.clone()),
+            owner_id: if self.foreign {
+                Owner::User(MacroUserIdStr::try_from(STRANGER.to_owned()).unwrap())
+            } else {
+                Owner::User(request.owner.clone())
+            },
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,
@@ -529,10 +545,115 @@ fn router_with_requests(
     router_with_gate(opener, bots, requests, NonUserOwners::Disabled)
 }
 
+/// Stands in for the harness's control path: records each first prompt
+/// delivered to a session an operator's runtime opened.
+#[derive(Default)]
+struct RecordingControls {
+    events: Mutex<Vec<(AgentSessionId, ControlEvent)>>,
+    /// The runtime refuses the prompt, as when the prompter lost access.
+    refuse: bool,
+}
+
+impl AgentSessionNotificationRecipient for RecordingControls {
+    async fn control_event(
+        &self,
+        id: AgentSessionId,
+        event: ControlEvent,
+    ) -> crate::domain::error::Result<crate::domain::ports::AcceptedControl> {
+        let action_id = event
+            .action_id
+            .expect("the handler names the first prompt's id");
+        self.events.lock().unwrap().push((id, event));
+        if self.refuse {
+            return Err(AgentSessionError::NoRuntimeAccess("no access".to_owned()));
+        }
+        Ok(crate::domain::ports::AcceptedControl {
+            action_id,
+            disposition: crate::domain::ports::ControlDisposition::Sent,
+        })
+    }
+    async fn queued_controls(
+        &self,
+        _: AgentSessionId,
+    ) -> crate::domain::error::Result<Vec<crate::domain::ports::QueuedControl>> {
+        unreachable!()
+    }
+    async fn edit_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: String,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn remove_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn steer_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn set_sandbox_size(
+        &self,
+        _: AgentSessionId,
+        _: crate::domain::model::SandboxSize,
+    ) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn session_harness(
+        &self,
+        _: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<harness_id::HarnessId>> {
+        unreachable!()
+    }
+    async fn delete_user_sessions(
+        &self,
+        _: MacroUserIdStr<'static>,
+    ) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn session_deleted(&self, _: AgentSessionId) -> crate::domain::error::Result<()> {
+        unreachable!()
+    }
+    async fn purge_owned_session(
+        &self,
+        _: AgentSessionId,
+        _: &Owner,
+    ) -> crate::domain::error::Result<shared_entity_registry::OwnedPurgeOutcome> {
+        unreachable!()
+    }
+}
+
 fn router_with_gate(
     opener: Arc<RecordingOpener>,
     bots: OneBotDirectory,
     requests: Arc<RecordingRequester>,
+    non_user_owners: NonUserOwners,
+) -> Router {
+    router_with_controls(
+        opener,
+        bots,
+        requests,
+        Arc::new(RecordingControls::default()),
+        non_user_owners,
+    )
+}
+
+fn router_with_controls(
+    opener: Arc<RecordingOpener>,
+    bots: OneBotDirectory,
+    requests: Arc<RecordingRequester>,
+    controls: Arc<RecordingControls>,
     non_user_owners: NonUserOwners,
 ) -> Router {
     let service = MacroAuthorizationServiceImpl::new(
@@ -549,6 +670,7 @@ fn router_with_gate(
         opener,
         Arc::new(bots),
         requests,
+        controls,
         MacroAuthorizationState::new(Arc::new(service)),
         non_user_owners,
     ))
@@ -779,6 +901,26 @@ async fn a_harness_may_not_open_sessions_for_an_unbound_agent() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.opened.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn no_session_opens_on_an_agent_teammates_computer() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut bots = OneBotDirectory::external_agent();
+    bots.facts.on_team_agent_computer = true;
+    let request = as_harness(body(
+        Some(BotId::TEST_A.as_uuid()),
+        "/srv/agent",
+        Some(OWNER),
+    ));
+
+    let response = router_for(opener.clone(), bots)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(opener.opened.lock().unwrap().is_empty());
 }
 
@@ -1331,27 +1473,139 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
     assert_eq!(payload["session"]["model"], "claude-opus-5");
 }
 
-/// Nothing delivers a prompt sent this way, so a caller that sends one is
-/// told rather than left to wonder why it had no effect.
+/// A program starting its operator-run agent with a prompt, as
+/// `macro.agentSessions.createManaged` does: the runtime opens the session,
+/// then the prompt goes to it through the session's control path, as the
+/// owner's, under the id the caller named.
 #[tokio::test]
-async fn a_macrod_agent_refuses_a_prompt_on_the_create() {
+async fn a_macrod_agent_gets_the_first_prompt_once_its_runtime_opens_the_session() {
     let requests = Arc::new(RecordingRequester::default());
+    let controls = Arc::new(RecordingControls::default());
+    let minted = macro_uuid::generate_uuid_v7();
+    let action = AgentActionId::mint();
     let request = as_user(
         OWNER,
-        serde_json::json!({ "botId": BotId::TEST_A.as_uuid(), "prompt": "fix it" }).to_string(),
+        serde_json::json!({
+            "id": minted,
+            "botId": BotId::TEST_A.as_uuid(),
+            "prompt": "fix it",
+            "promptActionId": action,
+        })
+        .to_string(),
     );
 
-    let response = router_with_requests(
+    let response = router_with_controls(
         Arc::new(RecordingOpener::default()),
         OneBotDirectory::macrod_agent(),
         requests.clone(),
+        controls.clone(),
+        NonUserOwners::Disabled,
     )
     .oneshot(request)
     .await
     .unwrap();
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(requests.requested.lock().unwrap().is_empty());
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(requests.requested.lock().unwrap().len(), 1);
+    let events = controls.events.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    let (session_id, event) = &events[0];
+    assert_eq!(session_id.as_uuid(), minted);
+    assert_eq!(event.action, AgentAction::prompt("fix it"));
+    assert_eq!(event.action_id, Some(action));
+    assert_eq!(
+        event.actor.as_ref().map(|actor| actor.as_ref()),
+        Some(OWNER)
+    );
+    assert!(event.context.is_none());
+    assert!(event.client.is_none());
+}
+
+/// Without a prompt nothing is sent: the composer delivers its own through
+/// the control endpoint once the create answers.
+#[tokio::test]
+async fn a_macrod_agent_opened_without_a_prompt_is_not_prompted() {
+    let controls = Arc::new(RecordingControls::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_with_controls(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        Arc::new(RecordingRequester::default()),
+        controls.clone(),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(controls.events.lock().unwrap().is_empty());
+}
+
+/// A prompt the runtime refuses fails the create the way a control prompt
+/// would, so the caller learns it never ran.
+#[tokio::test]
+async fn a_refused_first_prompt_fails_the_create() {
+    let controls = Arc::new(RecordingControls {
+        events: Mutex::default(),
+        refuse: true,
+    });
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_with_controls(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        Arc::new(RecordingRequester::default()),
+        controls.clone(),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(controls.events.lock().unwrap().len(), 1);
+}
+
+/// The id is the caller's to name, so it may already be another person's
+/// session. The prompt must never reach it.
+#[tokio::test]
+async fn a_first_prompt_never_reaches_someone_elses_session() {
+    let controls = Arc::new(RecordingControls::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "id": macro_uuid::generate_uuid_v7(),
+            "botId": BotId::TEST_A.as_uuid(),
+            "prompt": "fix it",
+        })
+        .to_string(),
+    );
+
+    let response = router_with_controls(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        Arc::new(RecordingRequester {
+            requested: Mutex::default(),
+            unavailable: false,
+            foreign: true,
+        }),
+        controls.clone(),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(controls.events.lock().unwrap().is_empty());
 }
 
 /// A runtime that never creates the session is a conflict the operator can
@@ -1691,6 +1945,7 @@ fn an_agents_program_is_not_a_user_principal() {
             origin,
             agent_id: agent.then_some(BotId::TEST_A),
             agent_via: None,
+            routine_id: None,
             macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
             user_context: model_user::UserContext {
                 user_id: "macro|owner@example.com".to_owned(),
@@ -1720,4 +1975,18 @@ fn an_agents_program_is_not_a_user_principal() {
             ControlPrincipal::Program
         ));
     }
+    // A routine code step running as its owner signs `routine_id` and no
+    // `agent_id`; the token alone makes it a program.
+    let UserBotOrHarnessAuthorization::User(owner) = user(CredentialOrigin::MacroApiJwt, false)
+    else {
+        unreachable!()
+    };
+    let routine_step = UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+        routine_id: Some(macro_uuid::Uuid::from_u128(0x7001)),
+        ..owner
+    });
+    assert!(matches!(
+        control_principal(&routine_step, &plain),
+        ControlPrincipal::Program
+    ));
 }

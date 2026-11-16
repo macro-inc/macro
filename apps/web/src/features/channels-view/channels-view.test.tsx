@@ -87,7 +87,8 @@ vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false, isLoading: false }),
-  validateSearchServiceText: (text: string) => text.length >= 3,
+  validateSearchServiceText: (text: string) =>
+    text.replaceAll('"', '').trim().length > 0,
 }));
 vi.mock('@app/lib/split-router', () => ({
   SplitRouter: {
@@ -457,15 +458,29 @@ describe('mobile dock search wiring', () => {
     expect(screen.getByTestId('mobile-channels').dataset.query).toBe('');
   });
 
-  it('pins the first six loaded channel favorites in favorite order', () => {
-    mocks.mobileLayout = () => true;
-    setRows(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => row(id)));
-    mocks.favoriteIds = () => ['g', 'missing', 'f', 'e', 'd', 'c', 'b', 'a'];
-    render(() => <ChannelsView />);
-    expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
-      'g,f,e,d,c,b'
-    );
-  });
+  it.each([
+    { sectionsEnabled: true, expected: 'g,f,e,d,c,b,a' },
+    { sectionsEnabled: false, expected: 'g,f,e,d,c,b' },
+  ])(
+    'preserves favorite order with sections enabled: $sectionsEnabled',
+    ({ sectionsEnabled, expected }) => {
+      mocks.mobileLayout = () => true;
+      mocks.sectionsEnabled = () => sectionsEnabled;
+      setRows(['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id) => row(id)));
+      mocks.favoriteIds = () => ['g', 'missing', 'f', 'e', 'd', 'c', 'b', 'a'];
+      render(() => <ChannelsView />);
+      expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
+        expected
+      );
+
+      setRows(
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'missing'].map((id) => row(id))
+      );
+      expect(screen.getByTestId('mobile-channels').dataset.pinned).toBe(
+        sectionsEnabled ? 'g,missing,f,e,d,c,b,a' : 'g,missing,f,e,d,c'
+      );
+    }
+  );
 });
 
 describe('channel selection loading and recovery', () => {

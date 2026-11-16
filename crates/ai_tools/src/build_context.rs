@@ -139,6 +139,9 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
 /// to the shared connector encryption key; hosts without it remain unwired.
 ///
+/// `TYPESAFE_API_KEY` enables the memory privacy judge; without it every memory
+/// save is refused.
+///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
 /// vars before environment defaults).
@@ -174,9 +177,24 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
 /// reads as connected for a linked user; `None` where the host cannot reach
 /// the authentication service.
+///
+/// `sender_provider` lists an inbox's verified send-as aliases, so the email
+/// tools' `from` can name one; hosts without Gmail access pass
+/// [`email::domain::senders::UnavailableEmailSenderProvider`].
 #[tracing::instrument(
-    skip(pool, event_task_tracker, import_jobs, recorder, linked_github),
+    skip(
+        pool,
+        event_task_tracker,
+        import_jobs,
+        recorder,
+        linked_github,
+        sender_provider
+    ),
     err
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a host-owned dependency"
 )]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
@@ -186,6 +204,7 @@ pub async fn build_tool_service_context_from_env(
     pricing: ai_billing::AiPricing,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
+    sender_provider: impl email::domain::senders::EmailSenderProvider,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -434,6 +453,7 @@ pub async fn build_tool_service_context_from_env(
             ),
             0,
         )
+        .with_sender_provider(sender_provider)
         .with_macro_event_broker(macro_event_broker.clone()),
     );
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
@@ -690,7 +710,7 @@ pub async fn build_tool_service_context_from_env(
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
-        activity_tool_context: crate::tool_context::build_activity_tool_context(
+        activity_service: crate::tool_context::build_activity_read_service(
             pool.clone(),
             properties_service,
             entity_access_service.clone(),

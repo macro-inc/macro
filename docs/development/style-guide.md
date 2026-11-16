@@ -37,7 +37,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`web/libraries.md`](../../.agents/rules/web/libraries.md) | FE 35–46 | `apps/web`, `packages` |
 | [`web/ui.md`](../../.agents/rules/web/ui.md) | FE | `.tsx` |
 | [`web/design-system.md`](../../.agents/rules/web/design-system.md) | FE 60–68 | `apps/web` `.tsx`: control roles, header layout, selected state, overlay surfaces, loading skeletons |
-| [`web/mobile.md`](../../.agents/rules/web/mobile.md) | | `apps/web` UI and CSS on touch and phones |
+| [`web/mobile.md`](../../.agents/rules/web/mobile.md) | FE 70 | `apps/web` UI and CSS on touch and phones, separate desktop and mobile views |
 | [`web/ui-primitives.md`](../../.agents/rules/web/ui-primitives.md) | | `apps/web/src/components/ui` |
 | [`web/startup-bundle.md`](../../.agents/rules/web/startup-bundle.md) | | `apps/web/src` |
 | [`web/i18n.md`](../../.agents/rules/web/i18n.md) | | `apps/web/src` user-visible text in new UI, menus, and navigation |
@@ -47,3 +47,42 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 To find a rule by ID: `rg 'CS-30' .agents/rules`. To add one, use the
 [rule template](../../.agents/templates/rule.md); an ID-bearing rule goes in the
 file for its scope with the next free number.
+
+## Email backend boundary checks
+
+The email-specific ast-grep rules enforce the [backend boundaries](../architecture/email-backend.md)
+without changing the severity or scope of the workspace's legacy rules.
+
+| Rule | Checks |
+| --- | --- |
+| [`email-domain-no-concrete-io`](../../rules/ast-grep/email-domain-no-concrete-io.yml) | Domain references to concrete clients, adapter modules, filesystem I/O and environment access. |
+| [`email-inbound-no-concrete-io`](../../rules/ast-grep/email-inbound-no-concrete-io.yml) | Concrete I/O in HTTP handlers, crate inbound adapters and delivery processors. |
+| [`email-inbound-no-raw-state-access`](../../rules/ast-grep/email-inbound-no-raw-state-access.yml) | Raw pool/client fields and local client calls in inbound processing. |
+| [`email-worker-no-runtime-io`](../../rules/ast-grep/email-worker-no-runtime-io.yml) | Concrete I/O in worker/context files outside startup composition. |
+| [`email-worker-no-raw-state-access`](../../rules/ast-grep/email-worker-no-raw-state-access.yml) | Raw pool/client worker-context fields and raw client use outside `context()`. |
+| [`email-outbound-no-inbound-host`](../../rules/ast-grep/email-outbound-no-inbound-host.yml) | Outbound dependencies on API/pubsub implementations via `crate::` or `super::` paths. |
+
+These are error-level rules. Their notes list the composition, transport,
+legacy type and helper exceptions. Keep exceptions narrow and cover both the
+permitted syntax and a nearby forbidden case in
+[`rules/ast-grep-tests`](../../rules/ast-grep-tests).
+
+The I/O rules include direct and grouped `std::fs` and `tokio::fs` paths;
+worker startup composition keeps its existing allowance. Relative API/pubsub
+paths are checked in outbound adapters. Relative domain/inbound module imports
+still need review: these syntax rules cannot resolve which module a `super::`
+chain reaches across their different file depths and roots.
+
+When changing these rules, run the native fixtures and scan the whole repository
+(the rules retain their declared source scopes):
+
+```sh
+bunx --yes @ast-grep/cli@0.44.1 test
+bunx --yes @ast-grep/cli@0.44.1 scan --filter '^email-' .
+```
+
+The fixtures include expected match locations and are discovered through
+`sgconfig.yml`. Root `just check` scans changed source files; changing only a rule
+file does not replace the native tests or a source scan. The Conventions workflow
+uses the same rule directory. Syntax guards complement domain-policy review;
+they do not resolve arbitrary Rust aliases or prove the contents of adapters.
