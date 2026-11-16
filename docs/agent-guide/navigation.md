@@ -709,7 +709,8 @@ on. Where the view has no keyboard list on screen (Passwords, the booking
 lists, Routines' Discover tab), `ArrowDown` and `Enter` stay in the field.
 Home's and Chat's sidebar search fields follow the same rules, landing on the
 first matching row of the sidebar list; emptying the field from the list
-collapses it back to the Search icon. Agents' sidebar field does not yet: its
+collapses it back to the Search icon. An `Escape` pressed in the preview or
+conversation beside the sidebar leaves the search alone. Agents' sidebar field does not yet: its
 conversation list has no keyboard navigation.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the

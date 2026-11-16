@@ -22,71 +22,74 @@ async function open(page: Page, query = '') {
 }
 
 for (const surface of SURFACES) {
-test(`moves from the search field into the results and back out${surface}`, async ({
-  page,
-}) => {
-  const { field, grid, rows } = await open(page, surface);
+  test(`moves from the search field into the results and back out${surface}`, async ({
+    page,
+  }) => {
+    const { field, grid, rows } = await open(page, surface);
 
-  await field.pressSequentially('budget');
-  await expect(rows).toHaveCount(3);
+    await field.pressSequentially('budget');
+    await expect(rows).toHaveCount(3);
 
-  await page.keyboard.press('ArrowDown');
-  await expect(grid).toBeFocused();
-  await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget 2026');
+    await page.keyboard.press('ArrowDown');
+    await expect(grid).toBeFocused();
+    await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget 2026');
 
-  await page.keyboard.press('j');
-  await page.keyboard.press('ArrowDown');
-  await expect(grid).toHaveAttribute('aria-activedescendant', 'Launch budget');
-  await expect(field).toHaveValue('budget');
-
-  await field.focus();
-  await page.keyboard.press('Enter');
-  await expect(grid).toBeFocused();
-  await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget 2026');
-
-  // Escape leaves the list on the row it was on.
-  await page.keyboard.press('j');
-  await field.focus();
-  await page.keyboard.press('Escape');
-  await expect(grid).toBeFocused();
-  await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget notes');
-});
-
-test(`keeps the search on Escape in the field and clears it from the list${surface}`, async ({
-  page,
-}) => {
-  const { field, grid, rows } = await open(page, surface);
-  await field.pressSequentially('budget');
-
-  await page.keyboard.press('Escape');
-  await expect(grid).toBeFocused();
-  await expect(field).toHaveValue('budget');
-  await expect(rows).toHaveCount(3);
-
-  // A sidebar's field stays beside the detail, whose Escape it leaves alone.
-  if (surface) {
-    await page.getByRole('button', { name: 'Open detail' }).focus();
-    await page.keyboard.press('Escape');
+    await page.keyboard.press('j');
+    await page.keyboard.press('ArrowDown');
+    await expect(grid).toHaveAttribute(
+      'aria-activedescendant',
+      'Launch budget'
+    );
     await expect(field).toHaveValue('budget');
-    await grid.focus();
-  }
 
-  // A selection is the innermost level, then the search, then the tab.
-  await page.keyboard.press('j');
-  await page.keyboard.press('x');
-  await expect(page.getByRole('row', { selected: true })).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('row', { selected: true })).toHaveCount(0);
-  await expect(field).toHaveValue('budget');
+    await field.focus();
+    await page.keyboard.press('Enter');
+    await expect(grid).toBeFocused();
+    await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget 2026');
 
-  await page.keyboard.press('Escape');
-  await expect(rows).toHaveCount(5);
-  await expect(page.getByRole('searchbox')).toHaveCount(0);
-  await expect(page.getByTestId('tab')).toHaveText('Archived');
+    // Escape leaves the list on the row it was on.
+    await page.keyboard.press('j');
+    await field.focus();
+    await page.keyboard.press('Escape');
+    await expect(grid).toBeFocused();
+    await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget notes');
+  });
 
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('tab')).toHaveText('Inbox');
-});
+  test(`keeps the search on Escape in the field and clears it from the list${surface}`, async ({
+    page,
+  }) => {
+    const { field, grid, rows } = await open(page, surface);
+    await field.pressSequentially('budget');
+
+    await page.keyboard.press('Escape');
+    await expect(grid).toBeFocused();
+    await expect(field).toHaveValue('budget');
+    await expect(rows).toHaveCount(3);
+
+    // A sidebar's field stays beside the detail, whose Escape it leaves alone.
+    if (surface) {
+      await page.getByRole('button', { name: 'Open detail' }).focus();
+      await page.keyboard.press('Escape');
+      await expect(field).toHaveValue('budget');
+      await grid.focus();
+    }
+
+    // A selection is the innermost level, then the search, then the tab.
+    await page.keyboard.press('j');
+    await page.keyboard.press('x');
+    await expect(page.getByRole('row', { selected: true })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('row', { selected: true })).toHaveCount(0);
+    await expect(field).toHaveValue('budget');
+
+    await page.keyboard.press('Escape');
+    await expect(rows).toHaveCount(5);
+    await expect(page.getByRole('searchbox')).toHaveCount(0);
+    await expect(page.getByTestId('tab')).toHaveText('Archived');
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('tab')).toHaveText('Inbox');
+  });
 }
 
 test('a wide field owns the header and runs a recent search from the keyboard', async ({

@@ -34,6 +34,11 @@ export type ListSearchKeysOptions = {
   /** The button that opens the collapsed field. */
   trigger: () => HTMLElement | undefined;
   suggestions?: () => ListSearchSuggestions | undefined;
+  /**
+   * Whether an Escape pressed away from the field is this search's to clear;
+   * without it, any Escape in the split that nothing else takes is.
+   */
+  ownsEscape?: () => boolean;
 };
 
 /**
@@ -108,16 +113,18 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     return false;
   };
 
-  // Escape in the list steps back out of the search. The field has left the
-  // view whenever a thread or other detail has replaced the list, so that
-  // view's own Escape runs instead.
+  // Escape in the list steps back out of the search. A list header's field
+  // has left the view whenever a thread or other detail has replaced the
+  // list, so that view's own Escape runs instead. A sidebar's field stays
+  // beside the detail, so it passes `ownsEscape` to leave that Escape alone.
   if (panel) {
     const scopeId = panel.splitHotkeyScope;
     // A list that overrides the split's Escape clears the search through the
     // same registration, so the step exists whichever handler runs.
     onCleanup(
       registerListSearch(scopeId, {
-        isActive: () => options.value().trim().length > 0,
+        isActive: () =>
+          options.value().trim().length > 0 && (options.ownsEscape?.() ?? true),
         clear: options.clear,
       })
     );

@@ -49,6 +49,7 @@ function setup(
   const goToFirst = vi.fn(() => true);
   const leaveView = vi.fn(() => true);
   let list!: HTMLDivElement;
+  let detail!: HTMLDivElement;
 
   function Sidebar(props: { scopeId: string }) {
     return (
@@ -123,16 +124,16 @@ function setup(
       registrationType: 'add',
     });
 
+    // The split holds the sidebar (its search and list) and, beside it, the
+    // detail the list opened.
     return (
       <div ref={(element) => attachGlobalDOMScope(element)}>
-        <div
-          ref={(element) => {
-            list = element;
-            attachSplit(element);
-          }}
-          tabIndex={0}
-        >
-          <Sidebar scopeId={splitScope} />
+        <div ref={attachSplit}>
+          <div data-view-shell-aside="">
+            <Sidebar scopeId={splitScope} />
+            <div ref={list} tabIndex={0} />
+          </div>
+          <div ref={detail} tabIndex={0} />
         </div>
       </div>
     );
@@ -158,6 +159,7 @@ function setup(
     goToFirst,
     leaveView,
     list: () => list,
+    detail: () => detail,
   };
 }
 
@@ -230,6 +232,19 @@ it('clears the search on Escape in the list, after a selection, then collapses t
 
   press('Escape');
   expect(leaveView).toHaveBeenCalledOnce();
+});
+
+it('leaves an Escape pressed in the detail beside the sidebar alone', async () => {
+  const { openField, field, search, leaveView, detail } = setup({
+    search: 'hello',
+  });
+  await openField();
+  detail().focus();
+
+  press('Escape');
+  expect(search()).toBe('hello');
+  expect(field()).toBeTruthy();
+  expect(leaveView).not.toHaveBeenCalled();
 });
 
 it('closes a search the sidebar keeps open itself', async () => {

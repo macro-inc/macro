@@ -157,6 +157,11 @@ function Search(props: {
     focusResults: () => props.focusResults,
     input: () => input,
     trigger: () => header?.button(),
+    // The preview or conversation beside the sidebar keeps its own Escape.
+    ownsEscape: () =>
+      input
+        ?.closest('[data-view-shell-aside]')
+        ?.contains(document.activeElement) ?? false,
   });
 
   return (

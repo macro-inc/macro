@@ -95,89 +95,89 @@ function Fixture() {
       <div ref={attachSplit} class="max-w-2xl rounded-xl bg-panel p-4">
         {/* As in a view, the sidebar holds the field and its list. */}
         <div data-view-shell-aside="">
-        <div class="flex items-center justify-between gap-2">
-          <h1 class="text-sm font-medium" data-testid="tab">
-            {tab()}
-          </h1>
-          <Show when={!(wide && open())}>
-            <button type="button">New</button>
-          </Show>
-          <SplitPanelContext.Provider value={panel}>
-            <Show
-              when={inSidebar}
-              fallback={
-                <ListHeaderSearch
-                  label="Search files"
-                  value={search()}
-                  onValueChange={setSearch}
-                  focusResults={() => grid.focus()}
-                  registerFocus={() => {}}
-                  wide={wide}
-                  onOpenChange={setOpen}
-                  onFocusChange={setFocused}
-                  suggestions={
-                    wide
-                      ? {
-                          count: () => recent().length,
-                          active,
-                          setActive,
-                          pick: (index) => setSearch(recent()[index] ?? ''),
-                        }
-                      : undefined
-                  }
-                />
-              }
-            >
-              <div class="w-72">
-                <ViewSidebar.Header
-                  searchLabel="Search files"
-                  collapseControl={<span />}
-                  search={() => (
-                    <ViewSidebar.Search
-                      label="Search files"
-                      value={search()}
-                      onValueChange={setSearch}
-                      focusResults={() => grid.focus()}
-                    />
-                  )}
-                >
-                  Files
-                </ViewSidebar.Header>
-              </div>
+          <div class="flex items-center justify-between gap-2">
+            <h1 class="text-sm font-medium" data-testid="tab">
+              {tab()}
+            </h1>
+            <Show when={!(wide && open())}>
+              <button type="button">New</button>
             </Show>
-          </SplitPanelContext.Provider>
-        </div>
-        <div role="listbox" aria-label="Recent searches">
-          <For each={recent()}>
-            {(query, index) => (
-              <div role="option" aria-selected={active() === index()}>
-                {query}
-              </div>
-            )}
-          </For>
-        </div>
-        <div
-          ref={grid}
-          role="grid"
-          aria-label="Files"
-          aria-activedescendant={list.focus.key()}
-          tabIndex={0}
-          class="mt-3 outline-none"
-        >
-          <For each={items()}>
-            {(item) => (
-              <div
-                id={item.id}
-                role="row"
-                aria-selected={list.selection.isSelected(item.id)}
-                class="rounded-md px-2 py-1.5 text-sm"
-                classList={{ 'bg-hover': list.focus.key() === item.id }}
+            <SplitPanelContext.Provider value={panel}>
+              <Show
+                when={inSidebar}
+                fallback={
+                  <ListHeaderSearch
+                    label="Search files"
+                    value={search()}
+                    onValueChange={setSearch}
+                    focusResults={() => grid.focus()}
+                    registerFocus={() => {}}
+                    wide={wide}
+                    onOpenChange={setOpen}
+                    onFocusChange={setFocused}
+                    suggestions={
+                      wide
+                        ? {
+                            count: () => recent().length,
+                            active,
+                            setActive,
+                            pick: (index) => setSearch(recent()[index] ?? ''),
+                          }
+                        : undefined
+                    }
+                  />
+                }
               >
-                <div role="gridcell">{item.id}</div>
-              </div>
-            )}
-          </For>
-        </div>
+                <div class="w-72">
+                  <ViewSidebar.Header
+                    searchLabel="Search files"
+                    collapseControl={<span />}
+                    search={() => (
+                      <ViewSidebar.Search
+                        label="Search files"
+                        value={search()}
+                        onValueChange={setSearch}
+                        focusResults={() => grid.focus()}
+                      />
+                    )}
+                  >
+                    Files
+                  </ViewSidebar.Header>
+                </div>
+              </Show>
+            </SplitPanelContext.Provider>
+          </div>
+          <div role="listbox" aria-label="Recent searches">
+            <For each={recent()}>
+              {(query, index) => (
+                <div role="option" aria-selected={active() === index()}>
+                  {query}
+                </div>
+              )}
+            </For>
+          </div>
+          <div
+            ref={grid}
+            role="grid"
+            aria-label="Files"
+            aria-activedescendant={list.focus.key()}
+            tabIndex={0}
+            class="mt-3 outline-none"
+          >
+            <For each={items()}>
+              {(item) => (
+                <div
+                  id={item.id}
+                  role="row"
+                  aria-selected={list.selection.isSelected(item.id)}
+                  class="rounded-md px-2 py-1.5 text-sm"
+                  classList={{ 'bg-hover': list.focus.key() === item.id }}
+                >
+                  <div role="gridcell">{item.id}</div>
+                </div>
+              )}
+            </For>
+          </div>
         </div>
         {/* The detail the list opened, beside the sidebar. */}
         <button type="button" class="mt-3 text-sm">
