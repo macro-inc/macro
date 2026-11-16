@@ -22,8 +22,8 @@ use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
-    is_agent_run,
+    CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOnly, is_program_run,
 };
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -204,18 +204,18 @@ impl IntoResponse for ToolApprovalApiError {
 }
 
 /// Only a person lets a held call run: an agent's program (see
-/// [`is_agent_run`]) may deny or cancel one, but approving would let it
+/// [`is_program_run`]) may deny or cancel one, but approving would let it
 /// approve its own call.
 fn refuse_program_approval(
     answer: ToolApprovalAnswerDto,
-    agent_attributed: bool,
+    attribution: CredentialAttribution,
     headers: &HeaderMap,
 ) -> Result<(), (StatusCode, &'static str)> {
     let approves = matches!(
         answer,
         ToolApprovalAnswerDto::Approve | ToolApprovalAnswerDto::ApproveAndRemember
     );
-    if approves && is_agent_run(agent_attributed, headers) {
+    if approves && is_program_run(attribution, headers) {
         return Err((
             StatusCode::FORBIDDEN,
             "An agent can't approve this for you.",
@@ -261,12 +261,8 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    refuse_program_approval(
-        request.answer,
-        caller.authorization.agent_id.is_some(),
-        &headers,
-    )
-    .map_err(IntoResponse::into_response)?;
+    refuse_program_approval(request.answer, caller.authorization.attribution(), &headers)
+        .map_err(IntoResponse::into_response)?;
     // A person answers: a bot has no say over whose access is spent.
     let by = access
         .entity_access_receipt
