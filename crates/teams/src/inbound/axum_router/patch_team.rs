@@ -25,6 +25,7 @@ use super::TeamRouterState;
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 503, body = ErrorResponse),
     ),
 )]
 #[tracing::instrument(skip_all, err)]

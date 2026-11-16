@@ -23,7 +23,7 @@ consumer = [
   "macro_event_broker/outbound",
 ]
 default = ["consumer", "outbound", "realtime"]
-outbound = ["dep:sqlx", "dep:tracing"]
+outbound = ["dep:sqlx", "dep:tracing", "dep:entity_access"]
 realtime = [
   "dep:broadcast",
   "dep:rootcause",
@@ -33,6 +33,7 @@ realtime = [
 ]
 
 [dependencies]
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 agent_correlation = { path = "../agent_correlation" }
 utoipa = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }

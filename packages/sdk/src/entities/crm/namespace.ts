@@ -10,6 +10,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
+import { Team } from '../teams/team';
 import { Company } from './company';
 import { Contact } from './contact';
 import { CrmPipeline } from './pipeline';
@@ -34,6 +35,20 @@ export class CrmNamespace {
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
+  }
+
+  /**
+   * Read the caller's current CRM access, including when access is denied.
+   * Existing handles do not bypass the server's current permission checks.
+   *
+   * @readonly
+   */
+  async access(): Promise<{ team?: Team; allowed: boolean }> {
+    const access = unwrap(await this.client.storage.getCrmMemberAccess());
+    return {
+      team: access.team_id ? Team.byId(this.client, access.team_id) : undefined,
+      allowed: access.allowed,
+    };
   }
 
   /**
