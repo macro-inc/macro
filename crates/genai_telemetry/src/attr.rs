@@ -92,6 +92,27 @@ pub const MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS: &str = "macro.genai.chat.time_to_fi
 /// Macro-specific: what a model call streamed first: `text`, `reasoning` or
 /// `tool_call`.
 pub const MACRO_CHAT_FIRST_CHUNK_KIND: &str = "macro.genai.chat.first_chunk_kind";
+/// Macro-specific: how many tools a model call offered upfront.
+pub const MACRO_PROMPT_TOOLS_EAGER_COUNT: &str = "macro.genai.prompt.tools.eager.count";
+/// Macro-specific: the bytes of the schemas a model call offered upfront.
+pub const MACRO_PROMPT_TOOLS_EAGER_BYTES: &str = "macro.genai.prompt.tools.eager.bytes";
+/// Macro-specific: a short hash of the schemas a model call offered upfront.
+pub const MACRO_PROMPT_TOOLS_EAGER_HASH: &str = "macro.genai.prompt.tools.eager.hash";
+/// Macro-specific: how many tools found by tool search a model call offered.
+pub const MACRO_PROMPT_TOOLS_LOADED_COUNT: &str = "macro.genai.prompt.tools.loaded.count";
+/// Macro-specific: the bytes of the schemas of tools found by tool search.
+pub const MACRO_PROMPT_TOOLS_LOADED_BYTES: &str = "macro.genai.prompt.tools.loaded.bytes";
+/// Macro-specific: a short hash of the schemas of tools found by tool search.
+pub const MACRO_PROMPT_TOOLS_LOADED_HASH: &str = "macro.genai.prompt.tools.loaded.hash";
+/// Macro-specific: how many conversation messages a model call sent.
+pub const MACRO_PROMPT_MESSAGES: &str = "macro.genai.prompt.messages";
+/// Macro-specific: the bytes of a model call's conversation, tool results
+/// excepted.
+pub const MACRO_PROMPT_HISTORY_BYTES: &str = "macro.genai.prompt.history.bytes";
+/// Macro-specific: how many tool results a model call sent.
+pub const MACRO_PROMPT_TOOL_RESULTS: &str = "macro.genai.prompt.tool_results.count";
+/// Macro-specific: the bytes of the tool results a model call sent.
+pub const MACRO_PROMPT_TOOL_RESULTS_BYTES: &str = "macro.genai.prompt.tool_results.bytes";
 
 /// Macro-specific: the coarse ACP tool kind (`execute`, `edit`, `read`, …).
 pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";
@@ -101,6 +122,9 @@ pub const MACRO_TOOL_TITLE: &str = "macro.genai.tool.title";
 /// result's text, anything else's JSON), recorded whether or not content is,
 /// so an oversized result shows without the result itself.
 pub const MACRO_TOOL_RESULT_BYTES: &str = "macro.genai.tool.result_bytes";
+/// Macro-specific: whether the model read only the beginning of a tool's
+/// result because the whole of it was too long.
+pub const MACRO_TOOL_RESULT_CUT: &str = "macro.genai.tool.result_cut";
 /// Macro-specific: the MCP server a tool was reached through, when it was.
 pub const MACRO_MCP_SERVER: &str = "macro.genai.mcp.server";
 

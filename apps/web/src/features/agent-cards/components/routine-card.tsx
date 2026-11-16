@@ -16,21 +16,28 @@ import { routineStatus } from '@entity/types/entity';
 import Play from '@icon/system/regular/play.svg';
 import { queryReadyGate } from '@queries/gate';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
-import { Button, cn } from '@ui';
+import {
+  Badge,
+  type BadgeVariant,
+  Button,
+  cn,
+  Item,
+  Card as UiCard,
+} from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { dayAndTime } from '../core/event-time';
-import { Card, CardBody, CardFooter, CardHeader } from './kit/card';
-import { CardPill, type CardTone, SkeletonSingle, Tile } from './kit/parts';
+import { Card, CardBody, CardFooter } from './kit/card';
+import { SkeletonSingle } from './kit/parts';
 import { ReferenceCard } from './reference-card';
 
 /** Where a routine stands: waiting for its next run, paused, or running. */
 export type RoutineState = 'active' | 'paused' | 'running' | 'idle';
 
-const STATES: Record<RoutineState, { label: string; tone: CardTone }> = {
-  active: { label: 'Active', tone: 'ok' },
-  paused: { label: 'Paused', tone: 'neutral' },
-  running: { label: 'Running', tone: 'accent' },
-  idle: { label: 'No upcoming runs', tone: 'neutral' },
+const STATES: Record<RoutineState, { label: string; badge: BadgeVariant }> = {
+  active: { label: 'Active', badge: 'success' },
+  paused: { label: 'Paused', badge: 'secondary' },
+  running: { label: 'Running', badge: 'accent' },
+  idle: { label: 'No upcoming runs', badge: 'secondary' },
 };
 
 /**
@@ -55,30 +62,30 @@ export function RoutineCardView(props: {
   const state = () => STATES[props.state];
   return (
     <Card width="compact" data-agent-card="routine">
-      <CardHeader
-        center
-        padded
-        tile={
-          <Tile>
+      <UiCard.Header>
+        <Item class="gap-3 border-0 p-0">
+          <Item.Media class="self-center">
             <EntityIcon targetType="routine" size="sm" />
-          </Tile>
-        }
-        title={props.name}
-        subtitle="Routine"
-        trailing={
-          <CardPill tone={state().tone}>
-            <span
-              class={cn(
-                'size-1.5 rounded-full bg-current',
-                props.state === 'running' && 'animate-pulse'
-              )}
-              aria-hidden="true"
-            />
-            {state().label}
-          </CardPill>
-        }
-      />
-      <CardBody class="pt-0">
+          </Item.Media>
+          <Item.Content class="gap-0">
+            <UiCard.Title class="truncate">{props.name}</UiCard.Title>
+            <UiCard.Description>Routine</UiCard.Description>
+          </Item.Content>
+          <Item.Actions>
+            <Badge variant={state().badge} size="xs">
+              <span
+                class={cn(
+                  'size-1.5 rounded-full bg-current',
+                  props.state === 'running' && 'animate-pulse'
+                )}
+                aria-hidden="true"
+              />
+              {state().label}
+            </Badge>
+          </Item.Actions>
+        </Item>
+      </UiCard.Header>
+      <CardBody>
         <dl class="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-1 text-xs leading-5">
           <dt class="text-ink-subtle">Schedule</dt>
           <dd class="truncate text-ink">{props.schedule ?? 'Custom'}</dd>
@@ -101,7 +108,6 @@ export function RoutineCardView(props: {
             <Button
               size="sm"
               variant="ghost"
-              class="mr-auto"
               disabled={props.busy}
               onClick={() => toggle()()}
             >
@@ -109,31 +115,32 @@ export function RoutineCardView(props: {
             </Button>
           )}
         </Show>
-        <Show when={props.onOpen}>
-          {(open) => (
-            <Button
-              size="sm"
-              variant="outline"
-              class={props.onToggle ? undefined : 'ml-auto'}
-              onClick={(event: MouseEvent) => open()(event)}
-            >
-              Open
-            </Button>
-          )}
-        </Show>
-        <Show when={props.onRunNow}>
-          {(run) => (
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={props.busy || props.state === 'running'}
-              onClick={() => run()()}
-            >
-              <Play />
-              Run now
-            </Button>
-          )}
-        </Show>
+        <UiCard.Actions class="ml-auto">
+          <Show when={props.onOpen}>
+            {(open) => (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(event: MouseEvent) => open()(event)}
+              >
+                Open
+              </Button>
+            )}
+          </Show>
+          <Show when={props.onRunNow}>
+            {(run) => (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={props.busy || props.state === 'running'}
+                onClick={() => run()()}
+              >
+                <Play class="size-4" />
+                Run now
+              </Button>
+            )}
+          </Show>
+        </UiCard.Actions>
       </CardFooter>
     </Card>
   );

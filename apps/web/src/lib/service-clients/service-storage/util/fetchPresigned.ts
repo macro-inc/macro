@@ -37,7 +37,7 @@ function httpStatusToError(
 function fetchExceptionToError(
   error: unknown
 ): Result<never, ResultError<FetchError>[]> {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+  if (error instanceof TypeError) {
     return err<never, ResultError<FetchError>[]>([
       { code: 'NETWORK_ERROR', message: 'Network error occurred' },
     ]);

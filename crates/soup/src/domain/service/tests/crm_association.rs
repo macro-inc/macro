@@ -61,6 +61,14 @@ const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
 ];
 
 impl EmailPrivacyService for FakeCrm {
+    async fn excluded_email_threads(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
+    ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
+        panic!("unexpected excluded_email_threads call")
+    }
+
     async fn contribution_mailbox(
         &self,
         _: Uuid,

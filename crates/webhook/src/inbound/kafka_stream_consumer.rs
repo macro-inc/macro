@@ -5,7 +5,8 @@ use crate::domain::ingestion::{
     stream::{
         agent_session_lifecycle_stream_candidate, agent_trigger_stream_candidate,
         call_stream_candidate, channel_stream_candidate, document_stream_candidate,
-        message_stream_candidate, user_stream_candidate, webhook_stream_candidate,
+        message_stream_candidate, password_stream_candidate, user_stream_candidate,
+        webhook_stream_candidate,
     },
     user_event_subject,
 };
@@ -94,6 +95,9 @@ async fn candidate_from<R: WebhookWorkspaceResolver>(
             let user = user_event_subject(event.event());
             let team_workspace_ids = user_team_workspace_ids(workspace_resolver, user).await;
             user_stream_candidate(event.event(), team_workspace_ids).map(Some)
+        }
+        DeclaredMacroEvent::PasswordMacroEvent(event) => {
+            password_stream_candidate(event.event()).map(Some)
         }
     }
 }

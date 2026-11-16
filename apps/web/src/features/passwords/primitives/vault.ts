@@ -25,6 +25,7 @@ import {
   validateDraft,
 } from '../core/types';
 import { passwordKeys } from '../queries/keys';
+import { isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -79,6 +80,8 @@ export function createVault() {
     reconcile: 'id',
   }));
   const loadedItems = () => (items.isPending ? [] : (items.data ?? []));
+  /** The vault list, or undefined while it loads or after it failed without data. */
+  const availableItems = () => (items.isPending ? undefined : items.data);
   const loadedFolders = () => (folders.isPending ? [] : (folders.data ?? []));
 
   const [selection, setSelection] = createSignal<VaultSelection>();
@@ -166,6 +169,20 @@ export function createVault() {
     setSelection(item ? { kind: 'item', id: item.id } : undefined);
     if (item?.kind !== 'note' && item)
       fireAndForget(loadUsername(item), 'passwords');
+  }
+  /**
+   * No answer from Macro: the last request for the selected item, or the
+   * latest list reload. The list on screen may be out of date until it answers.
+   */
+  const unreachable = () =>
+    failure() === 'unreachable' ||
+    (items.isError && isUnreachable(items.error));
+  /** Ask again: reload the list and folders, and the selected item's username. */
+  function retryConnection() {
+    fireAndForget(items.refetch(), 'passwords');
+    fireAndForget(folders.refetch(), 'passwords');
+    const current = selection();
+    if (current?.kind === 'item') select(selected());
   }
   function selectDraft(key: string) {
     resetDetail();
@@ -650,6 +667,7 @@ export function createVault() {
     items,
     folders,
     loadedItems,
+    availableItems,
     loadedFolders,
     selection,
     selected,
@@ -675,6 +693,8 @@ export function createVault() {
     usernameLoading,
     usernameCopied,
     failure,
+    unreachable,
+    retryConnection,
     reveal,
     copy: copyPassword,
     copyUsername,

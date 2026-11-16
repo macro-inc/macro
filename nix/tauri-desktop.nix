@@ -241,6 +241,11 @@
           simd = true;
           profile = "ai-engine-wasm";
         }
+        {
+          name = "password_import_wasm";
+          crate = "crates/password_import_wasm";
+          dir = "password-import";
+        }
       ];
 
       # A binary of the root workspace (not the nested Tauri one), built
@@ -385,9 +390,12 @@
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };
