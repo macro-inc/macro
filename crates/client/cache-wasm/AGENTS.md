@@ -47,6 +47,12 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Bump this crate's `version` whenever a change here or in `cache-core` /
+  `cache-turso` changes what the web host reads or sends. `just ensure-cache-wasm`
+  rebuilds a checkout's engine only when the version differs, and `bun run build`
+  never rebuilds it, so without a bump an existing checkout bundles new host code
+  with its old engine. A mutation inspection without lease fields, for one, makes
+  the queue wait out a dead page's five-minute lease.
 - Preserve successful hydration replies when optional window-proof computation
   fails; empty proofs retain broad invalidation after the durable write.
 - Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`

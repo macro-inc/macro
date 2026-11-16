@@ -3,7 +3,7 @@ edition = "2024"
 name = "cache-wasm"
 publish = false
 # Rebuild with paged database view reads retained in the cache.
-version = "0.6.54"
+version = "0.6.55"
 
 [features]
 default = []
