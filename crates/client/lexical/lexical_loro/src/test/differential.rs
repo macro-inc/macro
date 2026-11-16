@@ -6,6 +6,17 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn bun(input: Value) -> Value {
+    match try_bun(input) {
+        Ok(value) => value,
+        Err(stderr) => panic!("{stderr}"),
+    }
+}
+
+/// C-JS-LORO-116-HINT-PANIC-01: JS loro-crdt 1.16.3, the web catalog version,
+/// panics inside the Source mirror on some collab key streams; 1.17.1 does not.
+const JS_LORO_HINT_PANIC: &str = "Op/hint length mismatch";
+
+fn try_bun(input: Value) -> Result<Value, String> {
     let mut child = Command::new("bun")
         .arg(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -23,12 +34,30 @@ fn bun(input: Value) -> Value {
         .write_all(input.to_string().as_bytes())
         .expect("write input");
     let output = child.wait_with_output().expect("Bun completion");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).expect("mirror JSON")
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+    }
+    Ok(serde_json::from_slice(&output.stdout).expect("mirror JSON"))
+}
+
+/// Fails loudly once JS Loro stops panicking on this stream, so the tally entry
+/// C-JS-LORO-116-HINT-PANIC-01 and the skip below get removed with it.
+#[test]
+#[should_panic(expected = "Op/hint length mismatch")]
+fn js_loro_1_16_panics_on_a_known_collab_key_stream() {
+    let script = [
+        (91, 0),
+        (0, 132),
+        (79, 0),
+        (100, 4),
+        (91, 0),
+        (100, 212),
+        (100, 137),
+        (100, 34),
+        (165, 0),
+    ];
+    let (run, _) = stream(&script).expect("native stream");
+    bun(json!({"runs":[run]}));
 }
 fn observe(doc: &LoroDoc) -> Result<Value> {
     fn visit(container: Container, path: String, kinds: &mut serde_json::Map<String, Value>) {
@@ -143,7 +172,12 @@ proptest! {
     #[test]
     fn collab_key_stream_matches_current_mirror(script in prop::collection::vec((any::<u8>(),any::<u8>()),1..80)) {
         let (run, expected) = stream(&script).expect("native stream");
-        let result = bun(json!({"runs":[run]}));
+        let result = match try_bun(json!({"runs":[run]})) {
+            Ok(result) => result,
+            // C-JS-LORO-116-HINT-PANIC-01: the JS side cannot run this stream.
+            Err(stderr) if stderr.contains(JS_LORO_HINT_PANIC) => return Ok(()),
+            Err(stderr) => panic!("{stderr}"),
+        };
         prop_assert_eq!(&result[0]["observations"], &json!(expected));
     }
 }
