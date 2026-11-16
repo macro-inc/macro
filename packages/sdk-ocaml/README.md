@@ -11,6 +11,9 @@ services), generated from the same OpenAPI specs as the TypeScript SDK
 - `macro_sdk_fetch` (`fetch/`): sends them through JavaScript's `fetch`
   from a program compiled to WebAssembly, for code mode. See
   [WebAssembly transport](#webassembly-transport).
+- `code_mode` (`code_mode/`): the program contract for code mode's OCaml
+  programs, and the prebuilt bundle they compile against. See
+  [Code mode](#code-mode).
 
 ## Install
 
@@ -175,6 +178,87 @@ it is decoded as the reply), reject (a refusal; `Error (Transport _)`), or
 send the request with headers added. One known gap: cognition declares
 `get_state_handler` twice (both reads); both map to `getStateHandler`, where
 the TypeScript SDK names the second `getStateHandler2`.
+
+## Code mode
+
+### Program contract
+
+A code-mode OCaml program is one `main.ml` that calls `Code_mode.run` once,
+the counterpart of a JavaScript program's `main({macro, session, execution})`:
+
+```ocaml
+open Macro_sdk
+
+let () =
+  Code_mode.run @@ fun { macro; session_id; execution_id = _; web_app_url = _ } ->
+  let reply = Macro_sdk_fetch.call_exn macro (Contacts.get_contacts ()) in
+  `Assoc [ ("contacts", `Int (List.length reply.contacts));
+           ("session", match session_id with Some id -> `String id | None -> `Null) ]
+```
+
+`macro` is a ready `Macro_sdk_fetch.t` with the run's token and every
+service host. The value `main` returns becomes the final frame
+`{"type":"result","value":...}`; an exception becomes
+`{"type":"error","message":...}`, the same frames JavaScript programs end
+with. The bootstrap's side (`globalThis.__macroCodeMode`: the context as
+JSON, and `finish(frame)`) is specified in `code_mode/code_mode.mli`; code
+mode's bootstrap does not implement it yet. Like `fetch/`, `code_mode`
+builds only in the `wasm` profile; its Deno tests (`code_mode/test/`,
+`run.mjs` plays the bootstrap with code mode's Deno flags) run with:
+
+```sh
+nix-shell shell.nix --run "dune build --profile wasm --build-dir _build_wasm @code_mode/runtest"
+```
+
+Programs must not print to stdout: it carries the bootstrap's frames.
+
+### Code mode bundle
+
+Code mode compiles each program against a bundle built once per image, the
+`code-mode-ocaml` flake package (`nix/cloud-storage.nix`;
+`code_mode/bundle/build.sh` does the work). Its path is meant to reach the
+agent harness as `CODE_MODE_OCAML_DIR` (`codeModeOcamlEnv`, not wired yet):
+
+| Path | Contents |
+| --- | --- |
+| `lib/` | wasm_of_ocaml archives (`--effects=jspi`): `runtime.wasma` (with `fetch/`'s `.wat`/`.js`), stdlib, yojson, uri and its dependencies, js_of_ocaml, `macro_sdk_runtime`, `macro_sdk`, `macro_sdk_fetch`, `code_mode`, `std_exit.wasmo`; `link.txt` (link order) and `shapes.txt` (`--load-shape` list) |
+| `cmi/` | the interfaces a program may use: the SDK, its runtime, yojson, uri, `Macro_sdk_fetch`, `Code_mode` (not js_of_ocaml) |
+| `stdlib/` | the standard library's `.cmi` files (`ocamlc -nostdlib -I stdlib`) |
+| `assets/` | the library modules as `wasm_of_ocaml link` names them (`<library>-<content hash>.wasm`, the same for every program), served to every program's loader |
+| `bin/` | `ocamlc`, `wasm_of_ocaml`, `wasm-opt`, `wasm-merge`, `wasm-metadce` |
+| `findlib/` | the one findlib package (`stdlib`) wasm_of_ocaml looks up at start (`OCAMLFIND_CONF`) |
+| `compile.sh` | the reference per-program compile |
+| `fingerprint` | `<SDK version>+<12 hex of sha256 over cmi/>`, e.g. `0.1.0+65d27fd120f3` |
+
+The fingerprint is the counterpart of the TypeScript SDK's: source that
+compiled against one fingerprint compiles against any bundle with the same
+one. Compiled Wasm belongs to the bundle (store path) that linked it. The
+SDK version is `(version ...)` in `dune-project`.
+
+Per program, `compile.sh <dir>` runs three fixed commands in `<dir>` (no
+dune, no ocamlfind), with `PATH` = `bin/` plus coreutils, `TMPDIR` = `<dir>`,
+and `/bin/sh` present (wasm_of_ocaml runs binaryen through it):
+
+```sh
+ocamlc -nostdlib -I $B/stdlib -I $B/cmi -c main.ml
+wasm_of_ocaml compile --effects=jspi --no-sourcemap -o main.wasmo main.cmo --load-shape $B/lib/<each of shapes.txt>
+wasm_of_ocaml link --no-sourcemap -o main.js $B/lib/<each of link.txt> main.wasmo $B/lib/std_exit.wasmo
+```
+
+then deletes the copies of `assets/` from `main.assets/`, leaving `main.js`,
+`main.assets/main-*.wasm`, `start-*.wasm` and `_link_info.wasm`. The loader
+reads the rest from `assets/` (see `code_mode/test/run.mjs`, which loads it
+without CommonJS or env access).
+
+`nix build .#checks.x86_64-linux.code-mode-ocaml-sample` (CI: `OCaml SDK
+Check`) compiles `code_mode/test/sample.ml` that way and runs it under Deno
+2.9.6 with code mode's flags against a stand-in API
+(`code_mode/bundle/check.sh`, which prints the timings). On big-pickle,
+2026-11-16, median of 11 cold runs: compile 82 ms, spawn to `Code_mode.run`
+97 ms, whole run with one call 115 ms. The bundle's closure is 149 MiB
+(binaryen 50, glibc 34, the bundle itself 51: `ocamlc` and `wasm_of_ocaml`
+copied, with their references to the OCaml installation removed, which
+would otherwise add 640 MiB).
 
 ## How the spec maps to OCaml
 

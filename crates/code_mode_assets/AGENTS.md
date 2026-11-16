@@ -27,7 +27,18 @@ A failed run or a missing file fails the build; there is no stale fallback.
 
 - Owns: building and embedding the assets.
 - Not here: the generator (`packages/code-mode-sdk`), process isolation
-  (`crates/code_execution`), documentation selection (`crates/agent_code_mode`).
+  (`crates/code_execution`), documentation selection (`crates/agent_code_mode`),
+  the OCaml SDK bundle for OCaml programs (below).
+
+## OCaml bundle
+
+OCaml programs (not wired yet) compile against a second, run-time asset
+directory: the `code-mode-ocaml` flake package (`codeModeOcaml` next to
+`codeModeAssets` in `nix/cloud-storage.nix`), whose path
+`codeModeOcamlEnv` names `CODE_MODE_OCAML_DIR`. Unlike these assets it is
+read at run time, not embedded: Wasm modules, `.cmi` files, `ocamlc`,
+`wasm_of_ocaml`, binaryen and a `fingerprint` file. Its layout, commands
+and checks are in `packages/sdk-ocaml/README.md` ("Code mode bundle").
 
 ## Checks
 

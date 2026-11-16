@@ -4,9 +4,11 @@
 
 The OCaml client for the Macro API: `macro_sdk` (types, codecs and sans-IO
 request builders for every operation in `../sdk/specs`), `macro_sdk_eio`
-(the cohttp-eio transport) and `macro_sdk_fetch` (`fetch/`, the
-WebAssembly transport over JavaScript's `fetch`, for code mode). The OCaml
-counterpart of `../sdk/generated`.
+(the cohttp-eio transport), `macro_sdk_fetch` (`fetch/`, the
+WebAssembly transport over JavaScript's `fetch`, for code mode) and
+`code_mode` (`code_mode/`, the code-mode program contract and the prebuilt
+Wasm bundle programs compile against). The OCaml counterpart of
+`../sdk/generated`.
 
 ## How it works
 
@@ -23,15 +25,19 @@ encoding) and hands the reply to `interpret`.
 - `runtime/request.ml`, `runtime/config.ml`: the request type, hosts, auth.
 - `fetch/macro_sdk_fetch.mli`: the Wasm transport and its contract with the
   `fetch` it calls.
+- `code_mode/code_mode.mli`: the program contract and the bootstrap's side.
+- `code_mode/bundle/build.sh`, `compile.sh`: code mode's bundle and the
+  per-program compile (README "Code mode bundle").
 
 ## Scope
 
 - Owns: the generator, the runtime, the Eio and fetch transports,
-  `generated/`.
+  `code_mode`, the code-mode bundle's build (`code_mode/bundle/`; the nix
+  derivation is `codeModeOcaml` in `nix/cloud-storage.nix`), `generated/`.
 - Not here: the specs (`../sdk/specs`, synced by `../sdk`); hand-written
   entity APIs like the TypeScript SDK's `src/` (none yet); code mode's
-  OCaml compile step, bootstrap and prebuilt Wasm bundle
-  (`crates/code_execution`, `crates/code_mode_assets`; not built yet).
+  OCaml compile step and bootstrap (`crates/code_execution`; not built
+  yet).
 
 ## Recipes
 
@@ -46,9 +52,13 @@ encoding) and hands the reply to `interpret`.
 
 - `nix-shell shell.nix --run "dune build && dune test"` (from this directory).
   CI runs the same as `OCaml SDK Check` (`tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs`).
-- `fetch/` changed: `nix-shell shell.nix --run "dune build --profile wasm
-  --build-dir _build_wasm @fetch/runtest"` (Deno tests; CI runs it after
-  the native checks).
+- `fetch/` or `code_mode/` changed: `nix-shell shell.nix --run "dune build
+  --profile wasm --build-dir _build_wasm @fetch/runtest @code_mode/runtest"`
+  (Deno tests; CI runs it after the native checks).
+- The bundle or anything it builds changed: `nix build --no-link -L
+  .#checks.x86_64-linux.code-mode-ocaml-sample` from the repository root
+  (CI runs it too); it prints compile time and startup. New files must be
+  `git add`ed first: the flake sees only tracked files.
 - `dune fmt` for hand-written code.
 
 ## Gotchas
@@ -59,8 +69,17 @@ encoding) and hands the reply to `interpret`.
   into `(** *)` comments.
 - Tests read `../sdk/specs` and `../sdk/src/config.ts` through
   `DUNE_SOURCEROOT`, outside this dune project, so those rules always rerun.
-- `fetch/` builds only in the `wasm` profile (`enabled_if`); never make
-  native `dune build` depend on js_of_ocaml or wasm_of_ocaml.
+- `fetch/` and `code_mode/` build only in the `wasm` profile
+  (`enabled_if`); never make native `dune build` depend on js_of_ocaml or
+  wasm_of_ocaml.
+- `globalThis.__macroCodeMode` (`code_mode.mli`) is the contract with code
+  mode's bootstrap; `code_mode/test/run.mjs` plays that side. Change them
+  together.
+- The bundle's runtime additions (`fetch/*.wat`, `fetch/await.js`) are
+  listed again in `code_mode/bundle/build.sh`; a new one goes in both.
+- A new library a program may use: its `.cmi` files in `build.sh`'s `cmi/`
+  copy and its archive in the link order. Never put js_of_ocaml's `.cmi`
+  files there: programs must not name the JavaScript interop.
 - `macroSdkOperation` on the `fetch` init is the contract with code mode's
   bootstrap (`crates/code_execution/src/outbound/deno/bootstrap.mjs`, which
   reads it once OCaml programs run there); change both together. `fetch/test/` checks `sdk_method` against
