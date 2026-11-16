@@ -1,6 +1,9 @@
 /**
  * A point in the document whose on-screen position should survive a reflow.
- * `top` is its viewport offset when captured; `measure` reads it again.
+ * `top` is its offset from the scroller's top edge when captured; `measure`
+ * reads it again. Measuring from the scroller rather than the viewport keeps
+ * the anchor valid when the scroller itself moves, as a split does when the
+ * split above it closes.
  */
 export type ScrollAnchor = {
   top: number;
@@ -10,6 +13,24 @@ export type ScrollAnchor = {
 function rangeTop(range: Range): number | undefined {
   const rect = range.getClientRects()[0];
   return rect?.top;
+}
+
+/** An anchor at viewport offset `top`, measured from the scroller's top edge. */
+function relativeTo(
+  scroller: HTMLElement,
+  view: DOMRect,
+  top: number,
+  measure: () => number | undefined
+): ScrollAnchor {
+  return {
+    top: top - view.top,
+    measure: () => {
+      const current = measure();
+      return current === undefined
+        ? undefined
+        : current - scroller.getBoundingClientRect().top;
+    },
+  };
 }
 
 function caretRangeAt(doc: Document, x: number, y: number): Range | undefined {
@@ -32,6 +53,8 @@ export function captureScrollAnchor(
 ): ScrollAnchor | undefined {
   const view = scroller.getBoundingClientRect();
   const isOnScreen = (top: number) => top >= view.top && top <= view.bottom;
+  const anchorAt = (top: number, measure: () => number | undefined) =>
+    relativeTo(scroller, view, top, measure);
 
   const selection = editorRoot.ownerDocument.getSelection();
   if (selection && selection.rangeCount > 0) {
@@ -40,11 +63,13 @@ export function captureScrollAnchor(
       ? rangeTop(range)
       : undefined;
     if (top !== undefined && isOnScreen(top)) {
-      return { top, measure: () => rangeTop(range) };
+      return anchorAt(top, () => rangeTop(range));
     }
   }
 
-  for (const block of editorRoot.children) {
+  const blocks = editorRoot.children;
+  for (let i = firstBlockBelow(blocks, view.top); i < blocks.length; i++) {
+    const block = blocks[i]!;
     const rect = block.getBoundingClientRect();
     if (rect.bottom <= view.top) continue;
     if (rect.top >= view.bottom) return undefined;
@@ -58,16 +83,31 @@ export function captureScrollAnchor(
       );
       if (range && block.contains(range.startContainer)) {
         const top = rangeTop(range);
-        if (top !== undefined) return { top, measure: () => rangeTop(range) };
+        if (top !== undefined) return anchorAt(top, () => rangeTop(range));
       }
     }
-    return {
-      top: rect.top,
-      measure: () =>
-        block.isConnected ? block.getBoundingClientRect().top : undefined,
-    };
+    return anchorAt(rect.top, () =>
+      block.isConnected ? block.getBoundingClientRect().top : undefined
+    );
   }
   return undefined;
+}
+
+/**
+ * The index of the first block whose bottom is below `top`. Blocks are laid
+ * out in document order, so a binary search finds it without measuring every
+ * block above the viewport, which matters when this runs as the reader scrolls
+ * a long document.
+ */
+function firstBlockBelow(blocks: HTMLCollection, top: number) {
+  let low = 0;
+  let high = blocks.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (blocks[middle]!.getBoundingClientRect().bottom <= top) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 /** Scrolls so the anchor is back at the viewport offset it was captured at. */
@@ -115,11 +155,9 @@ export function captureElementScrollAnchor(
 
   return {
     scroller,
-    anchor: {
-      top,
-      measure: () =>
-        element.isConnected ? element.getBoundingClientRect().top : undefined,
-    },
+    anchor: relativeTo(scroller, view, top, () =>
+      element.isConnected ? element.getBoundingClientRect().top : undefined
+    ),
   };
 }
 
@@ -166,4 +204,57 @@ export function holdScrollAnchor(scroller: HTMLElement, anchor: ScrollAnchor) {
   activeHolds.set(scroller, release);
 
   restore();
+}
+
+/**
+ * Keeps the reader's place when the scroller changes width. Text rewraps under
+ * an unchanged scrollTop when a neighbouring split closes or opens, and WebKit
+ * has no CSS scroll anchoring to correct it. Where the browser does anchor,
+ * this takes over for width changes, so every engine keeps the same text in
+ * view. The anchor is taken as the reader scrolls, and again when the content
+ * changes height at the same width (an edit or an image loading above), because
+ * by the time a width change is observed the content has already reflowed.
+ * A hold already running on the scroller (the clicked element when a new split
+ * opens) is left alone. Returns the cleanup.
+ */
+export function keepScrollAnchorOnResize(
+  scroller: HTMLElement,
+  capture: () => ScrollAnchor | undefined
+): () => void {
+  let anchor: ScrollAnchor | undefined;
+  let frame: number | undefined;
+  let width = scroller.getBoundingClientRect().width;
+
+  const recapture = () => {
+    if (frame !== undefined) return;
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      anchor = capture();
+    });
+  };
+
+  const observer = new ResizeObserver(() => {
+    const next = scroller.getBoundingClientRect().width;
+    // A hidden split measures zero; keep the anchor for when it comes back.
+    if (next === 0) return;
+    if (next === width) {
+      recapture();
+      return;
+    }
+    width = next;
+    if (!anchor || scroller.scrollTop === 0 || activeHolds.has(scroller)) {
+      return;
+    }
+    holdScrollAnchor(scroller, anchor);
+  });
+
+  scroller.addEventListener('scroll', recapture, { passive: true });
+  observer.observe(scroller);
+  for (const child of scroller.children) observer.observe(child);
+
+  return () => {
+    scroller.removeEventListener('scroll', recapture);
+    observer.disconnect();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  };
 }

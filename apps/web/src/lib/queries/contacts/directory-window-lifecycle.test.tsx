@@ -236,3 +236,64 @@ it('does not retry authorization failures, but hydration refreshes a recovered l
   expect(window!.data()?.source).toBe('cache');
   client.clear();
 });
+
+it('keeps its window key through a refresh of the same page and changes it for the next page', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  let changed: CacheChangeListener | undefined;
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheChanged: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  };
+  const reader = vi.fn<typeof readContactDirectory>().mockImplementation(
+    async (user, _host, request): Promise<ContactDirectoryPage> => ({
+      source: 'cache',
+      sync: 'snapshot',
+      offline: false,
+      query: request.query,
+      users: [],
+      nextCursor: request.cursor
+        ? null
+        : {
+            source: 'people',
+            userId: user,
+            query: request.query,
+            generation: 'db',
+            after: 'page-two-cursor',
+            policyKey: hashKey([request.policy]),
+          },
+    })
+  );
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  function Harness() {
+    window = createContactDirectoryWindow(
+      () => ({ userId: 'viewer', host }),
+      reader
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(300);
+  const firstPage = window!.windowKey();
+  expect(firstPage).toBeDefined();
+
+  changed!(parseCacheRevision('1'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledTimes(2);
+  expect(window!.windowKey()).toBe(firstPage);
+
+  await window!.loadNext();
+  await vi.advanceTimersByTimeAsync(300);
+  expect(window!.windowKey()).toBeDefined();
+  expect(window!.windowKey()).not.toBe(firstPage);
+  client.clear();
+});

@@ -107,6 +107,10 @@ export class ConnectedApp {
   /**
    * The tools this app serves, with each one's description and argument
    * schema. Read a tool's `inputSchema` before calling it.
+   *
+   * @readonly
+   * @openworld
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   async tools(): Promise<ConnectedTool[]> {
     const records = unwrap(
@@ -119,7 +123,12 @@ export class ConnectedApp {
     );
   }
 
-  /** @internal The harness route that names this app. */
+  /**
+   * @internal The harness route that names this app.
+   *
+   * @readonly
+   * @mcp-exclude Internal route helper.
+   */
   path() {
     return {
       session_id: this.execution.session().id,
@@ -174,6 +183,10 @@ export class ConnectedTool {
    * or whose connection expired, answers with `isError` and text telling you
    * what to say to the user, including any connect markup to put in your
    * reply verbatim.
+   *
+   * @destructive
+   * @openworld
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   async call(args: Record<string, unknown> = {}): Promise<ConnectedToolResult> {
     const result: ConnectedToolResultRecord = unwrap(

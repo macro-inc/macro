@@ -69,7 +69,10 @@ fn retired_tools_are_generated_but_no_host_offers_them() {
         .into_iter()
         .map(|entry| entry.name)
         .collect();
-    assert_eq!(retired, ["ReadChat", "ReadThread"]);
+    assert_eq!(
+        retired,
+        ["ReadChat", "ReadThread", "Subagent", "ReadActivity"]
+    );
 
     let json = crate::all_tool_frontend_schemas()
         .to_json_pretty()
@@ -99,7 +102,7 @@ fn retired_tools_are_generated_but_no_host_offers_them() {
             );
         }
         assert!(
-            !crate::subagent_toolset().tools.contains_key(name),
+            !crate::base_toolset().tools.contains_key(name),
             "{name}"
         );
         assert!(!crate::database_tools().tools.contains_key(name), "{name}");

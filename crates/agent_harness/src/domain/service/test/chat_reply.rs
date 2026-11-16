@@ -508,6 +508,7 @@ mod elicitation {
                     action_id: None,
                     actor: Some(sender()),
                     context: None,
+                    client: None,
                 })),
             )
             .await

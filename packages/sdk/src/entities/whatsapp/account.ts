@@ -38,7 +38,11 @@ export class WhatsAppAccount extends MacroEntity<WhatsAppAccountRecord> {
     User.byId(this.client, id),
   );
 
-  /** Discard cached connection state and load its current value. */
+  /**
+   * Discard cached connection state and load its current value.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

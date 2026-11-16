@@ -6,7 +6,7 @@
 //! [`PhantomTool`](ai_toolset::schema::PhantomTool) under the tool's name.
 //! Its generated TypeScript and web card then keep working while no host can
 //! call it.
-use crate::schemas::read;
+use crate::schemas::{read, read_activity, subagent};
 use crate::{ToolChatService, ToolEntityAccessService};
 use ai_toolset::schema::{FrontendToolEntry, ToolSchemaGenerator};
 use schemars::{JsonSchema, SchemaGenerator};
@@ -21,9 +21,11 @@ pub(super) struct RetiredTools;
 
 impl ToolSchemaGenerator for RetiredTools {
     fn register_schemas(&self, generator: &mut SchemaGenerator) -> Vec<FrontendToolEntry> {
-        let retired: [&dyn ToolSchemaGenerator; 2] = [
+        let retired: [&dyn ToolSchemaGenerator; 4] = [
             &chat::inbound::toolset::chat_toolset::<ToolChatService, ToolEntityAccessService>(),
             &read::read_thread(),
+            &subagent::subagent(),
+            &read_activity::read_activity(),
         ];
         retired
             .into_iter()

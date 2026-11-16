@@ -1,5 +1,5 @@
-# Databases are not Soup entities: ask only for the outcome, not the Soup
-# effects whose hydration would fail.
+# Databases are not Soup entities: ask only for the outcome. They have no Soup
+# record for an effect to patch.
 fragment DatabaseEntityMutationResultFields on GraphqlEntityMutationResult {
   __typename
   ... on GraphqlMutationError {

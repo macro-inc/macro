@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import {
   type ConnectedCalendarAccount,
   ConnectedCalendars,
@@ -7,6 +8,7 @@ import { useCalendarPreferences } from '../../calendar/utils/preferences';
 /** Exercises the production controls and persisted preferences without OAuth or real accounts. */
 export function FixtureCalendars(props: { notify: (message: string) => void }) {
   const [preferences, setPreferences] = useCalendarPreferences();
+  const [notBusy, setNotBusy] = createSignal<string[]>(['fixture-holidays']);
   const accounts: ConnectedCalendarAccount[] = [
     {
       id: 'fixture-pending',
@@ -92,6 +94,16 @@ export function FixtureCalendars(props: { notify: (message: string) => void }) {
       accountColor={(id) => preferences.accountColors[id]}
       onSourceColor={(id, color) => setPreferences('sourceColors', id, color)}
       onAccountColor={(id, color) => setPreferences('accountColors', id, color)}
+      countsAsBusy={(id) => !notBusy().includes(id)}
+      onCountsAsBusyChange={(id, counts) =>
+        setNotBusy((current) =>
+          counts
+            ? current.filter((other) => other !== id)
+            : [...current.filter((other) => other !== id), id]
+        )
+      }
+      busyError={false}
+      onBusyRetry={() => {}}
     />
   );
 }

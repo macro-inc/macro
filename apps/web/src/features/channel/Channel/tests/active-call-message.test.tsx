@@ -13,21 +13,30 @@ import { ChannelTabProvider } from '../ChannelTabContext';
 vi.mock('@channel/Call/use-call', () => ({
   useCall: (_channelId: () => string, options?: { onJoin?: () => void }) => ({
     isInThisChannel: () => false,
+    isJoining: () => false,
     joinCall: async () => options?.onJoin?.(),
   }),
 }));
 
 vi.mock('@queries/call/call', () => ({
   useActiveCallQuery: () => ({
-    data: { createdAt: '2026-09-25T14:00:00.000Z' },
+    isSuccess: true,
+    data: { callId: 'call-1', createdAt: '2026-09-25T14:00:00.000Z' },
+  }),
+  useLiveCallRecordQuery: () => ({
+    isSuccess: true,
+    data: { participants: [] },
   }),
 }));
+
+vi.mock('@core/component/UserGroup', () => ({ UserGroup: () => null }));
 
 vi.mock('@icon/system/regular/phone-call.svg', () => ({
   default: () => <span aria-hidden="true" />,
 }));
 
 vi.mock('@ui', () => ({
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
   Button: (props: {
     children: JSX.Element;
     disabled?: boolean;

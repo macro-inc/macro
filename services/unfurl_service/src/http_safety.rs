@@ -5,7 +5,7 @@ use futures::StreamExt;
 use reqwest::StatusCode;
 use std::error::Error;
 use std::fmt;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use url::Url;
 
@@ -30,6 +30,7 @@ impl SsrfSafeHttpClient {
             .connect_timeout(CONNECT_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .dns_resolver(Arc::new(PrivateIpFilteringResolver))
+            .no_proxy()
             .build()
             .map(Self)
     }
@@ -132,7 +133,7 @@ pub async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
         .map_err(FetchError::DnsLookupFailed)?;
 
     for addr in addrs {
-        if is_private_ip(&addr.ip()) {
+        if is_non_public_ip(&addr.ip()) {
             tracing::warn!(host, ip = %addr.ip(), "blocked request to private/internal IP");
             return Err(FetchError::PrivateIp);
         }
@@ -141,25 +142,72 @@ pub async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn is_private_ip(ip: &IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-        }
-        IpAddr::V6(v6) => {
-            if let Some(mapped_v4) = v6.to_ipv4_mapped() {
-                return is_private_ip(&IpAddr::V4(mapped_v4));
-            }
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6.is_unique_local()
-                || v6.is_unicast_link_local()
-        }
+pub fn is_non_public_ip(ip: &IpAddr) -> bool {
+    match *ip {
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => match embedded_ipv4(v6) {
+            Some(embedded) => is_blocked_ipv4(embedded),
+            None => is_blocked_ipv6(v6),
+        },
     }
+}
+
+fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
+    let [first, second, third, _] = ip.octets();
+
+    // 0.0.0.0/8: "this network".
+    first == 0
+        || ip.is_private()
+        || ip.is_loopback()
+        // 169.254.0.0/16, including the 169.254.169.254 metadata service.
+        || ip.is_link_local()
+        // 100.64.0.0/10: carrier-grade NAT and Tailscale.
+        || (first == 100 && (second & 0xc0) == 64)
+        // 192.0.0.0/24: IETF protocol assignments.
+        || (first == 192 && second == 0 && third == 0)
+        // 198.18.0.0/15: benchmarking.
+        || (first == 198 && (second & 0xfe) == 18)
+        || ip.is_documentation()
+        || ip.is_multicast()
+        // 240.0.0.0/4 reserved, and the broadcast address.
+        || first >= 240
+}
+
+fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+
+    // Only global unicast (2000::/3) is public. Outside it are loopback,
+    // multicast, unique-local (including the fd00:ec2::254 metadata
+    // service), link-local, local-use NAT64, and the unassigned space.
+    (segments[0] & 0xe000) != 0x2000
+        // 2001::/32: Teredo, which tunnels to an obfuscated IPv4 address.
+        || (segments[0] == 0x2001 && segments[1] == 0)
+        // 2001:db8::/32 and 3fff::/20: documentation.
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || (segments[0] == 0x3fff && (segments[1] & 0xf000) == 0)
+}
+
+/// The IPv4 address an IPv6 address carries: IPv4-mapped (`::ffff:0:0/96`),
+/// NAT64 (`64:ff9b::/96`), IPv4-compatible (`::/96`), or 6to4 (`2002::/16`).
+fn embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    if let Some(mapped) = ip.to_ipv4_mapped() {
+        return Some(mapped);
+    }
+
+    let segments = ip.segments();
+    let low_bits = Ipv4Addr::from((u32::from(segments[6]) << 16) | u32::from(segments[7]));
+
+    if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] || segments[..6] == [0; 6] {
+        return Some(low_bits);
+    }
+
+    if segments[0] == 0x2002 {
+        return Some(Ipv4Addr::from(
+            (u32::from(segments[1]) << 16) | u32::from(segments[2]),
+        ));
+    }
+
+    None
 }
 
 pub async fn send_request(

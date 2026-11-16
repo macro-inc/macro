@@ -27,12 +27,20 @@ export class AgentInvocation {
     return new AgentInvocation(client, session, id);
   }
 
-  /** The session that owns this invocation. */
+  /**
+   * The session that owns this invocation.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return this.parent;
   }
 
-  /** Recorded activity caused by this invocation, lazily paginated. */
+  /**
+   * Recorded activity caused by this invocation, lazily paginated.
+   *
+   * @readonly
+   */
   activity(options: Omit<AgentActivityOptions, 'invocation'> = {}) {
     return sessionActivity(this.client, this.parent, {
       ...options,

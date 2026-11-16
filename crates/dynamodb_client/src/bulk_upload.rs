@@ -5,7 +5,7 @@ use aws_sdk_dynamodb::{
 };
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
-    UploadFolderStatus,
+    UploadFolderProgress, UploadFolderStatus,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -15,6 +15,9 @@ const REQUEST_PK_PREFIX: &str = "REQUEST#";
 const REQUEST_SK: &str = "META";
 const DOCUMENT_SK_PREFIX: &str = "DOCUMENT#";
 const UNZIP_REQUEST_ENTITY_TYPE: &str = "BulkUploadZipRequest";
+const FILES_TOTAL: &str = "files_total";
+const FILES_STORED: &str = "files_stored";
+const FILES_FAILED: &str = "files_failed";
 
 pub async fn create_bulk_upload_request(
     client: &Client,
@@ -142,11 +145,11 @@ pub async fn update_bulk_upload_request_status(
     Ok(())
 }
 
-pub async fn get_bulk_upload_request(
+pub async fn find_bulk_upload_request(
     client: &Client,
     table: &str,
     request_id: &str,
-) -> anyhow::Result<BulkUploadRequest> {
+) -> anyhow::Result<Option<BulkUploadRequest>> {
     let pk = format!("{}{}", REQUEST_PK_PREFIX, request_id);
 
     let result = client
@@ -158,14 +161,56 @@ pub async fn get_bulk_upload_request(
         .await
         .map_err(map_sdk_err)?;
 
-    let item = result.item().ok_or_else(|| {
-        error!("Bulk upload request not found: {}", request_id);
-        anyhow::anyhow!("Bulk upload request not found: {}", request_id)
-    })?;
+    result.item().map(get_request_for_item).transpose()
+}
 
-    let request = get_request_for_item(item)?;
+pub async fn get_bulk_upload_request(
+    client: &Client,
+    table: &str,
+    request_id: &str,
+) -> anyhow::Result<BulkUploadRequest> {
+    find_bulk_upload_request(client, table, request_id)
+        .await?
+        .ok_or_else(|| {
+            error!("Bulk upload request not found: {}", request_id);
+            anyhow::anyhow!("Bulk upload request not found: {}", request_id)
+        })
+}
 
-    Ok(request)
+pub async fn update_bulk_upload_request_progress(
+    client: &Client,
+    table: &str,
+    request_id: &str,
+    progress: UploadFolderProgress,
+) -> anyhow::Result<()> {
+    let pk = format!("{}{}", REQUEST_PK_PREFIX, request_id);
+    let number = |value: u32| AttributeValue::N(value.to_string());
+
+    client
+        .update_item()
+        .table_name(table)
+        .key("PK", AttributeValue::S(pk))
+        .key("SK", AttributeValue::S(REQUEST_SK.to_string()))
+        .update_expression(
+            "SET #files_total = :files_total, #files_stored = :files_stored, \
+             #files_failed = :files_failed, #updated_at = :updated_at",
+        )
+        .expression_attribute_names("#files_total", FILES_TOTAL)
+        .expression_attribute_names("#files_stored", FILES_STORED)
+        .expression_attribute_names("#files_failed", FILES_FAILED)
+        .expression_attribute_names("#updated_at", "updated_at")
+        .expression_attribute_values(":files_total", number(progress.files_total))
+        .expression_attribute_values(":files_stored", number(progress.files_stored))
+        .expression_attribute_values(":files_failed", number(progress.files_failed))
+        .expression_attribute_values(
+            ":updated_at",
+            AttributeValue::S(chrono::Utc::now().to_rfc3339()),
+        )
+        .send()
+        .await
+        .map_err(map_sdk_err)?;
+
+    Ok(())
 }
 
 pub async fn get_bulk_upload_document_statuses(
@@ -403,7 +448,23 @@ fn get_request_for_item(
             .get("parent_id")
             .and_then(|v| v.as_s().ok())
             .map(|s| s.to_string()),
+        progress: get_progress_for_item(item),
     };
 
     Ok(request)
+}
+
+/// Progress is written only once the extractor has counted the files.
+fn get_progress_for_item(item: &HashMap<String, AttributeValue>) -> Option<UploadFolderProgress> {
+    let count = |name: &str| {
+        item.get(name)
+            .and_then(|v| v.as_n().ok())
+            .and_then(|n| n.parse::<u32>().ok())
+    };
+
+    Some(UploadFolderProgress {
+        files_total: count(FILES_TOTAL)?,
+        files_stored: count(FILES_STORED).unwrap_or_default(),
+        files_failed: count(FILES_FAILED).unwrap_or_default(),
+    })
 }

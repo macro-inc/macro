@@ -1,6 +1,34 @@
 use super::*;
 use harness_id::HarnessId;
 
+#[tokio::test]
+async fn closing_stdin_stops_an_embedded_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, false);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_ready());
+}
+
+#[tokio::test]
+async fn closing_stdin_does_not_stop_a_managed_system_service() {
+    use std::future::Future as _;
+    use std::task::Poll;
+
+    let (reader, writer) = tokio::io::duplex(1);
+    drop(writer);
+    let closed = stdin_closed(reader, true);
+    tokio::pin!(closed);
+
+    let state = std::future::poll_fn(|cx| Poll::Ready(closed.as_mut().poll(cx))).await;
+    assert!(state.is_pending());
+}
+
 #[test]
 fn creates_a_config_from_setup_flags() {
     let directory = tempfile::tempdir().expect("temp dir");
@@ -13,7 +41,9 @@ fn creates_a_config_from_setup_flags() {
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace.clone()),
         },
@@ -38,7 +68,9 @@ fn reconfigures_without_dropping_credentials() {
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace),
         },
@@ -49,6 +81,7 @@ fn reconfigures_without_dropping_credentials() {
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_test_secret".to_owned(),
+        pairing_id: None,
     };
     ConfigForm::load(&path)
         .expect("load form")
@@ -59,7 +92,9 @@ fn reconfigures_without_dropping_credentials() {
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(moved.clone()),
         },
@@ -75,13 +110,74 @@ fn reconfigures_without_dropping_credentials() {
 }
 
 #[test]
+fn reconfiguring_drops_settings_older_releases_wrote() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    let workspace = directory.path().join("workspace");
+    std::fs::write(
+        &path,
+        format!(
+            r#"[identity]
+name = "laptop"
+allow_permission_bypass = true
+
+[server]
+port = 8080
+
+[credentials]
+harness_id = "{harness_id}"
+token = "mhns_test_secret"
+scope = "personal"
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "{workspace}"
+"#,
+            harness_id = HarnessId::TEST_A,
+            workspace = workspace.display(),
+        ),
+    )
+    .expect("write old config");
+    assert!(Config::load(&path).is_err());
+
+    configure(
+        &path,
+        &ServiceOptions {
+            ignore_stdin_eof: false,
+            config: None,
+            profile: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace.clone()),
+        },
+        Some(agent_catalog::custom("hermes acp").expect("custom agent")),
+    )
+    .expect("reconfigure an old config");
+
+    let config = Config::load(&path).expect("load migrated config");
+    assert_eq!(
+        config.credentials,
+        Some(HarnessCredentials {
+            harness_id: HarnessId::TEST_A,
+            token: "mhns_test_secret".to_owned(),
+            pairing_id: None,
+        })
+    );
+    assert_eq!(config.workspace.path, workspace);
+}
+
+#[test]
 fn creating_a_config_requires_an_agent() {
     let directory = tempfile::tempdir().expect("temp dir");
     let path = directory.path().join("macrod.toml");
     let error = configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
+            profile: None,
             agent: None,
             workspace: Some(directory.path().to_owned()),
         },

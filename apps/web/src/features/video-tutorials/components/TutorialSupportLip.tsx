@@ -19,7 +19,7 @@ export function TutorialSupportLip(props: {
   onSelect: () => void;
 }) {
   return (
-    <div class="-mt-1 flex min-h-10 shrink-0 flex-wrap items-center justify-center px-4 pb-1 text-center text-sm text-ink-muted mobile:mt-0 mobile:pt-2">
+    <div class="-mt-1 flex min-h-10 shrink-0 flex-wrap items-center justify-center px-4 pb-1 text-center text-sm text-ink-muted">
       {/* Decorative: they show there are real people in the channel. The
           separator rings take the dialog's surface, as the live viewers'
           take the header's. */}

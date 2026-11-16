@@ -4,9 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupInitiativeSoupPropertiesFieldAllOfTwoAppearance } from './soupInitiativeSoupPropertiesFieldAllOfTwoAppearance';
 import type { SoupInitiativeSoupPropertiesFieldAllOfTwoViewedAt } from './soupInitiativeSoupPropertiesFieldAllOfTwoViewedAt';
 
 export type SoupInitiativeSoupPropertiesFieldAllOfTwo = {
+  appearance?: SoupInitiativeSoupPropertiesFieldAllOfTwoAppearance;
   /** Creation timestamp. */
   createdAt: string;
   /** Initiative identifier. */

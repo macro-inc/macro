@@ -62,6 +62,7 @@ async fn a_withdrawn_bypass_reaches_a_live_session_before_its_next_prompt() {
                 action: permission_answer("after", "once"),
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await

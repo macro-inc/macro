@@ -24,6 +24,8 @@ export type ConnectionGatewayWebsocket = Websocket<
 export type FromWebsocketMessage = {
   type: string;
   data: any;
+  /** W3C trace context of the request that sent the frame, when it had one. */
+  trace?: Record<string, string>;
 };
 
 export const connectionGatewaySessionTelemetry =

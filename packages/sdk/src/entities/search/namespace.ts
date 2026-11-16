@@ -113,6 +113,8 @@ export class SearchNamespace {
   /**
    * One bounded page of matches across every kind of item, most relevant
    * first; resume with `nextCursor` and the same options.
+   *
+   * @readonly
    */
   async page(
     query: string,
@@ -130,6 +132,8 @@ export class SearchNamespace {
   /**
    * Every match across every kind of item, most relevant first, auto-paginated.
    * Break a `for await` loop to stop; no further page is fetched.
+   *
+   * @readonly
    */
   async *all(
     query: string,

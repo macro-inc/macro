@@ -24,6 +24,8 @@ HTML worker belong to `packages/sdk-docs`.
   entity. Agents route on the sentence; the guide is how that area works,
   inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
+- The bundled SDK adds its hand-assigned display verb to each generated call
+  when code mode enables the verb header in the bootstrap.
 
 ## Tool contracts
 
