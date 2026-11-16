@@ -1,0 +1,927 @@
+.config/hakari.toml
+  s_695cafe799631b::t_0d394183354e76 127-131
+.github/workflows/web-app-check-main.yml
+  s_695cafe799631b::t_73ff56d49bba34 44-45,77-78
+.github/workspace-dep-closures.json
+  s_695cafe799631b::t_84befb51e45f17 133,135-137,143-146,148,154,160-161,164,167-172,174,2929,6223,13504-13510,13576
+.sqlx/query-02e9f0d2bd0a0f5d72ab93c896b5a22df7fa4ada26e7615f938858a5fc99dc8b.json
+  s_695cafe799631b::t_b307e6525a27a2 1-22
+.sqlx/query-0333a760b20b3b2e52fd3958d9be5c0eae2a67f1c1fd7a1f9d310878c8e57b34.json
+  s_695cafe799631b::t_caf6bea9050730 3,39
+.sqlx/query-0b85bcf76954e92bae48e29c2589affd0c97e636e39fe92f9af8355242b56926.json
+  s_695cafe799631b::t_4d6686ba6fd1a9 1-56
+.sqlx/query-0f65091c112ee6098caf9b8d31ebbcac958e85c3e87fbaff38b1f40956759b78.json
+  s_695cafe799631b::t_d80a6692526f29 3,19-20,28
+.sqlx/query-1a0501fb980f882e39dcfcacdef136a346b7366e4645750e3ef8a9f44e4fffc1.json
+  s_695cafe799631b::t_84881400bc2b14 3,22
+.sqlx/query-1db2f63f8032caa6b64b1f1eb56272e05d982d9aced01a67e786edc82ad40217.json
+  s_695cafe799631b::t_9ef129296a06e6 1-56
+.sqlx/query-1eac6f9a88de4d4eb9981113c3d2dc01b3d92d17331b294da46f10f71ef402d0.json
+  s_695cafe799631b::t_07e96083c80cb3 1-17
+.sqlx/query-2cf08d60055acdba9cfbeedde220fbdc34e9f99d26f77d6a28e2dd561cfaa9fa.json
+  s_695cafe799631b::t_71ae9db97fce6d 1-22
+.sqlx/query-2d2c688177f7bef5f260c2ba424195d1048cc6bc69d9c6f3632e7e79988d5c8e.json
+  s_695cafe799631b::t_a1acbfacffb1f1 3,57
+.sqlx/query-4b5246f639b9f590eb36da0554e7bdfa9c31f47f6116347e4b118f555ad23a80.json
+  s_695cafe799631b::t_7763d8647163a7 3,21
+.sqlx/query-5e78ffcd6359c5435ae958d543462ecc202caa0680cf7b82e2e619a9f2425bd6.json
+  s_695cafe799631b::t_dd72112b237969 3,40
+.sqlx/query-79d92c4c4021e408090a37048555a984e174171edd4ec4b28dd0bd489906a815.json
+  s_695cafe799631b::t_433cabb6d0d5a1 3,22
+.sqlx/query-846c9960ab3610c7b6eabe02d611a752026a3e850d517f8a0a783a4e32c1e099.json
+  s_695cafe799631b::t_b347dec530e26d 3,21
+.sqlx/query-8afec1b0eff950e99084344b532fd2b795e67a8f58ff50cd0001baea7a34eee6.json
+  s_695cafe799631b::t_bd027569bdc7b8 3,40
+.sqlx/query-99701a730d2a7ecb87f1acb12761719a45079937975636713977fde9be8826e9.json
+  s_695cafe799631b::t_f0cd2c34c87036 1-24
+.sqlx/query-9a06f5e9f99698cb16eb4fd7c07031321168434a50ac147d0a0e4e01900c8c45.json
+  s_695cafe799631b::t_8ab7e72b08a900 1-30
+.sqlx/query-9b296a31e5a6cd4bb00efc0008b6c111e1151425b67aaec722dcbe74a098bd23.json
+  s_695cafe799631b::t_5ee5fbd4b3abf6 3,21
+.sqlx/query-9ca3d6ab18287a8e9cdd9f4a3cc1d9c23f1e3f629364acb6d7487a811a06bc75.json
+  s_695cafe799631b::t_315ea675996ae9 1-22
+.sqlx/query-9d54d0baef817f65cf7e79257e0f46455da4f176131f8bb3c038b3c3e176369e.json
+  s_695cafe799631b::t_5c84e9e9875349 3,33,39
+.sqlx/query-9e63c7d2027e9da369789472b4cffbffe8ed7511899e26289c3b0c2838ff82d2.json
+  s_695cafe799631b::t_04016932472889 3,22
+.sqlx/query-a4365267615aee459493223b1acdc27c5df6b5d0ca53b5f050485003ab46f2ef.json
+  s_695cafe799631b::t_0ff5f452a45f1b 3,40
+.sqlx/query-a500df8a31d459dc58950f029e96c37c0e8e14b71cca0d1c05bc605374096c66.json
+  s_695cafe799631b::t_a2f789e195f0bb 1-23
+.sqlx/query-a65726d562b05159fae5e3e774e82643926e0eb3d54e63af0d7e935ffd412045.json
+  s_695cafe799631b::t_63eded66ba92fc 3,57
+.sqlx/query-ae4f033a4eeb59f1be9eb9fe4dd0a8e52336b91d201f0348b15198d418c42c85.json
+  s_695cafe799631b::t_84df0e612697ad 1-16
+.sqlx/query-afd61220b0597737f3cbcd98b132987b19a3be7a56e9e3d86e6c18ddfd1b4c8c.json
+  s_695cafe799631b::t_a3f15dec9cac00 1-23
+.sqlx/query-b9efad9f9a18e461fe4765b55cade88aaf4ee4332fd25f3e0edba98c61f5eb27.json
+  s_695cafe799631b::t_8e832e4255540e 1-14
+.sqlx/query-ba9fdcf699f39ac9e899458dc0f3ae94ab59fbec027d7d85133979318144a085.json
+  s_695cafe799631b::t_43bf7fd1bd5a07 1-28
+.sqlx/query-c066c5a7e490d86e4e77ced466506a7ce05281110c60da96bac91056babe819d.json
+  s_695cafe799631b::t_edb8d2d314f3e6 3,45
+.sqlx/query-c2e312b4efbe4e18bf71a8fc928781867ab7065b1e26a2aea71b9b2c94908bfe.json
+  s_695cafe799631b::t_f8c72c6a4e0485 1-35
+.sqlx/query-c44d51b5b0f20a301abc4070891372c29d026f13eabc0fab91e3280c9c8ab8c3.json
+  s_695cafe799631b::t_e69ba5dc311bd6 1-40
+.sqlx/query-cfdad0fd35df267c20407bb2c0bac8ce73215b9aaf9b7e747dc582bac13d2160.json
+  s_695cafe799631b::t_07f53015c3375c 3,45
+.sqlx/query-eac774a19b3b6d29574b4284660e69db7b12e1e61d31ddc8eea32d419b5acc35.json
+  s_695cafe799631b::t_ac85cad2eeb81a 1-23
+.sqlx/query-f66cc8640ca70717be0495ac6ec03113e7a271ff3da686dcadf85c78b7bd42ed.json
+  s_695cafe799631b::t_3ce5bee9e04b9e 3,22
+.sqlx/query-f84f06705621a735406c90a9a7090312a3e2375e5800f1767f7c5e72d3de1a40.json
+  s_695cafe799631b::t_55ff1ef337e705 3,40,77
+.sqlx/query-fc856d158ab107a09036aa9648609c86a467af9d9245bd4d61249102e173d31c.json
+  s_695cafe799631b::t_752f073f6d56c9 3,13-17,33,55,60
+Cargo.lock
+  s_695cafe799631b::t_b44bde7bcd855c 79,354,780,6849,9467,15490-15519,15528,15531,15539,15543
+Cargo.toml
+  s_695cafe799631b::t_dba56e3a549076 3-5,9-10,312,358,574-578
+apps/web/AGENTS.md
+  s_695cafe799631b::t_aa3ed4cef8179d 1104,1782-1786
+apps/web/docs/graphql-normalized-cache-plan.md
+  s_695cafe799631b::t_10f254427f1596 427-439,456-457,478-479
+apps/web/justfile
+  s_695cafe799631b::t_4a35e47bb44ec5 150,153,398-415
+apps/web/package.json
+  s_695cafe799631b::t_2f932f163c9c34 16
+apps/web/src/components/ui/components/EmptyStatePanel.tsx
+  s_695cafe799631b::t_29e4563d79b465 23-24,108-114,133-143
+apps/web/src/features/block-agent/component/AgentComposer.test.tsx
+  s_695cafe799631b::t_fd207257ceb311 119-120
+apps/web/src/features/block-agent/component/AgentComposer.tsx
+  s_695cafe799631b::t_e3095973875f19 258-260
+apps/web/src/features/block-agent/context/create-queue-controller.ts
+  s_695cafe799631b::t_52e729b8f977ae 45-47,139,141,147,149
+apps/web/src/features/block-agent/debug/Gallery.tsx
+  s_695cafe799631b::t_bcae61fc616ef7 233,238-239
+apps/web/src/features/block-agent/ui/QueuedPrompts.test.tsx
+  s_695cafe799631b::t_10d44be6695268 2,12-13,310-426
+apps/web/src/features/block-agent/ui/QueuedPrompts.tsx
+  s_695cafe799631b::t_1af1a190e7b680 30,41,67-72,182,394-397,399-401,418,422-439,515-546
+apps/web/src/features/calendar-view/components/Header.tsx
+  s_695cafe799631b::t_a6aa92a2dfe4ad 326
+apps/web/src/features/calendar/components/CalendarSettingsDropdown.tsx
+  s_695cafe799631b::t_c18094952adf6c 2,17,52,60,350-353,369,373-383,385-397,400-409,412-426,428-450,452,463-464,508-510,512-513,516-523,526-528,531,533-534,539-546,549-551,554,556-557,625-626
+apps/web/src/features/calendar/components/PeriodSelector.tsx
+  s_695cafe799631b::t_2619967898a3da 1,15,208,212-217,220-223,225-226
+apps/web/src/features/calendar/components/SourceControls.test.tsx
+  s_695cafe799631b::t_114d15b873b5e7 185,190-191,193-197,200-201,203
+apps/web/src/features/calendar/components/SourceControls.tsx
+  s_695cafe799631b::t_30b13ef1af343e 5,95,132-137,139-141,149-153,155-160,163-165,173
+apps/web/src/features/calendar/components/TurnOffCalendarDialog.tsx
+  s_695cafe799631b::t_d42b80a416edb2 58-59
+apps/web/src/features/changes/debug/Gallery.tsx
+  s_695cafe799631b::t_0e6b3bfc2e7dcb 138,143-144
+apps/web/src/features/meetings/queries/meeting-teammates.test.ts
+  s_695cafe799631b::t_f1b6367e92f7e7 27
+apps/web/src/features/passwords/browser-test/vault.browser.e2e.ts
+  s_695cafe799631b::t_ce6db25694ce33 1,142-204
+apps/web/src/features/passwords/browser-test/vault.tsx
+  s_695cafe799631b::t_74498181287ced 6,12-15,98-100
+apps/web/src/features/passwords/components/import-steps.tsx
+  s_695cafe799631b::t_8e3238486772f4 1-537
+apps/web/src/features/passwords/components/new-item-menu.tsx
+  s_695cafe799631b::t_4535d32549b88c 8,24,73-78
+apps/web/src/features/passwords/components/vault-empty-state.tsx
+  s_695cafe799631b::t_76a34338aba58a 1-54
+apps/web/src/features/passwords/components/vault-sidebar.tsx
+  s_695cafe799631b::t_641f423206f668 512,528
+apps/web/src/features/passwords/context/passwords-context.tsx
+  s_695cafe799631b::t_da6d97eafb361a 1-9,17-21,37-41,83-161,179-181
+apps/web/src/features/passwords/core/import.ts
+  s_695cafe799631b::t_e5680d34c9b41b 1-276
+apps/web/src/features/passwords/primitives/import.ts
+  s_695cafe799631b::t_2d356719cd58bf 1-625
+apps/web/src/features/passwords/primitives/vault.ts
+  s_695cafe799631b::t_abcbadf2324fe1 82-83,655
+apps/web/src/features/passwords/queries/import-resume.ts
+  s_695cafe799631b::t_bc68db24f49286 1-62
+apps/web/src/features/passwords/queries/source.ts
+  s_695cafe799631b::t_9e9f6598ac4492 13-14,16,27,29-30,64,69-90,112-119,124,139-143,164,175,228-235,384-406
+apps/web/src/features/passwords/route-views.tsx
+  s_695cafe799631b::t_26641496d7ddeb 22,150-155
+apps/web/src/features/passwords/tests/fake-source.ts
+  s_695cafe799631b::t_9bd4d807e3a217 2-7,19-44,46-47,59-65,209-324
+apps/web/src/features/passwords/tests/fixture-scope.ts
+  s_695cafe799631b::t_f1b83082e34d90 1-6,21-49
+apps/web/src/features/passwords/tests/import-dialog.test.tsx
+  s_695cafe799631b::t_51be76939bdf6c 1-780
+apps/web/src/features/passwords/tests/import.test.ts
+  s_695cafe799631b::t_a398ae15ddb959 1-440
+apps/web/src/features/passwords/tests/new-item-menu.test.tsx
+  s_695cafe799631b::t_892cb92831e015 1-40
+apps/web/src/features/passwords/tests/recipients.test.ts
+  s_695cafe799631b::t_9707fcc40ee844 7
+apps/web/src/features/passwords/tests/source.test.ts
+  s_695cafe799631b::t_8f1dfda99351d6 6,485-527
+apps/web/src/features/passwords/tests/username.test.tsx
+  s_695cafe799631b::t_166ad5f6cca4df 11,63,145
+apps/web/src/features/passwords/tests/vault-empty-state.test.tsx
+  s_695cafe799631b::t_6d9d97f0dd0614 1-37
+apps/web/src/features/passwords/tests/vault.test.tsx
+  s_695cafe799631b::t_7864beb9abba6f 20,44,306,383,470,554,616,666
+apps/web/src/features/passwords/views/import-dialog.tsx
+  s_695cafe799631b::t_3f38e1ce1e39f7 1-195
+apps/web/src/features/passwords/views/vault-view.tsx
+  s_695cafe799631b::t_69a14c7f400b90 23,44-47,65,83-87,434,447-458,514-515,689,767,806-810,860-864,897-910
+apps/web/src/lib/core/password-import/.gitignore
+  s_695cafe799631b::t_01fb29186ad0fc 1
+apps/web/src/lib/core/password-import/client.ts
+  s_695cafe799631b::t_117be8a2545c7c 1-30
+apps/web/src/lib/core/password-import/limits.json
+  s_695cafe799631b::t_1bba66ec08724f 1-11
+apps/web/src/lib/core/password-import/password-import.worker.ts
+  s_695cafe799631b::t_16810fd15ce938 1-38
+apps/web/src/lib/core/password-import/types.ts
+  s_695cafe799631b::t_bad31843b272a3 1-115
+apps/web/src/lib/core/password-import/wasm-module.ts
+  s_695cafe799631b::t_5a13bbfc222474 1-42
+apps/web/src/lib/core/password-import/wire-sample.json
+  s_695cafe799631b::t_ce84126bcc5b76 1-528
+apps/web/src/lib/core/password-import/wire-sample.test.ts
+  s_695cafe799631b::t_5f0ec0b658b06e 1-156
+apps/web/src/lib/graphql-cache/host/worker-host.test.ts
+  s_695cafe799631b::t_02ea262b1f435b 142-143,1709,1711,1723-1780,1805
+apps/web/src/lib/graphql-cache/host/worker-host.ts
+  s_695cafe799631b::t_0f4a6cdcf9d65d 16,60,185-186,357-360,582-584,589-592,665,780,817-819,821-827,839-841,848,1250
+apps/web/src/lib/graphql-cache/protocol.ts
+  s_695cafe799631b::t_20f06c553a4734 979,995-1002,1085,1097-1098,1101-1113,1116
+apps/web/src/lib/graphql-cache/telemetry-otel.ts
+  s_695cafe799631b::t_168f1f17d8ec0e 31-36
+apps/web/src/lib/graphql-cache/telemetry.test.ts
+  s_695cafe799631b::t_8bd801a6a6023e 9,430-501
+apps/web/src/lib/graphql-cache/telemetry.ts
+  s_695cafe799631b::t_ef2628b8ba61c4 107,164-210,218-219,305-312,674-729,787-788
+apps/web/src/lib/graphql-cache/worker/cache-engine-runtime.ts
+  s_695cafe799631b::t_ef62ce2d1485c0 12,521
+apps/web/src/lib/graphql-cache/worker/coordinator-core.test.ts
+  s_695cafe799631b::t_2d7784ba09cc99 259,285,370
+apps/web/src/lib/graphql-cache/worker/coordinator-core.ts
+  s_695cafe799631b::t_e21183b498ac73 3,107-113,257,997-999
+apps/web/src/lib/graphql-cache/worker/coordinator-page-adapter.test.ts
+  s_695cafe799631b::t_5dbb7858952b30 370-388
+apps/web/src/lib/graphql-cache/worker/coordinator-page-adapter.ts
+  s_695cafe799631b::t_dc5ce30b9ebdc1 7,71-73,455,693-696
+apps/web/src/lib/graphql-cache/worker/coordinator-protocol.test.ts
+  s_695cafe799631b::t_dd8c84c59eac7d 219-224,229,231
+apps/web/src/lib/graphql-cache/worker/coordinator-protocol.ts
+  s_695cafe799631b::t_36cab2b94eab1f 218-219,1222-1234
+apps/web/src/lib/graphql-cache/worker/coordinator-router.test.ts
+  s_695cafe799631b::t_92c53c87169f1f 1330
+apps/web/src/lib/graphql-cache/worker/coordinator-router.ts
+  s_695cafe799631b::t_a3f836f21d5fa6 10,1050,1394-1397,1498
+apps/web/src/lib/graphql-cache/worker/worker-core.ts
+  s_695cafe799631b::t_24c36ccc78c513 33,1056,1101,1221
+apps/web/src/lib/i18n/locales/en/passwords.ts
+  s_695cafe799631b::t_0fb240d4f1263e 109-112,188-306
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_695cafe799631b::t_57ccee74bbfabe 4690-4694,4703
+apps/web/src/lib/service-clients/service-auth/generated/schemas/index.ts
+  s_695cafe799631b::t_b276708d31d876 199,204,309
+apps/web/src/lib/service-clients/service-auth/generated/schemas/patchTeamCrmSettingsResponse.ts
+  s_695cafe799631b::t_5700b6942bd8cb 9-10
+apps/web/src/lib/service-clients/service-auth/generated/schemas/patchTeamMemberCrmAccess.ts
+  s_695cafe799631b::t_06fdcf9b764f19 1-16
+apps/web/src/lib/service-clients/service-auth/generated/schemas/patchTeamRequest.ts
+  s_695cafe799631b::t_824ffeda7af381 9,20
+apps/web/src/lib/service-clients/service-auth/generated/schemas/patchTeamRequestMemberCrmAccess.ts
+  s_695cafe799631b::t_a5e1bc241a5760 1-9
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamWithMembers.ts
+  s_695cafe799631b::t_297fe2f4e74391 10,17-18
+apps/web/src/lib/service-clients/service-auth/generated/schemas/teamWithMembersCrmMemberAccess.ts
+  s_695cafe799631b::t_27fc47c79cf81b 1-11
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_695cafe799631b::t_c8f66c8ad95737 4068-4077,9398,9426-9440,9478-9488,10761,10763-10772
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_e7fba64acbc356::t_fd90d3d874e069 20962-20970
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_e7fba64acbc356::t_f824cbc1dca843 4924-4931,16657,16715-16718,16734-16744
+apps/web/src/lib/service-clients/service-storage/cache-recovery.test.ts
+  s_695cafe799631b::t_0eb0a5b331dda0 3-7,107-196
+apps/web/src/lib/service-clients/service-storage/cache-recovery.ts
+  s_695cafe799631b::t_52a863ee07c25a 3,16-27,29,37-58,60-63,67-69,71-72,75,82-85,111,116-120,123-127,133,144-149,167,176-177,183,185
+apps/web/src/lib/service-clients/service-storage/generated/schemas/crmMemberAccessResponse.ts
+  s_695cafe799631b::t_1b8802e23c0884 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/crmMemberAccessResponseTeamId.ts
+  s_695cafe799631b::t_483c7d347905a7 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_695cafe799631b::t_fce6fde684bb4f 859-860,2280-2303,2313
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportBatch.ts
+  s_695cafe799631b::t_ef3305de494534 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportBatchResult.ts
+  s_695cafe799631b::t_94d5c657acf275 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportBatchResultTargetFolderId.ts
+  s_695cafe799631b::t_2290ef3e7f0a70 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportErrorCode.ts
+  s_695cafe799631b::t_7a0709bfea801b 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportFolder.ts
+  s_695cafe799631b::t_1f088346eed542 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportFolderParentKey.ts
+  s_695cafe799631b::t_c926edc5bcbbfb 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportFolderResult.ts
+  s_695cafe799631b::t_6712884880435c 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportFormat.ts
+  s_695cafe799631b::t_8291a54e0c8e2a 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItem.ts
+  s_695cafe799631b::t_a061f7b48efc1b 1-31
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemFolderKey.ts
+  s_695cafe799631b::t_59d62883fcafec 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemResult.ts
+  s_695cafe799631b::t_a7a2890d6d16a6 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemResultErrorCode.ts
+  s_695cafe799631b::t_ac482e36bf76e9 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemResultItemId.ts
+  s_695cafe799631b::t_d51a4887bfd92d 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemTotp.ts
+  s_695cafe799631b::t_4204127d2ccd10 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportItemUrl.ts
+  s_695cafe799631b::t_8a36ffe7fffa8a 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportKey.ts
+  s_695cafe799631b::t_48355fec7cc4c2 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportOutcome.ts
+  s_695cafe799631b::t_511c4eefdd362a 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTarget.ts
+  s_695cafe799631b::t_e2f1a0125118a6 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOf.ts
+  s_695cafe799631b::t_fef582cc96a15b 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOfFive.ts
+  s_695cafe799631b::t_536eb8df7a7d32 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOfFiveKind.ts
+  s_695cafe799631b::t_ec447f909f3a36 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOfKind.ts
+  s_695cafe799631b::t_5125927a8eef0f 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOfThree.ts
+  s_695cafe799631b::t_91dba0bb8c1b72 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordImportTargetOneOfThreeKind.ts
+  s_695cafe799631b::t_4fe12025b0999a 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/passwordMatchNames.ts
+  s_695cafe799631b::t_a80d461edd783a 1-16
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_695cafe799631b::t_dc3f7ce7e2173e 9189-9205,78141-78394,78659-78760
+apps/web/src/lib/service-clients/service-storage/graphql-soup.test.ts
+  s_695cafe799631b::t_7e0f7c7dfe5ad9 482-483,487-488,492-494,1424-1465
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_695cafe799631b::t_96464b0dbc7c63 45,50,52,95-99,580-599,601-656,889-891
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_695cafe799631b::t_4ca78169c9e425 15727,26340
+apps/web/src/lib/service-clients/service-storage/graphql/notification-inbox.graphql
+  s_695cafe799631b::t_92b74de682d753 113
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_695cafe799631b::t_0ec196a8884a3f 10054-10072,24361-24471,24601-24692,38929-38944,55411-55690,55828-55842
+apps/web/tauri/Cargo.lock
+  s_695cafe799631b::t_08a43834c1d3b2 474-485,1349-1365,8002,8039,8251,8826,8829,8833,8836-8837
+apps/web/tauri/desktop-cef/Cargo.lock
+  s_695cafe799631b::t_bad8f5ad42ae4a 485-496,1419-1435,8482,8519,8730,9303,9306,9310,9312-9313
+apps/web/tauri/src-tauri/Cargo.toml
+  s_695cafe799631b::t_2412bc37dc090e 54-57,62
+apps/web/tauri/src-tauri/README.md
+  s_695cafe799631b::t_d5b99619ca4935 46-79
+apps/web/tauri/src-tauri/gen/apple/NotificationServiceExtension/Info.plist
+  s_695cafe799631b::t_4f2e6f517ad3e8 20,22
+apps/web/tauri/src-tauri/gen/apple/ShareExtension/Info.plist
+  s_695cafe799631b::t_d08782b1503c6d 20,22
+apps/web/tauri/src-tauri/gen/apple/app_iOS/Info.plist
+  s_695cafe799631b::t_700fdca7b6e3db 18,31
+apps/web/tauri/src-tauri/src/lib.rs
+  s_695cafe799631b::t_747083f4809c49 553-561
+apps/web/tauri/src-tauri/tauri.android.conf.json
+  s_695cafe799631b::t_16549455404baf 5
+crates/activity/AGENTS.md
+  s_695cafe799631b::t_e0924d804cee49 74-75
+crates/activity/Cargo.toml
+  s_695cafe799631b::t_a07672e44951eb 26,36
+crates/activity/src/domain/announcements.rs
+  s_695cafe799631b::t_019e217216db26 71-77
+crates/activity/src/domain/mod.rs
+  s_695cafe799631b::t_053837e3e83e68 15
+crates/activity/src/domain/ports.rs
+  s_695cafe799631b::t_c7229282c1a795 113-130
+crates/activity/src/domain/visible_reads.rs
+  s_695cafe799631b::t_4d06430ce7b57b 1,8-10,13,16-45,47,50,52,57-58,61-70,72,79-99,103-104,106,118,120-122,133-136,139-150,164,166-168,182,184-203,207,219
+crates/activity/src/domain/visible_reads/test.rs
+  s_695cafe799631b::t_f9d511bc977e47 1-174
+crates/activity/src/outbound/entity_access_audience.rs
+  s_695cafe799631b::t_acf5ae4d0f81d7 1-82
+crates/activity/src/outbound/mod.rs
+  s_695cafe799631b::t_d97dd923f019cb 9-11
+crates/agent_code_mode/AGENTS.md
+  s_695cafe799631b::t_f1124bcc28e705 23-28
+crates/agent_code_mode/Cargo.toml
+  s_695cafe799631b::t_8a7f35b39ae153 25
+crates/agent_code_mode/SKILL.md
+  s_695cafe799631b::t_7578e8541095de 21
+crates/agent_code_mode/src/domain/models.rs
+  s_695cafe799631b::t_7d6ab486faf87d 154-216
+crates/agent_code_mode/src/domain/ports.rs
+  s_695cafe799631b::t_f640953683d25c 1-3,7,30-38,64-75
+crates/agent_code_mode/src/domain/service.rs
+  s_695cafe799631b::t_400f0776109123 7,40,55,63,68-101,108,130-134,156,158-161,167,179,242,451-452,519,523-531,614-615,617-618,622-628,630-634,638-644,680-687,689-694
+crates/agent_code_mode/src/domain/service/test.rs
+  s_695cafe799631b::t_a76e531c27b8dd 3,78,83-88,92-115,146,386-397,405,482,626,727-793
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_695cafe799631b::t_633083375cbd0e 1
+crates/agent_session/AGENTS.md
+  s_695cafe799631b::t_18c83dd5a99d94 236-237
+crates/agent_session/src/domain/activity.rs
+  s_695cafe799631b::t_e1d1ef701ebaa1 1,32-33,35,52-90,92,98-156
+crates/agent_session/src/inbound/axum_router/activity.rs
+  s_695cafe799631b::t_48ba9c93227f7a 138
+crates/ai_tools/src/test.rs
+  s_695cafe799631b::t_f4278d192c7016 864,877
+crates/ai_tools/src/tool_context.rs
+  s_695cafe799631b::t_ea5ef7f15517c5 2064,2066-2068,2079,2081-2083
+crates/channels/AGENTS.md
+  s_695cafe799631b::t_a15d23bad8810d 117-118
+crates/channels/src/domain/service.rs
+  s_695cafe799631b::t_30ab8718026fec 1119-1133
+crates/channels/src/domain/service/test.rs
+  s_695cafe799631b::t_fbfeafcf0915c6 2157-2158
+crates/channels/src/domain/service/test/crm_references.rs
+  s_695cafe799631b::t_705a16010bca72 1-42
+crates/channels/src/outbound/entity_access_comment_parents.rs
+  s_695cafe799631b::t_6e43588d12e4b1 36
+crates/code_execution/AGENTS.md
+  s_695cafe799631b::t_709ada16fa63b8 13-17,47-50
+crates/code_execution/README.md
+  s_695cafe799631b::t_5c1dc1f12b4940 58-59,98-99,119-128
+crates/code_execution/src/outbound/deno.rs
+  s_695cafe799631b::t_2ed46d5dcec8ea 24-158,249-251,254
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_695cafe799631b::t_3e6f9e34a05753 76-79,132-147,175-179
+crates/code_execution/src/outbound/deno/test.rs
+  s_695cafe799631b::t_82f5571109056b 395-618
+crates/code_execution/src/outbound/deno/unavailable.mjs
+  s_695cafe799631b::t_eb9c393781579d 1-4
+crates/codex_cloud_agents/Cargo.toml
+  s_695cafe799631b::t_dff1c474642b37 37
+crates/complete_graph/AGENTS.md
+  s_695cafe799631b::t_d3decd036171a4 140-141
+crates/complete_graph/src/schema.rs
+  s_695cafe799631b::t_eca7fde9cbc218 155-156,158,167-168,194,305,310,313-314,631-632,635-636,721-723,731-732,762-766
+crates/complete_graph/src/schema/test.rs
+  s_695cafe799631b::t_376b0c4605b2eb 52,1171,1211-1216,1231-1236,2109,2226-2227
+crates/complete_graph/src/schema/test/crm_member_access.rs
+  s_695cafe799631b::t_3e39aab896e0f9 1-257
+crates/crm/AGENTS.md
+  s_695cafe799631b::t_c29423e8571630 73-74,116-120,152-163,194,198-199
+crates/crm/src/domain/auth.rs
+  s_695cafe799631b::t_9f24a30497b2e7 28-38,237-260
+crates/crm/src/domain/auth/test.rs
+  s_695cafe799631b::t_dfffb8f33cfd55 120-200
+crates/crm/src/domain/companies_repo.rs
+  s_695cafe799631b::t_53baf490cea38d 48-56,88-89,99-100
+crates/crm/src/domain/contact_listing.rs
+  s_695cafe799631b::t_a7aab4ab79bb78 29
+crates/crm/src/domain/model.rs
+  s_695cafe799631b::t_31b87b58fbe4a1 489-491
+crates/crm/src/domain/pipelines.rs
+  s_695cafe799631b::t_729a9a44969dce 228,539
+crates/crm/src/domain/search_repo.rs
+  s_695cafe799631b::t_12d05c9a94764b 34-36
+crates/crm/src/domain/search_service.rs
+  s_695cafe799631b::t_71665da1c04734 85-89,117-121
+crates/crm/src/domain/service.rs
+  s_695cafe799631b::t_c0a1aa9a563c52 25-31,325,916-925,940,1145,1148,1152,1154,1221-1225,1292,1312,1396,1409,1426,1439,1463,1515-1518,1704
+crates/crm/src/domain/service/test.rs
+  s_695cafe799631b::t_00d766b8f5a802 87-90,1248-1253
+crates/crm/src/domain/stages.rs
+  s_695cafe799631b::t_d5cd4def3ba957 118,173
+crates/crm/src/domain/stages/test.rs
+  s_695cafe799631b::t_4a186a48002e29 696-701
+crates/crm/src/inbound/axum_extractors/test.rs
+  s_695cafe799631b::t_db19650ef64d7e 263-266,455
+crates/crm/src/inbound/axum_router.rs
+  s_695cafe799631b::t_3475772e0f2cd2 63-65,155-158,272-277
+crates/crm/src/inbound/axum_router/member_access.rs
+  s_695cafe799631b::t_b1d59196019b2c 1-36
+crates/crm/src/outbound.rs
+  s_695cafe799631b::t_916cfd385c329f 10-11
+crates/crm/src/outbound/companies_repo.rs
+  s_695cafe799631b::t_0836422231a656 90-95,2307-2319,3074-3083
+crates/crm/src/outbound/companies_repo/activity_property_edges.sql
+  s_695cafe799631b::t_18330cf6242bbe 2-3,17,19,21-27,29-31,33-34,36,59,70
+crates/crm/src/outbound/companies_repo/association.rs
+  s_695cafe799631b::t_d583d33f29c9da 85,101-107,113,173-185,187-189,196,227,280
+crates/crm/src/outbound/companies_repo/contact_listing.rs
+  s_695cafe799631b::t_8f14f4bc892238 53
+crates/crm/src/outbound/companies_repo/previews.rs
+  s_695cafe799631b::t_c84af87a0cfeb1 6-8,51,94
+crates/crm/src/outbound/companies_repo/test.rs
+  s_695cafe799631b::t_d085f4ff8ed9bb 27-28
+crates/crm/src/outbound/companies_repo/test/activity_property_edges.rs
+  s_695cafe799631b::t_e1e8ffa114b21a 466-467,474-477,482,504,510-514,529-610
+crates/crm/src/outbound/companies_repo/test/fixtures/activity_replica_authority.sql
+  s_695cafe799631b::t_34ce116efa6b68 1-3
+crates/crm/src/outbound/companies_repo/test/member_access.rs
+  s_695cafe799631b::t_07db1861a0d5f6 1-352
+crates/crm/src/outbound/companies_repo/test/previews.rs
+  s_695cafe799631b::t_b4a85f74acb27a 302-387
+crates/crm/src/outbound/member_access.rs
+  s_695cafe799631b::t_0dca699616df2e 1-25
+crates/crm/src/outbound/pipelines.rs
+  s_695cafe799631b::t_55a36a531d7272 419-428
+crates/crm/src/outbound/search_repo.rs
+  s_695cafe799631b::t_657c7f3a472a50 19,25-34,252-261
+crates/crm/tests/pipelines.rs
+  s_695cafe799631b::t_e77e82238414db 1446-1448
+crates/crm/tests/pipelines/member_access.rs
+  s_695cafe799631b::t_55d9ea72fddec1 1-147
+crates/email/src/domain/service/previews.rs
+  s_695cafe799631b::t_7f75bcb6503e61 339-340,343,345-348
+crates/entity_access/AGENTS.md
+  s_695cafe799631b::t_3e36bd23109e9d 86-88,107-110
+crates/entity_access/src/domain/ports.rs
+  s_695cafe799631b::t_83bcc9de6e22c7 14-17,314-343,573-607
+crates/entity_access/src/domain/service.rs
+  s_695cafe799631b::t_aa384f01af664f 440-447
+crates/entity_access/src/outbound/pg_access_repo.rs
+  s_695cafe799631b::t_9e29e094d81873 408-411,420-422,435-437,850-861,934-944
+crates/entity_access/src/outbound/pg_access_repo/queries.rs
+  s_695cafe799631b::t_4af98282472b33 32,132-135,148,150,174-178,216,218
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_batch_access.rs
+  s_695cafe799631b::t_fd5f0c83c80d53 1-79
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_company_access.rs
+  s_695cafe799631b::t_49a64481596d28 36,61,69-72
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_company_access/test.rs
+  s_695cafe799631b::t_2fefc8e9eb6874 82-83
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_company_access/test/member_access.rs
+  s_695cafe799631b::t_563ba18c5d3ae3 1-91
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_contact_access.rs
+  s_695cafe799631b::t_c9d71990bb73fb 39,66,74-76,79
+crates/entity_access/src/outbound/pg_access_repo/queries/crm_entity_users.rs
+  s_695cafe799631b::t_7fa4804f927cba 28,44
+crates/entity_access/src/outbound/pg_access_repo/queries/entity_audiences.rs
+  s_695cafe799631b::t_d2fed207e3176e 112-113,115
+crates/entity_access/src/outbound/pg_access_repo/queries/initiative_access.rs
+  s_695cafe799631b::t_0174d36c7efa21 22-25,64,66
+crates/entity_access/src/outbound/pg_access_repo/queries/pipeline_access.rs
+  s_695cafe799631b::t_998c5d67888cc7 36-39,41-48,52-86
+crates/entity_access/src/outbound/pg_access_repo/queries/thread_access.rs
+  s_695cafe799631b::t_4bbda937c738fd 209,482
+crates/entity_access/src/outbound/pg_access_repo/queries/thread_access/test.rs
+  s_695cafe799631b::t_3e6d7843b5df9e 1467-1468
+crates/entity_access/src/outbound/pg_access_repo/queries/thread_access/test/member_access.rs
+  s_695cafe799631b::t_e501e2050f264e 1-75
+crates/entity_access/src/outbound/pg_access_repo/test/pipelines_access.rs
+  s_695cafe799631b::t_b6be0072735da9 227-344
+crates/graphql_activity/AGENTS.md
+  s_695cafe799631b::t_78ba6e7a59e35a 50-51
+crates/graphql_activity/Cargo.toml
+  s_695cafe799631b::t_802f5604ab7b3b 11
+crates/graphql_activity/src/lib.rs
+  s_695cafe799631b::t_72b5cb206413a6 53-55
+crates/graphql_activity/src/subscriptions.rs
+  s_695cafe799631b::t_4eaa5535315941 8-12,14-15,18-46,83,85,95-101,122,125-126,129,132-135,140-146,154
+crates/graphql_activity/src/subscriptions/test.rs
+  s_695cafe799631b::t_dcbda3c25bca05 86-99,135-148,181-194,220-233
+crates/macro_db_client/AGENTS.md
+  s_695cafe799631b::t_0fe0ae54819256 84-87,98-104
+crates/macro_db_client/migrations/20261112212050_passwords_import_activity.down.sql
+  s_695cafe799631b::t_3f16e1f35f499b 1-2
+crates/macro_db_client/migrations/20261112212050_passwords_import_activity.up.sql
+  s_695cafe799631b::t_ad7e4c233055b0 1-17
+crates/macro_db_client/migrations/20261114170231_crm_member_access.sql
+  s_695cafe799631b::t_73bdf66e17c5cd 1-3
+crates/macro_db_client/src/item_access/get_accessible_items.rs
+  s_695cafe799631b::t_b4a92148556b7a 8,128-130,150-169,176-223,241-242,305-307
+crates/macro_db_client/src/item_access/get_accessible_items/documents_by_grant.sql
+  s_695cafe799631b::t_a8f22f1ff38d74 1-28
+crates/macro_db_client/src/item_access/get_accessible_items/test.rs
+  s_695cafe799631b::t_83b4f2057243b4 1-162
+crates/macro_db_client/tests/coalesced_access_lookups.rs
+  s_695cafe799631b::t_3c3c971a0636b8 25-27
+crates/openbao_client/spec/openapi.json
+  s_695cafe799631b::t_d37ed15f29fe5f 161-165,169-170
+crates/openbao_client/spec/patch.py
+  s_695cafe799631b::t_4f69b82329f324 69-70
+crates/openbao_client/src/client.rs
+  s_695cafe799631b::t_1635e07122d58c 35,100,102,104,125,127,129,354-358
+crates/openbao_client/src/client/test.rs
+  s_695cafe799631b::t_1b0d8cba310d8e 17-19,34,84,148,226-228,309,387,559,584,639
+crates/openbao_client/src/generated.rs
+  s_695cafe799631b::t_dd1c97ac140bca 71
+crates/opensearch_client/AGENTS.md
+  s_695cafe799631b::t_1044c1b26ca53d 73-77
+crates/opensearch_client/src/search/agent_sessions.rs
+  s_695cafe799631b::t_efed9dfda5a64f 15,84-85,87-99
+crates/opensearch_client/src/search/agent_sessions/test.rs
+  s_695cafe799631b::t_9473a7b3c7f3b9 51-104
+crates/opensearch_client/src/search/call_records.rs
+  s_695cafe799631b::t_18ecec9bfca872 12,218-221,233-234,249-253,256,259
+crates/opensearch_client/src/search/call_records/test.rs
+  s_695cafe799631b::t_70c7b8d562aea9 30-105
+crates/opensearch_client/src/search/chats.rs
+  s_695cafe799631b::t_0f10dab45b8be9 10,135-139,151-152,163-168,171,174
+crates/opensearch_client/src/search/chats/test.rs
+  s_695cafe799631b::t_dd9eafe2e212df 132-194
+crates/opensearch_client/src/search/documents.rs
+  s_695cafe799631b::t_101b1386c77a75 10,281,293,297-298,300,302,305,368
+crates/opensearch_client/src/search/utils.rs
+  s_695cafe799631b::t_ed097f2e0e1506 9-51
+crates/password_import/AGENTS.md
+  s_695cafe799631b::t_4e2c1932d6f5c2 1-79
+crates/password_import/CLAUDE.md
+  s_695cafe799631b::t_85a6b9bde3af6a 1
+crates/password_import/Cargo.toml
+  s_695cafe799631b::t_b58e6dd814885d 1-31
+crates/password_import/fuzz/.gitignore
+  s_695cafe799631b::t_b8f3369334e2ab 1-5
+crates/password_import/fuzz/Cargo.toml
+  s_695cafe799631b::t_c11abdc2d3c42e 1-47
+crates/password_import/fuzz/fuzz_targets/bitwarden_csv.rs
+  s_695cafe799631b::t_2c1cb3e99aa56d 1-9
+crates/password_import/fuzz/fuzz_targets/bitwarden_json.rs
+  s_695cafe799631b::t_67e0139f41f95c 1-9
+crates/password_import/fuzz/fuzz_targets/detect.rs
+  s_695cafe799631b::t_a7c177d98af6fc 1-5
+crates/password_import/fuzz/fuzz_targets/one_password_csv.rs
+  s_695cafe799631b::t_ff36cacb0a49f6 1-9
+crates/password_import/fuzz/fuzz_targets/one_password_pux.rs
+  s_695cafe799631b::t_9b75a4ba6d7c7a 1-9
+crates/password_import/src/bitwarden_csv.rs
+  s_695cafe799631b::t_d9600af82b5123 1-99
+crates/password_import/src/bitwarden_json.rs
+  s_695cafe799631b::t_58463bd3abee58 1-612
+crates/password_import/src/bounded.rs
+  s_695cafe799631b::t_ec0b9da2ed03c3 1-155
+crates/password_import/src/csv_table.rs
+  s_695cafe799631b::t_97328cfedaf973 1-167
+crates/password_import/src/detect.rs
+  s_695cafe799631b::t_33a3932208104d 1-47
+crates/password_import/src/draft.rs
+  s_695cafe799631b::t_201627458c6463 1-509
+crates/password_import/src/draft/test.rs
+  s_695cafe799631b::t_28d4e44f91a959 1-256
+crates/password_import/src/error.rs
+  s_695cafe799631b::t_6eb2f42ae205c5 1-65
+crates/password_import/src/lib.rs
+  s_695cafe799631b::t_ee3b228ea59a1b 1-54
+crates/password_import/src/model.rs
+  s_695cafe799631b::t_56eb543dced77b 1-486
+crates/password_import/src/one_password_csv.rs
+  s_695cafe799631b::t_969f5012a4fa3a 1-98
+crates/password_import/src/one_password_pux.rs
+  s_695cafe799631b::t_4bb4dbe949a559 1-693
+crates/password_import/src/totp.rs
+  s_695cafe799631b::t_730fa0b8385595 1-78
+crates/password_import/src/totp/test.rs
+  s_695cafe799631b::t_d416951e70332a 1-116
+crates/password_import/src/vault.rs
+  s_695cafe799631b::t_5adeb195be77b2 1-76
+crates/password_import/src/zip_archive.rs
+  s_695cafe799631b::t_325bc3c38f40f0 1-150
+crates/password_import/tests/fixtures/bitwarden.csv
+  s_695cafe799631b::t_0b77f84f64ad82 1-12
+crates/password_import/tests/fixtures/bitwarden.json
+  s_695cafe799631b::t_efb24181d2dcdb 1-240
+crates/password_import/tests/fixtures/bitwarden_encrypted.json
+  s_695cafe799631b::t_9181ce56d496b5 1-9
+crates/password_import/tests/fixtures/bitwarden_organization.csv
+  s_695cafe799631b::t_8b388fa8494833 1-3
+crates/password_import/tests/fixtures/one_password.csv
+  s_695cafe799631b::t_083725c4c39dab 1-12
+crates/password_import/tests/fixtures/one_password_export.data.json
+  s_695cafe799631b::t_46f2fe0277d1ef 1-460
+crates/password_import/tests/import/golden.rs
+  s_695cafe799631b::t_9abcdbd9d20f1e 1-102
+crates/password_import/tests/import/limits.rs
+  s_695cafe799631b::t_56c8678bdcd3a9 1-270
+crates/password_import/tests/import/main.rs
+  s_695cafe799631b::t_7b6813fed9599d 1-8
+crates/password_import/tests/import/mapping.rs
+  s_695cafe799631b::t_8ebc2211e8c190 1-263
+crates/password_import/tests/import/properties.rs
+  s_695cafe799631b::t_fe480287e854c0 1-79
+crates/password_import/tests/import/redaction.rs
+  s_695cafe799631b::t_6d46c8f1877e15 1-178
+crates/password_import/tests/import/security.rs
+  s_695cafe799631b::t_daad4a43534c58 1-388
+crates/password_import/tests/import/snapshots/import__golden__bitwarden_csv.snap
+  s_695cafe799631b::t_0ad1c0096f3a60 1-168
+crates/password_import/tests/import/snapshots/import__golden__bitwarden_json.snap
+  s_695cafe799631b::t_53c3b5974ef2a6 1-533
+crates/password_import/tests/import/snapshots/import__golden__bitwarden_organization_csv_skips_every_row.snap
+  s_695cafe799631b::t_c6f4197bc24565 1-32
+crates/password_import/tests/import/snapshots/import__golden__one_password_csv.snap
+  s_695cafe799631b::t_e0984084b9ac39 1-171
+crates/password_import/tests/import/snapshots/import__golden__one_password_pux.snap
+  s_695cafe799631b::t_307ce46cdd60ed 1-786
+crates/password_import/tests/import/support.rs
+  s_695cafe799631b::t_87dbeb87fc7158 1-45
+crates/password_import_wasm/AGENTS.md
+  s_695cafe799631b::t_f27ebbcbcf1b7a 1-37
+crates/password_import_wasm/CLAUDE.md
+  s_695cafe799631b::t_7c5577d139db47 1
+crates/password_import_wasm/Cargo.toml
+  s_695cafe799631b::t_6154d9c53d9ee0 1-23
+crates/password_import_wasm/src/bindings.rs
+  s_695cafe799631b::t_24f5f66055e5f2 1-47
+crates/password_import_wasm/src/lib.rs
+  s_695cafe799631b::t_41c1e03ff35b5e 1-19
+crates/password_import_wasm/src/test.rs
+  s_695cafe799631b::t_51d4b997267137 1-149
+crates/password_import_wasm/src/wire.rs
+  s_695cafe799631b::t_e25d08803c337b 1-211
+crates/passwords/AGENTS.md
+  s_695cafe799631b::t_4df95fb459afbc 69-79,133-156
+crates/passwords/Cargo.toml
+  s_695cafe799631b::t_687589b68eecff 15,17,22,36,40
+crates/passwords/src/domain/models.rs
+  s_695cafe799631b::t_6d7996dd2fbceb 3,178-181,184-190,393-394,420-422
+crates/passwords/src/domain/models/import.rs
+  s_695cafe799631b::t_372e5ba43c2942 1-227
+crates/passwords/src/domain/ports.rs
+  s_695cafe799631b::t_76017aa5cdd97a 77-84,108-124,189-193
+crates/passwords/src/domain/service.rs
+  s_695cafe799631b::t_85d6ee72ab4610 4,77-88,283-297,320,368,431,667,688-700,702-704,706-708,782-783
+crates/passwords/src/domain/service/fakes.rs
+  s_695cafe799631b::t_47a8b7e231b5cc 24,33-35,37-41,50,59-61,63-64,69-74,116-123,137-138,284,287-289,347,370-390,446,448-501
+crates/passwords/src/domain/service/import.rs
+  s_695cafe799631b::t_5f5edf75eefca2 1-253
+crates/passwords/src/domain/service/import/test.rs
+  s_695cafe799631b::t_61a554ad3e9b7a 1-484
+crates/passwords/src/inbound.rs
+  s_695cafe799631b::t_9a5c14912c165f 3-5
+crates/passwords/src/inbound/import.rs
+  s_695cafe799631b::t_e56513085fbd1b 1-72
+crates/passwords/src/inbound/router.rs
+  s_695cafe799631b::t_b48006f4ca08a1 45-54,217
+crates/passwords/src/inbound/router/test.rs
+  s_695cafe799631b::t_b025a71edea58b 118-127
+crates/passwords/src/inbound/router/test/admission.rs
+  s_695cafe799631b::t_47c23e6888356e 18-19,40,313-419
+crates/passwords/src/outbound/openbao.rs
+  s_695cafe799631b::t_ca5614005ff82e 8,13-15,28-29,34-62,76,81,86-116,229-242,248,250-273,286-294,296-302,309-312,314-320,340-343,345-351,358,360-394,396-400,402-403,406-408,413-416,418-421,443-455,460-467,472-475,477-480
+crates/passwords/src/outbound/openbao/test.rs
+  s_695cafe799631b::t_8856efd1bfe68b 7,697
+crates/passwords/src/outbound/openbao/test/recovery.rs
+  s_695cafe799631b::t_599bf5a53f0c74 18-19,97,118,126-129,146,255-258,353-356
+crates/passwords/src/outbound/openbao/test/token_reuse.rs
+  s_695cafe799631b::t_963d90d43614e5 1-451
+crates/passwords/src/outbound/openbao/token_cache.rs
+  s_695cafe799631b::t_10e8b6f21785ca 1-181
+crates/passwords/src/outbound/openbao/token_cache/test.rs
+  s_695cafe799631b::t_6436cf749081ca 1-355
+crates/passwords/src/outbound/postgres.rs
+  s_695cafe799631b::t_096527f41b4adf 36,38,72-77,98-102,153-159,396-419,510-529,554-555
+crates/passwords/src/outbound/postgres/folders.rs
+  s_695cafe799631b::t_017de27808d8c9 4-6,8-17,78-124,129,135-158
+crates/passwords/src/outbound/postgres/folders/test.rs
+  s_695cafe799631b::t_360eb4c5eb935a 266-462
+crates/passwords/src/outbound/postgres/import.rs
+  s_695cafe799631b::t_279ab7f4624baa 1-28
+crates/passwords/src/outbound/postgres/import/test.rs
+  s_695cafe799631b::t_835fc81f34e4b4 1-133
+crates/passwords/src/outbound/postgres/test/access.rs
+  s_695cafe799631b::t_97790c3b0f5d16 173-209
+crates/prompt/AGENTS.md
+  s_695cafe799631b::t_050823f56ef6b4 48-49
+crates/prompt/src/code_mode.rs
+  s_695cafe799631b::t_d5ecfdd8b15245 8
+crates/saved_views/AGENTS.md
+  s_695cafe799631b::t_45da5904ca37ee 10
+crates/saved_views/src/domain.rs
+  s_695cafe799631b::t_fd7ce9eef78637 140-146,245-278,285,483,534-537,598-600,639,650-651,654-655,668,681-683
+crates/saved_views/src/pgsql/test.rs
+  s_695cafe799631b::t_bb19bff419ce75 24-31,380-490
+crates/search_service/AGENTS.md
+  s_695cafe799631b::t_bba99166277c9e 121-122
+crates/search_service/src/api/context.rs
+  s_695cafe799631b::t_0880bb60721dac 26-27
+crates/search_service/src/api/search/crm_company.rs
+  s_695cafe799631b::t_6fb3ed507ab1fc 77,79-81
+crates/soup/AGENTS.md
+  s_695cafe799631b::t_07e52aa09f8657 193-194
+crates/soup/src/domain/service.rs
+  s_695cafe799631b::t_17edacdb418d08 915,922-936
+crates/soup/src/domain/service/tests/crm_association.rs
+  s_695cafe799631b::t_100dc013102423 89-92,320
+crates/soup/src/outbound/pg_soup_repo/attention.rs
+  s_695cafe799631b::t_69d5ddfc2f60f9 102
+crates/static_file_service_client/src/get_file.rs
+  s_695cafe799631b::t_b46af71863fd08 34-62
+crates/teams/AGENTS.md
+  s_695cafe799631b::t_73db87bf8dd991 156-161
+crates/teams/src/domain.rs
+  s_695cafe799631b::t_a551c17776260c 3
+crates/teams/src/domain/crm_member_access.rs
+  s_695cafe799631b::t_47ac7d0665d170 1-42
+crates/teams/src/domain/model.rs
+  s_695cafe799631b::t_56e277e2bbd5bf 431-432,465-466,519-520,541-551,798-806
+crates/teams/src/domain/model/error.rs
+  s_695cafe799631b::t_fbc7736cd2599e 26-28
+crates/teams/src/domain/team_repo.rs
+  s_695cafe799631b::t_e41bd7af92d54c 15-18,127,186,189,271-280
+crates/teams/src/domain/team_service.rs
+  s_695cafe799631b::t_32d23344b13a6c 41,54-57,168-169,207,313,701,727,753,757-762,816,822,842,1055,1084,1183,1185,1190,1192,2641,2655-2670,2746
+crates/teams/src/domain/team_service/test.rs
+  s_695cafe799631b::t_9ca5b04cb4f2d2 72,106-108,198-200,294-309,532-533,537,553-555,683,687-690,752,4640,4682,4725,4787,4814,4857,4908,4949,6223-6224,6302,6324-6325,6389,6671-6672,6710,6819-6820,6864
+crates/teams/src/domain/team_service/test/crm_member_access.rs
+  s_695cafe799631b::t_dcbcf22ccb5d7b 1-79
+crates/teams/src/inbound/axum_router.rs
+  s_695cafe799631b::t_e0b83ac617db4a 230-235
+crates/teams/src/inbound/axum_router/patch_team.rs
+  s_695cafe799631b::t_4f20b8035ff23e 28
+crates/teams/src/inbound/axum_router/test.rs
+  s_695cafe799631b::t_fb2d1631dc9b02 217-222
+crates/teams/src/outbound/team_repo.rs
+  s_695cafe799631b::t_b6070483dbbd4c 5-8,676,684-686,688,692,694-695,704-711,1071,1075-1077,1081-1082,1085-1088,1090,1096-1101,1248,1259-1263,1282,1551-1595
+crates/teams/src/outbound/team_repo/test.rs
+  s_695cafe799631b::t_9899628d954788 9,1245,1509,1540,1570,1599,1612,1625,1951
+crates/teams/src/outbound/team_repo/test/crm_member_access.rs
+  s_695cafe799631b::t_d4a11d226af7ed 1-115
+docs/CRM_EMAIL_PRIVACY.md
+  s_695cafe799631b::t_450e77cce8475f 3-6,11-71
+docs/agent-guide/ai-chat.md
+  s_695cafe799631b::t_9fce0f8098925f 1338-1340
+docs/agent-guide/calendar.md
+  s_695cafe799631b::t_12bb87c2d21941 537-541,543-549,552-553
+docs/agent-guide/crm.md
+  s_695cafe799631b::t_11c1b64e2fd1a5 712-740
+docs/agent-guide/passwords.md
+  s_695cafe799631b::t_0196466175eb3c 70-130,139-140
+docs/agent-guide/search.md
+  s_695cafe799631b::t_00adfc73b4a40b 218-219
+docs/architecture/canvas.md
+  s_695cafe799631b::t_733c39e0781e10 12-13
+docs/design/crm-contact-creation.md
+  s_695cafe799631b::t_92c21ea1d14124 25
+docs/design/crm-selective-email-contribution.md
+  s_695cafe799631b::t_92698f74fa8383 16-19
+docs/design/passwords.md
+  s_695cafe799631b::t_ccc926e7482b52 121-125,211-254
+docs/design/sdk-content-editing.md
+  s_695cafe799631b::t_e2d7c133a0bf8b 582-584
+infra/local/openbao/AGENTS.md
+  s_695cafe799631b::t_099dccaeced3cf 37-39
+infra/local/openbao/README.md
+  s_695cafe799631b::t_d2302d83672d3f 136
+infra/stacks/fusionauth-instance/README.md
+  s_695cafe799631b::t_ffb4fbc0e6764a 41-49
+infra/stacks/fusionauth-instance/update-theme-message.ts
+  s_695cafe799631b::t_9fa9ebda4b4511 27-30,32-92,95-97,100-110,125-129
+nix/tauri-desktop.nix
+  s_695cafe799631b::t_fe51ed8f3cecdc 244-248,424-425,987-988
+packages/muppet/utilities/macro/chat/test/chat.test.ts
+  s_695cafe799631b::t_885dc9c8f76d17 168,172,177,180-182,189,193,198
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_695cafe799631b::t_aacd2366c5781b 32,100
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_695cafe799631b::t_155fcd47048152 277,791
+packages/sdk/AGENTS.md
+  s_695cafe799631b::t_2cc71c0033bcd7 172,326-327
+packages/sdk/README.md
+  s_695cafe799631b::t_3b306b9556fe10 637-648
+packages/sdk/generated/auth/index.ts
+  s_695cafe799631b::t_0c478ad9be5316 4
+packages/sdk/generated/auth/types.gen.ts
+  s_695cafe799631b::t_67f451af835c42 1554-1555,1576-1589,1606,2540-2545,4494
+packages/sdk/generated/storage/index.ts
+  s_695cafe799631b::t_15a7dcffbba4fc 4
+packages/sdk/generated/storage/sdk.gen.ts
+  s_695cafe799631b::t_74727b57ec0e61 5,1744-1750,4252-4265,4287-4301
+packages/sdk/generated/storage/types.gen.ts
+  s_695cafe799631b::t_e8f07bd92d2306 6592-6605,16629-16785,16878-16889,30019-30031,36261-36293,36349-36378
+packages/sdk/specs/auth.json
+  s_695cafe799631b::t_b23e1dd36d2707 4068-4077,9398,9426-9440,9478-9488,10761,10763-10772
+packages/sdk/specs/storage.json
+  s_695cafe799631b::t_78f0febe158774 10054-10072,24361-24471,24601-24692,38929-38944,55411-55690,55828-55842
+packages/sdk/src/coverage/skipped.ts
+  s_695cafe799631b::t_7f7a586e3feaa6 448,450
+packages/sdk/src/entities/canvases/canvas.ts
+  s_695cafe799631b::t_4a0a6083b2fa75 390-394
+packages/sdk/src/entities/crm/namespace.ts
+  s_695cafe799631b::t_852f54f3ebbfae 13,40-53
+packages/sdk/src/entities/teams/team.ts
+  s_695cafe799631b::t_c4251394987f25 18-19,81-82,86-102
+packages/sdk/src/entities/workspace/query.test.ts
+  s_695cafe799631b::t_e7cd93465b0ed8 1-15
+packages/sdk/src/entities/workspace/query.ts
+  s_695cafe799631b::t_94dd139e01b1d8 272
+packages/sdk/src/utils/verbs.ts
+  s_695cafe799631b::t_089b687cdee607 118,228
+packages/sdk/tests/crm-member-access.test.ts
+  s_695cafe799631b::t_d0b225401c5038 1-59
+packages/sdk/tests/workspace.test.ts
+  s_695cafe799631b::t_8bff6506c05ce9 66,623
+services/agent_harness_service/Cargo.toml
+  s_695cafe799631b::t_3b39b42e3497f5 74,169
+services/agent_harness_service/src/code_mode.rs
+  s_695cafe799631b::t_010f4594402191 3,120,155-164,323
+services/agent_harness_service/src/code_mode/images.rs
+  s_695cafe799631b::t_0bb6868c4e26d2 1-73
+services/agent_harness_service/src/code_mode/images/test.rs
+  s_695cafe799631b::t_52e3c7eb09eba2 1-43
+services/agent_harness_service/src/code_mode/test.rs
+  s_695cafe799631b::t_36e4f8b33770c7 633-637
+services/agent_harness_service/src/internal_mcp.rs
+  s_695cafe799631b::t_f751d0b71775e9 293,333-356
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_695cafe799631b::t_9ee6b8f38f731f 412-431
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_695cafe799631b::t_05f4c277c54ff3 13-26,46,49-53,97
+services/agent_harness_service/src/lib.rs
+  s_695cafe799631b::t_7b7c920b287fce 936-942
+services/authentication_service/AGENTS.md
+  s_695cafe799631b::t_d40cb1b0cd8d56 332-338
+services/authentication_service/src/outbound.rs
+  s_695cafe799631b::t_c132b9fd6da331 5
+services/authentication_service/src/outbound/crm_member_access.rs
+  s_695cafe799631b::t_8baefca6a1cafb 1-72
+services/authentication_service/src/server.rs
+  s_695cafe799631b::t_b54167b360f5c1 702-708,723
+services/document_storage_service/AGENTS.md
+  s_695cafe799631b::t_bd3d43af6a2bd3 15,21,115-117,166-168
+services/document_storage_service/Cargo.toml
+  s_695cafe799631b::t_cb2f5264b40936 194,329
+services/document_storage_service/src/api.rs
+  s_695cafe799631b::t_435fd41976024e 75,80-83,463-469
+services/document_storage_service/src/api/context.rs
+  s_695cafe799631b::t_23cf917c1ed640 294,296-298,1123
+services/document_storage_service/src/api/middleware/crm_access.rs
+  s_695cafe799631b::t_16efba99dcad72 1-195
+services/document_storage_service/src/api/middleware/crm_access/test.rs
+  s_695cafe799631b::t_a979c30c8ebe2e 1-264
+services/document_storage_service/src/api/middleware/mod.rs
+  s_695cafe799631b::t_35f81e87103447 1
+services/document_storage_service/src/api/swagger.rs
+  s_695cafe799631b::t_89064f9f799af7 236-237,736,1305
+services/document_storage_service/src/outbound/saved_view_changes/test.rs
+  s_695cafe799631b::t_704d6ffb62d3fd 26-33
+services/document_storage_service/src/server.rs
+  s_695cafe799631b::t_d11483f7164b63 2529,2708,2710-2712
+services/document_storage_service/src/service/activity.rs
+  s_695cafe799631b::t_1ef61fc50a01a1 90
+services/document_storage_service/src/service/saved_views.rs
+  s_695cafe799631b::t_cdbc0c4e5ce38b 2-3,17-29,33-57,62,72,97
+tooling/xtask/crates/xtask_deps/src/closures.rs
+  s_695cafe799631b::t_e3392b6b73c281 45
+tooling/xtask/crates/xtask_workflows/src/workflows/web_artifact_paths.rs
+  s_695cafe799631b::t_7761d91e05a4be 26-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2613f96e233c316b35bba6eb7d8443da5108e5ca",
+  "prompts": {},
+  "sessions": {
+    "s_695cafe799631b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bc62c68-1b4e-4243-bba7-d22f0052d31c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e7fba64acbc356": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc72e5c9-e8a1-4e3f-8b52-3eec63bb16f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
