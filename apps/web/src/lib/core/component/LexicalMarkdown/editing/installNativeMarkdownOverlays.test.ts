@@ -10,6 +10,11 @@ import tableSelection from './browser-test/fixtures/table-selection.json';
 import { installNativeMarkdownOverlays } from './installNativeMarkdownOverlays';
 
 beforeAll(initializeNativeSurfaceTests);
+
+/** A listener is removed only by the capture flag it was added with. */
+function captures(options?: boolean | EventListenerOptions): boolean {
+  return typeof options === 'boolean' ? options : (options?.capture ?? false);
+}
 afterEach(() => vi.restoreAllMocks());
 
 test('live host permission gates gap input even while native access and the DOM remain editable', () => {
@@ -112,13 +117,14 @@ for (const cause of [undefined, null, { reason: 'opaque listener failure' }]) {
     const added: Array<{
       type: string;
       listener: EventListenerOrEventListenerObject;
+      capture: boolean;
     }> = [];
     const add = fixture.root.addEventListener.bind(fixture.root);
     const removed = vi.spyOn(fixture.root, 'removeEventListener');
     vi.spyOn(fixture.root, 'addEventListener').mockImplementation(
       (type, listener, options) => {
         if (type === 'contextmenu') throw cause;
-        added.push({ type, listener });
+        added.push({ type, listener, capture: captures(options) });
         add(type, listener, options);
       }
     );
@@ -132,8 +138,15 @@ for (const cause of [undefined, null, { reason: 'opaque listener failure' }]) {
       expect(failure).toBeDefined();
       expect(failure?.error).toBe(cause);
       expect(added.length).toBeGreaterThan(0);
-      for (const { type, listener } of added) {
-        expect(removed).toHaveBeenCalledWith(type, listener);
+      for (const { type, listener, capture } of added) {
+        expect(
+          removed.mock.calls.some(
+            ([removedType, removedListener, options]) =>
+              removedType === type &&
+              removedListener === listener &&
+              captures(options) === capture
+          )
+        ).toBe(true);
       }
     } finally {
       fixture.close();
