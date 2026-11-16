@@ -116,6 +116,9 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
 pub const MAX_REFRESH_ATTEMPTS: u8 = 3;
 /// Bounds one user's model work, inside the 25-minute claim lease.
 const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
+/// A day is generated only this long after it ends, so activity still on its way
+/// into the activity log is counted before the day is judged inactive.
+const ACTIVITY_SETTLE: Duration = Duration::hours(1);
 
 /// Wait before the next claim of a day after a failed attempt: 1, 2, 4, 8, then
 /// 16 hours, so transient provider errors clear without rerunning every lease.
@@ -280,7 +283,7 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
         P: FnMut() -> F,
         F: Future<Output = bool>,
     {
-        let yesterday = Utc::now().date_naive() - Duration::days(1);
+        let yesterday = (Utc::now() - ACTIVITY_SETTLE).date_naive() - Duration::days(1);
         for _ in 0..25 {
             if paused().await {
                 break;

@@ -46,7 +46,8 @@ batch stops after the user in progress. A failed flag read keeps generation runn
 Shutdown cancels and drains the tracked task. The CLI awaits one user's generation
 and can be used locally with the existing provider and service configuration.
 
-Each claim targets the first unprocessed completed UTC day. Before any model
+Each claim targets the first unprocessed UTC day that ended at least an hour ago,
+so activity still arriving from Kafka is counted. Before any model
 call, the activity log (`activity_events`, views and appearance changes excluded)
 is checked for that day; a day without activity commits with no report and no
 new profile. Each piece (daily, weekly, monthly, summary, profile) is stored in
