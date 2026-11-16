@@ -29,7 +29,12 @@ export function DateTile(props: { date: Date; past?: boolean }) {
       )}
       aria-hidden="true"
     >
-      <span class="text-[9px] leading-[10px] font-semibold tracking-wider text-ink-subtle uppercase">
+      <span
+        class={cn(
+          'text-[9px] leading-[10px] font-semibold tracking-wider uppercase',
+          props.past ? 'text-ink-disabled' : 'text-ink-subtle'
+        )}
+      >
         {MONTHS[props.date.getMonth()]}
       </span>
       <span class="text-[15px] leading-[18px] font-semibold tabular-nums">
