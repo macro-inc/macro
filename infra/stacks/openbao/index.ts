@@ -1,4 +1,9 @@
 // Hosted OpenBao for Passwords, dev only. See AGENTS.md and README.md.
+//
+// This file is the legacy vault in the main account's shared VPC, which still
+// serves DSS. `vault.ts` builds its replacement in the OpenBao account beside
+// it; a later change moves the DNS name there and removes this one (README
+// "Moving the vault to the OpenBao account").
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
@@ -16,6 +21,18 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
+import { AccountVault } from './vault';
+import {
+  API_ADDRESS,
+  BASE_NAME,
+  DURABLE,
+  HOSTNAME,
+  HTTPS_PORT,
+  NFS_PORT,
+  OPENBAO_GID,
+  OPENBAO_UID,
+  TAGS,
+} from './constants';
 import { API_PORT, DATA_MOUNT_PATH, renderServerConfig } from './server-config';
 
 if (stack !== 'dev') {
@@ -23,21 +40,12 @@ if (stack !== 'dev') {
 }
 const region = aws.config.requireRegion();
 
-const BASE_NAME = pulumi.getProject();
-// The `openbao` user in the upstream image `image/Dockerfile` builds on.
-const OPENBAO_UID = 100;
-const OPENBAO_GID = 1000;
-const HOSTNAME = 'openbao-dev.macro-internal.com';
-const API_ADDRESS = `https://${HOSTNAME}`;
-const HTTPS_PORT = 443;
-const NFS_PORT = 2049;
-
 // The Raft directory on EFS. A restore points this at the restored copy
 // (README "Restore"); changing it replaces the access point.
 const DATA_DIRECTORY = new pulumi.Config().get('dataDirectory') ?? '/openbao';
 
-const tags = { project: BASE_NAME, environment: stack, tech_lead: 'wolf' };
-const durable = { protect: true, retainOnDelete: true };
+const tags = TAGS;
+const durable = DURABLE;
 const vpc = get_coparse_api_vpc();
 
 // Only the document storage service (which hosts Passwords) may call the vault.
@@ -591,3 +599,13 @@ export const fileSystemId = fileSystem.id;
 export const fileSystemArn = fileSystem.arn;
 export const backupRoleArn = backupRole.arn;
 export const backupVaultName = backupVault.name;
+
+// --- The replacement vault in the OpenBao account ------------------------------
+
+const accountVault = new AccountVault(`${BASE_NAME}-account-vault`, {
+  region,
+  documentStorageSecurityGroupId,
+  sharedVpcId: vpc.vpcId,
+  zoneId: zone.zoneId,
+});
+export const account = accountVault.outputs;

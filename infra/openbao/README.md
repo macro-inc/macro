@@ -58,3 +58,43 @@ at startup. Rotate in this order:
 It prints only the namespace it provisioned. The roles disable JWT clock
 leeway, so the document storage service and the vault must keep synchronized
 clocks (both run on Fargate with Amazon Time Sync).
+
+## Copying to the OpenBao account vault
+
+`copy_secrets.py` copies every team's `passwords` values from the legacy vault
+to its replacement in the OpenBao account. It is one step of the move in the
+[stack README](../stacks/openbao/README.md#moving-the-vault-to-the-openbao-account-once).
+
+- **Version numbers stay the same,** because the document storage service's
+  metadata points at them. Destroyed and pruned versions are written as
+  placeholders and destroyed again.
+- **It only moves the destination forward.**
+  - It checks the versions the destination already has against the source and
+    never rewrites one.
+  - A version the source has erased since is erased there too.
+  - A destination that is ahead (written to after the name moved) is accepted
+    if the versions both have match.
+  - An item written differently on both sides is reported as diverged and left
+    alone.
+- **It is idempotent.** A repeat run copies only what changed, and also cleans
+  up after a run that stopped partway.
+- **It checks its work.** After copying, it compares each team's items, current
+  versions and values.
+- **It refuses** one vault on both tunnels, and teams the destination hasn't
+  provisioned yet.
+- **It prints** counts and item ids only.
+- **It can't copy TOTP seeds,** because OpenBao never returns one. It reports
+  how many keys each team has.
+
+With the legacy tunnel on 18443 and the replacement's on 28443:
+
+```sh
+doppler run -p openbao -c dev --only-secrets OPENBAO_ROOT_TOKEN OPENBAO_ACCOUNT_ROOT_TOKEN -- \
+  sh -c 'BAO_SOURCE_TOKEN="$OPENBAO_ROOT_TOKEN" BAO_DESTINATION_TOKEN="$OPENBAO_ACCOUNT_ROOT_TOKEN" \
+    exec python3 infra/openbao/copy_secrets.py \
+      --source-connect 127.0.0.1:18443 --destination-connect 127.0.0.1:28443 --dry-run'
+```
+
+Drop `--dry-run` to copy. The run exits 2 if any item diverged or failed the
+check; `--team-id` limits a run to named teams. To roll back after the name
+points at the replacement, swap the two tunnels and tokens.
