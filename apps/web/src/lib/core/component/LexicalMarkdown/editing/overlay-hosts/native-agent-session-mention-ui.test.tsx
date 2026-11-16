@@ -139,10 +139,19 @@ vi.mock('@app/lib/analytics/analytics-context', () => ({
 // HostedMentionsMenu reads main's contact-search kill switch through
 // PostHog, which the app always provides; this fixture has no provider, so
 // the switch reads as off, its production default.
-vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
-  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
-}));
+vi.mock('@app/lib/analytics/posthog', async (importOriginal) => {
+  const { disableCrmContactSearch } = await import(
+    '@core/constant/featureFlags'
+  );
+  return {
+    ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
+    useFeatureFlag: (flag: unknown) => {
+      if (flag !== disableCrmContactSearch)
+        throw new Error('Unexpected PostHog flag in this fixture');
+      return () => ({ enabled: false, loading: false });
+    },
+  };
+});
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => null }));
 vi.mock(import('@core/block'), async (importOriginal) => ({
   ...(await importOriginal()),
