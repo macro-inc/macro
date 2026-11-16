@@ -4,7 +4,10 @@ import * as path from 'node:path';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { stack } from '../../packages/shared';
-import { get_coparse_api_vpc } from '../../packages/vpc';
+import {
+  get_coparse_api_vpc,
+  PRIVATE_ROUTE_TABLE_KEYS,
+} from '../../packages/vpc';
 
 if (stack !== 'dev') {
   throw new Error('The computers WireGuard gateway is dev-only');
@@ -31,12 +34,15 @@ const gatewayPrivateKey = config.requireSecret('gatewayPrivateKey');
 
 // Public subnet in us-east-1c: the Elastic IP needs an internet gateway route.
 const GATEWAY_SUBNET_ID = vpc.publicSubnetIds[0];
-// The route tables of the private subnets the agent harness tasks run in.
-// They are shared with prod; the /32 route only steers traffic for the host.
-const PRIVATE_ROUTE_TABLE_IDS = [
-  'rtb-00dfae8780d5d8d84',
-  'rtb-027a26d11875ac278',
-];
+// The route tables of the private subnets the agent harness tasks run in,
+// owned by vpc-network. They are shared with prod (the VPC has only a prod
+// vpc-network stack); the /32 route only steers traffic for the host.
+const privateRouteTableIds = new pulumi.StackReference(
+  `${BASE_NAME}-vpc-network`,
+  { name: 'macro-inc/vpc-network/prod' }
+).requireOutput('privateRouteTableIds') as pulumi.Output<
+  Record<(typeof PRIVATE_ROUTE_TABLE_KEYS)[number], string>
+>;
 
 const harnessSecurityGroup = aws.ec2.getSecurityGroupOutput({
   name: `agent-harness-service-sg-${stack}`,
@@ -196,9 +202,9 @@ const instance = new aws.ec2.Instance(
 
 // --- Routes -------------------------------------------------------------------
 
-for (const routeTableId of PRIVATE_ROUTE_TABLE_IDS) {
-  new aws.ec2.Route(`${BASE_NAME}-incus-${routeTableId}`, {
-    routeTableId,
+for (const key of PRIVATE_ROUTE_TABLE_KEYS) {
+  new aws.ec2.Route(`${BASE_NAME}-incus-${key}`, {
+    routeTableId: privateRouteTableIds[key],
     destinationCidrBlock: `${INCUS_ADDRESS}/32`,
     networkInterfaceId: networkInterface.id,
   });
