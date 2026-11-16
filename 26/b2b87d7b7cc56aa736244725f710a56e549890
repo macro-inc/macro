@@ -1,0 +1,36 @@
+crates/agent_code_mode/src/outbound/reviews/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 25-26
+crates/agent_code_mode/src/outbound/postgres/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 18-19,78-79
+crates/agent_code_mode/src/domain/ports.rs
+  s_8b139b3d2541ba::t_6440eaded0bf8c 53-59
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 110-111
+crates/agent_code_mode/src/domain/service/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 289-290,493-494
+  s_8b139b3d2541ba::t_4cfee666d6a8ce 688-807
+crates/agent_code_mode/src/domain/connected_apps/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 155-156,220-221,268-269,305-306
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_8b139b3d2541ba::t_e3890007aab541 162-163
+crates/agent_code_mode/src/domain/models.rs
+  s_8b139b3d2541ba::t_f7a80a4533706d 58-98,162,164-170
+crates/agent_code_mode/src/domain/service.rs
+  s_8b139b3d2541ba::t_424f602cf1ae64 5,32-43,52,74,78-97,110-111,125,483-489,510-511,563-572,655-658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "26b2b87d7b7cc56aa736244725f710a56e549890",
+  "prompts": {},
+  "sessions": {
+    "s_8b139b3d2541ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8ecbb76b-bbc8-44bf-bc96-2356d7ec3075",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
