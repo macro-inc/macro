@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
@@ -33,10 +34,8 @@ import {
   createSignal,
   For,
   type JSX,
-  Match,
   on,
   Show,
-  Switch,
 } from 'solid-js';
 import {
   type CombinedEntity,
@@ -528,11 +527,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
-  createEffect(() => {
-    search();
-    resultCount();
-    setSelectedIndex(0);
-  });
+  // A new search moves the highlight to the top; a further page listed below
+  // keeps it where the user put it.
+  createEffect(on(search, () => setSelectedIndex(0)));
   let previousWindow: string | undefined;
   createEffect(
     on(quickAccess.windowKey, (key) => {
@@ -545,6 +542,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     })
   );
   const loadNext = () => fireAndForget(loadNextPages(), 'property-picker');
+  // Further pages load as the end of the list scrolls into view. With no rows
+  // listed, the sentinel sits below the empty list and keeps reading pages
+  // until one matches or the sources end. A failed page waits for Retry.
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => hasMore() && !paginationError(),
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage: loadNext,
+  });
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
@@ -758,6 +765,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   );
                 }}
               </For>
+              <Show when={hasMore()}>
+                <div ref={setSentinel} class="h-px" />
+              </Show>
             </div>
           </Show>
           <Show when={customEmail()}>
@@ -813,7 +823,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         ) : (
           <div class="text-center py-4 text-ink-muted text-sm">
             <Show
-              when={!isLoadingEntities()}
+              when={!isLoadingEntities() && !hasMore()}
               fallback={<span>Loading...</span>}
             >
               {props.config.emptyMessage ??
@@ -822,7 +832,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         )}
       </Show>
-      <Show when={hasMore()}>
+      <Show when={sortedEntities().length === 0 && hasMore()}>
+        <div ref={setSentinel} class="h-px" />
+      </Show>
+      <Show when={paginationError() && hasMore()}>
         <Button
           variant="ghost"
           class="w-full"
@@ -830,9 +843,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           onPointerDown={(event) => event.preventDefault()}
           onClick={loadNext}
         >
-          <Switch fallback={t('viewMenus.nextOptions')}>
-            <Match when={isLoadingMore()}>{t('common.loadingOptions')}</Match>
-          </Switch>
+          {t('viewMenus.retryOptions')}
         </Button>
       </Show>
     </div>
