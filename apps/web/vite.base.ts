@@ -16,6 +16,7 @@ import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
+import { wasmModules } from './scripts/wasm-modules.ts';
 
 function readShortSha(): string {
   try {
@@ -640,6 +641,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
       },
       plugins: [
+        wasmModules(),
         devHttps(),
         devCompression(),
         devExternalSourcemaps(),
@@ -665,6 +667,7 @@ export const createAppViteConfig = (): UserConfigFn => {
       worker: {
         format: 'es',
         plugins: () => [
+          wasmModules(),
           tsconfigpaths({
             root: './',
           }),

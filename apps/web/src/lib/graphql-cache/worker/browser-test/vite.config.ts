@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../../scripts/wasm-modules.ts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 
@@ -9,6 +10,7 @@ export default defineConfig(({ command }) => ({
   root: directory,
   base: command === 'build' ? '/app/' : '/',
   plugins: [
+    wasmModules(),
     tsconfigPaths({
       projects: [resolve(directory, '../../../../../tsconfig.json')],
     }),

@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { wasmModules } from '../../../../../scripts/wasm-modules.ts';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const web = fileURLToPath(new URL('../../../../../', import.meta.url));
@@ -16,6 +17,7 @@ export default defineConfig({
   root: directory,
   cacheDir: `${directory}/.vite`,
   plugins: [
+    wasmModules(),
     {
       name: 'signature-fixture-services',
       enforce: 'pre',
