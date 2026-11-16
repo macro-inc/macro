@@ -18,10 +18,6 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-/// The in-VPC self-hosted runner with network access to the databases. Stays
-/// off Namespace deliberately — migrations need to reach RDS.
-const DB_MIGRATOR_RUNNER: &str = "db-migrator";
-
 /// Build the workflow. The dispatch/call input blocks are filled in by
 /// [`patch`].
 pub fn deploy_all_services() -> Workflow {
@@ -309,7 +305,7 @@ fn migrate_db() -> Job {
         .cond(Expression::new(
             "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
         ))
-        .runs_on(DB_MIGRATOR_RUNNER)
+        .runs_on(runners::DB_MIGRATOR)
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(run_migrations())
 }

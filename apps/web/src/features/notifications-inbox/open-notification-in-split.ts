@@ -8,7 +8,49 @@ import type { NotificationInboxRow } from './context/notifications-inbox-context
 import { agentTurnParams } from './primitives/notification-location';
 import { rowEntity } from './primitives/row-entity';
 
-type OpenOptions = { newSplit: boolean; splitHandle: SplitHandle };
+type PasswordsVisibility = {
+  enabled: () => boolean;
+  teamId: () => string | undefined;
+};
+
+type OpenOptions = {
+  newSplit: boolean;
+  splitHandle: SplitHandle;
+  passwords?: PasswordsVisibility;
+};
+
+function isPasswordRequest(notification: UnifiedNotification, teamId: string) {
+  const metadata = notification.notification_metadata;
+  if (metadata.tag !== 'password_access_requested') return false;
+  const content = metadata.content;
+  return (
+    notification.notification_event_type === 'password_access_requested' &&
+    notification.entity_type === 'team' &&
+    notification.entity_id === teamId &&
+    content?.teamId === teamId &&
+    typeof content.itemId === 'string' &&
+    content.itemId.trim().length > 0 &&
+    typeof content.requestId === 'string' &&
+    content.requestId.trim().length > 0
+  );
+}
+
+/** Team groups only present requests for the currently available vault. Server ACLs remain authoritative. */
+export function isVisibleInboxRow(
+  row: NotificationInboxRow,
+  passwords: PasswordsVisibility | undefined
+) {
+  if (row.content.entity.type !== 'team') return true;
+  if (!passwords?.enabled()) return false;
+  const teamId = passwords.teamId();
+  if (!teamId || row.content.entity.id !== teamId) return false;
+  return (
+    row.content.notifications.length > 0 &&
+    row.content.notifications.every((notification) =>
+      isPasswordRequest(notification, teamId)
+    )
+  );
+}
 
 /**
  * Open one notification of a stack at its own location, as the app's other
@@ -35,6 +77,8 @@ async function openStackNotification(
       options.splitHandle
     ));
   if (!opened || opened.isErr()) {
+    // Notification-only teams never fall back to a generic entity page.
+    if (entity.type === 'team') return;
     await openEntityInSplitFromUnifiedList(rowEntity(row, notification), {
       openInNewSplit: options.newSplit,
       splitHandle: options.splitHandle,
@@ -58,11 +102,21 @@ export function openNotificationInSplit(
   row: NotificationInboxRow,
   options: OpenOptions & { notification?: UnifiedNotification }
 ) {
-  // A runtime has no page of its own: its newest notification opens
-  // Settings → Machines at it, with Share open when a request waits there.
+  if (!isVisibleInboxRow(row, options.passwords)) return;
+  if (
+    row.content.entity.type === 'team' &&
+    options.notification &&
+    (!isPasswordRequest(options.notification, row.content.entity.id) ||
+      !row.content.notifications.some(
+        (notification) => notification.id === options.notification?.id
+      ))
+  )
+    return;
+  // A runtime or team has no page of its own: its newest notification opens
+  // its target (Settings → Machines, or the vault item a request is about).
   const notification =
     options.notification ??
-    (row.content.entity.type === 'harness'
+    (row.content.entity.type === 'harness' || row.content.entity.type === 'team'
       ? row.content.notifications[0]
       : undefined);
   fireAndForget(

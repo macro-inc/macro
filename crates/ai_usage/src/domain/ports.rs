@@ -61,7 +61,8 @@ pub enum AiFeature {
     CallSummary,
     /// Channel bots.
     ChannelBot,
-    /// AI projection materialization.
+    /// Retired AI projection materialization; kept so historical usage rows
+    /// still parse.
     AiProjection,
     /// In-document AI editing (the ai-editing-worker).
     AiEditing,

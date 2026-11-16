@@ -496,20 +496,6 @@ export type CreateChatRequest = {
 };
 
 /**
- * A sync to create, under an id its client minted so a retry finds it.
- */
-export type CreateDatabaseSyncRequest = {
-    /**
-     * Its id, minted by the client (UUIDv7).
-     */
-    id: string;
-    /**
-     * What it mirrors.
-     */
-    source: DatabaseSyncSource;
-};
-
-/**
  * What a successful tool call committed to the user's databases.
  */
 export type DatabaseChange = {
@@ -562,199 +548,6 @@ export type DatabaseQueryRequest = {
     prompt: string;
     schema: unknown;
     sql: string;
-};
-
-/**
- * A table of a database kept in sync with a source.
- */
-export type DatabaseSync = {
-    /**
-     * The columns it writes.
-     */
-    columns: Array<DatabaseSyncColumn>;
-    /**
-     * Creation time.
-     */
-    createdAt: string;
-    /**
-     * Who created it; its writes act with their access and read the source
-     * through their connection.
-     */
-    createdBy: string;
-    /**
-     * The database.
-     */
-    databaseId: string;
-    /**
-     * The columns it stopped writing.
-     */
-    detachedColumns: Array<DatabaseSyncDetachedColumn>;
-    /**
-     * Identifier.
-     */
-    id: string;
-    /**
-     * When a run last succeeded.
-     */
-    lastSyncedAt: string | null;
-    /**
-     * What it mirrors.
-     */
-    source: DatabaseSyncSource;
-    /**
-     * How its last run went.
-     */
-    status: DatabaseSyncStatus;
-    /**
-     * The table the sync writes.
-     */
-    tableId: string;
-};
-
-/**
- * A column the sync writes, and the field it holds.
- */
-export type DatabaseSyncColumn = {
-    /**
-     * The column.
-     */
-    column: string;
-    /**
-     * The source field.
-     */
-    field: DatabaseSyncField;
-};
-
-/**
- * Why a column stopped syncing.
- */
-export type DatabaseSyncDetachReason = 'deleted' | 'type_changed';
-
-/**
- * A column that no longer syncs. Its cells stay as they are, and the sync
- * never adds its field back.
- */
-export type DatabaseSyncDetachedColumn = {
-    /**
-     * The column.
-     */
-    column: string;
-    /**
-     * The source field it held.
-     */
-    field: DatabaseSyncField;
-    /**
-     * Why it stopped.
-     */
-    reason: DatabaseSyncDetachReason;
-};
-
-/**
- * Why a sync's last run failed.
- */
-export type DatabaseSyncFailure = 'source_disconnected' | 'source_not_found' | 'source_unavailable' | 'creator_lost_access' | 'database_unavailable' | 'internal';
-
-/**
- * A source field a column of a synced table holds.
- */
-export type DatabaseSyncField = {
-    /**
-     * Which one.
-     */
-    field: DatabaseSyncGranolaField;
-    source: 'granola';
-} | {
-    /**
-     * The property's id, which survives renames.
-     */
-    propertyId: string;
-    source: 'notion';
-};
-
-/**
- * One field of a Granola meeting a synced table keeps.
- */
-export type DatabaseSyncGranolaField = 'title' | 'date' | 'attendees' | 'summary' | 'link' | 'call';
-
-/**
- * Whether the user has connected Granola.
- */
-export type DatabaseSyncGranolaSource = {
-    /**
-     * Whether a Granola connection syncs meetings into Macro.
-     */
-    connected: boolean;
-};
-
-/**
- * A Notion data source the creator's connection can read.
- */
-export type DatabaseSyncNotionDataSource = {
-    /**
-     * The data source.
-     */
-    id: string;
-    /**
-     * Its title.
-     */
-    title: string;
-};
-
-/**
- * Whether the user has connected Notion, and what it can read.
- */
-export type DatabaseSyncNotionSource = {
-    /**
-     * Whether Notion is connected.
-     */
-    connected: boolean;
-    /**
-     * The data sources the connection can read, most recently edited
-     * first; empty when not connected.
-     */
-    dataSources: Array<DatabaseSyncNotionDataSource>;
-};
-
-/**
- * What a synced table mirrors.
- */
-export type DatabaseSyncSource = {
-    kind: 'granola_meetings';
-} | {
-    /**
-     * The data source.
-     */
-    dataSourceId: string;
-    kind: 'notion_data_source';
-};
-
-/**
- * What a user can sync a table from.
- */
-export type DatabaseSyncSources = {
-    /**
-     * Granola meetings.
-     */
-    granola: DatabaseSyncGranolaSource;
-    /**
-     * Notion data sources.
-     */
-    notion: DatabaseSyncNotionSource;
-};
-
-/**
- * How a sync stands.
- */
-export type DatabaseSyncStatus = {
-    state: 'pending';
-} | {
-    state: 'synced';
-} | {
-    /**
-     * Why.
-     */
-    failure: DatabaseSyncFailure;
-    state: 'failed';
 };
 
 /**
@@ -880,11 +673,6 @@ export type ErrorResponse = {
      */
     message: string;
 };
-
-/**
- * How long a projection remains active without being requested.
- */
-export type Expiry = 'day' | 'week' | 'month';
 
 /**
  * A private explicit memory document and its optimistic concurrency token.
@@ -1249,6 +1037,10 @@ export type ImportRun = {
      * presented while it is still `running`; rows staged after that take it.
      */
     review_id?: string | null;
+    /**
+     * The agent session presenting that review.
+     */
+    review_session_id?: string | null;
     scanned?: null | ScanCounts;
     /**
      * The source this run discovered from.
@@ -1345,16 +1137,6 @@ export type LinearIssueMeta = {
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
-
-/**
- * A database's syncs.
- */
-export type ListDatabaseSyncsResponse = {
-    /**
-     * Oldest first.
-     */
-    syncs: Array<DatabaseSync>;
-};
 
 export type MacroUserIdStr = string;
 
@@ -1985,42 +1767,6 @@ export type Price = {
 };
 
 /**
- * The current state of a user's projection instance.
- */
-export type ProjectionStateResponse = {
-    /**
-     * The cached result, if any. JSON-encoded when the projection defines an
-     * `output_schema`.
-     */
-    data?: string | null;
-    /**
-     * The most recent materialization error, if any.
-     */
-    error?: string | null;
-    /**
-     * When the result was generated.
-     */
-    generated_at?: string | null;
-    /**
-     * The projection id.
-     */
-    id: string;
-    /**
-     * When the result becomes stale.
-     */
-    stale_at?: string | null;
-    /**
-     * The materialization status.
-     */
-    status: ProjectionStatus;
-};
-
-/**
- * The materialization status of a user's projection instance.
- */
-export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
-
-/**
  * Response from [`ReadActivity`].
  */
 export type ReadActivityResponse = {
@@ -2033,11 +1779,6 @@ export type ReadActivityResponse = {
      */
     truncated: boolean;
 };
-
-/**
- * How frequently an active projection is regenerated.
- */
-export type RefreshCadence = 'high' | 'medium' | 'low';
 
 /**
  * Request body for rejecting a pending tool call.
@@ -2478,11 +2219,6 @@ export type StructuredToolActivity = {
 };
 
 /**
- * The kind of entity a projection is materialized for.
- */
-export type TargetType = 'user' | 'team';
-
-/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction = {
@@ -2754,57 +2490,6 @@ export type UpdateToolResponseRequest = {
      * The tool call ID whose response should be updated.
      */
     toolCallId: string;
-};
-
-/**
- * Request body for getting or creating an ai projection. The concrete target
- * id is resolved from the authenticated user, so only the target type is sent.
- */
-export type UpsertProjectionRequest = {
-    /**
-     * When `true` and generation is needed (cold instance or `regenerate`),
-     * the server generates inline and responds with the finished result
-     * instead of returning immediately and pushing an update through the
-     * connection gateway.
-     */
-    await?: boolean;
-    /**
-     * How long the projection remains active without being requested.
-     */
-    expiry: Expiry;
-    /**
-     * The frontend-defined projection id (e.g. `notification_important_widget`).
-     */
-    id: string;
-    /**
-     * Optional `provider/model` id used for generation (e.g.
-     * `cerebras/llama-3.3-70b`). The default model is used when absent.
-     */
-    model?: string | null;
-    /**
-     * Optional JSON schema the generated result must conform to. When set,
-     * `data` holds the JSON serialization of a conforming value. Enforcement
-     * is prompted (non-strict), so it works across providers.
-     */
-    output_schema?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * The prompt used to materialize the projection.
-     */
-    prompt: string;
-    /**
-     * How frequently the projection should be regenerated.
-     */
-    refresh_cadence: RefreshCadence;
-    /**
-     * When `true`, regenerate even if a cached result exists.
-     */
-    regenerate?: boolean;
-    /**
-     * Whether the projection is materialized for the requesting user or their team.
-     */
-    target_type: TargetType;
 };
 
 /**
@@ -3156,27 +2841,6 @@ export type GetUsageHandlerResponses = {
 };
 
 export type GetUsageHandlerResponse = GetUsageHandlerResponses[keyof GetUsageHandlerResponses];
-
-export type UpsertAiProjectionData = {
-    body: UpsertProjectionRequest;
-    path?: never;
-    query?: never;
-    url: '/ai-projections';
-};
-
-export type UpsertAiProjectionErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UpsertAiProjectionError = UpsertAiProjectionErrors[keyof UpsertAiProjectionErrors];
-
-export type UpsertAiProjectionResponses = {
-    200: ProjectionStateResponse;
-};
-
-export type UpsertAiProjectionResponse = UpsertAiProjectionResponses[keyof UpsertAiProjectionResponses];
 
 export type GetChatsForAttachmentHandlerData = {
     body?: never;
@@ -3672,216 +3336,6 @@ export type GenerateDatabaseQueryResponses = {
 };
 
 export type GenerateDatabaseQueryResponse = GenerateDatabaseQueryResponses[keyof GenerateDatabaseQueryResponses];
-
-export type CreateSyncedDatabaseData = {
-    body: CreateDatabaseSyncRequest;
-    path?: never;
-    query?: never;
-    url: '/databases/syncs';
-};
-
-export type CreateSyncedDatabaseErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * The source was not found, or the connection may not read it
-     */
-    404: ErrorResponse;
-    /**
-     * The source is not connected, or the id names another sync
-     */
-    409: ErrorResponse;
-    500: ErrorResponse;
-    /**
-     * The source could not be read
-     */
-    502: ErrorResponse;
-};
-
-export type CreateSyncedDatabaseError = CreateSyncedDatabaseErrors[keyof CreateSyncedDatabaseErrors];
-
-export type CreateSyncedDatabaseResponses = {
-    201: DatabaseSync;
-};
-
-export type CreateSyncedDatabaseResponse = CreateSyncedDatabaseResponses[keyof CreateSyncedDatabaseResponses];
-
-export type ListDatabaseSyncSourcesData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/databases/syncs/sources';
-};
-
-export type ListDatabaseSyncSourcesErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    500: ErrorResponse;
-    /**
-     * Notion could not be read
-     */
-    502: ErrorResponse;
-};
-
-export type ListDatabaseSyncSourcesError = ListDatabaseSyncSourcesErrors[keyof ListDatabaseSyncSourcesErrors];
-
-export type ListDatabaseSyncSourcesResponses = {
-    200: DatabaseSyncSources;
-};
-
-export type ListDatabaseSyncSourcesResponse = ListDatabaseSyncSourcesResponses[keyof ListDatabaseSyncSourcesResponses];
-
-export type ListDatabaseSyncsData = {
-    body?: never;
-    path: {
-        /**
-         * Database id
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/databases/{id}/syncs';
-};
-
-export type ListDatabaseSyncsErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No edit access to the database
-     */
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListDatabaseSyncsError = ListDatabaseSyncsErrors[keyof ListDatabaseSyncsErrors];
-
-export type ListDatabaseSyncsResponses = {
-    200: ListDatabaseSyncsResponse;
-};
-
-export type ListDatabaseSyncsResponse2 = ListDatabaseSyncsResponses[keyof ListDatabaseSyncsResponses];
-
-export type CreateDatabaseSyncData = {
-    body: CreateDatabaseSyncRequest;
-    path: {
-        /**
-         * Database id
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/databases/{id}/syncs';
-};
-
-export type CreateDatabaseSyncErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No edit access to the database
-     */
-    403: ErrorResponse;
-    /**
-     * The source was not found, or the connection may not read it
-     */
-    404: ErrorResponse;
-    /**
-     * The source is not connected, or the id names another sync
-     */
-    409: ErrorResponse;
-    500: ErrorResponse;
-    /**
-     * The source could not be read
-     */
-    502: ErrorResponse;
-};
-
-export type CreateDatabaseSyncError = CreateDatabaseSyncErrors[keyof CreateDatabaseSyncErrors];
-
-export type CreateDatabaseSyncResponses = {
-    201: DatabaseSync;
-};
-
-export type CreateDatabaseSyncResponse = CreateDatabaseSyncResponses[keyof CreateDatabaseSyncResponses];
-
-export type DeleteDatabaseSyncData = {
-    body?: never;
-    path: {
-        /**
-         * Database id
-         */
-        id: string;
-        /**
-         * Sync id
-         */
-        sync_id: string;
-    };
-    query?: never;
-    url: '/databases/{id}/syncs/{sync_id}';
-};
-
-export type DeleteDatabaseSyncErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No edit access to the database
-     */
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteDatabaseSyncError = DeleteDatabaseSyncErrors[keyof DeleteDatabaseSyncErrors];
-
-export type DeleteDatabaseSyncResponses = {
-    204: void;
-};
-
-export type DeleteDatabaseSyncResponse = DeleteDatabaseSyncResponses[keyof DeleteDatabaseSyncResponses];
-
-export type RunDatabaseSyncData = {
-    body?: never;
-    path: {
-        /**
-         * Database id
-         */
-        id: string;
-        /**
-         * Sync id
-         */
-        sync_id: string;
-    };
-    query?: never;
-    url: '/databases/{id}/syncs/{sync_id}/run';
-};
-
-export type RunDatabaseSyncErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No edit access to the database
-     */
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type RunDatabaseSyncError = RunDatabaseSyncErrors[keyof RunDatabaseSyncErrors];
-
-export type RunDatabaseSyncResponses = {
-    202: unknown;
-};
 
 export type DecisionsData = {
     body: DecisionRequest;
@@ -4603,6 +4057,10 @@ export type EditExplicitMemoryErrors = {
      * Internal server error
      */
     500: MemoryErrorBody;
+    /**
+     * Privacy review is unavailable; nothing was saved
+     */
+    503: MemoryErrorBody;
 };
 
 export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];

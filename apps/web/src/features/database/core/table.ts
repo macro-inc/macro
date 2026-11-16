@@ -133,6 +133,7 @@ export function formatCellValue(
     if (range) return formatTimeRange(range);
   }
   if (column.dataType === 'NUMBER' && typeof value === 'number') {
+    if (column.percentage) return `${formatNumber(value * 100)}%`;
     if (column.currencyColumnId && cells) {
       const currency = cells[column.currencyColumnId] ?? 'USD';
       return `${currency} ${monetaryFormat.format(value)}`;

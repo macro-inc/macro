@@ -210,7 +210,6 @@ fn exported_queues_match_local_values() {
         "notification-ingress-queue",
     );
     assert_eq!(queues.search_event_queue.as_ref(), "search-event-queue");
-    assert_eq!(queues.ai_projection_queue.as_ref(), "ai-projection-queue");
     assert_eq!(queues.convert_queue.as_ref(), "convert-service-queue");
     assert_eq!(
         queues.document_delete_queue.as_ref(),
@@ -287,10 +286,6 @@ fn exported_queues_match_dev_values() {
         "notification-ingress-queue-dev",
     );
     assert_eq!(queues.search_event_queue.as_ref(), "search-event-queue-dev");
-    assert_eq!(
-        queues.ai_projection_queue.as_ref(),
-        "ai-projection-queue-dev",
-    );
     assert_eq!(queues.convert_queue.as_ref(), "convert-service-queue-dev");
     assert_eq!(
         queues.document_delete_queue.as_ref(),
@@ -379,10 +374,6 @@ fn exported_queues_match_prod_values() {
         queues.search_event_queue.as_ref(),
         "search-event-queue-prod"
     );
-    assert_eq!(
-        queues.ai_projection_queue.as_ref(),
-        "ai-projection-queue-prod",
-    );
     assert_eq!(queues.convert_queue.as_ref(), "convert-service-queue-prod");
     assert_eq!(
         queues.document_delete_queue.as_ref(),
@@ -468,10 +459,6 @@ fn exported_queue_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         SearchEventQueue::local().override_env_var_name(),
         "OVERRIDE_SEARCH_EVENT_QUEUE",
-    );
-    assert_eq!(
-        AiProjectionQueue::local().override_env_var_name(),
-        "OVERRIDE_AI_PROJECTION_QUEUE",
     );
     assert_eq!(
         ConvertQueue::local().override_env_var_name(),

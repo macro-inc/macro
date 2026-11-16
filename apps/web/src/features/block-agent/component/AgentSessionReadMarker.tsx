@@ -1,3 +1,5 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markNotificationsForEntityAsRead } from '@notifications/notification-helpers';
 import type { NotificationSource } from '@notifications/notification-source';
@@ -28,6 +30,7 @@ function ActiveSessionReadMarker(props: {
   notificationSource: NotificationSource;
 }) {
   const entity = { type: 'agent_session', id: props.sessionId } as const;
+  const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const unread = () =>
     (
       props.notificationSource.notificationsByEntity()[
@@ -39,7 +42,9 @@ function ActiveSessionReadMarker(props: {
 
   const markRead = async () => {
     markedInitialView = true;
-    for (const notification of unread()) attempted.add(notification.id);
+    if (!graphqlSoup().enabled) {
+      for (const notification of unread()) attempted.add(notification.id);
+    }
     try {
       await markNotificationsForEntityAsRead(props.notificationSource, entity);
     } catch (error) {
@@ -57,7 +62,18 @@ function ActiveSessionReadMarker(props: {
   // Notification loading and incoming updates can happen after the session
   // mounts. Observe those external events for the lifetime of the active view;
   // an optimistic seen update must not schedule another mutation.
+  // The GraphQL feed never holds agent sessions and reading it would load it,
+  // so that mode marks the opened session once without observing the feed.
   createEffect(() => {
+    const flag = graphqlSoup();
+    if (flag.loading) {
+      scheduleRead.clear();
+      return;
+    }
+    if (flag.enabled) {
+      if (!markedInitialView) scheduleRead();
+      return;
+    }
     if (props.notificationSource.isLoading()) {
       scheduleRead.clear();
       return;

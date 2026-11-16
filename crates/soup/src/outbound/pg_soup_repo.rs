@@ -31,6 +31,7 @@ pub mod grouping;
 mod harness;
 mod initiative;
 mod notified;
+mod team;
 mod touched;
 mod unexpanded;
 
@@ -282,6 +283,16 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
+            team::by_ids(&self.pool.0, by_ids_request.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                    sort_key: None,
+                }),
+        );
+        items.extend(
             database_row::by_ids(&self.pool.0, by_ids_request)
                 .await?
                 .into_iter()
@@ -306,6 +317,7 @@ impl SoupRepo for PgSoupRepo {
         items.extend(agent_session::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(initiative::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(harness::by_ids(&self.pool.0, by_ids_request.clone()).await?);
+        items.extend(team::by_ids(&self.pool.0, by_ids_request.clone()).await?);
         items.extend(database_row::by_ids(&self.pool.0, by_ids_request).await?);
         Ok(items)
     }
@@ -488,7 +500,8 @@ pub(crate) async fn populate_properties(
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
                 | SoupItem::AgentSession(_)
-                | SoupItem::Harness(_) => None,
+                | SoupItem::Harness(_)
+                | SoupItem::Team(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }
             .map(|properties| properties.iter().cloned().map(SoupProperty::from).collect())

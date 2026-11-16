@@ -25,7 +25,7 @@ export function markCalendarCacheUnsupported(host: CacheHost): void {
 function calendarCacheHost(enabled: boolean): CacheHost | undefined {
   if (!enabled || !graphqlCacheEnabled()) return undefined;
   const host = getGraphqlSoupCacheHost();
-  if (!host || host.disabled || unsupportedHosts().has(host)) return undefined;
+  if (!host || unsupportedHosts().has(host)) return undefined;
   return host;
 }
 
