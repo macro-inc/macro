@@ -55,6 +55,8 @@ From the repository root: `just check`.
 - Provider event ends are exclusive; shared all-day form values include the end
   day. Keep conversion at the existing form/occurrence boundaries.
 - Imported zero-duration timed events are points, not editable time ranges.
+- Keep mini-month marker reads bounded to its displayed six-week grid and project
+  occurrences by local calendar day with exclusive ends.
 - Keep authorization, guest-policy restrictions, and read-only team projections
   intact when recomposing event actions.
 - Keep source readiness and account/range changes distinct from background refresh;

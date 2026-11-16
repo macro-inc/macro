@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { CalendarOccurrenceDataOptions } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type CalendarEvent,
   TEAM_OOO_SOURCE_ID,
@@ -23,6 +24,7 @@ import { CalendarMiniCalendar, TeamOooUpcomingList } from './CalendarSidebar';
 
 const requests = vi.hoisted(() => ({
   teamOoo: vi.fn<() => Promise<TeamOutOfOfficeItem[]>>(),
+  occurrences: vi.fn<(options: CalendarOccurrenceDataOptions) => void>(),
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -50,6 +52,12 @@ vi.mock('@queries/calendar/team-ooo', () => ({
       })),
     })),
 }));
+vi.mock('@app/features/calendar/hooks/use-calendar-occurrence-data', () => ({
+  useCalendarOccurrenceData: (options: CalendarOccurrenceDataOptions) => {
+    requests.occurrences(options);
+    return { visibleEvents: () => [] };
+  },
+}));
 
 const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
 const [selectedEventAnchor, setSelectedEventAnchor] =
@@ -72,6 +80,8 @@ const closeEventDetails = vi.fn(() => {
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   useCalendarView: () => ({
     displaySettings: { weekStartsOn: 1 },
+    sourceById: () => new Map(),
+    sourcesReady: () => true,
     selectedEvent,
     selectedEventAnchor,
     selectEvent,
@@ -145,6 +155,25 @@ afterEach(() => {
 });
 
 describe('CalendarMiniCalendar', () => {
+  it('bounds marker reads to the independently browsed six-week grid', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 13));
+    const user = userEvent.setup();
+    render(() => <CalendarMiniCalendar />);
+    const options = requests.occurrences.mock.calls[0]?.[0];
+    if (!options) throw new Error('Missing mini-month data source');
+    expect(options.range()).toMatchObject({
+      startDate: '2026-10-26',
+      endDate: '2026-12-07',
+    });
+    expect(options.sourcesReady?.()).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Go to next month' }));
+    expect(options.range()).toMatchObject({
+      startDate: '2026-11-30',
+      endDate: '2027-01-11',
+    });
+    expect(gotoDate).not.toHaveBeenCalled();
+  });
   it.each([
     {
       date: new Date(2026, 9, 31),

@@ -8,11 +8,13 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type TeamOooWindow,
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { miniMonthMarkers } from '@app/features/calendar/primitives/mini-month-markers';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
@@ -25,10 +27,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
+import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { format, getDaysInMonth } from 'date-fns';
+import { addDays, format, getDaysInMonth, startOfWeek } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { useCalendarFocus } from '../calendar-focus-target';
@@ -50,6 +53,22 @@ export function CalendarMiniCalendar() {
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
   const [focusedDay, setFocusedDay] = createSignal(currentDate());
+  const [month, setMonth] = createSignal(currentDate());
+  const gridStart = createMemo(() =>
+    startOfWeek(new Date(month().getFullYear(), month().getMonth(), 1), {
+      weekStartsOn: calendarView.displaySettings.weekStartsOn,
+    })
+  );
+  const gridEnd = createMemo(() => addDays(gridStart(), 42));
+  const data = useCalendarOccurrenceData({
+    range: () => createCalendarOccurrenceQueryRange(gridStart(), gridEnd()),
+    sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
+    isSourceVisible: calendarView.isSourceVisible,
+  });
+  const markersByDay = createMemo(() =>
+    miniMonthMarkers(data.visibleEvents(), gridStart(), gridEnd())
+  );
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
@@ -65,17 +84,24 @@ export function CalendarMiniCalendar() {
       value={currentDate()}
       focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
-      onMonthChange={(month) =>
+      month={month()}
+      markersByDay={markersByDay()}
+      onMonthChange={(nextMonth) => {
+        setMonth(nextMonth);
         setFocusedDay(
           new Date(
-            month.getFullYear(),
-            month.getMonth(),
-            Math.min(focusedDay().getDate(), getDaysInMonth(month))
+            nextMonth.getFullYear(),
+            nextMonth.getMonth(),
+            Math.min(focusedDay().getDate(), getDaysInMonth(nextMonth))
           )
-        )
-      }
+        );
+      }}
       onFocusedDayChange={setFocusedDay}
-      onValueChange={(date) => date && calendarPager.gotoDate(date)}
+      onValueChange={(date) => {
+        if (!date) return;
+        setMonth(date);
+        calendarPager.gotoDate(date);
+      }}
     />
   );
 }

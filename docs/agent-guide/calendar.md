@@ -456,7 +456,10 @@ icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar has no search of its own; event search is the header's
-`Search events`. Its mini calendar browses months independently of the main grid:
+`Search events`. Its mini calendar shows one calendar-colored dot per event up
+to three, then a short multicolor bar. Markers use visible, non-cancelled
+occurrences across the displayed six-week grid, with exclusive event ends.
+Its mini calendar browses months independently of the main grid:
 month arrows, the month picker, and keyboard focus changes do not move the main
 calendar. Selecting a day navigates the main calendar without closing the narrow
 layout's navigation overlay. Main calendar navigation updates the mini calendar's

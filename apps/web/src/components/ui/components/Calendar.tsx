@@ -1,3 +1,4 @@
+import { formatLocalDate } from '@core/util/local-date';
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
@@ -19,6 +20,7 @@ import {
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
+import { CalendarDayMarkers } from './calendar-day-markers/CalendarDayMarkers';
 import { Dropdown } from './Dropdown';
 
 const formatWeekdayLong = new Intl.DateTimeFormat(undefined, {
@@ -57,13 +59,20 @@ export type CalendarProps = Omit<
   class?: string;
   /** Optional end-exclusive date range to highlight. */
   highlightedRange?: HighlightedRange;
+  /** Event colors keyed by local YYYY-MM-DD day; omit for an unmarked calendar. */
+  markersByDay?: ReadonlyMap<string, readonly string[]>;
 };
 
-/** An accessible, single-date calendar styled with the app's semantic tokens. */
+/**
+ * An accessible, single-date calendar styled with the app's semantic tokens.
+ * @do Pass local-day event colors as markersByDay when a host has occurrence data.
+ * @dont Put interactive content inside a day trigger; markers are decorative.
+ */
 export function Calendar(props: CalendarProps) {
   const [local, calendarProps] = splitProps(props, [
     'class',
     'highlightedRange',
+    'markersByDay',
   ]);
   const initialFallbackDate = calendarProps.value ?? new Date();
 
@@ -127,7 +136,7 @@ export function Calendar(props: CalendarProps) {
                     <Index each={week()}>
                       {(day) => (
                         <CorvuCalendar.Cell
-                          class="p-0 text-center data-highlighted-range:bg-active data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
+                          class="p-0 text-center data-highlighted-range:bg-accent/10 data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
                           data-highlighted-range={
                             isDateInRange(day(), local.highlightedRange)
                               ? ''
@@ -152,9 +161,18 @@ export function Calendar(props: CalendarProps) {
                                 ? ''
                                 : undefined
                             }
-                            class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
+                            class="relative mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
                           >
                             {day().getDate()}
+                            <Show
+                              when={local.markersByDay?.get(
+                                formatLocalDate(day())
+                              )}
+                            >
+                              {(colors) => (
+                                <CalendarDayMarkers colors={colors()} />
+                              )}
+                            </Show>
                           </CorvuCalendar.CellTrigger>
                         </CorvuCalendar.Cell>
                       )}
