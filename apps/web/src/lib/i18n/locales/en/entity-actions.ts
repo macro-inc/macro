@@ -294,6 +294,10 @@ export default {
   toastGithubLinkCopyFailed: 'Could not copy GitHub link',
   toastBranchNameCopied: 'Branch name copied to clipboard',
   download: 'Download',
+  print: 'Print',
+  downloadAsDocx: 'Download DOCX',
+  presentationActions: 'Presentation actions',
+  documentActions: 'Document actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',
@@ -342,4 +346,8 @@ export default {
   // Markdown document layout.
   turnOnWideMode: 'Turn on wide mode',
   turnOffWideMode: 'Turn off wide mode',
+
+  // HTML files in the code block.
+  showHtmlCode: 'Show code',
+  showHtmlRendered: 'Show rendered',
 };

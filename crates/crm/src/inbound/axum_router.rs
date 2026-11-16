@@ -60,6 +60,9 @@ pub mod blocked_domains;
 /// team saved views).
 pub mod team_settings;
 
+/// Fresh viewer authority for session cache retirement.
+pub mod member_access;
+
 /// Individual email consent and domain blocklists.
 pub mod email_privacy;
 
@@ -150,9 +153,17 @@ where
 {
     Router::new()
         .route(
+            "/member-access",
+            get(member_access::handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/email-privacy",
             get(email_privacy::get_handler::<C, St, Eas, Auth>)
                 .put(email_privacy::update_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/email-privacy/threads",
+            get(email_privacy::excluded_threads_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies",
@@ -262,6 +273,12 @@ impl IntoResponse for CrmError {
                     message: message.into(),
                 }),
             ),
+            CrmError::AccessDenied => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "CRM access is not enabled for this team member".into(),
+                }),
+            ),
             CrmError::AdminRoleRequired => (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -272,6 +289,12 @@ impl IntoResponse for CrmError {
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
                     message: "changing CRM admin settings requires admin/owner team role".into(),
+                }),
+            ),
+            CrmError::ThreadExclusionsUnavailable => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "thread exclusions are not available".into(),
                 }),
             ),
             CrmError::StageEditRoleRequired(role) => (

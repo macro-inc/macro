@@ -463,20 +463,23 @@ async fn no_item_kinds_run_no_query(pool: PgPool) {
     );
 }
 
-/// With a replica set, the edges read it and only it: they still answer once
-/// the primary is closed, on a read-only connection, while the scope read,
-/// which stays on the primary, fails.
+/// A verified bot's data can use the replica without a membership lookup.
+/// Human authority always needs the primary and fails closed when it is down.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures("fixtures/contact_listing.sql")
 )]
 async fn a_replica_serves_the_edges_and_nothing_else(pool: PgPool) {
     let viewer = viewer(&pool).await;
+    let bot_scope = || CrmContactListScope::Team {
+        team_id: id(11),
+        include_hidden: false,
+    };
     add_records(&pool).await;
     add_items(&pool).await;
     let expected: BTreeSet<_> = new_edges(
         &CompaniesRepositoryImpl::new(pool.clone()),
-        CrmContactListScope::Viewer(&viewer),
+        bot_scope(),
         &ALL_TYPES,
     )
     .await
@@ -498,11 +501,16 @@ async fn a_replica_serves_the_edges_and_nothing_else(pool: PgPool) {
     pool.close().await;
 
     assert_eq!(
-        new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+        new_edges(&repo, bot_scope(), &ALL_TYPES)
             .await
             .into_iter()
             .collect::<BTreeSet<_>>(),
         expected
+    );
+    assert!(
+        repo.activity_property_edges(CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+            .await
+            .is_err()
     );
     assert!(
         repo.resolve_activity(CrmContactListScope::Viewer(&viewer))
@@ -517,4 +525,86 @@ fn literal_property_ids_are_the_system_properties() {
     let sql = include_str!("../activity_property_edges.sql");
     assert!(sql.contains(&SystemPropertyKey::COMPANIES_UUID.to_string()));
     assert!(sql.contains(&SystemPropertyKey::CONTACTS_UUID.to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        "fixtures/contact_listing.sql",
+        "fixtures/activity_replica_authority.sql"
+    )
+)]
+async fn activity_edges_use_primary_access_even_with_stale_replica_membership(pool: PgPool) {
+    let viewer = viewer(&pool).await;
+    add_records(&pool).await;
+    add_items(&pool).await;
+    let replica = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone().options([
+            ("search_path", "stale_authority,public"),
+            ("default_transaction_read_only", "on"),
+        ]))
+        .await
+        .unwrap();
+    let repo = CompaniesRepositoryImpl::new(pool.clone())
+        .with_activity_edges_replica(readonly_pool::ReadOnlyPool(replica.clone()));
+    assert!(
+        !new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+            .await
+            .is_empty()
+    );
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = false, team_role = 'member' WHERE user_id = $1",
+        &viewer
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+            .await
+            .is_empty()
+    );
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = true WHERE user_id = $1 AND team_id = $2",
+        &viewer,
+        id(12)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let granted: BTreeSet<_> = new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+        .await
+        .into_iter()
+        .map(|(_, id)| id)
+        .collect();
+    assert!(granted.contains("doc-102"));
+    assert!(!granted.contains("task-101"));
+    assert!(!granted.contains("call-103"));
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'admin' WHERE user_id = $1 AND team_id = $2",
+        &viewer,
+        id(11)
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let admin: BTreeSet<_> = new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+        .await
+        .into_iter()
+        .map(|(_, id)| id)
+        .collect();
+    assert!(admin.contains("task-101"));
+    assert!(!admin.contains("call-103"));
+    // A removed primary membership cannot survive through the replica's old row.
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", &viewer)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        new_edges(&repo, CrmContactListScope::Viewer(&viewer), &ALL_TYPES)
+            .await
+            .is_empty()
+    );
+    replica.close().await;
 }

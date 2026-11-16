@@ -387,6 +387,11 @@ export class Canvas {
    * await channel.send(`Current plan: ${canvas.webUrl()}`, { images: [image] });
    * ```
    *
+   * @example Look at the canvas yourself, in an agent session's ExecuteCode.
+   * ```js
+   * return { data: { link: canvas.webUrl() }, images: [await canvas.render()] };
+   * ```
+   *
    * @example Show the render in your reply.
    * ```js
    * const image = await canvas.render();

@@ -1,5 +1,5 @@
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
@@ -104,7 +104,11 @@ export function showsSessionHarness(session: {
  */
 export function modelDisplayName(
   id: string,
-  available: readonly { id: string; name: string }[]
+  available: readonly {
+    id: string;
+    name: string;
+    description?: string | null;
+  }[]
 ): string {
-  return modelLabel(id, available.find((model) => model.id === id)?.name);
+  return catalogModelLabel(id, available);
 }

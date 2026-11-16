@@ -533,6 +533,31 @@ async fn allowed_restates_the_privacy_function(pool: sqlx::PgPool) -> anyhow::Re
         "both verdicts occur: {allowed} of {total}"
     );
 
+    let excluded = sqlx::query_scalar!(
+        r#"
+        INSERT INTO crm_email_thread_exclusions (team_id, user_id, link_id, thread_id)
+        SELECT $1, l.macro_id, l.id, t.id
+        FROM email_threads t JOIN email_links l ON l.id = t.link_id
+        WHERE t.provider_id = 'ph:blocked-draft'
+        RETURNING thread_id
+        "#,
+        team,
+    )
+    .fetch_one(&pool)
+    .await?;
+    let (after_exclusion, differ, total) = verdicts(&pool, team).await?;
+    assert_eq!(after_exclusion, allowed - 1);
+    assert_eq!(differ, 0, "{differ} of {total} threads get another verdict");
+
+    sqlx::query!(
+        "DELETE FROM crm_email_thread_exclusions WHERE team_id = $1 AND thread_id = $2",
+        team,
+        excluded,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(verdicts(&pool, team).await?, (allowed, 0, total));
+
     // Delta reads only its own inbox, less what its blocklist and hidden
     // company cut.
     let (allowed, differ, total) = verdicts(&pool, Uuid::parse_str(DELTA)?).await?;

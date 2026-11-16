@@ -128,7 +128,7 @@ function ActivityTasksBody(props: {
             label={t('crm.searchSalesTasks')}
             value={state.search}
             onValueChange={(search) => setState('search', search)}
-            onEscape={() => listElement?.focus()}
+            focusResults={() => listElement?.focus()}
             registerFocus={() => {}}
           />
         </ListHeader>

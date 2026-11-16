@@ -114,7 +114,7 @@ function TasksViewRoot() {
 
   const taskList = () => (
     <>
-      <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+      <TasksHeader focusSearchResults={() => listElement()?.focus()} />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content class="flex flex-col">
         <Show
