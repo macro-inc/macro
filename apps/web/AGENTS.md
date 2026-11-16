@@ -224,6 +224,10 @@ Give browser fixtures the app's viewport metadata and assert the CSS viewport wi
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+The same suite's `list-search.browser.e2e.ts` drives the list header's search
+field over the real hotkey engine and list controller: ArrowDown and Enter move
+to the first result, and Escape keeps the search in the field and clears it
+from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -1020,6 +1024,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search field only when the sidebar is the list it searches (Home, Chat, Agents),
   in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
   New; a view with a list header searches from `ListHeaderSearch` alone.
+  `ListHeaderSearch` owns the search keys: pass `focusResults` so ArrowDown,
+  Enter and Escape can move the keyboard into the list, and never clear the
+  query on Escape yourself. ArrowDown and Enter then run the list's own "go to
+  first item" command, so a list on `useListInteractions` lands on its first
+  row with no code in the view. It registers the
+  split's Escape that clears a search from the list; keep a view's own Escape
+  steps (leaving a tab) conditional on no search, and selection clearing at
+  `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
