@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use super::HttpLexicalClient;
+use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 use messages::domain::models::MessageParent;
 use trigger_context::TriggerContext;
@@ -25,8 +25,8 @@ struct LexicalResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
-pub(crate) struct MarkdownSnapshotRequest<'a> {
-    pub(crate) markdown: &'a str,
+struct MarkdownSnapshotRequest<'a> {
+    markdown: &'a str,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -35,13 +35,13 @@ struct MarkdownResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
-pub(crate) struct MentionsRequest<'a> {
-    pub(crate) markdown: &'a str,
+struct MentionsRequest<'a> {
+    markdown: &'a str,
 }
 
 #[derive(Debug, serde::Serialize)]
-pub(crate) struct HtmlRequest<'a> {
-    pub(crate) markdown: &'a str,
+struct HtmlRequest<'a> {
+    markdown: &'a str,
 }
 
 /// An email body rendered from markdown: the two parts a MIME message carries.
@@ -54,8 +54,8 @@ pub struct RenderedBody {
 }
 
 #[derive(Debug, serde::Serialize)]
-pub(crate) struct ExtractReplyRequest<'a> {
-    pub(crate) markdown: &'a str,
+struct ExtractReplyRequest<'a> {
+    markdown: &'a str,
 }
 
 /// The leading `ReplyTargetNode` extracted from markdown by the lexical
@@ -185,10 +185,10 @@ pub struct AgentAnnouncementReplyTarget {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct AgentAnnouncementRequest<'a> {
+struct AgentAnnouncementRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) reply_target: Option<&'a AgentAnnouncementReplyTarget>,
-    pub(crate) chip: &'a AgentAnnouncementChip,
+    reply_target: Option<&'a AgentAnnouncementReplyTarget>,
+    chip: &'a AgentAnnouncementChip,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -222,8 +222,8 @@ pub struct AgentConnectionPrompt {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct AgentConnectionPromptRequest<'a> {
-    pub(crate) connection_prompt: &'a AgentConnectionPrompt,
+struct AgentConnectionPromptRequest<'a> {
+    connection_prompt: &'a AgentConnectionPrompt,
 }
 
 /// What a chat agent's thread message says below its session link, in the
@@ -321,8 +321,8 @@ pub struct AgentChatReply {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct AgentChatReplyRequest<'a> {
-    pub(crate) chat_reply: &'a AgentChatReply,
+struct AgentChatReplyRequest<'a> {
+    chat_reply: &'a AgentChatReply,
 }
 
 /// A person an agent session acts for or hears from.
@@ -359,16 +359,16 @@ pub struct AgentContextCurrentTime<'a> {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct AgentContextRequest<'a> {
-    pub(crate) prompt_markdown: &'a str,
+struct AgentContextRequest<'a> {
+    prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) instructions: Option<&'a str>,
+    instructions: Option<&'a str>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    pub(crate) people: Option<&'a AgentContextPeople<'a>>,
+    people: Option<&'a AgentContextPeople<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) current_time: Option<&'a AgentContextCurrentTime<'a>>,
+    current_time: Option<&'a AgentContextCurrentTime<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) trigger: Option<&'a TriggerContext>,
+    trigger: Option<&'a TriggerContext>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -421,10 +421,10 @@ impl MarkdownTarget {
 /// rather than a bare `String` — the type is the guarantee.
 ///
 /// There is deliberately no `From<String>`. Obtain one only from
-/// [`crate::LexicalClient::get_embedding_markdown`] (the authoritative backend render)
+/// [`LexicalClient::get_embedding_markdown`] (the authoritative backend render)
 /// or [`EmbeddingMarkdown::from_client_trusted`] (when the frontend already
 /// rendered it with lexical-core's `markdownToEmbeddingText`).
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmbeddingMarkdown(String);
 
 impl EmbeddingMarkdown {
@@ -476,25 +476,22 @@ pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwes
     }
     let status = response.status();
     let body = response.text().await?;
-    tracing::error!(status=%status, "unexpected response from lexical service");
+    tracing::error!(body=%body, status=%status, "unexpected response from lexical service");
     anyhow::bail!(body);
 }
 
-impl HttpLexicalClient {
+impl LexicalClient {
+    #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown(&self, document_id: &str) -> Result<Vec<MarkdownParseResult>> {
         let url = format!("{}/search/{}", self.url, document_id);
-        let response = check_response(
-            self.client
-                .get(&url)
-                .headers(crate::trace_headers())
-                .send()
-                .await?,
-        )
-        .await?;
+        let response = check_response(self.client.get(&url).send().await?).await?;
         let data: LexicalResponse = response.json().await?;
         Ok(data.data.into_iter().map(Into::into).collect())
     }
 
+    /// Fetches the full document rendered as a single markdown string in the
+    /// requested target format.
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_markdown(&self, document_id: &str, target: MarkdownTarget) -> Result<String> {
         let url = format!(
             "{}/markdown/{}?target={}",
@@ -506,6 +503,11 @@ impl HttpLexicalClient {
         Ok(response.data)
     }
 
+    /// Fetches the document body rendered as [embedding-format markdown](EmbeddingMarkdown),
+    /// typed so callers can only consume it as an [`EmbeddingMarkdown`]. Prefer
+    /// this over [`get_markdown`](Self::get_markdown) with
+    /// [`MarkdownTarget::Embedding`] anywhere the result feeds task-dedup.
+    #[tracing::instrument(skip(self), err)]
     pub async fn get_embedding_markdown(&self, document_id: &str) -> Result<EmbeddingMarkdown> {
         let markdown = self
             .get_markdown(document_id, MarkdownTarget::Embedding)
@@ -513,6 +515,10 @@ impl HttpLexicalClient {
         Ok(EmbeddingMarkdown(markdown))
     }
 
+    /// Resolve a comment mark against the live document: `None` when the
+    /// document no longer carries it. Performs no access check of its own, so
+    /// callers must already hold access to the document.
+    #[tracing::instrument(skip(self), err)]
     pub async fn resolve_comment_mark(
         &self,
         document_id: &str,
@@ -523,11 +529,13 @@ impl HttpLexicalClient {
         Ok(response.data)
     }
 
+    #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown_for_ai(&self, document_id: &str) -> Result<CognitionResponseData> {
         let url = format!("{}/cognition/{}", self.url, document_id);
         self.get_json(&url).await
     }
 
+    #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown_for_ai_from_url(
         &self,
         presigned_url: &str,
@@ -537,7 +545,6 @@ impl HttpLexicalClient {
             self.client
                 .get(&url)
                 .query(&[("url", presigned_url)])
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -545,18 +552,19 @@ impl HttpLexicalClient {
         response.json().await.context("unexpected response")
     }
 
+    #[tracing::instrument(skip(self), err)]
     pub async fn parse_cognition_v2(&self, document_id: &str) -> Result<CognitionV2ResponseData> {
         let url = format!("{}/cognitionv2/{}", self.url, document_id);
         self.get_json(&url).await
     }
 
+    #[tracing::instrument(skip(self, markdown), err)]
     pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
         let response = check_response(
             self.client
                 .post(&url)
                 .json(&MarkdownSnapshotRequest { markdown })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -566,13 +574,17 @@ impl HttpLexicalClient {
         Ok(bytes.to_vec())
     }
 
+    /// Renders `markdown` to an email-ready HTML body via the lexical
+    /// service, so a caller with no browser composer — the `SendEmail` tool,
+    /// whose body the model writes as markdown — produces the same HTML the
+    /// composer would have exported.
+    #[tracing::instrument(skip(self, markdown), err)]
     pub async fn markdown_to_html(&self, markdown: &str) -> Result<RenderedBody> {
         let url = format!("{}/html", self.url);
         let response = check_response(
             self.client
                 .post(&url)
                 .json(&HtmlRequest { markdown })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -580,13 +592,15 @@ impl HttpLexicalClient {
         response.json().await.context("unexpected response")
     }
 
+    /// Parses `markdown` via the lexical service and returns the entity
+    /// mentions it contains.
+    #[tracing::instrument(skip(self, markdown), err)]
     pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
         let url = format!("{}/mentions", self.url);
         let response = check_response(
             self.client
                 .post(&url)
                 .json(&MentionsRequest { markdown })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -595,12 +609,13 @@ impl HttpLexicalClient {
         Ok(data.mentions)
     }
 
+    /// Compose dimension-preserving channel markup from a real Lexical image node.
+    #[tracing::instrument(skip_all, err)]
     pub async fn compose_image_markdown(&self, image: &ImageMarkdownRequest<'_>) -> Result<String> {
         let response = check_response(
             self.client
                 .post(format!("{}/image-markdown", self.url))
                 .json(image)
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -610,6 +625,10 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — via the lexical service,
+    /// so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
         reply_target: Option<&AgentAnnouncementReplyTarget>,
@@ -620,7 +639,6 @@ impl HttpLexicalClient {
             self.client
                 .post(&url)
                 .json(&AgentAnnouncementRequest { reply_target, chip })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -630,6 +648,8 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
+    /// Compose an account setup reply through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, prompt), err)]
     pub async fn compose_agent_connection_prompt(
         &self,
         prompt: &AgentConnectionPrompt,
@@ -641,7 +661,6 @@ impl HttpLexicalClient {
                 .json(&AgentConnectionPromptRequest {
                     connection_prompt: prompt,
                 })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -651,13 +670,15 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, reply), err)]
     pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
             self.client
                 .post(&url)
                 .json(&AgentChatReplyRequest { chat_reply: reply })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -667,6 +688,10 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
+    /// Sanitizes an agent prompt and optionally composes it with why the
+    /// agent was called via the lexical service, so internal nodes and
+    /// escaping are handled by Lexical rather than by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, current_time, trigger), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
@@ -686,7 +711,6 @@ impl HttpLexicalClient {
                     current_time,
                     trigger,
                 })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -695,6 +719,10 @@ impl HttpLexicalClient {
         Ok(data.markdown)
     }
 
+    /// Parses `markdown` via the lexical service and returns the leading
+    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
+    #[tracing::instrument(skip(self, markdown), err)]
     pub async fn extract_explicit_reply(
         &self,
         markdown: &str,
@@ -704,7 +732,6 @@ impl HttpLexicalClient {
             self.client
                 .post(&url)
                 .json(&ExtractReplyRequest { markdown })
-                .headers(crate::trace_headers())
                 .send()
                 .await?,
         )
@@ -714,14 +741,9 @@ impl HttpLexicalClient {
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let response = check_response(
-            self.client
-                .get(url)
-                .headers(crate::trace_headers())
-                .send()
-                .await?,
-        )
-        .await?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = check_response(self.client.get(url).headers(headers).send().await?).await?;
         response.json().await.context("unexpected response")
     }
 }

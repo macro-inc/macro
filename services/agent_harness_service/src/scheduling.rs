@@ -15,7 +15,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl};
+use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_drafting;
@@ -466,29 +466,16 @@ impl SchedulingRuntime {
     }
 }
 
-/// Host-owned services shared with routine scheduling.
-pub struct SchedulingDependencies<Ingress> {
-    pub db: sqlx::PgPool,
-    pub code: Option<crate::routine_code::SdkRoutineCode>,
-    pub notifications: Arc<Ingress>,
-    pub search: search_service_client::SearchServiceClient,
-    pub lexical: lexical_client::LexicalClient,
-}
-
 /// Compose routine scheduling and event workers alongside the harness API.
 pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
+    db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
+    code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
-    dependencies: SchedulingDependencies<Ingress>,
+    notifications: Arc<Ingress>,
+    search: search_service_client::SearchServiceClient,
 ) -> Result<SchedulingRuntime> {
-    let SchedulingDependencies {
-        db,
-        code,
-        notifications,
-        search,
-        lexical,
-    } = dependencies;
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
     let generation_ready = ready.clone();
@@ -555,7 +542,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         &db,
         &registrar,
         Arc::clone(&access),
-        lexical,
+        &config,
     )?);
     // Tool and code steps run in this process, as the owner; agent steps
     // still go through the routine-session operations.
@@ -1087,7 +1074,7 @@ fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,
     access: Arc<EntityAccessServiceImpl<PgAccessRepository>>,
-    lexical: lexical_client::LexicalClient,
+    config: &Config,
 ) -> Result<
     impl scheduled_action::domain::event_runs::condition::EventContentReader
     + scheduled_action::domain::ports::RoutineEventReader
@@ -1122,7 +1109,10 @@ fn event_content(
         call::domain::service::CallRecordQueryServiceImpl::new(
             call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
         ),
-        lexical,
+        lexical_client::LexicalClient::new(
+            config.internal_api_key.to_string(),
+            LexicalServiceUrl::new()?.to_string(),
+        ),
     ))
 }
 

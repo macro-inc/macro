@@ -102,8 +102,6 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Validated lexical execution modes, loaded once at startup.
-    pub lexical_route_modes: lexical_client::RouteModes,
     pub openbao_address: OpenbaoAddress,
     pub passwords_jwt_issuer: PasswordsJwtIssuer,
     pub passwords_jwt_signing_key: PasswordsJwtSigningKey,

@@ -1,27 +1,16 @@
-//! Route-switch facade and the retained lexical-service HTTP transport.
-mod facade;
-mod in_process;
-mod raw_document;
-pub use raw_document::{MissingDocumentSource, RawDocumentSource};
-mod routing;
-pub use facade::LexicalClient;
-pub use routing::{
-    LexicalClientConfig, NotYetPorted, RouteGroup, RouteMode, RouteModes, RouteModesError,
-};
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";
 pub mod notion;
 pub mod parse_markdown;
-#[cfg(feature = "test-utils")]
-pub mod test_utils;
 pub mod types;
 
+#[allow(dead_code)]
 #[derive(Clone)]
-pub(crate) struct HttpLexicalClient {
+pub struct LexicalClient {
     url: String,
     client: reqwest::Client,
 }
 
-impl HttpLexicalClient {
+impl LexicalClient {
     pub fn new(internal_auth_key: String, url: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(INTERNAL_ACCESS_HEADER, internal_auth_key.parse().unwrap());
@@ -48,11 +37,4 @@ fn is_local_https(url: &str) -> bool {
         || url == "https://localhost"
         || url.starts_with("https://127.0.0.1:")
         || url.starts_with("https://127.0.0.1/")
-}
-
-/// Carry the active caller/route span across the retained HTTP transport.
-pub(crate) fn trace_headers() -> reqwest::header::HeaderMap {
-    let mut headers = reqwest::header::HeaderMap::new();
-    macro_tower_layers::inject_trace_headers(&mut headers);
-    headers
 }

@@ -195,10 +195,6 @@ fn boot_stubs_are_local_only() {
         Some("http")
     );
     assert_eq!(
-        env.get("LEXICAL_ROUTE_MODES").map(String::as_str),
-        Some("markdown=http,snapshot=http,composers=http,html=http")
-    );
-    assert_eq!(
         env.get("REDIS_HOST").map(String::as_str),
         Some("redis://redis:6379")
     );

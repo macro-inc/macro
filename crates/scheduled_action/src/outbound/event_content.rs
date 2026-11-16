@@ -91,22 +91,6 @@ impl<E, M, C, D, P, K> EventContentAdapter<E, M, C, D, P, K> {
             markdown,
         }
     }
-
-    // The excerpt reader needs only document facts and the exporter; unrelated
-    // event source ports are not involved in this part of the adapter.
-    async fn document_markdown(&self, id: &str, document: &DocumentBasic) -> Option<String> {
-        if document.file_type.as_deref() == Some(MARKDOWN_FILE_TYPE) {
-            self.markdown
-                .get_markdown(id, MarkdownTarget::External)
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(error = ?error, "document body unavailable for condition");
-                })
-                .ok()
-        } else {
-            None
-        }
-    }
 }
 
 impl<E, M, C, D, P, K> EventContentReader for EventContentAdapter<E, M, C, D, P, K>
@@ -329,7 +313,17 @@ where
             .map_err(|error| Report::new(error).into_dynamic())?;
         // Lexical renders only Macro's own documents; tasks are among them.
         // The body is an excerpt: without it, the name and properties remain.
-        let markdown = self.document_markdown(&id, &document).await;
+        let markdown = if document.file_type.as_deref() == Some(MARKDOWN_FILE_TYPE) {
+            self.markdown
+                .get_markdown(&id, MarkdownTarget::External)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "document body unavailable for condition");
+                })
+                .ok()
+        } else {
+            None
+        };
         Ok(EventContent::Document {
             document,
             properties,

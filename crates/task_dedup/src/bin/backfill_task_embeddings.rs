@@ -275,8 +275,7 @@ impl Context {
             .await
             .map_err(anyhow::Error::from)?;
         let lexical =
-            LexicalClient::from_env(config.internal_api_secret_key, config.lexical_service_url)?
-                .with_sync_from_env()?;
+            LexicalClient::new(config.internal_api_secret_key, config.lexical_service_url);
         let embedder = TextEmbedding3Small::new(config.openai_api_key);
         let vector_db = PgTaskVectorDb::new(pg.clone());
         Ok(Self {
