@@ -93,7 +93,7 @@ fn typescript() -> Job {
             "needs.path-check.outputs.should_run == 'true'",
         ))
         .name("Typecheck")
-        .timeout_minutes(15u32)
+        .timeout_minutes(30u32)
         .runs_on(mid_web_runner())
         // Entity icon permanence checks compare every committed name list.
         .add_step(checkout("Checkout Repo", true))
@@ -112,6 +112,9 @@ fn typescript() -> Job {
                 .run("bun run build")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
+        // Native editor modules import the generated document-session package.
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(build_document_session_for_tests())
         .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
 }
@@ -639,7 +642,9 @@ fn run_decorator_browser_typecheck() -> Step<Run> {
 
 fn run_session_tests() -> Step<Run> {
     Step::new("Check document session executor and storage")
-        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts")
+        // The devshell's LD_LIBRARY_PATH breaks Playwright's downloaded Chromium, as in
+        // the sign-up browser tests.
+        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH bunx playwright test --config src/session/browser-test/playwright.config.ts")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
