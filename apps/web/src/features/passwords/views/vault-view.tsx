@@ -256,7 +256,8 @@ function ItemPane(props: {
               <Show
                 when={
                   props.vault.failure() === 'failed' ||
-                  props.vault.failure() === 'unreachable'
+                  props.vault.failure() === 'unreachable' ||
+                  props.vault.failure() === 'notProvisioned'
                 }
               >
                 <FailureNotice failure={props.vault.failure()} class="pt-3" />

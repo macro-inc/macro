@@ -24993,7 +24993,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25060,7 +25060,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25138,7 +25138,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25197,7 +25197,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25295,7 +25295,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25468,7 +25468,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25535,7 +25535,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25686,7 +25686,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25762,7 +25762,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25821,7 +25821,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25897,7 +25897,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -25959,7 +25959,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26270,7 +26270,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26332,7 +26332,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26410,7 +26410,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26472,7 +26472,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26541,7 +26541,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26612,7 +26612,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26671,7 +26671,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26739,7 +26739,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26798,7 +26798,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -26866,7 +26866,7 @@
             }
           },
           "409": {
-            "description": "",
+            "description": "`version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up",
             "content": {
               "application/json": {
                 "schema": {
@@ -55483,7 +55483,8 @@
           "version_conflict",
           "vault_busy",
           "folder_missing",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordFailure": {
@@ -55628,7 +55629,8 @@
           "version_conflict",
           "folder_missing",
           "busy",
-          "vault_unavailable"
+          "vault_unavailable",
+          "vault_not_provisioned"
         ]
       },
       "PasswordImportFolder": {

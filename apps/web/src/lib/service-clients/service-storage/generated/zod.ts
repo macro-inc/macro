@@ -79336,6 +79336,7 @@ export const passwordsImportBatchResponse = zod
                     'folder_missing',
                     'busy',
                     'vault_unavailable',
+                    'vault_not_provisioned',
                   ])
                   .describe('Closed, sanitized per-item failure categories.'),
               ])

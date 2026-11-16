@@ -75,6 +75,8 @@ export function busyDelay(retries: number): number {
 
 function failure(codes: readonly string[]): PasswordFailure {
   if (codes.includes(PasswordErrorCode.folder_missing)) return 'folderMissing';
+  if (codes.includes(PasswordErrorCode.vault_not_provisioned))
+    return 'notProvisioned';
   if (codes.includes('NETWORK_ERROR')) return 'unreachable';
   return 'failed';
 }
@@ -108,6 +110,8 @@ function importFailure(codes: readonly string[]): ImportRequestFailure {
     return { retryable: true, reason: 'server_error' };
   if (has(SCOPE_CHANGED))
     return { retryable: false, reason: 'account_changed' };
+  if (has(PasswordErrorCode.vault_not_provisioned))
+    return { retryable: false, reason: 'not_provisioned' };
   if (has(PasswordErrorCode.invalid_request))
     return { retryable: false, reason: 'invalid' };
   return { retryable: false, reason: 'refused' };

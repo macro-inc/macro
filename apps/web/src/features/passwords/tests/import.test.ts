@@ -344,6 +344,40 @@ describe('sendImport', () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("fails items for a team whose vault isn't set up without resending them", async () => {
+    const requests: ImportBatchBody[] = [];
+    const waits: number[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      notProvisioned: true,
+    });
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'bitwarden_csv',
+        target: { kind: 'root' },
+        private: false,
+        items: [item('row:1'), item('row:2')],
+        folders: [],
+      },
+      {
+        span: NOOP_SPAN,
+        onProgress: () => {},
+        wait: async (ms) => {
+          waits.push(ms);
+        },
+      }
+    );
+    expect(outcome).toMatchObject({
+      created: 0,
+      failed: 2,
+      failures: { not_provisioned: 2 },
+    });
+    expect(requests).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
   it('gives up on an item that stays busy and counts it failed', async () => {
     const source = createFakePasswordSource([], {
       busy: new Map([['row:1', 10]]),

@@ -488,6 +488,7 @@ const FAILURE_LINES = [
   ['server_error', 'passwords.importFailureServerError'],
   ['busy', 'passwords.importFailureBusy'],
   ['folder_missing', 'passwords.importFailureFolderMissing'],
+  ['not_provisioned', 'passwords.importFailureNotProvisioned'],
   ['invalid', 'passwords.importFailureInvalid'],
   ['refused', 'passwords.importFailureRefused'],
   ['no_answer', 'passwords.importFailureNoAnswer'],

@@ -117,6 +117,7 @@ function itemFailureReason(
     .with('busy', () => 'busy' as const)
     .with('vault_unavailable', undefined, () => 'server_error' as const)
     .with('folder_missing', () => 'folder_missing' as const)
+    .with('vault_not_provisioned', () => 'not_provisioned' as const)
     .with('invalid_request', () => 'invalid' as const)
     .with(
       'not_found',
@@ -140,6 +141,7 @@ function isRetryable(code: ImportErrorCode | undefined) {
       'forbidden',
       'invalid_request',
       'version_conflict',
+      'vault_not_provisioned',
       undefined,
       () => false
     )

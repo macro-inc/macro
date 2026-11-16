@@ -259,6 +259,7 @@ export type ImportFailureReason =
   | 'server_error'
   | 'busy'
   | 'folder_missing'
+  | 'not_provisioned'
   | 'invalid'
   | 'refused'
   | 'no_answer'
