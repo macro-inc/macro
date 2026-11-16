@@ -721,6 +721,12 @@ where
         {
             return Ok(());
         }
+        self.resolve_domain_directory_entry(domain).await
+    }
+
+    /// Gives `domain`, which has no `crm_domain_directory` entry, one:
+    /// resolved, or pending when the resolver is unavailable.
+    async fn resolve_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
         match self.metadata_resolver.resolve(domain).await {
             DomainResolution::Resolved(metadata) => {
                 self.companies_repository
@@ -768,19 +774,17 @@ where
     ) -> Result<(), CrmError> {
         let email = email.trim();
         let Some((local_part, domain)) = email.split_once('@') else {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has no '@' separator"
-            )));
+            return Err(CrmError::InvalidRequest(
+                "email has no '@' separator".into(),
+            ));
         };
         if local_part.is_empty() {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has an empty local part"
-            )));
+            return Err(CrmError::InvalidRequest(
+                "email has an empty local part".into(),
+            ));
         }
         if domain.is_empty() {
-            return Err(CrmError::StorageLayerError(anyhow::anyhow!(
-                "email has an empty domain"
-            )));
+            return Err(CrmError::InvalidRequest("email has an empty domain".into()));
         }
 
         // Skip when the contact lives on the user's own domain —
@@ -805,13 +809,11 @@ where
             return Ok(());
         }
 
-        if !self
-            .companies_repository
-            .may_contribute_contact(*team_id, *link_id, email)
-            .await?
-        {
-            return Ok(());
-        }
+        // Whether this mailbox may contribute the address is decided by a
+        // scan of its eligible mail, the expensive step of a population. The
+        // repository's write transactions run that scan themselves before
+        // they write anything, so it is not repeated here for a population
+        // that turns out to write nothing or is about to scan anyway.
 
         // Personal mail providers (gmail, yahoo, …) never key a company:
         // one would swallow every contact on the provider. They file as
@@ -852,8 +854,25 @@ where
         // directory entry was written when its first sent message
         // populated; if it isn't tracked, this call will no-op in the
         // repo anyway.
-        if is_sent {
-            self.ensure_domain_directory_entry(domain).await?;
+        //
+        // A domain without an entry is looked up on the network, which
+        // mail this mailbox may not contribute must never cause: that is
+        // the one case admitted here, ahead of the transaction.
+        if is_sent
+            && self
+                .companies_repository
+                .lookup_domain_metadata(domain)
+                .await?
+                .is_none()
+        {
+            if !self
+                .companies_repository
+                .may_contribute_contact(*team_id, *link_id, email)
+                .await?
+            {
+                return Ok(());
+            }
+            self.resolve_domain_directory_entry(domain).await?;
         }
 
         self.companies_repository
