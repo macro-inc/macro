@@ -180,8 +180,10 @@ for (const provider of PROVIDERS) {
     // When this fails, Escape no longer closes the Draft options sheet to
     // go on writing (a phone with a keyboard). Today the sheet starts to
     // close and opens again (handoff phone-draft-sheet-escape-reopens).
+    // `@sometimes`: the sheet stays closed in some runs, and one pass does
+    // not say the bug is gone.
     test('known bug: phone-draft-sheet-escape-reopens: Escape closes the Draft options sheet and keeps the composer @known-bug', {
-      tag: '@known-bug',
+      tag: ['@known-bug', '@sometimes'],
     }, async ({ page, mailbox }) => {
       const sheet = page.getByRole('dialog', { name: 'Draft options' });
       await openPhoneComposer(page, mailbox);
