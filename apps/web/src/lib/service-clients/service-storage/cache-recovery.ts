@@ -13,10 +13,12 @@ export type CacheRecoveryState =
   | 'unavailable'
   | 'recovery-required';
 
-/** Restarts allowed in a row before the page stops retrying until reload. A
- * cache that fails again after each restart would otherwise rebuild the client
- * for the rest of the page session. */
-export const MAX_RECOVERY_ATTEMPTS = 10;
+/** Relapses allowed in a row before the page stops retrying until reload: a
+ * restart that succeeded but whose cache failed again before staying up. Such a
+ * cache would otherwise rebuild the client for the rest of the page session.
+ * Restarts that fail outright (a lock another context still holds) keep
+ * retrying at the capped backoff. */
+export const MAX_RECOVERY_RELAPSES = 10;
 
 /** How long a restarted cache must stay up before its failures count afresh. */
 export const RECOVERY_HEALTHY_MS = 60_000;
@@ -35,23 +37,23 @@ export function canRetryCacheFailure(error: unknown): boolean {
 /** Why a page stopped retrying its cache until reload. */
 export type CacheRecoveryStopReason =
   | 'superseded'
-  | 'attempts-exhausted'
+  | 'relapses-exhausted'
   | 'unrecoverable';
 
 export type CacheRecoveryOptions = {
   /** Called when a cache fails again before it stayed up after a restart. */
-  onRelapse?: (attempts: number, error: unknown) => void;
+  onRelapse?: (relapses: number, error: unknown) => void;
   /** Called once each time the page stops retrying until reload. */
   onStopped?: (
     reason: CacheRecoveryStopReason,
-    attempts: number,
+    relapses: number,
     error: unknown
   ) => void;
 };
 
 function stopReason(error: unknown): CacheRecoveryStopReason {
   if (isCacheSupersededError(error)) return 'superseded';
-  return canRetryCacheFailure(error) ? 'attempts-exhausted' : 'unrecoverable';
+  return canRetryCacheFailure(error) ? 'relapses-exhausted' : 'unrecoverable';
 }
 
 /** Owns a page session's retry cycle, never the persisted cache or its scope. */
@@ -64,8 +66,10 @@ export function createCacheRecovery(
   let generation = 0;
   // Restarts since the cache last stayed up for RECOVERY_HEALTHY_MS. A restart
   // that succeeds but fails again soon after keeps counting, so its backoff
-  // grows and the cap still applies.
+  // keeps growing.
   let attempt = 0;
+  // Restarts in a row whose cache failed again before staying up.
+  let relapses = 0;
   let pending: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let healthyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -109,21 +113,24 @@ export function createCacheRecovery(
   };
   const failed = (error: unknown) => {
     failure = error;
-    if (healthyTimer !== undefined) options.onRelapse?.(attempt, error);
+    if (healthyTimer !== undefined) {
+      relapses += 1;
+      options.onRelapse?.(relapses, error);
+    }
     clearHealthyTimer();
     // Only these typed errors prove restarting cannot bypass a quarantined
     // journal: nothing opened storage, or a read was refused while the database
     // moved between owners. Unknown storage/transport failures stay closed, and
     // so does a cache that kept failing after every restart.
     const recoverable =
-      canRetryCacheFailure(error) && attempt < MAX_RECOVERY_ATTEMPTS;
+      canRetryCacheFailure(error) && relapses < MAX_RECOVERY_RELAPSES;
     const stopping = !recoverable && state() !== 'recovery-required';
     setState(recoverable ? 'unavailable' : 'recovery-required');
     if (recoverable) schedule();
     else {
       clearTimer();
       unlisten();
-      if (stopping) options.onStopped?.(stopReason(error), attempt, error);
+      if (stopping) options.onStopped?.(stopReason(error), relapses, error);
     }
   };
   async function run(epoch: number) {
@@ -138,6 +145,7 @@ export function createCacheRecovery(
       healthyTimer = setTimeout(() => {
         healthyTimer = undefined;
         attempt = 0;
+        relapses = 0;
       }, RECOVERY_HEALTHY_MS);
     } catch (error) {
       if (generation !== epoch) return;
@@ -172,6 +180,7 @@ export function createCacheRecovery(
       pending = undefined;
       failure = undefined;
       attempt = 0;
+      relapses = 0;
       clearTimer();
       clearHealthyTimer();
       unlisten();

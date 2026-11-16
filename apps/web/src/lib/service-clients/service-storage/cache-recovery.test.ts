@@ -2,7 +2,7 @@ import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createCacheRecovery,
-  MAX_RECOVERY_ATTEMPTS,
+  MAX_RECOVERY_RELAPSES,
   RECOVERY_HEALTHY_MS,
 } from './cache-recovery';
 
@@ -138,22 +138,22 @@ it('stops after a cache keeps failing soon after each successful restart', async
     { errorCode: 'owner-lock-unavailable' }
   );
   recovery.failed(lockHeld);
-  for (let restart = 1; restart <= MAX_RECOVERY_ATTEMPTS; restart += 1) {
+  for (let restart = 1; restart <= MAX_RECOVERY_RELAPSES; restart += 1) {
     await vi.advanceTimersByTimeAsync(40_000);
     expect(rebuild).toHaveBeenCalledTimes(restart);
     expect(recovery.state()).toBe('ready');
     // The restarted host fails again before it stayed up.
     recovery.failed(lockHeld);
   }
-  expect(onRelapse).toHaveBeenCalledTimes(MAX_RECOVERY_ATTEMPTS);
+  expect(onRelapse).toHaveBeenCalledTimes(MAX_RECOVERY_RELAPSES);
   expect(recovery.state()).toBe('recovery-required');
   expect(onStopped).toHaveBeenCalledExactlyOnceWith(
-    'attempts-exhausted',
-    MAX_RECOVERY_ATTEMPTS,
+    'relapses-exhausted',
+    MAX_RECOVERY_RELAPSES,
     lockHeld
   );
   await vi.advanceTimersByTimeAsync(10 * 60_000);
-  expect(rebuild).toHaveBeenCalledTimes(MAX_RECOVERY_ATTEMPTS);
+  expect(rebuild).toHaveBeenCalledTimes(MAX_RECOVERY_RELAPSES);
   recovery.reset();
 });
 
@@ -162,7 +162,7 @@ it('counts failures afresh once a restarted cache stayed up', async () => {
   const onRelapse = vi.fn();
   const recovery = createCacheRecovery(rebuild, { onRelapse });
   const blocked = new CacheBootstrapExhaustedError('Failed to fetch');
-  for (let round = 0; round < MAX_RECOVERY_ATTEMPTS * 2; round += 1) {
+  for (let round = 0; round < MAX_RECOVERY_RELAPSES * 2; round += 1) {
     recovery.failed(blocked);
     await vi.advanceTimersByTimeAsync(2_000);
     expect(recovery.state()).toBe('ready');
@@ -171,5 +171,26 @@ it('counts failures afresh once a restarted cache stayed up', async () => {
     expect(recovery.attempts()).toBe(0);
   }
   expect(onRelapse).not.toHaveBeenCalled();
+  recovery.reset();
+});
+
+it('keeps retrying a lock another context holds for a long time', async () => {
+  const lockHeld = Object.assign(
+    new Error('cache database owner lock is held by another context'),
+    { errorCode: 'owner-lock-unavailable' }
+  );
+  const rebuild = vi.fn(async (): Promise<void> => {
+    throw lockHeld;
+  });
+  const onStopped = vi.fn();
+  const recovery = createCacheRecovery(rebuild, { onStopped });
+  recovery.failed(lockHeld);
+  await vi.advanceTimersByTimeAsync(30 * 60_000);
+  expect(rebuild.mock.calls.length).toBeGreaterThan(MAX_RECOVERY_RELAPSES * 2);
+  expect(recovery.state()).toBe('unavailable');
+  expect(onStopped).not.toHaveBeenCalled();
+  rebuild.mockResolvedValueOnce(undefined);
+  await recovery.retry();
+  expect(recovery.state()).toBe('ready');
   recovery.reset();
 });

@@ -426,12 +426,15 @@ another. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
 persisted data. A page whose build was superseded (`cache-superseded`) never
 retries: that coordinator never hands the database back, so the page waits for
-the reload prompt. A page also stops after ten restarts in a row
-(`MAX_RECOVERY_ATTEMPTS`); the count and backoff reset only after a restarted
-cache has stayed up for a minute, because a restart can succeed and the new
-host fail again moments later. `graphql.cache_recovery` records each attempt and
-its failure, `graphql.cache_recovery_relapse` a restarted host that failed
-before staying up, and `graphql.cache_recovery_stopped` why the page stopped.
+the reload prompt. A page also stops after ten relapses in a row
+(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
+before staying up for a minute. A successful restart no longer resets the
+backoff on its own; the count and backoff reset only once the restarted cache
+stays up. A restart that fails outright, such as a lock another context still
+holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
+that failed before staying up, and `graphql.cache_recovery_stopped` why the page
+stopped.
 Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
 from a fixed list (`describeCacheError`), so the message itself never leaves.
 

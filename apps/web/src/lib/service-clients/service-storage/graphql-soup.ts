@@ -585,9 +585,11 @@ const cacheRecovery = createCacheRecovery(
         await restartCache(span);
       } catch (error) {
         // Telemetry.span only ends the span; without this a failed restart
-        // reads as a successful one.
-        span.setAttr('cache.error_code', classifyCacheError(error));
-        span.error(error);
+        // reads as a successful one. The error's message stays local: engine
+        // and storage failures can carry text that must not be exported.
+        const code = recoveryErrorCode(error);
+        span.setAttr('cache.error_code', code);
+        span.error(new Error(`cache recovery failed: ${code}`));
         throw error;
       }
     }),
@@ -597,25 +599,32 @@ const cacheRecovery = createCacheRecovery(
   }
 );
 
+/** Classifies a recovery failure for telemetry, naming a superseded build. */
+function recoveryErrorCode(error: unknown): string {
+  return isCacheSupersededError(error)
+    ? 'superseded'
+    : classifyCacheError(error);
+}
+
 /** Records a restarted cache failing again before it stayed up: the restart
  * looked successful, but the host it opened did not last. */
-function recordCacheRecoveryRelapse(attempts: number, error: unknown): void {
+function recordCacheRecoveryRelapse(relapses: number, error: unknown): void {
   const span = Telemetry.span('graphql.cache_recovery_relapse');
-  span.setAttr('cache.recovery_attempts', attempts);
-  span.setAttr('cache.error_code', classifyCacheError(error));
+  span.setAttr('cache.recovery_relapses', relapses);
+  span.setAttr('cache.error_code', recoveryErrorCode(error));
   span.end();
 }
 
 /** Records that this page stopped restarting its cache until reload. */
 function recordCacheRecoveryStopped(
   reason: CacheRecoveryStopReason,
-  attempts: number,
+  relapses: number,
   error: unknown
 ): void {
   const span = Telemetry.span('graphql.cache_recovery_stopped');
   span.setAttr('cache.recovery_stop_reason', reason);
-  span.setAttr('cache.recovery_attempts', attempts);
-  span.setAttr('cache.error_code', classifyCacheError(error));
+  span.setAttr('cache.recovery_relapses', relapses);
+  span.setAttr('cache.error_code', recoveryErrorCode(error));
   span.end();
 }
 
