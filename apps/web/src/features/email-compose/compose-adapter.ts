@@ -295,11 +295,12 @@ export function createEmailComposeContext(): EmailComposeContext {
               {
                 persistent: true,
                 dismissStyle: isDraftRecovery ? 'icon' : undefined,
+                replace: options.replace,
+                onDismiss: options.onDismiss,
               }
             );
           }
-          toast.failure(message, notice(options));
-          return undefined;
+          return toast.failure(message, notice(options));
         },
         alert: (message, options) => toast.alert(message, notice(options)),
         dismiss: toast.dismiss,

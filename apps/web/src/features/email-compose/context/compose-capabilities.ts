@@ -360,7 +360,7 @@ export interface EmailComposeFeedback {
       message: string,
       options?: ComposeNoticeOptions
     ): number | undefined;
-    alert(message: string, options?: ComposeNoticeOptions): void;
+    alert(message: string, options?: ComposeNoticeOptions): number | undefined;
     dismiss(id: number): void;
   };
   /** A modal notice with a single acknowledgement; resolves when dismissed. */
@@ -459,6 +459,10 @@ export interface ComposeNoticeOptions {
   subtext?: string;
   duration?: number;
   persistent?: boolean;
+  /** An open notice this one changes in place, keeping its id. */
+  replace?: number;
+  /** Runs once the notice closes, however it closes. */
+  onDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */
   actions?: {
     label: string;

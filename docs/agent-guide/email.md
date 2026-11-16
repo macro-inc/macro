@@ -1195,14 +1195,17 @@ An online send shows **Sending…** with **Undo**: a new message opens its
 conversation and a reply closes its composer, and the message appears as sent
 there immediately, before the server or provider confirms it. Once the server
 accepts the send, **Undo** stays on offer until the server's undo deadline (the
-accepted attempt's `sendTime`), not for a fixed client duration. The notice says
-**Email sent** only after delivery. This holds when another Mail tab delivers or
-cancels the send first, and a cancelled reply still returns its thread to Inbox.
-When the server cannot say how such a send ended, the notice only withdraws
-**Undo**. A send that fails after it was queued shows
-a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
-send the provider did not confirm. An offline send shows **Email queued to
-send** and returns to the email list. The status panel shows a send only while it waits on this
+accepted attempt's `sendTime`), not for a fixed client duration. It is one
+notice that stays on screen until the send ends and changes in place: **Undo**
+leaves at the deadline, and **Sending…** then becomes **Email sent** only after
+delivery; it never closes and reopens while the send is in motion. This holds
+when another Mail tab delivers or cancels the send first, and a cancelled reply
+still returns its thread to Inbox. When the server cannot say how such a send
+ended, the notice closes. A send that fails after it was queued turns the
+notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
+reports a send the provider did not confirm. An offline send shows **Email
+queued to send**, which expires as usual, and returns to the email list; once
+the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
 (**Scheduled**). On phones the panel sits below the safe area and the floating
 header. Only one active send can own a draft across tabs; queued composers
