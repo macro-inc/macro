@@ -58,8 +58,9 @@ pub struct CallRecordSearchPayload {
 }
 
 /// `status_filter` optionally narrows visible calls by viewer-relative status.
-/// Standalone calls are discoverable only through the caller's individual grant;
-/// team/channel grants and shared links do not add them to team memory.
+/// Standalone and imported calls are discoverable only through the caller's
+/// individual grant; team/channel grants and shared links do not add them to
+/// team memory.
 ///
 /// Nothing is cached, but callers asking at the same time for the same
 /// database, user and status filter share one run of the query. A failure
@@ -156,6 +157,32 @@ async fn query_accessible_call_ids(
                       )
                 )
             )
+            UNION ALL
+            -- Imported calls exist only as call entities (native calls are
+            -- mirrored there too, so exclude them). They have no channel, so
+            -- like standalone calls they are found only through the caller's
+            -- own user grant. Start from those grants and look each call up
+            -- by id, so the cost follows the caller's grants, not the table.
+            -- The importer attended the meeting.
+            SELECT
+                ce.id,
+                CASE WHEN ce.user_id = $1 THEN 'ATTENDED' ELSE 'UNATTENDED' END
+            FROM (
+                SELECT DISTINCT ea.entity_id
+                FROM entity_access ea
+                WHERE ea.source_id = $1
+                  AND ea.source_type = 'user'
+                  AND ea.entity_type = 'call'
+                OFFSET 0
+            ) own_grants
+            CROSS JOIN LATERAL (
+                SELECT ce.id, ce.user_id
+                FROM call_entities ce
+                WHERE ce.id = own_grants.entity_id AND ce.created_via <> 'native'
+                -- One row by id; the limit keeps the planner from flattening
+                -- this into a join over every imported call.
+                LIMIT 1
+            ) ce
         )
         SELECT id AS "id!"
         FROM visible_calls
@@ -240,7 +267,7 @@ pub async fn get_call_record_search_payload(
     .fetch_optional(db)
     .await?
     else {
-        return Ok(None);
+        return get_imported_call_search_payload(db, call_id).await;
     };
 
     let participant_ids = sqlx::query_scalar!(
@@ -281,6 +308,114 @@ pub async fn get_call_record_search_payload(
         channel_name: header.channel_name,
         custom_name: header.custom_name,
         participant_ids,
+        segments,
+    }))
+}
+
+/// Index payload for an imported call, or `None` when `call_id` is not one.
+///
+/// Mirrors the detail view's read in
+/// `crates/call/src/outbound/pg_call_repo/imported.rs`, so a search hit and
+/// the opened call agree on segment ids, times and speakers.
+async fn get_imported_call_search_payload(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    call_id: &Uuid,
+) -> anyhow::Result<Option<CallRecordSearchPayload>> {
+    let Some(call) = sqlx::query!(
+        r#"
+        SELECT ce.id, ce.user_id, ce.title, COALESCE(ce.started_at, ce.created_at) AS "started_at!"
+        FROM call_entities ce
+        WHERE ce.id = $1 AND ce.created_via <> 'native'
+        "#,
+        call_id,
+    )
+    .fetch_optional(db)
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    let participants = sqlx::query!(
+        r#"
+        SELECT id, user_id, display_name, email
+        FROM call_entity_participants
+        WHERE call_id = $1
+        ORDER BY id
+        "#,
+        call_id,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let segments = sqlx::query!(
+        r#"
+        SELECT s.transcript_id, s.sequence_num, s.participant_id, s.speaker_label, s.content,
+               s.start_ms, s.end_ms, t.started_at AS transcript_started_at
+        FROM call_entity_transcript_segments s
+        JOIN call_entity_transcripts t ON t.call_id = s.call_id AND t.id = s.transcript_id
+        WHERE s.call_id = $1
+        ORDER BY t.started_at NULLS LAST, t.id, s.sequence_num
+        "#,
+        call_id,
+    )
+    .fetch_all(db)
+    .await?;
+
+    // Attendees show under their name, else their email.
+    let attendee_names: Vec<(Uuid, String)> = participants
+        .iter()
+        .map(|p| {
+            let name = p
+                .display_name
+                .clone()
+                .or_else(|| p.email.clone())
+                .unwrap_or_else(|| "Participant".into());
+            (p.id, name)
+        })
+        .collect();
+
+    let segments = segments
+        .into_iter()
+        .enumerate()
+        .map(|(index, s)| {
+            let origin = s.transcript_started_at.unwrap_or(call.started_at);
+            let at = |ms: i64| origin + chrono::Duration::milliseconds(ms);
+
+            // A segment belongs to the attendee the provider linked, else to
+            // the attendee its label names, else to the label itself.
+            let speaker_id = match s.participant_id {
+                Some(id) => id.to_string(),
+                None => {
+                    let label = s.speaker_label.unwrap_or_else(|| "Unknown speaker".into());
+                    attendee_names
+                        .iter()
+                        .find(|(_, name)| name.eq_ignore_ascii_case(&label))
+                        .map(|(id, _)| id.to_string())
+                        .unwrap_or(label)
+                }
+            };
+
+            CallRecordTranscriptSegment {
+                // Segments have a composite key; the detail view derives the
+                // same per-segment id for its deep links.
+                transcript_id: Uuid::new_v5(&s.transcript_id, &s.sequence_num.to_be_bytes()),
+                speaker_id,
+                // Renumbered across transcripts, as the detail view does.
+                sequence_num: index as i32,
+                content: s.content,
+                started_at: s.start_ms.map(at).unwrap_or(origin),
+                ended_at: s.end_ms.map(at),
+            }
+        })
+        .collect();
+
+    Ok(Some(CallRecordSearchPayload {
+        call_id: call.id,
+        channel_id: None,
+        created_by: call.user_id,
+        channel_name: None,
+        custom_name: call.title,
+        participant_ids: participants.into_iter().filter_map(|p| p.user_id).collect(),
         segments,
     }))
 }
@@ -326,6 +461,21 @@ pub async fn get_call_records_metadata(
             END AS "status!"
         FROM call_records cr
         WHERE cr.id = ANY($1)
+        UNION ALL
+        -- Imported calls, timed as the call list times them; the importer
+        -- attended the meeting.
+        SELECT
+            ce.id,
+            NULL::uuid,
+            ce.user_id,
+            COALESCE(ce.started_at, ce.created_at),
+            COALESCE(ce.ended_at, ce.started_at, ce.created_at),
+            COALESCE(ce.duration_ms, 0),
+            ce.title,
+            ce.user_id = $2,
+            CASE WHEN ce.user_id = $2 THEN 'ATTENDED' ELSE 'UNATTENDED' END
+        FROM call_entities ce
+        WHERE ce.id = ANY($1) AND ce.created_via <> 'native'
         "#,
         call_ids,
         user_id,

@@ -96,6 +96,7 @@ The `macro.calls` lifecycle events map to search actions as follows:
 | `call.record_archived` | Full upsert of the call and transcript segments |
 | `call.record_updated` | Full upsert so edits such as `custom_name` reach search |
 | `call.record_summarized` | Full upsert so the generated call name reaches search |
+| `call.record_imported` | Full upsert of an imported call and its transcript segments |
 | `call.record_deleted` | Remove the individual call by `call_id` |
 | `call.started` | Ignore after decoding |
 | `call.recording_ready` | Ignore after decoding |
