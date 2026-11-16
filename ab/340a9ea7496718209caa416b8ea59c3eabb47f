@@ -1,0 +1,23 @@
+apps/web/src/features/block-canvas/core/transitions/scene-geometry.ts
+  s_934636a8e47d04::t_a8c15935aa9297 9
+  s_934636a8e47d04::t_2423e5aa90049d 6,14,18-22,27-36
+apps/web/src/features/block-canvas/core/transitions/transitions.test.ts
+  s_934636a8e47d04::t_0176238118c6bd 3-4,22,256-267
+  s_934636a8e47d04::t_2e23c48deb47a6 268-269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ab340a9ea7496718209caa416b8ea59c3eabb47f",
+  "prompts": {},
+  "sessions": {
+    "s_934636a8e47d04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d87ebef5-3bea-40ed-a6de-d1faf318cb64",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
