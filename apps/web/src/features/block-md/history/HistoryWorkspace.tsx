@@ -1,4 +1,3 @@
-import { getSaveState } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   enableHistoryComponent,
@@ -9,6 +8,7 @@ import { Scroll } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { currentSavedState } from './current-state';
 import { useHistory } from './HistoryContext';
 import { HistoryOverlay } from './HistoryOverlay';
 import { HistoryScrubber } from './HistoryScrubber';
@@ -22,10 +22,7 @@ export function HistoryWorkspace(props: ParentProps) {
   const { displayName } = useMarkdownName();
   const visible = () =>
     history.isOpen() && !isMobile() && isFeatureEnabled(enableHistoryComponent);
-  const currentState = () => {
-    const editor = state.editor.md.editor;
-    return editor ? getSaveState(editor.getEditorState()) : undefined;
-  };
+  const currentState = () => currentSavedState(state.editor.md);
   const close = () => {
     history.exit();
     element()?.focus({ preventScroll: true });
