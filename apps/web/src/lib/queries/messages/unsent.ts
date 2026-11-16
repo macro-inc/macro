@@ -11,8 +11,8 @@ export const UNSENT_AFTER_MS = 5000;
 /**
  * Whether this session has been trying to send the message for longer than
  * `UNSENT_AFTER_MS`: it is waiting for a connection or for its channel to
- * let it in. A send that is refused for good rolls back instead. Only sends
- * the device queue holds are marked; over REST a send is as it was.
+ * let it in. A send that is refused for good rolls back instead. Nothing is
+ * marked while channels send over REST (`enable-channel-local-sync` off).
  */
 export function useMessageUnsent(messageId: () => string): () => boolean {
   const sending = useMutationState(() => {

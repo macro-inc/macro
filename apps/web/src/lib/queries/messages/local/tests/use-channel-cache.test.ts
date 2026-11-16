@@ -51,6 +51,7 @@ vi.mock('../unqueued-sends', () => ({
 }));
 vi.mock('../writes', () => ({ sendChannelMessage: mocks.sendChannelMessage }));
 vi.mock('../left-behind-sends', () => ({
+  queueIfAnswering: (host: unknown) => ({ answering: host }),
   sendLeftBehindOverRest: mocks.sendLeftBehindOverRest,
 }));
 
@@ -139,13 +140,14 @@ describe('useChannelCache', () => {
     await Promise.resolve();
 
     expect(host.onCacheGenerationChanged).not.toHaveBeenCalled();
-    expect(mocks.holdUnqueuedSendsPage).not.toHaveBeenCalled();
+    // Held so another tab starting now does not post the same sends.
+    expect(mocks.holdUnqueuedSendsPage).toHaveBeenCalled();
     expect(mocks.storeUnstoredPushes).not.toHaveBeenCalled();
     expect(mocks.resendUnqueuedSends).toHaveBeenCalledOnce();
     const [resendHost, sender, resend] = mocks.resendUnqueuedSends.mock
       .calls[0] as [unknown, string, (send: unknown, at: string) => void];
-    // The queue is still asked what it holds, so nothing is posted twice.
-    expect([resendHost, sender]).toEqual([host, 'sender-1']);
+    // The queue is still asked what it holds, without waiting on it.
+    expect([resendHost, sender]).toEqual([{ answering: host }, 'sender-1']);
     resend(send, '2026-01-01T00:00:00.000Z');
     expect(mocks.sendLeftBehindOverRest).toHaveBeenCalledExactlyOnceWith(send);
     expect(mocks.sendChannelMessage).not.toHaveBeenCalled();

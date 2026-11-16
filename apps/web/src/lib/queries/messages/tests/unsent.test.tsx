@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { render } from '@solidjs/testing-library';
 import { MutationObserver, QueryClient } from '@tanstack/query-core';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -81,5 +82,5 @@ describe('useMessageUnsent', () => {
 function fireAndForgetMutate(
   observer: MutationObserver<null, Error, { optimisticId: string }>
 ): void {
-  observer.mutate({ optimisticId: 'm1' }).catch(() => {});
+  fireAndForget(observer.mutate({ optimisticId: 'm1' }), 'test');
 }

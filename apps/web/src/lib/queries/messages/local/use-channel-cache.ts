@@ -8,14 +8,20 @@ import {
   getGraphqlSoupCacheHost,
   subscribeGraphqlSoupReconnected,
 } from '@service-storage/graphql-soup';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import {
   rereadChannelsAfterStorageReset,
   resetChannelSync,
   storeUnstoredPushes,
 } from './catch-up';
 import { channelCacheHost } from './flag';
-import { sendLeftBehindOverRest } from './left-behind-sends';
+import { queueIfAnswering, sendLeftBehindOverRest } from './left-behind-sends';
 import { resetPendingChannelPages } from './pages';
 import { evictIdleChannels, runChannelPrewarm } from './prewarm';
 import { loadPrewarmChannelIds } from './prewarm-list';
@@ -154,8 +160,11 @@ export function useChannelCache(userId: Accessor<string | undefined>): void {
     // posted over REST, unless the queue turns out to hold it: the cache
     // delivers its queue whatever this flag says.
     if (!sender || flag.loading || flag.enabled) return;
+    // Other pages starting now leave to this one what it takes over.
+    holdUnqueuedSendsPage();
+    const queue = queueIfAnswering(untrack(getGraphqlSoupCacheHost));
     fireAndForget(
-      resendUnqueuedSends(getGraphqlSoupCacheHost() ?? {}, sender, (send) =>
+      resendUnqueuedSends(queue, sender, (send) =>
         fireAndForget(sendLeftBehindOverRest(send), 'channel-local-sync')
       ),
       'channel-local-sync'

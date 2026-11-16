@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import {
+  forgetUnqueuedSend,
   noteUnqueuedSend,
   resendUnqueuedSends,
   type UnqueuedSend,
@@ -169,4 +170,35 @@ it('keeps a send whose queue request ended as its page was left', async () => {
   expect(
     storage.getItem(`channel-send-awaiting-queue:v1:${SENDER}:m2`)
   ).toBeNull();
+});
+
+it('hands every noted send on when there is no queue to ask', async () => {
+  const { deps, resend } = world(['new-page']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  const resent = await resendUnqueuedSends(
+    {},
+    SENDER,
+    resend,
+    deps('new-page')
+  );
+
+  expect(resent).toBe(1);
+  expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
+});
+
+it('a forgotten send is not sent again by a later page', async () => {
+  const { storage, deps, host, resend } = world(['newer-page']);
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  forgetUnqueuedSend(SENDER, 'm1', { storage });
+  const resent = await resendUnqueuedSends(
+    host,
+    SENDER,
+    resend,
+    deps('newer-page')
+  );
+
+  expect(resent).toBe(0);
+  expect(storage.length).toBe(0);
 });
