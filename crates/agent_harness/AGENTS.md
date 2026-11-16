@@ -101,11 +101,21 @@ finishes; a harness dialing again stops its previous dial from starting more.
 Permanent errors are not retried; others are, with jittered backoff, while the
 runtime stays connected. A session whose load keeps failing stays disconnected
 with its turn unfinished, so every dial tries it again (three attempts, under a
-permit). The `agent.runtime.reattach` span counts eager, lazy,
+permit). The `agent.runtime.reattach` span counts eager, lazy, dormant,
 skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
 native sessions whose Herdr agent still runs, each with `updatedAt` from its
 transcript's last write, so a session worked on in its Herdr pane within the
 hour is restored at dial time.
+
+`HarnessBindings::sessions_on_harness` resolves a dial's listed sessions in one
+query: archived ones are dropped, and dormant ones (`ListedSessions::dormant`:
+no `modified_at` or log activity for `DORMANT_AFTER`, 7 days, never the
+listing's `updatedAt`, and no unfinished or interrupted turn, queued prompt,
+pending tool approval, undelivered notification or current conversation) are
+only counted. A dial does no per-session work for them and nothing is stored;
+their next prompt or delivery reconnects them like any lazy session. Dormancy
+is invisible to users. A per-runtime cap on live sessions counts
+`ListedSessions::live` only.
 
 Each session's commands run one at a time on its command worker
 (`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
@@ -195,6 +205,9 @@ HTTP boundary checks both agent attribution and the execution header.
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` opens with `<you>`, the
+  session bot's name and handle, so the agent can tell a message naming it
+  from one naming someone else.
 - Every composed prompt's `<m-agent-context>` states `<current_time>` in the
   sender's (else owner's) primary calendar time zone, via the
   `UserTimeZones` port, or UTC when unknown. Models have no other source

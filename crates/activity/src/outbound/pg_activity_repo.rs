@@ -18,9 +18,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{ActionDecodeError, Activity, ActivityRecord, Actor, RecordedAction},
+    models::{
+        ActionDecodeError, Activity, ActivityRecord, Actor, NON_TOUCH_ACTION_TAGS, RecordedAction,
+    },
     overview::{ActivityOverview, ActivityWindow, DayCount, EntityRank, TOP_ENTITY_LIMIT},
-    ports::{ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap},
+    ports::{
+        ActivityFeedPage, ActivityRange, ActivityReads, ActivityRepo, EntityActivityMap,
+        SubjectActivityPresence,
+    },
 };
 
 /// Writes activities to MacroDB.
@@ -476,6 +481,41 @@ impl ActivityReads for PgActivityRepo {
             records: rows.into_iter().filter_map(StoredRow::decode).collect(),
             truncated,
         })
+    }
+}
+
+impl SubjectActivityPresence for PgActivityRepo {
+    type Err = sqlx::Error;
+
+    // One range probe of idx_activity_events_subject that stops at the first touch.
+    #[tracing::instrument(skip_all, err)]
+    async fn touched_between(
+        &self,
+        subject_id: &str,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let skipped: Vec<String> = NON_TOUCH_ACTION_TAGS
+            .iter()
+            .map(|tag| (*tag).to_owned())
+            .collect();
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1 FROM activity_events
+                WHERE subject_id = $1
+                  AND occurred_at >= $2
+                  AND occurred_at < $3
+                  AND action <> ALL($4)
+            ) AS "touched!"
+            "#,
+            subject_id,
+            from,
+            to,
+            &skipped,
+        )
+        .fetch_one(&self.pool)
+        .await
     }
 }
 
