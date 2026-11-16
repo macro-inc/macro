@@ -82,8 +82,13 @@ stacks. Process isolation belongs to
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
   reads symbol references (32 KiB). `Guidance::Selected` (owners with
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
-  carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
-  carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+  carry `inline_guides`. The routines guide carries the Compose Routines system
+  skill after it (`attached_skill`): code mode its code form
+  (`compose_routines::CODE`), inline, routed or in a `DescribeCodeTools`
+  result; direct hosts inline its routine-tools form
+  (`compose_routines::DIRECT`). No byte budget counts the skill, so it never
+  takes another entity's place. `mcp_guides` and `entity_guide` (no attached skill) serve
+  hosts that carry areas whole. All of it is generated from the SDK; edit the TSDoc.
 - `src/inbound/internal_user_executions.rs`: `POST
   /internal/code-mode/user-executions`, internal key only, runs one program
   through `UserCodeMode` as the body's user, always as `ToolCaller::Agent(MACRO_AI_BOT_ID)`

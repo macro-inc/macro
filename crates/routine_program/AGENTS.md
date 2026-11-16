@@ -16,7 +16,8 @@ no I/O.
   `RoutineProgram::from_task`.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
-  CreateRoutine and the scheduler's drafter both read), `STEP_CONTEXT` (the type of
+  CreateRoutine, the scheduler's drafter and the Compose Routines skill read),
+  `STEP_CONTEXT` (the type of
   `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
@@ -49,7 +50,8 @@ no I/O.
 ## Boundaries
 
 - Depends on: `bots` (`AgentMcpServer`).
-- Used by: `scheduled_action`, `routines` (agent tools), and through the
+- Used by: `scheduled_action`, `routines` (agent tools), `system_skills`
+  (Compose Routines), and through the
   scheduler's generated clients the SDK (`macro.routines`) and the web app's
   routines editor (`core/routine-steps.ts`).
 
