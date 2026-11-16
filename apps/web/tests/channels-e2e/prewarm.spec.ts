@@ -46,7 +46,7 @@ const DAY = 86_400_000;
 
 /**
  * As many channels of Ada's and Ben's, made one after another. The first two
- * are found together by `-edge`: the one just outside a limit and the one
+ * are found together by their names' common start: the one just outside a limit and the one
  * just inside it.
  */
 async function row(ada: Api, ben: Api, count: number): Promise<Named[]> {
@@ -73,7 +73,7 @@ async function expectOnlySecondHeld(
   channels: Named[],
   texts: string[]
 ): Promise<void> {
-  await findConversations(page, '-edge');
+  await findConversations(page, channels[0].name.slice(0, -2));
   await expect(conversationRow(page, channels[0].name)).toBeVisible();
   await expect(conversationRow(page, channels[1].name)).toBeVisible();
   await goOffline(page.context());
@@ -158,6 +158,8 @@ test('PRE-04 a fetched channel opens with its latest fifty messages with no conn
 
   await expect(view.message('long 55')).toBeVisible();
   expect(await view.readTo('long 06', 'back')).toEqual(texts.slice(5));
+  for (let wheel = 0; wheel < 3; wheel += 1) await view.wheel(-2000);
+  expect((await view.texts())[0]).toBe('long 06');
   await expect(view.message('long 05')).toHaveCount(0);
   await goOnline(page.context());
   const older = await view.readTo('long 01', 'back');
@@ -166,7 +168,7 @@ test('PRE-04 a fetched channel opens with its latest fifty messages with no conn
 
 // If this fails, channels a person stopped opening stay on the device for
 // good, or a channel they opened within the month is dropped.
-test('PRE-05 a channel not opened for thirty days is no longer on the device, and one opened a day later still is', async ({
+test('PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is', async ({
   pageFor,
   ada,
   ben,
@@ -181,6 +183,10 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   const today = Date.now();
   const first = await readAndReturn(page, old, looked[0]);
   await expectShown(first, ['opened thirty-one days ago']);
+  // Each channel is left before the clock moves: a page opening on it
+  // again would count as opening it on the later day.
+  await findRow(page, looked[0]);
+  await openFromList(page, looked[0]);
   // The device's clock is moved on: the suite cannot wait a month.
   await page.clock.install({ time: today + 2 * DAY });
   await page.reload();
@@ -188,6 +194,8 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   await expectShown(second, ['opened twenty-nine days ago']);
   // Twenty channels looked at since, so that the device does not fetch
   // either of the two again as one its person looked at last.
+  await findRow(page, looked[0]);
+  await openFromList(page, looked[0]);
   for (const channel of looked) await haveViewed('ben', channel.id);
   await page.clock.setSystemTime(today + 31 * DAY);
   await new Conversation(page, looked[19].id).open();

@@ -70,6 +70,7 @@ sync-removed	A person removed from a channel while away is not shown the message
 sync-sequence-lowered	A page fetched during a catch-up that lowers the device's sequence is replayed from there		Cannot be staged from the screen; unit tests in src/lib/queries/messages/local/tests/catch-up
 prewarm	A device left alone fetches unread channels it has never opened, so they open offline	PRE-01	
 prewarm-limits	Prewarm takes at most forty unread and twenty recent channels, fifty messages each	PRE-02,PRE-03,PRE-04	
+prewarm-one-at-a-time	Prewarm fetches one channel at a time, and only while the person leaves the app alone		Not visible on screen; unit tests in src/lib/queries/messages/local/tests/prewarm
 eviction	A channel not opened for thirty days is dropped from the device	PRE-05	
 queued-writes	A message, reply, edit, deletion and reaction made offline show at once and reach the services once, in order, as last left	WRT-01,WRT-02,WRT-03,WRT-06,WRT-07,WRT-08	
 queue-reload	Writes that could not be sent survive a reload and are sent once when the services can be reached	WRT-04	

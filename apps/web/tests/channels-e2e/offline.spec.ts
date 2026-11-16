@@ -343,6 +343,12 @@ test('OFF-12 going back to a link to an old message read while connected shows i
   const view = new ChannelView(page, history.id);
   await view.open({ messageId: target.id });
   await expect(view.messageById(target.id)).toBeInViewport();
+  // Read twice, as a channel is for the other tests of what a device holds
+  // (OFF-09): this one is about the place in the channel.
+  await findRow(page, elsewhere);
+  await openFromList(page, elsewhere);
+  await page.goBack();
+  await expect(view.messageById(target.id)).toBeInViewport();
   await startAfresh(page, elsewhere);
 
   await goOffline(page.context());

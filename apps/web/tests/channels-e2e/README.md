@@ -97,7 +97,7 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
 - Assert what is on screen with literals. No sleeps, no waiting on requests.
   The one timed wait is `leaveAlone` in `harness/device.ts`: a device
   fetches channels ahead only while its person does nothing, so doing
-  nothing for a while is the step under test (PRE-01, REC-04). The one read
+  nothing for a while is the step under test (PRE-01 to PRE-05, REC-04). The one read
   of what a page has fetched is `codeFetched`, with which `goOffline` lets a
   page finish fetching the app's code before it cuts it off: no test asserts
   on it.
@@ -105,6 +105,9 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   kept on the device, writes that wait there) skips itself on other builds
   with `test.skip(!SOUP_BUILD, ...)`, and its proof is run on a build with
   the flag.
+- A test that runs on both builds and reads messages needs a proof on each:
+  with the flag, messages come through `src/lib/queries/messages/local/`,
+  and a break of the other path leaves the test passing.
 - Add the id to `ledger/inventory.tsv`, then prove the test can fail: break
   the product where the behaviour lives, build the bundle, watch the test
   fail, and record the break in `ledger/proofs.tsv` and `ledger/breaks/`.

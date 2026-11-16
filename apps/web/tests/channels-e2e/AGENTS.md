@@ -80,5 +80,17 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   does not rebuild the cache engine and `just ensure-cache-wasm` only does on
   a crate version bump; an engine older than the web code left a reloaded
   page's writes waiting five minutes (WRT-04).
+- With the flag, messages are read through `src/lib/queries/messages/local/`:
+  a break of the fetch or the insert in `messages/timeline.ts`, or of the
+  live events' own handling, can leave a test passing there, so a test of
+  opening, order, links or live events is proved on a build with the flag
+  too (the `device-*` patches).
+- `haveViewed` leaves a person's notifications unseen, and a device fetches
+  channels with unseen ones: a channel meant to be read has only the
+  person's own messages (PRE-03).
+- A link in a message opens a new tab, which cannot load offline: offline,
+  a link is followed again with Back (OFF-12).
+- `page.clock` moves a device's clock (PRE-05); the services keep the real
+  time, so only what the device itself dates moves with it.
 - `blockWrites` and `loseWriteAnswers` match the four message mutations by
   name; a broader match also stops the read-marker writes a page makes.
