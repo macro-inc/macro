@@ -73,7 +73,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Read maintained Mirror.isEmpty through EditorView.isEmpty for blank paragraph/watermark status; do not scan root children on commits.
 - Match pinned importDOM conversion and append policies before emitting drafts; resolve artificial inline wrappers before native insertion and preserve decorator-owned payload children.
 - Validate serialized HTML-render attributes even when a shadow template supplies the content, preserving Source conversion errors.
-- Use mountLocalSessionView for local composers and read-only views; keep transport, durability and chatter disabled and seed before importing content.
+- Use mountLocalSessionView for isolated native local hosts and fixtures; keep transport, durability and chatter disabled and seed before importing content. App composers and StaticMarkdown remain upstream.
 - Construct native helper views synchronously after the shared engine resource is ready and keep close asynchronous; the compat adapter binds the actual setRootElement root on the same core/session.
 - Manage terminal placeholder line breaks only on block elements; inline links and marks keep their original children.
 

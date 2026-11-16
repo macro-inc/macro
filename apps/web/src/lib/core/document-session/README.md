@@ -21,8 +21,10 @@ of typing, paste, bulk, startup, document-open or bridge-budget acceptance.
 `engine-selection.ts` binds `rust-editor-model` once from the environment
 override or cached rollout at boot. Later rollout refreshes take effect on the
 next page load so existing classes, commands and editor transactions stay on
-one model. Only the document body switches engines: `lexical` and `@lexical/*`
-imports always resolve to upstream Lexical, whichever engine is selected.
+one model. Only the document body switches engines. Titles, comment editors,
+channel/chat composers, task/calendar descriptions and `StaticMarkdown` remain
+upstream Lexical. `lexical` and `@lexical/*` imports always resolve to upstream
+Lexical, whichever engine is selected.
 
 `EditorEngineProvider` owns the app-wide readiness resource under the rollout
 provider. When the cached choice is on, it starts the binary fetch and

@@ -5,8 +5,10 @@ connects an initialized WASM module, host session options, node views and an
 editable root to the existing collaboration I/O executor. Applications supply
 session identity, transport URLs, authorization and telemetry.
 
-`mountLocalSessionView` uses the same native model, view and executor for local
-composers and read-only content. It starts and seeds an independent document
+`mountLocalSessionView` provides the same native model, view and executor for
+isolated local hosts and fixtures. App titles, comment editors, composers and
+`StaticMarkdown` still use upstream Lexical; only the document body selects the
+native engine. The local host starts and seeds an independent document
 with transport, durability and cross-tab chatter disabled. The host loads WASM
 and supplies the session factory for its node/plugin preset and browser platform.
 Local read-only views retain native edit access for host content imports while
