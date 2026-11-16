@@ -130,6 +130,7 @@ import {
   isSafari,
 } from '@solid-primitives/platform';
 import {
+  type Accessor,
   createEffect,
   createSignal,
   getOwner,
@@ -144,6 +145,7 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createRustEditorSession } from '../primitives/create-rust-editor-session';
 import { createEditorAuthorization } from '../queries/editor-authorization';
 import { createNativeBodyFormattingOverlay } from './format-host/native-overlay';
+import { createNativeEditorDrop } from './native-editor-drop';
 import { nativeCommandTarget } from './useMarkdownCommands';
 
 export type RustMarkdownRuntime = Awaited<
@@ -159,6 +161,8 @@ export default function RustMarkdownEditor(props: {
   onRuntime?: (runtime: RustMarkdownRuntime | undefined) => void;
   onEmptyChange?: (empty: boolean) => void;
   onError?: (error: Error) => void;
+  /** The document chrome's container, where Source attaches its drop handlers. */
+  container?: Accessor<HTMLDivElement | undefined>;
 }) {
   const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
@@ -218,6 +222,22 @@ export default function RustMarkdownEditor(props: {
   const imageUploads = createNativeImageUploadController({
     mentionSourceId: documentId,
   });
+  const editorDrop = createNativeEditorDrop({
+    view: () => runtime()?.view,
+    canEdit: () => canEdit(),
+    sourceId: documentId,
+    droppableId: namespace,
+    dropFiles: (files, folders, at) =>
+      imageUploads.dropFiles(files, folders, at),
+  });
+  createEffect(
+    on(
+      () => props.container?.(),
+      (container) => {
+        if (container) editorDrop.connect(container);
+      }
+    )
+  );
   overlayLifecycle.add(() => imageUploads.dispose());
   const canInteractWithMedia = () =>
     ready() &&
@@ -631,6 +651,7 @@ export default function RustMarkdownEditor(props: {
             }
             setRuntime(mounted);
             bindLocationAndBlame(mounted);
+            overlayLifecycle.add(editorDrop.bindView(mounted.view));
             // Command menu (Cmd+K) formats and slash actions on the native body.
             state.editor.setMd(
               'nativeCommands',
@@ -794,6 +815,7 @@ export default function RustMarkdownEditor(props: {
   return (
     <>
       <NativeChecklistFacts host={checklist} />
+      <editorDrop.Indicator />
       <div
         ref={root}
         role="textbox"

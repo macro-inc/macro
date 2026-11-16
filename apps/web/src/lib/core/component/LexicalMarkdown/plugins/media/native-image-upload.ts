@@ -3,7 +3,11 @@ import { blockNameToFileExtensions } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { HEIC_EXTENSIONS } from '@core/heic';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { handleFileFolderDrop, type UploadInput } from '@core/util/upload';
+import {
+  handleFileFolderDrop,
+  type UploadFileEntry,
+  type UploadInput,
+} from '@core/util/upload';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -20,6 +24,10 @@ import { fileExtension } from '@service-storage/util/filename';
 import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { uploadEntriesAsItems } from '../../utils/fileUploadUtils';
 import { prepareBasicMention } from '../../utils/mentionsUtils';
+import {
+  type NativeInsertPoint,
+  placeAtInsertion,
+} from '../drag-insert/native';
 import { registerNativeFilePaste } from '../file-paste/native';
 import {
   dispatchApplicationCommandSettled,
@@ -88,15 +96,16 @@ export function createNativeImageUploadController(options?: {
   // Source onFilesReady: inline media first, in order, then the other files
   // and folders uploaded and mentioned, rechecking editability between steps.
   const filesReady =
-    (view: EditorView, generation: number) =>
-    async (
-      entries: Parameters<Parameters<typeof handleFileFolderDrop>[2]>[0]
-    ) => {
+    (view: EditorView, generation: number, at?: NativeInsertPoint) =>
+    async (entries: UploadFileEntry[]) => {
       const writable = () =>
         current(view, generation) &&
         editable(view) &&
         view.root.contentEditable === 'true';
       if (!writable()) return;
+      // Source SET_SELECTION_AT_INSERTION before a drop's insertions; a drop
+      // whose placement is refused or unhandled inserts nothing.
+      if (at && !(await placeAtInsertion(view, at, writable))) return;
       const uploads: UploadInput[] = [];
       for (const entry of entries) {
         if (!writable()) return;
@@ -310,6 +319,24 @@ export function createNativeImageUploadController(options?: {
     events,
     insertFile,
     openFileDialog,
+    /** Source dropFiles: files dropped on the body land at the drop point. */
+    dropFiles(
+      files: FileSystemFileEntry[],
+      directories: FileSystemDirectoryEntry[],
+      at: NativeInsertPoint | null
+    ) {
+      const view = mounted;
+      const generation = view?.mirror.keyGeneration;
+      if (!view || generation === null || generation === undefined) return;
+      fireAndForget(
+        handleFileFolderDrop(
+          files,
+          directories,
+          filesReady(view, generation, at ?? undefined)
+        ),
+        'native-media-drop'
+      );
+    },
     bindView(view: EditorView) {
       if (disposed || mounted)
         throw new Error('Image uploads require one live view');

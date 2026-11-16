@@ -2,6 +2,7 @@ import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { fireAndForget } from '../../../../util/fireAndForget';
 import { ownsNativeBlockDrag } from '../draggable-block/native';
 import { nativeList } from '../draggable-block/nativeGeometry';
+import { dispatchApplicationCommandSettledIfSessionEdit } from '../group-b/command';
 
 export type NativeInsertPoint = {
   key: number;
@@ -101,6 +102,31 @@ export function calculateNativeInsertPoint(
     return { key, position: 'after', domRect: rect };
   }
   return null;
+}
+
+/**
+ * Source SET_SELECTION_AT_INSERTION for an asynchronous native drop: the caret
+ * moves to the start or end of `at` only if `admit` (the drop's captured view
+ * generation and liveness) still holds at actual entry with Edit access. False
+ * means the drop must stop: refused, cancelled, or a target that is gone.
+ */
+export async function placeAtInsertion(
+  view: EditorView,
+  at: NativeInsertPoint,
+  admit: () => boolean
+): Promise<boolean> {
+  const result = await dispatchApplicationCommandSettledIfSessionEdit(
+    view,
+    'group-b.move',
+    () => ({
+      action: 'insertion',
+      key: at.key,
+      before: at.position === 'before',
+    }),
+    { admit }
+  );
+  if (result.status === 'error') throw result.error;
+  return result.status === 'success' && result.handled;
 }
 
 /** Transfer entries and insertion facts enter the priority bus in one paste call. */

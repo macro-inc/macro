@@ -1050,3 +1050,99 @@ fn booking_link_insert_at_a_root_caret_lands_in_a_new_paragraph() -> Result<(), 
     assert_eq!(agent_caret(&editor), (vec![1], false, 1));
     Ok(())
 }
+
+#[test]
+fn a_dropped_item_is_wrapped_in_a_new_paragraph_beside_the_target_block() -> Result<(), Error> {
+    for (before, expected) in [
+        (true, ["Dropped", "first", "second"]),
+        (false, ["first", "Dropped", "second"]),
+    ] {
+        let mut editor =
+            surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+                .extension_state(NodeClock(Arc::new(|| 1234)))
+                .build()
+                .expect("actual Macro surface");
+        let (first, _) = editor.update(|tx| {
+            let mut keys = Vec::new();
+            for text in ["first", "second"] {
+                let paragraph = tx.create(Paragraph::default())?;
+                let leaf = tx.create_text(text)?;
+                tx.append(paragraph, &[leaf.key()])?;
+                tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+                keys.push(paragraph.key());
+            }
+            Ok(keys[0])
+        })?;
+        let generation = editor.state().max_key().generation();
+        let payload = format!(
+            r#"{{"key":{},"before":{before},"mention":{{"documentId":"dropped-doc","documentName":"Dropped","blockName":"md","mentionUuid":"drop-mention","createdAt":99}}}}"#,
+            first.index()
+        );
+        let command =
+            surface::decode_command("group-b.drop-document-mention", &payload, generation, None)?
+                .expect("drop insertion is decoded");
+        assert_eq!(editor.dispatch(&command)?.0, Handled::Yes);
+        let view = editor.state().view();
+        let blocks = view.children_keys(NodeKey::ROOT)?;
+        assert_eq!(
+            blocks
+                .iter()
+                .map(|key| view.text_content(*key).into_owned())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        let wrapper = blocks[usize::from(!before)];
+        assert!(view.is::<Paragraph>(wrapper));
+        let children = view.children_keys(wrapper)?;
+        assert_eq!(children.len(), 1);
+        let mention = view
+            .get::<DocumentMentionNode>(children[0])
+            .expect("dropped document mention");
+        assert_eq!(mention.document_id.as_deref(), Some("dropped-doc"));
+        assert_eq!(mention.document_name.as_deref(), Some("Dropped"));
+        assert_eq!(mention.block_name.as_deref(), Some("md"));
+        assert_eq!(mention.mention_uuid.as_deref(), Some("drop-mention"));
+        assert_eq!(mention.created_at, Maybe::Value(99));
+        // Source mention.selectEnd() is selectNext(0, 0): the wrapper after the mention.
+        let selection = editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("Source selectEnd caret");
+        assert!(selection.is_collapsed());
+        assert_eq!(selection.anchor, Point::element(wrapper, ChildIndex(1)));
+    }
+    Ok(())
+}
+
+#[test]
+fn a_drop_on_a_detached_or_stale_target_does_nothing() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("actual Macro surface");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(())
+    })?;
+    let generation = editor.state().max_key().generation();
+    let mention = r#""mention":{"documentId":"d","documentName":"D","blockName":"md"}"#;
+    for (payload, generation) in [
+        (
+            format!(r#"{{"key":999,"before":true,{mention}}}"#),
+            generation,
+        ),
+        (
+            format!(r#"{{"key":0,"before":true,{mention}}}"#),
+            generation,
+        ),
+    ] {
+        let command =
+            surface::decode_command("group-b.drop-document-mention", &payload, generation, None)?
+                .expect("decoded");
+        assert_eq!(editor.dispatch(&command)?.0, Handled::No);
+    }
+    assert_eq!(editor.state().view().children_keys(NodeKey::ROOT)?.len(), 1);
+    Ok(())
+}

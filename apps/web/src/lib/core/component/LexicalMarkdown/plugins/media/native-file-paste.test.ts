@@ -128,3 +128,72 @@ test('an upload owner disposed while the mention is being tracked inserts nothin
     'uploaded-document-1'
   );
 });
+
+/** A dropped file as fileFolderDrop hands it over. */
+function droppedFile(file: File) {
+  return {
+    name: file.name,
+    isFile: true,
+    isDirectory: false,
+    file: (resolve: (file: File) => void) => resolve(file),
+  } as unknown as FileSystemFileEntry;
+}
+
+function dropFixture() {
+  service.uploads.length = 0;
+  const runtime = mount();
+  onTestFinished(() => runtime.root.remove());
+  onTestFinished(() => runtime.close());
+  runtime.port.setState(state('before'));
+  const uploads = createNativeImageUploadController({
+    mentionSourceId: () => 'source-document',
+  });
+  onTestFinished(() => uploads.dispose());
+  uploads.bindView(runtime.view);
+  const block = runtime.view.node(0)?.children[0];
+  if (block === undefined) throw new Error('Missing actual block');
+  const admit = runtime.port.inputSettledIfSessionEdit.bind(runtime.port);
+  const admissions = vi.spyOn(runtime.port, 'inputSettledIfSessionEdit');
+  return { runtime, uploads, block, admit, admissions };
+}
+
+test('a drop whose placement meets a new view generation at entry places nothing and uploads nothing', async () => {
+  const { runtime, uploads, block, admit, admissions } = dropFixture();
+  const before = runtime.executor.session.serializedState();
+  const original = runtime.view.mirror.keyGeneration;
+  if (original === null) throw new Error('Missing actual generation');
+  // The view is re-initialized (resync) after the drop queued its placement.
+  admissions.mockImplementationOnce((...args) => {
+    vi.spyOn(runtime.view.mirror, 'keyGeneration', 'get').mockReturnValue(
+      original + 1
+    );
+    return admit(...args);
+  });
+  uploads.dropFiles([droppedFile(new File(['%PDF'], 'report.pdf'))], [], {
+    key: block,
+    position: 'after',
+    domRect: new DOMRect(),
+  });
+  await vi.waitFor(() => expect(admissions).toHaveBeenCalledTimes(1));
+  for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+  expect(admissions).toHaveBeenCalledTimes(1);
+  expect(service.uploads).toEqual([]);
+  expect(runtime.executor.session.serializedState()).toBe(before);
+});
+
+test('a drop whose target block is gone places nothing and uploads nothing', async () => {
+  const { runtime, uploads, admissions } = dropFixture();
+  const before = runtime.executor.session.serializedState();
+  uploads.dropFiles([droppedFile(new File(['%PDF'], 'report.pdf'))], [], {
+    key: 9999,
+    position: 'before',
+    domRect: new DOMRect(),
+  });
+  await vi.waitFor(() => expect(admissions).toHaveBeenCalledTimes(1));
+  const placement = await admissions.mock.results[0]?.value;
+  expect(placement).toMatchObject({ status: 'success', handled: false });
+  for (let tick = 0; tick < 20; tick++) await Promise.resolve();
+  expect(admissions).toHaveBeenCalledTimes(1);
+  expect(service.uploads).toEqual([]);
+  expect(runtime.executor.session.serializedState()).toBe(before);
+});

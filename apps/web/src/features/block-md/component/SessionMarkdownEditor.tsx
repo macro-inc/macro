@@ -19,8 +19,10 @@ export default function SessionMarkdownEditor(props: {
   const [ready, setReady] = createSignal(false);
   const [empty, setEmpty] = createSignal(false);
   const [error, setError] = createSignal<string>();
+  const [container, setContainer] = createSignal<HTMLDivElement>();
   return (
     <MarkdownEditorChrome
+      connectContainer={setContainer}
       ready={ready()}
       empty={empty()}
       canEdit={permissions.canEdit()}
@@ -36,6 +38,7 @@ export default function SessionMarkdownEditor(props: {
         >
           <RustMarkdownEditor
             context={props.context}
+            container={container}
             loadCachedSnapshot={props.loadCachedSnapshot}
             autoFocus={props.autoFocus}
             onReady={() => {

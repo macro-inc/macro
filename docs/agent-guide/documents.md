@@ -1212,6 +1212,25 @@ Tauri's native interception and cannot verify the desktop window configuration.
 The setting and native rebuild requirement are documented in the
 [web agent guide](../../apps/web/AGENTS.md#desktop-file-drops).
 
+## Drag and drop into a document
+
+The same behavior holds with the native editor (`rust-editor-model` on) and
+without it:
+
+- Drag a row from a Drive list (open the document in a second split) over the
+  body: a blue line marks the insertion point between blocks. Dropping a
+  document, channel or other item inserts a mention in its own new paragraph
+  before or after that block, tracked against the open document; a dropped
+  image or video inserts the media at that point.
+- Drop files from the operating system: images and videos insert inline at the
+  drop point, other files and folders upload and appear as mentions there.
+- Drop plain text dragged from elsewhere: nothing is inserted.
+
+Synthetic browser drops carry no file-system entries, so they cannot check the
+file case; use a real OS drag, as for desktop file drops above. Native drops
+check the editor's current access and view generation before each write, so a
+document that became read-only or reloaded during the drop is left unchanged.
+
 ## Folder uploads
 
 Dropping a folder (or choosing one with the folder picker) zips it in the browser
