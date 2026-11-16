@@ -90,6 +90,8 @@ where
             .list_contacts_for_soup(user_id, None, query)
             .await?
             .into_iter()
+            // An id lookup shows a team admin archived people too.
+            .filter(|listed| !listed.contact.hidden)
             .map(|listed| CrmPerson {
                 id: listed.contact.id,
                 team_id: listed.team_id,
@@ -99,3 +101,6 @@ where
             .collect())
     }
 }
+
+#[cfg(test)]
+mod test;

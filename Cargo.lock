@@ -7733,6 +7733,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model_user",
  "rand 0.9.4",
  "rootcause",
  "serde",
