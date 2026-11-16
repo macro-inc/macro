@@ -18,6 +18,8 @@ mod history;
 #[cfg(feature = "application")]
 mod metadata;
 #[cfg(feature = "application")]
+mod reconcile_ids;
+#[cfg(feature = "application")]
 pub(crate) use builder::with_session_plugins_excluding_root;
 pub use builder::{
     default_editor_builder, register_editor_commands, with_session_plugins,
@@ -861,6 +863,8 @@ impl EditorSurface {
                 )
             })
         };
+        #[cfg(feature = "application")]
+        let changed = self.reconcile_root_id(doc, now, access, view)? || changed;
         if let Some(awareness) = browser_history {
             self.publish_browser_history_selection(view, None);
             return self
@@ -980,3 +984,6 @@ mod root_id_test;
 
 #[cfg(test)]
 mod input_dom_prefix_test;
+
+#[cfg(all(test, feature = "application"))]
+mod root_id_remote_test;

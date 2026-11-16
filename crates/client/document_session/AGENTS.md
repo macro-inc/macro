@@ -32,9 +32,7 @@ The host supplies identities and both clocks and executes the returned effects.
   or pass the importer's exact StateKey<Option<String>> to
   with_session_plugins_with_id_state. Never install another key named id in that
   registry. default_editor_builder retains standalone identities and its private key.
-- Exclude Root from application session ID assignment, clipboard clearing and identity
-  index/conflict tracking. Preserve imported Root payloads, generic session Root IDs
-  and missing-ID repair for updated attached children.
+- Exclude Root from ordinary application ID transforms and clipboard clearing; preserve imported IDs and generic session Root tracking. The open and separate post-Loro passes mint only a missing Root ID from the shared entropy stream; raw SetState remains unchanged. Preserve the live root ID across incoming root own-field changes, and write it back only with the next real local mutation. Persist post-Loro repairs only for Edit, with the excluded history fix-up origin (C-ROOT-ID-UNDO-01: Source records an ID-only undo step that can remove the stored ID).
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Register Click at the ordinary rich-text Editor priority and reuse lexical_rich_nodes::rich_text::click; decorator-specific selection remains in component listeners.

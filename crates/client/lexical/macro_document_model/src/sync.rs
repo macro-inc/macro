@@ -12,8 +12,8 @@ pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy {
     root_search_text: false,
 };
 /// Root state keys whose live values survive incoming updates: Source's live
-/// reconciliation updates root children and leaves metadata alone.
-pub const RETAINED_LIVE_ROOT_STATE: &[&str] = &["documentMetadata"];
+/// reconciliation updates root children and leaves its live id and metadata alone.
+pub const RETAINED_LIVE_ROOT_STATE: &[&str] = &["id", "documentMetadata"];
 /// Macro writer with the configured root search index enabled.
 pub static MACRO_SEARCH_TEXT_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy {
     root_search_text: true,

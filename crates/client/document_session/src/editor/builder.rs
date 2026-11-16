@@ -5,6 +5,9 @@ pub(super) const DEFAULT_NAMESPACE: &str = "document-session";
 #[derive(Clone)]
 pub(super) struct ClipboardNamespace(pub String);
 
+#[cfg(feature = "application")]
+pub(super) static RECONCILE_ROOT_ID: CommandKey<()> = CommandKey::new("session-reconcile-root-id");
+
 /// Core and rich-node registry used until the application supplies its own factory.
 pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
     let builder = lexical_rich_nodes::register_rich_text_nodes(Editor::builder(mode));
@@ -38,8 +41,8 @@ pub fn with_session_plugins_with_id_state(
     install_session_plugins(builder, peer, id_state, true, IdMint::Session)
 }
 
-/// Application tracking: Root carries no tracked id, and nodes created without
-/// one receive Source nodeIdPlugin `nanoid(id_length)` from NodeRandom.
+/// Application per-node tracking excludes Root; the open and post-Loro passes
+/// handle it explicitly. Missing IDs use Source `nanoid(id_length)` from NodeRandom.
 #[cfg(feature = "application")]
 pub(crate) fn with_session_plugins_excluding_root(
     builder: EditorBuilder,
@@ -251,14 +254,33 @@ impl Plugin for NodeIds {
         "session-node-id"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        const COMMANDS: &[CommandRegistration] = &[CommandRegistration {
-            command: CommandKind::InsertClipboardNodes,
-            priority: CommandPriority::Critical,
-            placement: Placement::Before,
-        }];
+        const COMMANDS: &[CommandRegistration] = &[
+            CommandRegistration {
+                command: CommandKind::InsertClipboardNodes,
+                priority: CommandPriority::Critical,
+                placement: Placement::Before,
+            },
+            #[cfg(feature = "application")]
+            CommandRegistration {
+                command: CommandKind::Extension(&RECONCILE_ROOT_ID),
+                priority: CommandPriority::Critical,
+                placement: Placement::Before,
+            },
+        ];
         COMMANDS
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        #[cfg(feature = "application")]
+        if let Command::Extension(command) = command
+            && command.payload(&RECONCILE_ROOT_ID).is_some()
+        {
+            if self.track_root || !matches!(self.mint, IdMint::Nanoid { .. }) {
+                return Ok(Handled::No);
+            }
+            tx.add_tag(UpdateTag::Custom(COLLAB_SELECTION_TAG.into()));
+            self.ensure_root_id(tx, &[])?;
+            return Ok(Handled::Yes);
+        }
         if let Command::InsertClipboardNodes { nodes, .. } = command {
             // Clipboard copies lose durable identities even across documents.
             // Yield so selection/table handlers still own actual insertion.
@@ -340,26 +362,42 @@ impl Plugin for NodeIds {
             }
         }
         #[cfg(feature = "application")]
-        self.initialize_root_id(tx, &reserved)?;
+        if tx.is_initializing() {
+            self.ensure_root_id(tx, &reserved)?;
+        } else if !self.track_root
+            && matches!(self.mint, IdMint::Nanoid { .. })
+            && !commit.changes.mutations.is_empty()
+            && !commit.tags.contains(&UpdateTag::Collaboration)
+            && !commit.tags.contains(&UpdateTag::Historic)
+            && !commit.tags.contains(&UpdateTag::SkipCollab)
+            && ![
+                "from-loro",
+                COLLAB_SELECTION_TAG,
+                "local-status",
+                "code-highlight-ids",
+            ]
+            .iter()
+            .any(|tag| commit.tags.contains(&UpdateTag::Custom((*tag).into())))
+        {
+            // Source ignores remote root fields, then writes its live id on the
+            // next real local edit. Preserve the imported slot until that edit.
+            tx.supersede_retained_root_state(
+                self.id_state,
+                macro_document_model::sync::RETAINED_LIVE_ROOT_STATE,
+            )?;
+        }
         Ok(())
     }
 }
 #[cfg(feature = "application")]
 impl NodeIds {
-    /// Source INITIALIZE_DOCUMENT_IDS: the open's id pass ($updateAllNodeIds from the root's
-    /// child caret, whose origin is the root) gives the root an id when it has none and keeps
-    /// an existing one. Only the initial after-commit drain covers the root; every later commit
-    /// still skips it (Source never re-ids the root after open). The id enters the index, as
-    /// Source's mappings include it.
-    fn initialize_root_id(
-        &self,
-        tx: &mut Transaction<'_>,
-        reserved: &[String],
-    ) -> Result<(), Error> {
+    /// The open and post-Loro ID passes include Root. Ordinary local updates do not:
+    /// in particular, raw SetState must retain an incoming id-less root.
+    fn ensure_root_id(&self, tx: &mut Transaction<'_>, reserved: &[String]) -> Result<(), Error> {
         let IdMint::Nanoid { length } = self.mint else {
             return Ok(());
         };
-        if self.track_root || !tx.is_initializing() {
+        if self.track_root {
             return Ok(());
         }
         let stored = tx

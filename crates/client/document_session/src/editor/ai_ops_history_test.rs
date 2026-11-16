@@ -36,10 +36,12 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
         .apply(
             &doc,
             Input::SetState {
-                state: serde_json::from_value(json!({"root":{"type":"root","children":[
-                    paragraph("alphaId1", "Alpha beta gamma"),
-                    paragraph("secondId", "Second line"),
-                ]}}))
+                state: serde_json::from_value(
+                    json!({"root":{"type":"root","$":{"id":"ROOTid01"},"children":[
+                        paragraph("alphaId1", "Alpha beta gamma"),
+                        paragraph("secondId", "Second line"),
+                    ]}}),
+                )
                 .expect("seed"),
                 tags: TagSet::default(),
             },
@@ -63,11 +65,10 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
     (surface, doc, view)
 }
 
-// SetState keeps the incoming id-less root, as Source's raw setEditorState does
-// (bcc849e5), after the open took draw 1 of the id stream for the root it replaced.
-// KNOWN DIVERGENCE C-ROOT-ID-RECONCILE-01: an id-less root is not re-id'd after a
-// Loro-driven reconcile (Source: CollabProvider's $updateAllNodeIds), so the undone
-// and redone roots here export no id.
+// Native-authored Source-rule fixture: the explicit root id keeps these grouping
+// assertions independent of the post-reconcile ID draw. These are literal expectations
+// derived from the fixture and Source's import rules, not captured Source exports.
+// The id-less-root path is covered by root_id_test and root_id_remote_test.
 //
 // After any undo, Source's Loro-driven reconcile imports every node (probe log
 // 8803f2b1), so each storage-null key a node holds absent reads back as its
@@ -78,14 +79,14 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
 
 /// `before` (the seeded fixture) as Source holds it after an undo restores it.
 fn before_source() -> SerializedEditorState {
-    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":null,"style":null,"text":"Alpha beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":null,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#)
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":null,"style":null,"text":"Alpha beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":null,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"id":"ROOTid01","documentMetadata":{"version":11}}}}"#)
         .expect("Source-rule literal")
 }
 
 /// `after_first` as Source holds it after an undo restores it: the first op's
 /// setText wrote text format 0 and paragraph textFormat 0, which stay values.
 fn after_first_source() -> SerializedEditorState {
-    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":0,"style":null,"text":"Omega beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":0,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#)
+    serde_json::from_str(r#"{"root":{"children":[{"children":[{"detail":null,"format":0,"style":null,"text":"Omega beta gamma","type":"text","version":1,"$":{"id":"RALpOnRU"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"alphaId1"},"textFormat":0,"textStyle":null},{"children":[{"detail":null,"format":null,"style":null,"text":"Second line","type":"text","version":1,"$":{"id":"N-OHZRWQ"}}],"direction":null,"format":"","indent":null,"type":"paragraph","version":1,"$":{"id":"secondId"},"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"id":"ROOTid01","documentMetadata":{"version":11}}}}"#)
         .expect("Source-rule literal")
 }
 

@@ -17,18 +17,16 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
         macro_document_model::EditorType::MarkdownSync,
     );
     let mut surface = EditorSurface::new(config, 7, now(0)).expect("actual Macro session surface");
-    // SetState keeps the incoming id-less root, as Source's raw setEditorState does
-    // (bcc849e5), after the open took draw 1 of the id stream for the root it replaced.
-    // KNOWN DIVERGENCE C-ROOT-ID-RECONCILE-01: an id-less root is not re-id'd after a
-    // Loro-driven reconcile (Source: CollabProvider's $updateAllNodeIds), so the undone
-    // and redone roots here export no id.
+    // Native-authored Source-rule fixture: pin the root id so this table history
+    // test is independent of post-reconcile mint timing. Exact JSON below is derived
+    // from this input and Source import rules, not a captured Source export.
     let doc = lexical_loro::new_doc(7).expect("Loro document");
     let mut view = Vec::new();
     surface
         .init(&doc, now(0), Access::Edit, &mut view)
         .expect("initialize");
     surface.apply(&doc, Input::SetState {
-        state: serde_json::from_value(json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"base"}]}]}})).expect("initial model"),
+        state: serde_json::from_value(json!({"root":{"type":"root","$":{"id":"ROOTid01"},"children":[{"type":"paragraph","children":[{"type":"text","text":"base"}]}]}})).expect("initial model"),
         tags: TagSet::default(),
     }, now(0), Access::Edit, &mut view).expect("base model");
     let text = surface
@@ -123,7 +121,7 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
         // not, while text mode stays undefined. Literal drafted from this test's pre-import
         // state by that rule.
         serde_json::from_str::<SerializedEditorState>(
-                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"N-OHZRWQ"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"RALpOnRU"},"direction":null,"indent":null,"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#,
+                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"N-OHZRWQ"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"RALpOnRU"},"direction":null,"indent":null,"textFormat":null,"textStyle":null}],"format":"","type":"root","version":1,"$":{"id":"ROOTid01","documentMetadata":{"version":11}}}}"#,
             )
                 .expect("Source-rule literal")
     });
@@ -139,7 +137,7 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
         // not, while text mode stays undefined. Literal drafted from this test's pre-import
         // state by that rule.
         serde_json::from_str::<SerializedEditorState>(
-                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"N-OHZRWQ"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"RALpOnRU"},"direction":null,"indent":null,"textFormat":null,"textStyle":null},{"children":[{"children":[{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"HGSFJif7"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"XZHQbVZX"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1},{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"ZsfiuPd1"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"N-TehWzD"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1}],"direction":null,"format":"","indent":0,"type":"tablerow","version":1,"$":{"id":"WN7eT1BU"}}],"direction":null,"format":"","indent":0,"type":"table","version":1,"$":{"id":"lSqSp5z_"},"colWidths":[210,160]},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"Q_DWqp0L"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"documentMetadata":{"version":11}}}}"#,
+                r#"{"root":{"children":[{"children":[{"text":"base","type":"text","version":1,"$":{"id":"N-OHZRWQ"},"detail":null,"format":null,"style":null}],"format":"","type":"paragraph","version":1,"$":{"id":"RALpOnRU"},"direction":null,"indent":null,"textFormat":null,"textStyle":null},{"children":[{"children":[{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"HGSFJif7"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"XZHQbVZX"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1},{"children":[{"children":[],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"ZsfiuPd1"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"tablecell","version":1,"$":{"id":"N-TehWzD"},"backgroundColor":null,"colSpan":1,"headerState":0,"rowSpan":1}],"direction":null,"format":"","indent":0,"type":"tablerow","version":1,"$":{"id":"WN7eT1BU"}}],"direction":null,"format":"","indent":0,"type":"table","version":1,"$":{"id":"lSqSp5z_"},"colWidths":[210,160]},{"children":[],"format":"","type":"paragraph","version":1,"$":{"id":"Q_DWqp0L"},"textFormat":0,"textStyle":"","direction":null,"indent":null}],"format":"","type":"root","version":1,"$":{"id":"ROOTid01","documentMetadata":{"version":11}}}}"#,
             )
                 .expect("Source-rule literal")
     });

@@ -17,7 +17,8 @@
 //! A malformed decode, a foreign author or a missing known write is a fixture fault, never a RED.
 use super::*;
 use loro::{ContainerTrait, ToJson};
-use std::sync::atomic::AtomicI64;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicI64, AtomicUsize};
 
 const SEED_PEER: u64 = 7;
 
@@ -42,15 +43,15 @@ fn is_minted_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 /// The root `$` the model exports (Null when absent).
-fn model_root_state(surface: &EditorSurface) -> serde_json::Value {
+pub(super) fn model_root_state(surface: &EditorSurface) -> serde_json::Value {
     let root = surface.state().to_json().expect("model export").root;
     root.get("$").cloned().unwrap_or(serde_json::Value::Null)
 }
 /// The root `$` stored in Loro (Null when absent).
-fn stored_root_state(doc: &loro::LoroDoc) -> serde_json::Value {
+pub(super) fn stored_root_state(doc: &loro::LoroDoc) -> serde_json::Value {
     doc.get_deep_value().to_json_value()["root"]["$"].clone()
 }
-fn id_of(state: &serde_json::Value) -> String {
+pub(super) fn id_of(state: &serde_json::Value) -> String {
     state["id"]
         .as_str()
         .map_or_else(|| "<absent>".to_owned(), str::to_owned)
@@ -290,7 +291,7 @@ fn finds_metadata(commits: &[serde_json::Value], doc: &loro::LoroDoc) {
 /// (session.rs:297 `new_doc(peer)`, the surface constructed with the same peer at :298), with
 /// the stored snapshot imported into it (session.rs:821-828 `seed`). The stored snapshot is
 /// the Source-shaped map written by the mirror port as peer SEED_PEER.
-fn seeded(root: &str, reader: u64) -> loro::LoroDoc {
+pub(super) fn seeded(root: &str, reader: u64) -> loro::LoroDoc {
     let source = lexical_loro::new_doc(SEED_PEER).expect("fixture: Loro document");
     lexical_loro::mirror::set_state(&source, &serde_json::from_str(root).expect("fixture: JSON"))
         .expect("fixture: seed write");
@@ -304,7 +305,7 @@ fn seeded(root: &str, reader: u64) -> loro::LoroDoc {
     assert_eq!(doc.peer_id(), reader, "fixture: reader peer");
     doc
 }
-fn open(doc: &loro::LoroDoc, peer: u64, access: Access) -> EditorSurface {
+pub(super) fn open(doc: &loro::LoroDoc, peer: u64, access: Access) -> EditorSurface {
     let mut surface = EditorSurface::new(config(), peer, now()).expect("fixture: session");
     let mut view = Vec::new();
     surface
@@ -312,7 +313,7 @@ fn open(doc: &loro::LoroDoc, peer: u64, access: Access) -> EditorSurface {
         .expect("fixture: init");
     surface
 }
-const ABSENT_ROOT: &str = r#"{"type":"root","version":1,"format":"","indent":0,"direction":null,"children":[{"$":{"id":"para0001"},"type":"paragraph","version":1,"format":"","indent":0,"direction":null,"textFormat":0,"textStyle":"","children":[{"$":{"id":"text0001"},"type":"text","version":1,"text":"hello","format":0,"detail":0,"mode":"normal","style":""}]}]}"#;
+pub(super) const ABSENT_ROOT: &str = r#"{"type":"root","version":1,"format":"","indent":0,"direction":null,"children":[{"$":{"id":"para0001"},"type":"paragraph","version":1,"format":"","indent":0,"direction":null,"textFormat":0,"textStyle":"","children":[{"$":{"id":"text0001"},"type":"text","version":1,"text":"hello","format":0,"detail":0,"mode":"normal","style":""}]}]}"#;
 
 #[test]
 fn an_edit_open_stores_a_minted_root_id_in_its_first_change() {
@@ -565,4 +566,313 @@ fn a_cleanup_open_stores_the_minted_root_id_order_unobserved() {
             .contains("comment-mark"),
         "the draft mark is cleaned up"
     );
+}
+
+#[derive(Clone, Debug)]
+struct IdPassFrame {
+    from_loro: bool,
+    id_pass: bool,
+    id: Option<String>,
+}
+struct IdPassFrames(Arc<Mutex<Vec<IdPassFrame>>>);
+impl Plugin for IdPassFrames {
+    fn name(&self) -> &'static str {
+        "root-id-pass-observer"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _tx: &mut Transaction<'_>, _command: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn after_commit(&self, _tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        self.0
+            .lock()
+            .expect("frame observations")
+            .push(IdPassFrame {
+                from_loro: commit.tags.contains(&UpdateTag::Collaboration),
+                id_pass: commit
+                    .tags
+                    .contains(&UpdateTag::Custom(COLLAB_SELECTION_TAG.into())),
+                id: commit
+                    .next
+                    .view()
+                    .get_state(NodeKey::ROOT, &macro_document_model::node_ids::ID_STATE)?,
+            });
+        Ok(())
+    }
+}
+
+fn first_child_map(parent: &loro::LoroMap) -> loro::LoroMap {
+    let Some(loro::ValueOrContainer::Container(loro::Container::MovableList(children))) =
+        parent.get("children")
+    else {
+        panic!("child list");
+    };
+    let Some(loro::ValueOrContainer::Container(loro::Container::Map(child))) = children.get(0)
+    else {
+        panic!("child map");
+    };
+    child
+}
+
+#[test]
+fn loro_reconcile_repairs_an_idless_root_and_echoes_the_id() {
+    for access in [Access::Edit, Access::Read, Access::CommentOnly] {
+        for incoming_id in [None, Some("remoteRoot")] {
+            let fixture = ABSENT_ROOT.replacen(
+                r#""type":"root","#,
+                r#""type":"root","$":{"id":"ROOTid01"},"#,
+                1,
+            );
+            let doc = seeded(&fixture, 8);
+            let draws = Arc::new(AtomicUsize::new(0));
+            let frames = Arc::new(Mutex::new(Vec::new()));
+            let mut config = config();
+            let entropy = draws.clone();
+            let observed = frames.clone();
+            // Real application registry and session ID plugin, with only its host entropy
+            // made deterministic. The fixture has no Await nodes requiring peer ownership.
+            config.builder = Arc::new(move |mode, peer| {
+                let entropy = entropy.clone();
+                builder::with_session_plugins_excluding_root(
+                    macro_document_model::surface::preset_builder_with_mode(
+                        macro_document_model::EditorType::MarkdownSync,
+                        mode,
+                    )
+                    .extension_state(macro_document_model::NodeClock(Arc::new(|| 0)))
+                    .extension_state(macro_document_model::NodeRandom(Arc::new(move |length| {
+                        let index = entropy.fetch_add(1, Ordering::SeqCst) % 64;
+                        vec![u8::try_from(index).expect("alphabet index"); length]
+                    })))
+                    .extension_state(macro_document_model::NodeHost::default()),
+                    peer,
+                    &macro_document_model::node_ids::ID_STATE,
+                    8,
+                )
+                .plugin(IdPassFrames(observed.clone()))
+            });
+            let mut surface = EditorSurface::new(config, 8, now()).expect("surface");
+            surface
+                .init(&doc, now(), Access::Edit, &mut Vec::new())
+                .expect("open");
+            let mut root: serde_json::Value =
+                serde_json::from_str(ABSENT_ROOT).expect("root fixture");
+            if let Some(id) = incoming_id {
+                root["$"] = serde_json::json!({ "id": id });
+            }
+            surface
+                .apply(
+                    &doc,
+                    Input::SetState {
+                        state: serde_json::from_value(serde_json::json!({ "root": root }))
+                            .expect("state"),
+                        tags: TagSet::default(),
+                    },
+                    now(),
+                    Access::Edit,
+                    &mut Vec::new(),
+                )
+                .expect("Source raw SetState before demotion");
+            assert_eq!(model_root_state(&surface)["id"].as_str(), incoming_id);
+            {
+                surface
+                    .apply(
+                        &doc,
+                        Input::Command {
+                            command: Command::ClearHistory,
+                            selection: ViewSelection::KeepModel,
+                        },
+                        now(),
+                        access,
+                        &mut Vec::new(),
+                    )
+                    .expect("clear initial history");
+            }
+            let remote = lexical_loro::new_doc(9).expect("remote peer");
+            remote
+                .import(&doc.export(loro::ExportMode::Snapshot).expect("snapshot"))
+                .expect("remote seed");
+            let paragraph = first_child_map(&remote.get_map("root"));
+            let leaf = first_child_map(&paragraph);
+            let Some(loro::ValueOrContainer::Container(loro::Container::Text(text))) =
+                leaf.get("text")
+            else {
+                panic!("remote text container");
+            };
+            text.insert(5, "!").expect("actual remote child edit");
+            remote.commit();
+            doc.import(
+                &remote
+                    .export(loro::ExportMode::updates(&doc.oplog_vv()))
+                    .expect("remote update"),
+            )
+            .expect("real Loro import");
+            let imported = doc.oplog_vv();
+            let before_draws = draws.load(Ordering::SeqCst);
+            frames.lock().expect("frames").clear();
+            let mut effects = Vec::new();
+            surface
+                .remote_pending(&doc, now(), access, &mut effects, false)
+                .expect("reconcile imported state");
+            let repaired = id_of(&model_root_state(&surface));
+            if let Some(id) = incoming_id {
+                assert_eq!(repaired, id, "an existing imported id is never reassigned");
+                assert_eq!(draws.load(Ordering::SeqCst), before_draws);
+            } else {
+                assert!(is_minted_id(&repaired), "reconciled root id: {repaired}");
+                let letter = macro_document_model::node_ids::NANOID_ALPHABET[before_draws % 64];
+                assert_eq!(repaired, char::from(letter).to_string().repeat(8));
+                assert_eq!(
+                    draws.load(Ordering::SeqCst),
+                    before_draws + 1,
+                    "one draw from the shared stream, before any other missing ids"
+                );
+            }
+            let observed = frames.lock().expect("frames");
+            let import = observed
+                .iter()
+                .position(|frame| frame.from_loro)
+                .expect("import commit");
+            assert_eq!(observed[import].id.as_deref(), incoming_id);
+            if incoming_id.is_none() {
+                let pass = observed
+                    .iter()
+                    .position(|frame| frame.id_pass)
+                    .expect("separate mutating ID pass");
+                assert!(import < pass, "the ID pass follows the sealed import");
+                assert!(!observed[pass].from_loro);
+                assert_eq!(observed[pass].id.as_deref(), Some(repaired.as_str()));
+            }
+            if incoming_id.is_none() {
+                assert!(effects.iter().any(|effect| matches!(effect,
+                    ViewEffect::CommitTags(tags) if tags.iter().any(|tag| tag == COLLAB_SELECTION_TAG)
+                )), "the mutating ID pass publishes its update tag");
+            } else {
+                // Core discards empty applies before hooks and view-tag publication.
+                assert!(!observed.iter().any(|frame| frame.id_pass));
+            }
+            let state = surface.state().to_json().expect("model JSON");
+            assert_eq!(state.root["children"][0]["$"]["id"], "para0001");
+            assert_eq!(
+                state.root["children"][0]["children"][0]["$"]["id"],
+                "text0001"
+            );
+            let undo = surface.undo.as_ref().expect("history");
+            assert!(
+                !undo.can_undo(),
+                "C-ROOT-ID-UNDO-01: fix-up is not an undo step"
+            );
+            assert!(!undo.can_redo());
+            if access == Access::Edit {
+                assert_eq!(id_of(&stored_root_state(&doc)), repaired);
+                remote
+                    .import(
+                        &doc.export(loro::ExportMode::updates(&remote.oplog_vv()))
+                            .expect("echo"),
+                    )
+                    .expect("receive the locally minted id");
+                assert_eq!(id_of(&stored_root_state(&remote)), repaired);
+            } else {
+                assert_eq!(
+                    doc.oplog_vv(),
+                    imported,
+                    "read/comment reconcile writes nothing"
+                );
+                assert_eq!(stored_root_state(&doc)["id"].as_str(), incoming_id);
+            }
+            drop(observed);
+            let draws_after_repair = draws.load(Ordering::SeqCst);
+            text.insert(6, "?").expect("second remote child edit");
+            remote.commit();
+            doc.import(
+                &remote
+                    .export(loro::ExportMode::updates(&doc.oplog_vv()))
+                    .expect("second remote update"),
+            )
+            .expect("second real import");
+            let second_imported = doc.oplog_vv();
+            surface
+                .remote_pending(&doc, now(), access, &mut Vec::new(), false)
+                .expect("second reconcile");
+            assert_eq!(id_of(&model_root_state(&surface)), repaired);
+            assert_eq!(
+                draws.load(Ordering::SeqCst),
+                draws_after_repair,
+                "a subsequent import never remints the live ID, including Read and Comment"
+            );
+            assert_eq!(
+                doc.oplog_vv(),
+                second_imported,
+                "the present-ID follow-up writes nothing"
+            );
+        }
+    }
+}
+
+#[test]
+fn reconcile_id_pass_preserves_real_edit_undo_redo_for_three_cycles() {
+    let fixture = ABSENT_ROOT.replacen(
+        r#""type":"root","#,
+        r#""type":"root","$":{"id":"ROOTid01"},"#,
+        1,
+    );
+    let doc = seeded(&fixture, 8);
+    let mut surface = open(&doc, 8, Access::Edit);
+    let mut effects = Vec::new();
+    surface
+        .apply(
+            &doc,
+            Input::Command {
+                command: Command::ClearHistory,
+                selection: ViewSelection::KeepModel,
+            },
+            now(),
+            Access::Edit,
+            &mut effects,
+        )
+        .expect("clear initial history");
+    let root_id = id_of(&model_root_state(&surface));
+    for _ in 0..3 {
+        let state = surface.state().view();
+        let paragraph = state.children_keys(NodeKey::ROOT).expect("root children")[0];
+        let text = state.children_keys(paragraph).expect("paragraph children")[0];
+        let point = Point::text(text, Utf16Offset(5));
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText("!".into()),
+                    selection: ViewSelection::Range {
+                        anchor: point,
+                        focus: point,
+                        resolution_dirty: false,
+                    },
+                },
+                now(),
+                Access::Edit,
+                &mut effects,
+            )
+            .expect("real text edit");
+        assert_eq!(&*surface.state().root_text_content(), "hello!");
+        surface
+            .apply(&doc, Input::Undo, now(), Access::Edit, &mut effects)
+            .expect("undo edit");
+        assert_eq!(&*surface.state().root_text_content(), "hello");
+        assert_eq!(id_of(&model_root_state(&surface)), root_id);
+        assert_eq!(id_of(&stored_root_state(&doc)), root_id);
+        assert!(!surface.undo.as_ref().expect("history").can_undo());
+        assert!(surface.undo.as_ref().expect("history").can_redo());
+        surface
+            .apply(&doc, Input::Redo, now(), Access::Edit, &mut effects)
+            .expect("redo edit");
+        assert_eq!(&*surface.state().root_text_content(), "hello!");
+        assert_eq!(id_of(&model_root_state(&surface)), root_id);
+        surface
+            .apply(&doc, Input::Undo, now(), Access::Edit, &mut effects)
+            .expect("reset next cycle");
+        assert_eq!(&*surface.state().root_text_content(), "hello");
+        assert!(!surface.undo.as_ref().expect("history").can_undo());
+        assert!(surface.undo.as_ref().expect("history").can_redo());
+    }
 }
