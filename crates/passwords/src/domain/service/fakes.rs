@@ -19,6 +19,11 @@ pub struct FakeEnrollment {
 pub struct FakeRepository {
     pub records: Mutex<HashMap<Uuid, Record>>,
     pub staged: Mutex<HashMap<Uuid, Record>>,
+    /// Held across every staging check and insert, like the operation-id lock:
+    /// an intent and an enrollment never reserve the same id.
+    pub reservations: Mutex<()>,
+    /// The agent and action of each agent-published intent; absent means human.
+    pub intent_agents: Mutex<HashMap<Uuid, (String, crate::domain::agent::AgentAction)>>,
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
     pub fail_import_audit: AtomicBool,
@@ -34,6 +39,8 @@ pub struct FakeRepository {
     pub imports: Mutex<Vec<(TeamId, Uuid, ImportFormat, ImportCounts)>>,
     pub busy_items: Mutex<HashSet<Uuid>>,
     pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
+    /// Operations whose intents completed through `save_reconciled`.
+    pub reconciled: Mutex<Vec<Uuid>>,
     /// Membership lookups (`teams`), to count admission work.
     pub team_lookups: AtomicUsize,
     /// Answer `ensure_folder` without keeping the folder, as if it were
@@ -45,6 +52,8 @@ impl FakeRepository {
         Self {
             records: Mutex::new(HashMap::new()),
             staged: Mutex::new(HashMap::new()),
+            reservations: Mutex::new(()),
+            intent_agents: Mutex::new(HashMap::new()),
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
             fail_import_audit: AtomicBool::new(false),
@@ -60,6 +69,7 @@ impl FakeRepository {
             imports: Mutex::new(vec![]),
             busy_items: Mutex::new(HashSet::new()),
             enrollments: Mutex::new(HashMap::new()),
+            reconciled: Mutex::new(vec![]),
             team_lookups: AtomicUsize::new(0),
             forget_ensured_folders: AtomicBool::new(false),
         }
@@ -310,6 +320,15 @@ impl Repository for FakeRepository {
         {
             return Err(Error::NotFound);
         }
+        let _reserved = self.reservations.lock().expect("fixture lock");
+        if self
+            .enrollments
+            .lock()
+            .expect("fixture lock")
+            .contains_key(&operation)
+        {
+            return Err(Error::Conflict);
+        }
         let mut staged = self.staged.lock().expect("fixture lock");
         if let Some(previous) = staged.get(&operation) {
             if previous.metadata.id != record.metadata.id
@@ -323,6 +342,38 @@ impl Repository for FakeRepository {
             staged.insert(operation, record.clone());
         }
         Ok(())
+    }
+    async fn intent_origin(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        operation: Uuid,
+    ) -> Result<Option<crate::domain::ports::IntentOrigin>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let staged = self.staged.lock().expect("fixture lock");
+        let Some(record) = staged.get(&operation) else {
+            return Ok(None);
+        };
+        if record.metadata.team_id != team || record.metadata.id != item {
+            return Ok(None);
+        }
+        Ok(Some(
+            match self
+                .intent_agents
+                .lock()
+                .expect("fixture lock")
+                .get(&operation)
+            {
+                None => crate::domain::ports::IntentOrigin::Human,
+                Some((agent, action)) => crate::domain::ports::IntentOrigin::Agent {
+                    agent: macro_user_id::cowlike::CowLike::into_owned(
+                        macro_user_id::user_id::MacroUserIdStr::parse_from_str(agent)
+                            .expect("fixture agent"),
+                    ),
+                    action: *action,
+                },
+            },
+        ))
     }
     async fn staged(&self, team: TeamId, item: ItemId, operation: Uuid) -> Result<Record, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
@@ -338,8 +389,17 @@ impl Repository for FakeRepository {
         }
         Ok(record)
     }
-    async fn finish(&self, _: Uuid) -> Result<(), Error> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected: Option<i32>,
+        operation: Uuid,
+    ) -> Result<(), Error> {
+        self.save(record, expected).await?;
+        self.reconciled
+            .lock()
+            .expect("fixture lock")
+            .push(operation);
         Ok(())
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {

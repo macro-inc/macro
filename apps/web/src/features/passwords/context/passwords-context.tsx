@@ -176,6 +176,8 @@ export type PasswordCapabilities = {
   recipientsLoading: Accessor<boolean>;
   recipientsError: Accessor<boolean>;
   writeClipboard(value: string): Promise<void>;
+  /** Name to show for an account, such as an agent asking for access. */
+  displayName(accountId: string): string;
   /** Parses an export file in the browser; the file is never uploaded. */
   parseExport(file: File): Promise<ParseReply>;
   importResume: ImportResumeStore;

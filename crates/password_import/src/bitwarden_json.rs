@@ -3,13 +3,15 @@
 //! driver's license, passport), `login`, `card`, `identity`, `sshKey`,
 //! `bankAccount`, `driversLicense`, `passport`, `fields: [{name, value, type 0–3}]`,
 //! `organizationId`, `collectionIds`, `deletedDate`, `archivedDate`,
-//! `passwordHistory` and `attachments`. Folder names nest with `/`.
-//! `encrypted: true` fails with `EncryptedBitwarden`.
+//! `passwordHistory`, `reprompt`, `attachments` and `login.uris[].match`.
+//! Folder names nest with `/`. `encrypted: true` fails with `EncryptedBitwarden`.
+//! The zip export's `data.json` is this format; its attachments are counted
+//! from the archive (see `bitwarden_zip`).
 use std::collections::HashMap;
 use std::fmt;
 
 use serde::Deserialize;
-use serde::de::{Deserializer, Error, IgnoredAny, SeqAccess, Visitor};
+use serde::de::{Deserializer, Error, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::value::RawValue;
 
 use crate::bounded::{Bounded, Count};
@@ -111,6 +113,8 @@ struct Item {
     notes: Option<Secret>,
     favorite: Option<bool>,
     #[serde(default)]
+    reprompt: Code,
+    #[serde(default)]
     fields: Bounded<Field>,
     login: Option<Login>,
     card: Option<Card>,
@@ -123,6 +127,63 @@ struct Item {
     attachments: Option<Vec<IgnoredAny>>,
     deleted_date: Option<IgnoredAny>,
     archived_date: Option<IgnoredAny>,
+}
+
+/// A small integer code (`reprompt`, a URL's `match`) that only adds a
+/// dropped part. Anything else, such as a bool, a string or a negative number,
+/// reads as `None` instead of making the whole item malformed; lists and
+/// objects are skipped without being kept.
+#[derive(Default)]
+struct Code(Option<u8>);
+
+impl<'de> Deserialize<'de> for Code {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(CodeVisitor)
+    }
+}
+
+struct CodeVisitor;
+
+impl<'de> Visitor<'de> for CodeVisitor {
+    type Value = Code;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("any value")
+    }
+
+    fn visit_u64<E: Error>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(Code(u8::try_from(value).ok()))
+    }
+
+    fn visit_i64<E: Error>(self, _: i64) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_f64<E: Error>(self, _: f64) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_bool<E: Error>(self, _: bool) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_str<E: Error>(self, _: &str) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(Code(None))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        while seq.next_element::<IgnoredAny>()?.is_some() {}
+        Ok(Code(None))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(Code(None))
+    }
 }
 
 /// Whether `collectionIds` names any collection. Bitwarden's import docs
@@ -184,7 +245,13 @@ struct Login {
 #[derive(Deserialize)]
 struct Uri {
     uri: Option<String>,
+    #[serde(rename = "match", default)]
+    match_type: Code,
 }
+
+/// Bitwarden's domain match, which is also what a URL without a rule uses
+/// unless the user changed the global default. The vault matches by domain.
+const DOMAIN_MATCH: u8 = 0;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -277,7 +344,13 @@ struct Passport {
     expiration_date: Option<Secret>,
 }
 
-pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError> {
+/// Parse the JSON export. `attachments` counts the files a zip export holds
+/// per item id; the plain JSON export carries none.
+pub(crate) fn parse(
+    bytes: &[u8],
+    limits: &Limits,
+    attachments: &HashMap<String, usize>,
+) -> Result<Parts, ImportError> {
     let bytes = crate::strip_byte_order_mark(bytes);
     // Count first: two bytes of `[0,0,...]` would otherwise become a kept
     // entry each, before any limit applied.
@@ -307,7 +380,7 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     let mut parts = Parts::default();
     for (index, raw) in items.iter().enumerate() {
         match serde_json::from_str::<Item>(raw.get()) {
-            Ok(item) => add_item(&mut parts, item, index, &folders),
+            Ok(item) => add_item(&mut parts, item, index, &folders, attachments),
             Err(_) => parts.skip(
                 Some(SourceKey::of_malformed(raw, &[], index)),
                 None,
@@ -319,7 +392,13 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
     Ok(parts)
 }
 
-fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<String, String>) {
+fn add_item(
+    parts: &mut Parts,
+    item: Item,
+    index: usize,
+    folders: &HashMap<String, String>,
+    attachments: &HashMap<String, usize>,
+) {
     let key = SourceKey::from_scoped_id_or_index(&[], item.id.as_deref(), index);
     let name = item.name.as_deref();
 
@@ -350,6 +429,13 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
             return parts.skip(Some(key), name, SkipReason::UnsupportedCategory);
         }
     };
+
+    let zipped_attachments = item
+        .id
+        .as_deref()
+        .and_then(|id| attachments.get(id))
+        .copied()
+        .unwrap_or(0);
 
     let mut draft = Draft::new(key, kind);
     draft.set_name(item.name);
@@ -415,14 +501,29 @@ fn add_item(parts: &mut Parts, item: Item, index: usize, folders: &HashMap<Strin
             FieldType::Text | FieldType::Boolean | FieldType::Unknown => false,
         };
 
+        let value = field.value.unwrap_or_default();
+        if value.expose_secret().trim().is_empty() {
+            draft.drop_part(DroppedPart::EmptyField, 1);
+            continue;
+        }
+
         let label = field.name.as_deref().unwrap_or_default();
-        draft.add_field(label, field.value.unwrap_or_default(), concealed);
+        draft.add_field(label, value, concealed);
+    }
+
+    if item.reprompt.0.is_some_and(|reprompt| reprompt != 0) {
+        draft.drop_part(DroppedPart::Reprompt, 1);
     }
 
     let history = item.password_history.map_or(0, |history| history.len());
     draft.drop_part(DroppedPart::PasswordHistory, history);
-    let attachments = item.attachments.map_or(0, |attachments| attachments.len());
-    draft.drop_part(DroppedPart::Attachment, attachments);
+    // A zip's `data.json` lists no attachments today; should it ever, the
+    // same files would be counted twice.
+    let listed_attachments = item.attachments.map_or(0, |attachments| attachments.len());
+    draft.drop_part(
+        DroppedPart::Attachment,
+        listed_attachments.max(zipped_attachments),
+    );
 
     parts.add(draft);
 }
@@ -432,6 +533,13 @@ fn add_login(draft: &mut Draft, login: Login) {
         draft.mark_too_large();
     }
     for uri in login.uris.entries {
+        if uri
+            .match_type
+            .0
+            .is_some_and(|match_type| match_type != DOMAIN_MATCH)
+        {
+            draft.drop_part(DroppedPart::UriMatchType, 1);
+        }
         if let Some(uri) = uri.uri {
             draft.add_url(&uri);
         }
