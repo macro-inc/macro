@@ -7,6 +7,8 @@ The host supplies identities and both clocks and executes the returned effects.
 
 ## Boundaries
 
+- Present newer nonempty application-body documents read-only, rejecting projection and sync readiness for every access level; keep generic/editor-only surfaces independent of application schema versions.
+
 - Route ordinary Up/Down at Editor priority through the existing rich-text movement helpers; leave application stopping and host geometry in the higher-priority fixed block-navigation role, and retain the helper's actual pre-DOM selection points.
 
 - Forward application controller queries through EditorSurface.application_query using only the existing read-only core editor; never expose mutable Core or grant callback reentry.

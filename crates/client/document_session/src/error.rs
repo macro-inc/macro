@@ -4,6 +4,9 @@ pub enum SessionError {
     /// The winning seed has not initialized this surface.
     #[error("document surface is not ready")]
     NotReady,
+    /// The application cannot open a document written by a newer editor.
+    #[error("VERSION_MISMATCH_ERROR")]
+    VersionMismatch,
     /// Current effective access prohibits this edit.
     #[error("document is read-only")]
     ReadOnly,

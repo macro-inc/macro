@@ -38,6 +38,7 @@ const control = vi.hoisted(() => ({
     styles: [],
     currentMatch: -1,
   },
+  versionError: vi.fn(),
   textPaste: vi.fn(),
   textPasteRelease: vi.fn(),
 }));
@@ -137,6 +138,7 @@ vi.mock('../context/markdown-document-context', () => ({
       session: { setStatus: control.status },
       editor: {
         error: () => false,
+        setError: control.versionError,
         md: control.md,
         setMd: (key: string, value: unknown) => {
           control.md[key] = value;
@@ -746,14 +748,24 @@ const context = {
 
 function session() {
   let initialized = false;
-  const listeners = new Set<(commit: { fullReconcile: boolean }) => void>();
+  const listeners = new Set<
+    (commit: { fullReconcile: boolean; keys: number[] }) => void
+  >();
+  const versionListeners = new Set<() => void>();
   const view = {
+    onPluginEvent(name: string, listener: () => void) {
+      if (name === 'group-b.document-version-error')
+        versionListeners.add(listener);
+      return () => versionListeners.delete(listener);
+    },
     setEditable: vi.fn(),
     focus: vi.fn(),
     node: () => (initialized ? {} : undefined),
     isEmpty: () => (initialized ? true : null),
     registerViewCommand: () => () => {},
-    onCommit(listener: (commit: { fullReconcile: boolean }) => void) {
+    onCommit(
+      listener: (commit: { fullReconcile: boolean; keys: number[] }) => void
+    ) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
@@ -761,12 +773,17 @@ function session() {
   return {
     view,
     close: vi.fn(async () => {}),
+    versionError() {
+      for (const listener of [...versionListeners]) listener();
+    },
     initialize() {
       initialized = true;
-      for (const listener of [...listeners]) listener({ fullReconcile: true });
+      for (const listener of [...listeners])
+        listener({ fullReconcile: true, keys: [0] });
     },
     unchanged() {
-      for (const listener of [...listeners]) listener({ fullReconcile: false });
+      for (const listener of [...listeners])
+        listener({ fullReconcile: false, keys: [] });
     },
   };
 }
@@ -1311,4 +1328,64 @@ it('wires the native GIF picker: slash request, post-projection bind, hosted men
   });
   rendered.unmount();
   await waitFor(() => expect(control.gifDispose).toHaveBeenCalledOnce());
+});
+
+it('observes newer document versions through the mounted body lifecycle', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  const installed = control.create.mock.calls[0][0].installOverlays(
+    mounted.view
+  );
+  mounted.versionError();
+  expect(control.versionError).toHaveBeenCalledWith('VERSION_MISMATCH_ERROR');
+  control.versionError.mockClear();
+  installed.dispose();
+  mounted.versionError();
+  expect(control.versionError).not.toHaveBeenCalled();
+  rendered.unmount();
+});
+
+it('retains a newer-version read-only presentation without publishing readiness', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const ready = vi.fn();
+  const exposed = vi.fn();
+  const rendered = render(() => (
+    <RustMarkdownEditor
+      context={context}
+      autoFocus={false}
+      onReady={ready}
+      onRuntime={exposed}
+    />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  control.create.mock.calls[0][0].view.onError(
+    new Error('VERSION_MISMATCH_ERROR')
+  );
+  mounted.initialize();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(mounted.close).not.toHaveBeenCalled();
+  expect(control.versionError).toHaveBeenCalledWith('VERSION_MISMATCH_ERROR');
+  expect(ready).not.toHaveBeenCalled();
+  expect(exposed.mock.calls.every(([value]) => value === undefined)).toBe(true);
+  expect(mounted.view.setEditable).not.toHaveBeenCalledWith(true);
+  rendered.unmount();
+});
+
+it('does not write a version error from a retired document runtime', async () => {
+  const mounted = session();
+  control.create.mockResolvedValue(mounted);
+  const rendered = render(() => (
+    <RustMarkdownEditor context={context} autoFocus={false} />
+  ));
+  await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+  const notifyError = control.create.mock.calls[0][0].view.onError;
+  rendered.unmount();
+  notifyError(new Error('VERSION_MISMATCH_ERROR'));
+  expect(control.versionError).not.toHaveBeenCalled();
 });

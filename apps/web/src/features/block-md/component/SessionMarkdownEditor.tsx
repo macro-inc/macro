@@ -1,4 +1,5 @@
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
+import { getErrorDescription } from '@core/component/LexicalMarkdown/constants';
 import { createNativeFocusTarget } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-focus';
 import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { MessageLoadError } from '@core/messages/MessageLoadError';
@@ -26,7 +27,10 @@ export default function SessionMarkdownEditor(props: {
       ready={ready()}
       empty={empty()}
       canEdit={permissions.canEdit()}
-      error={error()}
+      error={(() => {
+        const editorError = state.editor.error();
+        return editorError ? getErrorDescription(editorError) : error();
+      })()}
       body={
         // Paste preparation must finish before the editor accepts input.
         <EditorEngineBoundary

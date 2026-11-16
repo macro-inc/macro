@@ -81,6 +81,10 @@ import {
   type NativeCodeAccessories,
 } from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
 import { installNativeCodeChrome } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
+import {
+  nativeDocumentMetadataError,
+  registerNativeDocumentMetadata,
+} from '@core/component/LexicalMarkdown/plugins/document-metadata/native';
 import { createNativeEditorStats } from '@core/component/LexicalMarkdown/plugins/editor-stats/native';
 import { FloatingSearchHighlight } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
 import { createNativeDocumentFind } from '@core/component/LexicalMarkdown/plugins/find-and-replace/native';
@@ -190,7 +194,8 @@ export default function RustMarkdownEditor(props: {
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const [ready, setReady] = createSignal(false);
   const abort = new AbortController();
-  const canEdit = () => ready() && permissions.canEdit();
+  const canEdit = () =>
+    ready() && !state.editor.error() && permissions.canEdit();
   const userMentionContext = createNativeUserMentionContext(theme);
   const overlayLifecycle = createNativeListenerScope();
   const checklist = createNativeChecklistPlanHost((error) => {
@@ -356,6 +361,7 @@ export default function RustMarkdownEditor(props: {
   let releaseEmpty: (() => void) | undefined;
   let releaseScrollTelemetry: (() => void) | undefined;
   let lastError: Error | undefined;
+  let versionMismatch = false;
   let reportOpenStatus: ((status: number) => void) | undefined;
   let syncStatus = 0;
   const clearPublicRuntime = () => {
@@ -372,6 +378,15 @@ export default function RustMarkdownEditor(props: {
   const showError = (value: unknown) => {
     const failure =
       value instanceof Error ? value : new Error('Editor session failed');
+    const versionError = nativeDocumentMetadataError(failure);
+    if (versionError && !abort.signal.aborted) {
+      // Source retains its installed content under the warning, without ready/sync.
+      // Keep the view and its selection/copy handlers alive until owner disposal.
+      versionMismatch = true;
+      state.editor.setError(versionError);
+      setReady(false);
+      return;
+    }
     rejectReady?.(failure);
     if (!abort.signal.aborted && failure !== lastError) {
       lastError = failure;
@@ -547,6 +562,9 @@ export default function RustMarkdownEditor(props: {
                 try {
                   if (abort.signal.aborted)
                     throw new Error('Editor open cancelled');
+                  overlayLifecycle.add(
+                    registerNativeDocumentMetadata(view, state.editor.setError)
+                  );
                   const creation = createNativeCreationComposerController(view);
                   overlayLifecycle.add(creation.dispose);
                   const database = createNativeDatabaseController(view);
@@ -746,7 +764,7 @@ export default function RustMarkdownEditor(props: {
                   });
                 });
                 if (lastError) throw lastError;
-                phase = 'initialized';
+                phase = versionMismatch ? 'version-mismatch' : 'initialized';
               } catch (error) {
                 phase = abort.signal.aborted
                   ? 'cancelled'
@@ -775,6 +793,7 @@ export default function RustMarkdownEditor(props: {
                 );
               }
             });
+            if (versionMismatch) return;
             if (!abort.signal.aborted) {
               if (lastError) throw lastError;
               equationContext.bindView(mounted.view);

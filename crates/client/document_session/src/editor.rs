@@ -75,6 +75,9 @@ pub struct EditorConfig {
     pub browser_history_awareness: bool,
     /// Collaborative history merge interval on the host-provided clocks.
     pub delay_ms: u64,
+    /// Newer nonempty stored documents are rejected before projection or readiness.
+    /// Generic surfaces leave this unset; the application body pins its schema counter.
+    pub max_document_version: Option<f64>,
     /// Trusted application commands that change only local policy-excluded state.
     pub local_commands: &'static [CommandKind],
 }
@@ -93,6 +96,7 @@ impl Default for EditorConfig {
             },
             browser_history_awareness: false,
             delay_ms: 400,
+            max_document_version: None,
             local_commands: &[],
         }
     }
@@ -324,6 +328,20 @@ impl EditorSurface {
         } else {
             SerializedEditorState { root: serde_json::json!({"type":"root","version":1,"children":[],"direction":null,"format":"","indent":0}).as_object().cloned().ok_or(SessionError::Configuration("empty root must be an object"))? }
         };
+        let newer_version = self.config.max_document_version.is_some_and(|maximum| {
+            state
+                .root
+                .get("children")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|children| !children.is_empty())
+                && state
+                    .root
+                    .get("$")
+                    .and_then(|fields| fields.get("documentMetadata"))
+                    .and_then(|metadata| metadata.get("version"))
+                    .and_then(serde_json::Value::as_f64)
+                    .is_some_and(|version| version > maximum)
+        });
         // Even an empty document runs build-time hooks and drains their output.
         self.core = Self::core(
             Self::builder(&self.config, self.config.mode, doc.peer_id())
@@ -331,6 +349,21 @@ impl EditorSurface {
                 .build()?,
             self.config.diff,
         );
+        // Source installs its parsed state locally, then rejects the load before
+        // startSync/readiness. Keep that read-only presentation without attaching
+        // projection or history; no rejected load may write or export local changes.
+        if newer_version {
+            self.group_active = false;
+            self.history_ready = false;
+            self.availability = HistoryAvailability::default();
+            self.cursor = None;
+            self.core.set_editable(false);
+            view.push(ViewEffect::Initialize(InitialView::Editor {
+                diff: self.view_diff()?,
+                state: self.core.state().to_json()?,
+            }));
+            return Err(SessionError::VersionMismatch);
+        }
         if let Some(capture) = &self.follow_up_errors {
             capture.clear();
             self.core.observe_follow_up_errors(capture.clone());

@@ -40,6 +40,7 @@ pub fn application_editor_config_with_tokens(
 ) -> EditorConfig {
     if editor_type == macro_document_model::EditorType::MarkdownSync {
         config.namespace = "block-md-main".into();
+        config.max_document_version = Some(macro_document_model::plugins_group_b::DOCUMENT_VERSION);
         config.diff.selected_state = Some(await_view_state);
         config.browser_history_awareness = config.mode == lexical_model::EditorMode::ViewAttached
             && config.view_host.engine != lexical_model::ViewEngine::Native;

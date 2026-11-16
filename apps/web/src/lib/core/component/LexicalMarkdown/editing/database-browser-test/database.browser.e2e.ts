@@ -72,3 +72,70 @@ for (const engine of ['native', 'source'] as const) {
     });
   }
 }
+
+for (const engine of ['native', 'source'] as const) {
+  for (const access of ['edit', 'read', 'comment']) {
+    test(`${engine} newer document ${access} stays readable and copyable under Source warning`, async ({
+      page,
+      context,
+    }, testInfo) => {
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.route('**/*', async (route) => {
+        if (!route.request().url().startsWith('http://127.0.0.1:43829/'))
+          return route.abort();
+        await route.fulfill({ response: await route.fetch() });
+      });
+      await page.goto(
+        `/${engine === 'source' ? 'version-source' : 'version'}.html?access=${access}`
+      );
+      await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+      const body = page.getByRole('textbox', { name: 'Document body' });
+      await expect(
+        page.getByText(
+          'Refresh the page to edit this document. It may have been updated using a newer version of Macro.',
+          { exact: true }
+        )
+      ).toBeVisible();
+      await expect(body).toHaveAttribute('contenteditable', 'false');
+      // Source's ordinary read-only content div has no aria-readonly override.
+      expect(await body.getAttribute('aria-readonly')).toBeNull();
+      await expect(body).toHaveText('Before');
+      await body.click();
+      await page.keyboard.type('After');
+      await expect(body).toHaveText('Before');
+      await body.evaluate(async (root) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let text = walker.nextNode();
+        while (text && text.textContent !== 'Before') text = walker.nextNode();
+        if (!text) throw new Error('Missing readable text');
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const selection = getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        document.dispatchEvent(new Event('selectionchange'));
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve())
+        );
+      });
+      const sentinel = `unselected-${engine}-${access}`;
+      await page.evaluate(
+        (text) => navigator.clipboard.writeText(text),
+        sentinel
+      );
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+        sentinel
+      );
+      await page.keyboard.press('Control+c');
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+        'Before'
+      );
+      expect(errors).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('version-warning.png'),
+      });
+    });
+  }
+}

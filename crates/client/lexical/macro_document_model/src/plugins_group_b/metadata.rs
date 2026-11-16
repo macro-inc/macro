@@ -1,4 +1,4 @@
-//! Document version policy; notifications are projected from root state by the view.
+//! Document version policy and Source-compatible Root-transform notifications.
 use super::*;
 use serde_json::{Value, json};
 use std::sync::{Arc, LazyLock};
@@ -36,6 +36,7 @@ enum MetadataUpdate {
     Upgrade,
 }
 static UPGRADE: CommandKey<MetadataUpdate> = CommandKey::new("group-b.document-metadata-upgrade");
+static VERSION_ERROR: EventKey<()> = EventKey::new("group-b.document-version-error");
 static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
     command: CommandKind::Extension(&UPGRADE),
     priority: CommandPriority::Editor,
@@ -56,6 +57,17 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder
         .state_export_order::<Root>(&["id", "documentMetadata", "pinnedPropertyIds"])
         .plugin(Metadata)
+        .transform::<Root>(|tx, root| {
+            let metadata = tx.get_state(root, &DOCUMENT_METADATA)?;
+            if metadata
+                .get("version")
+                .and_then(Value::as_f64)
+                .is_some_and(|version| version > DOCUMENT_VERSION)
+            {
+                tx.emit(&VERSION_ERROR, ());
+            }
+            Ok(())
+        })
 }
 struct Metadata;
 impl Plugin for Metadata {

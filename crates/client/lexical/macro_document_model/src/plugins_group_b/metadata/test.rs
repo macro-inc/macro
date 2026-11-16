@@ -114,3 +114,56 @@ fn initialization_exports_source_canonical_metadata_and_state_order()
     }
     Ok(())
 }
+
+#[test]
+fn version_error_follows_root_transforms_not_plain_state_installation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let state = |version| {
+        serde_json::from_value(json!({"root": {
+            "type":"root", "version":1,
+            "$":{"id":"root0001","documentMetadata":{"version":version,"environmentTags":null}},
+            "children":[{"type":"paragraph","version":1,"$":{"id":"para0001"},"children":[
+                {"type":"text","version":1,"text":"Before","$":{"id":"leaf0001"}}
+            ]}]
+        }}))
+    };
+    let mut editor = crate::surface::preset_builder_with_mode(
+        crate::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .initial_state(state(11)?)
+    .build()?;
+    let future = editor.parse_editor_state(&state(12)?)?;
+    let warns = |commit: &Commit| {
+        commit
+            .chain()
+            .flat_map(|item| &item.events)
+            .any(|event| event.payload(&VERSION_ERROR).is_some())
+    };
+    let replaced = editor.set_editor_state(future, TagSet::default())?;
+    assert!(
+        !warns(&replaced),
+        "Source bare setEditorState has no callback"
+    );
+    let (_, typed) = editor.update(|tx| {
+        let paragraph = tx
+            .first_child(NodeKey::ROOT)
+            .ok_or(Error::Invariant("paragraph"))?;
+        let text = tx.first_child(paragraph).ok_or(Error::Invariant("text"))?;
+        tx.text(text)?.set_text_content("Before!")?;
+        Ok(())
+    })?;
+    assert!(
+        warns(&typed),
+        "Source promotes the indirect dirty root after typing"
+    );
+    let (_, inserted) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])
+    })?;
+    assert!(
+        warns(&inserted),
+        "Source top-level insert transforms the root"
+    );
+    Ok(())
+}

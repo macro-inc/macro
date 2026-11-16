@@ -19,3 +19,11 @@ from `apps/web`, through the project build slot when required. Use an owned
 headless Chromium with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Test output and
 report paths can be overridden with `DATABASE_TEST_OUTPUT` and
 `DATABASE_TEST_REPORT`.
+
+The version-admission page additionally seeds a real newer-version Loro snapshot
+into a native session before readiness. Edit, read and comment cases compare
+both engines: Source warning, visible read-only text, typing rejected and trusted
+selection/copy preserved. The native page uses the same error-code mapper as the
+document host. This isolated page has no
+backend or production document context; the mounted-host tests separately cover
+readiness, error-state wiring and disposal.
