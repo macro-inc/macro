@@ -1,0 +1,508 @@
+// Bombadil property: a loaded channel does not resize or move by itself.
+// See README.md in this directory for how to run it.
+import { always } from '@antithesishq/bombadil';
+import type { Range } from '@antithesishq/bombadil/actions';
+import {
+  type ActionTemplate,
+  actions,
+  extract,
+  registerCustomAction,
+  weighted,
+} from '@antithesishq/bombadil/browser';
+import {
+  back,
+  clicks,
+  forward,
+} from '@antithesishq/bombadil/browser/defaults/actions';
+import manifest from '../../../../tooling/seed_cli/seed/local_e2e/manifest.json' with {
+  type: 'json',
+};
+// Written by run.sh: the stack's backend origin and a second seeded user's token.
+import local from './local.json' with { type: 'json' };
+
+type Violation = {
+  kind: 'lost-bottom' | 'anchor-moved' | 'resized';
+  at: number;
+  channel: string;
+  anchor: string | null;
+  delta: number;
+  scrollTop: number;
+};
+
+type ProbeReport = {
+  frames: number;
+  /** Frames compared with the frame before, outside input grace periods. */
+  checked: number;
+  count: number;
+  violations: Violation[];
+};
+
+// Bombadil captures a state only at quiescence, so a jump the app corrects a
+// few frames later falls between two captures. The extractor therefore
+// installs a probe in the page that samples after every paint and keeps a
+// running list of violations; each capture reads that list.
+//
+// Extractors are serialized into the page, so everything the probe uses is
+// defined inside this function.
+const probe = extract((state): ProbeReport => {
+  const page = state.window as Window & { __channelProbe?: ProbeReport };
+
+  if (!page.__channelProbe) {
+    // What explains a change. Input moves the view directly, so it explains
+    // motion only briefly; a scroll that keeps moving after it (smooth or
+    // momentum scrolling) extends that. Work the app starts in response, such
+    // as loading older messages, is not excused: it must keep the reader's
+    // place. Typing and window resizes may resize the timeline a little later.
+    // Bombadil acts every 60 ms or so, so a longer motion grace would excuse
+    // nearly every frame.
+    const MOTION_GRACE_MS = 150;
+    const LAYOUT_GRACE_MS = 800;
+    const TOLERANCE_PX = 1;
+    const report: ProbeReport = {
+      frames: 0,
+      checked: 0,
+      count: 0,
+      violations: [],
+    };
+    page.__channelProbe = report;
+
+    let lastInputAt = 0;
+    let lastScrollAt = 0;
+    let lastResizeAt = 0;
+    const onInput = () => {
+      lastInputAt = performance.now();
+    };
+    for (const type of [
+      'wheel',
+      'touchstart',
+      'touchmove',
+      'keydown',
+      'pointerdown',
+      'beforeinput',
+    ]) {
+      page.addEventListener(type, onInput, { capture: true, passive: true });
+    }
+    page.addEventListener('resize', () => {
+      lastResizeAt = performance.now();
+    });
+    page.addEventListener(
+      'scroll',
+      () => {
+        const now = performance.now();
+        if (now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS) {
+          lastScrollAt = now;
+        }
+      },
+      { capture: true, passive: true }
+    );
+
+    type Baseline = {
+      scroller: HTMLElement;
+      url: string;
+      channel: string;
+      pinned: boolean;
+      anchor: string | null;
+      anchorTop: number;
+      scrollTop: number;
+      height: number;
+    };
+    let baseline: Baseline | null = null;
+
+    const sample = () => {
+      const scroller = document.querySelector<HTMLElement>(
+        'main [data-channel-scroll]'
+      );
+      const channel =
+        location.pathname.match(/\/channels?\/([^/~?]+)/)?.[1] ?? '';
+      if (
+        !scroller ||
+        !channel ||
+        scroller.dataset.scrollPhase !== 'ready' ||
+        scroller.querySelector('[data-message-id]') === null
+      ) {
+        baseline = null;
+        return;
+      }
+
+      const rect = scroller.getBoundingClientRect();
+      const fromBottom =
+        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      const anchorElement = [
+        ...scroller.querySelectorAll<HTMLElement>('[data-message-id]'),
+      ].find((message) => message.getBoundingClientRect().top >= rect.top - 1);
+      const current: Baseline = {
+        scroller,
+        url: location.pathname + location.search,
+        channel,
+        pinned: fromBottom <= TOLERANCE_PX,
+        anchor: anchorElement?.dataset.messageId ?? null,
+        anchorTop: anchorElement
+          ? anchorElement.getBoundingClientRect().top - rect.top
+          : 0,
+        scrollTop: scroller.scrollTop,
+        height: scroller.clientHeight,
+      };
+
+      const now = performance.now();
+      const motionExplained =
+        now - Math.max(lastInputAt, lastScrollAt) < MOTION_GRACE_MS ||
+        now - lastResizeAt < LAYOUT_GRACE_MS;
+      const heightExplained =
+        now - Math.max(lastInputAt, lastResizeAt) < LAYOUT_GRACE_MS;
+      // A navigation (another conversation, a jump to a message) mounts or
+      // repositions a timeline on purpose; it is loaded anew.
+      if (
+        !baseline ||
+        baseline.scroller !== scroller ||
+        baseline.url !== current.url
+      ) {
+        baseline = current;
+        return;
+      }
+
+      const record = (kind: Violation['kind'], delta: number) => {
+        report.count += 1;
+        report.violations.push({
+          kind,
+          at: Math.round(performance.now()),
+          channel,
+          anchor: baseline?.anchor ?? null,
+          delta: Math.round(delta),
+          scrollTop: Math.round(scroller.scrollTop),
+        });
+        if (report.violations.length > 20) report.violations.shift();
+      };
+
+      // Compare each painted frame with the one before it. The previous
+      // frame's top message is looked up again by id: if it moved, or left
+      // the DOM while nothing explains a scroll, the view moved by itself.
+      if (!motionExplained) report.checked += 1;
+      if (motionExplained) {
+        // Input moved the view.
+      } else if (baseline.pinned && !current.pinned) {
+        record('lost-bottom', fromBottom);
+      } else if (!baseline.pinned && baseline.anchor !== null) {
+        const previousAnchor = scroller.querySelector<HTMLElement>(
+          `[data-message-id="${baseline.anchor}"]`
+        );
+        if (!previousAnchor) {
+          record('anchor-moved', baseline.scrollTop - scroller.scrollTop);
+        } else {
+          const delta =
+            previousAnchor.getBoundingClientRect().top -
+            rect.top -
+            baseline.anchorTop;
+          if (Math.abs(delta) > TOLERANCE_PX) record('anchor-moved', delta);
+        }
+      }
+      if (!heightExplained && current.height !== baseline.height) {
+        record('resized', current.height - baseline.height);
+      }
+      baseline = current;
+    };
+
+    // Sample after the frame paints, not in the frame callback, so the
+    // sample sees what the user saw.
+    const loop = () =>
+      requestAnimationFrame(() =>
+        setTimeout(() => {
+          sample();
+          report.frames += 1;
+          loop();
+        }, 0)
+      );
+    loop();
+  }
+
+  const report = page.__channelProbe;
+  return {
+    frames: report.frames,
+    checked: report.checked,
+    count: report.count,
+    violations: report.violations.slice(-5),
+  };
+});
+
+export const channelStaysPutAfterLoad = always(() => probe.current.count === 0);
+
+type Timeline = {
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  above: number;
+  below: number;
+  height: number;
+  /** Mounted messages that end above the visible area, nearest first. */
+  aboveIds: string[];
+  /** Messages at least partly visible. */
+  visibleIds: string[];
+} | null;
+
+const timeline = extract((state): Timeline => {
+  const scroller = state.document.querySelector<HTMLElement>(
+    'main [data-channel-scroll]'
+  );
+  if (!scroller) return null;
+  const rect = scroller.getBoundingClientRect();
+  if (rect.height === 0) return null;
+  return {
+    x: Math.round(rect.left + rect.width / 2),
+    y: Math.round(rect.top + rect.height / 2),
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+    right: Math.round(rect.right),
+    bottom: Math.round(rect.bottom),
+    above: Math.round(scroller.scrollTop),
+    below: Math.round(
+      scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop
+    ),
+    height: Math.round(rect.height),
+    aboveIds: [...scroller.querySelectorAll<HTMLElement>('[data-message-id]')]
+      .filter((message) => message.getBoundingClientRect().bottom < rect.top)
+      .map((message) => message.dataset.messageId ?? '')
+      .reverse()
+      .slice(0, 3),
+    visibleIds: [...scroller.querySelectorAll<HTMLElement>('[data-message-id]')]
+      .filter((message) => {
+        const box = message.getBoundingClientRect();
+        return box.bottom > rect.top && box.top < rect.bottom;
+      })
+      .map((message) => message.dataset.messageId ?? '')
+      .slice(0, 3),
+  };
+});
+
+// Bombadil's default scroll moves only the window; the timeline is an inner
+// scroller, so wheel over its center instead.
+const scrollTimeline = actions(() => {
+  const current = timeline.current;
+  if (!current) return [];
+  const origin = { x: current.x, y: current.y };
+  const templates: ActionTemplate[] = [];
+  if (current.above > 0) {
+    templates.push({
+      ScrollUp: {
+        origin,
+        distance: [
+          40,
+          Math.max(41, Math.min(current.above, current.height * 3)),
+        ],
+      },
+    });
+  }
+  if (current.below > 0) {
+    templates.push({
+      ScrollDown: {
+        origin,
+        distance: [
+          40,
+          Math.max(41, Math.min(current.below, current.height * 3)),
+        ],
+      },
+    });
+  }
+  return templates;
+});
+
+const channels = [
+  manifest.channels.general.id,
+  manifest.navigation.genericChannelMention.sourceChannelId,
+  manifest.navigation.targetedMessageMention.sourceChannelId,
+];
+
+const openChannel = registerCustomAction(
+  'openChannel',
+  async (_document, window, id: string) => {
+    window.location.assign(`/app/channel/${id}`);
+  }
+);
+
+// Another member writes. Rows arrive or change through the live socket while
+// the reader is idle, which is when the view must not move. Content that
+// lays out late (link unfurls, images, code blocks) is the classic trigger.
+const PEER_MESSAGES = [
+  'Short peer message',
+  Array.from({ length: 40 }, () => 'a long wrapped peer message').join(' '),
+  '```\nfirst line of code\nsecond line of code\nthird line of code\n```',
+  'A link that unfurls https://example.com',
+  `An image ${local.frontendOrigin}/app/icon.png`,
+];
+
+const peerRequest = async (
+  window: Window,
+  method: string,
+  path: string,
+  body: Record<string, unknown>
+) => {
+  const response = await window.fetch(`${local.backendOrigin}/dss${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${local.peerToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ ...body, nonce: window.crypto.randomUUID() }),
+  });
+  return response.ok ? response.json() : null;
+};
+
+type PeerWindow = Window & { __peerMessages?: string[] };
+
+const peerPost = registerCustomAction(
+  'peerPost',
+  async (_document, window, channel: string, content: string) => {
+    const posted = await peerRequest(
+      window,
+      'POST',
+      `/messages/channel/${channel}`,
+      { content, mentions: [], attachments: [] }
+    );
+    const page = window as PeerWindow;
+    if (posted?.id)
+      page.__peerMessages = [...(page.__peerMessages ?? []), posted.id];
+  }
+);
+
+const peerReply = registerCustomAction(
+  'peerReply',
+  async (
+    _document,
+    window,
+    channel: string,
+    message: string,
+    content: string
+  ) => {
+    await peerRequest(window, 'POST', `/messages/channel/${channel}`, {
+      content,
+      mentions: [],
+      attachments: [],
+      thread_id: message,
+    });
+  }
+);
+
+const peerReact = registerCustomAction(
+  'peerReact',
+  async (_document, window, channel: string, message: string) => {
+    await peerRequest(
+      window,
+      'POST',
+      `/messages/channel/${channel}/items/${message}/reactions`,
+      { emoji: '👍', add: true }
+    );
+  }
+);
+
+// Edits the peer's own latest message, which grows it by several lines.
+const peerEdit = registerCustomAction(
+  'peerEdit',
+  async (_document, window, channel: string, content: string) => {
+    const message = (window as PeerWindow).__peerMessages?.at(-1);
+    if (!message) return;
+    await peerRequest(
+      window,
+      'PATCH',
+      `/messages/channel/${channel}/items/${message}`,
+      { content, mentions: [] }
+    );
+  }
+);
+
+const openMessage = registerCustomAction(
+  'openMessage',
+  async (_document, window, channel: string, message: string) => {
+    window.location.assign(
+      `/app/channel/${channel}?channel_message_id=${message}`
+    );
+  }
+);
+
+const focusComposer = registerCustomAction(
+  'focusComposer',
+  async (document) => {
+    document
+      .querySelector<HTMLElement>('main [contenteditable="true"]')
+      ?.focus();
+  }
+);
+
+const currentChannel = extract(
+  (state) =>
+    state.window.location.pathname.match(/\/channels?\/([^/~?]+)/)?.[1] ?? null
+);
+
+const within = (value: Range, low: number, high: number) =>
+  typeof value === 'number'
+    ? value >= low && value <= high
+    : value[0] >= low && value[1] <= high;
+
+// Clicks inside the timeline only (reactions, threads, disclosures); the rest
+// of the app is out of scope for this property.
+const timelineClicks = clicks.filter((action) => {
+  const current = timeline.current;
+  if (!current || typeof action !== 'object' || !('Click' in action))
+    return false;
+  const { x, y } = action.Click.point;
+  return (
+    within(x, current.left, current.right) &&
+    within(y, current.top, current.bottom)
+  );
+});
+
+// Messages in the middle of the general channel's 5,000-message history
+// (md5('local-e2e-scroll-<channel>-<n>') in the seed).
+const MID_HISTORY_MESSAGES = [
+  'a808c813-73cc-27d7-183d-33639f96f542',
+  '7a35b969-2813-c9a6-0b20-46110eed3386',
+  '0dcb7c0f-f584-5189-39df-f5e064142095',
+];
+
+const peerActions = actions(() => {
+  const channel = currentChannel.current;
+  const current = timeline.current;
+  if (!channel || !current) return [];
+  const nearby = [...current.aboveIds, ...current.visibleIds];
+  return [
+    ...PEER_MESSAGES.map((text) => peerPost(channel, text)),
+    ...nearby.map((message) => peerReact(channel, message)),
+    ...nearby.map((message) =>
+      peerReply(channel, message, PEER_MESSAGES[1] ?? '')
+    ),
+    peerEdit(channel, `${PEER_MESSAGES[1]}\n\n${PEER_MESSAGES[2]}`),
+  ];
+});
+
+const typing = actions(() =>
+  timeline.current
+    ? [focusComposer(), { TypeText: { text: { Regexp: '[a-z ]{40,400}' } } }]
+    : []
+);
+
+export const explore = weighted([
+  [40, scrollTimeline],
+  [10, timelineClicks],
+  [5, actions(() => channels.map((id) => openChannel(id)))],
+  [
+    5,
+    actions(() =>
+      MID_HISTORY_MESSAGES.map((message) =>
+        openMessage(manifest.channels.general.id, message)
+      )
+    ),
+  ],
+  [25, peerActions],
+  [10, typing],
+  [
+    5,
+    actions(() => [
+      { SetViewport: { width: 390, height: 844 } },
+      { SetViewport: { width: 1280, height: 800 } },
+    ]),
+  ],
+  [5, back],
+  [1, forward],
+  // Idle time is where drift shows.
+  [30, actions(() => ['Wait'])],
+]);
