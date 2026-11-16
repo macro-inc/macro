@@ -111,7 +111,7 @@ const probe = extract((state): ProbeReport => {
       scroller: HTMLElement;
       url: string;
       channel: string;
-      pinned: boolean;
+      fromBottom: number;
       anchor: string | null;
       anchorTop: number;
       scrollTop: number;
@@ -119,7 +119,8 @@ const probe = extract((state): ProbeReport => {
     };
     let baseline: Baseline | null = null;
 
-    const sample = () => {
+    // The painted timeline, or null while no loaded channel timeline shows.
+    const readFrame = (): Baseline | null => {
       const scroller = document.querySelector<HTMLElement>(
         'main [data-channel-scroll]'
       );
@@ -131,8 +132,7 @@ const probe = extract((state): ProbeReport => {
         scroller.dataset.scrollPhase !== 'ready' ||
         scroller.querySelector('[data-message-id]') === null
       ) {
-        baseline = null;
-        return;
+        return null;
       }
 
       const rect = scroller.getBoundingClientRect();
@@ -141,11 +141,11 @@ const probe = extract((state): ProbeReport => {
       const anchorElement = [
         ...scroller.querySelectorAll<HTMLElement>('[data-message-id]'),
       ].find((message) => message.getBoundingClientRect().top >= rect.top - 1);
-      const current: Baseline = {
+      return {
         scroller,
         url: location.pathname + location.search,
         channel,
-        pinned: fromBottom <= TOLERANCE_PX,
+        fromBottom,
         anchor: anchorElement?.dataset.messageId ?? null,
         anchorTop: anchorElement
           ? anchorElement.getBoundingClientRect().top - rect.top
@@ -153,6 +153,72 @@ const probe = extract((state): ProbeReport => {
         scrollTop: scroller.scrollTop,
         height: scroller.clientHeight,
       };
+    };
+
+    // How far the view moved by itself between two frames, or null. The
+    // previous frame's top message is looked up again by id: if it moved, or
+    // left the DOM, the view moved.
+    const motion = (
+      previous: Baseline,
+      current: Baseline
+    ): { kind: Violation['kind']; delta: number } | null => {
+      if (previous.fromBottom <= TOLERANCE_PX) {
+        return current.fromBottom <= TOLERANCE_PX
+          ? null
+          : { kind: 'lost-bottom', delta: current.fromBottom };
+      }
+      if (previous.anchor === null) return null;
+      const previousAnchor = current.scroller.querySelector<HTMLElement>(
+        `[data-message-id="${previous.anchor}"]`
+      );
+      if (!previousAnchor) {
+        return {
+          kind: 'anchor-moved',
+          delta: previous.scrollTop - current.scrollTop,
+        };
+      }
+      const delta =
+        previousAnchor.getBoundingClientRect().top -
+        current.scroller.getBoundingClientRect().top -
+        previous.anchorTop;
+      return Math.abs(delta) > TOLERANCE_PX
+        ? { kind: 'anchor-moved', delta }
+        : null;
+    };
+
+    const record = (
+      current: Baseline,
+      previous: Baseline,
+      kind: Violation['kind'],
+      delta: number
+    ) => {
+      report.count += 1;
+      report.violations.push({
+        kind,
+        at: Math.round(performance.now()),
+        channel: current.channel,
+        anchor: previous.anchor,
+        delta: Math.round(delta),
+        scrollTop: Math.round(current.scrollTop),
+      });
+      if (report.violations.length > 20) report.violations.shift();
+    };
+
+    // Compare each painted frame with the one before it.
+    const sample = () => {
+      const current = readFrame();
+      const previous = baseline;
+      baseline = current;
+      // A navigation (another conversation, a jump to a message) mounts or
+      // repositions a timeline on purpose; it is loaded anew.
+      if (
+        !current ||
+        !previous ||
+        previous.scroller !== current.scroller ||
+        previous.url !== current.url
+      ) {
+        return;
+      }
 
       const now = performance.now();
       const motionExplained =
@@ -160,56 +226,14 @@ const probe = extract((state): ProbeReport => {
         now - lastResizeAt < LAYOUT_GRACE_MS;
       const heightExplained =
         now - Math.max(lastInputAt, lastResizeAt) < LAYOUT_GRACE_MS;
-      // A navigation (another conversation, a jump to a message) mounts or
-      // repositions a timeline on purpose; it is loaded anew.
-      if (
-        !baseline ||
-        baseline.scroller !== scroller ||
-        baseline.url !== current.url
-      ) {
-        baseline = current;
-        return;
+      if (!motionExplained) {
+        report.checked += 1;
+        const moved = motion(previous, current);
+        if (moved) record(current, previous, moved.kind, moved.delta);
       }
-
-      const record = (kind: Violation['kind'], delta: number) => {
-        report.count += 1;
-        report.violations.push({
-          kind,
-          at: Math.round(performance.now()),
-          channel,
-          anchor: baseline?.anchor ?? null,
-          delta: Math.round(delta),
-          scrollTop: Math.round(scroller.scrollTop),
-        });
-        if (report.violations.length > 20) report.violations.shift();
-      };
-
-      // Compare each painted frame with the one before it. The previous
-      // frame's top message is looked up again by id: if it moved, or left
-      // the DOM while nothing explains a scroll, the view moved by itself.
-      if (!motionExplained) report.checked += 1;
-      if (motionExplained) {
-        // Input moved the view.
-      } else if (baseline.pinned && !current.pinned) {
-        record('lost-bottom', fromBottom);
-      } else if (!baseline.pinned && baseline.anchor !== null) {
-        const previousAnchor = scroller.querySelector<HTMLElement>(
-          `[data-message-id="${baseline.anchor}"]`
-        );
-        if (!previousAnchor) {
-          record('anchor-moved', baseline.scrollTop - scroller.scrollTop);
-        } else {
-          const delta =
-            previousAnchor.getBoundingClientRect().top -
-            rect.top -
-            baseline.anchorTop;
-          if (Math.abs(delta) > TOLERANCE_PX) record('anchor-moved', delta);
-        }
+      if (!heightExplained && current.height !== previous.height) {
+        record(current, previous, 'resized', current.height - previous.height);
       }
-      if (!heightExplained && current.height !== baseline.height) {
-        record('resized', current.height - baseline.height);
-      }
-      baseline = current;
     };
 
     // Sample after the frame paints, not in the frame callback, so the
