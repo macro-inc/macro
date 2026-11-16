@@ -1,0 +1,29 @@
+apps/web/src/lib/service-clients/service-storage/generated/schemas/audienceClass.ts
+  s_8dacbdae2863e4::t_32f31ef492579c 25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/vecItem.ts
+  s_8dacbdae2863e4::t_004475f051990c 19-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/webhookFilter.ts
+  s_8dacbdae2863e4::t_db4e6a330806e8 19-21
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_8dacbdae2863e4::t_e35ac3b029704b 40118,84634,84698,84760,84831,84886
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_8dacbdae2863e4::t_4f317c9eee47e7 31361,66149-66154,68060,68733
+packages/sdk/specs/storage.json
+  s_8dacbdae2863e4::t_dc7d4cb38c0588 31361,66149-66154,68060,68733
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1e1c65e90cb51ed12db5904276336c7fa4f0dca6",
+  "prompts": {},
+  "sessions": {
+    "s_8dacbdae2863e4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fcecbfc5-75ce-4eea-8f46-925ffe784c1a",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
