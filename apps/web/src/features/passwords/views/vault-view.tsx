@@ -20,7 +20,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import LockIcon from '@icon/system/regular/lock.svg';
 import TrayArrowDownIcon from '@icon/system/regular/tray-arrow-down.svg';
 import { Button, Dropdown } from '@ui';
 import { err } from 'neverthrow';
@@ -42,6 +41,10 @@ import { ItemLogo } from '../components/item-logo';
 import { KIND_ICONS } from '../components/kind-icon';
 import { NewItemMenu } from '../components/new-item-menu';
 import { ShareMenu } from '../components/share-menu';
+import {
+  type VaultEmptyReason,
+  VaultEmptyState,
+} from '../components/vault-empty-state';
 import {
   FolderActionItems,
   type FolderCommands,
@@ -77,20 +80,11 @@ function destinationFolder(filter: PasswordFilter) {
   return filter.startsWith('folder:') ? filter.slice(7) : null;
 }
 
-function EmptyState(props: { vault: VaultController }) {
-  const message = () => {
-    if (props.vault.search().trim()) return t('passwords.noResults');
-    if (props.vault.filter().startsWith('folder:'))
-      return t('passwords.emptyFolder');
-    if (props.vault.filter() === 'all') return t('passwords.emptyVault');
-    return t('passwords.empty');
-  };
-  return (
-    <div class="flex flex-col items-center gap-2 px-4 pt-16 text-center">
-      <LockIcon class="size-5 text-ink-extra-muted" />
-      <p class="text-sm text-ink-muted">{message()}</p>
-    </div>
-  );
+function emptyReason(vault: VaultController): VaultEmptyReason {
+  if (vault.search().trim()) return 'search';
+  if (vault.filter().startsWith('folder:')) return 'folder';
+  if (vault.filter() === 'all') return 'vault';
+  return 'filter';
 }
 
 function DetailBack(props: { onBack: () => void }) {
@@ -863,7 +857,11 @@ export function VaultView(props: {
                       vault.drafts().length === 0
                     }
                   >
-                    <EmptyState vault={vault} />
+                    <VaultEmptyState
+                      reason={emptyReason(vault)}
+                      onCreate={create}
+                      onImport={openImport}
+                    />
                   </Show>
                 </Match>
               </Switch>

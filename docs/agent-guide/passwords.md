@@ -71,6 +71,8 @@ present, and characters are drawn uniformly with rejection sampling.
 
 The New menu (desktop sidebar and list header) and the phone's floating New end
 with Import…, which opens the import dialog (a full-screen sheet on phones).
+An empty vault (All, no search) shows "No passwords yet" with New login and
+Import buttons; Import opens the same dialog.
 Drop or choose a 1Password `.1pux` or CSV, or a Bitwarden unencrypted JSON or
 CSV export. The file is parsed on the device: `crates/password_import`
 compiled to wasm (`crates/password_import_wasm`, built by

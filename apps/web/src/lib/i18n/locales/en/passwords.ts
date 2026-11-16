@@ -106,6 +106,10 @@ export default {
   noTeamTitle: 'Passwords is for teams',
   noTeamBody: 'Join or create a team to keep shared logins here.',
   emptyVault: 'No passwords yet',
+  emptyVaultHint:
+    'Add your first login, or bring your passwords over from 1Password or Bitwarden.',
+  emptyVaultCreate: 'New login',
+  emptyVaultImport: 'Import',
   emptyFolder: 'This folder is empty',
   noResults: 'No matching items',
   uppercase: 'A–Z',
