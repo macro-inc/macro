@@ -1,0 +1,61 @@
+packages/sdk-ocaml/analyzer/lib/analyze.ml
+  s_4034a1ab8352ec::t_a4c44e720b2c3e 1-95,97-158,161-292,294-295,297-334,336-386,388-391,393-395,397-402,404-416,418-428,437-512
+  s_4034a1ab8352ec::t_fe70cd7cc72361 96
+  s_4034a1ab8352ec::t_7af558339fe7ab 159-160
+  s_4034a1ab8352ec::t_eba3b5a35426cd 293
+  s_4034a1ab8352ec::t_5f5a781d86d55c 296
+  s_4034a1ab8352ec::t_ee39a4f36ad9d0 335
+  s_4034a1ab8352ec::t_9861020f45a0d5 387
+  s_4034a1ab8352ec::t_8e44723af2b518 392
+  s_4034a1ab8352ec::t_a303cd5722b2c0 396
+  s_4034a1ab8352ec::t_5687275fb1cebc 403
+  s_4034a1ab8352ec::t_bac74259f0edc8 417
+  s_4034a1ab8352ec::t_6f1dc6f99fa2b6 429-431,434-436
+  s_4034a1ab8352ec::t_ebe9f1959bcff5 513-515
+packages/sdk-ocaml/analyzer/index/index.ml
+  s_4034a1ab8352ec::t_2b2b2fa7fd891e 1-76
+  s_4034a1ab8352ec::t_32ec90fca2b2f0 77-79
+packages/sdk-ocaml/analyzer/lib/analyze.mli
+  s_4034a1ab8352ec::t_a787efc36430ea 1-42,44,48-52
+  s_4034a1ab8352ec::t_1009669f05e6dd 43
+  s_4034a1ab8352ec::t_726e7dc56ffe0b 45-47
+  s_4034a1ab8352ec::t_8ca7636fb2144e 53-55
+packages/sdk-ocaml/analyzer/bin/dune
+  s_c40fd2f0323f22::t_889582084934d3 1-3
+packages/sdk-ocaml/analyzer/index/dune
+  s_e015be4a6833c1::t_2001a3413f9881 1-5
+packages/sdk-ocaml/analyzer/lib/dune
+  s_e015be4a6833c1::t_767ce9ebe489eb 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2e398e9777853779d9722d23bd0bce214a1ec56d",
+  "prompts": {},
+  "sessions": {
+    "s_4034a1ab8352ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c071e5-bedc-444f-93e5-7bacdda05a7b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e015be4a6833c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "497631fe-089f-4a0c-bf2f-36800aaf41e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
