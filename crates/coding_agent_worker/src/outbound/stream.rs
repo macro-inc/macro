@@ -16,8 +16,8 @@ use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
 use harnesses::domain::models::{Harness, HarnessAgent, RUNTIME_CONNECTED_HEADER};
 use rootcause::prelude::ResultExt as _;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-use webhook::domain::models::{WebhookFilter, WebhookScope};
 
 use crate::config::{HarnessCredentials, MacroApi};
 
@@ -30,12 +30,35 @@ const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// long-lived event stream.
 const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// One filter of the stream's `filters` query parameter, in the wire shape
+/// `event_stream::domain::filters::WebhookFilter` reads. Declared here so
+/// the daemon links no server crate: those reach Kafka (rdkafka), which the
+/// release builds cannot compile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StreamFilter {
+    /// Event names.
+    pub events: Vec<String>,
+    /// Entity ids; absent matches every id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ids: Option<Vec<String>>,
+}
+
+/// The workspace a stream reads, as the stream's `scope` query parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum StreamScope {
+    /// The harness owner's personal workspace.
+    User,
+    /// The owner's team workspace.
+    Team,
+}
+
 /// Map the harness's current team grants onto its webhook workspace scope.
-pub fn stream_scope(harness: &Harness) -> WebhookScope {
+pub fn stream_scope(harness: &Harness) -> StreamScope {
     if harness.shared_team_ids.is_empty() {
-        WebhookScope::User
+        StreamScope::User
     } else {
-        WebhookScope::Team
+        StreamScope::Team
     }
 }
 
@@ -90,7 +113,7 @@ impl EventStreamClient {
     /// The workspace scope of this harness's current team grants, read from the server on
     /// every connect so sharing changes on the web apply without
     /// re-pairing.
-    async fn scope(&self) -> rootcause::Result<WebhookScope> {
+    async fn scope(&self) -> rootcause::Result<StreamScope> {
         let harness: Harness = self
             .read(
                 "read this harness's owner",
@@ -136,7 +159,7 @@ impl EventStreamClient {
     #[tracing::instrument(skip(self, filters), err)]
     pub async fn connect<E: DeserializeOwned>(
         &self,
-        filters: &[WebhookFilter],
+        filters: &[StreamFilter],
     ) -> rootcause::Result<EventStream<E>> {
         let filters =
             serde_json::to_string(filters).context("could not encode the stream filters")?;
