@@ -5,7 +5,11 @@
 -- `checkout_opened_at` are set when the user starts connecting Gmail or opens
 -- a checkout, so the follow-up knows what they tried without asking Google or
 -- Stripe. Rows live about an hour, so the table stays small and needs no index
--- beyond its key.
+-- beyond its key. The foreign keys hold off writes to `comms_channels` and
+-- `"User"` while this file runs, so it fails after 5s on a busy table instead
+-- of queueing those writes behind it.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE support_follow_ups (
     channel_id         UUID PRIMARY KEY REFERENCES comms_channels (id) ON DELETE CASCADE,
     user_id            TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
