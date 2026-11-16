@@ -204,7 +204,8 @@ project row, switching tabs, returning Home, and reopening the same comment.
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch layouts show no inline previews: a tap opens the entity
+in its own view.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture
