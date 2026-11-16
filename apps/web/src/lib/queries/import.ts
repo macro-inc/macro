@@ -52,11 +52,13 @@ const IMPORT_UPDATED_MESSAGE_TYPE = 'import_updated';
  */
 const PENDING_IMPORT_STATE: ImportState = { runs: [], entities: [] };
 
-function anythingInFlight(state: ImportState | undefined): boolean {
+/** Whether a run or ledger row is still moving, so polling should stay tight. */
+export function anythingInFlight(state: ImportState | undefined): boolean {
   if (!state) return false;
   return (
-    state.runs.some((run) => run.status === 'running') ||
-    state.entities.some((entity) => entity.status === 'importing')
+    state.runs.some(
+      (run) => run.status === 'running' || run.status === 'importing'
+    ) || state.entities.some((entity) => entity.status === 'importing')
   );
 }
 
@@ -83,6 +85,28 @@ export function useImportQuery() {
   });
 
   return useQuery(() => importStateQueryOptions());
+}
+
+// Cached on the query past unmount; module scope keeps hook state out of it.
+function importRunsQueryOptions() {
+  return queryOptions({
+    ...importStateQueryOptions(),
+    refetchInterval: (query) =>
+      anythingInFlight(query.state.data) ? 3_000 : false,
+  });
+}
+
+/**
+ * The import aggregate for an always-mounted reader: it polls only while
+ * something is in flight and otherwise waits for `import_updated` pushes.
+ */
+export function useImportRunsQuery() {
+  createConnectionWebsocketEffect((message) => {
+    if (message.type !== IMPORT_UPDATED_MESSAGE_TYPE) return;
+    fireAndForget(invalidateImportState(), 'import-state');
+  });
+
+  return useQuery(() => importRunsQueryOptions());
 }
 
 function invalidateImportState() {
