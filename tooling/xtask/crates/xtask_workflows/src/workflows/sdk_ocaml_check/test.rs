@@ -27,9 +27,19 @@ fn builds_and_tests_in_the_package_nix_shell() {
 }
 
 #[test]
-fn runs_the_wasm_transport_tests() {
+fn runs_the_wasm_libraries_tests() {
     let yaml = rendered_yaml();
 
-    assert!(yaml.contains("--profile wasm --build-dir _build_wasm @fetch/runtest"));
+    assert!(
+        yaml.contains("--profile wasm --build-dir _build_wasm @fetch/runtest @code_mode/runtest")
+    );
     assert!(yaml.contains("packages/sdk/generated/*/sdk.gen.ts"));
+}
+
+#[test]
+fn checks_the_code_mode_bundle() {
+    let yaml = rendered_yaml();
+
+    assert!(yaml.contains(".#checks.x86_64-linux.code-mode-ocaml-sample"));
+    assert!(yaml.contains("nix/cloud-storage.nix"));
 }

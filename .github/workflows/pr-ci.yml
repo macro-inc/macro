@@ -532,6 +532,7 @@ jobs:
             - 'packages/sdk/src/config.ts'
             - 'packages/sdk/generated/*/sdk.gen.ts'
             - 'flake.lock'
+            - 'nix/cloud-storage.nix'
             - '.github/workflows/sdk-ocaml-check.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
