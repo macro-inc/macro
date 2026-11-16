@@ -18,7 +18,15 @@ import { NOOP_SPAN, Telemetry } from '@macro-inc/observability';
 import { TextNode } from 'lexical';
 import { createRoot, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import { ACTIONS } from '../plugins/actions/actions';
 import { dispatchApplicationCommandSettled } from '../plugins/group-b/command';
@@ -64,7 +72,17 @@ afterAll(() => {
   if (previousLocks) Object.defineProperty(navigator, 'locks', previousLocks);
   else Reflect.deleteProperty(navigator, 'locks');
 });
-afterEach(() => vi.restoreAllMocks());
+/** jsdom has no ResizeObserver; the table resizer registers one on mount. */
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+beforeEach(() => vi.stubGlobal('ResizeObserver', TestResizeObserver));
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function mount() {
   const root = document.createElement('div');

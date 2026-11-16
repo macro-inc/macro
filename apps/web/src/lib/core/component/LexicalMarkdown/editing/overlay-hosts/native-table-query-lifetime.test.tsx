@@ -7,13 +7,23 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { createComponent } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { installNativeMarkdownOverlays } from '../installNativeMarkdownOverlays';
 import table from '../table-hover-browser-test/fixtures/table.json';
 import { createNativeTableHoverHost } from './native-table-hover';
 
 beforeAll(initializeNativeSurfaceTests);
-afterEach(() => vi.restoreAllMocks());
+/** jsdom has no ResizeObserver; the table resizer registers one on mount. */
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+beforeEach(() => vi.stubGlobal('ResizeObserver', TestResizeObserver));
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 test.each([undefined, null, { fault: 'table facts' }])(
   'a real healthy table UI retires only its own scope after query failure %s',

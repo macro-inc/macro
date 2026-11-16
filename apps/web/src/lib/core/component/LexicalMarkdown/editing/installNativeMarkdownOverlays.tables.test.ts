@@ -9,8 +9,6 @@ import { installNativeMarkdownOverlays } from './installNativeMarkdownOverlays';
 const control = vi.hoisted(() => ({
   keys: vi.fn(),
   releaseKeys: vi.fn(),
-  resize: vi.fn(),
-  releaseResize: vi.fn(),
 }));
 vi.mock('../plugins/tables/nativeKeys', () => ({
   registerNativeTableKeys: (view: unknown) => {
@@ -18,16 +16,10 @@ vi.mock('../plugins/tables/nativeKeys', () => ({
     return control.releaseKeys;
   },
 }));
-vi.mock('../plugins/tables/nativeResizeEdges', () => ({
-  registerNativeTableResizeEdges: (view: unknown) => {
-    control.resize(view);
-    return control.releaseResize;
-  },
-}));
 
 beforeAll(initializeNativeSurfaceTests);
 
-test('the body installs table arrow keys and column/row resize edges until disposed', () => {
+test('the body installs table arrow keys until disposed', () => {
   const fixture = nativeSurface();
   fixture.port.setState(JSON.stringify(tableSelection));
   const installation = installNativeMarkdownOverlays(fixture.view, {
@@ -35,12 +27,9 @@ test('the body installs table arrow keys and column/row resize edges until dispo
   });
   try {
     expect(control.keys).toHaveBeenCalledExactlyOnceWith(fixture.view);
-    expect(control.resize).toHaveBeenCalledExactlyOnceWith(fixture.view);
     expect(control.releaseKeys).not.toHaveBeenCalled();
-    expect(control.releaseResize).not.toHaveBeenCalled();
     installation.dispose();
     expect(control.releaseKeys).toHaveBeenCalledOnce();
-    expect(control.releaseResize).toHaveBeenCalledOnce();
   } finally {
     installation.dispose();
     fixture.close();

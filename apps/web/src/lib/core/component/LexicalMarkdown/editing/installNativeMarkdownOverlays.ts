@@ -16,7 +16,6 @@ import { dispatchApplicationCommand } from '../plugins/group-b/command';
 import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/native';
 import { registerNativeTabIndentation } from '../plugins/tab-indentation/native';
 import { registerNativeTableKeys } from '../plugins/tables/nativeKeys';
-import { registerNativeTableResizeEdges } from '../plugins/tables/nativeResizeEdges';
 import { registerNativeTableTouchSelection } from '../plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../plugins/trailing-paragraph/native';
 import { registerNativeWordNavigation } from '../plugins/word-navigation/native';
@@ -118,7 +117,6 @@ export function installNativeMarkdownOverlays(
     }
     listeners.add(registerNativeTrailingParagraph(view, options.canEdit));
     listeners.add(registerNativeTableKeys(view));
-    listeners.add(registerNativeTableResizeEdges(view));
     listeners.add(registerNativeTableTouchSelection(view, options.canEdit));
     const dragListeners = createNativeListenerScope();
     listeners.add(dragListeners.dispose);
