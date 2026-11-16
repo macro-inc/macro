@@ -199,9 +199,6 @@ impl SyncCore {
                         .retain(|seq| *seq > through || retained.contains(seq));
                     self.foreign_versions.retain(|seq, _| *seq > through);
                 }
-                StorageCompletion::Mark { through } => {
-                    let _ = through;
-                }
                 _ => {}
             },
             StorageEvent::Done {
@@ -435,11 +432,6 @@ impl SyncCore {
             };
             let event = if load {
                 StorageEvent::Loaded {
-                    id,
-                    result: Err(error),
-                }
-            } else if adopt {
-                StorageEvent::Adopted {
                     id,
                     result: Err(error),
                 }

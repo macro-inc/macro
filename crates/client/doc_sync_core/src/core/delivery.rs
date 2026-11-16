@@ -351,7 +351,7 @@ impl SyncCore {
                         owner: self.config.session,
                         through,
                     },
-                    StorageCompletion::Mark { through },
+                    StorageCompletion::Mark,
                     now,
                     out,
                 );

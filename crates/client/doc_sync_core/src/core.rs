@@ -65,9 +65,7 @@ enum StorageCompletion {
         covers: Option<(SessionId, WalSeq)>,
         vv: loro::VersionVector,
     },
-    Mark {
-        through: WalSeq,
-    },
+    Mark,
     Prune {
         through: WalSeq,
     },
