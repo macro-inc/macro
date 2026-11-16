@@ -165,13 +165,26 @@ async fn a_team_channel_belongs_to_its_team_only(pool: PgPool) {
 
 const CRM_TEAM: Uuid = Uuid::from_u128(0x000000000000000000000000000ea001);
 
-/// A CRM record belongs to its team while every member may see it; hiding it
-/// (or its company) makes it admins-only, so no team holds it.
+/// The fixture team's user with `role`.
+async fn team_user(pool: &PgPool, role: &str) -> String {
+    sqlx::query_scalar!(
+        "SELECT user_id FROM team_user WHERE team_id = $1 AND team_role = $2::text::team_role",
+        CRM_TEAM,
+        role,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// A CRM record belongs to its team while some member may see it. Which
+/// members may is per person, as `crm_entity_users` decides: CRM access
+/// (`crm_access`, or a role above member), and admins only once hidden.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../fixtures", scripts("user_team"))
 )]
-async fn a_visible_crm_record_belongs_to_its_team(pool: PgPool) {
+async fn crm_records_reach_only_members_with_crm_access(pool: PgPool) {
     let mut companies = Vec::new();
     for hidden in [false, true] {
         let company = Uuid::now_v7();
@@ -201,23 +214,68 @@ async fn a_visible_crm_record_belongs_to_its_team(pool: PgPool) {
     .await
     .unwrap();
 
+    let admin = team_user(&pool, "admin").await;
+    let member = team_user(&pool, "member").await;
+    let asked = vec![admin.clone(), member.clone()];
+    let viewers = |entity_id: Uuid, entity_type: EntityType| {
+        let pool = pool.clone();
+        let asked = asked.clone();
+        async move {
+            let mut viewers = crm_team_viewers(&pool, &entity_id, entity_type, &CRM_TEAM, &asked)
+                .await
+                .unwrap();
+            viewers.sort();
+            viewers
+        }
+    };
+
+    for record in [visible, hidden] {
+        assert_eq!(
+            crm_team(&pool, &record, EntityType::CrmCompany)
+                .await
+                .unwrap(),
+            Some(CRM_TEAM),
+            "admins see even a hidden record"
+        );
+    }
     assert_eq!(
-        crm_team(&pool, &visible, EntityType::CrmCompany)
+        crm_team(&pool, &contact, EntityType::CrmContact)
             .await
             .unwrap(),
         Some(CRM_TEAM)
     );
     assert_eq!(
-        crm_team(&pool, &hidden, EntityType::CrmCompany)
-            .await
-            .unwrap(),
-        None
+        viewers(visible, EntityType::CrmCompany).await,
+        vec![admin.clone(), member.clone()]
     );
     assert_eq!(
-        crm_team(&pool, &contact, EntityType::CrmContact)
-            .await
-            .unwrap(),
-        None,
+        viewers(hidden, EntityType::CrmCompany).await,
+        vec![admin.clone()]
+    );
+    assert_eq!(
+        viewers(contact, EntityType::CrmContact).await,
+        vec![admin.clone()],
         "a contact of a hidden company is admins-only"
+    );
+
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = false WHERE user_id = $1",
+        member,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        viewers(visible, EntityType::CrmCompany).await,
+        vec![admin.clone()]
+    );
+    assert_eq!(
+        viewers(Uuid::now_v7(), EntityType::CrmPipeline).await,
+        vec![admin.clone()],
+        "a pipeline needs CRM access too"
+    );
+    assert!(
+        viewers(visible, EntityType::Document).await.is_empty(),
+        "only CRM records are gated here"
     );
 }

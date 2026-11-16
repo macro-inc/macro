@@ -428,13 +428,26 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         channel_id: &Uuid,
     ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
 
-    /// The team owning a CRM company or contact that every member may see;
-    /// `None` when it is hidden (admins only) or missing.
+    /// The team owning a CRM company or contact, when at least one member
+    /// may see it (CRM access, and admins only for a hidden record); `None`
+    /// otherwise or when it is missing.
     fn get_crm_entity_team(
         &self,
         entity_id: &Uuid,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
+    /// Of `users`, the members of `team_id` who may see a CRM company,
+    /// contact or pipeline through that team: CRM access (`crm_access`, or a
+    /// role above member), and admins and owners only for a hidden company or
+    /// contact.
+    fn get_crm_team_viewers(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        team_id: &Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
     /// The members of [`Self::get_entity_users`]'s generic union reached
     /// through a grant at `min_level` or above, in one read, uncached.
@@ -1098,8 +1111,9 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
 /// A team holds access when the entity is granted to the team itself, not
 /// when one of its members can open it: a `team` grant, a grant to a channel
 /// the team owns, membership of a team channel for that channel (and its
-/// calls), or a CRM record the team owns that every member may see. Link
-/// shares never count. Team-workspace webhooks match entity events through it
+/// calls), or a CRM record the team owns that some member may see. Link
+/// shares never count. CRM records are not visible to every member, so a
+/// caller acting for one member checks [`Self::get_team_crm_viewers`] too. Team-workspace webhooks match entity events through it
 /// (`crates/event_access/ACCESS_MODEL.md`, "Team webhooks").
 pub trait EntityTeamAccess: Clone + Send + Sync + 'static {
     /// The teams holding access to the entity, sorted and deduplicated, read
@@ -1113,6 +1127,19 @@ pub trait EntityTeamAccess: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         min_level: Option<AccessLevel>,
     ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// Of `users`, those who may see a CRM company, contact or pipeline as
+    /// members of `team_id` (CRM access, and admins only for a hidden
+    /// record), read through to the database. Every other entity type
+    /// returns no one: only CRM records hide from some of a team that holds
+    /// them.
+    fn get_team_crm_viewers(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        team_id: Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 }
 
 /// Resolves the current users of many entities of one type at once.

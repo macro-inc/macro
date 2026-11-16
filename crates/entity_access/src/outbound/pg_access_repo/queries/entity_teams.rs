@@ -64,9 +64,12 @@ pub async fn channel_team(pool: &PgPool, channel_id: &Uuid) -> Result<Option<Uui
     Ok(team.flatten())
 }
 
-/// The team that owns a CRM company or contact while every member may see it:
-/// a hidden record (or a contact of a hidden company) is for admins only, so
-/// it has no team-wide access.
+/// The team that owns a CRM company or contact, when at least one of its
+/// members may see it: as `crm_entity_users` lists them, members with CRM
+/// access (`crm_access`, or a role above member), and only admins and owners
+/// for a hidden record (or a contact of a hidden company). Which of the team
+/// a team-workspace webhook speaks for is decided per creator by
+/// [`crm_team_viewers`].
 #[tracing::instrument(err, skip(pool))]
 pub async fn crm_team(
     pool: &PgPool,
@@ -76,7 +79,15 @@ pub async fn crm_team(
     match entity_type {
         EntityType::CrmCompany => {
             sqlx::query_scalar!(
-                r#"SELECT team_id FROM crm_companies WHERE id = $1 AND NOT hidden"#,
+                r#"
+                SELECT c.team_id FROM crm_companies c
+                WHERE c.id = $1 AND EXISTS (
+                    SELECT 1 FROM team_user tu
+                    WHERE tu.team_id = c.team_id
+                      AND (tu.crm_access OR tu.team_role <> 'member')
+                      AND (NOT c.hidden OR tu.team_role <> 'member')
+                )
+                "#,
                 entity_id,
             )
             .fetch_optional(pool)
@@ -87,7 +98,12 @@ pub async fn crm_team(
                 r#"
                 SELECT ct.team_id FROM crm_contacts ct
                 LEFT JOIN crm_companies c ON c.id = ct.company_id
-                WHERE ct.id = $1 AND NOT (ct.hidden OR c.hidden IS TRUE)
+                WHERE ct.id = $1 AND EXISTS (
+                    SELECT 1 FROM team_user tu
+                    WHERE tu.team_id = ct.team_id
+                      AND (tu.crm_access OR tu.team_role <> 'member')
+                      AND (NOT (ct.hidden OR c.hidden IS TRUE) OR tu.team_role <> 'member')
+                )
                 "#,
                 entity_id,
             )
@@ -95,5 +111,70 @@ pub async fn crm_team(
             .await
         }
         _ => Ok(None),
+    }
+}
+
+/// Of `users`, the members of `team_id` who may see a CRM record through that
+/// team, by the rule `crm_entity_users` and `crm_company_access` apply: CRM
+/// access (`crm_access`, or a role above member), and for a hidden company or
+/// contact (or a contact of a hidden company) admins and owners only. A
+/// pipeline has no hidden flag: CRM access is enough. One read bounded by
+/// `users` (`team_user` by its key), plus the record by primary key.
+#[tracing::instrument(err, skip(pool, users), fields(user_count = users.len()))]
+pub async fn crm_team_viewers(
+    pool: &PgPool,
+    entity_id: &Uuid,
+    entity_type: EntityType,
+    team_id: &Uuid,
+    users: &[String],
+) -> Result<Vec<String>, sqlx::Error> {
+    match entity_type {
+        EntityType::CrmCompany => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT tu.user_id FROM crm_companies c
+                JOIN team_user tu ON tu.team_id = c.team_id
+                WHERE c.id = $1 AND c.team_id = $2 AND tu.user_id = ANY($3)
+                  AND (tu.crm_access OR tu.team_role <> 'member')
+                  AND (NOT c.hidden OR tu.team_role <> 'member')
+                "#,
+                entity_id,
+                team_id,
+                users,
+            )
+            .fetch_all(pool)
+            .await
+        }
+        EntityType::CrmContact => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT tu.user_id FROM crm_contacts ct
+                LEFT JOIN crm_companies c ON c.id = ct.company_id
+                JOIN team_user tu ON tu.team_id = ct.team_id
+                WHERE ct.id = $1 AND ct.team_id = $2 AND tu.user_id = ANY($3)
+                  AND (tu.crm_access OR tu.team_role <> 'member')
+                  AND (NOT (ct.hidden OR c.hidden IS TRUE) OR tu.team_role <> 'member')
+                "#,
+                entity_id,
+                team_id,
+                users,
+            )
+            .fetch_all(pool)
+            .await
+        }
+        EntityType::CrmPipeline => {
+            sqlx::query_scalar!(
+                r#"
+                SELECT tu.user_id FROM team_user tu
+                WHERE tu.team_id = $1 AND tu.user_id = ANY($2)
+                  AND (tu.crm_access OR tu.team_role <> 'member')
+                "#,
+                team_id,
+                users,
+            )
+            .fetch_all(pool)
+            .await
+        }
+        _ => Ok(Vec::new()),
     }
 }

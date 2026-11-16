@@ -1048,6 +1048,33 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::entity_teams::crm_team(&self.pool, entity_id, entity_type).await?)
     }
 
+    #[tracing::instrument(err, skip(self, users), fields(user_count = users.len()))]
+    async fn get_crm_team_viewers(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+        team_id: &Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let users: Vec<String> = users.iter().map(|user| user.as_ref().to_owned()).collect();
+        let viewers = queries::entity_teams::crm_team_viewers(
+            &self.pool,
+            entity_id,
+            entity_type,
+            team_id,
+            &users,
+        )
+        .await?;
+        Ok(viewers
+            .into_iter()
+            .filter_map(|user| {
+                MacroUserIdStr::parse_from_str(&user)
+                    .ok()
+                    .map(|user| user.into_owned())
+            })
+            .collect())
+    }
+
     #[tracing::instrument(err, skip(self, principal_id))]
     async fn is_entity_user(
         &self,

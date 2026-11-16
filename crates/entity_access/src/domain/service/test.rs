@@ -761,6 +761,16 @@ impl AccessRepository for MockRepo {
         Ok(None)
     }
 
+    async fn get_crm_team_viewers(
+        &self,
+        _entity_id: &Uuid,
+        _entity_type: EntityType,
+        _team_id: &Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(users.to_vec())
+    }
+
     async fn is_entity_user(
         &self,
         entity_id: &Uuid,

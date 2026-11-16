@@ -1271,6 +1271,29 @@ impl<R: AccessRepository> EntityTeamAccess for EntityAccessServiceImpl<R> {
         teams.dedup();
         Ok(teams)
     }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, users), fields(user_count = users.len()))]
+    async fn get_team_crm_viewers(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        team_id: Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        match entity_type {
+            EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline
+                if !users.is_empty() =>
+            {
+                let id = Uuid::parse_str(entity_id).map_err(|_| {
+                    AccessError::BadRequest("invalid entity_id for get_team_crm_viewers")
+                })?;
+                self.repo
+                    .get_crm_team_viewers(&id, entity_type, &team_id, users)
+                    .await
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
 }
 
 impl<R: AccessRepository> EntityAudienceLookup for EntityAccessServiceImpl<R> {
