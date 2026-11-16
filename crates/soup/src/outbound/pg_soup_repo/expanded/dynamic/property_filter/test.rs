@@ -48,7 +48,7 @@ fn options_of_one_definition_share_one_exists() {
         exists(
             "",
             STATUS,
-            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']::text[]")
+            &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}', '{BLOCKED}']::text[] OFFSET 0")
         )
     );
 }
@@ -87,12 +87,12 @@ fn options_group_by_definition_and_entity_type() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']::text[]")
+                &format!("?| ARRAY['{IN_PROGRESS}', '{BLOCKED}']::text[] OFFSET 0")
             ),
             exists(
                 "AND ep_prop.entity_type = 'TASK'",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']::text[]")
+                &format!("?| ARRAY['{NOT_STARTED}', '{IN_PROGRESS}']::text[] OFFSET 0")
             ),
             exists("", PRIORITY, &format!("? '{LOW}'")),
         )
@@ -109,7 +109,7 @@ fn negation_and_conjunction_close_the_or_region() {
             exists(
                 "",
                 STATUS,
-                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']::text[]")
+                &format!("?| ARRAY['{NOT_STARTED}', '{BLOCKED}']::text[] OFFSET 0")
             )
         )
     );

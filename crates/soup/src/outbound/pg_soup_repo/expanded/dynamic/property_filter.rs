@@ -8,6 +8,7 @@ use recursion::CollapsibleExt;
 use uuid::Uuid;
 
 use super::{property_literal_predicate, sql_string_literal};
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 
 #[cfg(test)]
 mod test;
@@ -199,13 +200,19 @@ fn option_membership_predicate(group: &MembershipGroup<Uuid>, entity_id_sql: &st
     // `?|` is the OR of `?` over its array, so one EXISTS reads the entity's
     // row once. One EXISTS per option was planned as a hashed subplan each,
     // every one reading that option's rows across all entities.
+    //
+    // Fenced. Unlike that OR, a single `EXISTS` can be pulled up into a
+    // semi-join, and Postgres drove the Tasks list from the property index's
+    // matching rows across every entity (misestimated ~40x), checking
+    // sub-type and access on each; cold, that read every matching task in
+    // the database.
     format!(
         r#"EXISTS (
             SELECT 1 FROM entity_properties ep_prop
             WHERE ep_prop.entity_id = {entity_id_sql}
             {entity_type_clause}
             AND ep_prop.property_definition_id = '{definition}'
-            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[]
+            AND ep_prop.values->'value' ?| ARRAY[{options}]::text[] {PER_CANDIDATE}
         )"#
     )
 }
