@@ -32,4 +32,13 @@ export default {
   moreOptions: 'More options',
   fewerOptions: 'Fewer options',
   applyChangesTo: 'Apply changes to',
+  composerTitle: 'Title',
+  newEvent: 'New event',
+  eventKind: 'Event type',
+  eventKindEvent: 'Event',
+  eventKindOutOfOffice: 'Out of office',
+  composerCalendar: 'Calendar',
+  chooseCalendar: 'Choose calendar',
+  composerRepeats: 'Repeats',
+  addDescription: 'Add description',
 };
