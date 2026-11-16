@@ -925,9 +925,9 @@ Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 converted yet (`purchasing`, or the API's billing setup step) reads `Setting
 up · Updating billing… · 0:12`; a bought computer shows its setup progress at
 once while its charge settles (billing `purchasing`), and a refused charge
-releases it and sends the buyer the setup-failed notice. Buying another
-computer while one is still being paid for shows **Your team's last computer
-is still being paid for. Try again in a minute.** Then the billing state: `Payment past due` while the team
+releases it and sends the buyer the setup-failed notice. Buying a fourth
+computer while three are still being paid for shows **Your team has three
+computers still being paid for. Try again in a minute.** Then the billing state: `Payment past due` while the team
 subscription is past due, `Cancels <date>` while a cancellation is pending
 (`billing: ending`), or `Kept until <date>` once billing has ended and the disk
 is retained (`billing: ended`). The list polls every 3 seconds while any

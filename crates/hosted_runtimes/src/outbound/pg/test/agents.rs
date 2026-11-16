@@ -33,7 +33,7 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
     host(&repo, "runtime-dev-1", 31, 7, 3).await;
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
 
-    // Bought first: a team buys one unpaid computer at a time.
+    // Another computer of the team was bought first.
     bought(&repo, 2).await;
     let mut for_agent = standard(1);
     for_agent.agent = Some(agent.clone());

@@ -1,6 +1,6 @@
 //! A purchase provisions at once and its charge settles in the billing
 //! worker: success bills the computer, a refusal releases it, an unknown
-//! outcome retries, and a team has one unpaid computer at a time.
+//! outcome retries, and a team has at most three unpaid computers at once.
 
 use super::*;
 use crate::domain::lifecycle::{Failure, SetupOutcome};
@@ -300,8 +300,10 @@ async fn a_charge_still_unknown_at_its_last_attempt_is_settled_for_good() {
     }
 }
 
+/// Two agent invites back to back each buy a computer while the first still
+/// charges; only a fourth unpaid one waits for a charge to settle.
 #[tokio::test]
-async fn a_team_buys_its_next_computer_once_the_last_one_is_paid_for() {
+async fn back_to_back_purchases_pass_until_three_are_unpaid() {
     let service = service_with(
         FakeRepo {
             sold_units: 9,
@@ -309,22 +311,25 @@ async fn a_team_buys_its_next_computer_once_the_last_one_is_paid_for() {
         },
         FakeBilling::default(),
     );
-    service
-        .purchase(standard_purchase("buy-dialog-1"))
-        .await
-        .unwrap();
+    for key in ["buy-dialog-1", "buy-dialog-2", "buy-dialog-3"] {
+        let bought = service.purchase(standard_purchase(key)).await;
+        assert!(
+            matches!(bought, Ok(Purchase::Ready(_))),
+            "{key}: {bought:?}"
+        );
+    }
 
-    let second = service.purchase(standard_purchase("buy-dialog-2")).await;
+    let fourth = service.purchase(standard_purchase("buy-dialog-4")).await;
     assert!(
-        matches!(second, Err(ComputerError::UnpaidComputer)),
-        "{second:?}"
+        matches!(fourth, Err(ComputerError::UnpaidComputer)),
+        "{fourth:?}"
     );
-    assert_eq!(service.list(TEAM).await.unwrap().len(), 1);
+    assert_eq!(service.list(TEAM).await.unwrap().len(), 3);
 
     service.run_billing_effects().await.unwrap();
-    let second = service.purchase(standard_purchase("buy-dialog-2")).await;
-    assert!(matches!(second, Ok(Purchase::Ready(_))), "{second:?}");
-    assert_eq!(service.list(TEAM).await.unwrap().len(), 2);
+    let fourth = service.purchase(standard_purchase("buy-dialog-4")).await;
+    assert!(matches!(fourth, Ok(Purchase::Ready(_))), "{fourth:?}");
+    assert_eq!(service.list(TEAM).await.unwrap().len(), 4);
 }
 
 #[tokio::test]

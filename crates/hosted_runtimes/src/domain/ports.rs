@@ -94,15 +94,23 @@ pub struct DueTimer {
     pub fire_at: DateTime<Utc>,
 }
 
+/// How many charged purchases a team may have unpaid at once: Stripe
+/// reservations plus computers still
+/// [`crate::domain::lifecycle::Billing::Charging`]. Each settles or is
+/// released within one charge window, so this caps unpaid running time at
+/// that many windows while back-to-back purchases (two agent invites) pass.
+pub const MAX_UNPAID_COMPUTERS: u8 = 3;
+
 /// Why units could not be reserved.
 #[derive(Debug, thiserror::Error)]
 pub enum ReserveError<Err> {
     /// No host that can run the size awake has enough sale capacity.
     #[error("no host has room for this size")]
     SoldOut,
-    /// The team has a charged purchase (a reservation, or a computer still
-    /// [`crate::domain::lifecycle::Billing::Charging`]) that is not paid yet.
-    #[error("the team has an unpaid computer")]
+    /// The team has [`MAX_UNPAID_COMPUTERS`] charged purchases (reservations,
+    /// or computers still [`crate::domain::lifecycle::Billing::Charging`])
+    /// that are not paid yet.
+    #[error("the team has too many unpaid computers")]
     UnpaidComputer,
     /// Reservation storage failed.
     #[error(transparent)]
@@ -148,8 +156,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Self::BillingGuard, Self::Err>> + Send;
 
     /// Under the host lock: return what `reservation.purchase_key` already
-    /// led to, refuse a charged purchase while the team has an unpaid one
-    /// ([`ReserveError::UnpaidComputer`]), or hold the purchase's units until `expires_at` on the host,
+    /// led to, refuse a charged purchase while the team has
+    /// [`MAX_UNPAID_COMPUTERS`] unpaid ones ([`ReserveError::UnpaidComputer`]), or hold the purchase's units until `expires_at` on the host,
     /// among those whose awake capacity fits them, with the most sold
     /// capacity left (sold capacity minus live computers and
     /// reservations, expired or not: an expired one may still settle as

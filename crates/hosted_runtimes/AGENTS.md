@@ -68,8 +68,8 @@ read it before changing behaviour.
   keep their attempts. Never count it as an effect failure.
 - A purchase provisions at once and charges in the billing worker
   (`Effect::Charge`, `Billing::Charging`); the charge is never abandoned (its
-  last attempt settles), a refusal releases the computer, and a team has one
-  unpaid computer at a time (`ComputerError::UnpaidComputer`).
+  last attempt settles), a refusal releases the computer, and a team has at
+  most `MAX_UNPAID_COMPUTERS` (3) unpaid at once (`ComputerError::UnpaidComputer`).
 - A billing removal keeps one idempotency key across retries; see
   `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
 - `PageOperator` is the log event `computer needs an operator` (error level);

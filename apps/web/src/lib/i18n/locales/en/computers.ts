@@ -212,7 +212,7 @@ export default {
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',
   errorUnpaidComputer:
-    "Your team's last computer is still being paid for. Try again in a minute.",
+    'Your team has three computers still being paid for. Try again in a minute.',
   errorPaymentFailed: "Your team's payment method was declined.",
   errorNotPurchasable:
     "Your team's subscription can't add a computer. Check Billing, or contact support.",

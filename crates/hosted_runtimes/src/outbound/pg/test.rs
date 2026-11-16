@@ -732,30 +732,27 @@ async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
     );
 }
 
-/// A team has one unpaid computer at a time: a charged purchase waits while
-/// a reservation or a still-charging computer of the team is unpaid; comped
-/// purchases, other teams and a settled charge do not wait.
+/// A team has at most three unpaid computers at once: a charged purchase
+/// waits while three reservations or still-charging computers of the team are
+/// unpaid; comped purchases, other teams and a settled charge do not wait.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_team_buys_one_unpaid_computer_at_a_time(pool: PgPool) {
+async fn a_team_has_at_most_three_unpaid_computers(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool.clone(), policy());
     host(&repo, "unpaid-host", 64, 0, 1).await;
 
+    // Back to back: a reservation and a charging computer leave room for a third.
     let first = reserve(&repo, standard(80)).await;
-    assert!(matches!(
-        repo.reserve(standard(81), now(), now() + Duration::minutes(15))
-            .await,
-        Err(ReserveError::UnpaidComputer)
-    ));
-
     let charging = repo
         .convert_reservation(first.id, now())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(charging.state.billing, Billing::Charging);
+    reserve(&repo, standard(81)).await;
+    reserve(&repo, standard(82)).await;
     assert!(matches!(
-        repo.reserve(standard(81), now(), now() + Duration::minutes(15))
+        repo.reserve(standard(83), now(), now() + Duration::minutes(15))
             .await,
         Err(ReserveError::UnpaidComputer)
     ));
@@ -766,7 +763,7 @@ async fn a_team_buys_one_unpaid_computer_at_a_time(pool: PgPool) {
         Ok(Reserved::Purchased(_))
     ));
     // Comped purchases charge nothing, so they never wait.
-    let mut comped = standard(82);
+    let mut comped = standard(84);
     comped.funding = Funding::Comped {
         reason: "internal team".to_owned(),
     };
@@ -781,22 +778,7 @@ async fn a_team_buys_one_unpaid_computer_at_a_time(pool: PgPool) {
         now(),
     )
     .await;
-    reserve(&repo, standard(81)).await;
-
-    // The index backs the check: a second charging computer cannot be stored.
-    let second = repo
-        .convert_reservation(ComputerId::new_from_uuid(Uuid::from_u128(81)), now())
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(second.state.billing, Billing::Charging);
-    let duplicate = sqlx::query!(
-        r#"UPDATE hosted_runtime SET state = jsonb_set(state, '{billing}', '{"billing":"charging"}') WHERE id = $1"#,
-        Uuid::from_u128(80),
-    )
-    .execute(&pool)
-    .await;
-    assert!(duplicate.is_err());
+    reserve(&repo, standard(83)).await;
 }
 
 mod enrollment;

@@ -188,11 +188,14 @@ attempt, so a busy database never fails a computer or abandons a removal.
   landed (success) or not (failure). While `Charging`, cancel, undo, restore
   and release are `Rejected::PaymentPending` (409), and subscription
   snapshots skip the computer, so a webhook never strips or bills the item the
-  charge just added. A team has at most one unpaid computer: `reserve`, under
-  the host locks, refuses a charged purchase while the team has a Stripe
-  reservation or a `Charging` computer (`ComputerError::UnpaidComputer`, 409
-  with code `unpaid_computer`, which the web shows); the partial unique index
-  `hosted_runtime_charging_team_idx` backs it. Comped purchases never wait. A
+  charge just added. A team has at most `MAX_UNPAID_COMPUTERS` (3) unpaid
+  computers, so back-to-back purchases (two agent invites) pass: `reserve`,
+  under the host locks, refuses a charged purchase once the team's Stripe
+  reservations plus `Charging` computers reach it
+  (`ComputerError::UnpaidComputer`, 409 with code `unpaid_computer`, which the
+  web shows); the partial index `hosted_runtime_charging_team_idx` answers the
+  count. Each unpaid computer settles or is released within one charge
+  window, so unpaid running time is capped at three windows. Comped purchases never wait. A
   conversion that fails answers `Confirming` (HTTP 202);
   `confirm_reservations` (run by the billing worker) converts reservations
   older than `CONFIRM_DELAY`. Status/list show a reservation as status

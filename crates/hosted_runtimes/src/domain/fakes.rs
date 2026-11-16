@@ -273,15 +273,27 @@ impl ComputerRepo for FakeRepo {
             return Err(ReserveError::SoldOut);
         }
         if matches!(reservation.funding, Funding::Stripe { .. }) {
-            let charging = self.computers.lock().unwrap().values().any(|computer| {
-                computer.team_id == reservation.team_id
-                    && computer.state.billing == Billing::Charging
-            });
-            let reserved = self.reservations.lock().unwrap().values().any(|held| {
-                held.team_id == reservation.team_id
-                    && matches!(held.funding, Funding::Stripe { .. })
-            });
-            if charging || reserved {
+            let charging = self
+                .computers
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|computer| {
+                    computer.team_id == reservation.team_id
+                        && computer.state.billing == Billing::Charging
+                })
+                .count();
+            let reserved = self
+                .reservations
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|held| {
+                    held.team_id == reservation.team_id
+                        && matches!(held.funding, Funding::Stripe { .. })
+                })
+                .count();
+            if charging + reserved >= usize::from(crate::domain::ports::MAX_UNPAID_COMPUTERS) {
                 return Err(ReserveError::UnpaidComputer);
             }
         }

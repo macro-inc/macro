@@ -64,9 +64,9 @@ impl<
     /// a charged one is charged beside its creation (its own item plus
     /// `extra_items`, in one subscription update keyed by the computer id).
     /// A retry with the same purchase key returns what the first attempt led
-    /// to, so it never charges twice or buys a second computer. A team buys
-    /// one charged computer at a time: another while one is unpaid is
-    /// [`ComputerError::UnpaidComputer`]. An error always means nothing was
+    /// to, so it never charges twice or buys a second computer. A team has at
+    /// most [`crate::domain::ports::MAX_UNPAID_COMPUTERS`] charged computers
+    /// unpaid at once: another is [`ComputerError::UnpaidComputer`]. An error always means nothing was
     /// bought; a conversion that failed is [`Purchase::Confirming`].
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<Purchase, ComputerError> {
         self.purchase_linked(request, None).await

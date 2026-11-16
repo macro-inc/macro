@@ -176,7 +176,7 @@ async function offersError(
 }
 
 /**
- * 409 is the team's last computer still being paid for (`unpaid_computer`),
+ * 409 is the team's three computers still being paid for (`unpaid_computer`),
  * a sold-out size, or a purchase key that belongs to another purchase.
  */
 async function purchaseError(
@@ -191,7 +191,7 @@ async function purchaseError(
         ? {
             code: 'UNPAID_COMPUTER',
             message:
-              "Your team's last computer is still being paid for. Try again in a minute.",
+              'Your team has three computers still being paid for. Try again in a minute.',
           }
         : {
             code: 'PURCHASE_CONFLICT',

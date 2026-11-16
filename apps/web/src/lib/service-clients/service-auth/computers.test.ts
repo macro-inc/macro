@@ -86,7 +86,7 @@ describe('purchase errors', () => {
     );
   });
 
-  it('tells a team still paying for its last computer apart from other conflicts by the 409 code', async () => {
+  it('tells a team still paying for three computers apart from other conflicts by the 409 code', async () => {
     fetchWithToken.mockResolvedValue(ok({}));
     await computersClient.purchase({ purchaseKey: 'key', size: 'standard' });
     const handler = fetchWithToken.mock.calls[0][1].errorResponseHandler;
