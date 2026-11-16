@@ -7,7 +7,7 @@ import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queri
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
-import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
+import { NEW_TASK_TITLE_SELECTOR } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
@@ -26,7 +26,10 @@ import {
   enableSnippets,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { triggerFocusInput } from '@core/directive/focusInput';
+import {
+  triggerFocusInput,
+  triggerFocusNewElement,
+} from '@core/directive/focusInput';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -283,13 +286,16 @@ export function runCreateAction(
             blockName: 'md',
             loading: true,
             span,
-            createFn: () =>
-              createMarkdownFile({
+            createFn: async () => {
+              const id = await createMarkdownFile({
                 title: '',
                 content: '',
                 projectId: options.projectId,
                 source,
-              }),
+              });
+              if (!id) toast.failure(t('create.couldNotCreateDocument'));
+              return id;
+            },
             shouldInsert,
             openCreated,
           })
@@ -361,7 +367,10 @@ export function runCreateAction(
             projectId: options.projectId,
             source,
           });
-          if ('error' in result) return;
+          if ('error' in result) {
+            toast.failure(t('create.couldNotCreateCanvas'));
+            return;
+          }
           return result.documentId ?? undefined;
         },
         shouldInsert,
@@ -370,7 +379,7 @@ export function runCreateAction(
       return;
     case 'task':
       // Raise the keyboard within this gesture; the composer mounts later.
-      raiseKeyboardForNewTaskTitle();
+      triggerFocusNewElement(NEW_TASK_TITLE_SELECTOR, { touchOnly: true });
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
@@ -388,13 +397,16 @@ export function runCreateAction(
       createBlock({
         blockName: 'snippet',
         loading: true,
-        createFn: () =>
-          createSnippet({
+        createFn: async () => {
+          const id = await createSnippet({
             projectId: options.projectId,
             title: '',
             content: '',
             source,
-          }),
+          });
+          if (!id) toast.failure(t('create.couldNotCreateSnippet'));
+          return id;
+        },
         shouldInsert,
         openCreated,
       }).catch(reportCreateBlockError);
@@ -479,7 +491,10 @@ export function runCreateAction(
             projectId: options.projectId,
             source,
           });
-          if (result.isErr()) return;
+          if (result.isErr()) {
+            toast.failure(t('create.couldNotCreateCodeFile'));
+            return;
+          }
           return result.value.documentId ?? undefined;
         },
         shouldInsert,

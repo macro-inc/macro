@@ -4,9 +4,8 @@
 
 The Calls list starts with the Calls `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows.
 
-On desktop a collapsible sidebar starts with the shared outlined `New` button,
-with `Search calls` immediately left of collapse. Search reveals its field above
-New. The sidebar also holds
+On desktop a collapsible sidebar starts with the shared outlined `New` button;
+`Search calls` is in the list header. The sidebar also holds
 the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
 `External`; External means at least one guest without a Macro account joined),
 a `Channels` section listing channels seen in loaded calls, and `Tags`. Choosing
@@ -226,10 +225,14 @@ Open call returns to the existing meeting/channel route. More offers
 only after explicit selection and reports success or failure. More stays available
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
-starts bottom-right, follows the speaker and gives screen sharing priority.
-Speaker changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen
-shares and participant departures update immediately. Reduced motion skips both
-the hold and the fade; outgoing controls stop accepting input during a transition.
+starts bottom-right and keeps the pinned participant or screen, regardless of
+Layout. A pinned participant keeps their camera/avatar even while sharing;
+your own camera pin survives other participants leaving the call.
+Unpinning or losing the pinned source immediately restores the default selection:
+screen share, speaker, camera, then first participant. Without a pin, speaker
+changes wait 650ms to ignore brief gaps, then crossfade over 200ms. Screen shares
+and participant departures update immediately. Reduced motion skips both the hold
+and the fade; outgoing controls stop accepting input during a transition.
 Drag its header freely within the window. The nearest corner glows faintly within
 120px, strengthening until both edges reach the 24px snap range. This
 edge-anchored success gradient previews the snap, fading
@@ -795,8 +798,9 @@ While a call is live, the controls bar instead has a **Call sharing** dropdown w
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
 are disabled while connecting or saving. Team sharing is canonical **view** access
-(the same `Team access` model documents and AI chats use), enabled by default for
-channel calls. Any participant with edit access can change it, and other
+(the same `Team access` model documents and AI chats use). Calls in DMs and private
+channels start **Private**; calls in team and public channels start with team
+sharing. Any participant with edit access can change it, and other
 participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.

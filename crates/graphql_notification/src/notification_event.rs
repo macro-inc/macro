@@ -18,6 +18,10 @@ pub use crm_discussion::GraphqlCrmDiscussionMetadata;
 /// Request to join a channel-shared calendar event notification metadata.
 mod calendar_join_request;
 pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
+
+/// Agent request for access to a vault item notification metadata.
+mod password_access_request;
+pub use password_access_request::GraphqlPasswordAccessRequestedMetadata;
 /// Request-to-join-a-channel notification metadata.
 mod channel_access_request;
 pub use channel_access_request::GraphqlChannelAccessRequestedMetadata;
@@ -874,6 +878,18 @@ impl GraphqlComputerSetupMetadata {
         &self.0.computer_name
     }
 
+    /// The Macro user id of the agent teammate the computer runs; absent for
+    /// a plain computer.
+    async fn agent_user_id(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.user_id.as_str())
+    }
+
+    /// The name of the agent teammate the computer runs; absent for a plain
+    /// computer.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
     /// Whether setup finished or failed.
     async fn outcome(&self) -> GraphqlComputerSetupOutcome {
         match self.0.outcome {
@@ -1490,6 +1506,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
     /// Calendar event join request metadata.
     CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Agent request for access to a vault item metadata.
+    PasswordAccessRequested(GraphqlPasswordAccessRequestedMetadata),
     /// Request-to-join-a-channel metadata.
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
@@ -1542,6 +1560,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::CrmDiscussion(metadata) => Self::CrmDiscussion(metadata.into()),
             NotifEvent::CalendarEventJoinRequest(metadata) => {
                 Self::CalendarEventJoinRequest(metadata.into())
+            }
+            NotifEvent::PasswordAccessRequested(metadata) => {
+                Self::PasswordAccessRequested(metadata.into())
             }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))

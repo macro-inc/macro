@@ -65,7 +65,7 @@
   inset: -12px;
   z-index: -1;
   border: 1px solid #ffffff14;
-  border-radius: 38px;
+  border-radius: calc(var(--illustration-radius, 26.25px) + 12px);
   background: linear-gradient(135deg, #ffffff0c, #ffffff03 55%, #ffffff06);
   pointer-events: none;
 }

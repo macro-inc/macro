@@ -169,6 +169,10 @@ impl MacroEventBroker for MaybeToolEventBroker {
 pub type ToolBotService = BotServiceImpl<
     PgBotsRepo,
     MaybeToolEventBroker,
+    harnesses::domain::service::HarnessServiceImpl<
+        harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerAgents,
+    >,
     crate::mcp_app_catalog::PipedreamMcpAppCatalog,
 >;
 
@@ -186,9 +190,17 @@ pub fn build_bot_tool_context(
 ) -> ToolBotToolContext {
     BotToolContext {
         service: Arc::new(
-            BotServiceImpl::new(PgBotsRepo::new(pool), event_broker).with_mcp_apps(
-                crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(pipedream),
-            ),
+            BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                event_broker,
+                harnesses::domain::service::HarnessServiceImpl::new(
+                    harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                ),
+            )
+            .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
+                pipedream,
+            )),
         ),
         entity_access_service,
         document_storage_service_url: document_storage_service_url
@@ -2049,9 +2061,11 @@ pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<Too
 
 /// The acting user's own activity, as `GET /activity` serves it.
 pub type ToolActivityReadService = activity::ActivityReadService<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    activity::domain::visible_reads::VisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
-        ToolEntityAccessService,
+        activity::outbound::entity_access_audience::EntityAccessActivityAudience<
+            ToolEntityAccessService,
+        >,
     >,
 >;
 
@@ -2062,9 +2076,11 @@ pub fn build_activity_read_service(
 ) -> Arc<ToolActivityReadService> {
     Arc::new(
         activity::ActivityReadService::new(
-            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::domain::visible_reads::VisibleActivityReads::new(
                 activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
-                entity_access_service.clone(),
+                activity::outbound::entity_access_audience::EntityAccessActivityAudience::new(
+                    entity_access_service.clone(),
+                ),
             ),
         )
         .with_metadata_resolver(ToolActivityMetadataResolver::new(

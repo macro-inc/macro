@@ -93,6 +93,10 @@ keeps the meeting link last. Start an empty form by adding a section, then its q
   database cell does; the answer counts once both ends are set, and an end
   before the start is refused. Receipts show it as the table does. Gates test
   it with the database's range tests.
+- A question on a **Percentage** column asks in percentage points
+  (placeholder **Percent**): typing `25` saves `0.25`, which the table shows
+  as 25%. Receipts and gate rules read it as a percent too ("Rate is more than
+  25%").
 - Required questions show a **Required** badge below their answer preview.
   Selecting the question puts its Required switch at the bottom right, with
   duplicate, remove, and more actions on the left.

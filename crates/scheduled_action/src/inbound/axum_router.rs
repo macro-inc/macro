@@ -891,7 +891,9 @@ impl IntoResponse for ScheduledActionApiError {
                 RoutineSessionError::AppNotConnected | RoutineSessionError::AppsUnsupported => {
                     (StatusCode::UNPROCESSABLE_ENTITY, session.to_string())
                 }
-                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::Conflict | RoutineSessionError::TeamAgentComputer => {
+                    (StatusCode::CONFLICT, session.to_string())
+                }
                 RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "agent service is unavailable".to_owned(),

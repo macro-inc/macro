@@ -87,7 +87,7 @@ pub fn entity_filters_from_include(
 // TODO: query, match_type are common to all requests. consolidate.
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
-    /// The search query string. Must be at least 3 characters.
+    /// The search query string. Must not be empty; one character is enough.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.

@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createRoot, createSignal, type JSX } from 'solid-js';
+import { createRoot, createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
 import {
@@ -206,6 +206,7 @@ type ComposerProps = {
   drawerOpen: boolean;
   draft: string;
   attachments: InputAttachmentData[];
+  onRemoveAttachment: (attachment: InputAttachmentData) => void;
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
@@ -217,6 +218,13 @@ vi.mock('../components/ChatComposer', () => ({
       <output data-testid="attachments">
         {props.attachments.map((a) => a.name).join(',')}
       </output>
+      <For each={props.attachments}>
+        {(attachment) => (
+          <button onClick={() => props.onRemoveAttachment(attachment)}>
+            Remove {attachment.name}
+          </button>
+        )}
+      </For>
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -693,6 +701,70 @@ describe('agent-led new conversation', () => {
       (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
     ).toBe('Keep the Agents prompt');
     expect(screen.getByTestId('attachments').textContent).toBe('notes.txt');
+  });
+  it('shows the Agents page and the list composer the same unsent draft', () => {
+    localStorage.setItem(
+      `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+      JSON.stringify([{ id: 'kept-file', name: 'notes.txt', kind: 'document' }])
+    );
+    const roster = buildAgentRoster({
+      agents: [],
+      runtimes: [],
+      cursorConnected: true,
+      cursorNeedsConnection: false,
+      macroDefaultModel: 'chat-default',
+      cursorDefaultModel: 'cursor-default',
+    });
+    render(() => {
+      const persisted = createPersistedComposerDraft(undefined, () => 'user');
+      return (
+        <>
+          <section aria-label="Agents page">
+            <NewChatPage
+              draft={persisted.draft()}
+              onDraftChange={persisted.setDraft}
+              roster={roster}
+              rosterLoading={false}
+              onStart={vi.fn()}
+              onOpenRoster={vi.fn()}
+            />
+          </section>
+          <section aria-label="List composer">
+            <NewChatPage
+              compact
+              roster={roster}
+              rosterLoading={false}
+              onStart={vi.fn()}
+              onOpenRoster={vi.fn()}
+            />
+          </section>
+        </>
+      );
+    });
+    const agentsPage = within(
+      screen.getByRole('region', { name: 'Agents page' })
+    );
+    const list = within(screen.getByRole('region', { name: 'List composer' }));
+
+    fireEvent.input(agentsPage.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Typed on the page' },
+    });
+    expect(
+      (list.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+    ).toBe('Typed on the page');
+
+    fireEvent.input(list.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Typed on the page, then in the list' },
+    });
+    expect(
+      (agentsPage.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement)
+        .value
+    ).toBe('Typed on the page, then in the list');
+
+    fireEvent.click(
+      agentsPage.getByRole('button', { name: 'Remove notes.txt' })
+    );
+    expect(list.getByTestId('attachments').textContent).toBe('');
   });
   it('keeps Home attachments off the Agents store when the parent owns the draft', () => {
     mocks.attachments = [

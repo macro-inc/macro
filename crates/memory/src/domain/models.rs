@@ -30,13 +30,37 @@ pub enum Granularity {
 }
 
 /// A privacy-reviewed activity report; period_end is inclusive.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Activity {
     pub granularity: Granularity,
     pub period_start: NaiveDate,
     pub period_end: NaiveDate,
     pub content: String,
+}
+
+/// One reviewed component of a day's generation, kept until the day commits.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Piece {
+    Activity(Activity),
+    Profile(String),
+}
+
+/// The reviewed pieces an earlier attempt at a day already produced.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StagedPieces {
+    pub activity: Vec<Activity>,
+    pub profile: Option<String>,
+}
+
+impl StagedPieces {
+    pub fn is_empty(&self) -> bool {
+        self.activity.is_empty() && self.profile.is_none()
+    }
+
+    pub fn activity(&self, granularity: Granularity) -> Option<&Activity> {
+        self.activity.iter().find(|r| r.granularity == granularity)
+    }
 }
 
 /// Activity reports for one user, ordered by period.
