@@ -102,3 +102,8 @@ ordinary artifact, or the explicit `NATIVE_WORD_WASM_SHA` when supplied.
 `NATIVE_WORD_PREBUILT=true` with `NATIVE_WORD_BUILD` replays a previously sealed
 static build; verify its source and package-map hashes before attributing the
 result to current code.
+
+`native-emoji-and-format.browser.e2e.ts` loads `user-mentions.html?engine=native&emoji=1`
+to check the native `:` picker (Enter and closing-shortcode insertion) and the Macro
+Control/Meta+E, +Shift+X and +Shift+H format shortcuts. The mention fixture's Source
+side uses the Source body menu's default sources, as the native overlay does.

@@ -143,9 +143,6 @@ function SourceFixture() {
         menu={menu}
         users={users}
         entities={entities}
-        sources={['users']}
-        includeGroups={false}
-        includeContacts={false}
         useBlockBoundary={true}
         showOpenTabs
         sourceDocumentId="user-menu-fixture"
@@ -172,6 +169,7 @@ function NativeFixture() {
   const params = new URLSearchParams(location.search);
   const invalidSnapshot = params.has('invalidSnapshot');
   const closeBeforeProjection = params.has('closeBeforeProjection');
+  const emoji = params.has('emoji');
   let completed: NativeMarkdownOverlayInstallation | undefined;
   const install = (
     view: Parameters<typeof installNativeMarkdownOverlays>[0]
@@ -192,6 +190,7 @@ function NativeFixture() {
     };
     const installed = installNativeMarkdownOverlays(view, {
       canEdit: () => true,
+      emoji,
       mentions: {
         sourceDocumentId: 'user-menu-fixture',
         disableMentionTracking: true,
