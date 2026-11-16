@@ -330,3 +330,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
   through team deletion; drop it before DSS RPC if data appeared.
 - Keep account deletion and membership compensation independent of vault items;
   team items retain their immutable creator after a person leaves.
+
+- Compose `FlaggedCrmAccessRollout` from the shared flag provider for team CRM
+  preference writes. `enable-crm-member-access-changes` is evaluated freshly for
+  service context `team-crm-member-access`; missing configuration, a missing/off
+  flag, or evaluation failure answers 503 before updates. Keep it off until all
+  membership-removal writers preserve CRM preferences and all access consumers
+  are upgraded. No environment bypass applies.

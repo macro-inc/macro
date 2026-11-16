@@ -50,12 +50,15 @@ pub fn discussion_trigger(
                 ..discussion
             })
         }
-        TriggerDecision::Existing { kind, .. } => TriggerContext::FollowUp(FollowUpContext {
+        TriggerDecision::Existing {
+            kind, confidence, ..
+        } => TriggerContext::FollowUp(FollowUpContext {
             addressed_by: match kind {
                 ThreadMessageKind::MentionThread => AddressedBy::Mention,
                 ThreadMessageKind::ExplicitReply => AddressedBy::ExplicitReply,
                 ThreadMessageKind::Inferred => AddressedBy::Inferred,
             },
+            confidence: *confidence,
             discussion,
         }),
     }

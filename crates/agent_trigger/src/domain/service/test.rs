@@ -267,6 +267,7 @@ struct ExistingDecision {
     bot_id: BotId,
     session_id: AgentSessionId,
     kind: ThreadMessageKind,
+    confidence: Option<u8>,
     message: MessagePostedMetadata,
 }
 
@@ -276,6 +277,7 @@ fn existing_channel_metadata(events: &[TriggerDecision]) -> ExistingDecision {
         bot_id,
         session_id,
         kind,
+        confidence,
         message,
     } = &events[0]
     else {
@@ -285,6 +287,7 @@ fn existing_channel_metadata(events: &[TriggerDecision]) -> ExistingDecision {
         bot_id: *bot_id,
         session_id: *session_id,
         kind: *kind,
+        confidence: *confidence,
         message: message.clone(),
     }
 }
@@ -686,7 +689,7 @@ fn judge_saying(result: Result<Vec<f32>>) -> MockImplicitTriggerJudge {
     judge
         .expect_addressee_probabilities()
         .once()
-        .return_once(move |_, _, _| Box::pin(async move { result }));
+        .return_once(move |_, _, _, _| Box::pin(async move { result }));
     judge
 }
 
@@ -696,16 +699,18 @@ fn judge_expecting(transcript: &'static str) -> MockImplicitTriggerJudge {
     judge
         .expect_addressee_probabilities()
         .once()
-        .return_once(move |_, given, _| {
+        .return_once(move |_, given, _, _| {
             assert_eq!(given, transcript);
             Box::pin(async { Ok(vec![0.9]) })
         });
     judge
 }
 
+/// A thread message; people are named Ada, bots carry no name on record.
 fn thread_message(id: u128, sender: ChannelSender<'static>, content: &str) -> ThreadMessage {
     ThreadMessage {
         id: Uuid::from_u128(id),
+        name: sender.as_user().map(|_| "Ada".to_owned()),
         sender,
         content: content.to_owned(),
         created_at: Utc::now(),
@@ -906,13 +911,14 @@ async fn the_judge_reads_every_live_agent_numbered_in_the_thread() {
     judge
         .expect_addressee_probabilities()
         .once()
-        .return_once(|_, transcript, agents| {
+        .return_once(|_, transcript, author, agents| {
             assert_eq!(agents, 2);
+            assert_eq!(author, "Ada");
             assert_eq!(
                 transcript,
                 "[agent 1] on it\n\
                  [agent 2] me too\n\
-                 [user macro|trigger-service-test@macro.com] hello\n"
+                 [Ada] hello\n"
             );
             Box::pin(async { Ok(vec![0.9, 0.1]) })
         });
@@ -925,10 +931,9 @@ async fn the_judge_reads_every_live_agent_numbered_in_the_thread() {
     );
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
-    assert_eq!(
-        existing_channel_metadata(&events).session_id,
-        AgentSessionId::TEST_A
-    );
+    let decision = existing_channel_metadata(&events);
+    assert_eq!(decision.session_id, AgentSessionId::TEST_A);
+    assert_eq!(decision.confidence, Some(90));
 }
 
 #[tokio::test]
@@ -989,9 +994,9 @@ async fn the_judge_reads_the_thread_around_the_agent() {
         agent_bots(),
         extractor(Ok(None)),
         judge_expecting(
-            "[user macro|trigger-service-test@macro.com] unrelated chatter\n\
+            "[Ada] unrelated chatter\n\
              [agent 1] on it\n\
-             [user macro|trigger-service-test@macro.com] hello\n",
+             [Ada] hello\n",
         ),
         history,
     );
@@ -1448,6 +1453,7 @@ async fn attributed_bot_mentions_open_or_resume_the_target_session() {
                         bot_id: target,
                         session_id: id,
                         kind: ThreadMessageKind::MentionThread,
+                        confidence: None,
                         message: posted,
                     }
                 } else {

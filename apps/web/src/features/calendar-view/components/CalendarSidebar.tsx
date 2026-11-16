@@ -379,7 +379,7 @@ export function CalendarSidebar() {
       </ViewSidebar.Content>
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
-      <ViewSidebar.Footer class="border-0">
+      <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
         <ViewSidebar.Nav aria-label="Calendar tools">
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>

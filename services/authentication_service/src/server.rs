@@ -700,6 +700,13 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    let crm_access_rollout: Arc<dyn teams::domain::crm_member_access::CrmAccessRollout> =
+        match feature_flags.clone() {
+            Some(flags) => Arc::new(crate::outbound::crm_member_access::FlaggedCrmAccessRollout(
+                flags,
+            )),
+            None => Arc::new(teams::domain::crm_member_access::DisabledCrmAccessRollout),
+        };
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
@@ -714,6 +721,7 @@ async fn run_server() -> anyhow::Result<()> {
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_crm_access_rollout(crm_access_rollout)
     .with_invite_rewarder(Arc::new(invite_rewards));
     let computer_rollout = feature_flags
         .clone()

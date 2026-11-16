@@ -640,7 +640,7 @@ export function createReplyComposer(
     const recipients = form.recipients();
     if (
       !hasDraftContent(
-        prepared.bodyText,
+        prepared.hasWrittenContent,
         form.subject(),
         form.attachments.list().length,
         // A forward's recipients are typed in, not derived from the thread,
@@ -1215,6 +1215,11 @@ export function createReplyComposer(
     const sendOperation = ++sendOperationVersion;
     const sendGeneration = identityVersion;
     try {
+      // A reply with nothing written has nothing to send, even if an earlier
+      // save gave it draft ids. Refuse before the save, which would drop them.
+      const snapshot = captureSave(willMarkDone);
+      if (!snapshot.draft) return refuseSend(props.notices, 'nothing-to-send');
+
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       const epochBeforeSave = session.epoch();
       try {
@@ -1232,8 +1237,8 @@ export function createReplyComposer(
             ) &&
           (form.attachments.list().length === 0 || session.serverConfirmed())
         )
-          await autosave.saveLocal(captureSave(willMarkDone));
-        else await autosave.save(captureSave(willMarkDone));
+          await autosave.saveLocal(snapshot);
+        else await autosave.save(snapshot);
       } catch (error) {
         props.notices.reportError(error);
         if (session.isStale(epochBeforeSave)) return;

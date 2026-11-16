@@ -5,8 +5,8 @@
 The single deployed agent backend: sessions, chat/completions, public workspace
 MCP, routine scheduling, and SSH/HTTP previews all run in this process. The
 app-wide connection gateway remains a separate realtime service. Preview DNS,
-HTTPS/SSH load balancers, and the projection queue have network/resource-only
-Pulumi stacks; they do not host extra agent processes.
+HTTPS/SSH load balancers, and the retired projection queue have
+network/resource-only Pulumi stacks; they do not host extra agent processes.
 
 ## Start here
 
@@ -185,8 +185,8 @@ Pulumi stacks; they do not host extra agent processes.
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
   (more are dropped) and each user's team is cached for 10 minutes.
-- `src/cognition/`: existing chat, completions, integrations, and projection
-  workers; the library also exports their OpenAPI document.
+- `src/cognition/`: existing chat, completions, and integrations; the library
+  also exports their OpenAPI document.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
@@ -419,7 +419,7 @@ mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
-projection workers before draining sessions and pending publishes. Preview
+cognition workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas

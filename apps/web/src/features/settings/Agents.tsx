@@ -7,7 +7,10 @@ import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import {
@@ -56,6 +59,7 @@ import {
   useIsTeamAdmin,
   useIsTeamOwner,
 } from '@queries/team/teams';
+import type { AgentModelDto } from '@service-agent-harness/generated/schemas/agentModelDto';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
@@ -136,6 +140,9 @@ type ConnectedHarness = {
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
+
+/** The model id a runtime lists for its own default choice (Claude Code's). */
+const DEFAULT_HARNESS_MODEL = 'default';
 
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
@@ -277,14 +284,37 @@ export function Agents(props: {
       isTeamOwner(),
       isTeamAdmin()
     );
+  const managedAgents = () =>
+    (agentsQuery.isSuccess ? agentsQuery.data : []).filter((agent) =>
+      canManageAgent(agent.bot, currentUserId(), currentTeamId())
+    );
+  // Only a runtime's own catalog says which model its `default` resolves to,
+  // so load the catalogs of runtimes that have an agent on `default`.
+  const defaultModelHarnesses = createMemo(() =>
+    connectedHarnesses().filter((harness) =>
+      managedAgents().some(
+        (agent) =>
+          agent.default_model === DEFAULT_HARNESS_MODEL &&
+          (agent.harness_id ?? agent.harness) === harness.id
+      )
+    )
+  );
+  const defaultModelQueries = useAgentModelsQueries(() =>
+    defaultModelHarnesses().map((harness) => harness.target)
+  );
+  const catalogFor = (harnessId: string) => {
+    const index = defaultModelHarnesses().findIndex(
+      (harness) => harness.id === harnessId
+    );
+    const query = index >= 0 ? defaultModelQueries[index] : undefined;
+    return query?.isSuccess && query.data.status === 'available'
+      ? query.data.models
+      : [];
+  };
   const agents = createMemo(() =>
-    (agentsQuery.isSuccess ? agentsQuery.data : [])
-      .filter((agent) =>
-        canManageAgent(agent.bot, currentUserId(), currentTeamId())
-      )
-      .map((agent) =>
-        summarizeAgent(agent, connectedHarnesses(), channelOptions())
-      )
+    managedAgents().map((agent) =>
+      summarizeAgent(agent, connectedHarnesses(), channelOptions(), catalogFor)
+    )
   );
   const teamAgents = createMemo(() => [
     MACRO_AGENT,
@@ -501,7 +531,8 @@ export function Agents(props: {
 function summarizeAgent(
   agent: AgentWithHarnessId,
   harnesses: readonly ConnectedHarness[],
-  channels: readonly ChannelOption[]
+  channels: readonly ChannelOption[],
+  catalogFor: (harnessId: string) => readonly AgentModelDto[]
 ): AgentSummary {
   const harnessKey = agent.harness_id ?? agent.harness;
   const harness = harnesses.find((option) => option.id === harnessKey);
@@ -523,7 +554,10 @@ function summarizeAgent(
     instructions: agent.instructions,
     whereItRuns: whereItRunsLabel(harnessKey, harness),
     defaultModel:
-      MODEL_PRETTYNAME[agent.default_model as Model] ?? agent.default_model,
+      agent.default_model === DEFAULT_HARNESS_MODEL
+        ? catalogModelLabel(agent.default_model, catalogFor(harnessKey))
+        : (MODEL_PRETTYNAME[agent.default_model as Model] ??
+          agent.default_model),
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
@@ -748,7 +782,7 @@ function AgentEditorPage(props: {
   };
   const preferredModelId = (id: string) => {
     const data = modelDataForHarness(id);
-    if (data?.status === 'unsupported') return 'default';
+    if (data?.status === 'unsupported') return DEFAULT_HARNESS_MODEL;
     if (data?.status !== 'available') return '';
     const current = data.currentModel;
     if (
@@ -797,8 +831,9 @@ function AgentEditorPage(props: {
       // The built-in runtime reports slugs as names; other runtimes name
       // their own models.
       label:
-        harnessId() === IN_MEMORY_HARNESS.id
-          ? modelLabel(model.id, model.name)
+        harnessId() === IN_MEMORY_HARNESS.id ||
+        model.id === DEFAULT_HARNESS_MODEL
+          ? modelLabel(model.id, model.name, model.description)
           : model.name,
       description: model.description ?? undefined,
       group: model.group ?? undefined,

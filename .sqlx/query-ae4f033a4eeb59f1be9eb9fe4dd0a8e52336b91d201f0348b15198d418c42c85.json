@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_user SET crm_access = $3 WHERE team_id = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae4f033a4eeb59f1be9eb9fe4dd0a8e52336b91d201f0348b15198d418c42c85"
+}
