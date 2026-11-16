@@ -17,6 +17,22 @@ pub(in crate::api::search) async fn filter_documents(
     user_id: &str,
     filters: &DocumentFilters,
 ) -> Result<FilterDocumentResponse, SearchError> {
+    filter_documents_within(
+        db,
+        user_id,
+        filters,
+        opensearch_client::search::MAX_TERMS_COUNT,
+    )
+    .await
+}
+
+/// [`filter_documents`] for an OpenSearch that takes at most `max_terms` ids.
+async fn filter_documents_within(
+    db: &sqlx::PgPool,
+    user_id: &str,
+    filters: &DocumentFilters,
+    max_terms: usize,
+) -> Result<FilterDocumentResponse, SearchError> {
     let document_ids_response: Vec<UserAccessibleItem> = if !filters.document_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
         macro_db_client::item_access::validate_user_accessible_items(
@@ -140,6 +156,34 @@ pub(in crate::api::search) async fn filter_documents(
         }
         None => document_ids,
     };
+
+    // When the attachment filter alone made the search ids-only, a list over
+    // the terms cap would fail it. Search as before the filter applied
+    // instead: what is shared with the caller plus what they own.
+    let only_the_attachment_filter = filters.is_email_attachment.is_some()
+        && filters.document_ids.is_empty()
+        && filters.project_ids.is_empty()
+        && filters.owners.is_empty()
+        && filters.file_types.is_empty();
+    if only_the_attachment_filter && document_ids.len() > max_terms {
+        tracing::warn!(
+            document_count = document_ids.len(),
+            max_terms,
+            "document search drops the email attachment filter: too many documents to list"
+        );
+        let shared = macro_db_client::item_access::get_accessible_items::get_user_accessible_items(
+            db,
+            user_id,
+            Some("document".to_string()),
+            true,
+        )
+        .await
+        .map_err(SearchError::InternalError)?;
+        return Ok(FilterDocumentResponse {
+            document_ids: shared.into_iter().map(|item| item.item_id).collect(),
+            ids_only: false,
+        });
+    }
 
     Ok(FilterDocumentResponse {
         document_ids,

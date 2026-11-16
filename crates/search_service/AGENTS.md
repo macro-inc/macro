@@ -63,6 +63,10 @@ per-entity-type search plus a unified search across them — mounted into
   `is_email_attachment` each include the caller's own documents and search
   `ids_only`, since a non-ids-only search also matches everything the caller
   owns. The OpenSearch index has no attachment field; `document_email` decides.
+  An id list over `opensearch_client::search::MAX_TERMS_COUNT` fails the
+  search; when `is_email_attachment` alone made it `ids_only`, the search drops
+  that filter instead (a `warn!` with the list size). Over-cap lists from the
+  other filters still fail.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call

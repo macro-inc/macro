@@ -104,6 +104,10 @@ pub trait SearchQueryConfig {
     const ENTITY_INDEX: OpenSearchEntityType;
 }
 
+/// Most values one `terms` query may hold: OpenSearch's default
+/// `index.max_terms_count`. A search with a longer id list is rejected.
+pub const MAX_TERMS_COUNT: usize = 65_536;
+
 #[derive(Default)]
 pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     /// The terms to search for
@@ -199,7 +203,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Creates the filter query to filter results to only those a user has
-    /// access to/has requested.
+    /// access to/has requested. The ids go into one `terms` query, so more
+    /// than [`MAX_TERMS_COUNT`] of them fail the search.
     /// This could either be a single term/terms query for ids_only or just user_id
     /// Or a bool query that contains both of these items
     pub(crate) fn build_filter_query<'a>(

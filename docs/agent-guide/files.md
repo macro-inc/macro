@@ -154,7 +154,9 @@ descendants' ancestors and reveals their branches.
 `Search Drive` searches the current tab or folder overview; search within a folder
 is temporarily hidden, including its Cmd+F shortcut. It keeps the list's attachment
 scope: an opened or imported email attachment matches only under **Email attachments**
-and **All files**, never in **My Files** or **Shared with me**. The sidebar's folder-name
+and **All files**, never in **My Files** or **Shared with me**. An account with more than
+65,536 documents in that scope is the exception: its search there matches attachments
+too, as it did before the scope applied. The sidebar's folder-name
 search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
