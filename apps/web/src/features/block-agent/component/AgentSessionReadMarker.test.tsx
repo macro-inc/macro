@@ -5,7 +5,13 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 
-const mocks = vi.hoisted(() => ({ markRead: vi.fn(async () => {}) }));
+const mocks = vi.hoisted(() => ({
+  markRead: vi.fn(async () => {}),
+  graphqlSoup: () => ({ enabled: false, loading: false }),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => mocks.graphqlSoup(),
+}));
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
@@ -36,6 +42,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   mocks.markRead.mockReset();
   mocks.markRead.mockResolvedValue(undefined);
+  mocks.graphqlSoup = () => ({ enabled: false, loading: false });
 });
 afterEach(() => {
   cleanup();
@@ -179,4 +186,54 @@ it('does not retry a failed mark indefinitely when the notification cache rolls 
   } finally {
     logError.mockRestore();
   }
+});
+
+it('marks the session once in GraphQL mode without reading the notification feed', async () => {
+  mocks.graphqlSoup = () => ({ enabled: true, loading: false });
+  const source = {
+    notificationsByEntity: vi.fn(() => ({})),
+    isLoading: vi.fn(() => false),
+  } as unknown as NotificationSource;
+  render(() => (
+    <AgentSessionReadMarker
+      sessionId="opened-session"
+      active
+      notificationSource={source}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(1_999);
+  expect(mocks.markRead).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(source, {
+    type: 'agent_session',
+    id: 'opened-session',
+  });
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(mocks.markRead).toHaveBeenCalledOnce();
+  expect(source.notificationsByEntity).not.toHaveBeenCalled();
+  expect(source.isLoading).not.toHaveBeenCalled();
+});
+
+it('leaves the notification feed alone until the flags say which mode applies', async () => {
+  const [flag, setFlag] = createSignal({ enabled: false, loading: true });
+  mocks.graphqlSoup = flag;
+  const source = {
+    notificationsByEntity: vi.fn(() => ({})),
+    isLoading: vi.fn(() => false),
+  } as unknown as NotificationSource;
+  render(() => (
+    <AgentSessionReadMarker
+      sessionId="opened-session"
+      active
+      notificationSource={source}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(mocks.markRead).not.toHaveBeenCalled();
+  expect(source.isLoading).not.toHaveBeenCalled();
+  setFlag({ enabled: true, loading: false });
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(mocks.markRead).toHaveBeenCalledOnce();
+  expect(source.notificationsByEntity).not.toHaveBeenCalled();
+  expect(source.isLoading).not.toHaveBeenCalled();
 });
