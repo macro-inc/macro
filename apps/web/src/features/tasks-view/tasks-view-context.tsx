@@ -209,8 +209,19 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   const ownedSlot = (name: string) =>
     listOwnedSlotName(props.scopeKey ? `${props.scopeKey}:${name}` : name);
-  const createState = () =>
-    makePersistedState(
+  const isSavedViewActive = () =>
+    Boolean(props.savedViewSource && (newSavedView() || tabSearch.savedView));
+  const createState = () => {
+    const persistence = createTasksViewPersistence({
+      handle: panel.handle,
+      userId,
+      restoreEntryState:
+        props.restoreEntryState ?? props.initialState === undefined,
+      restorePreferences: initial.collapsedSidebarSectionIds === undefined,
+      scopeKey: props.scopeKey,
+      savedViewActive: isSavedViewActive,
+    });
+    const [state, setState] = makePersistedState(
       createStore<TasksViewState>({
         layout: initial.layout ?? 'list',
         tab: initialTab,
@@ -228,24 +239,46 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           ...(initial.collapsedSidebarSectionIds ?? []),
         ],
       }),
-      createTasksViewPersistence({
-        handle: panel.handle,
-        userId,
-        restoreEntryState:
-          props.restoreEntryState ?? props.initialState === undefined,
-        restorePreferences: initial.collapsedSidebarSectionIds === undefined,
-        scopeKey: props.scopeKey,
-      })
+      persistence
     );
-  const [persistedState, setState] = props.scopeKey
+    return {
+      state,
+      setState,
+      restoreTab: persistence.restoreTab,
+      clearTabs: persistence.clearTabs,
+    };
+  };
+  const {
+    state: persistedState,
+    setState,
+    restoreTab,
+    clearTabs,
+  } = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
+  const restoreBuiltInTab = (tab: TasksTab, capture = true) => {
+    if (capture) panel.handle.captureEntryState();
+    const restored = restoreTab(persistedState, tab);
+    setState(
+      reconcile(
+        restored ?? {
+          ...persistedState,
+          tab,
+          layout: 'list',
+          search: '',
+          groupBy: TASK_DEFAULT_GROUP_BY[tab],
+          sort: [{ id: 'updated_at' }],
+          facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
+          dueDate: undefined,
+          collapsedGroupIds: [],
+        }
+      )
+    );
+  };
   // Rollout fallbacks must not overwrite saved tab or layout selections.
   const state = mergeProps(persistedState, {
     get savedViewActive() {
-      return Boolean(
-        props.savedViewSource && (newSavedView() || tabSearch.savedView)
-      );
+      return isSavedViewActive();
     },
     get layout() {
       if (
@@ -280,16 +313,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
     return tabSearch.tab;
   };
-  const { setState: setStateWithSearch, setPrimarySort } =
-    createTasksViewSearch({
-      state: persistedState,
-      setState,
-      search: tabSearch,
-      setSearch: setTabSearch,
-      tab: routeTab,
-      enabled: syncSearch,
-      nonListLayoutsEnabled: () => !isTouchDevice(),
-    });
   const currentSearch = () =>
     tasksTabSearchCodec.serialize({
       tab: state.tab,
@@ -360,6 +383,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   };
   const selectSavedView = (id: string) =>
     batch(() => {
+      panel.handle.captureEntryState();
       setNewSavedView(false);
       navigateSavedView(id);
     });
@@ -371,20 +395,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     });
   const startSavedView = () =>
     batch(() => {
+      panel.handle.captureEntryState();
       setNewSavedView(true);
       applyTaskFacets('team-tasks', DEFAULT_TASK_FACET_SELECTION);
       setState('dueDate', undefined);
       setState('search', '');
       navigateSavedView(undefined);
     });
-  const leaveSavedView = () =>
-    batch(() => {
-      savedViews?.reset();
-      setNewSavedView(false);
-      applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
-      setState('dueDate', undefined);
-      navigateSavedView(undefined);
-    });
+  const leaveSavedView = () => setTab('my-tasks');
   if (savedView) {
     savedViews = createTaskSavedViewDraft({
       source: savedView,
@@ -432,13 +450,12 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   }));
   const savedViewScope = () => (disposed ? undefined : requestScope());
   let priorSavedView: string | undefined;
-  let priorSavedViewViewer: string | undefined;
+  let priorSavedViewViewer = userId();
   createEffect(
     on(
       () => [tabSearch.savedView, userId(), newSavedView()] as const,
       ([id, viewer, creating]) => {
-        const accountChanged =
-          priorSavedViewViewer !== undefined && viewer !== priorSavedViewViewer;
+        const accountChanged = viewer !== priorSavedViewViewer;
         if (accountChanged) setNewSavedView(false);
         if (creating && !accountChanged) {
           if (creating !== id) return;
@@ -449,13 +466,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         const wasSelected = Boolean(priorSavedView);
         priorSavedView = id;
         priorSavedViewViewer = viewer;
-        if (changed) setState('search', '');
-        if (accountChanged || (!id && wasSelected)) {
-          applyTaskFacets(
-            accountChanged ? 'my-tasks' : state.tab,
-            DEFAULT_TASK_FACET_SELECTION
-          );
-          setState('dueDate', undefined);
+        if (changed && id) setState('search', '');
+        if (accountChanged) {
+          clearTabs();
+          restoreBuiltInTab(props.scopeKey ? initialTab : 'my-tasks', false);
+          if (syncSearch) navigateSavedView(undefined);
+        } else if (!id && wasSelected) {
+          restoreBuiltInTab(routeTab(), false);
         }
       }
     )
@@ -471,6 +488,22 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       }
     )
   );
+
+  // Restore departures from saved views before URL controls can write into
+  // the newly active built-in tab's snapshot.
+  const { setState: setStateWithSearch, setPrimarySort } =
+    createTasksViewSearch({
+      state: persistedState,
+      setState,
+      search: tabSearch,
+      setSearch: setTabSearch,
+      tab: routeTab,
+      enabled: syncSearch,
+      nonListLayoutsEnabled: () => !isTouchDevice(),
+      restoreTab: restoreBuiltInTab,
+      savedViewActive: isSavedViewActive,
+      beforeLayoutChange: () => panel.handle.captureEntryState(),
+    });
 
   const source = withSplitPanelOwner(ownedSlot('data-source'), () =>
     (props.sourceFactory ?? useTasksDataSource)(state, {
@@ -634,21 +667,19 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const setTab = (tab: TasksTab) => {
     if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
-    if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
       closeTask();
       return;
     }
-    setState(
-      produce((draft) => {
-        draft.tab = tab;
-        draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
-        draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
-        draft.dueDate = undefined;
-        draft.collapsedGroupIds = [];
-      })
-    );
-    closeTask();
+    batch(() => {
+      // Saved-view drafts are deliberately not tab snapshots. Reset while the
+      // saved view is still active, then restore the independent built-in tab.
+      if (leavingSavedView) savedViews?.reset();
+      restoreBuiltInTab(tab);
+      setNewSavedView(false);
+      if (leavingSavedView) navigateSavedView(undefined);
+      else closeTask();
+    });
   };
 
   const setFacets = (facets: TasksViewState['facets']) => {

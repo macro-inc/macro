@@ -20,6 +20,7 @@ import {
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -97,6 +98,7 @@ export type TaskListProps = {
 
 export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
+  const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const {
     state,
@@ -214,9 +216,15 @@ export function TaskList(props: TaskListProps) {
 
     return value;
   };
+  const listTab = () => (state.savedViewActive ? undefined : state.tab);
+  const listStorage = createTasksListEntryStorage(panel.handle, {
+    scopeKey,
+    tab: listTab,
+    userId,
+  });
   const [, setPersistedListState] = makePersistedState(
     [readListState, applyListState],
-    { storages: createTasksListEntryStorage(panel.handle, scopeKey) }
+    { storages: listStorage }
   );
 
   const visibleRows = source.items;
@@ -359,25 +367,31 @@ export function TaskList(props: TaskListProps) {
     },
   });
 
-  let restoredScroll = false;
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
-    if (!handle || restoredScroll) return;
-
-    handle.scrollTo(scrollOffset);
-    restoredScroll = true;
+    // Loading a different tab can replace the virtualizer after its position
+    // was restored. Apply the retained offset to each newly mounted handle.
+    handle?.scrollTo(scrollOffset);
   }
 
-  let activeTab = state.tab;
-  createEffect(() => {
-    const nextTab = state.tab;
-    if (nextTab === activeTab) return;
-
-    activeTab = nextTab;
-    listInteractions.selection.clear();
-    list.focus.clear({ reason: 'programmatic' });
-    setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
-  });
+  createEffect(
+    on(
+      () => [listTab(), userId()] as const,
+      ([tab, viewer], previous) => {
+        const accountChanged = previous?.[1] !== viewer;
+        if (accountChanged) listStorage.clearTabs();
+        scrollAnchor = undefined;
+        listInteractions.selection.clear();
+        list.focus.clear({ reason: 'programmatic' });
+        const restored =
+          tab === undefined || accountChanged
+            ? undefined
+            : listStorage.restoreTab(readListState(), tab);
+        setPersistedListState(restored ?? DEFAULT_TASKS_LIST_STATE);
+      },
+      { defer: true }
+    )
+  );
 
   createEffect(() => {
     visibleRows();
@@ -401,6 +415,7 @@ export function TaskList(props: TaskListProps) {
   let scrollAnchor: { id: string; offset: number } | undefined;
   function recordScrollAnchor() {
     const handle = virtualizer();
+    if (handle) scrollOffset = handle.scrollOffset;
     if (!handle || handle.scrollOffset <= 0) {
       scrollAnchor = undefined;
       return;
