@@ -26,97 +26,97 @@ afterEach(() => {
 });
 
 describe('collaboration IndexedDB recovery', () => {
-  it.each([
-    'expired',
-    'delivered',
-  ])('prunes native quarantined and foreign rows when %s', async (condition) => {
-    const store = new BrowserWALStore<number>('wal', 'doc');
-    await store.append(3);
-    const db = await openDB('wal', 1);
-    try {
-      for (const flag of ['quarantined', 'foreign']) {
+  it.each(['expired', 'delivered'])(
+    'prunes native quarantined and foreign rows when %s',
+    async (condition) => {
+      const store = new BrowserWALStore<number>('wal', 'doc');
+      await store.append(3);
+      const db = await openDB('wal', 1);
+      try {
+        for (const flag of ['quarantined', 'foreign']) {
+          await db.add('updates', {
+            scopeId: 'doc',
+            update: 2,
+            delivered: condition === 'delivered',
+            createdAt: condition === 'expired' ? 0 : Date.now(),
+            [flag]: true,
+          });
+        }
+
+        if (condition === 'expired') {
+          expect(await store.pruneExpired(1000)).toBe(2);
+        } else {
+          await store.pruneDelivered();
+        }
+
+        expect((await db.getAll('updates')).map((row) => row.update)).toEqual([
+          3,
+        ]);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it.each(['quarantined', 'foreign'])(
+    'does not replay or resend native %s rows after switching to the legacy engine',
+    async (flag) => {
+      const store = new BrowserWALStore<number>('wal', 'doc');
+      await store.append(1);
+      const db = await openDB('wal', 1);
+      try {
         await db.add('updates', {
           scopeId: 'doc',
           update: 2,
-          delivered: condition === 'delivered',
-          createdAt: condition === 'expired' ? 0 : Date.now(),
+          delivered: false,
+          createdAt: Date.now(),
           [flag]: true,
         });
-      }
+        await store.append(3);
 
-      if (condition === 'expired') {
-        expect(await store.pruneExpired(1000)).toBe(2);
+        expect((await store.getAll()).map((row) => row.update)).toEqual([1, 3]);
+        const push = vi.fn(async (_updates: number[]) => true);
+        const wal = new WALSyncer(store, push);
+        await wal.ready();
+        await wal.flush();
+
+        expect(push).toHaveBeenCalledExactlyOnceWith([1, 3]);
+        expect(await db.getAll('updates')).toHaveLength(3);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
+  it.each(['success', 'cursor failure'])(
+    'closes the scope-listing connection after %s',
+    async (outcome) => {
+      const first = new BrowserWALStore<number>('wal', 'first');
+      const second = new BrowserWALStore<number>('wal', 'second');
+      await first.append(1);
+      await first.append(2);
+      await second.append(3);
+
+      if (outcome === 'cursor failure') {
+        const error = new Error('Cursor iteration failed');
+        vi.spyOn(IDBCursor.prototype, 'continue').mockImplementationOnce(() => {
+          throw error;
+        });
+        await expect(BrowserWALStore.listScopeIds('wal')).rejects.toBe(error);
       } else {
-        await store.pruneDelivered();
+        await expect(BrowserWALStore.listScopeIds('wal')).resolves.toEqual([
+          'first',
+          'second',
+        ]);
       }
 
-      expect((await db.getAll('updates')).map((row) => row.update)).toEqual([
-        3,
-      ]);
-    } finally {
-      db.close();
+      expect(() => connections.at(-1)!.transaction('updates')).toThrow(
+        expect.objectContaining({ name: 'InvalidStateError' })
+      );
+      expect(await first.count()).toBe(2);
+      expect(await second.count()).toBe(1);
     }
-  });
-
-  it.each([
-    'quarantined',
-    'foreign',
-  ])('does not replay or resend native %s rows after switching to the legacy engine', async (flag) => {
-    const store = new BrowserWALStore<number>('wal', 'doc');
-    await store.append(1);
-    const db = await openDB('wal', 1);
-    try {
-      await db.add('updates', {
-        scopeId: 'doc',
-        update: 2,
-        delivered: false,
-        createdAt: Date.now(),
-        [flag]: true,
-      });
-      await store.append(3);
-
-      expect((await store.getAll()).map((row) => row.update)).toEqual([1, 3]);
-      const push = vi.fn(async (_updates: number[]) => true);
-      const wal = new WALSyncer(store, push);
-      await wal.ready();
-      await wal.flush();
-
-      expect(push).toHaveBeenCalledExactlyOnceWith([1, 3]);
-      expect(await db.getAll('updates')).toHaveLength(3);
-    } finally {
-      db.close();
-    }
-  });
-
-  it.each([
-    'success',
-    'cursor failure',
-  ])('closes the scope-listing connection after %s', async (outcome) => {
-    const first = new BrowserWALStore<number>('wal', 'first');
-    const second = new BrowserWALStore<number>('wal', 'second');
-    await first.append(1);
-    await first.append(2);
-    await second.append(3);
-
-    if (outcome === 'cursor failure') {
-      const error = new Error('Cursor iteration failed');
-      vi.spyOn(IDBCursor.prototype, 'continue').mockImplementationOnce(() => {
-        throw error;
-      });
-      await expect(BrowserWALStore.listScopeIds('wal')).rejects.toBe(error);
-    } else {
-      await expect(BrowserWALStore.listScopeIds('wal')).resolves.toEqual([
-        'first',
-        'second',
-      ]);
-    }
-
-    expect(() => connections.at(-1)!.transaction('updates')).toThrow(
-      expect.objectContaining({ name: 'InvalidStateError' })
-    );
-    expect(await first.count()).toBe(2);
-    expect(await second.count()).toBe(1);
-  });
+  );
 
   it('flushes persisted edits after the WAL connection closes', async () => {
     const store = new BrowserWALStore<Uint8Array>('wal', 'doc');

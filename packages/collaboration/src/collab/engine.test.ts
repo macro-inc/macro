@@ -26,48 +26,48 @@ function makeAwareness() {
 }
 
 describe('SyncEngine', () => {
-  it.each([
-    'snapshot',
-    'manager',
-  ] as const)('does not replace or restart a stopped owner during %s recovery', async (phase) => {
-    const source = new MockLiveSyncSource();
-    const { wal } = makeTestWAL(source);
-    const manager = new MockLoroManager();
-    const entered = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const snapshot = emptySnapshot();
-    if (phase === 'snapshot')
-      source.requestSnapshot.mockImplementationOnce(() =>
-        ResultAsync.fromSafePromise(
-          (async () => {
-            entered.resolve();
-            await release.promise;
-            return snapshot;
-          })()
-        )
-      );
-    else
-      manager.reset.mockImplementationOnce(async () => {
-        entered.resolve();
-        await release.promise;
-        return ok(undefined);
+  it.each(['snapshot', 'manager'] as const)(
+    'does not replace or restart a stopped owner during %s recovery',
+    async (phase) => {
+      const source = new MockLiveSyncSource();
+      const { wal } = makeTestWAL(source);
+      const manager = new MockLoroManager();
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const snapshot = emptySnapshot();
+      if (phase === 'snapshot')
+        source.requestSnapshot.mockImplementationOnce(() =>
+          ResultAsync.fromSafePromise(
+            (async () => {
+              entered.resolve();
+              await release.promise;
+              return snapshot;
+            })()
+          )
+        );
+      else
+        manager.reset.mockImplementationOnce(async () => {
+          entered.resolve();
+          await release.promise;
+          return ok(undefined);
+        });
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live: source },
+        bindings: { onRemoteState: () => {} },
       });
-    const engine = new SyncEngine({
-      loroManager: manager,
-      awareness: makeAwareness(),
-      syncs: { wal, live: source },
-      bindings: { onRemoteState: () => {} },
-    });
-    engine.start();
-    const resetting = engine.reset();
-    await entered.promise;
-    engine.stop();
-    release.resolve();
-    await resetting;
-    expect(engine.isRunning).toBe(false);
-    expect(manager.reset).toHaveBeenCalledTimes(phase === 'snapshot' ? 0 : 1);
-    wal.destroy();
-  });
+      engine.start();
+      const resetting = engine.reset();
+      await entered.promise;
+      engine.stop();
+      release.resolve();
+      await resetting;
+      expect(engine.isRunning).toBe(false);
+      expect(manager.reset).toHaveBeenCalledTimes(phase === 'snapshot' ? 0 : 1);
+      wal.destroy();
+    }
+  );
   it('does not import a queued remote packet after its document owner stops', async () => {
     const source = new MockLiveSyncSource();
     const { wal } = makeTestWAL(source);
