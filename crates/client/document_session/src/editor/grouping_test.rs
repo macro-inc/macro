@@ -17,6 +17,11 @@ fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
         macro_document_model::EditorType::MarkdownSync,
     );
     let mut surface = EditorSurface::new(config, 7, now(0)).expect("actual Macro session surface");
+    // SetState keeps the incoming id-less root, as Source's raw setEditorState does
+    // (bcc849e5), after the open took draw 1 of the id stream for the root it replaced.
+    // KNOWN DIVERGENCE C-ROOT-ID-RECONCILE-01: an id-less root is not re-id'd after a
+    // Loro-driven reconcile (Source: CollabProvider's $updateAllNodeIds), so the undone
+    // and redone roots here export no id.
     let doc = lexical_loro::new_doc(7).expect("Loro document");
     let mut view = Vec::new();
     surface

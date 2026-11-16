@@ -63,6 +63,12 @@ fn surface() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
     (surface, doc, view)
 }
 
+// SetState keeps the incoming id-less root, as Source's raw setEditorState does
+// (bcc849e5), after the open took draw 1 of the id stream for the root it replaced.
+// KNOWN DIVERGENCE C-ROOT-ID-RECONCILE-01: an id-less root is not re-id'd after a
+// Loro-driven reconcile (Source: CollabProvider's $updateAllNodeIds), so the undone
+// and redone roots here export no id.
+//
 // After any undo, Source's Loro-driven reconcile imports every node (probe log
 // 8803f2b1), so each storage-null key a node holds absent reads back as its
 // stored null (policy::storage_null_keys: paragraph direction, indent,
