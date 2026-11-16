@@ -93,8 +93,8 @@ export function ProjectsCollection(props: {
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
-  onCopyLink(id: string): void;
-  onCopyId(id: string): void;
+  onCopyLink(id: string): Promise<unknown>;
+  onCopyId(id: string): Promise<unknown>;
   onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
