@@ -16,15 +16,18 @@ no I/O.
   `RoutineProgram::from_task`.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
-  CreateRoutine and the scheduler's drafter both read), `STEP_CONTEXT` (the type of
+  CreateRoutine, the scheduler's drafter and the Compose Routines skill read),
+  `STEP_CONTEXT` (the type of
   `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
 - `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
   code (text, number, boolean, choice, or a question for AI), which `main`
-  reads as `knobs.<name>`, typed from the knob but not its value; and
-  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`.
+  reads as `knobs.<name>`, typed from the knob but not its value;
+  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`
+  (parsed with nom); and `sentence_runs`, that sentence read with its knobs
+  as text and values, as a routine suggestion's card shows it.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
   routines: surface, title, trigger (cron without a zone), a code step and/or
@@ -47,7 +50,8 @@ no I/O.
 ## Boundaries
 
 - Depends on: `bots` (`AgentMcpServer`).
-- Used by: `scheduled_action`, `routines` (agent tools), and through the
+- Used by: `scheduled_action`, `routines` (agent tools), `system_skills`
+  (Compose Routines), and through the
   scheduler's generated clients the SDK (`macro.routines`) and the web app's
   routines editor (`core/routine-steps.ts`).
 

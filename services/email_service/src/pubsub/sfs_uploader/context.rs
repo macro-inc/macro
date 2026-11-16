@@ -1,11 +1,19 @@
-use connection_gateway_client::client::ConnectionGatewayClient;
-use sqlx::PgPool;
-use static_file_service_client::StaticFileServiceClient;
+use crate::outbound::sfs_upload::{
+    PgSfsPhotoContacts, PgSfsPhotoMappings, PhotoSyncedGateway, SfsPhotoUploadClient,
+};
+use email::domain::mailbox::contacts::sfs_upload::SfsPhotoUploadService;
+use std::sync::Arc;
+
+/// Concrete contact-photo use case assembled by the worker context builder.
+pub type SfsUploadUseCase = SfsPhotoUploadService<
+    PgSfsPhotoMappings,
+    PgSfsPhotoContacts,
+    SfsPhotoUploadClient,
+    PhotoSyncedGateway,
+>;
 
 #[derive(Clone)]
 pub struct SFSUploaderContext {
-    pub db: PgPool,
-    pub sfs_client: StaticFileServiceClient,
+    pub service: Arc<SfsUploadUseCase>,
     pub sqs_worker: sqs_worker::SQSWorker,
-    pub connection_gateway_client: ConnectionGatewayClient,
 }

@@ -35,7 +35,7 @@ export function channelsByIdsQueryArgs(
   };
 }
 
-/** Keep each channel list's bounded unread projection current, including cached rows. */
+/** Keep each channel list's bounded unread and mention projections current, including cached rows. */
 export function registerChannelListNotificationRefresh(
   query: SoupAstItemsQuery
 ) {
@@ -51,7 +51,10 @@ export function registerChannelListNotificationRefresh(
         : (query.data?.entities ?? [])
             .filter(isChannelEntity)
             .flatMap((channel) =>
-              (channel.unreadNotifications ?? []).map(({ id }) => id)
+              [
+                ...(channel.unreadNotifications ?? []),
+                ...(channel.unreadMentions ?? []),
+              ].map(({ id }) => id)
             ),
     },
   }));
@@ -62,17 +65,17 @@ export function useChannelsByIdsQuery(
   channelIds: Accessor<readonly string[]>,
   options: Accessor<{ cacheFirst?: boolean }> = () => ({})
 ) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-      graphqlCacheFirstEntities: options().cacheFirst
-        ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-        : undefined,
-    })
-  );
+  // Soup reads its arguments from multiple reactive computations. Compile the
+  // ID filter once per membership change, not again for every status update.
+  const args = createMemo(() => channelsByIdsQueryArgs(channelIds()));
+  const query = useSoupAstItemsQuery(args, () => ({
+    enabled: channelIds().length > 0,
+    staleTime: 30_000,
+    graphqlProjection: 'channel-list',
+    graphqlCacheFirstEntities: options().cacheFirst
+      ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
+      : undefined,
+  }));
   registerChannelListNotificationRefresh(query);
   createEffect(() => {
     if (

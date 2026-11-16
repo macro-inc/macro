@@ -46,8 +46,8 @@ async fn a_failure_after_partial_output_is_still_forwarded_to_the_consumer() {
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-#[path = "test/tool_mode.rs"]
-mod tool_mode;
+#[path = "test/code_tools.rs"]
+mod code_tools;
 
 #[test]
 fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
@@ -76,7 +76,7 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
 
 #[test]
 fn reduced_definitions_keep_user_input_and_user_tool_review() {
-    let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let tools = NativeTools::new();
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
     for supports_input in [true, false] {
@@ -217,6 +217,118 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
          earlier, summarized or not, run ContentSearch with agentSessionIds \
          [\"{session}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
     )));
+}
+
+/// A session nobody watches reads its own short prompt, not the
+/// conversation's preamble and tool guidance, and no pointer to a
+/// ContentSearch it does not have; the rest of its part and its turn's
+/// documentation stay.
+#[test]
+fn an_unseen_turn_reads_its_own_short_prompt() {
+    let session = AgentSessionId::new();
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let prompt = system_prompt(
+        &TOOLS,
+        "<macro_sdk>routines</macro_sdk>",
+        session,
+        ReplyDelivery::Unseen,
+        Some(&identity),
+        Some("be terse"),
+        Some("prefers Rust"),
+    );
+    let text = prompt.to_string();
+
+    assert!(text.starts_with(unseen::PROMPT));
+    assert!(!text.contains(TOOLS));
+    assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
+    assert!(!text.contains("<agent_session>"));
+    assert!(!text.contains(opener::NOT_OPENED));
+    assert!(text.contains(&prompt::agent_identity::render("Grunk", "grunk")));
+    assert!(text.contains("<session_instructions>\nbe terse\n</session_instructions>"));
+    assert!(text.contains("<user_memory>\nprefers Rust\n</user_memory>"));
+    assert!(text.ends_with("<macro_sdk>routines</macro_sdk>"));
+}
+
+/// Every session one background opener starts gets the same instructions,
+/// so they sit in the cached shared block, read back across those sessions;
+/// only the owner's memory and the turn's documentation come after.
+#[test]
+fn an_unseen_turn_caches_its_instructions_with_the_shared_block() {
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        Some("draft routines"),
+        Some("prefers Rust"),
+    );
+
+    assert_eq!(
+        prompt.shared(),
+        Some(
+            format!(
+                "{}\n<session_instructions>\ndraft routines\n</session_instructions>",
+                unseen::PROMPT
+            )
+            .as_str()
+        )
+    );
+    assert_eq!(
+        prompt.rest(),
+        "\n<user_memory>\nprefers Rust\n</user_memory>"
+    );
+    let other = system_prompt(
+        &TOOLS,
+        "",
+        AgentSessionId::new(),
+        ReplyDelivery::Unseen,
+        None,
+        Some("draft routines"),
+        None,
+    );
+    assert_eq!(other.shared(), prompt.shared());
+}
+
+/// A background session given instructions brings its own reference; any
+/// other turn has its documentation picked for its request.
+#[test]
+fn only_a_background_session_with_instructions_skips_picked_documentation() {
+    assert!(!routes_documentation(
+        ReplyDelivery::Unseen,
+        Some("draft routines")
+    ));
+    assert!(routes_documentation(ReplyDelivery::Unseen, None));
+    assert!(routes_documentation(ReplyDelivery::Unseen, Some("  ")));
+    assert!(routes_documentation(
+        ReplyDelivery::Streamed,
+        Some("be terse")
+    ));
+    assert!(routes_documentation(ReplyDelivery::Whole, Some("be terse")));
+}
+
+/// An unseen turn (a routine draft) runs at low effort where its model takes
+/// one; any other turn keeps the effort it was given.
+#[test]
+fn an_unseen_turn_runs_at_low_effort_where_its_model_takes_one() {
+    use agent::ReasoningEffort;
+    let model = "anthropic/claude-sonnet-5-5";
+    assert_eq!(
+        unseen_effort(true, model, ReasoningEffort::default()),
+        ReasoningEffort::Low
+    );
+    assert_eq!(
+        unseen_effort(false, model, ReasoningEffort::High),
+        ReasoningEffort::High
+    );
+    assert_eq!(
+        unseen_effort(true, "some/model", ReasoningEffort::default()),
+        ReasoningEffort::default()
+    );
 }
 
 /// A named agent is told who it is before its instructions, even when it

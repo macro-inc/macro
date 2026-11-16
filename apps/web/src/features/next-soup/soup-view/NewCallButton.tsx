@@ -71,7 +71,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
         }
       }
 
-      await joinChannelCall(channelId);
+      await joinChannelCall(channelId, { kind: 'start' });
       setIsOpen(false);
       reset();
     } catch (err) {

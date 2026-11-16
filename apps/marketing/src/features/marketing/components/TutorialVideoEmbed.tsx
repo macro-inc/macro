@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { analytics } from '../../../app/utils/utilAnalytic';
 import presenterPhoto from '../../../assets/people/tutorial-presenter.jpg';
 import { createSitePalette } from '../../setup/sitePalette';
@@ -28,6 +28,33 @@ function PlayDisc() {
         stroke-linejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * The app window on the wallpaper. A frame that has not loaded yet waits out
+ * of sight and fades in, so it never pops in over the wallpaper.
+ */
+function PreviewWindow(props: { src: string; light: boolean }) {
+  const [pending, setPending] = createSignal(false);
+  let image!: HTMLImageElement;
+  const settle = () => setPending(false);
+  const awaitFrame = () => setPending(!image.complete);
+
+  onMount(awaitFrame);
+  createEffect(on(() => props.src, awaitFrame, { defer: true }));
+
+  return (
+    <div class="tutorial-video-poster-window" data-pending={pending()}>
+      <img
+        ref={image}
+        classList={{ 'tutorial-video-preview-light': props.light }}
+        src={props.src}
+        alt=""
+        onLoad={settle}
+        onError={settle}
+      />
+    </div>
   );
 }
 
@@ -121,18 +148,10 @@ export function TutorialVideoEmbed(props: {
           <Show when={!usesBenefitPoster()}>
             <div class="tutorial-video-poster" aria-hidden="true">
               <TutorialWallpaper tutorial={props.tutorial} />
-              <div class="tutorial-video-poster-window">
-                <img
-                  classList={{
-                    'tutorial-video-preview-light': palette() === 'cream',
-                  }}
-                  src={tutorialPreviewUrl(
-                    props.tutorial,
-                    palette() === 'cream'
-                  )}
-                  alt=""
-                />
-              </div>
+              <PreviewWindow
+                src={tutorialPreviewUrl(props.tutorial, palette() === 'cream')}
+                light={palette() === 'cream'}
+              />
             </div>
           </Show>
           {/* The poster also plays on a click; the pill is the

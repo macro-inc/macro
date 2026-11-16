@@ -1,6 +1,6 @@
 //! Strict remote evaluation through PostHog's V2 `/flags` endpoint.
 
-use crate::{FeatureFlags, FlagSnapshot, FlagValue};
+use crate::{FeatureFlags, FlagSnapshot, FlagValue, ServiceContext, ServiceFeatureFlags};
 use macro_env::Environment;
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::{Client, Url};
@@ -95,13 +95,13 @@ impl PostHogFeatureFlags {
         })
     }
 
-    async fn evaluate(&self, user_id: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
+    async fn evaluate(&self, distinct_id: &str) -> Result<FlagSnapshot, Report> {
         let response = self
             .client
             .post(self.endpoint.clone())
             .json(&serde_json::json!({
                 "api_key": self.project_key,
-                "distinct_id": user_id.as_ref(),
+                "distinct_id": distinct_id,
                 "evaluation_runtime": "server",
                 "geoip_disable": true,
                 "person_properties": {ENVIRONMENT_PROPERTY: environment_value(self.environment)},
@@ -154,7 +154,19 @@ impl PostHogFeatureFlags {
 
 impl FeatureFlags for PostHogFeatureFlags {
     async fn load(&self, user_id: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
-        tokio::time::timeout(self.timeout, self.evaluate(user_id))
+        tokio::time::timeout(self.timeout, self.evaluate(user_id.as_ref()))
+            .await
+            .map_err(|_| LoadError::Timeout)?
+    }
+}
+
+impl ServiceFeatureFlags for PostHogFeatureFlags {
+    async fn load_service(&self, context: ServiceContext) -> Result<FlagSnapshot, Report> {
+        let id = context.distinct_id();
+        if id.is_empty() || id.trim() != id {
+            return Err(rootcause::report!("Invalid service evaluation context"));
+        }
+        tokio::time::timeout(self.timeout, self.evaluate(id))
             .await
             .map_err(|_| LoadError::Timeout)?
     }

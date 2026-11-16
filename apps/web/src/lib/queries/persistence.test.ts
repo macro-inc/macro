@@ -6,6 +6,7 @@ import {
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
+import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
@@ -15,6 +16,7 @@ import type {
 } from './persistence/per-query-idb';
 import {
   createQueryPersistenceScopes,
+  shouldPersistCalendarQuery,
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
@@ -28,6 +30,7 @@ function createMockStore(): ClearablePerQueryPersistence & {
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
+  prune: ReturnType<typeof vi.fn>;
   flush: ReturnType<typeof vi.fn>;
 } {
   const entries = new Map<string, PersistedQueryEntry>();
@@ -39,6 +42,11 @@ function createMockStore(): ClearablePerQueryPersistence & {
     }),
     remove: vi.fn((hash: string) => {
       entries.delete(hash);
+    }),
+    prune: vi.fn(async (keep: (entry: PersistedQueryEntry) => boolean) => {
+      for (const [hash, entry] of entries) {
+        if (!keep(entry)) entries.delete(hash);
+      }
     }),
     flush: vi.fn(async () => {}),
     clear: vi.fn(async () => {
@@ -84,6 +92,39 @@ describe('setupQueryPersistence', () => {
     expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
       false
     );
+  });
+
+  it('persists calendar reads only when their key names an account', () => {
+    const range = {
+      start: '2026-11-08T05:00:00.000Z',
+      end: '2026-11-15T05:00:00.000Z',
+      startDate: '2026-11-08',
+      endDate: '2026-11-15',
+    };
+    const occurrences = calendarKeys.occurrences('viewer', range);
+
+    expect(shouldPersistCalendarQuery(occurrences.queryKey)).toBe(true);
+    expect(shouldPersistCalendarQuery(occurrences._ctx.graphql.queryKey)).toBe(
+      true
+    );
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars('viewer').queryKey
+      )
+    ).toBe(true);
+    expect(
+      shouldPersistCalendarQuery(calendarKeys.occurrences('', range).queryKey)
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.visibleCalendars(undefined).queryKey
+      )
+    ).toBe(false);
+    expect(
+      shouldPersistCalendarQuery(
+        calendarKeys.teamOutOfOffice('viewer', range).queryKey
+      )
+    ).toBe(false);
   });
 
   it('writes only the changed query on update', () => {
@@ -493,6 +534,46 @@ describe('setupQueryPersistence', () => {
 
     expect(queryClient.getQueryData(['channel', 'v'])).toBeUndefined();
     expect(store.remove).toHaveBeenCalledWith('["channel","v"]');
+  });
+
+  it('keeps an entry that outlives its query, restores it stale, and sweeps old ones', async () => {
+    const queryClient = new QueryClient();
+    const store = createMockStore();
+    const entry = (hash: string, ageMs: number): PersistedQueryEntry => ({
+      queryHash: hash,
+      queryKey: JSON.parse(hash),
+      data: { value: hash },
+      dataUpdatedAt: Date.now() - ageMs,
+      persistedAt: Date.now() - ageMs,
+      buster: 'test',
+    });
+    const week = 7 * 24 * 60 * 60 * 1000;
+    store.entries.set('["range","recent"]', entry('["range","recent"]', 1000));
+    store.entries.set('["range","old"]', entry('["range","old"]', week + 1));
+
+    const scope = createScope(['range'], store, { outlivesQuery: true });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
+    await Promise.resolve();
+
+    expect([...store.entries.keys()]).toEqual(['["range","recent"]']);
+
+    queryClient.prefetchQuery({
+      queryKey: ['range', 'recent'],
+      queryFn: () => new Promise(() => {}),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const restored = queryClient.getQueryState(['range', 'recent']);
+    expect(restored?.data).toEqual({ value: '["range","recent"]' });
+    expect(restored?.dataUpdatedAt).toBe(0);
+    // The stale stamp is not written over the entry's real age.
+    expect(store.set).not.toHaveBeenCalled();
+
+    queryClient.removeQueries({ queryKey: ['range', 'recent'] });
+
+    expect(store.remove).not.toHaveBeenCalled();
+    expect(store.entries.has('["range","recent"]')).toBe(true);
   });
 
   it('stops persistence on unsubscribe', () => {

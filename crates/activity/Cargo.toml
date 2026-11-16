@@ -6,8 +6,12 @@ version = "0.1.0"
 
 [features]
 schema = ["dep:utoipa"]
-axum = ["ai_tools", "schema", "dep:axum", "dep:macro_authorization"]
-ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:tracing"]
+axum = ["reads", "schema", "dep:axum", "dep:macro_authorization", "dep:tracing"]
+# The read service: ranges and feeds with display metadata resolved.
+reads = ["dep:async-trait"]
+# JSON schemas of the range types, for saved transcripts of the removed
+# ReadActivity tool.
+json_schema = ["dep:schemars", "reads"]
 consumer = [
   "dep:kafka_util",
   "dep:futures",
@@ -35,7 +39,6 @@ axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 broadcast = { path = "../broadcast", optional = true }
 channel_sender = { path = "../channel_sender" }

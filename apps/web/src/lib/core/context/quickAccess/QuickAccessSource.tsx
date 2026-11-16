@@ -6,6 +6,7 @@ import {
   materializeCachedGraphqlCrmContacts,
   useQuickAccessCrmContactsQuery,
 } from '@app/features/crm/record-adapter';
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -72,7 +73,7 @@ import {
   searchQuickAccessItems,
 } from './entity-search';
 import { createPersonList } from './person-list';
-import { createProjectedList } from './projected-list';
+import { createProjectedList, searchRowHost } from './projected-list';
 import type {
   Bucket,
   BucketCombination,
@@ -84,6 +85,7 @@ import type {
   QuickAccessListOptions,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+import { keepUnchangedRows } from './unchanged-rows';
 
 /**
  * index entry for sorted lists.
@@ -109,6 +111,7 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     ownerId: item.ownerId,
+    appearance: item.appearance,
   };
 
   switch (item.type) {
@@ -280,7 +283,7 @@ function getHistoryItemVersion(
   item: HistoryItem,
   viewedAt?: DateValue | null
 ): string {
-  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
+  return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}|${JSON.stringify(item.appearance)}`;
 }
 
 function getCrmCompanySearchText(company: CrmCompanyEntity): string {
@@ -301,7 +304,7 @@ function getCrmContactVersion(contact: CrmContactEntity): string {
 }
 
 function getSnippetVersion(snippet: SnippetEntity, viewedAt?: string): string {
-  return `${snippet.name}|${snippet.updatedAt}|${viewedAt}`;
+  return `${snippet.name}|${snippet.updatedAt}|${viewedAt}|${JSON.stringify(snippet.appearance)}`;
 }
 
 function getSkillVersion(skill: SkillEntity, viewedAt?: string): string {
@@ -845,6 +848,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'database',
         id: database.id,
         name: database.name,
+        appearance: readEntityAppearance(database.appearance),
         ownerId: database.owner_id,
         createdAt: database.created_at,
         grant,
@@ -881,6 +885,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'form',
         id: form.id,
         name: form.name,
+        appearance: readEntityAppearance(form.appearance),
         ownerId: form.ownerId,
         createdAt: form.createdAt,
         access,
@@ -1171,6 +1176,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const [cacheRevision, setCacheRevision] = createSignal(0);
     createEffect(() => {
       if (!projectionHost || cacheHost() !== projectionHost) return;
+      // A disabled list searches afresh when enabled, so it has no use for
+      // change notifications; in a busy workspace they arrive constantly.
+      if (options?.enabled?.() === false) return;
       onCleanup(
         subscribeToVisibleCacheChanges(
           projectionHost,
@@ -1212,7 +1220,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   channelIndex.buildDurationMs,
               };
             },
-            materialize: async (documents) => {
+            materialize: async (documents, query) => {
+              const rowHost = searchRowHost(projectionHost, query);
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);
               const missing = documents.filter(
@@ -1226,12 +1235,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 cachedEmails,
                 cachedInitiatives,
               ] = await Promise.all([
-                materializeCachedGraphqlHistoryItems(projectionHost, missing),
-                materializeCachedGraphqlChannels(projectionHost, documents),
-                materializeCachedGraphqlCrmCompanies(projectionHost, missing),
-                materializeCachedGraphqlCrmContacts(projectionHost, missing),
-                materializeCachedEmailItems(projectionHost, documents),
-                materializeCachedGraphqlInitiatives(projectionHost, documents),
+                materializeCachedGraphqlHistoryItems(rowHost, missing),
+                materializeCachedGraphqlChannels(rowHost, documents),
+                materializeCachedGraphqlCrmCompanies(rowHost, missing),
+                materializeCachedGraphqlCrmContacts(rowHost, missing),
+                materializeCachedEmailItems(rowHost, documents),
+                materializeCachedGraphqlInitiatives(rowHost, documents),
               ]);
               const historyById = new Map(
                 historyItems.map((item) => [item.id, item])
@@ -1339,7 +1348,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           })
         : undefined;
 
-    const list = createLazyMemo(() => {
+    const buildList = (): QuickAccessItem[] => {
       const local = [...localItems(), ...personList.items()];
       if (!projected || options?.enabled?.() === false)
         return deduplicateContactItems(local);
@@ -1391,7 +1400,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ),
         combined
       );
-    });
+    };
+    const list = createLazyMemo<QuickAccessItem[]>(
+      (listed) => keepUnchangedRows(listed, buildList()),
+      []
+    );
     return {
       items: list,
       windowKey: personList.windowKey,
@@ -1405,6 +1418,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             historyQuery.isLoading ||
             (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
+      isSearching: () =>
+        options?.enabled?.() !== false && (projected?.isSearching() ?? false),
       isLoadingMore: () =>
         personList.isLoadingMore() || (projected?.isLoadingMore() ?? false),
       error: () => personList.error() ?? projected?.error(),

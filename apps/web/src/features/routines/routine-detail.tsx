@@ -11,6 +11,7 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableEntityAppearance,
   enableRoutineConditions,
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
@@ -19,6 +20,10 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -65,6 +70,7 @@ export function RoutineDetail(props: {
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const decisions = useFeatureFlag(enableRoutineConditions);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
@@ -81,6 +87,7 @@ export function RoutineDetail(props: {
     },
     onKept: () => toast.success(t('subRoutines.kept')),
   });
+  const changeIcon = useChangeEntityIcon();
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
@@ -154,6 +161,24 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
+        identityIcon={
+          <Show when={source.entity()}>
+            {(entity) => (
+              <EntityAppearanceTrigger
+                entity={entity()}
+                editable={ownedByViewer()}
+              />
+            )}
+          </Show>
+        }
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? () => {
+                const entity = source.entity();
+                if (entity && ownedByViewer()) changeIcon(entity);
+              }
+            : undefined
+        }
         defaultModel={defaultModelForPlan(hasPaidAccess())}
         decisionsEnabled={decisions().enabled}
         initialTab={props.initialTab}

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation SET status = $2, finished_at = $3\n               WHERE id = $1 AND status = ANY($4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4fd5f8226139f69ea345f89c16cf6bfbfa52aed5ae2c18b7736c52e7ebbe1f3"
+}

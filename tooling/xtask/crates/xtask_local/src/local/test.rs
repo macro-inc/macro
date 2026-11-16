@@ -4,6 +4,23 @@ use std::collections::BTreeSet;
 /// Every mode whose spec we assert invariants over.
 const MODES: &[Mode] = &[Mode::Local, Mode::Dev];
 
+#[test]
+fn full_teardown_removes_vault_storage_without_crossing_instance_boundaries() {
+    let default = Instance::derive(None, None).unwrap();
+    let named = Instance::derive(Some("passwords-isolation"), None).unwrap();
+    let default_volumes: BTreeSet<_> = instance_volumes(&default).collect();
+    let named_volumes: BTreeSet<_> = instance_volumes(&named).collect();
+
+    assert_eq!(default_volumes.len(), 7);
+    assert_eq!(named_volumes.len(), 7);
+    assert!(default_volumes.is_disjoint(&named_volumes));
+    assert!(default_volumes.contains("macro_openbao_data"));
+    assert!(named_volumes.contains("macro-passwords-isolation_openbao_data"));
+    assert!(external_volumes(&named).into_iter().all(|volume| {
+        named_volumes.contains(&volume) && volume != "macro-passwords-isolation_openbao_data"
+    }));
+}
+
 /// Cross-field design rules every [`ModeSpec`] must satisfy. These encode what
 /// makes a mode *coherent* — a new mode that trips one of these is a bug, not a
 /// new policy — so they're the real guard on the table, not a restatement of it.

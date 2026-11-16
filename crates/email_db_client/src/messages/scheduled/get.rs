@@ -1,4 +1,3 @@
-use crate::messages::get::convert_db_messages_to_service_concurrent;
 use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -91,22 +90,6 @@ pub async fn get_scheduled_message_no_auth(
     .await?;
 
     Ok(record)
-}
-
-/// Fetches unsent scheduled messages for a link with pagination
-#[tracing::instrument(skip(pool), err)]
-pub async fn get_scheduled_messages_by_link_id(
-    pool: &PgPool,
-    link_id: Uuid,
-    offset: u32,
-    limit: u32,
-) -> anyhow::Result<Vec<service::message::Message>> {
-    if limit == 0 {
-        anyhow::bail!("limit must be positive");
-    }
-
-    let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
-    convert_db_messages_to_service_concurrent(pool, db_messages).await
 }
 
 /// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.

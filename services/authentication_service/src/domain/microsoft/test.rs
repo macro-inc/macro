@@ -96,7 +96,7 @@ async fn verified_mailbox_never_changes_the_initiating_owner() {
         .expect_encrypt()
         .once()
         .withf(move |actual, email, _| {
-            actual == &owner.to_string() && email == "other-mailbox@example.com"
+            actual == owner.to_string() && email == "other-mailbox@example.com"
         })
         .returning(|_, _, _| Ok(envelope()));
     let service = Service::new(repo, provider, Arc::new(cipher));
