@@ -28,6 +28,13 @@ under the finger first. Check that nothing sits under the dock or the home
 indicator, that every button answers a real tap, and that closing a sheet
 leaves the selection as it was.
 
+Handles are drawn small but a finger takes them from further away: a drag that
+starts within 12px of a corner resizes, one within 12px of the rotation knob
+rotates, a drag from the middle of the shape moves it, and a tap within 8px of
+an unfilled shape's stroke selects it. On touch there are no corner-radius
+handles; use Corner radius in the inspector. A mouse on the same canvas keeps
+the exact targets.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without

@@ -206,3 +206,53 @@ test('the zoom button offers fit and the grid', async ({ page }) => {
   await expect(sheet).toHaveCount(0);
   expect((await canvas(page)).scale).not.toBe(1);
 });
+
+test('a finger takes a corner from outside it and moves the shape from its middle', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const shape = await filledShape(page);
+  await page.touchscreen.tap(shape.x, shape.y);
+  const size = () =>
+    page.evaluate(() => {
+      const item = window.canvasTouchFixture.editor.document.items.filled;
+      if (item?.type !== 'rectangle') return undefined;
+      return {
+        width: Math.round(item.geometry.width),
+        height: Math.round(item.geometry.height),
+      };
+    });
+  const box = await page.locator('[data-graphics-item="filled"]').boundingBox();
+  if (!box) throw new Error('The filled rectangle is not rendered');
+
+  // 12px outside the bottom-right corner, where a cursor would find nothing.
+  const corner = { x: box.x + box.width + 9, y: box.y + box.height + 8 };
+  await touch(cdp, 'touchStart', [corner]);
+  await touch(cdp, 'touchMove', [{ x: corner.x + 20, y: corner.y + 15 }]);
+  await touch(cdp, 'touchMove', [{ x: corner.x + 40, y: corner.y + 30 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await size()).toEqual({ width: 180, height: 130 });
+
+  const middle = await filledShape(page);
+  await touch(cdp, 'touchStart', [middle]);
+  await touch(cdp, 'touchMove', [{ x: middle.x + 15, y: middle.y + 10 }]);
+  await touch(cdp, 'touchMove', [{ x: middle.x + 30, y: middle.y + 20 }]);
+  await touch(cdp, 'touchEnd', []);
+  expect(await size()).toEqual({ width: 180, height: 130 });
+  const moved = await filledShape(page);
+  expect(moved.x).toBeCloseTo(middle.x + 30, 0);
+});
+
+test('a tap near the stroke of an outlined shape selects it', async ({
+  page,
+}) => {
+  const box = await page
+    .locator('[data-graphics-item="outline"]')
+    .boundingBox();
+  if (!box) throw new Error('The outlined ellipse is not rendered');
+
+  // 8px inside the ellipse's leftmost point: no paint under the finger.
+  await page.touchscreen.tap(box.x + 8, box.y + box.height / 2);
+
+  expect((await canvas(page)).selectedIds).toEqual(['outline']);
+});

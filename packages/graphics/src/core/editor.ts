@@ -361,8 +361,9 @@ function createEditor(
     },
     select,
     selectMany: selection.selectMany,
-    hitTest: (point: Point, deep = false) =>
-      hitTest(document, point, deep, 3 / camera.scale),
+    /** The topmost item at a point, picked within `reach` screen pixels of its paint. */
+    hitTest: (point: Point, deep = false, reach = 3) =>
+      hitTest(document, point, deep, reach / camera.scale),
     groupSelection(id: string) {
       if (disposed) return;
       commitDocument(

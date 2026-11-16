@@ -1,4 +1,4 @@
-import { screenToWorld } from '../core/camera';
+import { screenToWorld, worldToScreen } from '../core/camera';
 import type { DrawingKind } from '../core/drawing';
 import type { GraphicsEditor } from '../core/editor';
 import type { Appearance, Point } from '../core/model';
@@ -8,18 +8,27 @@ import {
   type ResizeHandle,
   resizeHandles,
 } from '../core/resize';
+import { roots } from '../core/scene';
 import {
   type SelectionFrame,
   selectionContainsPoint,
   selectionFrame,
 } from '../core/selection-frame';
-import { isShapeKind } from '../core/shapes/registry';
+import {
+  rotationKnobOffset,
+  rotationKnobPoint,
+  touchHandleAt,
+} from '../core/selection-handles';
+import { isShape, isShapeKind } from '../core/shapes/registry';
 import { selectionTarget } from './selection-target';
 import { attachTouchNavigation } from './touch-navigation';
 
 // Matches the Figma viewer: pinch tracks finger speed, wheel notches stay bounded.
 const WHEEL_ZOOM_RATE = 0.01;
 const MAX_WHEEL_ZOOM_EXPONENT = 0.6;
+/** How near a stroke a press picks its shape, in screen pixels: a cursor, then a finger. */
+const PICK_TOLERANCE = 3;
+const TOUCH_PICK_TOLERANCE = 10;
 
 export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -59,6 +68,12 @@ export type GraphicsInputOptions = {
    * tool, say) and the press stays with the tool.
    */
   longPress?: () => ((point: Point) => void) | undefined;
+  /**
+   * Lay the selection's handles out for fingers: the rotation knob stands
+   * further off the frame, and corner-radius handles are left to the host's
+   * inspector. Fingers get larger handle targets whether or not this is set.
+   */
+  touchHandles?: boolean;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -198,6 +213,36 @@ export function attachCameraControls(
       editor.updateDrawing([], { proportional: event.shiftKey });
     }
   };
+  /**
+   * The handle a finger means when it lands near the selection's frame without
+   * hitting a drawn handle. The handles are drawn for a cursor; a finger takes
+   * them from further away.
+   */
+  const touchHandle = (
+    frame: SelectionFrame | undefined,
+    event: Pick<PointerEvent, 'clientX' | 'clientY'>
+  ) => {
+    const selected = roots(editor.document, editor.getSession().selectedIds);
+    const first = selected[0] ? editor.document.items[selected[0]] : undefined;
+    // Read-only surfaces and a lone connector show no handles to reach for.
+    if (!frame || options.editing === false) return undefined;
+    if (selected.length === 1 && first?.type === 'connector') return undefined;
+
+    const camera = editor.getCamera();
+    const rect = element.getBoundingClientRect();
+    const corners = frame.corners.map((corner) =>
+      worldToScreen(camera, corner)
+    );
+    const knob = rotationKnobPoint(
+      corners,
+      selected.length === 1 && isShape(first),
+      rotationKnobOffset(options.touchHandles)
+    );
+    return touchHandleAt(corners, knob, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+  };
   const pointerDown = (event: PointerEvent) => {
     if (
       options.suspended?.() ||
@@ -241,10 +286,6 @@ export function attachCameraControls(
       const handle = target
         ?.closest('[data-graphics-handle]')
         ?.getAttribute('data-graphics-handle');
-      const transformHandle =
-        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
-          ? handle
-          : undefined;
       const point = worldPoint(event);
       const deep = options.duplicateOnAltDrag
         ? event.metaKey || event.ctrlKey
@@ -253,6 +294,13 @@ export function attachCameraControls(
         editor.document,
         editor.getSession().selectedIds
       );
+      const touch = event.pointerType === 'touch';
+      const transformHandle =
+        isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
+          ? handle
+          : touch
+            ? touchHandle(frame, event)
+            : undefined;
       const id = selectionTarget(
         editor.document,
         editor.getSession().selectedIds,
@@ -261,7 +309,9 @@ export function attachCameraControls(
           deep,
           additive: event.shiftKey,
           handle: !!transformHandle,
-          tolerance: 3 / editor.getCamera().scale,
+          tolerance:
+            (touch ? TOUCH_PICK_TOLERANCE : PICK_TOLERANCE) /
+            editor.getCamera().scale,
         }
       );
       cursor =
