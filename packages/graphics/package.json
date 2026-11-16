@@ -29,7 +29,7 @@
     "jsdom": "^26.1.0",
     "solid-js": "^1.9.7",
     "typescript": "^5.9.3",
-    "vite-plugin-solid": "^2.11.8",
+    "vite-plugin-solid": "2.11.16",
     "vitest": "5.1.0"
   },
   "dependencies": {

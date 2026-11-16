@@ -70,10 +70,14 @@ may import a block package, `@core/block`, or block-related signal modules.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
-  location parameters, and block methods into `EmailThreadHost` callbacks.
+  location parameters, and block methods into `EmailThreadHost` callbacks, then
+  picks `views/email-thread.tsx` or, on touch, where every thread opens as
+  this block, `views/mobile/email-thread.tsx`.
   `block-email/EmailThreadHostView.tsx` composes the shared thread body without
   reading block state, so the Email view can mount it directly and compose its
-  own top bar. The thread does not read a block ID or register a block method
+  own top bar. The body adds nothing to a host's header: each host passes its
+  top bar and header actions, and the mobile view passes only a title and Info.
+  The thread does not read a block ID or register a block method
   itself. The adapter captures block signal accessors during setup; event
   callbacks use those captured functions instead of resolving a provider after
   setup.
@@ -690,7 +694,12 @@ attachment handles retain the generation captured at reservation.
 
 The status panel combines device intents with actor/inbox-authorized, cursor-paged
 `pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
-never automatic resubmission. Delivery state distinguishes local queueing,
+never automatic resubmission. `queries/email/server-sends.ts` reads that list
+at sign-in, when the tab is shown or comes online, when this browser's send
+journal gains or loses a send, and on a timer only while the tab is visible:
+every 10 seconds while a send is in motion, once a minute otherwise. No realtime
+event announces a send attempt, so the minute is how soon an idle tab learns of
+another device's send. Delivery state distinguishes local queueing,
 server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
 but the panel stays silent for routine delivery: it lists a send only while it
 waits on this device, needs attention, or is scheduled. Thread surfaces project

@@ -106,6 +106,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 owner,
                 origin,
                 context: _,
+                runtime_user: _,
             },
         )) => {
             let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;

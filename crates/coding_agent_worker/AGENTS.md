@@ -17,7 +17,17 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   bypass live only on the web (Settings → Machines); a file that still
   has `[identity]` or a `scope` in `[credentials]` fails to load with an error
   naming that page; desktop setup (`macrod service --agent/--workspace`)
-  drops those and the retired `[server]` table instead (`drop_retired_settings`). The event stream reads the owner from `GET /harnesses/me`
+  drops those and the retired `[server]` table instead (`drop_retired_settings`).
+- `src/profiles.rs`: which config a macrod serves. One runtime per config:
+  the default one and named profiles at `~/.macrod/profiles/<name>.toml`
+  (`--profile` on the TUI, `service`, and `inspect`; `macrod profiles` lists
+  them with pairing and a lock probe). A profile pairs as
+  `<hostname> · <profile>`. With no flag, the TUI moves a `./macrod.toml` that
+  older releases read from the current folder into `~/.macrod` (the default
+  when there is none, else a profile named after the folder), serves it, and
+  prints the command for next time; when another macrod holds the default, a
+  terminal gets a prompt for a new profile name. An update restarts with
+  `--profile` added when the profile was chosen this way. The event stream reads the owner from `GET /harnesses/me`
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
@@ -46,6 +56,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   pairing it was claimed from (`credentials.pairing_id`), so only a new
   pairing is claimed, and nothing else on the disk is touched. No enrollment
   in the source (removed after macrod connects) with a marker means enrolled.
+  An enrollment carrying `agent` (an agent teammate's computer) also writes
+  its environment to `/var/lib/macrod/agent.env` (0600, owned like the
+  config) for the guest's `macro-agent.service`; one without removes it.
 - `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
   computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
   session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),

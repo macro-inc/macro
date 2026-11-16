@@ -145,6 +145,13 @@ export type ChannelEntity = EntityBase & {
     state: 'unseen' | 'seen' | 'done';
     createdAt: DateValue;
   }[];
+  /** The viewer's unread mentions, thread replies included, from an edge
+   * limited to `CHANNEL_MENTION_EDGE_LIMIT` rows. Undefined on rows from other
+   * projections. Never use for bulk reads. */
+  unreadMentions?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   teamId?: string;
   interactedAt?: DateValue | null;

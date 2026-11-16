@@ -67,6 +67,9 @@ async function resolveActorName(
   if (meta.tag === 'routine_run_finished') {
     return meta.content.routineName;
   }
+  if (meta.tag === 'computer_setup') {
+    return meta.content.agent?.name ?? meta.content.computerName;
+  }
   if (meta.tag === 'agent_sign_in_expiry') {
     return meta.content.computerName;
   }

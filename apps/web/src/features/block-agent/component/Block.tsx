@@ -20,10 +20,12 @@ import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import {
+  type Accessor,
   children,
   createEffect,
   createSignal,
@@ -36,14 +38,35 @@ import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
+import { AgentSessionHeader } from '../views/agent-session-header';
+import { MobileAgentSessionHeader } from '../views/mobile/agent-session-header';
 import { AgentComposer } from './AgentComposer';
 import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
-import { AgentSplitHeader } from './AgentSplitHeader';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
+import { useAgentSessionHeader } from './agent-session-header';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
+
+/** The session's header state, then the one device switch. */
+function AgentBlockHeader(props: {
+  session: Accessor<AgentSessionResponse | undefined>;
+  title: Accessor<string | undefined>;
+}) {
+  const header = useAgentSessionHeader(props);
+
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <AgentSessionHeader session={props.session()} header={header} />
+      }
+    >
+      <MobileAgentSessionHeader session={props.session()} header={header} />
+    </Show>
+  );
+}
 
 // Keep the editor mounted while another mobile accessory (Changes) is active.
 function AgentComposerRegion(props: ParentProps) {
@@ -183,9 +206,9 @@ function AgentBlockContent(props: {
             persistentFloating={persistentFloating()}
           >
             <AgentSidePanelSections />
-            <AgentSplitHeader
-              session={session()}
-              title={metadata()?.title ?? undefined}
+            <AgentBlockHeader
+              session={session}
+              title={() => metadata()?.title ?? undefined}
             />
             <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the

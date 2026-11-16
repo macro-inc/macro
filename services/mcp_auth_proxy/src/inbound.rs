@@ -5,5 +5,5 @@ pub(crate) const GATEWAY_PATH_PREFIX: &str = "/mcp";
 
 /// Axum router for the MCP OAuth broker.
 pub mod axum_router;
-/// Bearer token middleware for the protected MCP endpoint.
+/// User API key and JWT bearer middleware for the protected MCP endpoint.
 pub mod middleware;

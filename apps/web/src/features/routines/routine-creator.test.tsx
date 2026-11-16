@@ -1,5 +1,7 @@
+import { queryClient } from '@queries/client';
 import type {
   ActionConfiguration,
+  DraftJob,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -11,12 +13,20 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import { createSignal, type JSX } from 'solid-js';
+import { match } from 'ts-pattern';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../agents-view/core/roster';
+import {
+  createDraftsOnScreen,
+  DraftsOnScreenContext,
+} from './context/drafts-on-screen';
 import { getDefaultTimezone } from './core/routine-draft';
 import { newRoutineDraft } from './core/routine-templates';
 import { loadRoutineComposerDraft } from './draft-storage';
+import { applyDraftUpdate } from './queries/draft-jobs-sync';
+import { scheduledActionKeys } from './queries/keys';
 import { RoutineCreator } from './routine-creator';
 import { startRoutineDraft } from './routine-draft-start';
 import { RoutineNew } from './routine-new';
@@ -36,6 +46,32 @@ const host = vi.hoisted(() => ({
   githubLinked: true as boolean | undefined,
   connectGithub: vi.fn(),
 }));
+const drafts = vi.hoisted(() => ({
+  start: vi.fn(),
+  list: vi.fn(),
+  discard: vi.fn(),
+}));
+// The page's own client, without the app's persistence.
+vi.mock('@queries/client', async (importOriginal) => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    ...(await importOriginal<typeof import('@queries/client')>()),
+    queryClient: new QueryClient(),
+  };
+});
+vi.mock('@service-scheduled-action/client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@service-scheduled-action/client')>();
+  return {
+    ...actual,
+    scheduledActionClient: {
+      ...actual.scheduledActionClient,
+      startRoutineDraftJob: drafts.start,
+      listRoutineDraftJobs: drafts.list,
+      discardRoutineDraftJob: drafts.discard,
+    },
+  };
+});
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: host.flags.has(flag.key),
@@ -1005,5 +1041,184 @@ describe('new routine', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
     expect(host.cancelled).toHaveBeenCalledOnce();
     expect(loadRoutineComposerDraft()).toBeNull();
+  });
+});
+
+describe('new routine drafting in the background', () => {
+  const REQUEST = 'When an invoice arrives, label it Finance.';
+  const KEY = scheduledActionKeys.draftJobs.queryKey;
+  type State = 'drafting' | 'ready' | 'failed';
+  const finished = { finishedAt: '2026-11-12T10:00:30Z' };
+  const outcome = (state: State) =>
+    match(state)
+      .with('drafting', () => ({}))
+      .with('ready', () => ({
+        ...finished,
+        draft: {
+          outcome: 'routine',
+          name: 'Invoices to Finance',
+          trigger: {
+            type: 'events',
+            filters: [{ events: ['email.message_received'] }],
+          },
+          steps: [
+            {
+              type: 'code',
+              id: 'label_finance',
+              title: 'Label it Finance',
+              summary: 'Adds the Finance label.',
+              source: 'export async function main() {}',
+            },
+          ],
+          problems: [],
+          created: [],
+        },
+      }))
+      .with('failed', () => ({
+        ...finished,
+        message: 'There’s no label named Finance.',
+        created: [],
+      }))
+      .exhaustive();
+  const job = (id: string, state: State, stage = 'started') =>
+    ({
+      id,
+      state,
+      request: { kind: 'routine', description: REQUEST },
+      progress: { stage },
+      createdAt: '2026-11-12T10:00:00Z',
+      ...outcome(state),
+    }) as DraftJob;
+
+  // The server's drafts. Each test drafts under its own id: a page keeps
+  // the ids it discarded out of its list.
+  let server: DraftJob[] = [];
+  let count = 0;
+  let id = '';
+  /** The server moves the draft on and says so. */
+  function report(state: State, stage: string) {
+    server = server.map((each) =>
+      each.id === id ? job(id, state, stage) : each
+    );
+    applyDraftUpdate({ draftId: id, state, progress: { stage } });
+  }
+
+  beforeEach(() => {
+    host.flags.add('enable-routine-background-drafts');
+    queryClient.clear();
+    server = [];
+    id = `draft-${++count}`;
+    drafts.list.mockImplementation(async () => ok(structuredClone(server)));
+    drafts.start.mockImplementation(async () => {
+      server = [job(id, 'drafting'), ...server];
+      return ok(job(id, 'drafting'));
+    });
+    drafts.discard.mockImplementation(
+      async ({ draftId }: { draftId: string }) => {
+        server = server.filter((each) => each.id !== draftId);
+        return ok(undefined);
+      }
+    );
+  });
+
+  function openNewRoutine() {
+    render(() => (
+      <QueryClientProvider client={queryClient}>
+        <DraftsOnScreenContext.Provider value={createDraftsOnScreen()}>
+          <RoutineCreator onStart={host.started} />
+        </DraftsOnScreenContext.Provider>
+      </QueryClientProvider>
+    ));
+  }
+
+  async function draftIt() {
+    openNewRoutine();
+    fireEvent.input(
+      await screen.findByRole('textbox', { name: 'Describe your routine' }),
+      { target: { value: REQUEST } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Draft it' }));
+    return await screen.findByRole('region', { name: 'Drafting your routine' });
+  }
+
+  it('shows how the draft is going in place of the box', async () => {
+    const progress = await draftIt();
+    expect(within(progress).getByText(REQUEST)).toBeTruthy();
+    expect(
+      screen.queryByRole('region', { name: 'Describe your routine' })
+    ).toBeNull();
+    report('drafting', 'writing');
+    await waitFor(() =>
+      expect(within(progress).getByText('Writing the steps…')).toBeTruthy()
+    );
+    // Nothing opens, and nothing else is asked, until the draft is ready.
+    expect(host.started).not.toHaveBeenCalled();
+    expect(drafts.start).toHaveBeenCalledOnce();
+  });
+
+  it('opens the draft on the new routine’s page once it is ready', async () => {
+    await draftIt();
+    report('ready', 'checked');
+    await waitFor(() => expect(host.started).toHaveBeenCalledOnce());
+    expect(loadRoutineComposerDraft()).toMatchObject({
+      name: 'Invoices to Finance',
+    });
+    // Handed over, the job is done with.
+    expect(drafts.discard).toHaveBeenCalledWith({ draftId: id });
+  });
+
+  it('puts the request back with why, when the draft fails', async () => {
+    await draftIt();
+    report('failed', 'writing');
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'There’s no label named Finance.'
+    );
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Describe your routine',
+      }).value
+    ).toBe(REQUEST);
+    expect(host.started).not.toHaveBeenCalled();
+  });
+
+  it('cancels the draft and keeps the request', async () => {
+    const progress = await draftIt();
+    fireEvent.click(
+      within(progress).getByRole('button', { name: 'Cancel draft' })
+    );
+    expect(
+      (
+        await screen.findByRole<HTMLTextAreaElement>('textbox', {
+          name: 'Describe your routine',
+        })
+      ).value
+    ).toBe(REQUEST);
+    expect(drafts.discard).toHaveBeenCalledWith({ draftId: id });
+    expect(queryClient.getQueryData(KEY)).toEqual([]);
+  });
+
+  it('picks up a draft still going when it opens again', async () => {
+    server = [job(id, 'drafting', 'writing')];
+    openNewRoutine();
+    const progress = await screen.findByRole('region', {
+      name: 'Drafting your routine',
+    });
+    expect(within(progress).getByText(REQUEST)).toBeTruthy();
+    expect(drafts.start).not.toHaveBeenCalled();
+  });
+
+  it('offers a draft that finished while it was closed', async () => {
+    server = [job(id, 'ready', 'checked')];
+    openNewRoutine();
+    const ready = await screen.findByRole('group', {
+      name: 'Routine draft ready',
+    });
+    expect(within(ready).getByText(/Invoices to Finance/)).toBeTruthy();
+    // The box stays, for something new.
+    expect(
+      screen.getByRole('region', { name: 'Describe your routine' })
+    ).toBeTruthy();
+    fireEvent.click(within(ready).getByRole('button', { name: 'Review' }));
+    expect(host.started).toHaveBeenCalledOnce();
   });
 });

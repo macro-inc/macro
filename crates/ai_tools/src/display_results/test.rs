@@ -53,10 +53,11 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
             "events",
             "cards",
             "tags",
+            "agentUpdates",
             "container"
         ]
     );
-    let children = &variants[7]["properties"]["children"]["items"]["$ref"];
+    let children = &variants[8]["properties"]["children"]["items"]["$ref"];
     assert!(
         children.is_string(),
         "a container's children refer back to the widget"
@@ -103,6 +104,6 @@ fn a_view_that_does_not_decode_fails_the_call_without_echoing_it() {
     .expect_err("an unknown widget type");
     assert_eq!(
         error.to_string(),
-        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`"
+        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `agentUpdates`, `container`"
     );
 }

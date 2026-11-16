@@ -8,8 +8,8 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
-import { authKeys } from '@queries/auth/keys';
-import type { UserInfoData } from '@queries/auth/user-info';
+import { ThrownResultError } from '@core/util/result';
+import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
@@ -118,7 +118,12 @@ export async function getItemPreview(
       // Preserve the existing access/deletion result through the REST fallback.
     }
     const fallback = await fetchRestPreviewBatch([item]);
-    return defaultNameTransform(fallback.get(item.id) ?? noAccessPreview(item));
+    // A failed request throws, as the dataloader's read below does.
+    const errors = fallback.failed.get(item.id);
+    if (errors) throw new ThrownResultError(errors);
+    return defaultNameTransform(
+      fallback.previews.get(item.id) ?? noAccessPreview(item)
+    );
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
@@ -319,10 +324,6 @@ export function invalidatePreview(itemId?: string) {
     predicate: (query) => query.isActive(),
   });
   return Promise.all([graphqlRefresh, restRefresh]);
-}
-
-function cachedUserId(): string | undefined {
-  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
 }
 
 function runGraphqlPreviewWrite(write: Promise<void>) {

@@ -786,7 +786,7 @@ export const UnifiedFilterDropdown = (
 
   const triggerSize = () => {
     if (!props.hideLabel) return 'sm';
-    return props.grouped ? 'icon-sm' : 'icon-md';
+    return 'icon-md';
   };
 
   return (

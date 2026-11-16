@@ -43,6 +43,7 @@ pub fn test_macrod_update() -> Workflow {
 /// Builds musl like the release workflow, in the same minimal Nix shell.
 fn linux_job() -> Job {
     Job::default()
+        .timeout_minutes(20u32)
         .name("macrod update (linux)")
         .runs_on(runners::Runner::RustCi.to_string())
         .add_step(steps::checkout(false, false))
@@ -69,6 +70,7 @@ fn linux_job() -> Job {
 
 fn macos_job() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .name("macrod update (macos)")
         // These runners have no compiler cache, and the test only needs a working
         // binary, so debug info is pure cost.
@@ -93,6 +95,7 @@ fn macos_job() -> Job {
 /// runner's MSVC toolchain.
 fn windows_job() -> Job {
     Job::default()
+        .timeout_minutes(20u32)
         .name("macrod update (windows)")
         // These runners have no compiler cache, and the test only needs a working
         // binary, so debug info is pure cost.

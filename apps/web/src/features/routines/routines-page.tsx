@@ -2,6 +2,7 @@ import { useViewControlHotkeys } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
@@ -25,6 +26,7 @@ import { RoutineDetail } from './routine-detail';
 import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutineNew } from './routine-new';
+import { useRoutineRowMenuActions } from './routine-row-menu-actions';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
@@ -53,6 +55,16 @@ function RoutinesContent() {
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
+  const menu = useRoutineRowMenuActions(source, {
+    open: (id) => open(id),
+    openInNewSplit: (id) =>
+      layout.openWithSplit(routineContent(id), {
+        preferNewSplit: true,
+        activate: true,
+        search: {},
+      }),
+    openInNewTab: (id) => openInNewTab(() => open(id)),
+  });
   const decisions = useFeatureFlag(enableRoutineConditions);
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
   const hasPaidAccess = useHasPaidAccess();
@@ -95,6 +107,7 @@ function RoutinesContent() {
           }
           onTemplate={startFrom}
           discover={discover()}
+          menu={menu}
         />
       }
     >

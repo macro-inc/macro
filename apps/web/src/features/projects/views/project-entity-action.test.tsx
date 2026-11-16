@@ -42,6 +42,7 @@ function open(
     createCollectionSource: unused,
     createPropertyDefinitionsSource: unused,
     createProjectSource: unused,
+    createProjectIdentitySource: unused,
     createCommands: () => ({
       createTask: vi.fn(),
       pending: () => false,

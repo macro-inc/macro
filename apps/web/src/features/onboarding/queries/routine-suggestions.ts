@@ -12,6 +12,7 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
   enableRoutineCodeSteps,
   enableRoutineSuggestions,
+  enableSuggestions,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
@@ -21,11 +22,12 @@ import { queryClient } from '@queries/client';
 import { useEnsureTagSetMutation } from '@queries/properties/tags';
 import {
   getCreateScheduledActionUrl,
-  getGenerateRoutineSuggestionsUrl,
   getListRoutineSuggestionsUrl,
+  getStartSuggestionGenerationUrl,
 } from '@service-scheduled-action/generated/client';
 import type {
   ActionConfiguration,
+  GenerationStarted,
   RoutineSuggestion,
   RoutineSuggestions,
   ScheduledAction,
@@ -57,16 +59,35 @@ export function useRoutineSuggestionsEnabled(): () => boolean {
 }
 
 /**
- * Starts the person's one generation; later calls change nothing on the
- * server. Its answer seeds the step's list.
+ * Suggestions of either kind are on for this person, so connecting an inbox
+ * starts their onboarding generation, whether or not the flow has a routines
+ * step.
  */
-export async function generateRoutineSuggestions(timezone: string) {
-  const answer = await throwOnErr(() =>
-    fetchWithToken<RoutineSuggestions>(
-      `${SCHEDULED_ACTION_HOST}${getGenerateRoutineSuggestionsUrl({ timezone })}`,
+export function useSuggestionGenerationEnabled(): () => boolean {
+  const routines = useRoutineSuggestionsEnabled();
+  const userId = useUserId();
+  const suggestions = useFeatureFlag(enableSuggestions);
+
+  return () => routines() || (userId() !== undefined && suggestions().enabled);
+}
+
+/**
+ * Starts the person's onboarding generation (their suggestions and routine
+ * suggestions, as each is on for them); later calls change nothing on the
+ * server.
+ */
+export async function startSuggestionGeneration(timezone: string) {
+  await throwOnErr(() =>
+    fetchWithToken<GenerationStarted>(
+      `${SCHEDULED_ACTION_HOST}${getStartSuggestionGenerationUrl({ timezone })}`,
       { method: 'POST' }
     )
   );
+}
+
+/** The routine suggestions as they stand, to seed the routines step's list. */
+export async function seedRoutineSuggestions() {
+  const answer = await fetchSuggestions();
   queryClient.setQueryData(onboardingRoutineKeys.suggestions.queryKey, answer);
   return answer;
 }

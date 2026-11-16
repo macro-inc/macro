@@ -1,5 +1,7 @@
 use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
-use crate::cognition::api::tool_selection::{service_tools, structured_completion_prompt};
+use crate::cognition::api::tool_selection::{
+    service_tools, structured_completion_prompt, tools_refused_to_current_session,
+};
 use crate::cognition::model::stream::ToolSet;
 use crate::cognition::service::structured_completion::{ToolFreeCompletionError, ToolFreeRequest};
 use agent::structured_output::{CompletionThinking, DynamicSchema};
@@ -119,9 +121,28 @@ pub async fn structured_completion(
 
     let user_id = user.authorization.user.macro_user_id.clone();
 
+    if tools_refused_to_current_session(&request.toolset) {
+        return Err(StructuredCompletionError {
+            error: "this session's completions take no tools".into(),
+            status: StatusCode::FORBIDDEN,
+            code: None,
+        });
+    }
+    // A generation session's completions are its own work, recorded with it
+    // and never counted against the person's allowance.
+    let scope = agent_correlation::context::current_scope();
+    let session = (scope == Some(agent_correlation::scope::SessionScope::Generation))
+        .then(agent_correlation::context::current_session)
+        .flatten();
+    let feature = if session.is_some() {
+        ai_usage::AiFeature::NonBillableAgentSession
+    } else {
+        ai_usage::AiFeature::DynamicCompletionsApi
+    };
+
     // One admission covers both the agent and final formatting phases.
     ctx.ai_admission
-        .admit(&user_id, ai_usage::AiFeature::DynamicCompletionsApi)
+        .admit(&user_id, feature)
         .await
         .map_err(|error| StructuredCompletionError {
             error: error.to_string(),
@@ -146,6 +167,7 @@ pub async fn structured_completion(
                     prompt: request.prompt,
                     schema: request.output_schema,
                     thinking: request.thinking,
+                    session,
                 },
             )
             .await

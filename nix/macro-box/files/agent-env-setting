@@ -1,0 +1,12 @@
+# `setting <file> <KEY>`: KEY's value in agent.env, which enrollment writes as
+# systemd environment lines, `KEY="value"` with `\` and `"` escaped. The last
+# line for a key wins, as in systemd.
+setting() {
+  local value
+  value=$(sed -n "s/^$2=//p" "$1" | tail -n 1)
+  if [[ $value == \"*\" ]]; then
+    value=${value:1:${#value}-2}
+    value=$(printf '%s' "$value" | sed -e 's/\\\(["\\]\)/\1/g')
+  fi
+  printf '%s' "$value"
+}

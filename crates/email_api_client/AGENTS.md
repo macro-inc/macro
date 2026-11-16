@@ -36,7 +36,8 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Boundaries
 
 - Depends on: `email_utils`, `models_email`, `gmail_client` (feature
-  `outbound-gmail`), `calendar_events` (feature `outbound-outlook`).
+  `outbound-gmail`), `calendar_events` and `macro_service_urls` (feature
+  `outbound-outlook`).
 - Used by: `crates/email` (ports only), `services/email_service`,
   `services/calendar_service`.
 
@@ -142,9 +143,15 @@ Outlook (Microsoft Graph) outbound adapters.
   account. `zones.rs` is CLDR's `windowsZones.xml` (territory `001`, in file
   order) with its `LICENSE` beside it; regenerate both from a new CLDR
   release when Windows adds zones. Keep out a zone whose IANA rules the
-  bundled chrono-tz lacks: Outlook writes send local times computed with
-  them, so stale rules move an event. British Columbia, Alberta and Manitoba
-  Standard Time are held out that way until current tz data ships.
+  vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
+  times computed with them, so stale rules move an event; update the tz
+  data first.
+- The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
+  `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
+  `crates/outlook_emulator`; tests in other crates use
+  `OutlookApiClientRepository::for_graph_url`. Continuation links and upload
+  URLs are only followed on the root's origin (or Microsoft's upload hosts),
+  so an emulator must serve them itself.
 - Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
   takes the field or shape that failed (`read_json` gives the JSON path and a
   missing field's name) and must never quote the response, which can carry

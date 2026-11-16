@@ -5,8 +5,8 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    TeamRole, UserTeamInfo, ViewAccessLevel,
+    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityAudience, EntityPermission,
+    RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -25,6 +25,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a signed-in user has on each requested
+    /// document, keyed by the id as given; documents without access are left
+    /// out. Each answer is the one [`Self::get_document_access`] gives.
+    fn get_documents_access(
+        &self,
+        document_ids: &[String],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<String, AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a chat.
     fn get_chat_access(
@@ -128,6 +137,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// Highest grant on each of `ids` for the caller's current sharing
+    /// sources, reading only those pipelines' grants. Pipelines without a
+    /// grant are left out.
+    fn get_pipelines_access(
+        &self,
+        ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a database.
     fn get_database_access(
@@ -320,6 +338,17 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, AccessError>> + Send;
 
+    /// Gets the users each entity's `entity_access` grants reach (direct users, team
+    /// members, and active channel participants), the same users
+    /// [`Self::get_entity_users`] returns for an entity of a type without a special
+    /// audience. Entities granted to the same sources share one audience; entities
+    /// without grants are left out.
+    fn get_entity_grant_audiences(
+        &self,
+        entity_ids: &[Uuid],
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
+
     /// Get direct user grants only, excluding inherited channel, team, and project access.
     fn get_direct_entity_users(
         &self,
@@ -458,6 +487,48 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         }
     }
 
+    /// View receipts for the documents a signed-in user can view, keyed by the
+    /// id as given. Each document is decided as
+    /// [`Self::generate_entity_access_receipt`] decides it: refused, missing
+    /// and malformed documents are left out, and a failed check fails the
+    /// call. Implementations may share access lookups; the default checks one
+    /// document at a time.
+    fn generate_document_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        document_ids: &'a [String],
+    ) -> impl Future<
+        Output = Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError>,
+    > + Send
+    + 'a {
+        async move {
+            let mut receipts = HashMap::with_capacity(document_ids.len());
+            for document_id in document_ids {
+                match self
+                    .generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        None,
+                        document_id,
+                        EntityType::Document,
+                    )
+                    .await
+                {
+                    Ok(receipt) => {
+                        receipts.insert(document_id.clone(), receipt);
+                    }
+                    Err(
+                        AccessError::Unauthorized
+                        | AccessError::UnauthorizedWithMessage(_)
+                        | AccessError::NotFound(_)
+                        | AccessError::BadRequest(_),
+                    ) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(receipts)
+        }
+    }
+
     /// Mint view receipts for database rows. Implementations may share access
     /// lookups; the default delegates to the single-entity authorization path.
     fn generate_database_row_view_access_receipts<'a>(
@@ -579,8 +650,10 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     ///
     /// The activity team feed applies this audience in SQL
-    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`); keep
-    /// the two in step.
+    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
+    /// [`EntityAudienceLookup`] resolves it for many entities at once
+    /// (`outbound/pg_access_repo/queries/entity_audiences.rs`); keep the three
+    /// in step.
     fn get_users_by_entity(
         &self,
         entity_id: &str,
@@ -768,4 +841,28 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+    /// Highest effective grant on each of `ids` the user can access, without
+    /// reading their other pipelines.
+    fn pipelines_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+}
+
+/// Resolves the current users of many entities of one type at once.
+pub trait EntityAudienceLookup: Clone + Send + Sync + 'static {
+    /// Returns the users with current access to each of `entity_ids`, grouping
+    /// entities whose users are the same.
+    ///
+    /// Each entity's users are those [`EntityAccessService::get_users_by_entity`]
+    /// returns for it. Entities without users may be left out, and so are ids of
+    /// grant-based kinds that are not UUIDs, which can hold no grant, instead of
+    /// failing the rest. Returned ids are spelled as they were passed in, every
+    /// spelling of one entity included.
+    fn get_entity_audiences(
+        &self,
+        entity_type: EntityType,
+        entity_ids: &[&str],
+    ) -> impl Future<Output = Result<Vec<EntityAudience>, AccessError>> + Send;
 }

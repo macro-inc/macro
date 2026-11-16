@@ -30,11 +30,13 @@ export function SpreadsheetStories() {
         id="spreadsheets-detail-1"
         title={sections[0].title}
         description={sections[0].description}
+        demo={{ tone: sheets.tone, glassFrame: true }}
       >
         <PaperFeatureGraphic
-          height={396}
-          mobileHeight={380}
-          label="Claude is asked for next quarter’s forecast. Its cursor moves down the sheet, filling in each team’s number and a total, while a teammate works in another cell."
+          backdrop={false}
+          height={356}
+          mobileHeight={340}
+          label="Claude builds next quarter’s forecast in the sheet. Its cursor moves down the sheet, filling in each team’s number and a total, while a teammate works in another cell."
           mobile={<SheetAgentDemo compact />}
         >
           <SheetAgentDemo />
@@ -44,8 +46,10 @@ export function SpreadsheetStories() {
         id="spreadsheets-detail-2"
         title={sections[1].title}
         description={sections[1].description}
+        demo={{ tone: sheets.tone, glassFrame: true }}
       >
         <PaperFeatureGraphic
+          backdrop={false}
           interactive
           height={430}
           mobileHeight={420}
@@ -59,8 +63,10 @@ export function SpreadsheetStories() {
         id="spreadsheets-detail-3"
         title={sections[2].title}
         description={sections[2].description}
+        demo={{ tone: sheets.tone, glassFrame: true }}
       >
         <PaperFeatureGraphic
+          backdrop={false}
           height={414}
           mobileHeight={580}
           label="A sheet of spend by team with a total formula, a bar chart of the selected cells, and a comment thread on one cell."
@@ -73,11 +79,14 @@ export function SpreadsheetStories() {
         id="spreadsheets-detail-4"
         title={sections[3].title}
         description={sections[3].description}
+        demo={{ tone: sheets.tone, glassFrame: true }}
       >
         <PaperFeatureGraphic
-          height={196}
-          mobileHeight={300}
-          label="An Excel workbook opens as an editable Macro sheet with its three sheets, and downloads back as Excel or CSV."
+          backdrop={false}
+          height={384}
+          mobileHeight={400}
+          label="An uploaded Excel workbook open in Macro with its three sheets as tabs and an Edit in Macro action that makes an editable copy."
+          mobile={<SheetImportGraphic compact />}
         >
           <SheetImportGraphic />
         </PaperFeatureGraphic>

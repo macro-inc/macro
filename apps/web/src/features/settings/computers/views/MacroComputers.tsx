@@ -2,9 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
 import {
@@ -13,7 +11,6 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
-  useComputerOffersQuery,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
   useRetryComputerMutation,
@@ -21,19 +18,12 @@ import {
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import {
-  type ComputerStatus,
-  type SizeOffer,
-  TEAM_ON_TRIAL,
-} from '@service-auth/computers';
+import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import {
-  MachineCardError,
-  MachineRow,
-} from '../../components/connected-runtimes-section';
+import { MachineCardError } from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -48,34 +38,29 @@ import {
   computerFailureMessage,
   formatComputerDate,
   formatQuote,
+  type OffersFailure,
+  offersFailure,
 } from '../core/computer-display';
+import {
+  computerSetupRequest,
+  consumeComputerSetupRequest,
+} from '../primitives/setup-request';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
+import type { SetupStepId } from './computer-setup-dialog';
 
-/** Opens Billing, where a trialing team ends its trial and subscribes. */
-function TrialBillingButton() {
-  const settings = useSettingsState();
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      onClick={() => settings.openSettings('Billing')}
-    >
-      {t('computers.trialBillingAction')}
-    </Button>
-  );
-}
-
-/** Whether the offers failed because the team's subscription is trialing. */
-export function offersBlockedByTrial(offers: {
+/**
+ * The offers failed for a reason Billing settles: a trial, or no paid plan.
+ * The buy row says so instead of offering a dialog that would say the same.
+ */
+export function offersBlockedByPlan(offers: {
   isError: boolean;
   error: unknown;
-}): boolean {
-  return (
-    offers.isError && thrownResultErrorHasCode(offers.error, TEAM_ON_TRIAL)
-  );
+}): OffersFailure | undefined {
+  if (!offers.isError) return undefined;
+  const failure = offersFailure(offers.error);
+  return failure.remedy === 'billing' ? failure : undefined;
 }
 
 /**
@@ -183,7 +168,15 @@ function ManagedComputerRow(props: {
     return state.kind === 'account' && state.expired;
   };
 
+  const failed = () => props.computer.status === 'failed';
   const primary = (): ComputerPrimaryAction | undefined => {
+    // A failed setup only moves again once it is retried.
+    if (failed() && props.canManage)
+      return {
+        label: t('computers.retrySetup'),
+        disabled: retry.isPending,
+        onClick: () => run(retrySetup()),
+      };
     if (setupIncomplete()) {
       if (!props.canFinishSetup) return undefined;
       return {
@@ -335,7 +328,8 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
-    if (props.canManage && computer.status === 'failed') {
+    // Retry setup is the row's action; the menu keeps the rest.
+    if (props.canManage && computer.status === 'failed' && !primary()) {
       items.push({
         label: t('computers.retry'),
         icon: 'retry',
@@ -406,19 +400,34 @@ function ManagedComputerRow(props: {
  */
 export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
+  /** Get a computer, at the top of Machines, opened the buy flow. */
+  buying: boolean;
+  onBuyingChange: (buying: boolean) => void;
 }) {
   const isAdmin = useIsTeamAdmin();
-  const { enabled, canPurchase, computers, failed } = useTeamComputers();
-  const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
+  const { enabled, computers, failed } = useTeamComputers();
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
-  const onTrial = () => offersBlockedByTrial(offers);
-
-  const [buying, setBuying] = createSignal(false);
+  const buying = () => props.buying;
+  const setBuying = (value: boolean) => props.onBuyingChange(value);
   const [settingUp, setSettingUp] = createSignal<string>();
+  // Set when a setup notification reopens the flow: it lands on Bring your AI.
+  const [resumeAt, setResumeAt] =
+    createSignal<Exclude<SetupStepId, 'computer'>>();
   const [signingIn, setSigningIn] = createSignal<string>();
   const [releasing, setReleasing] = createSignal<ComputerStatus>();
   const [releaseError, setReleaseError] = createSignal<string>();
+
+  // A setup notification, or its link opened cold, names the computer.
+  createEffect(
+    on(computerSetupRequest, (request) => {
+      if (!request) return;
+      setBuying(false);
+      setResumeAt('claude');
+      setSettingUp(request.computerId);
+      consumeComputerSetupRequest(request.id);
+    })
+  );
 
   const harnessFor = (computer: ComputerStatus) =>
     props.harnesses.find((candidate) => candidate.id === computer.harnessId);
@@ -426,9 +435,6 @@ export function MacroComputers(props: {
   // The computer's team owner and admins own its harness, not its buyer.
   const canManageClaude = (computer: ComputerStatus) =>
     harnessFor(computer)?.access === 'owner';
-
-  const fromPriceLine = () =>
-    fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
 
   const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);
@@ -465,11 +471,7 @@ export function MacroComputers(props: {
 
   return (
     <Show when={enabled()}>
-      <Show
-        when={
-          computers().length > 0 || failed() || (canPurchase() && isAdmin())
-        }
-      >
+      <Show when={computers().length > 0 || failed()}>
         <div data-settings-target="macro-computer">
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
             {t('computers.title')}
@@ -483,7 +485,10 @@ export function MacroComputers(props: {
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
                   canFinishSetup={isAdmin()}
-                  onFinishSetup={() => setSettingUp(computer.id)}
+                  onFinishSetup={() => {
+                    setResumeAt(undefined);
+                    setSettingUp(computer.id);
+                  }}
                   onSignIn={() => setSigningIn(computer.id)}
                   onRelease={() => {
                     setReleaseError(undefined);
@@ -492,30 +497,6 @@ export function MacroComputers(props: {
                 />
               )}
             </For>
-            <Show when={canPurchase() && isAdmin()}>
-              <MachineRow
-                name={t('computers.getComputer')}
-                meta={
-                  onTrial()
-                    ? t('computers.trialBlocked')
-                    : [t('computers.getComputerLine'), fromPriceLine()]
-                        .filter(Boolean)
-                        .join(' · ')
-                }
-                actions={
-                  <Show when={!onTrial()} fallback={<TrialBillingButton />}>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setBuying(true)}
-                    >
-                      {t('computers.getComputerAction')}
-                    </Button>
-                  </Show>
-                }
-              />
-            </Show>
             <Show when={failed()}>
               <MachineCardError>{t('computers.loadFailed')}</MachineCardError>
             </Show>
@@ -523,16 +504,23 @@ export function MacroComputers(props: {
         </div>
       </Show>
 
-      <ComputerBuyFlow open={buying()} onClose={() => setBuying(false)} />
+      {/* One dialog for buying and for Finish setup, so a computer bought
+          here reopens where its setup left off. */}
       <ComputerBuyFlow
-        open={!!settingUp()}
+        open={buying() || !!settingUp()}
         computerId={settingUp()}
-        onClose={() => setSettingUp(undefined)}
+        resumeStep={resumeAt()}
+        onClose={() => {
+          setBuying(false);
+          setSettingUp(undefined);
+          setResumeAt(undefined);
+        }}
       />
       <Show when={byId(signingIn())?.harnessId}>
         {(harnessId) => (
           <ClaudeSignInDialog
             harnessId={harnessId()}
+            entry="computer_row"
             onClose={() => setSigningIn(undefined)}
           />
         )}
