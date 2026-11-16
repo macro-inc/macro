@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { messageKeys } from '../../keys';
 import {
   type ChannelChangesPage,
   catchUpAndRefresh,
   catchUpChannel,
   noteChannelPush,
   pushesStored,
+  rereadChannelsAfterStorageReset,
   resetChannelSync,
   storeUnstoredPushes,
 } from '../catch-up';
@@ -282,5 +284,38 @@ describe('pushes a page that is gone left unstored', () => {
 
     expect(fetchChanges).toHaveBeenCalledWith(CHANNEL_ID, '7');
     expect(unstoredPushChannels()).toEqual(['another-channel']);
+  });
+});
+
+describe('rereadChannelsAfterStorageReset', () => {
+  it('has the loaded channel pages and threads read again, and nothing else', () => {
+    invalidateQueries.mockClear();
+
+    rereadChannelsAfterStorageReset();
+
+    expect(
+      invalidateQueries.mock.calls.map(([filter]) => filter.queryKey)
+    ).toEqual([messageKeys.messages._def, messageKeys.threadReplies._def]);
+    const channel = { type: 'channel' as const, id: CHANNEL_ID };
+    const document = { type: 'document' as const, id: 'a-document' };
+    for (const [filter] of invalidateQueries.mock.calls) {
+      expect(
+        filter.predicate({ queryKey: messageKeys.messages(channel).queryKey })
+      ).toBe(true);
+      expect(
+        filter.predicate({ queryKey: messageKeys.messages(document).queryKey })
+      ).toBe(false);
+    }
+  });
+
+  it('forgets the pushes the reset device no longer has to take', async () => {
+    const host = sequencedHost('7');
+    channelCacheHost.mockReturnValue(host);
+    noteChannelPush(CHANNEL_ID, 8);
+
+    rereadChannelsAfterStorageReset();
+
+    // Nothing is being stored for the channel any more: a read is not held up.
+    expect(await pushesStored(CHANNEL_ID, '7')).toBe(false);
   });
 });

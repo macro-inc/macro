@@ -10,7 +10,7 @@ import { fetchCached } from '../../calendar/graphql/network';
 import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { channelCacheHost } from './flag';
-import { forgetPendingChannelPages } from './pages';
+import { forgetPendingChannelPages, resetPendingChannelPages } from './pages';
 import { channelActivityKey, channelMessageKey } from './sort-key';
 import {
   forgetUnstoredPush,
@@ -334,6 +334,34 @@ export async function storeUnstoredPushes(
       // Offline or a failed request: it stays noted for the next try.
     }
   }
+}
+
+/**
+ * The device lost everything it held: its storage was reset under this page.
+ * Forgets what the page knew of it and has every loaded channel page and
+ * thread read again, so the device holds what is on screen once more. Without
+ * this a channel read before the reset opens offline with nothing.
+ */
+export function rereadChannelsAfterStorageReset(): void {
+  resetChannelSync();
+  resetPendingChannelPages();
+  for (const queryKey of [
+    messageKeys.messages._def,
+    messageKeys.threadReplies._def,
+  ]) {
+    queryClient.invalidateQueries({ queryKey, predicate: readsChannel });
+  }
+}
+
+/** Whether a message query reads a channel; its parent follows the key scope. */
+function readsChannel(query: { queryKey: readonly unknown[] }): boolean {
+  const parent = query.queryKey[2];
+  return (
+    typeof parent === 'object' &&
+    parent !== null &&
+    'type' in parent &&
+    parent.type === 'channel'
+  );
 }
 
 /** Forgets every channel's sync state; for account changes and tests. */
