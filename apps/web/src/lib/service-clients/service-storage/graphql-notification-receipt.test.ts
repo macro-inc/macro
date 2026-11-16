@@ -190,9 +190,10 @@ it('delivers hidden-tab events before parked writes, preserving cache order with
     resume.resolve();
     await caughtUp.promise;
     expect(host.writeQuery).toHaveBeenCalledOnce();
-    expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith([
-      'GraphqlNotification:notification-1',
-    ]);
+    expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
+      ['GraphqlNotification:notification-1'],
+      undefined
+    );
     expect(onResult).toHaveBeenCalledTimes(2);
     expect(onPatch).toHaveBeenCalledTimes(2);
     for (const receipt of [first, second]) {

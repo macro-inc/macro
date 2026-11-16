@@ -9397,6 +9397,16 @@ export type EmailFollowupResponse = {
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
+    action: 'set_thread_exclusion';
+    /**
+     * False removes this exception; consent and other exclusions still apply.
+     */
+    excluded: boolean;
+    /**
+     * Must belong to a mailbox owned by the authenticated member.
+     */
+    thread_id: string;
+} | {
     action: 'set_consent';
     /**
      * False withdraws this mailbox's CRM contribution without deleting records.
@@ -9896,6 +9906,38 @@ export type ExcludedDefaultView = {
     defaultViewId: string;
     id: string;
     userId: string;
+};
+
+/**
+ * One private thread from the caller's own mailbox, never a teammate's copy.
+ */
+export type ExcludedEmailThread = {
+    /**
+     * Exact mailbox containing this copy.
+     */
+    link_id: string;
+    /**
+     * Current subject, for the owner's privacy settings.
+     */
+    subject?: string | null;
+    /**
+     * Mailbox-local thread identity.
+     */
+    thread_id: string;
+};
+
+/**
+ * A bounded page of the caller's private threads, ordered by thread ID.
+ */
+export type ExcludedEmailThreads = {
+    /**
+     * Pass as `after` to read the next page.
+     */
+    next_cursor?: string | null;
+    /**
+     * At most fifty exclusions.
+     */
+    threads: Array<ExcludedEmailThread>;
 };
 
 export type ExportDocumentResponse = {
@@ -27957,6 +27999,24 @@ export type UpdateCrmEmailPrivacyResponses = {
 };
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
+
+export type ListCrmExcludedEmailThreadsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Read entries after this thread ID.
+         */
+        after?: string | null;
+    };
+    url: '/crm/email-privacy/threads';
+};
+
+export type ListCrmExcludedEmailThreadsResponses = {
+    200: ExcludedEmailThreads;
+};
+
+export type ListCrmExcludedEmailThreadsResponse = ListCrmExcludedEmailThreadsResponses[keyof ListCrmExcludedEmailThreadsResponses];
 
 export type GetCrmMemberAccessData = {
     body?: never;

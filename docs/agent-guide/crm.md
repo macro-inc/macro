@@ -710,6 +710,33 @@ flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
 
+### Keep one thread out of CRM
+
+These controls require `enable-crm-thread-exclusions`, off by default everywhere.
+The API also refuses set/clear while its rollout flag is unavailable or disabled.
+Keep the flag off until ingestion and Team email reader binaries both support
+thread exceptions; older inlined readers ignore them.
+
+Open a thread from your own mailbox and choose **Keep this thread out of CRM**
+from its menu (the title menu on desktop, the thread menu on phone). This stops
+sharing your copy through CRM, including mail already contributed, on the next
+CRM read. It does not remove the email from your mailbox. Another consenting
+teammate's copy of the same conversation may still appear, including the same
+messages. Separately granted thread access is also unaffected.
+Sales Email uses your own mailbox, so your copy remains visible there too.
+
+Open **Email settings → Threads kept out of CRM** to see your exceptions.
+**Remove exception** makes that thread eligible again when your consent and
+other privacy settings permit; restoration also queues a backfill. Use **Next
+page** for further exceptions and **Back to first page** to return. Other members
+cannot see or change your exception list. Company and contact records and their
+existing interaction dates remain; later population recomputes dates from
+eligible history. Labels and folders are not supported yet.
+
+Members denied CRM viewing can still manage their own mailbox consent and
+thread exceptions. Viewing access does not authorize changes to another
+member's contribution.
+
 ## Member access
 
 Existing and new members start with CRM access. An admin or owner can patch a
