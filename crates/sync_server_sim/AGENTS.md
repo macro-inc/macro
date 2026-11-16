@@ -68,8 +68,8 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 Install `cargo-llvm-cov` as a local development tool. From the repository root:
 
 ```sh
-TMPDIR=/home/wolf/tmp cargo llvm-cov -p sync_server_core -p sync_server_sim --json --output-path /home/wolf/tmp/sync-core-coverage.json
-python3 crates/sync_server_sim/scripts/check-public-coverage.py /home/wolf/tmp/sync-core-coverage.json
+cargo llvm-cov -p sync_server_core -p sync_server_sim --json --output-path target/sync-core-coverage.json
+python3 crates/sync_server_sim/scripts/check-public-coverage.py target/sync-core-coverage.json
 ```
 
 The floor checks every public core function, aggregating monomorphized instances

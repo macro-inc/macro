@@ -54,11 +54,11 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance -j4`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_model -j4`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun)
-- `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance --target wasm32-unknown-unknown -j4`
-- `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance --all-targets -j4 -- -D warnings`
+- `cargo test -p lexical_conformance -j4`
+- `cargo test -p lexical_model -j4`
+- `cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun)
+- `cargo check -p lexical_conformance --target wasm32-unknown-unknown -j4`
+- `cargo clippy -p lexical_conformance --all-targets -j4 -- -D warnings`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 
 - `just lexical-replay`: complete native run plus fingerprinted per-case evidence; failures retain a nonzero exit status.

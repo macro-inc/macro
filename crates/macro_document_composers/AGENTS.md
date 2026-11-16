@@ -26,10 +26,10 @@ Portable document nodes, mentions, XML and Markdown machinery live in macro_docu
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_composers -j4`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4`
-- `TMPDIR=/home/wolf/tmp cargo check -p macro_document_composers --target wasm32-unknown-unknown -j4`
-- `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_composers --all-targets -j4 -- -D warnings`
+- `cargo test -p macro_document_composers -j4`
+- `cargo test -p lexical_conformance --test replay -j4`
+- `cargo check -p macro_document_composers --target wasm32-unknown-unknown -j4`
+- `cargo clippy -p macro_document_composers --all-targets -j4 -- -D warnings`
 - `cargo tree -p macro_document_model --target wasm32-unknown-unknown -e normal` contains neither trigger_context nor workspace-hack.
 - `bun packages/lexical-conformance/corpus/composer-wire.ts --check`
 - `bun packages/lexical-conformance/corpus/macro-composers.ts --check`

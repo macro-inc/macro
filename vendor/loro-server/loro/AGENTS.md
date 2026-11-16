@@ -15,5 +15,5 @@ The editor stack separately uses registry Loro1.17.1.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -j4 -p sync_server_core -p sync_server_sim`
+- `cargo test -j4 -p sync_server_core -p sync_server_sim`
 - Re-record sync-service and require155zero normalized transcript differences.

@@ -40,11 +40,11 @@ Never import them from production crates or bundles.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo run -p lexical_conformance_wasm --example export_host_types -j4 -- --check`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm -j4`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm --example instrument_exports -j4` (Bun executes actual synthetic WASM exports)
-- `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance_wasm --all-targets -j4 -- -D warnings`
-- `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance_wasm --target wasm32-unknown-unknown -j4`
+- `cargo run -p lexical_conformance_wasm --example export_host_types -j4 -- --check`
+- `cargo test -p lexical_conformance_wasm -j4`
+- `cargo test -p lexical_conformance_wasm --example instrument_exports -j4` (Bun executes actual synthetic WASM exports)
+- `cargo clippy -p lexical_conformance_wasm --all-targets -j4 -- -D warnings`
+- `cargo check -p lexical_conformance_wasm --target wasm32-unknown-unknown -j4`
 - `cargo tree --workspace -i lexical_conformance_wasm -e normal`: only itself.
 - `cargo x deps --check`, `just check`.
 - Run both differential configurations using [the differential guide](../../../../packages/lexical-conformance/diff/README.md); keep their module identities isolated.
@@ -54,8 +54,8 @@ Never import them from production crates or bundles.
 - Build artifacts live in this worktree's `target/` and the ignored package `pkg/`.
 - Compare mutations before DOM cache reconciliation and dirty sets from the final commit, matching upstream listeners.
 - Keep WP-07 failing tapes under `packages/lexical-conformance/fixtures/fuzz/`.
-- Keep the rich differential harness and its failing tapes outside the repository
-  under `/home/wolf/tmp/lexical-port/difffuzz`; never copy that harness here.
+- Keep the rich differential harness and its failing tapes outside the repository;
+  never copy that harness here.
 
 Rich snapshots retain dangling table selection points with null paths after final row/column deletion.
 

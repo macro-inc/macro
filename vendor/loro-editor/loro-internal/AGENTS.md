@@ -20,7 +20,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml dense_batch`
-- `TMPDIR=/home/wolf/tmp cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml --lib undo::` checks local merge scans and remote-conflict semantics; use the direct manifest because this dependency is excluded from workspace test membership.
+- `cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml dense_batch`
+- `cargo test -j2 --manifest-path vendor/loro-editor/loro-internal/Cargo.toml --lib undo::` checks local merge scans and remote-conflict semantics; use the direct manifest because this dependency is excluded from workspace test membership.
 - Consumer projection/session/server suites and exact sim replay.
 - Fresh sync-service re-record and 155 zero normalized differences.

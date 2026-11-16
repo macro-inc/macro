@@ -1,6 +1,6 @@
 # Node-map and keystroke benchmark
 
-Run `TMPDIR=/home/wolf/tmp cargo bench -p lexical_model --bench node_map -j4`.
+Run `cargo bench -p lexical_model --bench node_map -j4`.
 The CSV contains median and p95 microseconds after 50 warmups, with 1000 samples
 at 190/3835 nodes and 300 samples at 36530 nodes. Run a release benchmark; debug
 builds do not give a useful comparison. Keep previous snapshots alive during the
@@ -22,7 +22,7 @@ Both headless and view-attached model modes run. View-attached here includes mod
 cache reconciliation; it does not run a browser renderer. Snapshot release after
 the timed operation, document setup and CSV formatting are outside the sample.
 
-Compare with `/home/wolf/tmp/lexical-port/notes-bench.md`, pinned upstream 0.45.0:
+Upstream Lexical 0.45.0 reference timings for the same operations:
 
 | Nodes | Chrome update | Bun update | Node update | Chrome getWritable ×1 |
 | --- | --- | --- | --- | --- |

@@ -120,24 +120,24 @@ The fixed Macro catalog supplies comparison metadata, never JavaScript construct
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model --test projection_children -j2` checks bounded insertion work with independent full reconstruction and fresh snapshot replay; its ignored receipt runner compares ordered operations, JSON, VV and frontiers against an explicitly retained baseline.
+- `cargo test -p macro_document_model --test projection_children -j2` checks bounded insertion work with independent full reconstruction and fresh snapshot replay; its ignored receipt runner compares ordered operations, JSON, VV and frontiers against an explicitly retained baseline.
 
 - `cargo test -p macro_document_model --test sync_draft_comparison` checks actual source draft-strip bootstrap, comparison-only canonical exports, immutable writer bytes and incremental parent/typing behavior.
 
 - `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.
 - `bun apps/web/scripts/lexical-group-b-themes.ts --check` checks Group B theme paste validation/migration constants and source cases.
 
-- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.
-- `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
-- `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
-- `TMPDIR=/home/wolf/tmp bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts` after native gate generation checks the actual WASM gate.
+- `cargo test -p macro_document_model -j4`
+- `cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.
+- `cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
+- `cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
+- `bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts` after native gate generation checks the actual WASM gate.
 - `bun packages/lexical-conformance/corpus/macro-snapshots.ts --check` checks stored snapshot source compatibility.
 - `bun packages/lexical-conformance/corpus/macro-exports.ts --check` checks service export and XML source results.
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
 - `bun packages/lexical-conformance/corpus/transformers.ts --check` checks source metadata.
 - `bun packages/lexical-conformance/corpus/macro-markdown.ts --check` checks the supplemental source conversion oracle.
-- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model --features html --test html -j4` checks source route, node and fragment bytes.
+- `cargo test -p macro_document_model --features html --test html -j4` checks source route, node and fragment bytes.
 - `bun packages/lexical-conformance/corpus/macro-html.ts --check` and `bun packages/lexical-conformance/corpus/html-entities.ts --check` check HTML source freshness.
 - `bun packages/lexical-conformance/corpus/macro-mentions.ts --check` checks authored references.
 - `cargo x deps --check`, `cargo shear`, `just check`

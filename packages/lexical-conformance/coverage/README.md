@@ -11,9 +11,9 @@ matrix preserves API-call candidates, qualified fired-transformer candidates,
 observed S2 ranges, source tags and Rust implementation owners. Observed ranges
 and secondary tags do not replace the named primary test.
 
-Standalone shim test obligations are explicitly `ledger:removed`, deferred to
-`wolf/lexical-wasm-shim-wip@9df9909f`. They retain their specification IDs but
-name no missing test file and certify no execution.
+Standalone shim test obligations are explicitly `ledger:removed`: the standalone
+shim is not part of this tree. They retain their specification IDs but name no
+missing test file and certify no execution.
 
 `pending.txt` starts with every required row. It may only shrink relative to
 `--base=<revision>` (default `origin/main`, CI uses the fetched PR base SHA).

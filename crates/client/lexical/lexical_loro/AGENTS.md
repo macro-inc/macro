@@ -46,10 +46,10 @@ The editor pair uses workspace Loro1.17.1; the isolated Worker transcript driver
 remains1.16.3 beside the vendored1.16.2 server encoder to preserve C0 bytes.
 
 
-- `TMPDIR=/home/wolf/tmp cargo test -p lexical_loro -j4`
-- `TMPDIR=/home/wolf/tmp PROPTEST_CASES=256 cargo test -p lexical_loro -j4`
-- `TMPDIR=/home/wolf/tmp cargo check -p lexical_loro --target wasm32-unknown-unknown -j4`
-- `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_loro --all-targets -j4 -- -D warnings`
+- `cargo test -p lexical_loro -j4`
+- `PROPTEST_CASES=256 cargo test -p lexical_loro -j4`
+- `cargo check -p lexical_loro --target wasm32-unknown-unknown -j4`
+- `cargo clippy -p lexical_loro --all-targets -j4 -- -D warnings`
 - `cargo x workflows --check` after changing the generated `loro-pair` job.
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 

@@ -16,7 +16,7 @@ The editor stack separately uses Loro 1.17.1 and its local internal copy.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -j4 --manifest-path vendor/loro-server/loro-internal/Cargo.toml dense_batch`
+- `cargo test -j4 --manifest-path vendor/loro-server/loro-internal/Cargo.toml dense_batch`
 
-- `TMPDIR=/home/wolf/tmp cargo test -j4 -p sync_server_core -p sync_server_sim`
+- `cargo test -j4 -p sync_server_core -p sync_server_sim`
 - Re-record sync-service and require 155 zero normalized transcript differences.
