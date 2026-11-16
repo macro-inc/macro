@@ -158,8 +158,8 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneDelivered(): Promise<void> {
-    const entries = await this.getAll();
     const tx = await this.database.transaction('updates', 'readwrite');
+    const entries = await tx.store.index('scopeId').getAll(this.scopeId);
     const store = tx.objectStore('updates');
     for (const row of entries) {
       if (row.delivered && row.id !== undefined) {
@@ -170,9 +170,9 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneExpired(ttlMs: number): Promise<number> {
-    const entries = await this.getAll();
     const cutoff = Date.now() - ttlMs;
     const tx = await this.database.transaction('updates', 'readwrite');
+    const entries = await tx.store.index('scopeId').getAll(this.scopeId);
     const store = tx.objectStore('updates');
     let deleted = 0;
     for (const row of entries) {

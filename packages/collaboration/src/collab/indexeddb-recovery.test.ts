@@ -26,6 +26,38 @@ afterEach(() => {
 });
 
 describe('collaboration IndexedDB recovery', () => {
+  it.each(['expired', 'delivered'])(
+    'prunes native quarantined and foreign rows when %s',
+    async (condition) => {
+      const store = new BrowserWALStore<number>('wal', 'doc');
+      await store.append(3);
+      const db = await openDB('wal', 1);
+      try {
+        for (const flag of ['quarantined', 'foreign']) {
+          await db.add('updates', {
+            scopeId: 'doc',
+            update: 2,
+            delivered: condition === 'delivered',
+            createdAt: condition === 'expired' ? 0 : Date.now(),
+            [flag]: true,
+          });
+        }
+
+        if (condition === 'expired') {
+          expect(await store.pruneExpired(1000)).toBe(2);
+        } else {
+          await store.pruneDelivered();
+        }
+
+        expect((await db.getAll('updates')).map((row) => row.update)).toEqual([
+          3,
+        ]);
+      } finally {
+        db.close();
+      }
+    }
+  );
+
   it.each(['quarantined', 'foreign'])(
     'does not replay or resend native %s rows after switching to the legacy engine',
     async (flag) => {
