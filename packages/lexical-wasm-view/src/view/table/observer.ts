@@ -401,16 +401,24 @@ export class TableObserver {
     const root = this.view.root;
     if (!this.dragOwnsSelection || root.contentEditable !== 'true')
       return false;
-    // Chromium can re-anchor a cleared native text drag on the editable root.
+    // Chromium can re-anchor a cleared native text drag on the editable root
+    // or on the table's scrollable wrapper between them.
     if (this.isRootCaret(dom)) return true;
     if (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
       return false;
     dom.removeAllRanges();
     return true;
   }
+  /** A collapsed caret on the root or an element that holds this table inside it. */
   private isRootCaret(dom: Selection): boolean {
     const root = this.view.root;
-    return dom.isCollapsed && dom.anchorNode === root && dom.focusNode === root;
+    const node = dom.anchorNode;
+    return (
+      dom.isCollapsed &&
+      node === dom.focusNode &&
+      node instanceof Element &&
+      (node === root || (root.contains(node) && node.contains(this.table)))
+    );
   }
   private ownsNode(node: Node | null): boolean {
     const element = node instanceof Element ? node : node?.parentElement;

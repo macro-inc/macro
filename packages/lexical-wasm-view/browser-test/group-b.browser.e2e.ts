@@ -526,6 +526,29 @@ test('native touch table selection leaves scrolling alone and extends only after
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
+test('a mouse drag across cells keeps a native TableSelection over both cells', async ({
+  page,
+}) => {
+  await page.evaluate((state) => window.groupB.first.set(state), tableState);
+  const cells = page.locator('#first td');
+  const from = await cells.nth(0).boundingBox();
+  const to = await cells.nth(1).boundingBox();
+  if (!from || !to) throw new Error('Missing cell geometry');
+  // Trusted pointer input, so Chromium runs its own text drag alongside.
+  await page.mouse.move(from.x + 10, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+    steps: 8,
+  });
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  await page.mouse.up();
+  await expect(page.locator('#first .fixture-cell-selected')).toHaveCount(2);
+  expect(await page.evaluate(() => window.groupB.first.selection().kind)).toBe(
+    'table'
+  );
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
 test('cancelled, foreign-pointer and readonly cell drags submit no table selection', async ({
   page,
 }) => {
