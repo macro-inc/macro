@@ -12,21 +12,25 @@ use uuid::Uuid;
 /// `source` field, so migrating is an all-or-nothing cross-crate change —
 /// recorded here as the accepted exception rather than mixing the two
 /// error stacks module by module.
+///
+/// Displays the reason and the whole context chain of the source, and so
+/// reports no separate `source()`: a span's `err` event prints only the
+/// display, and must name what failed.
 #[derive(Debug, Error)]
-#[error("{reason}: {source}")]
+#[error("{reason}: {source:#}")]
 pub struct DetailedError {
     pub reason: FailureReason,
-    #[source]
     pub source: anyhow::Error,
 }
 
+/// Displays its [`DetailedError`], for the same reason.
 #[derive(Debug, Error)]
 pub enum ProcessingError {
-    #[error("Retryable error occurred")]
-    Retryable(#[source] DetailedError),
+    #[error("Retryable error occurred: {0}")]
+    Retryable(DetailedError),
 
-    #[error("Non-retryable error occurred")]
-    NonRetryable(#[source] DetailedError),
+    #[error("Non-retryable error occurred: {0}")]
+    NonRetryable(DetailedError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString)]
@@ -114,3 +118,6 @@ pub struct ScheduledPubsubMessage {
 pub struct SFSUploaderMessage {
     pub contact: Contact,
 }
+
+#[cfg(test)]
+mod test;
