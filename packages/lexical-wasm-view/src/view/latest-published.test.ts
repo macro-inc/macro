@@ -233,7 +233,7 @@ test('first actual edit includes metadata followup at the latest presentation bo
     ).toBe(true);
     expect(runtime.root.textContent).toBe('First edit');
     expect(roots).toHaveLength(1);
-    expect(roots[0]).toContain('"documentMetadata":{"version":10}');
+    expect(roots[0]).toContain('"documentMetadata":{"version":11}');
   } finally {
     await runtime.close();
   }

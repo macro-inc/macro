@@ -939,7 +939,7 @@ test('insert (desktop): picking the agent session in the real overlay matches So
         source: 'id',
         // Native's current root metadata, a ruled named difference from Source
         // (C-R003-PERSISTED-ROOT-METADATA-01); not parity.
-        native: { documentMetadata: { version: 10 } },
+        native: { documentMetadata: { version: 11 } },
       },
       ids,
       phase

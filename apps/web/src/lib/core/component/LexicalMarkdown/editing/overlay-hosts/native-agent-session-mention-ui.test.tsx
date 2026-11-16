@@ -508,7 +508,7 @@ function pairModels(
       source: 'id',
       // Native's current root metadata, a ruled named difference from Source
       // (C-R003-PERSISTED-ROOT-METADATA-01); not parity.
-      native: { documentMetadata: { version: 10 } },
+      native: { documentMetadata: { version: 11 } },
     },
     ids,
     `${phase} root`

@@ -86,7 +86,7 @@ test('fixed vertical callbacks use actual pending plans for all five stopping bl
             json: JSON.stringify({
               root: {
                 type: 'root',
-                $: { documentMetadata: { version: 10 } },
+                $: { documentMetadata: { version: 11 } },
                 children: [
                   {
                     type: 'paragraph',

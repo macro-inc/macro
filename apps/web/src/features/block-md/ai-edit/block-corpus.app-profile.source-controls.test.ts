@@ -334,9 +334,9 @@ async function generate(
 
 // documentMetadataPlugin stamps the version on the first load; loading that
 // stored state parses it, which adds environmentTags: null.
-const STORED_METADATA = '.root.$.documentMetadata: app-only {"version":10}';
+const STORED_METADATA = '.root.$.documentMetadata: app-only {"version":11}';
 const LOADED_METADATA =
-  '.root.$.documentMetadata: app-only {"version":10,"environmentTags":null}';
+  '.root.$.documentMetadata: app-only {"version":11,"environmentTags":null}';
 
 /** Every seed and state gains documentMetadata; returns the other state deltas. */
 /** Cases where the app refuses different ops than the headless Doc. */

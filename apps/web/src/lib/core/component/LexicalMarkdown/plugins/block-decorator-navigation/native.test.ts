@@ -98,7 +98,7 @@ function mounted() {
     JSON.stringify({
       root: {
         type: 'root',
-        $: { documentMetadata: { version: 10 } },
+        $: { documentMetadata: { version: 11 } },
         children: [
           { type: 'paragraph', children: [{ type: 'text', text: 'Before' }] },
           { type: 'horizontalrule' },

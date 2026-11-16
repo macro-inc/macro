@@ -18,7 +18,7 @@ test('actual Source mounts ordinary, admitted and missing Magic inputs unchanged
         direction: null,
         $: {
           id: 'fast-decorator-root',
-          documentMetadata: { version: 10, environmentTags: null },
+          documentMetadata: { version: 11, environmentTags: null },
         },
         children: [
           {

@@ -32,11 +32,11 @@ test('native checkbox marker toggles and restores its exact saved model', async 
   });
   // Actual Source import adds this field too; every other native byte and ID
   // must remain exact. Neither actual snapshot is normalized or masked.
-  expect(saved).toContain('"documentMetadata":{"version":10}');
+  expect(saved).toContain('"documentMetadata":{"version":11}');
   expect(reopened).toBe(
     saved.replace(
-      '"documentMetadata":{"version":10}',
-      '"documentMetadata":{"version":10,"environmentTags":null}'
+      '"documentMetadata":{"version":11}',
+      '"documentMetadata":{"version":11,"environmentTags":null}'
     )
   );
   await expect(page.locator('#errors')).toHaveText('');

@@ -792,7 +792,7 @@ function compareModels(
         // ids are not paired.
         source: replaced ? 'absent' : 'id',
         // C-R003-PERSISTED-ROOT-METADATA-01: a ruled named difference.
-        native: { documentMetadata: { version: 10 } },
+        native: { documentMetadata: { version: 11 } },
       },
       ids,
       phase

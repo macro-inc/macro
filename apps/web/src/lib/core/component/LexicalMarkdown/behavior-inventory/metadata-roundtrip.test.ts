@@ -70,9 +70,9 @@ test('Source checklist save/reopen retains its authored versus imported metadata
   editor.setEditorState(editor.parseEditorState(saved));
   editor.read(() => {});
   const reopened = editor.getEditorState().toJSON();
-  expect(saved.root.$?.documentMetadata).toEqual({ version: 10 });
+  expect(saved.root.$?.documentMetadata).toEqual({ version: 11 });
   expect(reopened.root.$?.documentMetadata).toEqual({
-    version: 10,
+    version: 11,
     environmentTags: null,
   });
 });
