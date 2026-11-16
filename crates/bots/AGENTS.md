@@ -62,7 +62,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
   `macrod`⇔`harness_id` pairing is checked only for a runtime the request
   chooses; a patch that omits `harness` keeps an unbound agent editable.
-- `POST /bots/{id}/tokens` refuses an agent's program
+- `POST /bots/{id}/tokens` and `POST /channels/{id}/bots/scoped` refuse an agent's program
   (`macro_authorization::is_program_minting`, 403): the response carries the
   secret. Programs present a `botCredential` card instead, which mints from the
   user's own session.

@@ -98,7 +98,9 @@ pub struct DeleteUserApiKeyParams {
     pub id: UserApiKeyId,
 }
 
-/// Why an agent's program may not create an API key.
+/// Why an agent's program may not create an API key: the key is a full
+/// credential for the account that would reach the model, without the
+/// program's agent claims.
 const PROGRAM_KEY_REFUSAL: &str = "An agent's program cannot create an API key: the key would reach you. Tell the user to create one in Macro's settings.";
 
 /// Mint a new API key for the caller.
@@ -126,13 +128,15 @@ where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
 {
-    // The key is a full credential for the account: a program would read it
-    // into the model, and could use it to shed its agent claims.
-    if is_program_minting(
-        user.authorization.user.agent_id.is_some(),
-        agent_correlation::context::current_routine().is_some(),
-        &headers,
-    ) {
+    let routine = agent_correlation::context::current_routine();
+    let agent_attributed = user.authorization.user.agent_id.is_some();
+    if is_program_minting(agent_attributed, routine.is_some(), &headers) {
+        tracing::warn!(
+            agent_attributed,
+            routine_id = ?routine,
+            agent_session_id = ?agent_correlation::context::current_session(),
+            "refused an API key from a program"
+        );
         return Err(UserApiKeyError::Forbidden(PROGRAM_KEY_REFUSAL));
     }
     let created = state

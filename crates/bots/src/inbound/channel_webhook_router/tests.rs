@@ -930,6 +930,32 @@ async fn channel_webhook_router_admin_can_create_scoped_bot() {
 }
 
 #[tokio::test]
+async fn an_agents_program_cannot_create_a_scoped_bot_with_its_token() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::for_create(scoped_bot_response(bot_id));
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/bots/scoped"))
+        .header("content-type", "application/json")
+        .header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+        .body(scoped_bot_request_body())
+        .unwrap();
+
+    let response = router(
+        service.clone(),
+        TestChannelPoster::new(),
+        EntityParticipantRole::Admin,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(service.create_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn channel_webhook_router_preferred_token_posts_as_bot() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());

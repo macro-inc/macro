@@ -599,10 +599,12 @@ pub async fn create_token_handler<
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
-    refuse_program_mint(
+    if refuses_program_mint(
         authorization.authorization.user.agent_id.is_some(),
         &headers,
-    )?;
+    ) {
+        return Err(BotsHandlerErr::Forbidden(PROGRAM_MINT_REFUSAL));
+    }
     let token = state
         .service
         .create_token(
@@ -616,19 +618,23 @@ pub async fn create_token_handler<
 
 /// Why an agent's program may not mint a bot token: the response carries the
 /// secret, which would reach the model.
-const PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present execution.views.present({widgets: [{type: 'botCredential', botId}]}); the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
+pub(crate) const PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present execution.views.present({widgets: [{type: 'botCredential', botId}]}); the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
 
-/// Refuse a mint from a program ([`is_program_minting`]); a person mints
+/// Whether a request that would return a new bot token's secret must be
+/// refused because a program made it ([`is_program_minting`]); a person mints
 /// from the card or bot settings.
-fn refuse_program_mint(agent_attributed: bool, headers: &HeaderMap) -> Result<(), BotsHandlerErr> {
-    if is_program_minting(
-        agent_attributed,
-        agent_correlation::context::current_routine().is_some(),
-        headers,
-    ) {
-        return Err(BotsHandlerErr::Forbidden(PROGRAM_MINT_REFUSAL));
+pub(crate) fn refuses_program_mint(agent_attributed: bool, headers: &HeaderMap) -> bool {
+    let routine = agent_correlation::context::current_routine();
+    let refused = is_program_minting(agent_attributed, routine.is_some(), headers);
+    if refused {
+        tracing::warn!(
+            agent_attributed,
+            routine_id = ?routine,
+            agent_session_id = ?agent_correlation::context::current_session(),
+            "refused a bot token mint from a program"
+        );
     }
-    Ok(())
+    refused
 }
 
 /// Handler for `GET /bots/{bot_id}/tokens`.
