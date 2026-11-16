@@ -1,5 +1,7 @@
 /// Continuing a session once its owner connects the app it waited on.
 pub mod app_connections;
+/// How many sessions this replica attaches to external runtimes at once.
+pub mod attach_budget;
 /// Fresh ACP capability discovery without creating an agent session.
 pub mod capability_discovery;
 pub mod conversation_turns;

@@ -1658,7 +1658,7 @@ pub async fn run() -> anyhow::Result<()> {
             let harness = Arc::clone(&reattaching);
             tokio::spawn(async move {
                 harness
-                    .reattach_live_sessions(live.harness, live.acp_sessions, live.span)
+                    .reattach_live_sessions(live.harness, live.acp_sessions, live.closed, live.span)
                     .await;
             });
         }
@@ -2551,7 +2551,7 @@ pub async fn run() -> anyhow::Result<()> {
                                 | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::PresentTool { .. }
                                 | HarnessCommand::SessionStopped { .. }
-                                | HarnessCommand::Reattach
+                                | HarnessCommand::Reattach(_)
                                 | HarnessCommand::DrainNotifications => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);

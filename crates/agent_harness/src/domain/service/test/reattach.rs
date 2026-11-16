@@ -2,8 +2,14 @@
 //! and the harness loads them without anyone prompting.
 
 use super::*;
+use crate::domain::attach_budget::{
+    ATTACH_CONCURRENCY, ATTACH_PERMIT_HOLD, AttachPath, AttachPermit, HARNESS_ATTACH_SHARE,
+    USER_RESERVED_ATTACHES,
+};
 use agent_client_protocol::schema::v1::LoadSessionResponse;
 use agent_session::domain::connection::ListedSession;
+use agent_session::domain::session::HANDSHAKE_TIMEOUT;
+use tokio_util::sync::CancellationToken;
 
 /// A session the runtime had opened before its connection dropped. Its ACP
 /// session id is its own id, which is how [`MirrorBindings`] resolves it.
@@ -65,6 +71,7 @@ async fn a_redial_loads_a_live_session_without_a_prompt() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -85,6 +92,7 @@ async fn a_redial_loads_a_live_session_without_a_prompt() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         )
         .await;
@@ -137,6 +145,7 @@ async fn a_redial_loads_every_live_session_but_not_archived_or_unknown_ones() {
                     updated_at: None,
                 },
             ],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -164,6 +173,7 @@ async fn a_live_session_on_a_runtime_that_is_gone_is_left_for_the_next_dial() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         )
         .await;
@@ -284,7 +294,12 @@ async fn a_dial_restores_only_this_harness_tracked_sessions_from_an_agent_that_l
         agent.resumes_session(ResumeSessionResponse::new());
     };
     tokio::join!(
-        service.reattach_live_sessions(report.harness, report.acp_sessions, report.span,),
+        service.reattach_live_sessions(
+            report.harness,
+            report.acp_sessions,
+            report.closed,
+            report.span
+        ),
         drive
     );
 
@@ -350,6 +365,7 @@ async fn a_redial_delivers_the_prompt_queued_behind_the_turn_the_drop_interrupte
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -390,6 +406,7 @@ async fn a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_pr
                     updated_at: None,
                 },
             ],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -426,7 +443,7 @@ async fn a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_pr
 async fn a_redial_restores_only_a_few_sessions_at_a_time() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = super::super::reattach::REATTACH_CONCURRENCY;
+    let limit = HARNESS_ATTACH_SHARE;
     let total = limit + 4;
     let mut sessions = Vec::new();
     for _ in 0..total {
@@ -469,6 +486,7 @@ async fn a_redial_restores_only_a_few_sessions_at_a_time() {
                     updated_at: None,
                 })
                 .collect(),
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -486,7 +504,7 @@ async fn a_redial_restores_only_a_few_sessions_at_a_time() {
 async fn a_redial_cancels_the_harness_previous_dial() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = super::super::reattach::REATTACH_CONCURRENCY;
+    let limit = HARNESS_ATTACH_SHARE;
     let total = limit + 1;
     let mut sessions = Vec::new();
     for _ in 0..total {
@@ -507,7 +525,12 @@ async fn a_redial_cancels_the_harness_previous_dial() {
         let listed = listed.clone();
         async move {
             service
-                .reattach_live_sessions(harness_for_bot(bot_id), listed, tracing::Span::none())
+                .reattach_live_sessions(
+                    harness_for_bot(bot_id),
+                    listed,
+                    CancellationToken::new(),
+                    tracing::Span::none(),
+                )
                 .await
         }
     });
@@ -533,7 +556,12 @@ async fn a_redial_cancels_the_harness_previous_dial() {
         }
     };
     let (second, ()) = tokio::join!(
-        service.reattach_live_sessions(harness_for_bot(bot_id), listed, tracing::Span::none()),
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            listed,
+            CancellationToken::new(),
+            tracing::Span::none()
+        ),
         answer_loads
     );
     let first = first.await.expect("the first dial's task");
@@ -583,6 +611,7 @@ async fn a_redial_retries_a_session_whose_restore_failed() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -614,6 +643,7 @@ async fn a_redial_does_not_retry_a_session_its_runtime_no_longer_serves() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         )
         .await;
@@ -642,6 +672,7 @@ async fn a_redial_dispatches_the_queue_an_earlier_attach_failed_to_load() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -671,6 +702,7 @@ async fn a_redial_dispatches_the_queue_an_earlier_attach_failed_to_load() {
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -725,6 +757,7 @@ async fn a_redial_restores_a_session_whose_turn_the_drop_interrupted_however_old
                 id: SessionId::new(session.to_string()),
                 updated_at: None,
             }],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -767,6 +800,7 @@ async fn a_redial_restores_a_session_its_runtime_saw_active_recently() {
                     updated_at: Some(days_ago),
                 },
             ],
+            CancellationToken::new(),
             tracing::Span::none(),
         ),
         drive
@@ -774,4 +808,332 @@ async fn a_redial_restores_a_session_its_runtime_saw_active_recently() {
 
     assert_eq!((report.eager, report.lazy), (1, 1), "{report:?}");
     assert_eq!(loaded(&runtime.agent()), [worked_locally.to_string()]);
+}
+
+/// Hold every background permit of the replica's attach budget, on
+/// harnesses other than the one under test.
+async fn fill_background_attaches(service: &TestHarness) -> Vec<AttachPermit<'_>> {
+    let mut held = Vec::new();
+    let others = ATTACH_CONCURRENCY - USER_RESERVED_ATTACHES;
+    for index in 0..others {
+        let harness = harness_id::HarnessId::new_from_uuid(macro_uuid::Uuid::from_u128(
+            0xB0_0000 + u128::try_from(index / HARNESS_ATTACH_SHARE).unwrap(),
+        ));
+        held.push(
+            service
+                .inner
+                .attach_budget
+                .acquire(AttachPath::Dial, harness, AgentSessionId::new())
+                .await
+                .unwrap(),
+        );
+    }
+    held
+}
+
+#[tokio::test]
+async fn a_prompt_restores_its_session_while_a_reattach_storm_holds_every_background_permit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let idle = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+    let storm = fill_background_attaches(&service).await;
+
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        agent.wait_for_requests(2).await;
+        assert_eq!(
+            service.inner.attach_budget.available(),
+            USER_RESERVED_ATTACHES - 1,
+            "the prompt holds a reserved permit while its session loads"
+        );
+        agent.loads_session(LoadSessionResponse::new());
+        agent.wait_for_requests(3).await;
+    };
+    let (result, ()) = tokio::join!(prompt(&service, idle, "still there?"), drive);
+
+    result.expect("the prompt restores its session");
+    let agent = runtime.agent();
+    assert_eq!(loaded(&agent), [idle.to_string()]);
+    assert_eq!(prompts(&agent), [vec![ContentBlock::from("still there?")]]);
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        USER_RESERVED_ATTACHES,
+        "the prompt's permit is back once its session is restored"
+    );
+    drop(storm);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_restore_that_never_answers_gives_its_permit_back_at_the_limit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let idle = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    let prompted = tokio::spawn({
+        let service = service.clone();
+        async move { prompt(&service, idle, "hello?").await }
+    });
+    initializes_loading(&runtime).await;
+    runtime.agent().wait_for_requests(2).await;
+    assert_eq!(loaded(&runtime.agent()), [idle.to_string()]);
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        ATTACH_CONCURRENCY - 1
+    );
+
+    // The runtime never answers `session/load`.
+    tokio::time::sleep(ATTACH_PERMIT_HOLD + std::time::Duration::from_secs(1)).await;
+
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        ATTACH_CONCURRENCY,
+        "a hung restore no longer holds a permit"
+    );
+    prompted.abort();
+}
+
+#[test]
+fn only_a_prompt_someone_sent_counts_as_a_user_attach() {
+    use super::super::deliver::delivery_path;
+    let sender = sender();
+
+    assert_eq!(
+        delivery_path(&AgentAction::prompt("hi"), Some(&sender)),
+        AttachPath::Prompt
+    );
+    assert_eq!(
+        delivery_path(&AgentAction::prompt("hi"), None),
+        AttachPath::Delivery
+    );
+    assert_eq!(
+        delivery_path(&AgentAction::Stop, Some(&sender)),
+        AttachPath::Delivery
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_delivery_queued_ahead_of_a_dial_restore_never_waits_out_the_hold_limit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    // Enough sessions for the dial to want the harness's whole share.
+    let mut sessions = Vec::new();
+    for _ in 0..HARNESS_ATTACH_SHARE {
+        sessions.push(native_session(&service, &repo, bot_id).await);
+    }
+    let target = sessions[0];
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+    let started = tokio::time::Instant::now();
+
+    let delivery = service.execute(
+        target,
+        HarnessCommand::Deliver(DeliverAction::prompt(
+            AgentAction::prompt("nobody typed this"),
+            None,
+            None,
+        )),
+    );
+    let dial = service.reattach_live_sessions(
+        harness_for_bot(bot_id),
+        sessions
+            .iter()
+            .map(|session| ListedSession {
+                id: SessionId::new(session.to_string()),
+                updated_at: None,
+            })
+            .collect(),
+        CancellationToken::new(),
+        tracing::Span::none(),
+    );
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        let mut answered = Vec::new();
+        // One load per session, then the delivery's prompt: each step needs
+        // a new request, so this only advances while attaches do.
+        for requests in 2..=(1 + sessions.len() + 1) {
+            agent.wait_for_requests(requests).await;
+            for frame in agent.received_frames() {
+                if let RawJsonRpcMessage::Request(request) = frame
+                    && request.method.as_ref() == "session/load"
+                    && !answered.contains(&request.id)
+                {
+                    answered.push(request.id.clone());
+                    agent.sends_reply(request.id, LoadSessionResponse::new());
+                }
+            }
+        }
+    };
+    let (delivered, report, ()) = tokio::join!(delivery, dial, drive);
+
+    delivered.expect("the delivery reaches its session");
+    assert_eq!(report.eager, sessions.len(), "{report:?}");
+    assert!(
+        started.elapsed() < HANDSHAKE_TIMEOUT,
+        "neither side waited for a permit the other held: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(prompts(&runtime.agent()).len(), 1);
+    let mut loaded = loaded(&runtime.agent());
+    loaded.sort();
+    let mut expected: Vec<String> = sessions.iter().map(ToString::to_string).collect();
+    expected.sort();
+    assert_eq!(loaded, expected, "each session is loaded once");
+    assert_eq!(service.inner.attach_budget.available(), ATTACH_CONCURRENCY);
+}
+
+/// Hold every permit of `harness`'s share, so a restore for it waits.
+async fn hold_harness_share(
+    service: &TestHarness,
+    harness: harness_id::HarnessId,
+) -> Vec<AttachPermit<'_>> {
+    let mut held = Vec::new();
+    for _ in 0..HARNESS_ATTACH_SHARE {
+        held.push(
+            service
+                .inner
+                .attach_budget
+                .acquire(AttachPath::Dial, harness, AgentSessionId::new())
+                .await
+                .unwrap(),
+        );
+    }
+    held
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_redial_drops_the_previous_dials_waiting_restores_without_a_permit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let harness = harness_for_bot(bot_id);
+    let first = native_session(&service, &repo, bot_id).await;
+    let second = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness, runtime.clone());
+    let held = hold_harness_share(&service, harness).await;
+
+    let stale_dial = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .reattach_live_sessions(
+                    harness,
+                    [first, second]
+                        .iter()
+                        .map(|session| ListedSession {
+                            id: SessionId::new(session.to_string()),
+                            updated_at: None,
+                        })
+                        .collect(),
+                    CancellationToken::new(),
+                    tracing::Span::none(),
+                )
+                .await
+        }
+    });
+    // Both restores reached their workers and wait for a permit.
+    service
+        .inner
+        .attach_budget
+        .requested(HARNESS_ATTACH_SHARE + 2)
+        .await;
+
+    service
+        .reattach_live_sessions(
+            harness,
+            Vec::new(),
+            CancellationToken::new(),
+            tracing::Span::none(),
+        )
+        .await;
+    let report = tokio::time::timeout(ATTACH_PERMIT_HOLD, stale_dial)
+        .await
+        .expect("the stale restores give up without waiting out a permit")
+        .unwrap();
+
+    assert_eq!(report.abandoned, 2, "{report:?}");
+    assert_eq!(
+        service.inner.attach_budget.granted(),
+        HARNESS_ATTACH_SHARE,
+        "no stale restore took a permit"
+    );
+    assert!(loaded(&runtime.agent()).is_empty());
+    drop(held);
+    assert_eq!(service.inner.attach_budget.available(), ATTACH_CONCURRENCY);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_closed_connection_drops_its_dials_waiting_restores_without_a_permit() {
+    let (service, repo, runtimes, mut reports) = listing_harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let harness = harness_for_bot(bot_id);
+    let first = native_session(&service, &repo, bot_id).await;
+    let second = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness, runtime.clone());
+    runtime.sends_ready();
+    let agent = runtime.agent();
+    agent.wait_for_requests(1).await;
+    agent.completes_initialize(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new()
+                        .list(agent_client_protocol::schema::v1::SessionListCapabilities::new()),
+                ),
+        ),
+    );
+    agent.wait_for_requests(2).await;
+    let Some(RawJsonRpcMessage::Request(list)) = agent.received_frames().into_iter().nth(1) else {
+        panic!("expected session/list after initialize");
+    };
+    agent.sends_reply(
+        list.id,
+        serde_json::json!({"sessions": [
+            {"sessionId": first.to_string(), "cwd": "/srv/agent"},
+            {"sessionId": second.to_string(), "cwd": "/srv/agent"},
+        ]}),
+    );
+    let report = reports.recv().await.expect("the dial reports its listing");
+    let held = hold_harness_share(&service, harness).await;
+
+    let dial = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .reattach_live_sessions(
+                    report.harness,
+                    report.acp_sessions,
+                    report.closed,
+                    report.span,
+                )
+                .await
+        }
+    });
+    service
+        .inner
+        .attach_budget
+        .requested(HARNESS_ATTACH_SHARE + 2)
+        .await;
+
+    runtime.disconnects();
+    let report = tokio::time::timeout(ATTACH_PERMIT_HOLD, dial)
+        .await
+        .expect("the restores give up once the connection closes")
+        .unwrap();
+
+    assert_eq!(report.abandoned, 2, "{report:?}");
+    assert_eq!(
+        service.inner.attach_budget.granted(),
+        HARNESS_ATTACH_SHARE,
+        "no restore for the closed connection took a permit"
+    );
+    assert_eq!(agent.received_requests().len(), 2, "nothing was loaded");
+    drop(held);
 }

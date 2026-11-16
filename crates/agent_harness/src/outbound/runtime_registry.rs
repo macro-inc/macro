@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use harness_id::HarnessId;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::domain::ports::{
     HarnessBindings, HarnessPresence, RuntimeConnectionId, RuntimeConnections,
@@ -43,6 +44,8 @@ pub struct LiveRuntimeSessions {
     pub harness: HarnessId,
     /// Its agents' live ACP sessions, with when each last saw activity.
     pub acp_sessions: Vec<ListedSession>,
+    /// Cancelled once this connection closes, so reattaching for it stops.
+    pub closed: CancellationToken,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
 }
@@ -51,6 +54,8 @@ pub struct LiveRuntimeSessions {
 struct ListedConnection<Sender> {
     id: RuntimeConnectionId,
     connection: Arc<RuntimeConnection<Sender>>,
+    /// Cancelled once the connection closes.
+    closed: CancellationToken,
 }
 
 // Manual Clone impl: the sender itself is behind the Arc.
@@ -59,6 +64,7 @@ impl<Sender> Clone for ListedConnection<Sender> {
         Self {
             id: self.id,
             connection: Arc::clone(&self.connection),
+            closed: self.closed.clone(),
         }
     }
 }
@@ -160,6 +166,7 @@ where
         let listed = ListedConnection {
             id: RuntimeConnectionId::generate(),
             connection: RuntimeConnection::connect(carrier),
+            closed: CancellationToken::new(),
         };
 
         // Listed before it is watched: a socket that dies immediately would
@@ -182,6 +189,7 @@ where
             tokio::spawn(report_live_sessions(
                 harness,
                 Arc::clone(&listed.connection),
+                listed.closed.clone(),
                 live_sessions.clone(),
             ));
         }
@@ -231,6 +239,7 @@ where
         connected_write: Option<JoinHandle<()>>,
     ) {
         listed.connection.closed().await;
+        listed.closed.cancel();
         // Only if it is still this connection: a redial that already replaced
         // it owns the entry now, and evicting that would take the live socket
         // down along with the dead one.
@@ -268,6 +277,7 @@ where
 async fn report_live_sessions<Sender>(
     harness: HarnessId,
     connection: Arc<RuntimeConnection<Sender>>,
+    closed: CancellationToken,
     live_sessions: mpsc::UnboundedSender<LiveRuntimeSessions>,
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
@@ -291,6 +301,7 @@ async fn report_live_sessions<Sender>(
     let _ = live_sessions.send(LiveRuntimeSessions {
         harness,
         acp_sessions: listed,
+        closed,
         span: tracing::Span::current(),
     });
 }
