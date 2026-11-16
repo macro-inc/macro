@@ -25,6 +25,7 @@ members = [
   "crates/document_id",
   "crates/passwords",
   "crates/password_import",
+  "crates/password_import_wasm",
   "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",

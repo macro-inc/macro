@@ -1,0 +1,528 @@
+{
+  "outcome": "parsed",
+  "export": {
+    "format": "bitwarden_json",
+    "summary": {
+      "itemsByKind": {
+        "login": 5,
+        "card": 1,
+        "note": 4,
+        "identity": 3,
+        "api": 1
+      },
+      "folders": 3,
+      "skippedByReason": {
+        "trashed": 1,
+        "archived": 1,
+        "passkey": 1,
+        "shared_collection": 2,
+        "unsupported_category": 1,
+        "malformed": 1
+      },
+      "droppedByPart": {
+        "attachment": 1,
+        "passkey": 1,
+        "password_history": 2,
+        "totp_non_default": 1,
+        "extra_field": 1
+      }
+    },
+    "folders": [
+      {
+        "key": "folder:0",
+        "name": "Work",
+        "parentKey": null,
+        "path": [
+          "Work"
+        ]
+      },
+      {
+        "key": "folder:1",
+        "name": "Clients",
+        "parentKey": "folder:0",
+        "path": [
+          "Work",
+          "Clients"
+        ]
+      },
+      {
+        "key": "folder:2",
+        "name": "Ünïcødé",
+        "parentKey": "folder:1",
+        "path": [
+          "Work",
+          "Clients",
+          "Ünïcødé"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "name": "Ünïcødé 🔑 名前",
+        "kind": "login",
+        "url": "https://login.example.test/sign-in",
+        "folderKey": "folder:2",
+        "favorite": true,
+        "values": {
+          "username": "ünïcødé-user",
+          "password": "pässwörd-🔑",
+          "notes": "Notes with ünïcødé 名前 and\nnew lines.",
+          "fields": [
+            {
+              "label": "Recovery code",
+              "value": "recovery-0000"
+            },
+            {
+              "label": "Plan",
+              "value": "premium"
+            },
+            {
+              "label": "Remember me",
+              "value": "true"
+            },
+            {
+              "label": "Field",
+              "value": "unnamed value"
+            },
+            {
+              "label": "Website 2",
+              "value": "androidapp://com.example.app"
+            },
+            {
+              "label": "Website 3",
+              "value": "https://second.example.test/"
+            }
+          ]
+        },
+        "totp": "JBSWY3DPEHPK3PXP"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000002",
+        "name": "Duplicate",
+        "kind": "login",
+        "url": "https://dup.example.test/",
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "dup-user",
+          "password": "dup-pass",
+          "notes": "",
+          "fields": []
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000003",
+        "name": "Duplicate",
+        "kind": "login",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "",
+          "fields": []
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000004",
+        "name": "Secure note",
+        "kind": "note",
+        "url": null,
+        "folderKey": "folder:0",
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "Note body",
+          "fields": []
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000005",
+        "name": "Synthetic Visa",
+        "kind": "card",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Holder",
+          "password": "4111111111111111",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Expires",
+              "value": "07/2030"
+            },
+            {
+              "label": "Security code",
+              "value": "123"
+            },
+            {
+              "label": "Brand",
+              "value": "Visa"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000006",
+        "name": "Synthetic Identity",
+        "kind": "identity",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Q Person",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Email",
+              "value": "identity@example.test"
+            },
+            {
+              "label": "Phone",
+              "value": "+1 555 0101"
+            },
+            {
+              "label": "Address",
+              "value": "Street line one, Unit 2, Testville, TS, 00000, US"
+            },
+            {
+              "label": "Title",
+              "value": "Mx"
+            },
+            {
+              "label": "Company",
+              "value": "Synthetic Co"
+            },
+            {
+              "label": "Username",
+              "value": "synthetic"
+            },
+            {
+              "label": "Social security number",
+              "value": "000-00-0000"
+            },
+            {
+              "label": "Passport number",
+              "value": "P000000"
+            },
+            {
+              "label": "License number",
+              "value": "D000000"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000007",
+        "name": "Deploy key",
+        "kind": "api",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "ssh-ed25519 c3ludGhldGlj",
+          "password": "synthetic-private-key-material",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Fingerprint",
+              "value": "SHA256:synthetic"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000101",
+        "name": "Bank account",
+        "kind": "note",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Bank name",
+              "value": "Synthetic Bank"
+            },
+            {
+              "label": "Name on account",
+              "value": "Synthetic Holder"
+            },
+            {
+              "label": "Account type",
+              "value": "checking"
+            },
+            {
+              "label": "Account number",
+              "value": "000111222"
+            },
+            {
+              "label": "Routing number",
+              "value": "000000000"
+            },
+            {
+              "label": "PIN",
+              "value": "0000"
+            },
+            {
+              "label": "SWIFT code",
+              "value": "SYNTXX00"
+            },
+            {
+              "label": "IBAN",
+              "value": "XX00SYNTHETIC"
+            },
+            {
+              "label": "Phone",
+              "value": "555-0100"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000102",
+        "name": "Driver's license",
+        "kind": "identity",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Driver",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "License number",
+              "value": "D000000"
+            },
+            {
+              "label": "License class",
+              "value": "C"
+            },
+            {
+              "label": "Date of birth",
+              "value": "1990-01-02"
+            },
+            {
+              "label": "Issuing country",
+              "value": "XX"
+            },
+            {
+              "label": "Issuing state",
+              "value": "Synthetic State"
+            },
+            {
+              "label": "Issued on",
+              "value": "2020-01-02"
+            },
+            {
+              "label": "Expires",
+              "value": "2030-01-31"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000103",
+        "name": "Passport",
+        "kind": "identity",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "Synthetic Traveler",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "Passport number",
+              "value": "P0000000"
+            },
+            {
+              "label": "Passport type",
+              "value": "P"
+            },
+            {
+              "label": "Nationality",
+              "value": "Synthetic"
+            },
+            {
+              "label": "Sex",
+              "value": "X"
+            },
+            {
+              "label": "Date of birth",
+              "value": "1990-01-02"
+            },
+            {
+              "label": "Place of birth",
+              "value": "Synthetic City"
+            },
+            {
+              "label": "Issuing country",
+              "value": "XX"
+            },
+            {
+              "label": "Issuing authority",
+              "value": "Synthetic Authority"
+            },
+            {
+              "label": "Issued on",
+              "value": "2020-01-02"
+            },
+            {
+              "label": "Expires",
+              "value": "2030-01-02"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000008",
+        "name": "Note at limit",
+        "kind": "note",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "@@NOTES_AT_LIMIT@@",
+          "fields": []
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000009",
+        "name": "Note over limit",
+        "kind": "note",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "",
+          "password": "",
+          "notes": "@@NOTES_OVER_LIMIT@@",
+          "fields": []
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000010",
+        "name": "Eight digit codes",
+        "kind": "login",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "code-user",
+          "password": "",
+          "notes": "",
+          "fields": [
+            {
+              "label": "One-time password",
+              "value": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=8"
+            }
+          ]
+        },
+        "totp": null
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000018",
+        "name": "With attachments",
+        "kind": "login",
+        "url": null,
+        "folderKey": null,
+        "favorite": false,
+        "values": {
+          "username": "attachment-user",
+          "password": "",
+          "notes": "",
+          "fields": []
+        },
+        "totp": null
+      }
+    ],
+    "skipped": [
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000011",
+        "name": "Organization login",
+        "reason": "shared_collection"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000012",
+        "name": "Collection login",
+        "reason": "shared_collection"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000013",
+        "name": "Deleted login",
+        "reason": "trashed"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000014",
+        "name": "Archived login",
+        "reason": "archived"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000015",
+        "name": "Passkey only",
+        "reason": "passkey"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000016",
+        "name": "Future type",
+        "reason": "unsupported_category"
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000017",
+        "name": null,
+        "reason": "malformed"
+      }
+    ],
+    "dropped": [
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "passkey",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "extra_field",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "password_history",
+        "count": 2
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000010",
+        "what": "totp_non_default",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000018",
+        "what": "attachment",
+        "count": 1
+      }
+    ]
+  }
+}

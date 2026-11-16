@@ -252,6 +252,11 @@
           simd = true;
           profile = "ai-engine-wasm";
         }
+        {
+          name = "password_import_wasm";
+          crate = "crates/password_import_wasm";
+          dir = "password-import";
+        }
       ];
 
       # A binary of the root workspace (not the nested Tauri one), built

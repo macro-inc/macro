@@ -43,6 +43,7 @@ pub(crate) const WASM_PACKAGES: &[&str] = &[
     "docx_engine",
     "fig_engine",
     "natural_time",
+    "password_import_wasm",
     "pptx_engine",
     "psd_engine",
 ];
