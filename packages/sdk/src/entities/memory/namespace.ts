@@ -29,6 +29,8 @@ export class MemoryNamespace {
    * @example
    * const memory = await macro.memory.read();
    * const lines = memory.content.split('\n');
+   *
+   * @readonly
    */
   async read(): Promise<ExplicitMemory> {
     return unwrap(await this.client.cognition.readExplicitMemory());
@@ -49,6 +51,8 @@ export class MemoryNamespace {
    *   { action: 'insert', line: lines.length + 1, content: 'Prefers metric units' },
    *   memory.revision,
    * );
+   *
+   * @destructive
    */
   async edit(edit: MemoryEdit, revision: number): Promise<ExplicitMemory> {
     return unwrap(

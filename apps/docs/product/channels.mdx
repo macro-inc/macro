@@ -10,54 +10,29 @@ Watch a 1:30 walkthrough of Macro Chat.
 
 <video src="https://macro.com/video/tutorials/chat.mp4" poster="https://macro.com/video/tutorials/chat-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-<div className="chat-preview" role="img" aria-label="Messages in the design channel">
-  <div className="chat-preview-bar">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m9 3.5-2 17m10-17-2 17M3.5 8.25h17m-17 7.5h17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-    <span className="chat-preview-title">design</span>
-  </div>
-  <div className="chat-preview-day">Today</div>
-  <div className="chat-preview-message">
-    <span className="chat-preview-avatar is-avery">A</span>
-    <div className="chat-preview-body">
-      <div className="chat-preview-meta"><span className="chat-preview-name">Avery</span><span className="chat-preview-time">10:24 AM</span></div>
-      <p>The review notes are in the doc. Can someone take a look?</p>
-    </div>
-  </div>
-  <div className="chat-preview-thread">
-    <div className="chat-preview-reply">
-      <span className="chat-preview-avatar is-riley">R</span>
-      <div className="chat-preview-body">
-        <div className="chat-preview-meta"><span className="chat-preview-name">Riley</span><span className="chat-preview-time">10:31 AM</span></div>
-        <p>I'll take the checklist and post it here.</p>
-      </div>
-    </div>
-    <div className="chat-preview-reply">
-      <span className="chat-preview-avatar is-quinn">Q</span>
-      <div className="chat-preview-body">
-        <div className="chat-preview-meta"><span className="chat-preview-name">Quinn</span><span className="chat-preview-time">10:36 AM</span></div>
-        <p>Let's keep the thread in <span className="chat-preview-channel">#design</span>.</p>
-      </div>
-    </div>
-    <div className="chat-preview-more">
-      <span className="chat-preview-stack" aria-hidden="true">
-        <span className="chat-preview-avatar is-avery">A</span>
-        <span className="chat-preview-avatar is-riley">R</span>
-        <span className="chat-preview-avatar is-quinn">Q</span>
-      </span>
-      <span className="chat-preview-more-count">2 more replies</span>
-      <span className="chat-preview-more-when">Last reply today</span>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="m9 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </div>
-  </div>
-</div>
-
 Anyone can be added to a channel by entering their email, even if they're not on your team. People without a Macro account receive an email telling them about their channel notifications.
 
-You can have an empty channel with just yourself, or add team members for a collaborative channel.
+<CardGroup cols={2}>
+  <Card title="Channels & Groups" icon="users">
+    Organize team conversations by topic, project, or team
+  </Card>
+
+  <Card title="Threaded Replies" icon="comments">
+    Keep discussions organized with threaded conversations
+  </Card>
+
+  <Card title="Bidirectional Links" icon="link">
+    @mention docs, tasks, and emails to create traceable references
+  </Card>
+
+  <Card title="Rich Messages" icon="pen-fancy">
+    Format messages with the same editor used everywhere in Macro
+  </Card>
+</CardGroup>
+
+> To create a channel use shortcut <kbd>c</kbd> \+ <kbd>g</kbd>
+
+New channels function similarly to Slack channels. You can have an empty channel with just yourself, or add team members for a collaborative channel.
 
 ## Channel types
 
@@ -88,40 +63,6 @@ Mention an agent you created the same way, with its **@tag**. Open **Settings �
 In **Settings → Agents**, **Connect Cursor** lets you mention **@Cursor** on your Cursor subscription. **Bring your own agent** pairs Claude Code, Codex, or another local agent through Macrod. See [Bring your own agent](/AI/bring-your-own).
 
 @mention a coding agent in the channel and it opens a session in the thread. When that session opens a pull request, the message links to it.
-
-<div className="agent-preview" role="img" aria-label="Avery mentions Cursor, and the coding session links to a pull request">
-  <div className="agent-preview-message">
-    <span className="chat-preview-avatar is-avery">A</span>
-    <div className="chat-preview-body">
-      <div className="chat-preview-meta"><span className="chat-preview-name">Avery</span><span className="chat-preview-time">10:41 AM</span></div>
-      <p><span className="agent-preview-mention">@Cursor</span>, the signup button is too small on mobile. Open a pull request.</p>
-    </div>
-  </div>
-  <div className="agent-preview-response">
-    <div className="agent-preview-from">from <span className="agent-preview-from-name">Avery</span></div>
-    <div className="agent-preview-quote"><span className="agent-preview-who">Avery</span><span>@Cursor, the signup button is too small on mobile. Open a pull request.</span></div>
-    <div className="agent-preview-card">
-      <div className="agent-preview-card-bar">
-        <span className="agent-preview-check" aria-hidden="true">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m5 12.25 4.5 4.5L19 7.25" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </span>
-        <span className="agent-preview-agent">Cursor Agent</span>
-        <span className="agent-preview-model">Auto</span>
-        <span className="agent-preview-status">Done</span>
-        <span className="agent-preview-open">Open session <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
-      </div>
-      <div className="agent-preview-pr">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 2.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm0 14a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm12 0a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" fill="currentColor" />
-          <path d="M6 7.25v9.5M18 16.75V9a4 4 0 0 0-4-4h-3M13.5 2.5 11 5l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <span className="agent-preview-pr-title">#184 · Fix the mobile signup button</span>
-        <span className="agent-preview-add">+18</span>
-        <span className="agent-preview-del">−4</span>
-      </div>
-    </div>
-  </div>
-</div>
 
 ## Message Features
 

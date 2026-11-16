@@ -13,7 +13,7 @@ use agent_session::domain::notifications::{
     NotificationFuture, NotificationWriter, PendingNotification,
 };
 use import_notion::domain::model::{
-    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, SearchHit,
+    NotionDataSource, NotionId, NotionPage, NotionUser, PageMarkdown, Paged, RowsPage, SearchHit,
     SearchObject,
 };
 use import_notion::domain::ports::{NotionApi, NotionError};
@@ -104,7 +104,7 @@ impl NotionApi for Pages {
         &self,
         _: &NotionId,
         _: Option<String>,
-    ) -> std::result::Result<Paged<NotionPage>, NotionError> {
+    ) -> std::result::Result<RowsPage, NotionError> {
         unimplemented!("only pages here")
     }
 

@@ -421,7 +421,7 @@ const emailService = new EmailService('email-service', {
 
 export const emailServiceUrl = pulumi.interpolate`${emailService.domain}`;
 
-const pubsubWorkers = new EmailPubSubWorkers('email-pubsub-workers', {
+new EmailPubSubWorkers('email-pubsub-workers', {
   vpc: coparse_api_vpc,
   tags,
   ecsClusterArn: cloudStorageClusterArn,
@@ -431,21 +431,6 @@ const pubsubWorkers = new EmailPubSubWorkers('email-pubsub-workers', {
   containerEnvVars,
   dopplerEcsEnvironment,
 });
-
-// Expected resources from this Pulumi update, never the live service's primary
-// revision (which could have rolled back). The automatic deployment verifies
-// these before exposing the new CRM consent API.
-export const crmBackfillConsumer = {
-  cluster: cloudStorageClusterArn,
-  service: pubsubWorkers.service.service.name,
-  taskDefinition: pubsubWorkers.service.taskDefinition.apply((definition) => {
-    if (!definition)
-      throw new Error('Pub/sub worker task definition is missing');
-    return definition.arn;
-  }),
-  image: pubsubWorkers.imageUri,
-  container: pubsubWorkers.containerName,
-};
 
 // Classifies signal threads for the Focus view. It reads mail only for
 // inboxes on FOCUS_ENABLED_EMAIL_DOMAINS (Doppler) and idles when that is empty.

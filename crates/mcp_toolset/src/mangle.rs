@@ -123,6 +123,13 @@ impl Mangled {
     }
 }
 
+/// Split a mangled `mcp__<server>__<tool>` name into its server and tool
+/// segments, as routing does; `None` for a name that is not mangled.
+#[must_use]
+pub fn unmangle(name: &str) -> Option<(&str, &str)> {
+    MangledName::parse(name)
+}
+
 impl MangledName {
     pub(crate) fn parse(s: &str) -> Option<(&str, &str)> {
         s.strip_prefix(MANGLED_PREFIX)?

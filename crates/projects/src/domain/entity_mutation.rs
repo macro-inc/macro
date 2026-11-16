@@ -1,5 +1,7 @@
 //! Unified entity-mutation capability impls for projects.
 
+use std::collections::HashSet;
+
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel,
 };
@@ -27,9 +29,9 @@ impl From<ProjectError> for EntityMutationErrorCode {
     fn from(error: ProjectError) -> Self {
         match error {
             error @ ProjectError::NotFound(_) => Self::not_found(rootcause::report!(error)),
-            error @ (ProjectError::Unauthorized | ProjectError::UnauthorizedWithMessage(_)) => {
-                Self::forbidden(rootcause::report!(error))
-            }
+            error @ (ProjectError::Unauthorized
+            | ProjectError::UnauthorizedWithMessage(_)
+            | ProjectError::Forbidden(_)) => Self::forbidden(rootcause::report!(error)),
             error @ (ProjectError::BadRequest(_)
             | ProjectError::NameTooLong { .. }
             | ProjectError::RecursiveNesting) => Self::invalid(rootcause::report!(error)),
@@ -59,16 +61,22 @@ fn access_error(error: AccessError) -> EntityMutationErrorCode {
     }
 }
 
-/// Deduplicate effects while preserving their domain-defined order.
+/// Deduplicate effects while preserving their domain-defined order. A folder
+/// tree yields one effect per item, so this stays linear in its size.
 fn unique_effects(
     effects: impl IntoIterator<Item = EntityMutationEffect>,
 ) -> Vec<EntityMutationEffect> {
-    effects.into_iter().fold(Vec::new(), |mut unique, effect| {
-        if !unique.contains(&effect) {
-            unique.push(effect);
-        }
-        unique
-    })
+    let mut seen = HashSet::new();
+    effects
+        .into_iter()
+        .filter(|effect| {
+            let key = match effect {
+                EntityMutationEffect::Updated(entity) => (false, entity.clone()),
+                EntityMutationEffect::Deleted(entity) => (true, entity.clone()),
+            };
+            seen.insert(key)
+        })
+        .collect()
 }
 
 /// Fetch project metadata; access is enforced separately via receipts.

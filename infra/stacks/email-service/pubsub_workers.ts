@@ -3,6 +3,7 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
   versionEnvironment,
   withTelemetry,
@@ -34,11 +35,8 @@ type Args = {
 };
 
 export class EmailPubSubWorkers extends pulumi.ComponentResource {
-  // AWSX uses the containers map key as the ECS container name.
-  public readonly containerName = 'service';
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public imageUri: pulumi.Output<string>;
   public serviceSg: aws.ec2.SecurityGroup;
   public service: awsx.ecs.FargateService;
   public clusterName: pulumi.Output<string> | string;
@@ -101,7 +99,6 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
       { parent: this }
     );
     this.ecr = image.ecr;
-    this.imageUri = image.image.imageUri;
 
     // sg - workers only need egress
     this.serviceSg = this.initializeSecurityGroup({
@@ -118,8 +115,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
-        // The consent API deploy waits for these consumers, including old-task drain.
-        continueBeforeSteadyState: false,
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -132,8 +128,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: withTelemetry(BASE_NAME, {
-            [this.containerName]: {
-              name: this.containerName,
+            service: {
+              name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,

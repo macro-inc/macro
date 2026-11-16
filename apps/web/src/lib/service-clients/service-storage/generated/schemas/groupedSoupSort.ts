@@ -18,4 +18,5 @@ export const GroupedSoupSort = {
   updated_at: 'updated_at',
   viewed_updated: 'viewed_updated',
   property: 'property',
+  name: 'name',
 } as const;

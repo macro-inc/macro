@@ -174,6 +174,7 @@ impl SequenceStepStore for PgSequenceSteps {
             provider_thread_id,
             thread_db_id: thread_id,
             subject: step.subject.to_owned(),
+            from_name: None,
             to: vec![step.to.clone()],
             cc: vec![],
             bcc: vec![],
@@ -315,17 +316,19 @@ impl SequenceStepStore for PgSequenceSteps {
             .execute(&mut *conn)
             .await
             .map_err(storage)?;
-        if !email_db_client::threads::delete::delete_thread_if_empty(conn, locked.thread_id)
+        // The step may have been the thread's only message.
+        use email_db_client::threads;
+        let emptied = !threads::delete::thread_has_messages(conn, locked.thread_id)
             .await
             .map_err(EmailErr::RepoErr)?
-        {
-            email_db_client::threads::update::recompute_thread_metadata(
-                conn,
-                locked.thread_id,
-                locked.link_id,
-            )
-            .await
-            .map_err(storage)?;
+            && threads::delete::delete_empty_thread(conn, locked.thread_id)
+                .await
+                .map_err(EmailErr::RepoErr)?
+                > 0;
+        if !emptied {
+            threads::update::recompute_thread_metadata(conn, locked.thread_id, locked.link_id)
+                .await
+                .map_err(storage)?;
         }
         Ok(CancelOutcome::Cancelled)
     }

@@ -1,10 +1,21 @@
 import { analytics } from '@app/lib/analytics';
-import shortUUID from 'short-uuid';
+import {
+  trackUpload,
+  type UploadProgressHandle,
+} from '@core/component/UploadProgress/uploadProgress';
+import { humanFileSize } from '@core/util/humanFileSize';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
+import { match } from 'ts-pattern';
+import type {
+  ZipWorkerRequest,
+  ZipWorkerResponse,
+} from '../../workers/folder-upload/zip-worker';
 import ZipWorker from '../../workers/folder-upload/zip-worker?worker';
 import { joinZipPath } from './folderUploadPaths';
 
-const MAX_FOLDER_FILE_COUNT = 1000;
-// NOTE: you can expect a 30-40% decrease in folder size when zipped
+const MAX_FOLDER_FILE_COUNT = 10_000;
+// Folders are zipped without compression, so this is also the upload's size.
 const MAX_FOLDER_BYTE_SIZE = 3 * 1000 * 1000 * 1000; // 3GB
 
 export class DirectoryFileCountExceededError extends Error {
@@ -82,7 +93,7 @@ export class DirectoryFileSizeExceededError extends Error {
   }
 
   private static toString(limit: number, directoryName: string) {
-    return `Folder ${directoryName} exceeds the size limit of ${limit} bytes.`;
+    return `Folder ${directoryName} exceeds the size limit of ${humanFileSize(limit)}.`;
   }
 
   override toString() {
@@ -93,216 +104,80 @@ export class DirectoryFileSizeExceededError extends Error {
   }
 }
 
-// Types for the worker communication
-interface ZipTaskMessage {
-  action: 'zipFiles';
-  files: File[];
-  fileDetails: FileDetail[];
-  /** Folder paths to write as entries, so empty folders survive. */
-  folderPaths: string[];
-  taskId?: string; // Added by the pool
-}
+type ZipTaskMessage = Omit<ZipWorkerRequest, 'taskId'>;
 
-interface ZipProgressData {
-  percentage?: number;
-  message: string;
-}
+type ZipProgressData = Extract<ZipWorkerResponse, { type: 'progress' }>['data'];
 
-interface ZipCompleteData {
-  zipBlob: Blob;
-  tempFilename: string;
-}
-
-interface ZipErrorData {
-  message: string;
-}
-
-interface WorkerMessage {
-  taskId: string;
-  type: 'progress' | 'complete' | 'error' | 'status';
-  data: ZipProgressData | ZipCompleteData | ZipErrorData;
-}
+type ZipCompleteData = Extract<ZipWorkerResponse, { type: 'complete' }>['data'];
 
 export interface FileDetail {
   path: string;
 }
 
-interface Task {
-  id: string;
-  message: ZipTaskMessage;
-  onProgress?: (data: ZipProgressData) => void;
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
-  processing: boolean;
-}
+/** Folders zipped at once; the rest of a large drop waits its turn. */
+const MAX_CONCURRENT_ZIPS = 3;
+let runningZips = 0;
+const waitingZips: (() => void)[] = [];
 
-// Worker wrapper to provide type-safe communication
-class ZipWorkerWrapper {
-  worker: Worker;
-  id: number;
-  busy: boolean;
-
-  constructor(WorkerConstructor: new () => Worker, id: number) {
-    this.worker = new WorkerConstructor();
-    this.id = id;
-    this.busy = false;
+/**
+ * Runs `work` once fewer than `MAX_CONCURRENT_ZIPS` folders are zipping. A
+ * finished folder hands its slot straight to the next waiting one.
+ */
+async function withZipSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (runningZips < MAX_CONCURRENT_ZIPS) {
+    runningZips += 1;
+  } else {
+    await new Promise<void>((resolve) => waitingZips.push(resolve));
   }
-
-  postMessage(message: ZipTaskMessage): void {
-    this.worker.postMessage(message);
-  }
-
-  terminate(): void {
-    this.worker.terminate();
+  try {
+    return await work();
+  } finally {
+    const next = waitingZips.shift();
+    if (next) next();
+    else runningZips -= 1;
   }
 }
 
-const MIN_WORKERS = 2;
-const MAX_WORKERS = 6;
+/**
+ * Zips one folder in a worker of its own, created on first use (iOS deadlocks
+ * on module workers built at load) and ended when the folder is done. A worker
+ * that fails to load or crashes fails its folder instead of leaving it
+ * preparing forever.
+ */
+function runZipWorker(
+  message: ZipTaskMessage,
+  onProgress: (data: ZipProgressData) => void
+): Promise<ZipCompleteData> {
+  return new Promise((resolve, reject) => {
+    const worker = new ZipWorker();
+    const taskId = crypto.randomUUID();
 
-class ZipWorkerPool {
-  private workerConstructor: new () => Worker;
-  private size: number;
-  private workers: ZipWorkerWrapper[];
-  private taskQueue: Task[];
-  private availableWorkers: ZipWorkerWrapper[];
-  private static instance: ZipWorkerPool | null = null;
-  private static suuidTranslator = shortUUID();
-
-  public static getInstance(
-    workerConstructor: new () => Worker,
-    size?: number
-  ): ZipWorkerPool {
-    if (!ZipWorkerPool.instance) {
-      ZipWorkerPool.instance = new ZipWorkerPool(workerConstructor, size);
-    }
-    return ZipWorkerPool.instance;
-  }
-
-  private constructor(
-    workerConstructor: new () => Worker,
-    size = navigator.hardwareConcurrency || 4
-  ) {
-    this.workerConstructor = workerConstructor;
-    this.size = Math.max(MIN_WORKERS, Math.min(MAX_WORKERS, size));
-    this.workers = [];
-    this.taskQueue = [];
-    this.availableWorkers = [];
-
-    this.initialize();
-  }
-
-  private initialize(): void {
-    for (let i = 0; i < this.size; i++) {
-      const workerWrapper = new ZipWorkerWrapper(this.workerConstructor, i);
-
-      workerWrapper.worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        const { taskId, type, data } = event.data;
-
-        const task = this.taskQueue.find((task) => task.id === taskId);
-
-        if (task) {
-          if (type === 'complete') {
-            task.resolve(data);
-            this.taskQueue = this.taskQueue.filter((t) => t.id !== taskId);
-            workerWrapper.busy = false;
-            this.availableWorkers.push(workerWrapper);
-            this.processNextTask();
-          } else if (type === 'progress' || type === 'status') {
-            if (task.onProgress) {
-              task.onProgress(data as ZipProgressData);
-            }
-          } else if (type === 'error') {
-            const errorData = data as ZipErrorData;
-            task.reject(new Error(errorData.message));
-            this.taskQueue = this.taskQueue.filter((t) => t.id !== taskId);
-            workerWrapper.busy = false;
-            this.availableWorkers.push(workerWrapper);
-            this.processNextTask();
-          }
-        }
-      };
-
-      workerWrapper.worker.onerror = (error: ErrorEvent) => {
-        console.error(`Worker ${i} error:`, error);
-        const newWorker = new ZipWorkerWrapper(this.workerConstructor, i);
-        this.workers[i] = newWorker;
-
-        // If the worker was processing a task, requeue it
-        const failedTask = this.taskQueue.find(
-          (task) =>
-            task.processing &&
-            !this.availableWorkers.some((w) => w.busy && w.id === i)
+    worker.onmessage = (event: MessageEvent<ZipWorkerResponse>) => {
+      const response = event.data;
+      if (response.taskId !== taskId) return;
+      match(response)
+        .with({ type: 'complete' }, ({ data }) => {
+          worker.terminate();
+          resolve(data);
+        })
+        .with({ type: 'progress' }, ({ data }) => onProgress(data))
+        .with({ type: 'error' }, ({ data }) => {
+          worker.terminate();
+          reject(new Error(data.message));
+        })
+        .exhaustive((unknown) =>
+          console.warn('zip worker: unknown response', unknown)
         );
+    };
 
-        if (failedTask) {
-          failedTask.processing = false;
-          this.processNextTask();
-        }
-      };
+    worker.onerror = (error: ErrorEvent) => {
+      console.error('zip worker error:', error);
+      worker.terminate();
+      reject(new Error(error.message || 'The folder could not be zipped'));
+    };
 
-      this.workers.push(workerWrapper);
-      this.availableWorkers.push(workerWrapper);
-    }
-  }
-
-  private processNextTask(): void {
-    // If there are pending tasks and available workers, assign tasks
-    if (this.taskQueue.length > 0 && this.availableWorkers.length > 0) {
-      const pendingTasks = this.taskQueue.filter((task) => !task.processing);
-
-      for (
-        let i = 0;
-        i < Math.min(pendingTasks.length, this.availableWorkers.length);
-        i++
-      ) {
-        const task = pendingTasks[i];
-        const worker = this.availableWorkers.shift();
-        if (!worker) {
-          console.error('No available workers');
-          continue;
-        }
-
-        task.processing = true;
-        worker.busy = true;
-
-        const message = {
-          ...task.message,
-          taskId: task.id,
-        };
-
-        worker.postMessage(message);
-      }
-    }
-  }
-
-  public addTask(
-    message: ZipTaskMessage,
-    onProgress?: (data: ZipProgressData) => void
-  ): Promise<ZipCompleteData> {
-    return new Promise((resolve, reject) => {
-      const suuid = ZipWorkerPool.suuidTranslator.generate();
-      const taskId = `zip-${suuid}`;
-
-      this.taskQueue.push({
-        id: taskId,
-        message,
-        onProgress,
-        resolve,
-        reject,
-        processing: false,
-      });
-
-      this.processNextTask();
-    });
-  }
-
-  public terminate(): void {
-    this.workers.forEach((worker) => worker.terminate());
-    this.workers = [];
-    this.availableWorkers = [];
-    ZipWorkerPool.instance = null;
-  }
+    worker.postMessage({ ...message, taskId } satisfies ZipWorkerRequest);
+  });
 }
 
 // zips up each folder entry and returns the zip files
@@ -322,8 +197,35 @@ export function handleFoldersInput(
   return zipPromises;
 }
 
+/**
+ * Shows the folder in the upload indicator while it is read and zipped, and
+ * keeps the tab from reloading into a newer build, which would discard it.
+ */
+async function prepareFolder(
+  folderName: string,
+  prepare: (progress: UploadProgressHandle) => Promise<File>
+): Promise<File> {
+  const progress = trackUpload(folderName, 0);
+  const releaseReloadHold = holdAutomaticReload();
+  try {
+    return await prepare(progress);
+  } finally {
+    progress.done();
+    releaseReloadHold();
+  }
+}
+
 // process zip with worker pool
-async function zipDirectory(entry: FileSystemDirectoryEntry) {
+function zipDirectory(entry: FileSystemDirectoryEntry) {
+  return prepareFolder(entry.name, (progress) =>
+    zipDirectoryEntries(entry, progress)
+  );
+}
+
+async function zipDirectoryEntries(
+  entry: FileSystemDirectoryEntry,
+  progress: UploadProgressHandle
+) {
   const folderName = entry.name;
 
   const fileEntries: FileSystemFileEntry[] = [];
@@ -368,9 +270,7 @@ async function zipDirectory(entry: FileSystemDirectoryEntry) {
 
   const files = await Promise.all(filePromises);
 
-  const zipFile = await zipFiles(folderName, files, fileDetails, folderPaths);
-
-  return zipFile;
+  return writeFolderZip(folderName, files, fileDetails, folderPaths, progress);
 }
 
 // recursively add files to fileEntries and fileDetails from entry
@@ -426,21 +326,33 @@ async function processDirectoryEntry(
   }
 }
 
-export async function zipFiles(
+// The SHA-256 each folder zip was written with, so uploading one never reads
+// it into memory to hash it.
+const folderZipHashes = new WeakMap<File, string>();
+
+/** The SHA-256 of a zip made by `zipFiles`, or undefined for any other file. */
+export function getFolderZipSha256(file: File): string | undefined {
+  return folderZipHashes.get(file);
+}
+
+export function zipFiles(
   folderName: string,
   files: File[],
   fileDetails: FileDetail[],
   folderPaths: string[] = []
 ): Promise<File> {
-  const workerPool = ZipWorkerPool.getInstance(ZipWorker);
+  return prepareFolder(folderName, (progress) =>
+    writeFolderZip(folderName, files, fileDetails, folderPaths, progress)
+  );
+}
 
-  const message: ZipTaskMessage = {
-    action: 'zipFiles',
-    files: files,
-    fileDetails: fileDetails,
-    folderPaths,
-  };
-
+async function writeFolderZip(
+  folderName: string,
+  files: File[],
+  fileDetails: FileDetail[],
+  folderPaths: string[],
+  progress: UploadProgressHandle
+): Promise<File> {
   // check file count
   if (files.length > MAX_FOLDER_FILE_COUNT) {
     throw new DirectoryFileCountExceededError(folderName, files.length);
@@ -455,19 +367,26 @@ export async function zipFiles(
     }
   }
 
-  // Add progress tracking
-  const onProgress = (_data: ZipProgressData) => {
-    // console.log(`Zip progress: ${data.message}`);
-  };
+  return Telemetry.span('folder_upload.zip', async (span) => {
+    span.setAttr('folder_upload.files', files.length);
+    span.setAttr('folder_upload.folders', folderPaths.length);
+    span.setAttr('folder_upload.bytes', totalBytes);
 
-  // Add the task to the pool and wait for the result
-  const result = await workerPool.addTask(message, onProgress);
+    const result = await withZipSlot(() =>
+      runZipWorker(
+        { action: 'zipFiles', files, fileDetails, folderPaths },
+        ({ processedBytes, totalBytes }) =>
+          progress.preparing(
+            totalBytes > 0 ? processedBytes / totalBytes : null
+          )
+      )
+    );
+    span.setAttr('folder_upload.zip_bytes', result.zipBlob.size);
 
-  const zipName = `${folderName}.zip`;
-
-  // Create the zip file from the result
-  const zipBlob = result.zipBlob;
-  const zipFile = new File([zipBlob], zipName, { type: 'application/zip' });
-
-  return zipFile;
+    const zipFile = new File([result.zipBlob], `${folderName}.zip`, {
+      type: 'application/zip',
+    });
+    folderZipHashes.set(zipFile, result.sha256);
+    return zipFile;
+  });
 }

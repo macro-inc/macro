@@ -22,6 +22,15 @@ outbound = [
   "ports",
 ]
 ports = []
+picture-fanout = [
+  "dep:connection_gateway_client",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:model-entity",
+  "dep:rdkafka",
+  "dep:user_events",
+  "ports",
+]
 directory-names = ["dep:macro_db_client", "dep:non_empty", "dep:sqlx", "ports"]
 
 [dependencies]
@@ -32,6 +41,14 @@ reqwest = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", features = [
+  "outbound",
+], optional = true }
+model-entity = { path = "../model-entity", optional = true }
+rdkafka = { workspace = true, optional = true }
+user_events = { path = "../user_events", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_db_client = { path = "../macro_db_client", optional = true }
 non_empty = { path = "../non_empty", optional = true }

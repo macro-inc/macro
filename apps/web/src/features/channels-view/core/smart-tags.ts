@@ -25,6 +25,43 @@ export function resolveChannelLabelMemberships(
     channels.map((channel) => [channel.id, channel])
   );
   return labels.map((label) => {
+    // Only the additive sections API marks its viewer-authorized memberships.
+    if (label.explicitChannelIds != null) {
+      const serverIds = new Set(label.channelIds);
+      const explicitIds = new Set(label.explicitChannelIds);
+      const eligible = (channel: ChannelEntity) => {
+        if (!canLabelChannel(channel, label)) return false;
+        if (!label.teamId) return channel.isParticipant !== false;
+        return channel.teamId
+          ? channel.teamId === label.teamId
+          : serverIds.has(channel.id);
+      };
+      const channelIds = [
+        ...new Set([
+          ...label.channelIds.filter((id) => !loadedIds.has(id)),
+          ...channels
+            .filter(
+              (channel) =>
+                eligible(channel) &&
+                (label.rule
+                  ? channelMatchesSmartTag(channel, label.rule, label)
+                  : explicitIds.has(channel.id))
+            )
+            .map((channel) => channel.id),
+        ]),
+      ];
+      return {
+        ...label,
+        channelIds,
+        explicitChannelIds: label.rule
+          ? []
+          : label.explicitChannelIds.filter((id) => {
+              const channel = channelsById.get(id);
+              return !channel || eligible(channel);
+            }),
+        channelCount: channelIds.length,
+      };
+    }
     const rule = label.rule;
     if (!rule) {
       const channelIds = label.channelIds.filter((id) => {

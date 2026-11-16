@@ -6,7 +6,7 @@ use crate::SystemSkill;
 
 static TITLE: &str = "Configure Agent";
 
-static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to change how one of their agents behaves - its instructions or system prompt, the model or runtime it runs on, which channels it answers in, which connected apps its sessions get, whether it asks before using tools, or whether it is a coding or chat agent. Agents are the personas people `@` mention in channels and open sessions with; each has a bot profile plus this configuration.
+static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to change how one of their agents behaves - its instructions or system prompt, the model or runtime it runs on, which channels it answers in, which connected apps its sessions get, whether it asks before using tools, or whether it is a coding or chat agent. Agents are the personas people `@` mention in channels and open sessions with; each has a bot profile plus this configuration. Where `ListAgents` and `ConfigureAgent` are absent, do each step through `ExecuteCode` with `macro.agents.list()` and `Agent.update()`.
 
 ## Find the agent
 

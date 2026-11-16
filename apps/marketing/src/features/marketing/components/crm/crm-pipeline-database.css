@@ -1,0 +1,27 @@
+/* A pipeline as a database table. Its columns keep their own widths, as the
+   app's do, so the Add field menu opens over the empty end of the rows. */
+#crm-databases .paper-feature-graphic > .feature-demo-backdrop::before { opacity: .25; }
+
+.crm-pipeline-db { position: relative; font-weight: 400; }
+.crm-pipeline-db .database-views-tabs .database-views-pill { font-weight: 500; }
+.crm-pipeline-db .database-views-name { font-weight: 400; }
+.crm-pipeline-db .database-views-row { grid-template-columns: 28px 130px 98px 88px 88px 30px; }
+.crm-pipeline-db .database-views-row > span { padding: 0 8px; white-space: nowrap; }
+.crm-pipeline-db .database-views-body { height: 252px; mask-image: none; }
+.crm-pipeline-db-value { color: var(--color-ui-content-secondary); font-variant-numeric: tabular-nums; }
+.crm-pipeline-db .crm-pipeline-db-add { justify-content: center; align-self: center; height: 24px; margin: 0 5px; padding: 0; border-radius: 7px; background: oklch(100% 0 0 / 10%); color: var(--color-ui-content-primary); }
+.crm-pipeline-db .crm-pipeline-db-add svg { color: inherit; }
+
+/* The app's elevated menu surface; it names its parent to keep its fill inside the artboard. */
+.crm-pipeline-db > .crm-pipeline-db-menu {
+  position: absolute; top: 74px; left: 432px; width: 120px; box-sizing: border-box; padding: 5px;
+  border-radius: 12px; background-color: #0d0e0f;
+  box-shadow: 0 0 0 1px #0006, inset 0 1px 0 #ffffff21, inset 0 0 0 1px #ffffff12, 0 20px 44px -16px #000d, 0 4px 12px -6px #0009;
+}
+.crm-pipeline-db-menu span { display: flex; align-items: center; gap: 9px; height: 28px; padding: 0 8px; border-radius: 7px; }
+.crm-pipeline-db-menu span[data-active] { background: oklch(100% 0 0 / 8%); }
+.crm-pipeline-db-menu svg { color: var(--color-ui-content-tertiary); }
+
+.paper-feature-art[data-compact=true] .crm-pipeline-db .database-views-row { grid-template-columns: 24px 118px 98px 30px; }
+.paper-feature-art[data-compact=true] .crm-pipeline-db-wide { display: none; }
+.paper-feature-art[data-compact=true] .crm-pipeline-db > .crm-pipeline-db-menu { left: 240px; width: 120px; }

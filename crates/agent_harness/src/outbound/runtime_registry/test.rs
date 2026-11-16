@@ -429,7 +429,11 @@ async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
     let report = reports.recv().await.expect("the dial reports");
     assert_eq!(report.harness, HarnessId::TEST_A);
     assert_eq!(
-        report.acp_sessions,
+        report
+            .acp_sessions
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
 }

@@ -1,6 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TASK_PROJECT_PROPERTY } from './task-project';
@@ -23,10 +24,17 @@ vi.mock('@queries/properties/definitions', () => ({}));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
 }));
+vi.mock('@queries/activity/push-registry', () => ({
+  registerActivityRevalidator: vi.fn(),
+  revalidateActivityQueries: vi.fn(async () => {}),
+}));
+const removeSearchEntities = vi.hoisted(() => vi.fn());
+vi.mock('@queries/soup/cache', () => ({ removeSearchEntities }));
 vi.mock('./create-project', () => ({ createProjectMutation: () => ({}) }));
 vi.mock('./project-soup', () => ({}));
 vi.mock('./project-identity', () => ({}));
 
+import { soupKeys } from '@queries/soup/keys';
 import { createProjectSources } from './project-sources';
 
 afterEach(() => vi.clearAllMocks());
@@ -138,5 +146,59 @@ it('sets and clears each task Project property, reporting failures per task', as
       }),
     ],
   });
+  dispose();
+});
+
+it.each([
+  ['refreshes', undefined, true],
+  ['leaves cache-maintained', { disabled: false }, false],
+] as const)(
+  '%s shared list rows after a rename',
+  async (_, host, refetched) => {
+    const cache = new QueryClient();
+    const key = soupKeys.astItems({ body: 'home' } as never).queryKey;
+    cache.setQueryData(key, { pages: [] });
+    const search = soupKeys.search({ body: 'launch' } as never).queryKey;
+    cache.setQueryData(search, { pages: [] });
+    const { rename, dispose } = createRoot((dispose) => ({
+      rename: createProjectSources(
+        { update: async () => ok(undefined) } as never,
+        { client: () => ({}) as never, cacheHost: () => host as never },
+        cache,
+        () => 'viewer'
+      ).createCommands().rename,
+      dispose,
+    }));
+
+    await rename('launch', 'Launch v2');
+
+    expect(cache.getQueryState(key)?.isInvalidated).toBe(refetched);
+    expect(cache.getQueryState(search)?.isInvalidated).toBe(true);
+    dispose();
+  }
+);
+
+it('drops deleted projects from cached Search pages after the refetch', async () => {
+  const cache = new QueryClient();
+  const { deleteMany, dispose } = createRoot((dispose) => ({
+    deleteMany: createProjectSources(
+      {
+        delete: async (id: string) =>
+          id === 'b' ? err([{ code: 'denied' }]) : ok(undefined),
+      } as never,
+      { client: () => ({}) as never, cacheHost: () => undefined },
+      cache,
+      () => 'viewer'
+    ).createCommands().deleteMany,
+    dispose,
+  }));
+
+  expect(await deleteMany(['a', 'b'])).toEqual(['b']);
+
+  expect(removeSearchEntities).toHaveBeenCalledOnce();
+  const [ids, matches] = removeSearchEntities.mock.calls[0] ?? [];
+  expect(ids).toEqual(new Set(['a']));
+  expect(matches({ type: 'project' })).toBe(true);
+  expect(matches({ type: 'document' })).toBe(false);
   dispose();
 });

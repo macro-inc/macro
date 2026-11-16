@@ -41,6 +41,8 @@ const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const API_KEY_USER_ID: &str = "macro|api-key@example.com";
 const VALID_USER_API_KEY: &str = "mak_valid";
 const MANAGER_API_KEY: &str = "mak_manager";
+/// A Macro API token that signs an agent session's scope.
+const SCOPED_JWT: &str = "scoped";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthorizationCall {
@@ -93,6 +95,12 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         &self,
         jwt: &str,
     ) -> Result<crate::ValidatedCredential, Report<MacroAuthorizationError>> {
+        if jwt == SCOPED_JWT {
+            let mut credential =
+                crate::ValidatedCredential::session(user_context(VALID_USER_ID, None));
+            credential.origin = crate::CredentialOrigin::ScopedMacroApiJwt;
+            return Ok(credential);
+        }
         self.authorize(jwt)
             .await
             .map(crate::ValidatedCredential::session)
@@ -1420,6 +1428,22 @@ async fn a_manager_credential_is_refused_only_where_the_account_holder_is_requir
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_scoped_agent_run_is_refused_only_where_the_account_holder_is_required() {
+    let (router, _) = test_router();
+    let scoped = |path: &str| {
+        empty_body(request(path).header("authorization", format!("Bearer {SCOPED_JWT}")))
+    };
+
+    let (status, body) = send(&router, scoped("/required/account-holder")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    let (status, body) = send(&router, scoped("/required/user-or-internal")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["acting_entity"], VALID_USER_ID);
 }
 
 #[tokio::test]

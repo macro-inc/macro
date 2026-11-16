@@ -2,11 +2,11 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
+use email_service::composition::workers::CrmMetadataResolver;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
@@ -309,7 +309,8 @@ async fn main() -> anyhow::Result<()> {
         // Admission is applied to each actual Graph request by the injected gate.
         email_api_client::domain::ports::AlwaysAllowRateLimiter,
     );
-    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
+        .with_imports_paused(config.outlook_imports_paused);
     if config.outlook_sync_enabled {
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
             mailbox_repository.clone(),
@@ -401,11 +402,11 @@ async fn main() -> anyhow::Result<()> {
         worker_cancellation_token.clone(),
     ));
 
-    let sequences = Arc::new(email_service::pubsub::context::sequences(
+    let sequences = Arc::new(email_service::composition::sequences(
         db.clone(),
         crm_service.clone(),
-        macro_service_urls::EmailServiceUrl::new_for_environment(env)?.as_str(),
-    ));
+        env,
+    )?);
     worker_tracker.spawn(email_sequences::inbound::sweep_worker::run(
         sequences.clone(),
         worker_cancellation_token.clone(),
@@ -672,7 +673,6 @@ async fn main() -> anyhow::Result<()> {
         let dss_client_backfill = dss_client.clone();
         let system_properties_service_backfill = system_properties_service.clone();
         let crm_service_backfill = crm_service_backfill.clone();
-        let sequences_backfill = sequences.clone();
         let macro_event_broker_backfill = macro_event_broker.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -689,7 +689,6 @@ async fn main() -> anyhow::Result<()> {
                 dss_client_backfill,
                 system_properties_service_backfill,
                 crm_service_backfill,
-                sequences_backfill,
                 macro_event_broker_backfill,
                 config.notifications_enabled,
                 cancellation_token,
@@ -764,16 +763,16 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            email_service::pubsub::scheduled::context::ScheduledContext {
-                sqs_worker: scheduled_worker,
-                db: db_scheduled,
-                email_api: email_api_scheduled,
-                attachment_bytes: draft_content,
-                s3_client: s3_client_scheduled,
-                attachment_bucket: attachment_bucket_scheduled,
-                macro_event_broker: macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::worker::context(
+                scheduled_worker,
+                db_scheduled,
+                email_api_scheduled,
+                draft_content,
+                s3_client_scheduled,
+                attachment_bucket_scheduled,
+                macro_event_broker_scheduled,
                 read_receipts,
-            },
+            ),
             cancellation_token,
         )
         .await;

@@ -179,6 +179,12 @@ export type ApiDraftInput = {
      * Generation from the last loaded draft; legacy clients begin at zero.
      */
     draft_generation?: number;
+    /**
+     * The address to send from: the selected inbox's own address or one of
+     * its verified Gmail send-as aliases, which sends under the alias's
+     * display name. Omit it to send from the inbox's own address.
+     */
+    from?: string | null;
     headers_json?: null | Value;
     /**
      * Per-message override for whether to include the signature on send:

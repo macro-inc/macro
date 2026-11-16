@@ -64,6 +64,16 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
     let guests = guests(&pool).await;
     insert_named_user(&pool, DUPLICATOR).await;
     let service = service(&pool);
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🚀".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Indigo),
+    };
+    service
+        .set_appearance(edit(guests.database_id), appearance.clone())
+        .await
+        .unwrap();
     let (sessions, title, relation, board) = (
         TableId::new(),
         ColumnId::new(),
@@ -145,6 +155,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
                             column: title,
                             value: CellValue::Text("Keynote".into()),
                         }]],
+                        ids: None,
                     },
                 }]
                 .into(),
@@ -174,6 +185,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
                                 value: CellValue::Rows(vec![keynote]),
                             },
                         ]],
+                        ids: None,
                     },
                 }]
                 .into(),
@@ -216,6 +228,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
 
     assert_eq!(copy.name, "Offsite copy");
     assert_eq!(copy.owner_id, DUPLICATOR);
+    assert_eq!(copy.appearance, Some(appearance.clone()));
     let grant = sqlx::query_scalar!(
         r#"SELECT access_level::text AS "level!" FROM entity_access
            WHERE entity_id = $1 AND entity_type = 'database' AND source_id = $2"#,
@@ -228,6 +241,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
     assert_eq!(grant, "owner");
 
     let detail = service.get_database(view(copy.id)).await.unwrap();
+    assert_eq!(detail.database.appearance, Some(appearance));
     assert_eq!(
         detail
             .tables
@@ -306,6 +320,7 @@ async fn a_refused_duplicate_leaves_no_database_behind(pool: PgPool) {
     let copy = Database {
         id: DatabaseId::new(),
         name: "Offsite copy".into(),
+        appearance: None,
         owner_id: DUPLICATOR.into(),
         created_at: chrono::Utc::now(),
         trashed_at: None,

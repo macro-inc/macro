@@ -3,7 +3,7 @@ import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform } from '@core/util/platform';
-import { useUserNamesQuery } from '@queries/auth';
+import { useUserNames } from '@queries/auth';
 import { invalidateActiveCallQueries } from '@queries/call/call';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { notificationServiceClient } from '@service-notification/client';
@@ -141,14 +141,11 @@ type NativeCallChannelTitleSyncValue =
   | null
   | undefined;
 
-type NativeParticipantDisplayNames =
-  | { isPending: true }
-  | {
-      isPending: false;
-      displayNames: Record<string, string>;
-      fetchedNameCount: number;
-      errors: unknown[];
-    };
+type NativeParticipantDisplayNames = {
+  displayNames: Record<string, string>;
+  fetchedNameCount: number;
+  errors: unknown[];
+};
 
 function refreshActiveCallQueriesAfterLeave() {
   void invalidateActiveCallQueries().catch((err) =>
@@ -240,7 +237,8 @@ const DUPLICATE_ANSWERED_CALL_WINDOW_MS = 2_000;
 
 async function joinChannelCallWhenReady(
   channelId: string,
-  nativeMedia = false
+  nativeMedia = false,
+  callId?: string
 ): Promise<void> {
   console.info('[callkit] waiting for split manager before joining', {
     channelId,
@@ -271,7 +269,7 @@ async function joinChannelCallWhenReady(
     });
     return openChannelCallTab(channelId);
   }
-  return joinChannelCall(channelId);
+  return joinChannelCall(channelId, { kind: 'join', callId });
 }
 
 /**
@@ -413,7 +411,7 @@ export function useCallKitSetup() {
       });
       markNativeCallActivity();
       nativeCall.setBootstrapChannelId(channelId);
-      joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
+      joinChannelCallWhenReady(channelId, nativeMedia, callId).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
       );
     };
@@ -741,7 +739,7 @@ function useCallKitParticipantDisplayNameSync() {
     uniqueParticipantIds(nativeParticipantIds())
   );
 
-  const participantUserNameQueries = useUserNamesQuery({
+  const participantUserNames = useUserNames({
     userIds: participantIds,
     enabled: () => participantIds().length > 0,
   });
@@ -751,26 +749,21 @@ function useCallKitParticipantDisplayNameSync() {
       const ids = participantIds();
       if (ids.length === 0) return undefined;
 
-      const isPending = participantUserNameQueries.some(
-        (query) => query.isPending
-      );
-      if (isPending) return { isPending: true };
-
-      const fetchedNames = participantUserNameQueries
-        .map((query) => query.data)
+      const names = participantUserNames();
+      // Pending/current-scope gaps must publish fallbacks too: otherwise native
+      // metadata would keep a previous account's private labels while fetching.
+      const fetchedNames = names
+        .map((entry) => entry.name)
         .filter((name): name is UserName => Boolean(name));
 
       return {
-        isPending: false,
         displayNames: buildParticipantDisplayNames(
           ids,
           fallbackParticipantDisplayNames(ids),
           fetchedNames
         ),
         fetchedNameCount: fetchedNames.length,
-        errors: participantUserNameQueries
-          .filter((query) => query.isError)
-          .map((query) => query.error),
+        errors: names.flatMap((entry) => (entry.error ? [entry.error] : [])),
       };
     }
   );
@@ -778,7 +771,6 @@ function useCallKitParticipantDisplayNameSync() {
   createEffect(
     on(participantDisplayNames, (displayNameData) => {
       if (!displayNameData) return;
-      if (displayNameData.isPending) return;
 
       const channelId = nativeCall.activeChannelId();
       const nativeParticipantIds = nativeCall.participantIdentities();

@@ -1,10 +1,12 @@
 import type { Catalog, DatabaseView } from '@core/database-sql/generated/types';
-import type {
-  DatabaseViewPage,
-  DatabaseViewPageFailure,
-  DatabaseViewPageRequest,
+import {
+  type DatabaseViewPage,
+  type DatabaseViewPageFailure,
+  type DatabaseViewPageRequest,
+  readDatabaseViewPage,
 } from '@service-storage/database-view-rows';
 import { waitFor } from '@solidjs/testing-library';
+import { createClient, fetchExchange } from '@urql/core';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -159,6 +161,57 @@ describe('server view pages', () => {
     resolve(page(['fresh']));
     await waitFor(() => expect(query.outcome()?.rowIds).toEqual(['fresh']));
     expect(query.loading()).toBe(false);
+  });
+
+  it('shows the cached first page when a refresh replaces the opening read', async () => {
+    const network = Promise.withResolvers<DatabaseViewPage>();
+    const { query, readPage } = harness((request) => {
+      if (request.requestPolicy === 'cache-and-network')
+        request.onCachedPage?.(page(['cached']));
+      return ResultAsync.fromSafePromise(network.promise);
+    });
+    const refreshed = query.refresh('refresh');
+    await waitFor(() => expect(query.outcome()?.rowIds).toEqual(['cached']));
+    expect(query.loading()).toBe(true);
+    network.resolve(page(['fresh']));
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rowIds).toEqual(['fresh']);
+    expect(
+      readPage.mock.calls.map(([request]) => request.requestPolicy)
+    ).toEqual(['cache-and-network']);
+  });
+
+  it('reads again when a refresh replaces a read still in flight', async () => {
+    const answers: ((rowId: string) => void)[] = [];
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [fetchExchange],
+      fetch: (_url, init) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError'))
+          );
+          answers.push((rowId) =>
+            resolve(
+              Response.json({
+                data: {
+                  user: { id: 'viewer', databaseViewRows: page([rowId]) },
+                },
+              })
+            )
+          );
+        }),
+    });
+    const { query } = harness((request) =>
+      readDatabaseViewPage(request, client)
+    );
+    await waitFor(() => expect(answers).toHaveLength(1));
+    const refreshed = query.refresh('websocket');
+    await waitFor(() => expect(answers).toHaveLength(2));
+    answers[0]('before-change');
+    answers[1]('after-change');
+    expect((await refreshed)._unsafeUnwrap()).toEqual({ landed: true });
+    expect(query.outcome()?.rowIds).toEqual(['after-change']);
   });
 
   it('keeps a delayed cache hit when the network fails first', async () => {

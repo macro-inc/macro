@@ -1,7 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
-import { fetchRestPreviewBatch } from './fetchers';
+import { fetchRestPreviewBatch, type PreviewBatch } from './fetchers';
 import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
 
@@ -29,16 +30,25 @@ class PreviewDataLoader {
         jitter: 0.1,
         throwOnError: 'last',
       },
-      onSuccess: (results: Map<string, PreviewItem>, batch) => {
+      onSuccess: (results: PreviewBatch, batch) => {
         for (const item of batch) {
           const key = this.getCacheKey(item);
           const requests = this.pendingRequests.get(key);
 
           if (requests) {
+            // A failed request is no answer: reject, so the query retries
+            // and caches nothing, rather than resolving "No Access".
+            const errors = results.failed.get(item.id);
+            if (errors) {
+              const error = new ThrownResultError(errors);
+              for (const request of requests) request.reject(error);
+              this.pendingRequests.delete(key);
+              continue;
+            }
             // A missing batch entry means no fetcher handled this item, not
             // that it was deleted — only fetchers may report 'does_not_exist'.
             const preview =
-              results.get(item.id) ??
+              results.previews.get(item.id) ??
               ({
                 id: item.id,
                 type: item.type ?? DEFAULT_ITEM_TYPE,

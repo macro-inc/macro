@@ -2,20 +2,23 @@
 
 ## What it is
 
-Pure Unicode normalization and ordered-subsequence matching for server contact search.
+Pure Unicode normalization and ordered-subsequence matching shared by server
+contact search and the client cache. Keep matching behavior consistent across them.
 
 ## Scope
 
-- Owns: normalization, token eligibility, and corpus-independent match quality.
-- Not here: authorization, pagination, database reads, ranking, or surface-specific boosts.
-- Used by: `contacts`.
+- Owns: normalization, token eligibility, corpus-independent match quality, recipient tiers/automated-local-part eligibility, and blend arithmetic (`src/ranking.rs`). Shared TSV fixtures verify Rust/browser parity. `src/names.rs` prepares the approved name-only exact/word-prefix/literal-contains tiers without changing ordinary subsequence search. Query classification as an identity/address belongs to its caller; these suggestions never prove uniqueness.
+- Not here: authorization, pagination, database reads, or each surface's chosen weights/boosts.
+- Used by: `contacts`, `cache-core` (native and WASM).
 
 ## Checks
 
 - `cargo test -p subsequence_match`
+- Cache ranking parity remains covered by `cargo test -p cache-core`.
 
 ## Gotchas
 
-- Keep this crate dependency-free; do not pull backend infrastructure into matching.
+- Keep runtime code dependency-free and WASM-safe; do not pull backend infrastructure into matching. `workspace-hack` only unifies workspace features.
+- Keep automated-mailbox prefix rules independent of the mandatory `reply` substring fast rejection for marker rules; preserve every marker/separator form and literal substring semantics.
 - Inputs to `subsequence_score` are normalized by the caller. SQL wildcards are
   ordinary characters here; SQL adapters escape their bound patterns separately.

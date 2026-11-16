@@ -36,5 +36,9 @@ export default {
   search: 'Search',
   selectItem: 'Select item',
   contactsAndCompanies: 'Contacts & Companies',
+  loadingOptions: 'Loading options…',
+  optionsUnavailable: 'Options unavailable. Selected values are kept.',
+  optionsIncomplete: 'Cached options or selected names may be incomplete.',
+  noOptionsInWindow: 'No matches in this page or cached snapshot.',
   settings: 'Settings',
 };

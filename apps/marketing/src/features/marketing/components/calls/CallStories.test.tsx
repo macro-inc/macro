@@ -81,7 +81,7 @@ it('shows the full call record and seeks when a transcript line is clicked', () 
   expect(view.getByText('Summary')).toBeTruthy();
   expect(view.getByText('Recording')).toBeTruthy();
   expect(playerTime(view.container)).toBe('0:00 / 18:22');
-  const line = view.getByRole('button', { name: 'Go to 1:12: Julia' });
+  const line = view.getByRole('button', { name: 'Go to 1:12: Julia Westphal' });
   fireEvent.click(line);
   expect(line.getAttribute('aria-pressed')).toBe('true');
   expect(playerTime(view.container)).toBe('1:12 / 18:22');
@@ -106,7 +106,9 @@ it('adds the finished call to history without opening another record automatical
   expect(view.queryByRole('heading', { name: 'Training prep' })).toBeNull();
   fireEvent.click(calls.getByRole('gridcell', { name: /Training prep/ }));
   expect(view.getByRole('heading', { name: 'Training prep' })).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Go to 0:03: Julia' })).toBeTruthy();
+  expect(
+    view.getByRole('button', { name: 'Go to 0:03: Julia Westphal' })
+  ).toBeTruthy();
 });
 
 it('shows finished call history without opening a record for reduced motion', () => {
@@ -124,7 +126,7 @@ it('jumps to the clicked line, then offers Sync to video time after scrolling aw
   vi.advanceTimersByTime(1000);
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
   vi.advanceTimersByTime(1100);
-  const line = view.getByRole('button', { name: 'Go to 1:12: Julia' });
+  const line = view.getByRole('button', { name: 'Go to 1:12: Julia Westphal' });
   expect(line.getAttribute('aria-pressed')).toBe('true');
   expect(playerTime(view.container)).toBe('1:12 / 18:22');
   vi.advanceTimersByTime(1300);
@@ -137,7 +139,7 @@ it('jumps to the clicked line, then offers Sync to video time after scrolling aw
 it('lets a visitor choose a transcript line without being moved back by motion', () => {
   const view = render(() => <CallTranscriptDemo />);
   visible(true);
-  const line = view.getByRole('button', { name: 'Go to 0:41: Teo' });
+  const line = view.getByRole('button', { name: 'Go to 0:41: Teo Nys' });
   fireEvent.pointerDown(line);
   fireEvent.click(line);
   reduce();
@@ -205,16 +207,16 @@ it('starts a call from the channel header and shows everyone who joins', () => {
   expect(cursor?.getAttribute('data-clicking')).toBe('true');
   vi.advanceTimersByTime(500);
   expect(view.getByText('Connecting...')).toBeTruthy();
-  expect(view.queryByText('Julia')).toBeNull();
+  expect(view.queryByText('Julia Westphal')).toBeNull();
   vi.advanceTimersByTime(1800);
-  expect(view.getByText('Julia')).toBeTruthy();
-  expect(view.queryByText('Gabriel')).toBeNull();
+  expect(view.getByText('Julia Westphal')).toBeTruthy();
+  expect(view.queryByText('Gabriel Birman')).toBeNull();
   vi.advanceTimersByTime(1300);
   expect(view.queryByRole('button', { name: 'Call' })).toBeNull();
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
-  expect(view.getByText('Julia')).toBeTruthy();
-  expect(view.getByText('Gabriel')).toBeTruthy();
-  expect(view.getByRole('status', { name: 'Teo is muted' })).toBeTruthy();
+  expect(view.getByText('Julia Westphal')).toBeTruthy();
+  expect(view.getByText('Gabriel Birman')).toBeTruthy();
+  expect(view.getByRole('status', { name: 'Teo Nys is muted' })).toBeTruthy();
   expect(view.getByText('You')).toBeTruthy();
   fireEvent.click(view.getByRole('button', { name: 'Mute microphone' }));
   expect(view.getByRole('status', { name: 'You are muted' })).toBeTruthy();
@@ -393,7 +395,9 @@ it('shares a channel call with an absent teammate and opens its transcript', () 
   fireEvent.click(view.getByRole('button', { name: 'Leave call' }));
   fireEvent.click(view.getByRole('gridcell', { name: /Training prep/ }));
   expect(view.getByRole('heading', { name: 'Summary' })).toBeTruthy();
-  fireEvent.click(view.getByRole('button', { name: 'Go to 1:02: Julia' }));
+  fireEvent.click(
+    view.getByRole('button', { name: 'Go to 1:02: Julia Westphal' })
+  );
   expect(playerTime(view.container)).toContain('1:02');
 });
 it('does not expose an unshared recording to the absent teammate', () => {

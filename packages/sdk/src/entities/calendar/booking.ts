@@ -79,6 +79,8 @@ export class Booking extends MacroEntity<BookingRecord> {
    * Available replacement starts on one date (`YYYY-MM-DD`, in the booking
    * schedule's time zone), for {@link reschedule}. Availability is checked
    * again when the meeting moves.
+   *
+   * @readonly
    */
   async rescheduleSlots(date: string): Promise<BookingSlot[]> {
     return unwrap(
@@ -93,6 +95,9 @@ export class Booking extends MacroEntity<BookingRecord> {
    * Move the meeting to a start returned by {@link rescheduleSlots}; only on
    * the user's go-ahead, since the guest and hosts are notified. Returns the
    * saved booking.
+   *
+   * @destructive
+   * @openworld
    */
   async reschedule(startsAt: string): Promise<Booking> {
     return this.change({ action: 'reschedule', startsAt });
@@ -102,6 +107,10 @@ export class Booking extends MacroEntity<BookingRecord> {
    * Cancel the meeting; only on the user's go-ahead, since the guest and
    * hosts are notified. The booking link stays as it is. Returns the saved
    * booking.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
    */
   async cancel(): Promise<Booking> {
     return this.change({ action: 'cancel' });
@@ -110,6 +119,9 @@ export class Booking extends MacroEntity<BookingRecord> {
   /**
    * Approve a legacy pending booking and send its invitations; only on the
    * user's go-ahead. Returns the saved booking.
+   *
+   * @destructive
+   * @openworld
    */
   async approve(): Promise<Booking> {
     return this.change({ action: 'approve' });
@@ -118,6 +130,9 @@ export class Booking extends MacroEntity<BookingRecord> {
   /**
    * Record or clear attendance once a confirmed meeting has ended. Returns
    * the saved booking.
+   *
+   * @write
+   * @idempotent
    */
   async setAttendance(attendance: BookingAttendance): Promise<Booking> {
     return this.change({ action: 'attendance', attendance });

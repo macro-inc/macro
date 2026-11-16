@@ -43,7 +43,6 @@ export {
 } from './user-language';
 export {
   normalizeUserNameQueryId,
-  userNameQueryOptions,
-  useUserNamesQuery,
+  useUserNames,
 } from './user-names';
 export { invalidateUserQuota } from './user-quota';

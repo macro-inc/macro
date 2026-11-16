@@ -32,13 +32,13 @@ export function createCrmDemoWorkspace() {
     if (name) sampleData = sampleData.replaceAll(entry.name, name);
   }
   sampleData = sampleData
-    .replaceAll('Valentina', 'Ava Chen')
-    .replaceAll('valentina@coparse.com', 'ava@parlorstudio.example');
+    .replaceAll('Austin Barron', 'Ava Chen')
+    .replaceAll('austin@example.com', 'ava@parlorstudio.example');
   w.setData(JSON.parse(sampleData));
   w.setData('companies', (entries) =>
     entries.map((entry) => ({
       ...entry,
-      owner: entry.owner === 'valentina' ? 'gabriel' : entry.owner,
+      owner: entry.owner === 'austin' ? 'gabriel' : entry.owner,
       domain: `${(accountNames[entry.id] ?? entry.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.example`,
       contacts: entry.contacts.map((contact) => ({
         ...contact,

@@ -365,6 +365,8 @@ export function createLocalDraftStore(
                       writeId,
                       latestAttemptId: previous?.latestAttemptId,
                       queuedAttemptId: previous?.queuedAttemptId,
+                      // An edit drops a discard the queue has not admitted.
+                      deleteAttemptId: undefined,
                       attachments: input.attachments.map((attachment) => {
                         if (attachment.type !== 'local') return attachment;
                         const receipt = previous?.attachments.find(

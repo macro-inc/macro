@@ -204,6 +204,7 @@ export function ComposeRecipients(props: {
       }}
       inputId={opts?.inputId}
       options={ctx.recipientOptions}
+      createSource={ctx.createRecipientSource}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
       setSelectedOptions={(next) => {

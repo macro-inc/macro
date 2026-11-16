@@ -1,6 +1,7 @@
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { isMobile } from '@core/mobile/isMobile';
 import Copy from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import { CopyButton } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 
@@ -8,6 +9,7 @@ export function MeetingCopyButton(props: {
   url: string;
   onCopy: () => Promise<void>;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const [copied, setCopied] = createSignal(false);
   const [error, setError] = createSignal(false);
@@ -35,21 +37,29 @@ export function MeetingCopyButton(props: {
     }
   }
 
+  const size = () => {
+    if (props.compact) return 'icon-sm';
+    return isMobile() ? 'icon-lg' : 'lg';
+  };
   return (
     <div class="min-w-0 text-sm text-ink-muted">
       <HeaderIsland class="px-0">
         <CopyButton
           type="button"
           variant="ghost"
-          size={isMobile() ? 'icon-lg' : 'lg'}
+          size={size()}
           aria-label="Copy Meeting Url"
           tooltip={{ content: 'Copy Meeting Url', placement: 'top' }}
           disabled={props.disabled || copying()}
           aria-busy={copying()}
           onClick={copy}
         >
-          <Copy class="size-4" />
-          <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
+          <Show when={props.compact} fallback={<Copy class="size-4" />}>
+            <LinkIcon class="size-4" />
+          </Show>
+          <Show when={!props.compact}>
+            <span class="hidden @3xl/call-stage:inline">Copy Meeting Url</span>
+          </Show>
         </CopyButton>
       </HeaderIsland>
       <span role="status" class="sr-only">

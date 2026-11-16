@@ -5,7 +5,7 @@ import {
   enableRoutineCodeSteps,
   enableRoutineConditions,
 } from '@core/constant/featureFlags';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { StepAuthor } from './context/routine-slots';
 import type { RoutineSoFar } from './core/routine-steps';
 import { composeStep, reviseStep } from './queries/compose-step';
@@ -25,6 +25,9 @@ export function createRoutineStepAuthor(
     defaultModel: () => defaultModelForPlan(hasPaidAccess()),
     decisionsEnabled: () => decisions().enabled,
   });
+  // A step still drafting when the editor closes isn't sent again.
+  const left = new AbortController();
+  onCleanup(() => left.abort());
   return {
     code: () => codeSteps().enabled,
     add: (description, kind) =>
@@ -33,6 +36,7 @@ export function createRoutineStepAuthor(
         kind,
         routine: routine(),
         context: context(),
+        left: left.signal,
       }),
     revise: (step, instruction) =>
       reviseStep({
@@ -40,6 +44,7 @@ export function createRoutineStepAuthor(
         instruction,
         routine: routine(),
         context: context(),
+        left: left.signal,
       }),
   };
 }

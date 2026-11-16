@@ -87,7 +87,7 @@ describe('team authorization invalidation', () => {
     const keys = [
       calendarTeamKeys.identity('alice').queryKey,
       calendarTeamKeys.sharing(identity).queryKey,
-      calendarTeamKeys.availabilityCalendars(identity).queryKey,
+      calendarKeys.availabilityCalendars('alice').queryKey,
     ];
     let finish!: () => void;
     const pending = new Promise<void>((resolve) => {

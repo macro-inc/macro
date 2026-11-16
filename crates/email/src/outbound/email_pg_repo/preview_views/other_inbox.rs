@@ -77,7 +77,7 @@ pub(crate) async fn other_inbox_preview_cursor(
                   WHERE m.thread_id = t.id AND mf.is_present AND mf.provider_is_other
               )
               -- Preserve the view exclusion of junk, trash, and drafts. A pending
-              -- sequence step is not the user's draft (see build_visible_message_check).
+              -- sequence step is not the user's draft (see build_mailbox_facts_check).
               AND NOT EXISTS (
                   SELECT 1 FROM email_messages m JOIN email_message_mailbox_facts mf ON mf.id = m.id
                   WHERE m.thread_id = t.id AND mf.is_present AND (mf.in_junk OR mf.in_trash OR (m.is_draft

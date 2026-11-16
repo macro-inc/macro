@@ -6,6 +6,7 @@ import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
+import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -73,7 +74,7 @@ function ContactContent(props: ContactProps) {
       return {
         type: 'contact',
         id: current.id,
-        email: current.email,
+        emails: contactEmails(current),
         companyId: current.companyId,
       };
     },

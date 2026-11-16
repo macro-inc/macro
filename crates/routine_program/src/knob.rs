@@ -3,6 +3,15 @@
 
 use std::fmt;
 
+use nom::{
+    Finish, IResult, Parser,
+    branch::alt,
+    bytes::complete::{take_till1, take_while1},
+    character::complete::char,
+    combinator::{all_consuming, opt},
+    multi::many0,
+    sequence::delimited,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -96,6 +105,17 @@ impl Knob {
             | Self::Boolean { label, .. }
             | Self::Choice { label, .. }
             | Self::Question { label, .. } => label,
+        }
+    }
+
+    /// Its value as the step's sentence shows it: a question by its
+    /// clause, on or off as yes or no.
+    pub fn sentence_text(&self) -> String {
+        match self {
+            Self::Text { value, .. } | Self::Choice { value, .. } => value.clone(),
+            Self::Number { value, .. } => value.to_string(),
+            Self::Boolean { value, .. } => if *value { "yes" } else { "no" }.to_owned(),
+            Self::Question { label, .. } => label.clone(),
         }
     }
 
@@ -197,31 +217,85 @@ pub struct SentenceSlot {
 #[error("a step's sentence may only use braces for knobs, as `{{name}}` or `{{?name}}`")]
 pub struct SentenceSyntax;
 
+/// A piece of a step's sentence: words, or a knob's slot.
+enum SentencePiece<'a> {
+    Words(&'a str),
+    Slot(SentenceSlot),
+}
+
+/// `{name}` or `{?name}`.
+fn slot(input: &str) -> IResult<&str, SentenceSlot> {
+    delimited(
+        char('{'),
+        (
+            opt(char('?')),
+            take_while1(|c: char| c.is_ascii_alphanumeric()),
+        ),
+        char('}'),
+    )
+    .map(|(question, name): (Option<char>, &str)| SentenceSlot {
+        name: name.to_owned(),
+        question: question.is_some(),
+    })
+    .parse(input)
+}
+
+/// `sentence` as words and slots, in order.
+fn sentence_pieces(sentence: &str) -> Result<Vec<SentencePiece<'_>>, SentenceSyntax> {
+    let piece = alt((
+        take_till1(|c| c == '{' || c == '}').map(SentencePiece::Words),
+        slot.map(SentencePiece::Slot),
+    ));
+    all_consuming(many0(piece))
+        .parse(sentence)
+        .finish()
+        .map(|(_, pieces)| pieces)
+        .map_err(|_: nom::error::Error<&str>| SentenceSyntax)
+}
+
 /// The knob slots in `sentence`, in order.
 pub fn sentence_slots(sentence: &str) -> Result<Vec<SentenceSlot>, SentenceSyntax> {
-    let mut slots = Vec::new();
-    let mut rest = sentence;
-    while let Some(open) = rest.find(['{', '}']) {
-        if rest[open..].starts_with('}') {
-            return Err(SentenceSyntax);
-        }
-        let after = &rest[open + 1..];
-        let close = after.find('}').ok_or(SentenceSyntax)?;
-        let inner = &after[..close];
-        let (question, name) = match inner.strip_prefix('?') {
-            Some(name) => (true, name),
-            None => (false, inner),
-        };
-        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric()) {
-            return Err(SentenceSyntax);
-        }
-        slots.push(SentenceSlot {
-            name: name.to_owned(),
-            question,
-        });
-        rest = &after[close + 1..];
-    }
-    Ok(slots)
+    Ok(sentence_pieces(sentence)?
+        .into_iter()
+        .filter_map(|piece| match piece {
+            SentencePiece::Slot(slot) => Some(slot),
+            SentencePiece::Words(_) => None,
+        })
+        .collect())
+}
+
+/// A run of a step's sentence as it reads: words, or a knob's value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentenceRun {
+    /// What it says.
+    pub text: String,
+    /// It is a knob's value.
+    pub knob: bool,
+}
+
+/// `sentence` with `knobs`' values in its slots, as runs; none when a slot
+/// is malformed, names no knob, or is written the wrong way for its knob
+/// (`{?name}` for a question, `{name}` for the rest). Saving refuses those,
+/// so this fails only for a step that wasn't saved.
+pub fn sentence_runs(sentence: &str, knobs: &[Knob]) -> Option<Vec<SentenceRun>> {
+    sentence_pieces(sentence)
+        .ok()?
+        .into_iter()
+        .map(|piece| match piece {
+            SentencePiece::Words(words) => Some(SentenceRun {
+                text: words.to_owned(),
+                knob: false,
+            }),
+            SentencePiece::Slot(slot) => knobs
+                .iter()
+                .find(|knob| knob.name().as_str() == slot.name)
+                .filter(|knob| knob.is_question() == slot.question)
+                .map(|knob| SentenceRun {
+                    text: knob.sentence_text(),
+                    knob: true,
+                }),
+        })
+        .collect()
 }
 
 /// Whether `source` mentions `name` as a whole identifier, as `knobs.name`

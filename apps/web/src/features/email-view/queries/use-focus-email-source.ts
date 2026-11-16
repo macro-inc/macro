@@ -55,7 +55,7 @@ function matchesSearch(email: EmailEntity, text: string): boolean {
  * orders it. The server already sends it newest first, but sorting here keeps
  * rows under their day headers, which go by each row's own date. Done threads
  * leave at once, as on Signal: the server drops archived threads only on the
- * next read. Focus has no Status or Done filters.
+ * next read. Focus has no Read status or Done filters.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],

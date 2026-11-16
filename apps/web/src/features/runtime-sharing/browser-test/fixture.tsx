@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button, ImperativeDialogHost } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { PendingRequestsSection } from '../../settings/components/pending-requests-section';
 import { TeammateRuntimesSection } from '../../settings/components/teammate-runtimes-section';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { RuntimeShareDialog } from '../views/RuntimeShareDialog';
@@ -29,6 +30,7 @@ function Fixture() {
   return (
     <main class="@container flex w-full max-w-xl flex-col gap-4 p-4">
       <Button onClick={() => setOpen(true)}>Open Share menu</Button>
+      <PendingRequestsSection />
       <TeammateRuntimesSection canRemoveShared={false} onRemove={() => {}} />
       <Show when={mine()}>
         {(harness) => (

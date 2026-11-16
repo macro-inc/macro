@@ -1,9 +1,10 @@
 use super::{
-    FsRepo, UpdateStatus, find_cached_bundle,
+    BundleRejection, BundleStartup, FsRepo, StartupSelection, UpdateStatus, find_cached_bundle,
     tests::{
         FakeFs, cache_dir, seed_bundle, seed_persisted_bundle_root, service_with_status_and_fs,
     },
 };
+use crate::domain::startup::SavedSelection;
 
 #[tokio::test]
 async fn process_death_during_extraction_never_restores_or_reuses_partial_assets() {
@@ -16,13 +17,34 @@ async fn process_death_during_extraction_never_restores_or_reuses_partial_assets
         .unwrap();
     assert!(find_cached_bundle(&fs, &cache, 20, 0).await.is_none());
     let (mut service, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
-    assert!(!service.load_bundle_root(&cache, 0).await);
+    assert_eq!(
+        service.load_bundle_root(&cache, 0).await.selection,
+        StartupSelection::Embedded
+    );
     assert!(service.bundle_root_path().is_none());
 }
 
 #[tokio::test]
 async fn torn_completion_record_and_evicted_entrypoint_fall_back_to_embedded() {
-    for missing_entrypoint in [false, true] {
+    let evicted_entrypoint = BundleStartup {
+        selection: StartupSelection::Embedded,
+        saved_selection: SavedSelection::Ota,
+        rejection: Some(BundleRejection::EntrypointUnreadable),
+        read_error: Some("NotFound".to_string()),
+        bundle_dirs_found: 1,
+        bundle_dirs_removed: 0,
+    };
+    let torn_completion_record = BundleStartup {
+        selection: StartupSelection::Embedded,
+        saved_selection: SavedSelection::Ota,
+        rejection: Some(BundleRejection::ExtractionIncomplete),
+        read_error: None,
+        bundle_dirs_found: 1,
+        bundle_dirs_removed: 1,
+    };
+    for (missing_entrypoint, expected) in
+        [(false, torn_completion_record), (true, evicted_entrypoint)]
+    {
         let fs = FakeFs::default();
         let cache = cache_dir();
         let dir = seed_bundle(&fs, &cache, "1", 20, 0);
@@ -33,7 +55,7 @@ async fn torn_completion_record_and_evicted_entrypoint_fall_back_to_embedded() {
             fs.write_file(dir.with_extension("complete"), "2");
         }
         let (mut service, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
-        assert!(!service.load_bundle_root(&cache, 0).await);
+        assert_eq!(service.load_bundle_root(&cache, 0).await, expected);
         assert!(service.bundle_root_path().is_none());
     }
 }

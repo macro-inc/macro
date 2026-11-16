@@ -1,14 +1,20 @@
+import { t } from '@app/lib/i18n';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import type { JSX } from 'solid-js';
-import { RoutineSparkGlyph } from './routine-spark-glyph';
 
-/** The suggestions modal: a header, the list, and a footer of actions. */
+/**
+ * The suggestions dialog: a title and what to do, the host's kind tabs and
+ * a close button, the cards, and a footer that leads to every routine.
+ */
 export function RoutineSuggestionsDialog(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   title: string;
+  description: string;
+  /** Beside the title, e.g. For you and Templates tabs. */
+  tabs?: JSX.Element;
   /** AI's suggestions are still arriving. */
   generating: boolean;
   onSeeAll(): void;
@@ -18,44 +24,43 @@ export function RoutineSuggestionsDialog(props: {
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      class="w-160"
+      class="w-[860px]"
       animate
     >
-      <Panel depth={2} class="rounded-xl *:max-h-[80vh]">
+      <Panel depth={2} class="rounded-xl *:max-h-[85vh]">
         <Panel.Body scroll>
-          <div class="relative flex flex-col">
-            <header class="relative flex items-start gap-3 px-6 pt-6 pb-4">
-              <RoutineSparkGlyph size="lg" />
-              <div class="min-w-0 flex-1">
+          <div class="flex flex-col gap-5 p-6">
+            <header class="flex min-w-0 items-start gap-3.5">
+              <div class="flex min-w-0 flex-1 flex-col gap-1">
                 <Dialog.Title class="text-lg font-semibold tracking-[-0.02em] text-ink">
                   {props.title}
                 </Dialog.Title>
-                <Dialog.Description class="mt-0.5 text-sm text-ink-muted">
-                  Picked for you from your workspace, and templates from Macro.
-                  Enable one in a click, or open it to edit first.
+                <Dialog.Description class="text-sm text-ink-muted">
+                  {props.description}
                 </Dialog.Description>
               </div>
+              {props.tabs}
               <Dialog.CloseButton
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
-                <XIcon />
+                <XIcon class="size-4" aria-hidden="true" />
               </Dialog.CloseButton>
             </header>
-            <div class="relative px-3 pb-3">{props.children}</div>
-            <footer class="flex items-center justify-between gap-2 border-t border-edge-muted px-6 py-3">
-              <span class="text-xs text-ink-muted" aria-live="polite">
-                {props.generating ? 'Finding more for you…' : ''}
+            {props.children}
+            <footer class="flex items-center justify-between gap-2">
+              <span class="text-xs text-ink-extra-muted" aria-live="polite">
+                {props.generating ? t('routineSuggestions.findingMore') : ''}
               </span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => props.onSeeAll()}
               >
-                All routines
-                <ArrowRightIcon aria-hidden="true" />
+                {t('routineSuggestions.allRoutines')}
+                <ArrowRightIcon class="size-4" aria-hidden="true" />
               </Button>
             </footer>
           </div>

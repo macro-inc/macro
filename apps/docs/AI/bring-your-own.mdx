@@ -15,6 +15,10 @@ Watch a 1:17 walkthrough of MacroD.
 
 <video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
+Watch a 1:17 walkthrough of MacroD.
+
+<video src="https://macro.com/video/tutorials/macrod.mp4" poster="https://macro.com/video/tutorials/macrod-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
 ## On the Macro desktop app
 
 The desktop app bundles `macrod`, so there is nothing to download. Open **Settings → Machines** and use the **This computer** card. **Set up** looks for a coding agent already installed on your machine, then **Set up** that agent configures, pairs, and starts macrod and creates the agent. No terminal and no pairing code. Open **Options** to choose a different agent, set the **Workspace folder**, or turn on **Full access**. Keep the app open while agents run.
@@ -118,6 +122,30 @@ Leave `macrod` running and your computer awake while you use the machine. Its te
 
 To reconnect later, run `macrod` again; it loads `~/.macrod/macrod.toml` from any directory. If you remove the machine, pair it again before using it. Only one `macrod` can run with a given configuration at a time.
 
+## Run more than one machine on a computer
+
+Each machine has its own configuration. The first one uses `~/.macrod/macrod.toml`. Give every other machine a profile name:
+
+```bash
+macrod --profile work
+```
+
+A profile keeps its configuration in `~/.macrod/profiles/work.toml` and pairs as a new machine named after your computer and the profile, such as `my-laptop · work`. Rename it in **Settings → Machines**. Run `macrod --profile work` again to reconnect it.
+
+If you start `macrod` while another `macrod` already runs the default configuration, it offers to create a profile and suggests a name. Press <kbd>Enter</kbd> to accept it or type another name, then set up the new machine in **Quickstart**.
+
+To see every machine on your computer, run:
+
+```bash
+macrod profiles
+```
+
+It lists each profile with its configuration file, the machine it is paired to, and whether a `macrod` is running it now. Profile names use lowercase letters, digits, `-`, and `_`.
+
+### Configurations in project folders
+
+Older versions of `macrod` read `macrod.toml` from the folder you started them in. When you run `macrod` in a folder that still has one, `macrod` moves it into `~/.macrod` and keeps running that machine. It becomes `~/.macrod/macrod.toml` if you have no default configuration yet. Otherwise it becomes a profile named after the folder. `macrod` prints where the file went and the command to use from now on, such as `macrod --profile my-project`.
+
 ## Update macrod
 
 `macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, and verifies its checksum and that it starts. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
@@ -146,6 +174,7 @@ or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
 - **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
 - **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The machine's name, access, and permission bypass are set in **Settings → Machines**.
-- **`macrod` asks you to pair again after an update:** it reads only `~/.macrod/macrod.toml`. If you started an older `macrod` from a project folder, move the `macrod.toml` from that folder to `~/.macrod/`.
+- **`macrod` asks you to pair again after an update:** run `macrod` from the project folder you used to start it in. It moves that folder's `macrod.toml` into `~/.macrod` and tells you the command to use from now on. Run `macrod profiles` to see every machine on your computer.
+- **You had `allow_permission_bypass = false` in `macrod.toml`:** that setting is gone, and your computer no longer has a local veto. Whether a machine may bypass permission requests is set by the machine's managers in **Settings → Machines**, under **Allow bypassing permission requests**.
 
 To learn more about using agents in your workspace, see [Agents](/product/agents).

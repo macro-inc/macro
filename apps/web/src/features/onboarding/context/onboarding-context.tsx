@@ -83,7 +83,7 @@ export type TeamInvite = { id: string; invitedBy: string };
 export type TeamDirectorySource = {
   teams: Accessor<Loadable<readonly Team[]>>;
   invites: Accessor<Loadable<readonly TeamInvite[]>>;
-  /** Contact email addresses, for same-domain invite suggestions. */
+  /** At most PREFILL_CAP same-domain invite suggestions, not a contact catalog. */
   contacts: Accessor<Loadable<readonly string[]>>;
   retry(): void;
 };
@@ -131,7 +131,10 @@ export type OnboardingContext = {
   connectTool(tool: Tool): Promise<void>;
   /** Opens the native GitHub App repository selection, after account linking. */
   configureGithubRepositories(): void;
-  createTeamDirectory(): TeamDirectorySource;
+  createTeamDirectory(input: {
+    domain: Accessor<string | undefined>;
+    ownEmail: Accessor<string | undefined>;
+  }): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
   /** `allowDomainJoin` lets people on the owner's work domain join.
    * `notifyDomain` also emails the owner's same-domain contacts that the team
@@ -180,10 +183,15 @@ export type OnboardingContext = {
   /** Routine suggestions are on: the flow ends with the routines step. */
   routineSuggestionsEnabled: Accessor<boolean>;
   /**
-   * Starts AI suggesting routines from the inbox just connected, in this
-   * browser's time zone. The server runs it once per person.
+   * Suggestions of either kind are on (the person's suggestions, or routine
+   * suggestions): connecting an inbox starts their first generation.
    */
-  generateRoutineSuggestions(): void;
+  suggestionGenerationEnabled: Accessor<boolean>;
+  /**
+   * Starts the person's first generation from the inbox just connected, in
+   * this browser's time zone. The server runs it once per person.
+   */
+  startSuggestionGeneration(): void;
   createRoutinesStep(): RoutinesStepSource;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
