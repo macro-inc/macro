@@ -77,9 +77,8 @@ describe('createTauriCacheHost', () => {
     const span = vi.spyOn(Telemetry, 'span');
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.readQuery({ query: '{ x }' });
-    // Initialization, permission probe, read, and permission recheck.
+    // Initialization, initial authority, and read; stable reads need no recheck.
     expect(span.mock.calls).toEqual([
-      ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
       ['graphql_cache.ipc.request', { sampling: 'perf' }],
@@ -88,7 +87,7 @@ describe('createTauriCacheHost', () => {
     for (let revision = 1; revision <= 100; revision++) {
       notify({ payload: { revision: String(revision) } });
     }
-    expect(span).toHaveBeenCalledTimes(4);
+    expect(span).toHaveBeenCalledTimes(3);
     host.dispose();
   });
 

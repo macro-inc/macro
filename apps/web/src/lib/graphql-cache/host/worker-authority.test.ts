@@ -142,6 +142,66 @@ it('broadens unknown or stale pushes to rereads without delivering their field c
   expect(affected.mock.calls).toEqual([[[7]], [[7]], [[7], fieldChanges]]);
 });
 
+it('accepts a current transition after cold host initialization', async () => {
+  const result = await host.authority!.transition(state.generation, 'none');
+  expect(result.authority).toEqual(state);
+  expect(result.changed).toBe(true);
+  await expect(host.authority!.verifyRead()).resolves.toBeUndefined();
+});
+
+it('rejects a late transition reply after a newer owner event', async () => {
+  await host.authority!.current();
+  const post = adapter.postMessage;
+  const started =
+    Promise.withResolvers<
+      Extract<CacheRequest, { kind: 'transition-authority' }>
+    >();
+  adapter.postMessage = (request) => {
+    if (request.kind === 'transition-authority') started.resolve(request);
+    else post(request);
+  };
+  const pending = host.authority!.transition(state.generation, 'none');
+  const request = await started.promise;
+  expect(request.expected).toBe(state.generation);
+  const earlier = {
+    ...state,
+    generation: crypto.randomUUID(),
+    ready: true,
+    policy: 'none',
+  };
+  state = { ...earlier, generation: crypto.randomUUID(), policy: 'denied' };
+  adapter.onmessage?.(
+    new MessageEvent<WorkerMessage>('message', {
+      data: { kind: 'authority-changed', authority: state },
+    })
+  );
+  expect(host.authority!.snapshot()).toEqual(state);
+
+  const rejected = expect(pending).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+  adapter.onmessage?.(
+    new MessageEvent<WorkerMessage>('message', {
+      data: {
+        id: request.id,
+        ok: true,
+        result: {
+          authority: earlier,
+          changed: true,
+          affectedOps: [],
+          revision: '0',
+        },
+        authorityGeneration: earlier.generation,
+      },
+    })
+  );
+  await rejected;
+  expect(host.authority!.snapshot()).toEqual(state);
+  await expect(host.authority!.verifyRead()).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+});
+
 it('keeps a deletion source generation after authority advances before dispatch', async () => {
   await host.authority!.current();
   await host.authority!.transition(state.generation, 'none');

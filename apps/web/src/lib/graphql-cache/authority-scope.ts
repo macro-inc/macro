@@ -1,6 +1,8 @@
 import {
+  type DocumentNode,
   getOperationAST,
   Kind,
+  type OperationTypeNode,
   parse,
   type SelectionSetNode,
   valueFromASTUntyped,
@@ -22,22 +24,23 @@ function excluded(value: unknown, id: string): boolean {
   );
 }
 
-/** Match the Rust adapter's positive exclusion proof; unknown cursors miss. */
+/** Ordinary mail has owned or explicit grants; only crmScope expands CRM mail. */
 export function excludesCrmContent(value: unknown): boolean {
   const filters = object(value);
   const mail = object(filters.emailFilter);
   return (
     !filters.crmAssociation &&
     !mail.crmScope &&
-    excluded(mail.tree, 'threadId') &&
     excluded(filters.crmCompanyFilter, 'id') &&
-    (!filters.crmContactFilter || excluded(filters.crmContactFilter, 'id')) &&
-    (!filters.databaseRowFilter || excluded(filters.databaseRowFilter, 'id'))
+    (!filters.crmContactFilter || excluded(filters.crmContactFilter, 'id'))
   );
 }
 
 const unrelatedEntityTypes = new Set([
   'DOCUMENT',
+  // Soup rows require a database_entities owner; CRM pipeline rows have
+  // separate GraphqlCrmPipeline* contracts over reusable database storage.
+  'DATABASE_ROW',
   'TASK',
   'PROJECT',
   'INITIATIVE',
@@ -52,28 +55,402 @@ const unrelatedEntityTypes = new Set([
   'USER',
 ]);
 const protectedType =
-  /^(GraphqlSoupCrm|GraphqlCrmPipeline|GraphqlSoupEmail|GraphqlMail|GraphqlProperty|GraphqlActivityEvent|GraphqlSavedView|GraphqlSoupDatabaseRow)/;
+  /^(GraphqlSoupCrm|GraphqlCrmPipeline|GraphqlSoupEmail|GraphqlMail|GraphqlProperty|GraphqlActivityEvent|GraphqlSavedView)/;
 const protectedFields = new Set([
   'emailThread',
-  'emailFocus',
   'savedView',
   'savedViews',
   'activity',
   'activityOverview',
   'databaseActivity',
-  'databaseViewRows',
-  'workFeed',
   'attentionFeed',
-  'favorites',
   'propertyOptions',
   'propertyDefinitions',
 ]);
 
+// These resolver contracts cannot return CRM-derived content. Their children
+// reuse broad union fragments, so classification stops at the scoped field.
+const independentFields = new Set([
+  'emailLinks',
+  'emailFocus',
+  'workFeed',
+  'workFeedUpdates',
+  'favorites',
+  'databaseViewRows',
+]);
+
+// These are short-lived ownership witnesses, not cached record content. Each
+// check retains its source account, owner and generation; replacement closes it.
+const ownedEmails = new Map<string, () => boolean>();
+const activeOwnedEmails = new Map<
+  string,
+  { references: number; isCurrent: (() => boolean) | undefined }
+>();
+
+/** Hold one bounded read's witnesses across awaits, independently of idle eviction. */
+export function retainOwnedEmailWitnesses(threadIds: readonly string[]) {
+  const ids = [...new Set(threadIds)];
+  if (ids.length > 500)
+    throw new Error('Mail ownership retention exceeds one chunk');
+  for (const id of ids) {
+    const active = activeOwnedEmails.get(id);
+    if (active) active.references += 1;
+    else
+      activeOwnedEmails.set(id, {
+        references: 1,
+        isCurrent: ownedEmails.get(id),
+      });
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    for (const id of ids) {
+      const active = activeOwnedEmails.get(id);
+      if (active && --active.references === 0) activeOwnedEmails.delete(id);
+    }
+  };
+}
+
+export function rememberOwnedEmail(id: string, isCurrent: () => boolean) {
+  const active = activeOwnedEmails.get(id);
+  if (active) active.isCurrent = isCurrent;
+  ownedEmails.delete(id);
+  ownedEmails.set(id, isCurrent);
+  // One 500-row page can contain both requested and canonical alias IDs.
+  if (ownedEmails.size > 1024)
+    ownedEmails.delete(ownedEmails.keys().next().value!);
+}
+export function hasOwnedEmailWitness(id: unknown): boolean {
+  if (typeof id !== 'string') return false;
+  const active = activeOwnedEmails.get(id);
+  const witness = active?.isCurrent ?? ownedEmails.get(id);
+  if (!witness) return false;
+  if (witness()) return true;
+  if (active) active.isCurrent = undefined;
+  ownedEmails.delete(id);
+  return false;
+}
+
 function protectedKey(key: unknown): boolean {
+  if (typeof key === 'string' && key.startsWith('GraphqlSoupEmailThread:'))
+    return !hasOwnedEmailWitness(key.slice('GraphqlSoupEmailThread:'.length));
   return (
     typeof key !== 'string' ||
     key.startsWith('GraphqlUser:') ||
     protectedType.test(key)
+  );
+}
+
+type CursorField = 'soup' | 'groupSoup';
+type CursorWitness = {
+  query: string;
+  operationName: string | undefined;
+  field: CursorField;
+  groupKey: string | undefined;
+  isCurrent: () => boolean;
+};
+const cursorWitnesses = new Map<string, CursorWitness>();
+const MAX_CURSOR_WITNESSES = 128;
+const MAX_SCOPE_TEXT_BYTES = 2_000_000;
+let cursorBytes = 0;
+
+function forgetCursor(cursor: string) {
+  const witness = cursorWitnesses.get(cursor);
+  if (!witness) return;
+  cursorBytes -= (cursor.length + witness.query.length) * 2;
+  cursorWitnesses.delete(cursor);
+}
+
+function hasCursorWitness(
+  query: string,
+  operationName: string | undefined,
+  field: CursorField,
+  continuation: Record<string, unknown>
+) {
+  const cursor = continuation.cursor;
+  if (typeof cursor !== 'string') return false;
+  const witness = cursorWitnesses.get(cursor);
+  if (!witness) return false;
+  if (!witness.isCurrent()) {
+    forgetCursor(cursor);
+    return false;
+  }
+  return (
+    witness.query === query &&
+    witness.operationName === operationName &&
+    witness.field === field &&
+    (field === 'soup' || witness.groupKey === continuation.groupKey)
+  );
+}
+
+type ScopeCheck = (variables: Record<string, unknown>) => boolean;
+type CompiledScope = {
+  check: ScopeCheck;
+  kind?: OperationTypeNode;
+  operationName?: string;
+  cursorFields?: ReadonlySet<CursorField>;
+};
+const documents = new Map<
+  string,
+  {
+    document?: DocumentNode;
+    operations: Map<string | undefined, CompiledScope>;
+  }
+>();
+let documentBytes = 0;
+const protectedScope: CompiledScope = { check: () => true };
+
+function cachedDocument(query: string) {
+  let cached = documents.get(query);
+  if (cached) {
+    documents.delete(query);
+    documents.set(query, cached);
+  } else {
+    try {
+      cached = { document: parse(query), operations: new Map() };
+    } catch {
+      cached = { operations: new Map() };
+    }
+    // Bound retained ASTs, including ad hoc documents and invalid input.
+    if (query.length * 2 <= MAX_SCOPE_TEXT_BYTES) {
+      documents.set(query, cached);
+      documentBytes += query.length * 2;
+      while (documents.size > 64 || documentBytes > MAX_SCOPE_TEXT_BYTES) {
+        const oldest = documents.keys().next().value!;
+        documents.delete(oldest);
+        documentBytes -= oldest.length * 2;
+      }
+    }
+  }
+  return cached;
+}
+
+function compiledScope(query: string, operationName?: string): CompiledScope {
+  const cached = cachedDocument(query);
+  const previous = cached.operations.get(operationName);
+  if (previous) return previous;
+  if (!cached.document) return protectedScope;
+  const operation = getOperationAST(cached.document, operationName);
+  if (!operation) return protectedScope;
+  const fragments = new Map(
+    cached.document.definitions.flatMap((definition) =>
+      definition.kind === Kind.FRAGMENT_DEFINITION
+        ? [[definition.name.value, definition] as const]
+        : []
+    )
+  );
+  const cursorFields = new Set<CursorField>();
+  const compile = (
+    selectionSet: SelectionSetNode,
+    visiting = new Set<string>(),
+    path: readonly string[] = []
+  ): ScopeCheck => {
+    const checks = selectionSet.selections.map((selection): ScopeCheck => {
+      if (selection.kind === Kind.FRAGMENT_SPREAD) {
+        const name = selection.name.value;
+        const fragment = fragments.get(name);
+        if (
+          !fragment ||
+          visiting.has(name) ||
+          protectedType.test(fragment.typeCondition.name.value)
+        )
+          return () => true;
+        return compile(
+          fragment.selectionSet,
+          new Set([...visiting, name]),
+          path
+        );
+      }
+      if (selection.kind === Kind.INLINE_FRAGMENT) {
+        if (
+          selection.typeCondition &&
+          protectedType.test(selection.typeCondition.name.value)
+        )
+          return () => true;
+        return compile(selection.selectionSet, visiting, path);
+      }
+      const name = selection.name.value;
+      if (independentFields.has(name)) return () => false;
+      const args = (variables: Record<string, unknown>) =>
+        Object.fromEntries(
+          (selection.arguments ?? []).map((arg) => [
+            arg.name.value,
+            valueFromASTUntyped(arg.value, variables),
+          ])
+        );
+      if (name === 'soupEntity')
+        return (variables) => {
+          const input = object(args(variables).input);
+          return (
+            !unrelatedEntityTypes.has(String(input.entityType)) &&
+            !(
+              input.entityType === 'EMAIL_THREAD' &&
+              hasOwnedEmailWitness(input.entityId ?? input.id)
+            )
+          );
+        };
+      if (name === 'emailThread')
+        return (variables) =>
+          !hasOwnedEmailWitness(object(args(variables).input).threadId);
+      if (name === 'soup' || name === 'groupSoup') {
+        const fields = selection.selectionSet?.selections ?? [];
+        let cursorFieldsSelection = fields;
+        if (name === 'groupSoup') {
+          const bins = fields.find(
+            (field) =>
+              field.kind === Kind.FIELD &&
+              !field.alias &&
+              field.name.value === 'bins'
+          );
+          cursorFieldsSelection =
+            bins?.kind === Kind.FIELD
+              ? (bins.selectionSet?.selections ?? [])
+              : [];
+        }
+        const exposesCursor =
+          path.length === 1 &&
+          path[0] === 'user' &&
+          !selection.alias &&
+          cursorFieldsSelection.some(
+            (field) =>
+              field.kind === Kind.FIELD &&
+              !field.alias &&
+              field.name.value === 'nextCursor'
+          );
+        if (exposesCursor) cursorFields.add(name);
+        return (variables) => {
+          const input = object(args(variables).input);
+          if (input.initial !== undefined)
+            return !excludesCrmContent(object(input.initial).filters);
+          return (
+            !exposesCursor ||
+            !hasCursorWitness(
+              query,
+              operation.name?.value,
+              name,
+              object(input.continuation)
+            )
+          );
+        };
+      }
+      if (
+        name === 'setEntityProperty' ||
+        name === 'updateEntityPropertyOptions'
+      )
+        return (variables) =>
+          !unrelatedEntityTypes.has(
+            String(object(args(variables).input).entityType)
+          );
+      if (name === 'propertyDefinitions')
+        return (variables) =>
+          !['SYSTEM', 'USER', 'TEAM'].includes(String(args(variables).scope));
+      if (name === 'savedViews')
+        return (variables) =>
+          typeof args(variables).kind !== 'string' ||
+          ['crm', 'crm-list'].includes(String(args(variables).kind));
+      if (protectedFields.has(name)) return () => true;
+      return selection.selectionSet
+        ? compile(selection.selectionSet, visiting, [
+            ...path,
+            selection.alias?.value ?? name,
+          ])
+        : () => false;
+    });
+    return (variables) => checks.some((check) => check(variables));
+  };
+  const result = {
+    check: compile(operation.selectionSet),
+    kind: operation.operation,
+    operationName: operation.name?.value,
+    cursorFields,
+  };
+  cached.operations.set(operationName, result);
+  return result;
+}
+
+/** Only these selected, unaliased response shapes can establish a cursor witness. */
+export function queryExposesSoupCursors(query: string, operationName?: string) {
+  const scope = compiledScope(query, operationName);
+  return scope.kind === 'query' && !!scope.cursorFields?.size;
+}
+
+/** Called only after an owner-tagged cached read; never infer scope from cursor text. */
+export function rememberSoupContinuations(
+  request: {
+    query: string;
+    operationName?: string;
+    variables?: Record<string, unknown>;
+  },
+  data: unknown,
+  account: string,
+  isCurrent: () => boolean
+) {
+  const scope = compiledScope(request.query, request.operationName);
+  if (
+    scope.kind !== 'query' ||
+    scope.check(request.variables ?? {}) ||
+    !isCurrent()
+  )
+    return;
+  const user = object(object(data).user);
+  if (user.id !== account) return;
+  const remember = (cursor: unknown, field: CursorField, groupKey?: string) => {
+    if (typeof cursor !== 'string' || !cursor) return;
+    const bytes = (cursor.length + request.query.length) * 2;
+    if (bytes > MAX_SCOPE_TEXT_BYTES) return;
+    forgetCursor(cursor);
+    cursorWitnesses.set(cursor, {
+      query: request.query,
+      operationName: scope.operationName,
+      field,
+      groupKey,
+      isCurrent,
+    });
+    cursorBytes += bytes;
+    while (
+      cursorWitnesses.size > MAX_CURSOR_WITNESSES ||
+      cursorBytes > MAX_SCOPE_TEXT_BYTES
+    )
+      forgetCursor(cursorWitnesses.keys().next().value!);
+  };
+  if (scope.cursorFields?.has('soup'))
+    remember(object(user.soup).nextCursor, 'soup');
+  if (scope.cursorFields?.has('groupSoup')) {
+    const bins = object(user.groupSoup).bins;
+    if (Array.isArray(bins))
+      for (const bin of bins.slice(0, MAX_CURSOR_WITNESSES)) {
+        const value = object(bin);
+        if (typeof value.key === 'string')
+          remember(value.nextCursor, 'groupSoup', value.key);
+      }
+  }
+}
+
+export function queryOperationKind(query: string, operationName?: string) {
+  return compiledScope(query, operationName).kind;
+}
+
+function ownershipSelection(value: Record<string, unknown>): boolean {
+  if (
+    typeof value.document !== 'string' ||
+    typeof value.fragmentName !== 'string'
+  )
+    return false;
+  const fragment = cachedDocument(value.document).document?.definitions.find(
+    (definition) =>
+      definition.kind === Kind.FRAGMENT_DEFINITION &&
+      definition.name.value === value.fragmentName
+  );
+  return (
+    fragment?.kind === Kind.FRAGMENT_DEFINITION &&
+    fragment.typeCondition.name.value === 'GraphqlSoupEmailThread' &&
+    fragment.selectionSet.selections.every(
+      (selection) =>
+        selection.kind === Kind.FIELD &&
+        !selection.selectionSet &&
+        ['__typename', 'id', 'ownerId'].includes(selection.name.value)
+    )
   );
 }
 
@@ -83,75 +460,7 @@ export function queryNeedsCrmProof(
   variables: Record<string, unknown> = {},
   operationName?: string
 ): boolean {
-  try {
-    const document = parse(query);
-    const operation = getOperationAST(document, operationName);
-    if (!operation) return true;
-    const fragments = new Map(
-      document.definitions.flatMap((definition) =>
-        definition.kind === Kind.FRAGMENT_DEFINITION
-          ? [[definition.name.value, definition] as const]
-          : []
-      )
-    );
-    const visited = new Set<string>();
-    const selectionNeedsProof = (selectionSet: SelectionSetNode): boolean =>
-      selectionSet.selections.some((selection): boolean => {
-        if (selection.kind === Kind.FRAGMENT_SPREAD) {
-          if (visited.has(selection.name.value)) return false;
-          visited.add(selection.name.value);
-          const fragment = fragments.get(selection.name.value);
-          return (
-            !fragment ||
-            protectedType.test(fragment.typeCondition.name.value) ||
-            selectionNeedsProof(fragment.selectionSet)
-          );
-        }
-        if (selection.kind === Kind.INLINE_FRAGMENT)
-          return (
-            (selection.typeCondition &&
-              protectedType.test(selection.typeCondition.name.value)) ||
-            selectionNeedsProof(selection.selectionSet)
-          );
-        const name = selection.name.value;
-        const args = Object.fromEntries(
-          (selection.arguments ?? []).map((arg) => [
-            arg.name.value,
-            valueFromASTUntyped(arg.value, variables),
-          ])
-        );
-        const input = object(args.input);
-        // A positive scope proof applies to this complete selection, including
-        // union fragments for other kinds that the server cannot return here.
-        if (name === 'soupEntity')
-          return !unrelatedEntityTypes.has(String(input.entityType));
-        if (name === 'soup' || name === 'groupSoup')
-          return !excludesCrmContent(object(input.initial).filters);
-        if (
-          name === 'setEntityProperty' ||
-          name === 'updateEntityPropertyOptions'
-        )
-          return !unrelatedEntityTypes.has(String(input.entityType));
-        if (
-          name === 'propertyDefinitions' &&
-          ['SYSTEM', 'USER', 'TEAM'].includes(String(args.scope))
-        )
-          return false;
-        if (
-          name === 'savedViews' &&
-          typeof args.kind === 'string' &&
-          !['crm', 'crm-list'].includes(args.kind)
-        )
-          return false;
-        if (protectedFields.has(name)) return true;
-        return selection.selectionSet
-          ? selectionNeedsProof(selection.selectionSet)
-          : false;
-      });
-    return selectionNeedsProof(operation.selectionSet);
-  } catch {
-    return true;
-  }
+  return compiledScope(query, operationName).check(variables);
 }
 
 /** Accepts both worker requests and the equivalent native command arguments. */
@@ -168,8 +477,18 @@ export function requestNeedsCrmProof(
       object(value.variables),
       typeof value.operationName === 'string' ? value.operationName : undefined
     );
-  if (kind === 'read-records-by-keys')
+  if (kind === 'read-records-by-keys') {
+    if (
+      Array.isArray(value.keys) &&
+      value.keys.every(
+        (key) =>
+          typeof key === 'string' && key.startsWith('GraphqlSoupEmailThread:')
+      ) &&
+      ownershipSelection(value)
+    )
+      return false;
     return !Array.isArray(value.keys) || value.keys.some(protectedKey);
+  }
   if (kind === 'search') {
     const buckets = object(value.request).buckets;
     return (

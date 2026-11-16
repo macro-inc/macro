@@ -42,9 +42,11 @@ describe('CRM response content scope', () => {
   ])(
     '%s %s separates outcomes from cache admission',
     async (path, method, protectedContent, write) => {
-      await expect(
-        crmResponseScope('storage', path, `http://localhost${path}`, { method })
-      ).resolves.toEqual({ protected: protectedContent, write });
+      expect(
+        await crmResponseScope('storage', path, `http://localhost${path}`, {
+          method,
+        })
+      ).toEqual({ protected: protectedContent, write });
     }
   );
 
@@ -61,9 +63,9 @@ describe('CRM response content scope', () => {
         method: 'POST',
         body: JSON.stringify({ query, operationName }),
       });
-      await expect(
-        crmResponseScope('storage', '/items/soup/graphql', request, {})
-      ).resolves.toEqual({ protected: protectedContent, write });
+      expect(
+        await crmResponseScope('storage', '/items/soup/graphql', request, {})
+      ).toEqual({ protected: protectedContent, write });
       expect(request.bodyUsed).toBe(false);
     }
   });
@@ -75,31 +77,36 @@ describe('CRM response content scope', () => {
   ])(
     'keeps ambiguous or malformed GraphQL requests read-like',
     async (body) => {
-      await expect(
-        crmResponseScope('storage', '/graphql', 'http://localhost/graphql', {
-          method: 'POST',
-          body,
-        })
-      ).resolves.toEqual({ protected: true, write: false });
+      expect(
+        await crmResponseScope(
+          'storage',
+          '/graphql',
+          'http://localhost/graphql',
+          {
+            method: 'POST',
+            body,
+          }
+        )
+      ).toEqual({ protected: true, write: false });
     }
   );
 
   it('retains proof for POST email reads and preserves actual email writes', async () => {
-    await expect(
-      crmResponseScope(
+    expect(
+      await crmResponseScope(
         'email',
         '/email/messages/batch',
         'http://localhost/email/messages/batch',
         { method: 'POST' }
       )
-    ).resolves.toEqual({ protected: true, write: false });
-    await expect(
-      crmResponseScope(
+    ).toEqual({ protected: true, write: false });
+    expect(
+      await crmResponseScope(
         'email',
         '/email/drafts',
         'http://localhost/email/drafts',
         { method: 'POST' }
       )
-    ).resolves.toEqual({ protected: true, write: true });
+    ).toEqual({ protected: true, write: true });
   });
 });

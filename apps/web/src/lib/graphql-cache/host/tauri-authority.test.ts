@@ -1,6 +1,19 @@
+import { print } from 'graphql';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createCrmAccessAuthority } from '../../service-clients/service-storage/crm-access-authority';
-import { type CacheAuthority, StaleCacheAuthorityError } from '../authority';
+import {
+  DatabaseViewRowsDocument,
+  EmailThreadPageDocument,
+  FavoritesDocument,
+  SoupDocument,
+  WorkFeedDocument,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  type AuthorityTransition,
+  type CacheAuthority,
+  StaleCacheAuthorityError,
+} from '../authority';
+import { witnessOwnedEmail } from '../owned-email-authority';
 import { sourceAuthorityGeneration } from '../source-authority';
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -74,6 +87,159 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each([
+  [
+    'own inbox',
+    SoupDocument,
+    {
+      input: {
+        initial: {
+          filters: {
+            emailFilter: { tree: { literal: { linkId: 'own-mailbox' } } },
+            crmCompanyFilter: {
+              literal: { id: '00000000-0000-0000-0000-000000000000' },
+            },
+            crmContactFilter: {
+              literal: { id: '00000000-0000-0000-0000-000000000000' },
+            },
+            databaseRowFilter: {
+              literal: { id: '00000000-0000-0000-0000-000000000000' },
+            },
+          },
+        },
+      },
+    },
+  ],
+  ['personal work feed', WorkFeedDocument, {}],
+  ['favorites', FavoritesDocument, {}],
+  [
+    'independently accessible database',
+    DatabaseViewRowsDocument,
+    {
+      databaseId: 'independent-database',
+      input: { tableId: 'independent-table' },
+    },
+  ],
+] as const)(
+  'reads cached %s on a cold start while CRM proof is unreachable',
+  async (_label, document, variables) => {
+    state = { ...state, policy: 'none', ready: true };
+    const cached = {
+      kind: 'hit',
+      data: { user: { id: 'viewer', cached: 'personal content' } },
+    };
+    read = vi.fn(async () => cached);
+    const fetchProof = vi.fn(async (): Promise<string> => {
+      throw new TypeError('Failed to fetch');
+    });
+    const controller = createCrmAccessAuthority({
+      fetchProof,
+      retire: async () => {},
+    });
+    controller.setSession('viewer');
+    controller.setHost(host.authority);
+    await expect(
+      host.readQuery({ query: print(document), variables })
+    ).resolves.toEqual(cached);
+    expect(read).toHaveBeenCalledOnce();
+    expect(fetchProof).not.toHaveBeenCalled();
+    await expect(
+      host.readQuery({
+        query:
+          '{ user { soupEntity(input: {entityType: CRM_COMPANY, id: "company"}) { id name } } }',
+      })
+    ).rejects.toThrow('Failed to fetch');
+  }
+);
+
+it.each(['viewer', 'teammate'] as const)(
+  'uses an offline ownership witness only for a thread owned by %s',
+  async (ownerId) => {
+    state = { ...state, policy: 'none', ready: true };
+    const threadId = crypto.randomUUID();
+    const original = invoke.getMockImplementation()!;
+    invoke.mockImplementation((command, args) =>
+      command === 'graphql_cache_read_records_by_keys'
+        ? Promise.resolve({
+            revision: '1',
+            records: [
+              {
+                recordKey: `GraphqlSoupEmailThread:${threadId}`,
+                record: { id: threadId, ownerId },
+              },
+            ],
+          })
+        : original(command, args)
+    );
+    const fetchProof = vi.fn(async (): Promise<string> => {
+      throw new TypeError('Failed to fetch');
+    });
+    const controller = createCrmAccessAuthority({
+      fetchProof,
+      retire: async () => {},
+    });
+    controller.setSession('viewer');
+    controller.setHost(host.authority);
+    let currentHost = true;
+    const assertSession = controller.captureSession();
+    try {
+      const witness = () =>
+        witnessOwnedEmail(
+          host,
+          threadId,
+          () => 'viewer',
+          assertSession,
+          () => currentHost
+        );
+      expect(await Promise.all([witness(), witness()])).toEqual([
+        ownerId === 'viewer',
+        ownerId === 'viewer',
+      ]);
+      expect(
+        invoke.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_read_records_by_keys'
+        )
+      ).toHaveLength(1);
+      expect(fetchProof).not.toHaveBeenCalled();
+      const result = host.readQuery({
+        query: print(EmailThreadPageDocument),
+        variables: { threadId, offset: 0, limit: 20 },
+      });
+      if (ownerId === 'viewer') {
+        expect(await witness()).toBe(true);
+        expect(
+          invoke.mock.calls.filter(
+            ([command]) => command === 'graphql_cache_read_records_by_keys'
+          )
+        ).toHaveLength(1);
+        await expect(result).resolves.toMatchObject({ kind: 'hit' });
+        expect(fetchProof).not.toHaveBeenCalled();
+        controller.setSession('another-viewer');
+        await expect(
+          host.readQuery({
+            query: print(EmailThreadPageDocument),
+            variables: { threadId, offset: 0, limit: 20 },
+          })
+        ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+      } else await expect(result).rejects.toThrow('Failed to fetch');
+    } finally {
+      currentHost = false;
+    }
+  }
+);
+
+it('uses one native command for a stable unrelated cached read', async () => {
+  await host.authority!.current();
+  invoke.mockClear();
+  await host.readQuery({
+    query:
+      '{ user { soupEntity(input: {entityType: DOCUMENT, id: "document"}) { id } } }',
+  });
+  expect(invoke.mock.calls.map(([command]) => command)).toEqual([
+    'graphql_cache_read',
+  ]);
+});
+
 it('requires fresh proof for protected reads while authored queue inspection stays available offline', async () => {
   await host.authority!.current();
   await expect(host.inspectMutations!()).resolves.toEqual([]);
@@ -111,6 +277,7 @@ it('rejects native content that arrives after another window changes the permiss
   const pending = host.readQuery({ query: '{ user { emailThread { id } } }' });
   await started.promise;
   state = { ...state, generation: crypto.randomUUID() };
+  listeners.get('graphql-cache://authority-changed')!({ payload: state });
   release.resolve({
     kind: 'hit',
     data: { user: { emailThread: { name: 'old copied content' } } },
@@ -199,7 +366,7 @@ it('ignores authority events belonging to another cache identity', async () => {
   await expect(host.authority!.verifyRead()).resolves.toBeUndefined();
 });
 
-it('rejects an old postflight reply as soon as the permission event arrives', async () => {
+it('rejects an old explicit authority reply as soon as the permission event arrives', async () => {
   await host.authority!.current();
   await host.authority!.transition(state.generation, 'none');
   const old = state;
@@ -214,7 +381,7 @@ it('rejects an old postflight reply as soon as the permission event arrives', as
     }
     return freshReply.promise;
   };
-  const pending = host.readQuery({ query: '{ user { emailThread { id } } }' });
+  const pending = host.authority!.current();
   const rejected = expect(pending).rejects.toBeInstanceOf(
     StaleCacheAuthorityError
   );
@@ -282,6 +449,38 @@ it('bounds authority listener setup and releases a listener installed after the 
   expect(unlisten).toHaveBeenCalledOnce();
 });
 
+it('rejects a late transition reply after a newer owner event', async () => {
+  await host.authority!.current();
+  const invokeCurrent = invoke.getMockImplementation()!;
+  const completed = Promise.withResolvers<AuthorityTransition>();
+  const release = Promise.withResolvers<void>();
+  invoke.mockImplementation(async (command, args) => {
+    const result = await invokeCurrent(command, args);
+    if (command === 'graphql_cache_transition_authority') {
+      completed.resolve(result);
+      await release.promise;
+    }
+    return result;
+  });
+
+  const pending = host.authority!.transition(state.generation, 'none');
+  const earlier = await completed.promise;
+  state = { ...state, generation: crypto.randomUUID(), policy: 'denied' };
+  listeners.get('graphql-cache://authority-changed')!({ payload: state });
+  expect(host.authority!.snapshot()).toEqual(state);
+  expect(state.generation).not.toBe(earlier.authority.generation);
+
+  const rejected = expect(pending).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+  release.resolve();
+  await rejected;
+  expect(host.authority!.snapshot()).toEqual(state);
+  await expect(host.authority!.verifyRead()).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+});
+
 it('restores verification from a fresh unchanged proof after an authority event', async () => {
   await host.authority!.current();
   await host.authority!.transition(state.generation, 'none');
@@ -309,7 +508,7 @@ it('restores verification from a fresh unchanged proof after an authority event'
   await expect(host.authority!.verifyRead()).resolves.toBeUndefined();
 });
 
-it.each(['initialization', 'postflight'] as const)(
+it.each(['initialization', 'explicit'] as const)(
   'bounds a stalled %s authority lookup',
   async (stage) => {
     await host.authority!.current();
@@ -320,14 +519,17 @@ it.each(['initialization', 'postflight'] as const)(
       scope: state.identity,
       requestTimeoutMs: 50,
     });
-    if (stage === 'postflight') {
+    if (stage === 'explicit') {
       await host.authority!.current();
       await host.authority!.transition(state.generation, 'none');
       readAuthority = () => new Promise(() => {});
     }
-    const pending = host.readQuery({
-      query: '{ user { emailThread { id } } }',
-    });
+    const pending =
+      stage === 'explicit'
+        ? host.authority!.current()
+        : host.readQuery({
+            query: '{ user { emailThread { id } } }',
+          });
     const rejected = expect(pending).rejects.toThrow(
       'graphql cache ipc timeout: graphql_cache_current_authority'
     );

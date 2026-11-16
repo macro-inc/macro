@@ -1,4 +1,7 @@
-import { prepareResponseObservers } from '@core/util/response-observers';
+import {
+  passResponse,
+  prepareResponseObservers,
+} from '@core/util/response-observers';
 import {
   type CacheAuthority,
   type CacheAuthorityHost,
@@ -116,6 +119,20 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it('prepares unrelated requests synchronously without a CRM proof', async () => {
+    await verifiedViewer();
+    const external = prepareResponseObservers(
+      'https://unrelated.example/asset'
+    );
+    const independent = prepareResponseObservers(
+      'http://localhost/dss/documents'
+    );
+    expect(external).not.toBeInstanceOf(Promise);
+    expect(independent).not.toBeInstanceOf(Promise);
+    expect(external).toBe(passResponse);
+    expect(independent).toBe(passResponse);
+    expect(mocks.proof).not.toHaveBeenCalled();
+  });
   it.each(['unavailable', 'revoked'] as const)(
     'returns a committed Soup mutation when the later proof is %s',
     async (state) => {
@@ -256,7 +273,7 @@ describe('CRM HTTP response admission', () => {
     expect(await response.json()).toEqual({ message: 'Already exists' });
   });
 
-  it.each(['/crm/companies', '/documents'])(
+  it.each(['/crm/companies', '/crm/contacts'])(
     'does not return an old login outcome from %s after same-account re-login',
     async (path) => {
       await verifiedViewer();
@@ -268,7 +285,9 @@ describe('CRM HTTP response admission', () => {
       crmAccessAuthority.setSession('viewer');
       mocks.proof.mockResolvedValue(proof(true));
       await expect(
-        observe(Response.json({ id: 'created-before-login' }))
+        Promise.resolve().then(() =>
+          observe(Response.json({ id: 'created-before-login' }))
+        )
       ).rejects.toBeInstanceOf(StaleCacheAuthorityError);
     }
   );

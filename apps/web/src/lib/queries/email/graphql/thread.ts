@@ -9,7 +9,9 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
+import { witnessOwnedEmail } from '@graphql-cache/owned-email-authority';
 import type { ApiThread } from '@service-email/generated/schemas';
+import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import {
   EmailThreadIdentityFieldsFragmentDoc,
   EmailThreadPageDocument,
@@ -116,6 +118,14 @@ async function cachedThreadIdentity(
   if (cacheRequired && !host) {
     throw new Error('Email cache is unavailable; thread identity is unknown');
   }
+  if (host?.authority)
+    await witnessOwnedEmail(
+      host,
+      threadId,
+      crmAccessAuthority.account,
+      crmAccessAuthority.captureSession(),
+      () => getGraphqlCacheHost() === host
+    );
   const result = host
     ? await readRecordsByKeys(
         host,

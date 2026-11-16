@@ -41,6 +41,11 @@ independent resources such as document creates and `/crm/member-access` skip it.
 Treat the memoized response header only as a retirement
 hint: changed or missing hints require fresh JSON proof, and never relabel an
 in-flight response with the resulting generation.
+Keep personal Soup mail, Work Feed, bookmark metadata and independently scoped database-view reads available offline without CRM proof; inspect resolver contracts and arguments rather than broad fragment type names.
+Admit opaque Soup continuations only from an independently scoped cached parent with the same query, operation, group and current account/owner generation; bound witnesses and invalidate them on cache replacement.
+Before exempting a thread-by-ID read, select only cached id/ownerId and bind its ownership witness to the account, login, host, owner and generation; reuse valid witnesses, coalesce pending probes and retain each active Mail chunk's witnesses through fallback reads, while CRM-only shared threads remain gated.
+Memoize GraphQL classification by document and selected operation with bounded retention, recheck arguments and witnesses on each call, and never evaluate disabled infinite-query variables.
+Keep unrelated response observers synchronous and stable native reads to one IPC; use the installed authority event/version fence to reject changed generations instead of polling after every command.
 Keep an ordinary write's real status and payload when later CRM proof fails;
 guard the outcome by its login and admit cache effects only under the captured
 permission generation. Parse the selected GraphQL operation and classify REST
@@ -48,7 +53,7 @@ POST contracts explicitly because POST also serves reads. Preserve queued
 identity settlement separately; never offer a duplicate retry for a committed write.
 Reserve subscription order before authority awaits, capture both subscription and cache generations at arrival, and carry the source generation through deletion commands and host wrappers.
 Fence visibility synchronously on retirement, wait for every overlapping cleanup to settle before reopening, and reject replaced-owner transition replies before they can retire the current owner.
-Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; skipped response admission must never turn a stale or missing cached list into a replacement write.
+Derive whole-list team-view mutations from a successful network-only settings read inside the serialized mutation; retain the authoring account/session and recheck it after that GET, so a queued edit or skipped response admission cannot overwrite another login's settings or a newer list.
 Capture the generation before predicting optimistic results from authored
 arguments; caller-supplied copied updates must retain their original generation.
 Publish the shared client and host before installing authority callbacks, which
@@ -56,7 +61,7 @@ can synchronously reset mounted observers and reenter client lookup.
 On native, await bounded authority listener setup before exposing cached reads;
 reset and observe the event's scoped owner generation synchronously before refresh.
 `bun run gen-cache-authority-schema --check --rust` checks the shared contract.
-Conceal all preview snapshots while query authorization is paused, including REST email previews;
+Conceal protected preview snapshots while CRM proof is paused, including unwitnessed REST email previews, while independent document/task previews remain available;
 an independently shared item may stay mounted but must drop its CRM breadcrumbs and task preset.
 Bound both `init` and `current-authority` cache startup requests with the initialization deadline,
 including the existing owner-handoff pause and resume behavior.

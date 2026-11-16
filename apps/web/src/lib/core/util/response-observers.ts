@@ -11,23 +11,35 @@ export function registerResponseObserver(observer: ResponseObserver) {
   observers.add(observer);
   return () => observers.delete(observer);
 }
-export async function prepareResponseObservers(
+export const passResponse = (response: Response) => response;
+export type ResponseGuard = (
+  response: Response
+) => Response | Promise<Response>;
+
+export function prepareResponseObservers(
   input: RequestInfo | URL,
   init: RequestInit = {}
 ) {
-  const guards = await Promise.all(
-    [...observers].map((observer) => observer(input, init))
-  );
-  return async (response: Response) => {
-    for (const guard of guards) if (guard) response = await guard(response);
-    return response;
+  const prepared = [...observers].map((observer) => observer(input, init));
+  const compose = (values: (ResponseGuard | undefined)[]): ResponseGuard => {
+    const guards = values.filter((guard) => guard !== undefined);
+    if (!guards.length) return passResponse;
+    return (response) => {
+      let value: Response | Promise<Response> = response;
+      for (const guard of guards)
+        value = value instanceof Promise ? value.then(guard) : guard(value);
+      return value;
+    };
   };
+  if (prepared.some((guard) => guard instanceof Promise))
+    return Promise.all(prepared).then(compose);
+  return compose(prepared.filter((guard) => typeof guard === 'function'));
 }
 
 /** A response can arrive before a revocation but finish decoding after it. */
 export function guardResponseBody(
   response: Response,
-  guard: () => Promise<void>
+  guard: () => void | Promise<void>
 ): Response {
   for (const name of [
     'json',
@@ -41,7 +53,8 @@ export function guardResponseBody(
       configurable: true,
       value: async () => {
         const value = await read();
-        await guard();
+        const checked = guard();
+        if (checked instanceof Promise) await checked;
         return value;
       },
     });

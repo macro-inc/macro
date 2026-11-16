@@ -1510,6 +1510,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       onChanged: authorityObserver.onChanged,
       transition(expected, policy) {
         return Telemetry.span('crm.access.owner.request', async (span) => {
+          await ensureInitialized();
+          const version = authorityObserver.version();
           const result = (await initializedRequest({
             kind: 'transition-authority',
             identity: options.scope,
@@ -1517,7 +1519,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             policy,
             traceparent: span.traceparent(),
           })) as AuthorityTransition;
-          span.run(() => authorityObserver.observe(result.authority));
+          span.run(() => authorityObserver.observe(result.authority, version));
           authorityObserver.verify();
           span.setAttr('crm.access.changed', result.changed);
           return result;

@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   guardResponseBody,
+  type ResponseGuard,
   registerResponseObserver,
 } from '@core/util/response-observers';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
@@ -122,7 +123,7 @@ function install() {
       }
     },
   });
-  registerResponseObserver(async (input, init) => {
+  registerResponseObserver((input, init) => {
     if (!crmAccessAuthority.account()) return;
     const url = new URL(
       input instanceof Request ? input.url : String(input),
@@ -151,83 +152,88 @@ function install() {
       new URL(base, document.baseURI).pathname.replace(/\/$/, '').length
     );
     const assertSession = crmAccessAuthority.captureSession();
-    const scope = await crmResponseScope(
+    const scope = crmResponseScope(
       storage ? 'storage' : agentActivity ? 'agent' : 'email',
       path,
       input,
       init
     );
-    assertSession();
-    const queuedMutation = isQueuedSettlementRequest(init);
-    if (!scope.protected && !queuedMutation) {
-      return (response) => {
-        assertSession();
-        return guardResponseBody(response, async () => assertSession());
-      };
-    }
-    if (storage) {
-      const headers = new Headers(
-        init.headers ?? (input instanceof Request ? input.headers : undefined)
-      );
-      headers.set('x-macro-crm-access-signal', '1');
-      init.headers = headers;
-    }
-    const captured = await crmAccessAuthority.prepare();
-    return async (response) => {
-      let admitted: typeof captured | undefined = captured;
-      let rejected: unknown;
-      try {
-        const policy = response.headers.get('x-macro-crm-access');
-        const current = await captured.owner.current();
-        if (storage && isCrmPolicy(policy) && policy === current.policy) {
+    const observeScope = (
+      scope: Awaited<ReturnType<typeof crmResponseScope>>
+    ): ResponseGuard | undefined | Promise<ResponseGuard> => {
+      const queuedMutation = isQueuedSettlementRequest(init);
+      if (!scope.protected && !queuedMutation) return;
+      assertSession();
+      return (async () => {
+        if (storage) {
+          const headers = new Headers(
+            init.headers ??
+              (input instanceof Request ? input.headers : undefined)
+          );
+          headers.set('x-macro-crm-access-signal', '1');
+          init.headers = headers;
+        }
+        const captured = await crmAccessAuthority.prepare();
+        return async (response: Response) => {
+          let admitted: typeof captured | undefined = captured;
+          let rejected: unknown;
           try {
+            const policy = response.headers.get('x-macro-crm-access');
+            const current = await captured.owner.current();
+            if (storage && isCrmPolicy(policy) && policy === current.policy) {
+              try {
+                await crmAccessAuthority.assertCurrent(captured);
+              } catch {
+                // Recover from a prior unavailable proof without trusting the hint.
+                await crmAccessAuthority.refresh();
+              }
+            } else {
+              await crmAccessAuthority.refresh();
+            }
+            // Hints can be memoized or read after the handler. Only a fresh proof
+            // changes authority; the response always retains its original generation.
             await crmAccessAuthority.assertCurrent(captured);
-          } catch {
-            // Recover from a prior unavailable proof without trusting the hint.
-            await crmAccessAuthority.refresh();
+          } catch (error) {
+            crmAccessAuthority.retireUnverified(captured);
+            // An ordinary write keeps its real outcome, while a successful queued
+            // write still needs its identity to settle. Neither can publish rejected
+            // content to a cache; only reads fail when content admission fails.
+            if (
+              !(scope.write && !queuedMutation) &&
+              (!queuedMutation || !response.ok)
+            )
+              throw error;
+            admitted = undefined;
+            rejected = error;
           }
-        } else {
-          await crmAccessAuthority.refresh();
-        }
-        // Hints can be memoized or read after the handler. Only a fresh proof
-        // changes authority; the response always retains its original generation.
-        await crmAccessAuthority.assertCurrent(captured);
-      } catch (error) {
-        crmAccessAuthority.retireUnverified(captured);
-        // An ordinary write keeps its real outcome, while a successful queued
-        // write still needs its identity to settle. Neither can publish rejected
-        // content to a cache; only reads fail when content admission fails.
-        if (
-          !(scope.write && !queuedMutation) &&
-          (!queuedMutation || !response.ok)
-        )
-          throw error;
-        admitted = undefined;
-        rejected = error;
-      }
-      const check = async () => {
-        try {
-          if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
-          await crmAccessAuthority.assertCurrent(admitted);
-        } catch (error) {
-          crmAccessAuthority.retireUnverified(captured);
-          throw error;
-        }
-      };
-      rememberResponseAuthority(response, admitted?.generation, check);
-      if (scope.write && !queuedMutation) {
-        assertSession();
-        rememberWriteResponse(response, assertSession);
-        return guardResponseBody(response, async () => assertSession());
-      }
-      return guardResponseBody(response, async () => {
-        try {
-          await check();
-        } catch (error) {
-          if (!queuedMutation) throw error;
-        }
-      });
+          const check = async () => {
+            try {
+              if (!admitted) throw rejected ?? new StaleCacheAuthorityError();
+              await crmAccessAuthority.assertCurrent(admitted);
+            } catch (error) {
+              crmAccessAuthority.retireUnverified(captured);
+              throw error;
+            }
+          };
+          rememberResponseAuthority(response, admitted?.generation, check);
+          if (scope.write && !queuedMutation) {
+            assertSession();
+            rememberWriteResponse(response, assertSession);
+            return guardResponseBody(response, async () => assertSession());
+          }
+          return guardResponseBody(response, async () => {
+            try {
+              await check();
+            } catch (error) {
+              if (!queuedMutation) throw error;
+            }
+          });
+        };
+      })();
     };
+    return scope instanceof Promise
+      ? scope.then(observeScope)
+      : observeScope(scope);
   });
 }
 

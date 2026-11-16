@@ -442,6 +442,72 @@ fn reopening_an_interrupted_retirement_stays_closed_until_it_is_retried() {
 }
 
 #[test]
+fn legacy_identity_hydrates_the_account_without_creating_a_permission_proof() {
+    block_on(async {
+        let mut legacy = Engine::new(InMemoryStorage::new());
+        let query = "query Mail { user { id emailThread(id: \"own-thread\") { __typename id ownerId name } } }";
+        let data = json!({
+            "user": {
+                "id": "viewer",
+                "emailThread": {
+                    "__typename": "GraphqlSoupEmailThread",
+                    "id": "own-thread",
+                    "ownerId": "viewer",
+                    "name": "Personal subject"
+                }
+            }
+        });
+        legacy
+            .write_query(
+                None,
+                query,
+                Some("Mail"),
+                &Default::default(),
+                &data,
+                Some("viewer"),
+            )
+            .await
+            .unwrap();
+        let metadata = legacy
+            .storage()
+            .get_batch(&[
+                EntityKey("__meta:identity".into()),
+                EntityKey(AUTHORITY_KEY.into()),
+            ])
+            .await
+            .unwrap();
+        assert!(metadata[0].is_some());
+        assert!(metadata[1].is_none());
+
+        let mut reopened = Engine::new(legacy.into_storage());
+        let authority = reopened
+            .current_authority("anonymous-profile")
+            .await
+            .unwrap();
+        assert_eq!(authority.account.as_deref(), Some("viewer"));
+        assert!(!authority.ready);
+        assert!(authority.policy.is_none());
+        assert!(
+            reopened
+                .check_authority(Some(authority.generation))
+                .await
+                .is_err()
+        );
+        reopened
+            .check_authority_generation(Some(authority.generation), false)
+            .await
+            .unwrap();
+        assert!(matches!(
+            reopened
+                .read_query(None, query, Some("Mail"), &Default::default())
+                .await
+                .unwrap(),
+            ReadResult::Hit { data: restored } if restored == data
+        ));
+    });
+}
+
+#[test]
 fn an_account_witness_cannot_be_confused_with_the_physical_cache_profile() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

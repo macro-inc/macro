@@ -1,7 +1,7 @@
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { NATIVE_SESSION_SERVICE_URLS } from '../constant/servers';
 import { isTauri } from './platform';
-import { prepareResponseObservers } from './response-observers';
+import { passResponse, prepareResponseObservers } from './response-observers';
 
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
 // tauri-plugin-http's message when a URL is outside the capability's scope.
@@ -109,8 +109,22 @@ export function createPlatformFetch(
 }
 
 // Native startup installs the transport explicitly; all callers share it.
-export const platformFetch: typeof fetch = async (input, init) => {
-  const request = { ...init };
-  const observe = await prepareResponseObservers(input, request);
-  return observe(await globalThis.fetch(input, request));
+export const platformFetch: typeof fetch = (input, init) => {
+  try {
+    const request = { ...init };
+    const prepared = prepareResponseObservers(input, request);
+    const dispatch = (
+      observe:
+        | typeof passResponse
+        | ((response: Response) => Promise<Response> | Response)
+    ) => {
+      const response = globalThis.fetch(input, request);
+      return observe === passResponse ? response : response.then(observe);
+    };
+    return prepared instanceof Promise
+      ? prepared.then(dispatch)
+      : dispatch(prepared);
+  } catch (error) {
+    return Promise.reject(error);
+  }
 };

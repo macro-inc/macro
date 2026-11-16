@@ -1,4 +1,5 @@
 import { queryAuthorization } from '@app/lib/urql-solid/authorization';
+import { hasOwnedEmailWitness } from '@graphql-cache/authority-scope';
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
@@ -123,8 +124,18 @@ export function createEmailThreadSource(
     const requested = threadId();
     const epoch = queryAuthorization().epoch;
     if (previous?.epoch !== epoch) previous = undefined;
-    if (queryAuthorization().paused) return { requested, epoch };
-    if (!query.isSuccess && !query.isError) {
+    // Read non-suspending status before the witness guard so completion of an
+    // offline ownership lookup can wake this source through its query result.
+    const succeeded = query.isSuccess;
+    const failed = query.isError;
+    const resolved = query.resolvedThreadId;
+    if (
+      queryAuthorization().paused &&
+      !hasOwnedEmailWitness(requested) &&
+      !hasOwnedEmailWitness(resolved)
+    )
+      return { requested, epoch };
+    if (!succeeded && !failed) {
       // Resolving a local handle changes the query key, but must not unmount
       // an open composer while the same thread's canonical page loads.
       return {

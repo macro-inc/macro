@@ -1,6 +1,7 @@
 use super::*;
 use cache_core::engine::authority::AuthorityAdmission;
 use cache_core::store::Storage;
+use cache_core::value::CacheValue;
 use serde_json::json;
 
 async fn bind(handle: &EngineHandle) {
@@ -199,7 +200,7 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
         assert!(
             records[0]
                 .as_ref()
-                .is_none_or(|row| !row.fields.contains_key("emailName"))
+                .is_none_or(|row| !row.fields.contains_key("name"))
         );
         drop(state);
         let current = handle
@@ -216,6 +217,29 @@ fn native_permission_boundary_rejects_old_reads_and_writes_but_settles_authored_
                 )
                 .await
                 .is_ok()
+        );
+        current
+            .write(WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: query.into(),
+                operation_name: Some("Save".into()),
+                variables,
+                data,
+                identity: None,
+            })
+            .await
+            .unwrap();
+        let state = handle.inner.lock().await;
+        let records = state
+            .engine
+            .storage()
+            .get_batch(&[EntityKey("GraphqlSoupEmailThread:server-thread".into())])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0].as_ref().unwrap().fields.get("name"),
+            Some(&CacheValue::String("retired subject".into()))
         );
     });
 }

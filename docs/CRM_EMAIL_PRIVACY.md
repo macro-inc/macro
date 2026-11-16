@@ -69,15 +69,38 @@ skip it. A changed, missing, or invalid hint triggers a fresh
 authority read; it never changes the policy directly. The response keeps its
 pre-request generation even when that fresh read changes authority, so a late
 response cannot be relabeled and admitted after retirement. Protected local reads
-also require fresh authority. A changed permission retires normalized records,
+also require fresh authority. Personal Soup mail, Work Feed, bookmark metadata
+and independently scoped database views retain their cached offline reads when
+the permission endpoint is unavailable. Thread-by-ID reads first select only
+cached identity and ownership metadata: the current account's own thread can be
+read without a network proof, while a thread known only through CRM sharing
+remains gated. Ownership witnesses expire with their login, account, host, owner
+or generation, and repeated positive reads reuse them. Mail lists select ownership
+in batches of at most 500 IDs; up to 1,024 idle positive ID/alias witnesses are retained.
+Active chunks hold their witnesses until content and fallback flag reads settle,
+so concurrent lists cannot evict another reader's ownership evidence.
+A missing witness never permits content. Ordinary Soup database rows require an
+independently authorized database entity; CRM pipelines use distinct contracts.
+Opaque Soup continuation cursors inherit scope only from an independently scoped,
+owner-tagged cached parent. Witnesses retain the exact query, selected operation
+and group, expire with the account or cache owner/generation, and are capped at
+128 entries and 2 MB of query/cursor text. Unknown and CRM-associated cursors
+still require proof; cursor text itself is never treated as authorization.
+Unrelated fetch observers remain synchronous; stable native
+reads rely on the installed authority event/version fence and do not issue a
+second IPC authority request.
+
+A changed permission retires normalized records,
 derived search/projection rows, protected properties, persisted query lists, and
 mounted observer snapshots. Browser and native owners serialize this work behind
 a durable closed marker. Late responses, optimistic snapshots, and subscription
-frames keep their original generation and cannot restore retired content. Legacy
-database-row snapshots and unowned property snapshots have no reliable access
-provenance, so they are also quarantined and unavailable offline until a fresh
-authorized read restores them. Independently accessible mail and pipelines reload
-through current server grants. Unrelated document/calendar data, authored draft
+frames keep their original generation and cannot restore retired content. The
+existing native cleanup conservatively retires whole mail/database-row families
+and unowned property snapshots after a permission transition. It can remove independently accessible
+mail and database/pipeline snapshots too; those need a fresh authorized read to
+be available offline again. This transition cleanup is separate from classifying
+ordinary cold-start reads, which does not require CRM proof for personal data.
+Unrelated document/calendar data, authored draft
 content, queued command variables, UUIDs, leases, and identity bindings survive.
 
 A completed ordinary write returns its actual status and payload to the same
@@ -95,6 +118,8 @@ retirement closes admission immediately and waits for all overlapping cleanup
 work to settle before reopening; a replaced owner's delayed reply cannot retire
 the current owner. Function-style team-view edits obtain a network-only settings
 baseline inside the serialized mutation and stop before PUT if that read fails.
+They retain the enqueuing login and check it before the read and again before
+writing, so a queued edit cannot be applied under a replacement account.
 This adds one settings GET per such edit, not per view. Cross-client whole-list
 writes retain their existing last-write-wins behavior.
 

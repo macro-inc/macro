@@ -1,5 +1,7 @@
-import { queryNeedsCrmProof } from '@graphql-cache/authority-scope';
-import { getOperationAST, parse } from 'graphql';
+import {
+  queryNeedsCrmProof,
+  queryOperationKind,
+} from '@graphql-cache/authority-scope';
 
 type ResponseScope = { protected: boolean; write: boolean };
 const read: ResponseScope = { protected: true, write: false };
@@ -59,12 +61,12 @@ const emailPostWrites = [
 ];
 
 /** Unknown requests stay read-like and fail closed; selected GraphQL operations own their kind. */
-export async function crmResponseScope(
+export function crmResponseScope(
   service: 'storage' | 'email' | 'agent',
   path: string,
   input: RequestInfo | URL,
   init: RequestInit
-): Promise<ResponseScope> {
+): ResponseScope | Promise<ResponseScope> {
   const method = (
     init.method ?? (input instanceof Request ? input.method : 'GET')
   ).toUpperCase();
@@ -73,42 +75,47 @@ export async function crmResponseScope(
     service === 'storage' &&
     (path === '/items/soup/graphql' || path === '/graphql')
   ) {
-    try {
-      const body =
-        init.body ??
-        (input instanceof Request ? await input.clone().text() : undefined);
-      const payload =
-        method === 'GET'
-          ? Object.fromEntries(
-              new URL(
-                input instanceof Request ? input.url : String(input),
-                document.baseURI
-              ).searchParams
-            )
-          : typeof body === 'string'
-            ? JSON.parse(body)
-            : undefined;
-      if (typeof payload?.query !== 'string') return read;
-      const variables =
-        typeof payload.variables === 'string'
-          ? JSON.parse(payload.variables)
-          : payload.variables;
-      const operation = getOperationAST(
-        parse(payload.query),
-        payload.operationName
-      );
-      if (!operation) return read;
-      return {
-        protected: queryNeedsCrmProof(
+    const classify = (body: unknown): ResponseScope => {
+      try {
+        const payload =
+          method === 'GET'
+            ? Object.fromEntries(
+                new URL(
+                  input instanceof Request ? input.url : String(input),
+                  document.baseURI
+                ).searchParams
+              )
+            : typeof body === 'string'
+              ? JSON.parse(body)
+              : undefined;
+        if (typeof payload?.query !== 'string') return read;
+        const variables =
+          typeof payload.variables === 'string'
+            ? JSON.parse(payload.variables)
+            : payload.variables;
+        const operation = queryOperationKind(
           payload.query,
-          variables,
           payload.operationName
-        ),
-        write: operation.operation === 'mutation',
-      };
-    } catch {
-      return read;
-    }
+        );
+        if (!operation) return read;
+        return {
+          protected: queryNeedsCrmProof(
+            payload.query,
+            variables,
+            payload.operationName
+          ),
+          write: operation === 'mutation',
+        };
+      } catch {
+        return read;
+      }
+    };
+    if (init.body === undefined && input instanceof Request && method !== 'GET')
+      return input
+        .clone()
+        .text()
+        .then(classify, () => read);
+    return classify(init.body);
   }
   if (service === 'storage') {
     // Even a document attachment can be referenced from a private CRM comment.

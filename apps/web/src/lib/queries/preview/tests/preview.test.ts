@@ -1,4 +1,5 @@
 import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
+import { rememberOwnedEmail } from '@graphql-cache/authority-scope';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ItemEntity, PreviewItem } from '../types';
@@ -55,7 +56,9 @@ vi.mock('../fetchers', () => ({
   fetchRestPreviewBatch: fetchRestPreviewMock,
 }));
 
-vi.mock('../graphql', () => ({
+vi.mock('../graphql', async (importOriginal) => ({
+  previewNeedsCrmProof: (await importOriginal<typeof import('../graphql')>())
+    .previewNeedsCrmProof,
   canWriteGraphqlPreviewCache: canWriteGraphqlPreviewCacheMock,
   createGraphqlItemPreviewQuery: createGraphqlItemPreviewQueryMock,
   getGraphqlItemPreview: getGraphqlPreviewMock,
@@ -468,6 +471,102 @@ it.each(['graphql', 'rest'] as const)(
     } finally {
       resume();
       dispose();
+      policy.graphql = true;
+    }
+  }
+);
+
+for (const transport of ['graphql', 'rest'] as const) {
+  it.each([false, true])(
+    `keeps independent document previews readable while proof is unavailable on ${transport} (task: %s)`,
+    async (task) => {
+      policy.allowed = false;
+      policy.graphql = transport === 'graphql';
+      const item: ItemEntity = { id: 'personal-document', type: 'document' };
+      const document: PreviewItem = {
+        ...preview,
+        ...item,
+        type: 'document',
+        ...(task ? { subType: { type: 'task', is_completed: false } } : {}),
+      };
+      getGraphqlPreviewMock.mockResolvedValue(document);
+      fetchQueryMock.mockResolvedValue(document);
+      createGraphqlItemPreviewQueryMock.mockReturnValue({
+        data: () => document,
+        shouldFallback: () => transport === 'rest',
+        isLoading: () => false,
+      });
+      useQueryMock.mockReturnValue({
+        data: document,
+        isPending: false,
+        isSuccess: true,
+      });
+      const resume = beginQueryAuthorizationReset();
+      const { current, dispose } = createRoot((dispose) => ({
+        current: useItemPreview(() => item)[0],
+        dispose,
+      }));
+      try {
+        expect(current()).toEqual(document);
+        await expect(getItemPreview(item)).resolves.toEqual(document);
+      } finally {
+        dispose();
+        resume();
+        policy.allowed = true;
+        policy.graphql = true;
+      }
+    }
+  );
+}
+
+it('closes a cached owned-email preview when its ownership witness expires', async () => {
+  const [currentWitness, setCurrentWitness] = createSignal(true);
+  const item: ItemEntity = { id: 'preview-owned-thread', type: 'email' };
+  const email: PreviewItem = { ...preview, ...item, type: 'email' };
+  rememberOwnedEmail(item.id, currentWitness);
+  getGraphqlPreviewMock.mockResolvedValue(email);
+  createGraphqlItemPreviewQueryMock.mockReturnValue({
+    data: () => email,
+    shouldFallback: () => false,
+    isLoading: () => false,
+  });
+  const resume = beginQueryAuthorizationReset();
+  const { current, dispose } = createRoot((dispose) => ({
+    current: useItemPreview(() => item)[0],
+    dispose,
+  }));
+  try {
+    expect(current()).toEqual(email);
+    await expect(getItemPreview(item)).resolves.toEqual(email);
+    setCurrentWitness(false);
+    expect(current()).toMatchObject({ access: 'no_access' });
+    await expect(getItemPreview(item)).resolves.toMatchObject({
+      access: 'no_access',
+    });
+  } finally {
+    setCurrentWitness(false);
+    dispose();
+    resume();
+  }
+});
+
+it.each(['graphql', 'rest'] as const)(
+  'still rejects an independent preview returned after its epoch changed on %s',
+  async (transport) => {
+    policy.graphql = transport === 'graphql';
+    let resolve!: (preview: PreviewItem) => void;
+    const delayed = new Promise<PreviewItem>((done) => {
+      resolve = done;
+    });
+    getGraphqlPreviewMock.mockReturnValue(delayed);
+    fetchQueryMock.mockReturnValue(delayed);
+    const pending = getItemPreview({ id: 'doc-1', type: 'document' });
+    const resume = beginQueryAuthorizationReset();
+    try {
+      resolve(preview);
+      await expect(pending).resolves.toMatchObject({ access: 'no_access' });
+    } finally {
+      resume();
       policy.graphql = true;
     }
   }

@@ -1,3 +1,4 @@
+import { beginQueryAuthorizationReset } from '@app/lib/urql-solid/authorization';
 import type {
   Client,
   GraphQLRequest,
@@ -206,6 +207,49 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
   });
+
+  it.each([false, true])(
+    'keeps only ordinary cached Soup visible while CRM proof is unavailable (CRM scope: %s)',
+    async (crm) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const resume = beginQueryAuthorizationReset();
+      const { query, dispose } = createRoot((dispose) => ({
+        query: createSoupLiveQuery(() => ({
+          sortMethod: 'UPDATED_AT',
+          filters: {
+            crmCompanyFilter: {
+              literal: { id: '00000000-0000-0000-0000-000000000000' },
+            },
+            ...(crm ? { crmAssociation: { company: 'company' } } : {}),
+          },
+        })),
+        dispose,
+      }));
+      try {
+        if (crm) {
+          expect(fake.executions).toHaveLength(0);
+          expect(query.data()).toBeUndefined();
+          return;
+        }
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ id: 'cached-personal' }],
+            next_cursor: null,
+          }),
+          { source: 'normalized-cache-hit', revision: REVISION_1 },
+          new CombinedError({ networkError: new TypeError('Failed to fetch') })
+        );
+        expect(query.data()?.map((item) => item.id)).toEqual([
+          'cached-personal',
+        ]);
+      } finally {
+        dispose();
+        resume();
+      }
+    }
+  );
 
   it('retains CRM dependency scope on opaque continuation pages', async () => {
     const fake = makeFakeClient();

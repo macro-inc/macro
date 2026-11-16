@@ -763,7 +763,16 @@ The client sends that opt-in for storage responses that can carry CRM content;
 independent requests such as document creation and the fresh authority endpoint
 skip it. Changed or unavailable hints trigger a fresh proof before cache admission.
 Protected local reads also require fresh proof; unavailable proof keeps those
-results closed. An already-started read retains its original generation and is
+results closed. Cached personal inbox, Work Feed, bookmark metadata and ordinary
+database views remain readable at offline startup without that proof. Cached Soup
+continuations stay readable after their independently scoped parent page is read;
+unknown cursors remain gated, and account or cache replacement closes that scope.
+An own
+thread is readable when its cached ownership matches the current account and
+generation; CRM-only shared threads remain closed. A permission transition still
+performs conservative cleanup of mixed mail/database snapshots, so independent
+content removed by that cleanup needs an authorized refresh before it is
+available offline again. An already-started read retains its original generation and is
 discarded if authority changed while it was in flight. A completed write keeps
 its actual status and payload for the same login, but its cache effects are
 discarded after retirement. Company/contact create forms close after a successful

@@ -29,7 +29,8 @@ export function createBaseQuery<
 >(
   getOptions: Accessor<Options>,
   createObserver: UrqlObserverFactory<Options, Result>,
-  name: string
+  name: string,
+  scopeVariables?: (options: Options) => Record<string, unknown> | undefined
 ): Result {
   const providerClient = useOptionalUrqlClient();
   // Requests sent while the enclosing view loads join its trace; see
@@ -37,21 +38,23 @@ export function createBaseQuery<
   const flow = useFlowTrace();
   const options = createMemo(() => {
     const input = getOptions();
-    const protectedQuery =
-      !('query' in input) ||
-      queryNeedsCrmProof(
-        typeof input.query === 'string'
-          ? input.query
-          : stringifyDocument(input.query as DocumentNode),
-        'variables' in input
-          ? (input.variables as Record<string, unknown>)
-          : undefined
-      );
+    const pauseForCrm =
+      queryAuthorization().paused &&
+      !('enabled' in input && input.enabled === false) &&
+      (!('query' in input) ||
+        queryNeedsCrmProof(
+          typeof input.query === 'string'
+            ? input.query
+            : stringifyDocument(input.query as DocumentNode),
+          scopeVariables
+            ? scopeVariables(input)
+            : 'variables' in input
+              ? (input.variables as Record<string, unknown>)
+              : undefined
+        ));
     const next = {
       ...input,
-      ...(queryAuthorization().paused && protectedQuery
-        ? { enabled: false }
-        : {}),
+      ...(pauseForCrm ? { enabled: false } : {}),
     };
     if (!flow) return next;
     return {

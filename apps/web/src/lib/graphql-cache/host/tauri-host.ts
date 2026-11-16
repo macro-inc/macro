@@ -279,10 +279,19 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   async function request<T>(
     command: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    resumeScope?: {
+      request: EntityFilterCacheArgs;
+      assertCurrent(): void;
+    }
   ): Promise<T> {
-    const requireProof = requestNeedsCrmProof(command, args);
+    const requireProof = resumeScope
+      ? requestNeedsCrmProof(ENTITY_FILTER_COMMAND, {
+          request: resumeScope.request,
+        })
+      : requestNeedsCrmProof(command, args);
     let captured: string | undefined;
+    let authorityVersion = authorityObserver.version();
     if (!isAuthorityLifecycle(command)) {
       if (
         requireProof &&
@@ -305,7 +314,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       )
         throw new StaleCacheAuthorityError();
       args = { ...args, authority: { generation: captured, requireProof } };
+      authorityVersion = authorityObserver.version();
     }
+    resumeScope?.assertCurrent();
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
       sampling: 'perf',
@@ -320,10 +331,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         ? withRequestDeadline(command, operation, requestTimeoutMs, deadline)
         : operation);
       if (!isAuthorityLifecycle(command) && !isAuthoredSettlement(command)) {
-        const current = await currentAuthority();
-        if (current.generation !== captured)
+        // Native admission checks the generation under its owner lock. The
+        // installed change listener fences replies that cross an owner event;
+        // stable reads need no second IPC round trip.
+        if (
+          authorityObserver.version() !== authorityVersion ||
+          authorityObserver.snapshot()?.generation !== captured
+        )
           throw new StaleCacheAuthorityError();
       }
+      resumeScope?.assertCurrent();
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
       return markSourceAuthority(value, captured);
     } catch (error) {
@@ -587,6 +604,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       async transition(expected, policy) {
         const context = Telemetry.captureContext();
         await ready;
+        const version = authorityObserver.version();
         const result = await context.run(() =>
           request<AuthorityTransition>('graphql_cache_transition_authority', {
             identity: options.scope,
@@ -594,9 +612,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             policy,
           })
         );
+        context.run(() => authorityObserver.observe(result.authority, version));
         pendingReads.clear();
         liveQueries.clear();
-        context.run(() => authorityObserver.observe(result.authority));
         authorityObserver.verify();
         return result;
       },
@@ -828,12 +846,26 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             if (oldest !== undefined) liveQueries.delete(oldest);
           }
           if (registration.registrationId) {
+            const registered = registration;
+            const registrationId = registered.registrationId;
             const update = await request<LiveQueryUpdate | null>(
               ENTITY_FILTER_RESUME_COMMAND,
               {
                 id: live.id,
-                registrationId: registration.registrationId,
+                registrationId,
                 since: live.since,
+              },
+              {
+                // The native resume token has no filter. Reuse the exact local
+                // descriptor for admission without extending the wire contract.
+                request: args,
+                assertCurrent() {
+                  if (
+                    liveQueries.get(live.id) !== registered ||
+                    registered.registrationId !== registrationId
+                  )
+                    throw new StaleCacheAuthorityError();
+                },
               }
             );
             if (update !== null) return update;

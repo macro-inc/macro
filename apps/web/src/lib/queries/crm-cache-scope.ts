@@ -12,7 +12,6 @@ export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
       'activity',
       'agent-activity',
       'attention-feed',
-      'favorites',
       'attachmentReferences',
       'agentSessionActivity',
     ].includes(String(kind))
@@ -39,6 +38,7 @@ export function crmProtectedQueryKey(key: readonly unknown[]): boolean {
       'settingsOperations',
       'scheduledMessages',
       'composeDraftState',
+      'previews',
     ].includes(String(scope));
   if (kind === 'properties') {
     if (scope === 'definitions')

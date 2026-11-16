@@ -35,6 +35,21 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('dispatches an unrelated fetch synchronously and returns its original promise', async () => {
+  const transport = Promise.resolve(new Response('unrelated'));
+  const sent = vi.fn<typeof fetch>().mockReturnValue(transport);
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver(() => undefined);
+  try {
+    const result = platformFetch('https://unrelated.example/asset');
+    expect(sent).toHaveBeenCalledOnce();
+    expect(result).toBe(transport);
+    await result;
+  } finally {
+    stop();
+  }
+});
+
 it('sends observer annotations without changing the caller request options', async () => {
   const headers = new Headers({ 'x-original': 'kept' });
   const init = Object.freeze({ headers, method: 'POST' });
