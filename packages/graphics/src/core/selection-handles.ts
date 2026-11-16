@@ -78,10 +78,34 @@ export function rotationKnobPoint(
   };
 }
 
+/** How far along a side a point lies from the corner the side starts at. */
+function alongSide(point: Point, corner: Point, next: Point) {
+  const length = distance(corner, next);
+  if (!length) return 0;
+  return (
+    ((point.x - corner.x) * (next.x - corner.x) +
+      (point.y - corner.y) * (next.y - corner.y)) /
+    length
+  );
+}
+
 /**
- * The handle a finger takes when it lands near, not on, the selection's
- * drawn handles. The handles stay small on screen; this is their target for
- * touch: the knob and the corners from 16px away, then the edges from 12px.
+ * Whether a corner may claim a point: only from the outer quarter of each side
+ * that meets at it. A short side keeps its middle for its edge handle, so the
+ * side of one line of text sets its width instead of scaling it.
+ */
+function cornerClaims(corners: readonly Point[], index: number, point: Point) {
+  const corner = corners[index]!;
+  return [corners[(index + 1) % 4]!, corners[(index + 3) % 4]!].every(
+    (neighbour) =>
+      alongSide(point, corner, neighbour) <= distance(corner, neighbour) / 4
+  );
+}
+
+/**
+ * The handle a finger takes when it lands near the selection's handles. The
+ * handles stay small on screen; this is their target for touch: the knob and
+ * the corners from 16px away, then the edges from 12px.
  *
  * Inside the frame the reach shrinks with the frame (a quarter of its shorter
  * side for a corner, a sixth for an edge, and never more than 8px for an
@@ -112,10 +136,11 @@ export function touchHandleAt(
   for (let index = 0; index < 4; index++) {
     const away = distance(corners[index]!, point);
     if (away > cornerReach || away >= nearest) continue;
+    if (!cornerClaims(corners, index, point)) continue;
     nearest = away;
     handle = CORNER_HANDLES[index];
   }
-  // A corner within reach always wins over the edges that meet at it.
+  // A corner that claims the point wins over the edges that meet at it.
   if (handle) return handle;
 
   for (let index = 0; index < 4; index++) {

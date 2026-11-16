@@ -8,7 +8,7 @@ import {
   type ResizeHandle,
   resizeHandles,
 } from '../core/resize';
-import { roots } from '../core/scene';
+import { PICK_TOLERANCE, roots } from '../core/scene';
 import {
   type SelectionFrame,
   selectionContainsPoint,
@@ -26,9 +26,11 @@ import { attachTouchNavigation } from './touch-navigation';
 // Matches the Figma viewer: pinch tracks finger speed, wheel notches stay bounded.
 const WHEEL_ZOOM_RATE = 0.01;
 const MAX_WHEEL_ZOOM_EXPONENT = 0.6;
-/** How near a stroke a press picks its shape, in screen pixels: a cursor, then a finger. */
-const PICK_TOLERANCE = 3;
-const TOUCH_PICK_TOLERANCE = 10;
+/**
+ * How near a stroke a finger still picks its shape, in screen pixels, when it
+ * lands on nothing. A cursor gets `PICK_TOLERANCE`.
+ */
+const TOUCH_PICK_REACH = 10;
 
 export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -92,12 +94,21 @@ export function attachCameraControls(
         cursor?: string;
       }
     | undefined;
+  // A press that becomes a transform only once it moves.
   let pendingSelection:
     | {
         id: string;
         point: Point;
+        /** Released without moving, it toggles `id` in the selection. */
         toggle: boolean;
         duplicate?: () => string;
+        /** The handle the movement drags, for a finger near one. */
+        handle?: ResizeHandle | 'rotate';
+        /**
+         * What a finger that only tapped near a handle selects instead: an
+         * item, or nothing (`null`). Absent, the selection stays.
+         */
+        tap?: string | null;
       }
     | undefined;
   const originalCursor = element.style.cursor;
@@ -214,9 +225,27 @@ export function attachCameraControls(
     }
   };
   /**
-   * The handle a finger means when it lands near the selection's frame without
-   * hitting a drawn handle. The handles are drawn for a cursor; a finger takes
-   * them from further away.
+   * Whether a press outside the selection's frame lands on the paint of an
+   * item that is not selected. Such a press is for that item, however near
+   * the selection's handles it is.
+   */
+  const pressesAnotherItem = (
+    frame: SelectionFrame | undefined,
+    point: Point
+  ) => {
+    if (!frame || selectionContainsPoint(frame, point)) return false;
+    const hit = editor.hitTest(point, true);
+    if (!hit) return false;
+    const selected = editor.getSession().selectedIds;
+    // A hit on anything inside a selected group is a hit on the selection.
+    return (
+      !selected.includes(hit) &&
+      roots(editor.document, [...selected, hit]).includes(hit)
+    );
+  };
+  /**
+   * The handle a finger takes when it lands near the selection's frame. The
+   * handles are drawn for a cursor; a finger takes them from further away.
    */
   const touchHandle = (
     frame: SelectionFrame | undefined,
@@ -295,25 +324,33 @@ export function attachCameraControls(
         editor.getSession().selectedIds
       );
       const touch = event.pointerType === 'touch';
-      const transformHandle =
+      const drawn =
         isResizeHandle(handle) || isRadiusHandle(handle) || handle === 'rotate'
           ? handle
-          : touch
-            ? touchHandle(frame, event)
-            : undefined;
-      const id = selectionTarget(
-        editor.document,
-        editor.getSession().selectedIds,
-        point,
-        {
-          deep,
-          additive: event.shiftKey,
-          handle: !!transformHandle,
-          tolerance:
-            (touch ? TOUCH_PICK_TOLERANCE : PICK_TOLERANCE) /
-            editor.getCamera().scale,
-        }
-      );
+          : undefined;
+      // A finger near the frame takes the handle it is nearest, which can be a
+      // corner while it covers the strip drawn along an edge. Only paint that
+      // belongs to something else ends that reach.
+      const reached =
+        touch && !isRadiusHandle(drawn) && !pressesAnotherItem(frame, point)
+          ? touchHandle(frame, event)
+          : undefined;
+      const transformHandle = reached ?? drawn;
+      const { scale } = editor.getCamera();
+      const pick = (handle: boolean) =>
+        selectionTarget(
+          editor.document,
+          editor.getSession().selectedIds,
+          point,
+          {
+            deep,
+            additive: event.shiftKey,
+            handle,
+            tolerance: PICK_TOLERANCE / scale,
+            reach: touch ? TOUCH_PICK_REACH / scale : undefined,
+          }
+        );
+      const id = pick(!!transformHandle);
       cursor =
         transformHandle === 'rotate' || isRadiusHandle(transformHandle)
           ? 'grabbing'
@@ -343,6 +380,23 @@ export function attachCameraControls(
             options.duplicateOnAltDrag && event.altKey
               ? (options.createId ?? (() => crypto.randomUUID()))
               : undefined,
+        };
+      } else if (
+        id &&
+        touch &&
+        (isResizeHandle(transformHandle) || transformHandle === 'rotate')
+      ) {
+        // A finger resizes or rotates once it moves. One that only taps near a
+        // handle must not resize by nothing (which still fixes the width of
+        // auto-width text): outside the frame it is a tap on whatever is there.
+        const outside =
+          !drawn && !!frame && !selectionContainsPoint(frame, point);
+        pendingSelection = {
+          id,
+          point,
+          toggle: false,
+          handle: transformHandle,
+          tap: outside ? (pick(false) ?? null) : undefined,
         };
       } else if (id)
         transforming = editor.beginTransform(
@@ -398,7 +452,7 @@ export function attachCameraControls(
         !editor.beginTransform(
           pending.id,
           pending.point,
-          undefined,
+          pending.handle,
           pending.duplicate
         )
       ) {
@@ -425,6 +479,10 @@ export function attachCameraControls(
     if (!drag) return;
     if (drag.mode === 'select' && pendingSelection?.toggle)
       editor.toggleSelection(pendingSelection.id);
+    if (drag.mode === 'select' && pendingSelection?.tap !== undefined) {
+      if (pendingSelection.tap) editor.select(pendingSelection.tap);
+      else editor.selectMany([]);
+    }
     if (drag.mode === 'box') {
       editor.updateBoxSelection(worldPoint(event));
       editor.commitBoxSelection();

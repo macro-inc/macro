@@ -65,42 +65,44 @@ import {
 /** How far from a connector's endpoint a finger still takes it, on screen. */
 const TOUCH_ENDPOINT_REACH = 16;
 
-/**
- * One end of the selected connector, to drag onto another shape. It is drawn
- * for a cursor; laid out for touch, a finger takes it from further away.
- */
-function ConnectorEndHandle(props: {
+const CONNECTOR_ENDS = ['start', 'end'] as const;
+
+type ConnectorEndProps = {
   end: 'start' | 'end';
   connectorId: string;
   point: Point;
-  touch: boolean | undefined;
-}) {
+};
+
+/** One end of the selected connector, to drag onto another shape. */
+function ConnectorEndHandle(props: ConnectorEndProps) {
   return (
-    <>
-      <Show when={props.touch}>
-        <circle
-          data-graphics-connector-end={props.end}
-          data-graphics-connector-id={props.connectorId}
-          cx={props.point.x}
-          cy={props.point.y}
-          r={TOUCH_ENDPOINT_REACH}
-          fill="transparent"
-          style={{ 'pointer-events': 'all' }}
-        />
-      </Show>
-      <circle
-        data-graphics-connector-end={props.end}
-        data-graphics-connector-id={props.connectorId}
-        aria-label={`Connector ${props.end}`}
-        role="img"
-        cx={props.point.x}
-        cy={props.point.y}
-        r="6"
-        fill="white"
-        stroke={SELECTION_COLOR}
-        style={{ 'pointer-events': 'all', cursor: 'grab' }}
-      />
-    </>
+    <circle
+      data-graphics-connector-end={props.end}
+      data-graphics-connector-id={props.connectorId}
+      aria-label={`Connector ${props.end}`}
+      role="img"
+      cx={props.point.x}
+      cy={props.point.y}
+      r="6"
+      fill="white"
+      stroke={SELECTION_COLOR}
+      style={{ 'pointer-events': 'all', cursor: 'grab' }}
+    />
+  );
+}
+
+/** The wider, unseen target a finger takes a connector's end by. */
+function ConnectorEndTarget(props: ConnectorEndProps) {
+  return (
+    <circle
+      data-graphics-connector-end={props.end}
+      data-graphics-connector-id={props.connectorId}
+      cx={props.point.x}
+      cy={props.point.y}
+      r={TOUCH_ENDPOINT_REACH}
+      fill="transparent"
+      style={{ 'pointer-events': 'all', cursor: 'grab' }}
+    />
   );
 }
 
@@ -543,27 +545,41 @@ export function GraphicsSurface(props: {
               singleConnector()
             }
           >
-            {(item) => (
-              <For each={['start', 'end'] as const}>
-                {(end) => {
-                  const point = () =>
-                    screen(
-                      transformPoint(
-                        worldMatrix(scene(), item().id, overrides()),
-                        item().geometry[end].point
-                      )
-                    );
-                  return (
-                    <ConnectorEndHandle
-                      end={end}
-                      connectorId={item().id}
-                      point={point()}
-                      touch={props.input?.touchHandles}
-                    />
-                  );
-                }}
-              </For>
-            )}
+            {(item) => {
+              const point = (end: 'start' | 'end') =>
+                screen(
+                  transformPoint(
+                    worldMatrix(scene(), item().id, overrides()),
+                    item().geometry[end].point
+                  )
+                );
+              return (
+                <>
+                  {/* Both targets go under both drawn ends: on a short
+                      connector one end's target would cover the other end. */}
+                  <Show when={props.input?.touchHandles}>
+                    <For each={CONNECTOR_ENDS}>
+                      {(end) => (
+                        <ConnectorEndTarget
+                          end={end}
+                          connectorId={item().id}
+                          point={point(end)}
+                        />
+                      )}
+                    </For>
+                  </Show>
+                  <For each={CONNECTOR_ENDS}>
+                    {(end) => (
+                      <ConnectorEndHandle
+                        end={end}
+                        connectorId={item().id}
+                        point={point(end)}
+                      />
+                    )}
+                  </For>
+                </>
+              );
+            }}
           </Show>
           <For
             each={selected().filter((id) => {

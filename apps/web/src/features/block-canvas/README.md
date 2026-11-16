@@ -326,14 +326,20 @@ outline tolerance; a thick stroke does not gain another 3px outside its paint.
 A finger gets larger targets than a cursor, decided by the pointer type of each
 press, while the handles are drawn the same size. A touch within 16px of a
 corner or the rotation knob, or 12px outside an edge, takes that handle even
-though nothing is drawn under it (`touchHandleAt` in the graphics core). Inside
-the frame the reach shrinks with it (a quarter of the shorter side for a corner,
-a sixth and at most 8px for an edge), so the middle of a small shape still moves
-it. A touch picks a stroke from 10px away rather than 3. The touch view also sets
-`touchHandles` on the surface: the rotation knob stands 32px off the frame
-instead of 16, a connector's endpoints take a finger from 16px, and the
-corner-radius handles, which sit inside each corner, are left to the inspector's
-Corner radius field.
+though nothing is drawn under it (`touchHandleAt` in the graphics core). A corner
+claims only the outer quarter of each side that meets at it, so a short side (one
+line of text) keeps its middle for its edge handle. Inside the frame the reach
+shrinks with it (a quarter of the shorter side for a corner, a sixth and at most
+8px for an edge), so the middle of a small shape still moves it. The reach ends
+at another item's paint: a press there selects or drags that item. A finger
+resizes or rotates once it has moved 3px; one that only taps near a handle
+changes nothing, and outside the frame it selects what it tapped or clears the
+selection. A touch that lands on nothing picks a stroke from 10px away rather
+than 3; paint under the finger always wins over a stroke that is merely near.
+The touch view also sets `touchHandles` on the surface, which holds for every
+pointer there: the rotation knob stands 32px off the frame instead of 16, a
+connector's endpoints are taken from 16px, and the corner-radius handles, which
+sit inside each corner, are left to the inspector's Corner radius field.
 
 ## Ownership
 

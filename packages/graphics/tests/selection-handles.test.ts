@@ -63,3 +63,19 @@ it('keeps the middle of a small shape for moving it', () => {
   // Just outside a corner still resizes.
   expect(touchHandleAt(small, undefined, { x: 148, y: 148 })).toBe('se');
 });
+
+it('keeps the middle of a short side for its edge, not a corner', () => {
+  // One line of text, 200 x 20 on screen: both left corners are within reach
+  // of a finger beside its left side, which means the side.
+  const line = [
+    { x: 100, y: 100 },
+    { x: 300, y: 100 },
+    { x: 300, y: 120 },
+    { x: 100, y: 120 },
+  ];
+  expect(touchHandleAt(line, undefined, { x: 92, y: 110 })).toBe('w');
+  expect(touchHandleAt(line, undefined, { x: 308, y: 110 })).toBe('e');
+  // The corners keep the ends of the side and everything diagonal to them.
+  expect(touchHandleAt(line, undefined, { x: 92, y: 103 })).toBe('nw');
+  expect(touchHandleAt(line, undefined, { x: 92, y: 126 })).toBe('sw');
+});
