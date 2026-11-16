@@ -1,2 +1,5 @@
-//! Shared synchronization domain policy.
-pub use sync_server_core::domain::{document, models, permissions};
+//! Document synchronization policy, independent of content and storage.
+
+pub mod document;
+pub mod models;
+pub mod permissions;

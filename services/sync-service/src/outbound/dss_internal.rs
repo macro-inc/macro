@@ -5,7 +5,17 @@ use worker::{Env, Fetch, Method, Request, RequestInit};
 use crate::constants::header_names::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY;
 use crate::domain::document::DocumentAttribution;
 
-pub use sync_server_core::domain::types::InteractionReason;
+/// Why a document interaction was reported to DSS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionReason {
+    /// A periodic save of pending content changes.
+    Edited,
+    /// The first peer joined the document session.
+    FirstJoin,
+    /// The last connected peer left the document session.
+    LastLeave,
+}
 
 #[derive(Serialize)]
 struct InteractionRequest {
@@ -89,10 +99,6 @@ impl DssInternal for DssInternalClient<'_> {
             request
                 .headers_mut()?
                 .set("Content-Type", "application/json")?;
-            #[cfg(feature = "transcript")]
-            crate::transcript::event(
-                serde_json::json!({"port": "fetch", "url": url, "body": body}),
-            );
             let response = Fetch::Request(request).send().await?;
             match response.status_code() {
                 200 => return Ok(()),
@@ -121,10 +127,6 @@ impl DssInternal for DssInternalClient<'_> {
             document_id
         );
         let auth_key = self.internal_auth_key()?;
-        #[cfg(feature = "transcript")]
-        crate::transcript::event(
-            serde_json::json!({"out": "fetch_body", "body_b64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, snapshot)}),
-        );
 
         let mut req = Request::new_with_init(
             &url,
@@ -137,8 +139,6 @@ impl DssInternal for DssInternalClient<'_> {
         req.headers_mut()?
             .set("Content-Type", "application/octet-stream")?;
 
-        #[cfg(feature = "transcript")]
-        crate::transcript::event(serde_json::json!({"port": "fetch", "url": url}));
         let resp = Fetch::Request(req).send().await?;
         if resp.status_code() != 200 {
             error!(
@@ -171,10 +171,6 @@ impl DssInternal for DssInternalClient<'_> {
         let body = serde_json::to_vec(&InteractionRequest { reason })
             .map_err(|e| worker::Error::from(format!("failed to serialize interaction: {e}")))?;
 
-        #[cfg(feature = "transcript")]
-        crate::transcript::event(
-            serde_json::json!({"out": "fetch_body", "body_b64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &body)}),
-        );
         let mut req = Request::new_with_init(
             &url,
             RequestInit::new()
@@ -185,8 +181,6 @@ impl DssInternal for DssInternalClient<'_> {
             .set(MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY, &auth_key)?;
         req.headers_mut()?.set("Content-Type", "application/json")?;
 
-        #[cfg(feature = "transcript")]
-        crate::transcript::event(serde_json::json!({"port": "fetch", "url": url}));
         let resp = Fetch::Request(req).send().await?;
         if resp.status_code() != 200 {
             error!(

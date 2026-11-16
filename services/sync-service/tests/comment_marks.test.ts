@@ -7,7 +7,7 @@ import {
 	FromPeer,
 	FromRemote,
 	InitializeFromSnapshotRequest,
-} from "../../../crates/sync_protocol/bebop/generated/schema";
+} from "../bebop/generated/schema";
 import { createTestWebSocket, setupMiniflare } from "./utils";
 
 type Verdict = "comment_only" | "not_comment_only" | "fail";

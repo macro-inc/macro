@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import {
 	FromRemote,
 	InitializeFromSnapshotRequest,
-} from "../../../crates/sync_protocol/bebop/generated/schema";
+} from "../bebop/generated/schema";
 import {
 	connectToDocumentForTesting,
 	getTokenForDocument,

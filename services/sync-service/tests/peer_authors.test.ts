@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   FromPeer,
   InitializeFromSnapshotRequest,
-} from "../../../crates/sync_protocol/bebop/generated/schema";
+} from "../bebop/generated/schema";
 import {
   copyDocument,
   createTestUser,

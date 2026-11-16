@@ -169,6 +169,7 @@ version = "^0.10.7"
 
 [dependencies.loro-common]
 version = "1.16.0"
+path = "../loro-common"
 features = ["serde_json"]
 
 [dependencies.loro-internal]
@@ -177,6 +178,7 @@ path = "../loro-internal"
 
 [dependencies.loro-kv-store]
 version = "1.16.0"
+path = "../loro-kv-store"
 
 [dependencies.rustc-hash]
 version = "2.1.1"

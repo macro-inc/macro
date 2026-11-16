@@ -5,26 +5,25 @@ use worker::{
     wasm_bindgen::{JsCast, prelude::Closure},
 };
 
-use crate::error::ResultExt;
-use std::cell::Cell;
+use crate::{error::ResultExt, mutex::Mutex};
 
 pub const DEFAULT_TIME_TO_LIVE: Duration = Duration::from_secs(60);
 
-thread_local! { static CURRENT_TIMEOUT_ID: Cell<Option<(i32, i32)>> = const { Cell::new(None) }; }
+static CURRENT_TIMEOUT_ID: Mutex<Option<(i32, i32)>> = Mutex::new(None);
 
 /// Keeps the worker alive for at least `ttl: Duration` using JavaScript's `setTimeout`.
 /// It replaces any existing ttl, and returns the `setTimeout`'s timeout ID.
 pub fn keepalive(ttl: Duration) -> Option<(i32, i32)> {
     let closure = Closure::wrap(Box::new(move || {
-        CURRENT_TIMEOUT_ID.set(None);
+        *CURRENT_TIMEOUT_ID.lock("keepalive clear CURRENT_TIMEOUT_ID") = None;
     }) as Box<dyn FnMut()>);
 
     let global: worker::worker_sys::web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
 
     let mut out = None;
-    let current_id = CURRENT_TIMEOUT_ID.get();
+    let mut current_id = CURRENT_TIMEOUT_ID.lock("keepalive set CURRENT_TIMEOUT_ID");
 
-    if let Some((prev_timeout_id, prev_duration_millis)) = current_id {
+    if let Some((prev_timeout_id, prev_duration_millis)) = *current_id {
         global.clear_timeout_with_handle(prev_timeout_id);
         out = Some((prev_timeout_id, prev_duration_millis));
     }
@@ -42,7 +41,7 @@ pub fn keepalive(ttl: Duration) -> Option<(i32, i32)> {
             timeout_duration_ms = duration_millis,
             "created set_timeout"
         );
-        CURRENT_TIMEOUT_ID.set(Some((timeout_id, duration_millis)));
+        *current_id = Some((timeout_id, duration_millis));
     }
 
     closure.forget();

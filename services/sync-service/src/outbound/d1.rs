@@ -106,7 +106,7 @@ pub async fn get_user_id_from_peer_id(
     db: D1Database,
     document_id: &str,
     peer_id: &u64,
-) -> worker::Result<Option<String>> {
+) -> worker::Result<String> {
     let statement = db.prepare(
         "
             SELECT user_id
@@ -114,10 +114,13 @@ pub async fn get_user_id_from_peer_id(
             WHERE document_id = ? AND peer_id = ?;
         ",
     );
-    let user_id = statement
+    let Some(user_id) = statement
         .bind(&[document_id.into(), (*peer_id).to_string().into()])?
         .first(Some("user_id"))
-        .await?;
+        .await?
+    else {
+        return Err(worker::Error::from("no user found for peer id"));
+    };
 
     Ok(user_id)
 }
@@ -143,7 +146,15 @@ pub async fn get_peers_for_document_id(
     Ok(peers)
 }
 
-pub use sync_server_core::domain::types::BlameEvent;
+/// A single pending "last edited by" event, buffered until the
+/// next alarm tick flushes everything
+#[derive(Debug, Clone)]
+pub struct BlameEvent {
+    pub document_id: String,
+    pub node_id: String,
+    pub peer_id: u64,
+    pub timestamp_ms: i64,
+}
 
 /// Maximum statements per D1 `batch()` call. D1 has a per-batch statement
 /// limit; chunking keeps us comfortably under it.

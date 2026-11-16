@@ -245,6 +245,7 @@ version = "0.2.5"
 
 [dependencies.loro-common]
 version = "1.16.0"
+path = "../loro-common"
 
 [dependencies.loro-delta]
 version = "1.13.0"
@@ -252,6 +253,7 @@ package = "loro-delta"
 
 [dependencies.loro-kv-store]
 version = "1.16.0"
+path = "../loro-kv-store"
 
 [dependencies.md5]
 version = "0.7.0"
