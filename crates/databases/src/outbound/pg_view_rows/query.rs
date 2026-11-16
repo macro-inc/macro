@@ -314,6 +314,7 @@ fn predicate(sql: &mut Sql, columns: &Columns<'_>, filter: &Filter) -> Result<()
     sql.push("(");
     // The typed expressions below retain scalar/list and empty-cell semantics.
     // Expose positive membership separately so idx_ep_database_row_value_gin
+    // (select cells) or idx_ep_database_row_references_gin (reference cells)
     // can prune candidates before PostgreSQL expands JSON arrays.
     match filter {
         Filter::Has {

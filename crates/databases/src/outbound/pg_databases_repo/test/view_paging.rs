@@ -859,7 +859,7 @@ async fn membership_plan(pool: &PgPool, table: &QueryTable, test: FilterTest) ->
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn select_and_entity_membership_filters_use_the_database_row_value_index(pool: PgPool) {
+async fn select_and_entity_membership_filters_use_their_cell_indexes(pool: PgPool) {
     use database_sql::catalog::{EntityKind, SelectOption};
     use models_databases::{OptionId, views::SetOperator};
     let (mut table, _) = page_fixture(&pool).await;
@@ -894,7 +894,7 @@ async fn select_and_entity_membership_filters_use_the_database_row_value_index(p
         },
     )
     .await;
-    assert!(plan.contains("idx_ep_database_row_value_gin"), "{plan}");
+    assert!(plan.contains("idx_ep_database_row_references_gin"), "{plan}");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
