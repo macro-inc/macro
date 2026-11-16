@@ -137,6 +137,7 @@ where
                 name,
                 owner_id: owner.clone(),
                 acting_bot: None,
+                first_table: None,
             })
             .await?;
         let detail = self
