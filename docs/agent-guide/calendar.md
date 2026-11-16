@@ -329,18 +329,23 @@ they open beside the row instead. With the overlay hidden they open beside the r
 A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
+On a tablet the footer adds `--mobile-content-inset-bottom` to its padding, so
+`Settings` sits above the floating dock instead of under it.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
 it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 The mobile split header places a month selector and Today in its left island;
-selecting the month opens the date-selection drawer. The right island keeps
-full-sized Availability, Search, and Settings actions. The New menu
+selecting the month opens the date-selection drawer. On a phone the right
+island keeps full-sized Availability, `Booking links`, and Settings actions; on
+a tablet it holds the period selector, previous and next, Search, and (unless
+the pane is narrow, when the sidebar holds it) `Booking links`, and Settings
+stays in the sidebar footer. The New menu
 beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Inline Calendar previews retain their host's chrome without adding
-another sidebar; their left header island has a compact New menu because the
-bottom New action follows the foreground host view.
+Reminder. Touch devices never show Calendar as an inline preview, so the touch
+header has no preview variant. On desktop, inline Calendar previews (Home,
+Notifications) keep their host's chrome without adding another sidebar.
 
 With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 **Team sharing**: one `Share with teammates` row whose select offers

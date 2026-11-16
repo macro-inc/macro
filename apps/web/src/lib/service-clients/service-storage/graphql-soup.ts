@@ -1722,6 +1722,19 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'calendar_event_join_request'>
     )
     .with(
+      { __typename: 'GraphqlPasswordAccessRequestedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'password_access_requested',
+          content: {
+            requestId: metadata.passwordAccessRequestedRequestId,
+            teamId: metadata.passwordAccessRequestedTeamId,
+            itemId: metadata.passwordAccessRequestedItemId,
+            itemName: metadata.passwordAccessRequestedItemName,
+          },
+        }) satisfies NotifEventMember<'password_access_requested'>
+    )
+    .with(
       { __typename: 'GraphqlAiResponseMetadata' },
       (metadata) =>
         ({
@@ -2402,6 +2415,21 @@ export function mapGraphqlSoupItem(
             ownerId: entity.ownerId,
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt,
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupTeam' },
+      (entity) =>
+        ({
+          tag: 'team',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.teamName,
+            ownerId: entity.ownerId,
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

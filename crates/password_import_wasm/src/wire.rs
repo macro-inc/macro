@@ -206,6 +206,7 @@ pub fn parse_format(name: &str) -> Option<SourceFormat> {
         "one_password_csv" => Some(SourceFormat::OnePasswordCsv),
         "bitwarden_json" => Some(SourceFormat::BitwardenJson),
         "bitwarden_csv" => Some(SourceFormat::BitwardenCsv),
+        "bitwarden_zip" => Some(SourceFormat::BitwardenZip),
         _ => None,
     }
 }
