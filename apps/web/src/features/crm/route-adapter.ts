@@ -117,12 +117,11 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
   const navigate = useNavigate();
   const history = usePaneHistory();
 
-  const tab = () =>
-    params.sequenceId
-      ? sequenceTab(params.sequenceId)
-      : params.pipelineId
-        ? pipelineTab(params.pipelineId)
-        : search.tab;
+  const tab = () => {
+    if (params.sequenceId) return sequenceTab(params.sequenceId);
+    if (params.pipelineId) return pipelineTab(params.pipelineId);
+    return search.tab;
+  };
 
   const shown = (): CrmRecordRef | undefined =>
     params.recordType && params.recordId
@@ -186,17 +185,20 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
         [crmRecordSearch.namespace]: undefined,
       },
     };
-    fireAndForget(
-      pipelineId
-        ? navigate({ route: crmPipelineRoute, params: { pipelineId } }, options)
-        : sequenceId
-          ? navigate(
-              { route: crmSequenceRoute, params: { sequenceId } },
-              options
-            )
-          : navigate({ route: companiesRoute, params: {} }, options),
-      'crm'
-    );
+    const destination = () => {
+      if (pipelineId)
+        return navigate(
+          { route: crmPipelineRoute, params: { pipelineId } },
+          options
+        );
+      if (sequenceId)
+        return navigate(
+          { route: crmSequenceRoute, params: { sequenceId } },
+          options
+        );
+      return navigate({ route: companiesRoute, params: {} }, options);
+    };
+    fireAndForget(destination(), 'crm');
   };
 
   const item = () => {

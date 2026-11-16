@@ -309,23 +309,24 @@ export function useEnrollmentActionMutation() {
     },
     onSuccess: (enrollment, { sequenceId }) =>
       setEnrollment(sequenceId, enrollment),
-    onSettled: (_data, _error, { sequenceId, enrollment, action }) =>
-      Promise.all([
-        action === 'unsubscribe'
-          ? queryClient.invalidateQueries({
-              queryKey: sequenceKeys.detail._def,
-            })
-          : invalidateDetail(sequenceId),
+    onSettled: (_data, _error, { sequenceId, enrollment, action }) => {
+      // An unsubscribe stops the address in every sequence of the team.
+      if (action === 'unsubscribe')
+        return Promise.all([
+          queryClient.invalidateQueries({ queryKey: sequenceKeys.detail._def }),
+          invalidateList(),
+          invalidateContactCards(),
+        ]);
+      return Promise.all([
+        invalidateDetail(sequenceId),
         invalidateList(),
-        action === 'unsubscribe'
-          ? invalidateContactCards()
-          : enrollment.crmContactId
-            ? queryClient.invalidateQueries({
-                queryKey: sequenceKeys.contact(enrollment.crmContactId)
-                  .queryKey,
-              })
-            : undefined,
-      ]),
+        enrollment.crmContactId
+          ? queryClient.invalidateQueries({
+              queryKey: sequenceKeys.contact(enrollment.crmContactId).queryKey,
+            })
+          : undefined,
+      ]);
+    },
   }));
 }
 
