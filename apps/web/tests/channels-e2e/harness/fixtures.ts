@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import {
+  type BrowserContext,
   type BrowserContextOptions,
   test as base,
   type Page,
@@ -20,6 +21,27 @@ type Session = NonNullable<
 
 function session(key: PersonKey): Session {
   return JSON.parse(readFileSync(sessionFile(key), 'utf8')) as Session;
+}
+
+/**
+ * What a context a test opens itself needs so that its pages are recorded
+ * when the run records video. Playwright records only the contexts it opens.
+ */
+export function recorded(): Pick<BrowserContextOptions, 'recordVideo'> {
+  if (!process.env.CHANNELS_E2E_VIDEO) return {};
+  return { recordVideo: { dir: base.info().outputPath('videos') } };
+}
+
+/** Closes a context opened with `recorded()` and keeps its pages' videos. */
+export async function closeRecorded(context: BrowserContext): Promise<void> {
+  const pages = context.pages();
+  await context.close();
+  for (const page of pages) {
+    const path = await page.video()?.path();
+    if (path) {
+      await base.info().attach('video', { path, contentType: 'video/webm' });
+    }
+  }
 }
 
 type Fixtures = {
@@ -70,16 +92,17 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   cy: api('cy'),
   dee: api('dee'),
   pageFor: async ({ browser }, use) => {
-    const opened: { close(): Promise<void> }[] = [];
+    const opened: BrowserContext[] = [];
     await use(async (key) => {
       const context = await browser.newContext({
         storageState: session(key),
+        ...recorded(),
       });
       opened.push(context);
       return context.newPage();
     });
     for (const context of opened) {
-      await context.close();
+      await closeRecorded(context);
     }
   },
 });
