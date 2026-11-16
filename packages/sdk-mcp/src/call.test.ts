@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { BookingLinkDraft } from '../../sdk/generated/calendar/types.gen';
 import { Macro } from '../../sdk/src/macro';
-import { runOperation, withoutPersonalIdentifiers } from './call';
+import { runOperation } from './call';
 import { catalog, handleClasses } from './generated/catalog';
 import { InputValidators } from './validate';
 
@@ -299,51 +299,5 @@ describe('runOperation', () => {
         JSON.parse(request.body ?? ''),
       ])
     ).toEqual([['POST', { entityId: 'project-1', entityType: 'project' }]]);
-  });
-});
-
-describe('withoutPersonalIdentifiers', () => {
-  test('drops user ids and email addresses, keeps content that mentions them', () => {
-    // The shape search.page returned for a real call and document on prod.
-    const hit = {
-      type: 'call',
-      id: 'call-1',
-      name: 'Weekly sync',
-      owner_id: 'macro|someone@example.com',
-      participant_ids: ['macro|someone@example.com', 'macro|other@example.com'],
-      metadata: { created_by: 'macro|someone@example.com', status: 'ATTENDED' },
-      properties: [
-        {
-          definition: {
-            owner: { scope: 'user', user_id: 'macro|someone@example.com' },
-            display_name: 'Tags',
-          },
-        },
-      ],
-      mixed: ['plain', 'someone@example.com'],
-      contact: 'someone@example.com',
-      empty: [],
-      content: 'Mail someone@example.com about macro|ids by Friday.',
-      message:
-        '<m-user-mention>{"userId":"macro|someone@example.com","email":"someone@example.com"}</m-user-mention> and <m-user-mention>{"userId":"macro|b@example.com","name":"Bea"}</m-user-mention>, look',
-    };
-
-    expect(withoutPersonalIdentifiers({ results: [hit] })).toEqual({
-      results: [
-        {
-          type: 'call',
-          id: 'call-1',
-          name: 'Weekly sync',
-          metadata: { status: 'ATTENDED' },
-          properties: [
-            { definition: { owner: { scope: 'user' }, display_name: 'Tags' } },
-          ],
-          mixed: ['plain'],
-          empty: [],
-          content: 'Mail someone@example.com about macro|ids by Friday.',
-          message: '@user and @Bea, look',
-        },
-      ],
-    });
   });
 });

@@ -149,62 +149,6 @@ export function toJsonSafe(value: unknown, depth = 0): unknown {
   return Object.fromEntries(entries);
 }
 
-/** A Macro user id (`macro|<email>`) or a bare email address. */
-const PERSONAL_IDENTIFIER = /^(?:macro\|\S+|[^\s@|]+@[^\s@]+\.[^\s@]+)$/;
-
-function isPersonalIdentifier(value: unknown): boolean {
-  return typeof value === 'string' && PERSONAL_IDENTIFIER.test(value);
-}
-
-/** A user mention in Macro's markdown, its JSON carrying the user's id and email. */
-const USER_MENTION = /<m-user-mention>([\s\S]*?)<\/m-user-mention>/g;
-
-/** A user mention as `@name` when the mention names them, else `@user`. */
-function plainMention(_tag: string, json: string) {
-  try {
-    const mention: unknown = JSON.parse(json);
-    for (const key of ['name', 'displayName', 'display_name'])
-      if (typeof mention === 'object' && mention !== null) {
-        const name: unknown = Reflect.get(mention, key);
-        if (typeof name === 'string' && name && !isPersonalIdentifier(name))
-          return `@${name}`;
-      }
-  } catch {
-    // Not JSON: no name to show.
-  }
-  return '@user';
-}
-
-/**
- * A result with personal identifiers taken out: every value that is exactly
- * a Macro user id or an email address (owner, author, participant fields) is
- * dropped, an array loses those items, and a key whose value was only those
- * goes too. A user mention in message or document text becomes `@name`, so
- * its markup's id and email go; other text, such as an address someone
- * typed, is the user's data and stays. OpenAI's review rejects a tool that
- * returns identifiers the request didn't ask for.
- */
-export function withoutPersonalIdentifiers(value: unknown): unknown {
-  if (typeof value === 'string')
-    return value.replace(USER_MENTION, plainMention);
-  if (Array.isArray(value))
-    return value
-      .filter((item) => !isPersonalIdentifier(item))
-      .map(withoutPersonalIdentifiers);
-  if (typeof value !== 'object' || value === null) return value;
-  const entries = Object.entries(value).flatMap(([key, item]) => {
-    if (isPersonalIdentifier(item)) return [];
-    if (
-      Array.isArray(item) &&
-      item.length > 0 &&
-      item.every(isPersonalIdentifier)
-    )
-      return [];
-    return [[key, withoutPersonalIdentifiers(item)] as const];
-  });
-  return Object.fromEntries(entries);
-}
-
 /** Optional URL enrichment must not turn a completed operation into an error. */
 async function webUrl(value: unknown): Promise<string | undefined> {
   if (typeof value !== 'object' || value === null) return undefined;
@@ -273,10 +217,7 @@ export function errorResult(error: unknown): OperationResult {
 
 /**
  * Validate an operation's input, mint the handles it names, run the SDK
- * method and shape its result. Errors become `isError` results. With
- * `dropPersonalIdentifiers`, the result goes through
- * {@link withoutPersonalIdentifiers}; leave it off where a caller reads a
- * value to write it back whole (a booking link's hosts).
+ * method and shape its result. Errors become `isError` results.
  */
 export async function runOperation(options: {
   operation: Operation;
@@ -285,7 +226,6 @@ export async function runOperation(options: {
   catalog: Catalog;
   classes: HandleClasses;
   validators: InputValidators;
-  dropPersonalIdentifiers?: boolean;
 }): Promise<OperationResult> {
   const { operation, input, macro, catalog, classes, validators } = options;
   try {
@@ -333,9 +273,7 @@ export async function runOperation(options: {
     return {
       content: [{ type: 'text', text: summary(operation, result, url) }],
       structuredContent: {
-        result: options.dropPersonalIdentifiers
-          ? withoutPersonalIdentifiers(toJsonSafe(result) ?? null)
-          : (toJsonSafe(result) ?? null),
+        result: toJsonSafe(result) ?? null,
         ...(url ? { url } : {}),
       },
     };
