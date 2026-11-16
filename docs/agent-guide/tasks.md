@@ -1207,7 +1207,8 @@ disabled. Desktop and tablet section tabs stay unchanged. Phones show one page:
 title and property pills, a description of up to eight lines with Show more /
 Show less, a Discussion entry, then Tasks. The description uses the largest
 five-to-eight-line preview that leaves the Tasks heading and the first row's top
-above the floating controls. More opens the existing Details panel.
+above the floating controls. Empty descriptions show the full placeholder without
+clamping or Show more. More opens the existing Details panel.
 The header has caret-only Back, the truncating project title, Share, and Details;
 there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
 beneath the header and shows the progress ring, completed/total count, and Filters.

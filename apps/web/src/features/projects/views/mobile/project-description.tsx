@@ -17,14 +17,24 @@ export function MobileProjectDescription(
   }>
 ) {
   const [content, setContent] = createSignal<HTMLDivElement>();
+  const [empty, setEmpty] = createSignal(true);
   const clamp = createDescriptionClamp();
   const measure = () => {
     const current = content();
     if (!current) return;
-    const lineHeight = Number.parseFloat(getComputedStyle(current).lineHeight);
+    // The collaborative editor renders this placeholder only when Lexical is empty.
     const editor = current.querySelector<HTMLElement>('[role="textbox"]');
+    const hasPlaceholder = !!current.querySelector(
+      '[role="textbox"] ~ .text-ink-placeholder'
+    );
+    setEmpty(!editor || hasPlaceholder);
+    if (!editor || hasPlaceholder) {
+      clamp.measure(0, 1);
+      return;
+    }
+    const lineHeight = Number.parseFloat(getComputedStyle(current).lineHeight);
     clamp.measure(
-      Math.max(current.scrollHeight, editor?.scrollHeight ?? 0),
+      Math.max(current.scrollHeight, editor.scrollHeight),
       lineHeight,
       props.availableHeight === undefined
         ? undefined
@@ -56,18 +66,18 @@ export function MobileProjectDescription(
         onFocusIn={clamp.expand}
         classList={{
           'max-h-[calc(var(--description-lines)*1lh)] overflow-hidden [&_[role=textbox]]:line-clamp-[var(--description-lines)]':
-            !clamp.expanded(),
+            !empty() && !clamp.expanded(),
         }}
         class="text-base leading-relaxed"
       >
         <div
           ref={setContent}
-          class="leading-relaxed [&>div]:min-h-0 [&>div]:mt-0 [&_[contenteditable]]:leading-relaxed [&_p]:my-0"
+          class="leading-relaxed [&>div]:min-h-0 [&>div]:mt-0 [&_[contenteditable]]:leading-relaxed [&_p]:my-0 [&_[role=textbox]~.text-ink-placeholder]:static"
         >
           {props.children}
         </div>
       </div>
-      <Show when={clamp.overflowing()}>
+      <Show when={!empty() && clamp.overflowing()}>
         <button
           type="button"
           class="mt-1 text-sm text-ink-muted underline"

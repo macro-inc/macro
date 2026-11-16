@@ -30,7 +30,8 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - Resolve the phone Projects creation action with `TOKENS.create.initiative`; `TOKENS.create.project` creates a Drive folder.
 - Compose phone rows in the page's scroller with the shared task list's external scroll host; offset pinned group headers by the Tasks heading, and keep summary/description changes in the virtualizer's start margin.
 - Leave 32px below the phone summary; observe a sentinel in the existing scroller to show the heading's 20px page-color fade only while Tasks is stuck, without per-frame scroll listeners.
-- Fit the phone description to the largest five-to-eight-line preview that leaves the Tasks heading and 24px of its first row above floating chrome; keep measuring edits so Show more/Show less stays accurate.
+- Fit nonempty phone descriptions to the largest five-to-eight-line preview that leaves the Tasks heading and 24px of its first row above floating chrome; keep measuring edits so Show more/Show less stays accurate.
+- Leave empty phone descriptions unclamped without disclosure; keep the editor placeholder in normal flow so its full text reserves space above Discussion.
 - Reuse `components/discussion/` for the phone Discussion entry and fixed-height sheet; keep existing conversation queries, permissions, paging, and desktop inline threads.
 - Choose the task empty state from the authorized project's unfiltered task IDs before consulting layout queries; retain filtered-empty results when linked tasks exist. Center both project and task empty states in EmptyStatePanel with PROJECTS_DOCS_URL documentation; filtered project results offer Clear Filters without changing the built-in scope.
 - Keep existing-task assignment failures selected for retry and reject stale completion after the project or picker lifetime changes.
