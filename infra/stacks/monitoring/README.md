@@ -44,7 +44,8 @@ Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
 GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
-connections, and the AI provider account monitor. `error-logs-overall` notifies without paging because it crosses
+connections, the AI provider account monitor, and the Stripe inbox's
+dead-lettered and late-apply monitors. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
@@ -360,9 +361,11 @@ dashboard** for cloud-storage-service pool waits, per pool. Neither pages.
 [The runbook](../../../docs/runbooks/macrodb.md#io-credits) covers both.
 
 The pool monitor and the pool graphs read `db.client.connection.*` metrics and
-have no data until the cloud-storage-service release that records them; the
-monitor's thresholds come from the `soup.pool.acquire` span and need a retune
-after a week of data. The dashboard's `env` and `db` variables switch it to
+have no prod data until the cloud-storage-service release that records them.
+A minute without a wait exports no points, so the monitor counts it as 0 and
+does not alert on missing data. Tasks carry no per-task tag, so every pool
+query takes `max` and the graphs split by availability zone. The thresholds
+are provisional until prod has a week of data. The dashboard's `env` and `db` variables switch it to
 dev; the monitors are prod only.
 
 ## Agent runtime coverage

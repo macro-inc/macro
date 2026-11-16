@@ -971,11 +971,12 @@ export function getGraphqlSoupClient(): Client {
   return cachedClient;
 }
 
-/** Returns the cache host backing the flagged GraphQL Soup client. */
+/** Returns the cache host backing the flagged GraphQL Soup client, or
+ * undefined while that host is retired or unusable. */
 export function getGraphqlSoupCacheHost(): CacheHost | undefined {
   if (!graphqlCacheEnabled()) return undefined;
   getGraphqlSoupClient();
-  return cachedCacheHost;
+  return getGraphqlCacheHost();
 }
 
 /** Shared entity GraphQL client used by both Soup queries and mutations. */

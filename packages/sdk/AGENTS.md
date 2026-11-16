@@ -61,7 +61,9 @@ enforced by the ordinary backend APIs.
   routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
   `children()` and `keepAsOwn()` read and change the link, and
   `RoutineExecution.created` holds the routines a run created. The rules an
-  agent needs are in the `@agent` block on `RoutineNamespace`.
+  agent needs are in the `@agent` block on `RoutineNamespace`, which the
+  routine drafter also reads; code mode follows it with the Compose Routines
+  skill (`crates/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.

@@ -57,9 +57,11 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions stay local:
-partial sync returns partial local results; unavailable or older hosts never fall
-back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+window, never an authorization error. Interactive contact suggestions read locally:
+partial sync returns partial local results. Only a tab with no usable local cache
+(none, retired, unsupported, unbound or older host) reads bounded server
+`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
+server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -223,6 +225,13 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 
+A project's Tasks header keeps search, filters, Add existing tasks and New task on
+screen at 320–430px phone widths, with search closed and open, by collapsing both
+actions to icons and narrowing the open search on phones only; tablet and desktop
+keep the labels. Its backend-free regression renders the real row with a stand-in
+for the task filters (the real phone filter trigger, one button on desktop):
+`bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
+
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
@@ -284,7 +293,10 @@ Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: while loading, the card draws its
 header with the question (the card's name, so it wraps as it will) above a body
 reserved from `previewData.poll.optionCount`, keeps that height through load,
-and never scrolls or clips inside:
+and never scrolls or clips inside. With the real form block held suspended,
+the card shows the form's loading skeleton (`FormBlockLoading`, which needs no
+effect to appear), then after ten seconds "Couldn’t load this form." with
+Reload; that state also logs `form.card.stalled`, which the test doesn't check:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
 Contact mention chips (`<m-contact-mention>`, which agents write) are one
@@ -839,7 +851,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   a later observer may share an in-flight request without forwarding its context.
   Preserve company cascade semantics and require company restoration before a person.
   Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
-  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.
+  `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters;
+  `browser-test/team` also scrolls a 120-person company through three Team pages.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
@@ -1003,8 +1016,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
   Tasks, and Projects headers: title, filters, view options, New, expandable Search.
   Render project collection titles with `ViewSidebar.Title caret={false}`; keep
-  individual project names and touch pickers unchanged. Put sidebar search in
-  `ViewSidebar.Header` so its icon precedes collapse and its field opens above New.
+  individual project names and touch pickers unchanged. Give a sidebar a
+  search field only when the sidebar is the list it searches (Home, Chat, Agents),
+  in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
+  New; a view with a list header searches from `ListHeaderSearch` alone.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1028,6 +1043,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
+- Suggestions (the For you page and Home's Today strip and top priorities) live in `src/features/suggestions`; read its `AGENTS.md`. Gate every entry point with `useSuggestionsFlag` (`enable-suggestions`, desktop only).
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
 - Preview Home project rows with the shared `ProjectDetail`; preserve its project

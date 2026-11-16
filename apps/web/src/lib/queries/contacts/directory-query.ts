@@ -204,10 +204,8 @@ export function createContactDirectoryWindow(
     on(
       () => query.error,
       (error) => {
-        if (
-          error instanceof ContactDirectoryScopeError &&
-          untrack(cursor)?.value.source === 'people'
-        ) {
+        // A continuation from another source or generation restarts paging.
+        if (error instanceof ContactDirectoryScopeError && untrack(cursor)) {
           setCursor(undefined);
           invalidate();
         }
