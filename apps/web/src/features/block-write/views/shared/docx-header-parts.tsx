@@ -36,14 +36,14 @@ export function docxHeaderTools(props: DocxHeaderProps) {
   ];
 
   const askMacro: BlockTool = {
-    label: 'Ask Macro',
+    label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent(chatEntity(props)),
   };
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,
     focusTarget: getShareDrawerRecipientInput,
