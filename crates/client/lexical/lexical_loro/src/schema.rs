@@ -243,6 +243,23 @@ pub(crate) fn read_node_for_init(
     policy: &dyn SyncPolicy,
     transparent: &mut bool,
 ) -> Result<SerializedNode> {
+    read_node_at(map, parent, policy, transparent, 0)
+}
+/// `depth` is `map`'s depth below the root; a tree deeper than the model's nesting cap
+/// fails before recursing further.
+fn read_node_at(
+    map: &LoroMap,
+    parent: Option<&SerializedNode>,
+    policy: &dyn SyncPolicy,
+    transparent: &mut bool,
+    depth: usize,
+) -> Result<SerializedNode> {
+    if depth > lexical_model::MAX_NODE_DEPTH {
+        return Err(lexical_model::Error::NestingTooDeep {
+            limit: lexical_model::MAX_NODE_DEPTH,
+        }
+        .into());
+    }
     let mut node = own_map(map, policy)?;
     mask_local(&mut node, policy);
     crate::policy::normalize_stored(&mut node, policy, || Ok(parent.cloned()))?;
@@ -250,7 +267,7 @@ pub(crate) fn read_node_for_init(
         let mut result = Vec::new();
         for i in 0..list.len() {
             let child = map_at(list.get(i), "children item")?;
-            let json = read_node_for_init(&child, Some(&node), policy, transparent)?;
+            let json = read_node_at(&child, Some(&node), policy, transparent, depth + 1)?;
             if policy.is_dropped_json(&json) {
                 continue;
             }

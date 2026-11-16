@@ -5,7 +5,13 @@ use serde_json::Value;
 #[derive(Clone)]
 pub(crate) struct PendingBatch {
     pub diffs: Vec<OwnedDiff>,
+    /// A diff's path was longer than any tree within the nesting cap can produce; its
+    /// path was not retained (copying every such path is quadratic in depth).
+    pub too_deep: bool,
 }
+/// Two path entries per nested node (its map and its children list) plus the root and
+/// own-field containers: a longer path cannot belong to a tree within the nesting cap.
+const MAX_EVENT_PATH: usize = 2 * lexical_model::MAX_NODE_DEPTH + 16;
 #[derive(Clone)]
 pub(crate) struct OwnedDiff {
     target: ContainerID,
@@ -17,19 +23,30 @@ pub(crate) struct OwnedDiff {
 impl PendingBatch {
     /// Whether a diff changed a container a projected node owns, directly or below it.
     pub fn touches_projection(&self, index: &crate::index::NodeIndex) -> bool {
-        self.diffs.iter().any(|diff| {
-            index.owner.contains_key(&diff.target)
-                || diff.path.iter().any(|(id, _)| index.owner.contains_key(id))
-        })
+        self.too_deep
+            || self.diffs.iter().any(|diff| {
+                index.owner.contains_key(&diff.target)
+                    || diff.path.iter().any(|(id, _)| index.owner.contains_key(id))
+            })
     }
     pub fn from_event(event: loro::event::DiffEvent<'_>) -> Self {
+        let too_deep = event
+            .events
+            .iter()
+            .any(|event| event.path.len() > MAX_EVENT_PATH);
+        if too_deep {
+            return Self {
+                diffs: Vec::new(),
+                too_deep,
+            };
+        }
         let diffs=event.events.into_iter().map(|event| {
             let children_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("children"));
             let text_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("text"));
             let text=match event.diff {loro::event::Diff::Text(delta)=>Some(delta),_=>None};
             OwnedDiff{target:event.target.clone(),path:event.path.to_vec(),text,children_replaced,text_replaced}
         }).collect();
-        Self { diffs }
+        Self { diffs, too_deep }
     }
 }
 /// Raw remote changes and their native creation identities, retained until binding succeeds.
@@ -124,6 +141,12 @@ impl LoroProjection {
         let mut fields = OrderedSet::default();
         let mut replaced_text = OrderedSet::default();
         let mut text: OrderedMap<NodeKey, Vec<Vec<loro::TextDelta>>> = OrderedMap::default();
+        if batches.iter().any(|batch| batch.too_deep) {
+            return Err(lexical_model::Error::NestingTooDeep {
+                limit: lexical_model::MAX_NODE_DEPTH,
+            }
+            .into());
+        }
         for batch in &batches {
             for diff in &batch.diffs {
                 let Some((key, slot)) = self.index.owner.get(&diff.target).copied() else {
@@ -233,7 +256,13 @@ impl LoroProjection {
             if map.is_deleted() || !self.is_projected(doc, &map)? {
                 continue;
             }
-            self.build_children(&mut building, NodeTarget::Key(key), &map)?;
+            let mut depth = 0usize;
+            let mut node = key;
+            while let Some(parent) = state.view().parent(node) {
+                depth += 1;
+                node = parent;
+            }
+            self.build_children(&mut building, NodeTarget::Key(key), &map, depth)?;
         }
         // After building, so keys a remote move re-bound to a new map count as touched.
         let touched: Vec<NodeKey> = building.fields.iter().copied().collect();
@@ -502,11 +531,13 @@ impl LoroProjection {
         }
         Ok(true)
     }
+    /// `depth` is the parent's depth below the root; children sit one deeper.
     fn build_children(
         &mut self,
         b: &mut Building<'_>,
         parent: NodeTarget,
         map: &LoroMap,
+        depth: usize,
     ) -> Result<()> {
         if !b.built.insert(map.id()) {
             return Ok(());
@@ -524,8 +555,15 @@ impl LoroProjection {
         let index = b.lists.len();
         b.lists.push((parent, Vec::new()));
         let mut result = Vec::new();
-        for child in projected_children(map, self.policy)? {
-            result.push(self.resolve(b, &child, map)?);
+        let children = projected_children(map, self.policy)?;
+        if !children.is_empty() && depth >= lexical_model::MAX_NODE_DEPTH {
+            return Err(lexical_model::Error::NestingTooDeep {
+                limit: lexical_model::MAX_NODE_DEPTH,
+            }
+            .into());
+        }
+        for child in children {
+            result.push(self.resolve(b, &child, map, depth + 1)?);
         }
         if let NodeTarget::Key(key) = parent {
             let old = synced_children(b.state.view(), key, self.policy);
@@ -545,11 +583,13 @@ impl LoroProjection {
         entry.1 = result;
         Ok(())
     }
+    /// `depth` is the depth below the root of the node `map` becomes.
     fn resolve(
         &mut self,
         b: &mut Building<'_>,
         map: &LoroMap,
         parent: &LoroMap,
+        depth: usize,
     ) -> Result<NodeTarget> {
         if let Some((key, Slot::Node)) = self.index.owner.get(&map.id()).copied() {
             return Ok(NodeTarget::Key(key));
@@ -577,7 +617,7 @@ impl LoroProjection {
             b.reused.insert(key);
             b.fields.insert(key);
             b.stats.nodes_visited += 1;
-            self.build_children(b, NodeTarget::Key(key), map)?;
+            self.build_children(b, NodeTarget::Key(key), map, depth)?;
             return Ok(NodeTarget::Key(key));
         }
         let local = LocalNode(
@@ -610,7 +650,7 @@ impl LoroProjection {
         });
         b.pending.push((local, map.clone()));
         b.stats.nodes_visited += 1;
-        self.build_children(b, NodeTarget::Local(local), map)?;
+        self.build_children(b, NodeTarget::Local(local), map, depth)?;
         Ok(NodeTarget::Local(local))
     }
     /// Bind every core-created key to its native map, validating all pairs before mutation.

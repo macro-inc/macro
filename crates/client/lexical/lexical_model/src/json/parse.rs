@@ -57,6 +57,7 @@ pub(super) fn editor_state(editor: &mut Editor, text: &str) -> Result<EditorStat
     }
     let mut tx = editor.json_transaction()?;
     document.root.install(&mut tx)?;
+    super::check_tree_depth(&tx.pending)?;
     Ok(tx.pending.clone())
 }
 

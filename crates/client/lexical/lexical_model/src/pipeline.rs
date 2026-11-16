@@ -104,6 +104,9 @@ impl Transaction<'_> {
             return Err(Error::Invariant("cannot change a suspended pipeline mode"));
         }
         let suspended = self.pipeline_continuation.is_some();
+        if !suspended {
+            self.check_dirty_depth()?;
+        }
         let mut continuation = self.pipeline_continuation.take().map_or_else(
             || continuation::PipelineContinuation::new(mode),
             |value| *value,
@@ -116,6 +119,30 @@ impl Transaction<'_> {
             self.pipeline_continuation = Some(Box::new(continuation));
         }
         result.map(|_| ())
+    }
+    /// Fail before any recursive transform when a dirty node sits deeper than
+    /// [`crate::json::MAX_NODE_DEPTH`]. Walks parents iteratively, at most the limit per node.
+    fn check_dirty_depth(&self) -> Result<(), Error> {
+        let view = self.view();
+        for key in self
+            .dirty_leaves
+            .iter()
+            .chain(self.dirty_elements.keys())
+            .copied()
+        {
+            let mut depth = 0usize;
+            let mut node = key;
+            while let Some(parent) = view.parent(node) {
+                depth += 1;
+                if depth > crate::json::MAX_NODE_DEPTH {
+                    return Err(Error::NestingTooDeep {
+                        limit: crate::json::MAX_NODE_DEPTH,
+                    });
+                }
+                node = parent;
+            }
+        }
+        Ok(())
     }
     /// Run one node's virtual selection transform in the current mutable update.
     pub fn selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {

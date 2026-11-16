@@ -329,25 +329,17 @@ fn deeply_nested_export_imports_again() {
 }
 
 // A document exactly at MAX_JSON_DEPTH imports; one level deeper is rejected before
-// deserializing. The release wasm build, with its 1 MiB stack, parses, installs, edits,
-// exports and writes to Loro a 510-element document at the cap, and traps only past
-// about 1,300 nested elements. Debug native frames are larger, hence the 16 MiB thread.
+// deserializing. Debug native frames are larger than release wasm ones, hence the 16 MiB
+// thread.
 #[test]
 fn document_at_max_json_depth_imports_and_one_level_deeper_is_rejected() {
+    // Field nesting, not node nesting, so MAX_NODE_DEPTH does not decide.
     let nested = |levels: usize| {
-        let elements = (levels - 3) / 2;
-        let mut text = String::from("{\"root\":{\"type\":\"root\",\"version\":1,\"children\":[");
-        for _ in 0..elements {
-            text.push_str("{\"type\":\"paragraph\",\"version\":1,\"children\":[");
-        }
-        if levels % 2 == 0 {
-            text.push_str("{\"type\":\"text\",\"version\":1,\"text\":\"x\"}");
-        }
-        for _ in 0..elements {
-            text.push_str("]}");
-        }
-        text.push_str("]}}");
-        text
+        format!(
+            "{{\"root\":{{\"type\":\"root\",\"version\":1,\"children\":[],\"x\":{}{}}}}}",
+            "[".repeat(levels - 2),
+            "]".repeat(levels - 2)
+        )
     };
     std::thread::Builder::new()
         .stack_size(16 << 20)
@@ -364,7 +356,71 @@ fn document_at_max_json_depth_imports_and_one_level_deeper_is_rejected() {
             assert!(
                 error
                     .to_string()
-                    .contains("JSON nesting deeper than 1024 levels")
+                    .contains(&format!("JSON nesting deeper than {MAX_JSON_DEPTH} levels"))
+            );
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow");
+}
+
+// One nesting cap for every path that builds a tree: a node may sit at most
+// MAX_NODE_DEPTH levels below the root. Deeper trees fail with NestingTooDeep instead of
+// exhausting the wasm stack in recursive transforms, export or projection.
+#[test]
+fn trees_deeper_than_the_node_cap_fail_on_local_edits_and_json_import() {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("builder");
+            let nest = |tx: &mut Transaction<'_>, depth: usize| -> Result<(), Error> {
+                let mut parent = NodeKey::ROOT;
+                for _ in 0..depth {
+                    let child = tx.create(Paragraph::default())?;
+                    tx.append(parent, &[child.key()])?;
+                    parent = child.key();
+                }
+                Ok(())
+            };
+            editor
+                .update(|tx| nest(tx, MAX_NODE_DEPTH))
+                .expect("at the cap");
+            let at_cap = editor.state().to_json_string().expect("export");
+            assert!(editor.parse_editor_state_str(&at_cap).is_ok());
+            let mut deeper = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("builder");
+            let error = deeper
+                .update(|tx| nest(tx, MAX_NODE_DEPTH + 1))
+                .expect_err("past the cap");
+            assert!(
+                matches!(error, Error::NestingTooDeep { limit } if limit == MAX_NODE_DEPTH),
+                "{error}"
+            );
+            let nested_json = |depth: usize| {
+                let mut text =
+                    String::from("{\"root\":{\"type\":\"root\",\"version\":1,\"children\":[");
+                for _ in 0..depth {
+                    text.push_str("{\"type\":\"paragraph\",\"version\":1,\"children\":[");
+                }
+                for _ in 0..depth {
+                    text.push_str("]}");
+                }
+                text + "]}}"
+            };
+            assert!(
+                editor
+                    .parse_editor_state_str(&nested_json(MAX_NODE_DEPTH))
+                    .is_ok()
+            );
+            let error = editor
+                .parse_editor_state_str(&nested_json(MAX_NODE_DEPTH + 1))
+                .expect_err("past the cap");
+            assert!(
+                matches!(error, Error::NestingTooDeep { limit } if limit == MAX_NODE_DEPTH),
+                "{error}"
             );
         })
         .expect("spawn")

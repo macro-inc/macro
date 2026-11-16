@@ -5,9 +5,32 @@ mod write;
 pub use coercion::{js_string, js_to_number};
 /// Serialized field containing extensible node state.
 pub const NODE_STATE_KEY: &str = "$";
-/// Deepest JSON nesting accepted on import, about 500 nested elements. Upstream
-/// `JSON.parse` has no 128-level cap; this bound keeps hostile input off the stack.
-pub const MAX_JSON_DEPTH: usize = 1024;
+/// The deepest a node may sit below the root, on every path that builds a tree: local
+/// edits, JSON and clipboard import, and Loro reads. The release wasm build, with its
+/// 1 MiB stack, first traps at about 1,300 nested elements in its recursive transform,
+/// export and projection paths. Upstream has no such cap; a deeper tree fails with
+/// [`Error::NestingTooDeep`] instead of trapping.
+pub const MAX_NODE_DEPTH: usize = 512;
+/// Deepest JSON nesting accepted before deserializing: two levels per nested node plus
+/// the envelope and field values, so that [`MAX_NODE_DEPTH`] decides document depth.
+/// Upstream `JSON.parse` has no 128-level cap; this bound keeps hostile input off the
+/// stack.
+pub const MAX_JSON_DEPTH: usize = 2 * MAX_NODE_DEPTH + 16;
+/// Fail when any node of `state`'s tree sits deeper than [`MAX_NODE_DEPTH`]. Iterative, so
+/// it is safe on a tree of any depth.
+pub fn check_tree_depth(state: &EditorState) -> Result<(), Error> {
+    let view = state.view();
+    let mut stack = vec![(NodeKey::ROOT, 0usize)];
+    while let Some((key, depth)) = stack.pop() {
+        if depth > MAX_NODE_DEPTH {
+            return Err(Error::NestingTooDeep {
+                limit: MAX_NODE_DEPTH,
+            });
+        }
+        stack.extend(view.children(key).map(|child| (child, depth + 1)));
+    }
+    Ok(())
+}
 /// Deserialize document JSON past serde_json's 128-level default, up to `MAX_JSON_DEPTH`.
 pub fn from_json_str<'input, T: serde::Deserialize<'input>>(text: &'input str) -> Result<T, Error> {
     let mut depth = 0usize;
@@ -142,6 +165,7 @@ impl Editor {
         if let Some(error) = report.error {
             return Err(error);
         }
+        check_tree_depth(&report.state)?;
         Ok(report.state)
     }
     /// Parse without publishing, retaining the partial state alongside its import diagnostic.

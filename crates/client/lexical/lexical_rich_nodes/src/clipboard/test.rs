@@ -315,3 +315,49 @@ fn html_clipboard_uses_selected_slice_and_default_mime_order() -> Result<(), Err
     })?;
     Ok(())
 }
+
+// A pasted Lexical payload nested past the model's nesting cap is refused with the whole
+// update, leaving the document as it was, instead of reaching recursive transforms.
+#[test]
+fn a_paste_nested_past_the_node_cap_is_refused() -> Result<(), Error> {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| -> Result<(), Error> {
+            let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+            editor.update(|tx| {
+                let p = tx.create(Paragraph {})?;
+                tx.append(NodeKey::ROOT, &[p.key()])?;
+                tx.select_start(p)
+            })?;
+            let before = editor.state().to_json_string()?;
+            let mut node = serde_json::json!({"type":"text","version":1,"text":"deep"});
+            for _ in 0..lexical_model::MAX_NODE_DEPTH {
+                node = serde_json::json!({"type":"paragraph","version":1,"children":[node]});
+            }
+            let payload = serde_json::json!({"namespace":"test","nodes":[node]}).to_string();
+            let entries = [ClipboardEntry {
+                mime: MIME_LEXICAL,
+                data: &payload,
+            }];
+            let error = editor
+                .update(|tx| {
+                    insert_data_transfer_for_rich_text(
+                        tx,
+                        "test",
+                        &entries,
+                        None,
+                        SelectionSlot::Active,
+                    )
+                })
+                .expect_err("past the cap");
+            assert!(
+                matches!(error, Error::NestingTooDeep { limit } if limit == lexical_model::MAX_NODE_DEPTH),
+                "{error}"
+            );
+            assert_eq!(editor.state().to_json_string()?, before);
+            Ok(())
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow")
+}

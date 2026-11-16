@@ -473,3 +473,69 @@ fn a_local_commit_with_an_unprojected_remote_root_block_insert_diverges() -> Res
     assert_eq!(doc.get_deep_value(), stored_before);
     Ok(())
 }
+/// Nest `depth` paragraphs below the root of `doc` directly in Loro, as any peer could.
+fn nest_in_loro(doc: &LoroDoc, depth: usize) -> Result<()> {
+    let mut list = schema::children(&doc.get_map("root"))?.expect("root children");
+    for _ in 0..depth {
+        let map = list.insert_container(0, LoroMap::new())?;
+        map.insert("type", "paragraph")?;
+        map.insert("version", 1)?;
+        map.insert("format", "")?;
+        map.insert("indent", 0)?;
+        list = map.insert_container("children", loro::LoroMovableList::new())?;
+    }
+    doc.commit();
+    Ok(())
+}
+// The model's nesting cap also bounds trees that arrive through Loro: a snapshot read and
+// a remote projection fail with NestingTooDeep one level past the cap, before recursing.
+#[test]
+fn loro_trees_deeper_than_the_node_cap_fail_on_read_and_remote_projection() -> Result<()> {
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(|| -> Result<()> {
+            let too_deep = |error: &ProjectionError| {
+                matches!(
+                    error,
+                    ProjectionError::Editor(lexical_model::Error::NestingTooDeep { limit })
+                        if *limit == lexical_model::MAX_NODE_DEPTH
+                )
+            };
+            for (depth, fits) in [
+                (lexical_model::MAX_NODE_DEPTH, true),
+                (lexical_model::MAX_NODE_DEPTH + 1, false),
+                // Paths too long to retain: the buffered batch only records that.
+                (3 * lexical_model::MAX_NODE_DEPTH, false),
+            ] {
+                let editor = Editor::builder(EditorMode::Headless)
+                    .build()
+                    .expect("editor");
+                let doc = new_doc(1)?;
+                let mut projection = LoroProjection::initialize(&doc, editor.state(), &PLAIN, 0)?;
+                let peer = fork_doc(&doc, 2)?;
+                let before = peer.oplog_vv();
+                nest_in_loro(&peer, depth)?;
+                let read = reconstruct_state(&peer, &PLAIN);
+                let remote = projection.remote(
+                    &doc,
+                    editor.state(),
+                    &peer.export(ExportMode::updates(&before))?,
+                );
+                if fits {
+                    assert!(read.is_ok(), "read at the cap: {:?}", read.err());
+                    assert!(remote.is_ok(), "remote at the cap: {:?}", remote.err());
+                } else {
+                    assert!(read.as_ref().is_err_and(too_deep), "read: {:?}", read.err());
+                    assert!(
+                        remote.as_ref().is_err_and(too_deep),
+                        "remote: {:?}",
+                        remote.err()
+                    );
+                }
+            }
+            Ok(())
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow")
+}

@@ -186,6 +186,12 @@ pub enum Error {
     /// Unregistered node type {0}.
     #[error("unregistered node type {0}")]
     UnregisteredNodeOnCreate(&'static str),
+    /// A node would sit deeper below the root than the nesting cap allows.
+    #[error("nesting deeper than {limit} levels")]
+    NestingTooDeep {
+        /// [`crate::json::MAX_NODE_DEPTH`].
+        limit: usize,
+    },
     /// Model invariant.
     #[error("{0}")]
     Invariant(&'static str),
@@ -429,6 +435,7 @@ impl Error {
             Self::UnregisteredNodeType(..) => "UnregisteredNodeType",
             Self::UnregisteredNodeOnCreate(..) => "UnregisteredNodeOnCreate",
             Self::Invariant(..) | Self::InvariantMessage(..) => "Invariant",
+            Self::NestingTooDeep { .. } => "NestingTooDeep",
             Self::NodePayloadNotObject => "NodePayloadNotObject",
             Self::BaseKindMismatch => "BaseKindMismatch",
             Self::RemoveRoot => "RemoveRoot",
