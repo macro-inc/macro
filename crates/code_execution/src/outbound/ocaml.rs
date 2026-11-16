@@ -94,7 +94,7 @@ impl OcamlBundle {
     #[tracing::instrument(
         name = "code_execution.compile",
         skip_all,
-        fields(typing_only, outcome = tracing::field::Empty),
+        fields(typing_only, sdk_fingerprint = %self.fingerprint, outcome = tracing::field::Empty),
         err(level = "info")
     )]
     pub(crate) async fn compile(

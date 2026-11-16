@@ -238,6 +238,12 @@ impl DenoRunner {
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
+        // The program's run in Deno, from spawn to the final frame.
+        let deno = tracing::info_span!(
+            "code_execution.deno",
+            language = language.as_str(),
+            outcome = tracing::field::Empty,
+        );
         let execution = async {
             let candidate = bridge(
                 &job.environment,
@@ -248,10 +254,7 @@ impl DenoRunner {
                 events,
                 &job.limits,
             )
-            .instrument(tracing::info_span!(
-                "code_execution.deno",
-                language = language.as_str()
-            ))
+            .instrument(deno.clone())
             .await?;
             // Both streams have closed, so the process is exiting.
             let status = child.wait().await.map_err(internal)?;
@@ -280,6 +283,15 @@ impl DenoRunner {
             _ = sleep_until(job.deadline) => Ok(Outcome::TimedOut),
             result = execution => result,
         };
+        deno.record(
+            "outcome",
+            match &outcome {
+                Ok(Outcome::Succeeded { .. }) => "succeeded",
+                Ok(Outcome::Failed { .. }) | Err(_) => "failed",
+                Ok(Outcome::Cancelled) => "cancelled",
+                Ok(Outcome::TimedOut) => "timed_out",
+            },
+        );
         reap(&mut child).await;
         // Drop the directory only after the process is reaped.
         drop(directory);

@@ -228,12 +228,14 @@ try {
   };
   // The OCaml SDK names each call's operation on fetch itself
   // (init.macroSdkOperation, see packages/sdk-ocaml/fetch); the TypeScript
-  // SDK reports the same events and asks the same gate from inside.
+  // SDK reports the same events and asks the same gate from inside. Ids
+  // are numbers, as the TypeScript SDK's are: the host's activity reads
+  // only those.
   let nextOcamlRequest = 0;
   globalThis.fetch = async (input, init) => {
     const operation = init?.macroSdkOperation;
     if (language !== "ocaml" || !operation) return sendRequest(input, init);
-    const event = {id: `ocaml-${++nextOcamlRequest}`, service: String(operation.service), operation: String(operation.operation)};
+    const event = {id: ++nextOcamlRequest, service: String(operation.service), operation: String(operation.operation)};
     if (dryRun && catalog.get(`${event.service}.${event.operation}`)?.write !== false) {
       observe({...event, status: "skipped"});
       return Response.json({});
