@@ -1,0 +1,77 @@
+crates/agent_monitor_tui/src/app.rs
+  s_564ae7a9b7392a::t_439a0025181141 7,115,117-118,143,200-201,207-208,215-217,496-503,505
+crates/agent_monitor_tui/src/ui.rs
+  s_564ae7a9b7392a::t_3972f5a20636d1 11,67,203,218-219,221
+  s_564ae7a9b7392a::t_5c446ddfd579a5 272
+crates/agent_monitor_tui/src/theme.rs
+  s_564ae7a9b7392a::t_5c446ddfd579a5 214
+crates/coding_agent_worker/README.md
+  s_564ae7a9b7392a::t_5c446ddfd579a5 242-246,250-251
+crates/agent_monitor_tui/src/ui/filters.rs
+  s_564ae7a9b7392a::t_3972f5a20636d1 1,9,12,17-25,27-35,37-40,42-48,52,56-60,62-78,80,82-86,89
+  s_564ae7a9b7392a::t_236632b985baa8 26,36,41,87
+crates/agent_monitor_tui/src/view.rs
+  s_564ae7a9b7392a::t_439a0025181141 771,776-780,787-806,809-823,833-836,845-847,868,871,893,902,904
+crates/agent_monitor_tui/src/ui/tabs.rs
+  s_564ae7a9b7392a::t_5c446ddfd579a5 38-40,44
+  s_564ae7a9b7392a::t_3972f5a20636d1 1-33,35-37,41-43,45-51,53-57,59-60
+  s_564ae7a9b7392a::t_bdf6f5ec46bcd6 34,52,58
+crates/agent_monitor_tui/AGENTS.md
+  s_564ae7a9b7392a::t_5c446ddfd579a5 26-27,100-108,117-119
+crates/agent_monitor_tui/src/keys.rs
+  s_564ae7a9b7392a::t_439a0025181141 84,128,132,140-145,260,305,307-312,389,440-442,490,492,496
+crates/agent_monitor_tui/src/app/test.rs
+  s_564ae7a9b7392a::t_1ac1c599cd6e81 20-21,24-28,31-33,35-36,38,40,43-55,58-59,65,71
+crates/agent_monitor_tui/src/keys/test.rs
+  s_564ae7a9b7392a::t_c38248638908e9 149,258,294,357-358
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_200x56.snap
+  s_564ae7a9b7392a::t_5cd153e81cbf3c 5-6,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_240x45.snap
+  s_564ae7a9b7392a::t_e6fd743ec8b137 5-6,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_compact_80x24.snap
+  s_564ae7a9b7392a::t_fb3f2fb7162703 5-7,28
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_failing_lane_selected_and_enter_drills_into_the_author.snap
+  s_564ae7a9b7392a::t_68d3689ebc48f0 5-6,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_narrow_100x30.snap
+  s_564ae7a9b7392a::t_083eb373ccc842 5-7,14-22,34
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab.snap
+  s_564ae7a9b7392a::t_1448aaca382fe7 5-6,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_without_repositories_lists_the_prs_and_enter_opens_the_author.snap
+  s_564ae7a9b7392a::t_f9f18174fc4b94 5-6,49
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__drill_in_200x56.snap
+  s_564ae7a9b7392a::t_aba67ddd50860c 5,12,23,25,28-29,33-58,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__lane_detail_200x56.snap
+  s_564ae7a9b7392a::t_19f53768fe71a7 5,13,17,19,21,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_200x56.snap
+  s_564ae7a9b7392a::t_3602e4f1f758b9 5,27-36,58,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_narrow_100x30.snap
+  s_564ae7a9b7392a::t_e6b18c47822454 5-6,34
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_one_column_80x24.snap
+  s_564ae7a9b7392a::t_065d4abca0f581 5-6,28
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__monitor_wide_240x60_grows_the_body.snap
+  s_564ae7a9b7392a::t_915f79c732b6ce 5,28-39,64
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__tree_200x56.snap
+  s_564ae7a9b7392a::t_62daaaea946c10 5-7,60
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__wall_200x56.snap
+  s_564ae7a9b7392a::t_3175093547dceb 5-7,17,37,47,54-57,60
+crates/agent_monitor_tui/src/ui/test.rs
+  s_564ae7a9b7392a::t_26799a38a89040 318-319
+crates/agent_monitor_tui/src/view/test.rs
+  s_564ae7a9b7392a::t_7e7c259dba6816 145,164-178,423
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0ce503edc43a7f8b0b11b5b90ba03f020ed4b35a",
+  "prompts": {},
+  "sessions": {
+    "s_564ae7a9b7392a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e266-9e70-7091-9ea4-3b7a56db33fe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
