@@ -99,11 +99,6 @@ export type SessionLogFollow = {
   gap: () => void;
 };
 
-/** Whether a watch can follow the session over the GraphQL subscription. */
-export function canFollowAgentSessionLog(): boolean {
-  return true;
-}
-
 const DIRECTIONS: ReadonlySet<string> = new Set<LogDirectionDto>([
   'to_server',
   'to_runtime',

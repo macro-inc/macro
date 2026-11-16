@@ -63,17 +63,29 @@ vi.mock('@queries/soup/normalized-cache', () => ({
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: () => () => {},
 }));
+type LogFollow = { rows: (rows: AgentSessionLogEntryDto[]) => void };
+/** Each session's latest load subscription, which delivers its live rows. */
+const follows = vi.hoisted(() => new Map<string, LogFollow>());
 vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
-  watchAgentSessionLog: () => ({
-    cached: Promise.resolve(undefined),
-    cacheMiss: () => undefined,
-    fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
-    stop: () => {},
-  }),
-  canFollowAgentSessionLog: () => false,
+  watchAgentSessionLog: (id: string, _policy?: string, follow?: LogFollow) => {
+    if (follow) follows.set(id, follow);
+    return {
+      cached: Promise.resolve(undefined),
+      cacheMiss: () => undefined,
+      fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
+      stop: () => {},
+    };
+  },
   forgetAgentSessionLog: vi.fn(async () => {}),
 }));
+
+/** A row the log subscription delivers to an open session. */
+function deliver(id: string, row: AgentSessionLogEntryDto) {
+  const follow = follows.get(id);
+  if (!follow) throw new Error(`session ${id} is not followed`);
+  follow.rows([row]);
+}
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionRenamed: () => () => {},
   subscribeAgentSessionUpdated: () => () => {},
@@ -215,16 +227,11 @@ describe('pending navigation ownership', () => {
         },
       },
     ] satisfies FoldedStreamEvent[]);
-    AgentSession.ingest({
-      agentSessionId: id,
-      entries: [
-        {
-          id: 'confirmed-row',
-          createdAt: new Date().toISOString(),
-          direction: 'to_server',
-          content: { type: 'acp', jsonrpc: '2.0' },
-        } satisfies AgentSessionLogEntryDto,
-      ],
+    deliver(id, {
+      id: 'confirmed-row',
+      createdAt: new Date().toISOString(),
+      direction: 'to_server',
+      content: { type: 'acp', jsonrpc: '2.0' },
     });
     await settle();
     const firstText = stage.mock.calls.findIndex(
@@ -473,16 +480,11 @@ describe('first prompt on the create', () => {
         },
       },
     ] satisfies FoldedStreamEvent[]);
-    AgentSession.ingest({
-      agentSessionId: id,
-      entries: [
-        {
-          id: 'confirmed-row',
-          createdAt: new Date().toISOString(),
-          direction: 'to_server',
-          content: { type: 'acp', jsonrpc: '2.0' },
-        } satisfies AgentSessionLogEntryDto,
-      ],
+    deliver(id, {
+      id: 'confirmed-row',
+      createdAt: new Date().toISOString(),
+      direction: 'to_server',
+      content: { type: 'acp', jsonrpc: '2.0' },
     });
     await settle();
     const firstText = stage.mock.calls.findIndex(

@@ -150,15 +150,14 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           handleChannelAccessRequestChanged
         );
       })
-      // One frame appended to a live agent session's log. Routed to the
-      // channel's fold rather than to any cache: the frame is not a message,
-      // it is a step towards one, and only the fold knows which.
+      // Frames appended to an agent session's log. An open session folds
+      // them from its GraphQL log subscription; here they only mark a session
+      // nobody has open as moving, so list rows follow its turn.
       .with({ type: AGENT_SESSION_LOG_EVENT }, () => {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
           (event) => {
-            AgentSession.ingest(event);
             if (!AgentSession.get(event.agentSessionId)) {
               noteSessionActivity(event.agentSessionId);
             }
