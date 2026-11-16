@@ -1,0 +1,29 @@
+crates/webhook/src/domain/ingestion/test.rs
+  s_c40fd2f0323f22::t_5f7206737efb14 1141,1181,1504
+  s_c40fd2f0323f22::t_be85255c260bf5 2736,2756,2943,2991-2992
+  s_c40fd2f0323f22::t_04e1be04afac86 173-174,187,211-250,258-261,268-287,549-556
+  s_c40fd2f0323f22::t_b905063f99fca2 2726,2728,2751-2753,2912-2942,2944-2990
+  s_c40fd2f0323f22::t_fa9e925a35c7f7 1186-1191,1257-1262,1384-1389,2735
+  s_c40fd2f0323f22::t_302753de2be9ce 251-257,262-267
+  s_c40fd2f0323f22::t_62ab24861e0b38 558-559,565,2345-2346,2701-2702,2723-2725,2727,2729-2734,2737-2750,2754-2755
+crates/webhook/src/domain/ingestion.rs
+  s_c40fd2f0323f22::t_04e1be04afac86 321-324
+  s_c40fd2f0323f22::t_be85255c260bf5 957,973,988,992
+  s_c40fd2f0323f22::t_ca8f5b29abac5e 35,493,506-507,512-595,731-736,782-785,795-834,845,847-854,920-923,934-937,951-953
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "902f754d29ca367d09a7cff4de39c4212d18db16",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
