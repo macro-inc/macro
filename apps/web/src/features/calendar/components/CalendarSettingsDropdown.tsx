@@ -49,7 +49,7 @@ const TIME_FORMAT_OPTIONS: Array<{
   { value: '24-hour', label: '24-hour' },
 ];
 
-function createCalendarSettingsControls(isNarrow: () => boolean) {
+function createCalendarSettingsControls() {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();
@@ -57,8 +57,7 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   const [turnOffTarget, setTurnOffTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
 
-  const showCalendarVisibility = () =>
-    isNarrow() && calendarView.sources().length > 1;
+  const showCalendarVisibility = () => calendarView.sources().length > 1;
 
   const weekStartLabel = createMemo(
     () =>
@@ -213,27 +212,6 @@ function DesktopCalendarSettings(props: {
         </Show>
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
-        <Show when={controls.showCalendarVisibility()}>
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>Calendars</Dropdown.GroupLabel>
-            <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
-              {(group) => (
-                <Dropdown.CheckboxItem
-                  checked={controls.isAccountVisible(group)}
-                  closeOnSelect={false}
-                  onChange={(checked) =>
-                    controls.changeAccountVisibility(group, checked)
-                  }
-                >
-                  <span class="min-w-0 flex-1 truncate">
-                    {group.emailAddress}
-                  </span>
-                </Dropdown.CheckboxItem>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Show>
-
         <Dropdown.Group>
           <Dropdown.GroupLabel>Display</Dropdown.GroupLabel>
           <Dropdown.CheckboxItem
@@ -644,13 +622,8 @@ function MobileCalendarSettings(props: {
  * Responsive calendar display settings menu. The turn-off confirmation lives
  * outside the menu so it survives the menu closing on select.
  */
-export function CalendarSettingsDropdown(props: {
-  isNarrow?: boolean;
-  sidebar?: boolean;
-}) {
-  const controls = createCalendarSettingsControls(
-    () => props.isNarrow ?? false
-  );
+export function CalendarSettingsDropdown(props: { sidebar?: boolean }) {
+  const controls = createCalendarSettingsControls();
 
   return (
     <>
