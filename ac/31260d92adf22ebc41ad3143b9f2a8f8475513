@@ -1,0 +1,181 @@
+crates/chat/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 296-297,299
+crates/event_access/AGENTS.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 1-55
+crates/initiative/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 58
+crates/event_stream/src/domain/registry.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 11
+crates/macro_event_broker/src/domain/models.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 5,28
+crates/agent_trigger/src/domain/broker_events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 390-391,393
+.github/workspace-dep-closures.json
+  s_c40fd2f0323f22::t_cb88a10308d2b4 69,139,212,314,440,601,733,856,1032,1249,1464,1572,1683,1799,1910,2006,2143,2340,2536,2665,2824,3017,3173,3304,3397,3500,3603,3737,3942,4025,4111,4220,4361,4442,4499,4592,4675,4792,5070,5147,5231,5329,5433,5550,5619,5713,5893,6079,6375,6503,6616,6732,6837,6962,7079,7190,7307,7431,7569,7803,7805,7836,7865,7885,7935,7942,7945,8142,8296,8399,8518,8599,8664,8752,8863,8948,9070,9219,9348,9510,9673,9793,9883,10051,10150,10310,10466,10655,10908,11009,11102,11300,11368,11434,11518,11623,11693,11844,11918,11955,12249,12379,12483,12635,12762,12866,12953,12986,13070,13179,13215,13269,13503,13626,13734,13792,13854,13921,14036,14126,14258,14413,14566,14693,14861,15077,15216,15337,15470,15604,15743,15885,16149,16303,16509,16617,16699,16800,16922,17107,17158,17243,17367,17444,17712
+crates/channels/src/inbound/teammate_dms_consumer.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 99,104-105,107
+crates/properties/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 408,542
+crates/agent_session/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 441-442,444
+crates/databases/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 1
+crates/email/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 562,611,627
+crates/bots/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 100-101,103
+crates/call/src/domain/notification_events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 139-140,142
+crates/event_stream/src/topics.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 104
+crates/chat/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 301
+crates/channels/src/domain/mention_events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 104,147
+crates/channels/src/domain/mention_events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 78-79,81,144
+crates/event_stream/src/domain/catalog/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 96-97,142-143,157-158,346
+crates/teams/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 421-422,561,586
+crates/macro_event_broker/examples/example_event.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 56,61-62,64
+crates/teams/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 264-265,267
+crates/documents/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 334
+crates/event_stream/src/domain/access.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 20
+crates/event_stream/src/outbound/entity_access/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 11
+crates/calendar_events/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 2
+crates/event_stream/src/outbound/entity_access.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 8
+crates/event_stream/src/domain/stream/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 12
+crates/macro_event_broker/Cargo.toml
+  s_c40fd2f0323f22::t_ab2ff576a600c0 25
+crates/soup_realtime/src/domain/models.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 111,116-117,119
+crates/macro_event_broker/src/lib.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 23
+crates/call/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 229-230,232
+crates/properties/src/domain/events/public.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 7
+docs/guides/add-kafka-event.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 193,201
+crates/event_stream/Cargo.toml
+  s_c40fd2f0323f22::t_ab2ff576a600c0 76
+crates/messages/src/outbound/broker.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 50-51,53
+crates/webhook/src/domain/ingestion/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 2268,2440,2444,2459
+crates/event_stream/src/outbound/redis_log/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 6
+crates/forms/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 1
+crates/user_events/src/lib.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 50-51,53
+crates/event_stream/src/domain/ports.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 4
+crates/event_stream/src/domain/webhook_lifecycle.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 140-141,143
+crates/macro_event_broker/src/domain/models/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 27,31,33,144,148,150
+crates/notification/src/domain/models/websocket_notification_event/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 5,46
+crates/properties/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 244-245,247
+crates/event_stream/src/domain/fan_out/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 9,815,916,1158
+crates/bots/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 257,259,269
+crates/notification/src/domain/models/websocket_notification_event.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 138-139,141,217-218,263
+crates/event_stream/AGENTS.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 38,42,61
+crates/channels/src/domain/broker_events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 230,259,283
+crates/github/src/broker/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 2
+crates/event_access/Cargo.toml
+  s_c40fd2f0323f22::t_ab2ff576a600c0 1-17
+crates/github_pull_requests/src/broker/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 1
+crates/databases/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 266-267,269
+crates/macro_event_broker/src/domain/service/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 139,143,145,273,277,279
+crates/webhook/AGENTS.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 33-34
+crates/properties/src/domain/events/definitions.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 5
+crates/initiative/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 150-151,153
+Cargo.toml
+  s_c40fd2f0323f22::t_ab2ff576a600c0 75
+crates/webhook/README.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 89
+crates/event_stream/src/domain/normalize.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 10
+crates/activity/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 143-144,146
+crates/projects/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 228-229,231
+crates/email/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 542-543,545
+crates/projects/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 73
+crates/call/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 296
+crates/event_stream/src/domain/fan_out/bench.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 15
+crates/macro_event_broker/AGENTS.md
+  s_c40fd2f0323f22::t_ab2ff576a600c0 30
+crates/event_stream/src/domain/models.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 7
+crates/channels/src/domain/broker_events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 212-213,215
+crates/calendar_events/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 74-75,77
+crates/documents/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 359-360,362
+crates/github/src/broker.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 29-30,32
+crates/webhook/src/domain/ingestion.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 29
+crates/activity/src/domain/events/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 137,188
+crates/event_stream/src/domain/catalog.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 24
+crates/forms/src/domain/events.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 246-247,249
+crates/event_stream/src/domain/test_support.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 17
+crates/event_stream/src/domain/log_writer/test.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 7
+crates/github_pull_requests/src/broker.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 48-49,51
+crates/event_stream/src/domain/invalidations.rs
+  s_c40fd2f0323f22::t_ab2ff576a600c0 17
+Cargo.lock
+  s_c40fd2f0323f22::t_3ef987d6659fa8 8217,8248,12961
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ac31260d92adf22ebc41ad3143b9f2a8f8475513",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
