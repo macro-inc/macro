@@ -5,7 +5,7 @@ import type { ChatMessage } from './chat';
 /**
  * A chat message in the shape the shared channel rows render. Macro users
  * show as themselves (Macro name and avatar); everyone else by their
- * provider name.
+ * provider name and picture.
  */
 export function chatMessageData(
   message: ChatMessage,
@@ -18,7 +18,10 @@ export function chatMessageData(
     sender_id: message.sender.userId ?? '',
     imported_author:
       !message.sender.userId && message.sender.name.trim()
-        ? { name: message.sender.name }
+        ? {
+            name: message.sender.name,
+            avatar_url: message.sender.pictureUrl ?? null,
+          }
         : null,
     created_at: message.sentAt,
     updated_at: message.sentAt,

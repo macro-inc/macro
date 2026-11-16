@@ -41,6 +41,10 @@ it('shows partial account visibility and toggles every calendar in the account',
       sourceColor={() => undefined}
       onAccountColor={() => {}}
       onSourceColor={() => {}}
+      countsAsBusy={() => true}
+      onCountsAsBusyChange={() => {}}
+      busyError={false}
+      onBusyRetry={() => {}}
     />
   ));
   const account = ui.getByRole('checkbox', {
@@ -86,6 +90,10 @@ it('keeps the color control mounted across updates and supports resetting the ov
       sourceColor={() => color()}
       onAccountColor={() => {}}
       onSourceColor={(_, next) => setColor(next)}
+      countsAsBusy={() => undefined}
+      onCountsAsBusyChange={() => {}}
+      busyError={false}
+      onBusyRetry={() => {}}
     />
   ));
   const picker = ui.getByLabelText('Color for Work (work@example.com)');
@@ -103,4 +111,68 @@ it('keeps the color control mounted across updates and supports resetting the ov
   expect(color()).toBeUndefined();
   fireEvent.click(ui.getByRole('button', { name: 'Connect account' }));
   expect(connect).toHaveBeenCalledOnce();
+});
+
+it('saves Busy per calendar apart from showing it, and waits for the setting before offering it', () => {
+  const [busy, setBusy] = createSignal<Record<string, boolean>>({
+    primary: true,
+    coworker: true,
+  });
+  const [hidden, setHidden] = createSignal<string[]>([]);
+  const ui = render(() => (
+    <ConnectedCalendars
+      accounts={[
+        {
+          id: 'work',
+          email: 'work@example.com',
+          canManage: true,
+          needsPermission: false,
+          calendars: [
+            { id: 'primary', name: 'Work', color: '#123456', isPrimary: true },
+            { id: 'coworker', name: 'Coworker', color: '#654321' },
+            { id: 'unknown', name: 'Not loaded', color: '#abcdef' },
+          ],
+        },
+      ]}
+      loading={false}
+      error={false}
+      connecting={false}
+      canConnect={true}
+      onRetry={() => {}}
+      onConnect={() => {}}
+      onEnable={() => {}}
+      onDisconnect={() => {}}
+      isVisible={(id) => !hidden().includes(id)}
+      onVisibilityChange={(ids, visible) =>
+        setHidden((current) =>
+          visible
+            ? current.filter((id) => !ids.includes(id))
+            : [...current, ...ids]
+        )
+      }
+      accountColor={() => undefined}
+      sourceColor={() => undefined}
+      onAccountColor={() => {}}
+      onSourceColor={() => {}}
+      countsAsBusy={(id) => busy()[id]}
+      onCountsAsBusyChange={(id, counts) =>
+        setBusy((current) => ({ ...current, [id]: counts }))
+      }
+      busyError={false}
+      onBusyRetry={() => {}}
+    />
+  ));
+  const coworkerBusy = ui.getByRole('switch', {
+    name: 'Coworker counts as busy',
+  }) as HTMLInputElement;
+  expect(coworkerBusy.checked).toBe(true);
+  fireEvent.click(coworkerBusy);
+  expect(busy().coworker).toBe(false);
+  expect(hidden()).toEqual([]);
+  fireEvent.click(ui.getByRole('checkbox', { name: 'Coworker' }));
+  expect(hidden()).toEqual(['coworker']);
+  expect(busy().coworker).toBe(false);
+  expect(
+    ui.queryByRole('switch', { name: 'Not loaded counts as busy' })
+  ).toBeNull();
 });

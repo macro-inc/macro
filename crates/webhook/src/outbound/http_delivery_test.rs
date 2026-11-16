@@ -1,11 +1,25 @@
 use super::*;
 use crate::domain::{
-    models::{WebhookFilter, WebhookStatus},
+    models::{WebhookEndpointSchemePolicy, WebhookFilter, WebhookStatus},
     ports::WebhookDeliveryClient,
 };
 use chrono::Utc;
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use serde_json::json;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    iter,
+    net::{IpAddr, SocketAddr},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    time::timeout,
+};
 
 fn webhook(endpoint_url: &str, headers: WebhookHeaders) -> Webhook {
     Webhook {
@@ -252,4 +266,122 @@ async fn reserved_header_configuration_is_permanent_without_dns_lookup() {
         details.error_message.as_deref(),
         Some("reserved Macro headers cannot be overridden")
     );
+}
+
+/// Answers each lookup with the next address in `answers`, repeating the last.
+struct SequencedResolver {
+    answers: Vec<IpAddr>,
+    lookups: AtomicUsize,
+}
+
+impl Resolve for SequencedResolver {
+    fn resolve(&self, _name: Name) -> Resolving {
+        let lookup = self.lookups.fetch_add(1, Ordering::SeqCst);
+        let ip = self.answers[lookup.min(self.answers.len() - 1)];
+        Box::pin(async move {
+            let addresses: Addrs = Box::new(iter::once(SocketAddr::new(ip, 0)));
+            Ok(addresses)
+        })
+    }
+}
+
+async fn no_connection_was_accepted(listener: &TcpListener) -> bool {
+    timeout(Duration::ZERO, listener.accept()).await.is_err()
+}
+
+#[tokio::test]
+async fn connect_time_answer_is_checked_after_a_public_preflight_answer() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let resolver = Arc::new(SequencedResolver {
+        answers: vec![
+            "93.184.215.14".parse().unwrap(),
+            "127.0.0.1".parse().unwrap(),
+        ],
+        lookups: Default::default(),
+    });
+    let client = ReqwestWebhookDeliveryClient::with_resolver(
+        WebhookEndpointSchemePolicy::HttpsOnly,
+        resolver.clone(),
+    )
+    .unwrap();
+
+    let outcome = client
+        .deliver(
+            &webhook(
+                &format!("https://rebind.example:{port}/webhook"),
+                BTreeMap::new(),
+            ),
+            &event(),
+        )
+        .await
+        .unwrap();
+
+    let WebhookHttpOutcome::RetryableFailure(details) = outcome else {
+        panic!("blocked connect-time address should fail");
+    };
+    assert_eq!(details.error_kind.as_deref(), Some("network"));
+    assert_eq!(resolver.lookups.load(Ordering::SeqCst), 2);
+    assert!(no_connection_was_accepted(&listener).await);
+}
+
+#[tokio::test]
+async fn ipv4_mapped_ipv6_literal_is_permanent_configuration_failure() {
+    let client = ReqwestWebhookDeliveryClient::new().unwrap();
+
+    let outcome = client
+        .deliver(
+            &webhook("https://[::ffff:127.0.0.1]/webhook", BTreeMap::new()),
+            &event(),
+        )
+        .await
+        .unwrap();
+
+    let WebhookHttpOutcome::PermanentFailure(details) = outcome else {
+        panic!("mapped loopback literal should be permanent");
+    };
+    assert_eq!(
+        details.error_message.as_deref(),
+        Some("webhook endpoint host is not allowed")
+    );
+}
+
+#[tokio::test]
+async fn local_http_endpoints_are_delivered_without_following_redirects() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut request = vec![0; 8192];
+        let _ = stream.read(&mut request).await.unwrap();
+        stream
+            .write_all(
+                format!(
+                    "HTTP/1.1 302 Found\r\nLocation: http://localhost:{port}/redirected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        listener
+    });
+    let client = ReqwestWebhookDeliveryClient::new_with_endpoint_scheme_policy(
+        WebhookEndpointSchemePolicy::HttpAndHttps,
+    )
+    .unwrap();
+
+    let outcome = client
+        .deliver(
+            &webhook(&format!("http://localhost:{port}/webhook"), BTreeMap::new()),
+            &event(),
+        )
+        .await
+        .unwrap();
+
+    let WebhookHttpOutcome::PermanentFailure(details) = outcome else {
+        panic!("redirect should not be followed");
+    };
+    assert_eq!(details.response_status, Some(302));
+    let listener = server.await.unwrap();
+    assert!(no_connection_was_accepted(&listener).await);
 }

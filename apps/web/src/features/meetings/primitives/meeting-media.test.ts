@@ -70,6 +70,41 @@ describe('prejoin media', () => {
     }
   });
 
+  it('meters the previewed microphone until it is muted or handed off', async () => {
+    const { request } = fakeMediaAccess();
+    const stops: ReturnType<typeof vi.fn>[] = [];
+    const reporters: ((level: number) => void)[] = [];
+    const monitorLevel = vi.fn(
+      (_stream: MediaStream, onLevel: (level: number) => void) => {
+        const stop = vi.fn();
+        stops.push(stop);
+        reporters.push(onLevel);
+        return stop;
+      }
+    );
+    const { media, dispose } = createRoot((dispose) => ({
+      media: createMeetingMedia({ request, monitorLevel }),
+      dispose,
+    }));
+    try {
+      await media.prepare();
+      expect(monitorLevel).toHaveBeenCalledOnce();
+      reporters[0]?.(0.5);
+      expect(media.microphoneLevel()).toBe(0.5);
+      media.setMicrophoneEnabled(false);
+      expect(stops[0]).toHaveBeenCalledOnce();
+      expect(media.microphoneLevel()).toBe(0);
+      media.setMicrophoneEnabled(true);
+      await vi.waitFor(() => expect(monitorLevel).toHaveBeenCalledTimes(2));
+      reporters[1]?.(0.3);
+      media.handoff();
+      expect(stops[1]).toHaveBeenCalledOnce();
+      expect(media.microphoneLevel()).toBe(0);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not hand off a device the user turned off', async () => {
     const { request, tracks } = fakeMediaAccess();
     const { media, dispose } = setup(request);

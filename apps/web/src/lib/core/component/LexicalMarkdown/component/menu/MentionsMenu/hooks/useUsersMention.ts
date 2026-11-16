@@ -155,7 +155,14 @@ export function useUsersMention(
   };
 
   const usersAndGroups = createLazyMemo((): (UserItem | GroupMentionItem)[] => {
-    return [...groups(), ...users()];
+    // A group leads while browsing and once its alias is typed in full. A
+    // partial alias is also the start of people's names ("he" for Helen), so
+    // people matching it come first.
+    const term = searchTerm().trim().toLowerCase();
+    const matched = groups();
+    const leading = matched.filter((group) => !term || group.id === term);
+    const trailing = matched.filter((group) => !leading.includes(group));
+    return [...leading, ...users(), ...trailing];
   });
 
   return {

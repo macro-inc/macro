@@ -4,10 +4,6 @@
 //! caches as one rlib.
 
 mod api;
-/// Durable email-backfill completion orchestration.
-pub mod backfill_completion_service;
-/// Fenced email-backfill initialization orchestration.
-pub mod backfill_init_service;
 /// Durable publication of email backfill outbox rows.
 pub mod backfill_outbox;
 /// Connection-gateway refresh adapter for disconnecting an inbox's calendar.

@@ -84,6 +84,7 @@ fn action(action: AgentAction) -> DeliverAction {
         actor: Some(staff_sender()),
         announce: None,
         context: None,
+        client: None,
     }
 }
 
@@ -731,6 +732,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             announced: Some(macro_uuid::generate_uuid_v7()),
             created_at: chrono::Utc::now(),
             context: None,
+            client: None,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();

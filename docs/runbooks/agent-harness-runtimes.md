@@ -15,6 +15,7 @@ under one `agent.runtime.reattach` span per dial:
 | Sessions per dial | `@agent.runtime.reattach_sessions`; `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped`, `.reattach_failures` |
 | Connects and disconnects | Logs: `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected)` `@harness:<id>` |
 | Starvation | Logs: `service:agent-harness-service "tokio runtime starvation detected"`, by `host`; `@delay_ms` |
+| Task memory | Metrics: `ecs.fargate.mem.rss` / `ecs.fargate.mem.limit`, `short_image:agent-harness-service-prod,container_name:service`, by `task_arn` |
 
 ## Reattaching in a loop
 
@@ -43,9 +44,32 @@ session there.
 ## Tokio runtime starving
 
 agent-harness-service logged more than 1,000 starvation warnings in
-15 minutes: its runtime threads are blocked, so requests, websockets and
-leases stall.
+15 minutes: its runtime ticks ran late, so requests, websockets and leases
+stall.
 
 - Group the warnings by `host` to find the replica, and look for a reattach
   storm or a slow blocking call on it at the same time.
 - `@delay_ms` above 1,000 means ticks ran over a second late.
+- `@cpu_wait_ms`, the longest any one thread waited for a CPU, near or above
+  `@delay_ms` means the replica's threads could not get a CPU: the task spent
+  its CPU quota for the 100 ms period, or every CPU was busy (its own work,
+  its sidecars or other processes). With that wait, one task logging the
+  same `@delay_ms` over and over points at its quota. Moving work off the
+  runtime does not help there; less CPU or a larger task does.
+- `@cpu_wait_ms` well below `@delay_ms` means a task held a runtime thread,
+  computing or blocked. `@cpu_run_ms` (CPU all threads used in the interval,
+  `@actual_ms` long) tells which, against the replica's usual CPU use.
+
+## Task memory near its limit
+
+One agent-harness-service task's resident memory passed 75% of its limit.
+ECS kills the task at 100%, and every session it serves drops and resumes on
+the other replica.
+
+- Compare the per-process gauges (`ahs.harness.workers`,
+  `ahs.agent_session.active`, `ahs.inmem.*`, from
+  `services/agent_harness_service/src/runtime_gauges.rs`) on that task with
+  its memory: one that climbs with it is the holder. Flat gauges under a
+  climbing memory point at the allocator.
+- Lever: replace the task (a deploy, or stopping it so ECS starts a new one).
+  Sessions resume from Postgres on their next prompt.

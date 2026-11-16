@@ -1,25 +1,41 @@
 import { expect, it } from 'vitest';
 import { preserveOrderedWindow, preservePersonOrder } from './ordered-window';
 
-it('preserves a matched window across local scoring and missing local matches without moving other source slots', () => {
-  const exact = { id: 'exact', personOrder: 0 };
-  const prefix = { id: 'prefix', personOrder: 1 };
-  const contains = { id: 'contains', personOrder: 2 };
-  const document = { id: 'document' };
-  const result = preservePersonOrder(
-    [contains, document, prefix],
-    [prefix, document, exact, contains]
-  );
-  expect(result.map((item) => item.id)).toEqual([
-    'exact',
-    'document',
-    'prefix',
-    'contains',
+const row = (id: string, personOrder?: number) => ({ id, personOrder });
+
+it('never leaves an empty row when a windowed identity repeats in the ranked list', () => {
+  const a = row('a', 0);
+  const duplicate = row('a');
+  const b = row('b');
+
+  expect(
+    preserveOrderedWindow([a, duplicate, b], [a], (item) => item.id)
+  ).toEqual([a, duplicate, b]);
+  expect(preservePersonOrder([duplicate, a, b], [a, duplicate, b])).toEqual([
+    a,
+    a,
+    b,
   ]);
 });
-it('keeps the complete source window when a local matcher rejects reversed query words', () => {
-  const personal = [{ id: 'john-smith' }, { id: 'smith-johnson' }];
+
+it('orders people by the window within a tier and lists unranked window people after the last person', () => {
+  const first = row('first', 0);
+  const second = row('second', 1);
+  const third = row('third', 2);
+  const unranked = row('unranked', 3);
+  const doc = row('doc');
+  const tail = row('tail');
+  const tiers = new Map([
+    ['first', 0],
+    ['second', 1],
+    ['third', 1],
+  ]);
+
   expect(
-    preserveOrderedWindow([{ id: 'channel' }], personal, (item) => item.id)
-  ).toEqual([{ id: 'channel' }, ...personal]);
+    preservePersonOrder(
+      [third, doc, second, first, tail],
+      [first, second, third, unranked, doc, tail],
+      (item) => tiers.get(item.id) ?? 0
+    ).map((item) => item.id)
+  ).toEqual(['second', 'doc', 'third', 'first', 'unranked', 'tail']);
 });

@@ -114,6 +114,8 @@ export class InitiativeNamespace {
    * name, Status, Priority, assignees, due date and progress over the tasks the
    * caller can view; most recently updated first unless `sort` says otherwise.
    * Iterate with `for await`; pages load as the loop advances.
+   *
+   * @readonly
    */
   async *list(
     options: InitiativeListOptions = {},
@@ -160,7 +162,11 @@ export class InitiativeNamespace {
     }
   }
 
-  /** Every accessible initiative with its name, in one request. */
+  /**
+   * Every accessible initiative with its name, in one request.
+   *
+   * @readonly
+   */
   async summaries(): Promise<InitiativeSummary[]> {
     return unwrap(await this.client.storage.listInitiatives()).initiatives.map(
       (i) => ({
@@ -171,7 +177,11 @@ export class InitiativeNamespace {
     );
   }
 
-  /** Create an initiative. */
+  /**
+   * Create an initiative.
+   *
+   * @write
+   */
   async create(options: InitiativeOptions): Promise<Initiative> {
     return Initiative.from(
       this.client,

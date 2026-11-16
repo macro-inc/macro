@@ -99,6 +99,12 @@ impl Daemon {
         let turns = ActiveTurns::default();
         let adopted = adopt(inherited, &turns);
         let (handoffs, handoff) = Handoffs::channel();
+        let computer = crate::computer::is_macro_computer().then(|| {
+            std::sync::Arc::new(crate::computer::Computer::new(
+                &config.macro_api,
+                &config.workspace.path,
+            ))
+        });
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -108,6 +114,7 @@ impl Daemon {
             turns.clone(),
             adopted,
             handoffs,
+            computer,
         );
         let runtime_connected = runtime.connection_state();
         let presence_watch = AbortOnDropHandle::new(tokio::spawn(watch_presence(

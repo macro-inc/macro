@@ -8,6 +8,7 @@ fn run(trigger: RunTrigger, end: RunEnd) -> FinishedRoutineRun {
         owner: MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
         routine_id: uuid::Uuid::nil(),
         routine_name: "Morning brief".to_string(),
+        parent_name: None,
         trigger,
         target: RunTarget::Agent,
         end,

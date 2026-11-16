@@ -2,7 +2,9 @@
 //! is private, and accepted-turn hooks miss invalid-tool recovery. Intercepting
 //! each send here also accounts for `GenericEventSource` reconnect executions.
 //! No GenAI spans or aggregate analytics are emitted by this adapter; it only
-//! adds the provider's stop reason to Rig's streaming span, which Rig drops.
+//! adds the provider's stop reason to Rig's streaming span, which Rig drops,
+//! and logs responses that mean Macro's provider account is suspended or out
+//! of credit ([`genai_telemetry::provider_account`]).
 
 use std::time::Duration;
 
@@ -35,6 +37,9 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
     inner: H,
     provider: String,
     protocol: WireProtocol,
+    /// Whether the key is Macro's own, so a suspended or out-of-credit
+    /// response is a Macro outage worth alerting on.
+    macro_account: bool,
 }
 
 // Required by Rig's CompletionModel bounds, even for explicitly built clients.
@@ -53,6 +58,30 @@ impl<H> MeteredHttpClient<H> {
             inner,
             provider: provider.into(),
             protocol,
+            macro_account: true,
+        }
+    }
+
+    /// This client authenticating with an agent's own key: its account
+    /// failures are the agent owner's billing, not a Macro outage.
+    pub fn with_agent_api_key(mut self) -> Self {
+        self.macro_account = false;
+        self
+    }
+
+    /// Log a response that means Macro's account with the provider is
+    /// suspended or out of credit (see [`genai_telemetry::provider_account`]).
+    fn report_account_failure<T>(&self, result: &http_client::Result<T>) {
+        if !self.macro_account {
+            return;
+        }
+
+        if let Err(http_client::Error::InvalidStatusCodeWithMessage(status, body)) = result {
+            genai_telemetry::provider_account::report_provider_error(
+                &self.provider,
+                Some(status.as_u16()),
+                body,
+            );
         }
     }
 
@@ -161,7 +190,8 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
         let request = request.map(Into::into);
         let context = MeteringContext::current();
         async move {
-            MeteringContext::carry(context, async move {
+            let reporter = client.clone();
+            let result = MeteringContext::carry(context, async move {
                 let (request, attempt) = client.prepare(request).await?;
                 let Some(attempt) = attempt else {
                     return client.inner.send(request).await;
@@ -213,7 +243,9 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                 drop(caller_alive);
                 result
             })
-            .await
+            .await;
+            reporter.report_account_failure(&result);
+            result
         }
     }
 
@@ -229,16 +261,32 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
         if context.as_ref().is_some_and(MeteringContext::enabled) && !activated {
             tracing::warn!("multipart provider attempt is not covered by observational metering");
         }
-        let inner = self.inner.clone();
+        let client = self.clone();
         async move {
             if activated {
                 return Err(http_error(MeteringError::Unsupported));
             }
-            inner.send_multipart(request).await
+            let result = client.inner.send_multipart(request).await;
+            client.report_account_failure(&result);
+            result
         }
     }
 
     async fn send_streaming<T>(&self, request: Request<T>) -> http_client::Result<StreamingResponse>
+    where
+        T: Into<Bytes> + Send,
+    {
+        let result = self.send_streaming_metered(request).await;
+        self.report_account_failure(&result);
+        result
+    }
+}
+
+impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
+    async fn send_streaming_metered<T>(
+        &self,
+        request: Request<T>,
+    ) -> http_client::Result<StreamingResponse>
     where
         T: Into<Bytes> + Send,
     {

@@ -1,5 +1,5 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import './AiEditingAgents.css';
-import aiPeerCursor from '../../../../assets/posts/ai-editing-agents/ai-peer-cursor.png';
 import type { PostMeta } from '../../registry';
 
 const ORIGINAL_URL = 'https://404wolf.com/posts/AgentsAttackTheDocument/';
@@ -36,26 +36,11 @@ export default function AiEditingAgentsPost() {
           of agents that come in and attack your documents with requested
           changes while you are mid-edit.
         </p>
-        <figure class="aie-shot">
-          <div class="aie-shot-frame">
-            <img
-              src={aiPeerCursor}
-              alt="A Macro document titled Hello World Doc with the text 'hello world' being typed by a labelled cursor reading 'Wolf (AI)'"
-              loading="lazy"
-              width={709}
-              height={284}
-              style={{
-                width: '100%',
-                height: 'auto',
-                'aspect-ratio': '709 / 284',
-              }}
-            />
-          </div>
-          <figcaption class="aie-figcaption">
-            To the rest of the document, an agent is just another peer with a
-            name and a cursor.
-          </figcaption>
-        </figure>
+        <PostProductGraphic kind="doc-agent" />
+        <p class="aie-figcaption">
+          To the rest of the document, an agent is just another peer with a name
+          and a cursor.
+        </p>
         <p>
           Macro documents are a tree, not flat Markdown, and they sync live
           between peers with{' '}

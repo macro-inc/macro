@@ -176,6 +176,9 @@ export class Agent extends MacroEntity<AgentRecord> {
    * to edit one, apply your change to the current value and pass the result.
    * Changes apply to sessions opened afterwards. Built-in personas cannot be
    * updated.
+   *
+   * @write
+   * @idempotent
    */
   async update(patch: AgentPatch): Promise<void> {
     await this.mutate((c) =>
@@ -190,6 +193,9 @@ export class Agent extends MacroEntity<AgentRecord> {
    * Replace every setting, including the name, handle and owning team:
    * fields left out of `options` return to their defaults. Use
    * {@link Agent.update} to change some settings and keep the rest.
+   *
+   * @destructive
+   * @idempotent
    */
   async replace(options: AgentOptions): Promise<void> {
     await this.mutate((c) =>

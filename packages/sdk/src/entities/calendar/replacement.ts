@@ -9,7 +9,16 @@ export class CalendarReplacement {
     readonly id: string,
   ) {}
 
-  /** Read progress without initiating provider writes. */
+  /** A handle to a replacement by its operation id. */
+  static byId(client: MacroClient, id: string): CalendarReplacement {
+    return new CalendarReplacement(client, id);
+  }
+
+  /**
+   * Read progress without initiating provider writes.
+   *
+   * @readonly
+   */
   async status(): Promise<CalendarReplacementView> {
     return unwrap(
       await this.client.calendar.calendarReplacementStatus({
@@ -19,7 +28,12 @@ export class CalendarReplacement {
   }
 
   /** Confirm the reviewed cancellation and reinvitation, or resume that same operation.
-   * Present the preview and obtain the organizer's confirmation before the first call. */
+   * Present the preview and obtain the organizer's confirmation before the first call.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async confirm(): Promise<CalendarReplacementView> {
     return unwrap(
       await this.client.calendar.confirmCalendarReplacement({
@@ -28,7 +42,12 @@ export class CalendarReplacement {
     );
   }
 
-  /** Discard an unconfirmed preview. Confirmed operations must be recovered, not discarded. */
+  /**
+   * Discard an unconfirmed preview. Confirmed operations must be recovered, not discarded.
+   *
+   * @destructive
+   * @idempotent
+   */
   async discard(): Promise<void> {
     unwrap(
       await this.client.calendar.discardCalendarReplacement({

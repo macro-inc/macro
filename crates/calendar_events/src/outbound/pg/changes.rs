@@ -331,8 +331,7 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 calendar.consecutive_sync_failures,
                 account.provider,
                 calendar.online_meeting_providers,
-                COALESCE(preference.contributes_to_availability,
-                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
+                COALESCE(preference.contributes_to_availability, true) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id

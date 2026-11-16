@@ -604,6 +604,7 @@ where
                 action: origin.into_action(),
                 actor: Some(actor),
                 announce: Some(announcement),
+                client: None,
             },
         )
         .await?;

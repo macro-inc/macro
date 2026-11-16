@@ -1,3 +1,18 @@
+import IconShare from '@icon/share.svg';
+import IconArrowUp from '@icon/system/regular/arrow-up.svg';
+import IconCalendar from '@icon/system/regular/calendar-blank.svg';
+import IconChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import IconChannel from '@icon/system/regular/chats-circle.svg';
+import IconClock from '@icon/system/regular/clock.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconDoc from '@icon/system/regular/file.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import IconPalette from '@icon/system/regular/palette.svg';
+import IconPriorityMedium from '@icon/system/regular/priority-medium.svg';
+import IconStatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconTextAa from '@icon/system/regular/text-aa.svg';
+import IconX from '@icon/system/regular/x.svg';
 import {
   type Accessor,
   type Component,
@@ -13,21 +28,6 @@ import {
   untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconChannel from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconTask from '../../../assets/icons/icon-tasks.svg';
-import IconArrowUp from '../../../assets/icons/phosphor/arrow-up.svg';
-import IconCalendar from '../../../assets/icons/phosphor/calendar-blank.svg';
-import IconChatTeardrop from '../../../assets/icons/phosphor/chat-teardrop.svg';
-import IconClock from '../../../assets/icons/phosphor/clock.svg';
-import IconLink from '../../../assets/icons/phosphor/link.svg';
-import IconPalette from '../../../assets/icons/phosphor/palette.svg';
-import IconShare from '../../../assets/icons/phosphor/share.svg';
-import IconTextAa from '../../../assets/icons/phosphor/text-aa.svg';
-import IconX from '../../../assets/icons/phosphor/x.svg';
-import IconStatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconDoc from '../../../assets/icons/wide-file-md.svg';
-import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
@@ -356,7 +356,7 @@ const SCRIPT: Block[] = [
   {
     kind: 'li',
     md: '',
-    segs: [{ k: 'text', text: 'Share the plan with Valentina' }],
+    segs: [{ k: 'text', text: 'Share the plan with Austin Barron' }],
   },
   { kind: 'h2', md: '## ', segs: [{ k: 'text', text: 'Context' }] },
   {
@@ -440,7 +440,7 @@ const SCRIPT: Block[] = [
 ];
 
 /** The run the comment lands on, and the comment itself. */
-const COMMENT_TEXT = 'Please check the date against Valentina’s email.';
+const COMMENT_TEXT = 'Please check the date against Austin Barron’s email.';
 /** Anchor the date-check comment to the launch date, not the checklist heading. */
 const COMMENT_BLOCK = 3;
 
@@ -660,7 +660,7 @@ const COMMENT_STAMPS = stampChars(
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const ease = (x: number) =>
-  x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 const _lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 /** How many stamps in a table have landed. */
 const countAt = (stamps: number[], now: number) => {
@@ -732,10 +732,10 @@ const CHIP_ICON_EM: Record<ChipKind | 'doc', number> = {
 };
 
 const CHIP_COLOR: Record<ChipKind | 'doc', string> = {
-  person: 'var(--a0)',
+  person: 'var(--mds-mention-color, var(--a0))',
   doc: HUE_DOC,
   task: HUE_TASK,
-  date: 'var(--a0)',
+  date: 'var(--mds-mention-color, var(--a0))',
   email: HUE_EMAIL,
   channel: HUE_CHANNEL,
 };
@@ -757,10 +757,10 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           class="mds-chip-person"
           style={{
             'background-color':
-              'color-mix(in srgb, var(--a0) 20%, transparent)',
+              'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
             'border-radius': '0.22em',
-            color: 'var(--a0)',
-            'font-weight': '500',
+            color: 'var(--mds-mention-color, var(--a0))',
+            'font-weight': 'var(--mds-mention-weight, 500)',
             padding: '0.1em 0.14em',
             'white-space': 'nowrap',
           }}
@@ -778,8 +778,9 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
           props.kind === 'date'
             ? {
                 'background-color':
-                  'color-mix(in srgb, var(--a0) 20%, transparent)',
+                  'var(--mds-mention-background, color-mix(in srgb, var(--a0) 20%, transparent))',
                 'border-radius': '0.22em',
+                'font-weight': 'var(--mds-mention-weight, inherit)',
                 padding: '0.1em 0.16em',
               }
             : undefined
@@ -800,7 +801,11 @@ function Chip(props: { kind: ChipKind; label: string; tail?: string }) {
         />
         <Show
           when={props.kind !== 'date'}
-          fallback={<span style={{ color: 'var(--a0)' }}>{props.label}</span>}
+          fallback={
+            <span style={{ color: 'var(--mds-mention-color, var(--a0))' }}>
+              {props.label}
+            </span>
+          }
         >
           <span class="mds-u">{props.label}</span>
         </Show>
@@ -1064,7 +1069,7 @@ const travel = (k: number, o: number, i: number): number => {
   if (o <= 0) return ease(k);
   const kb = 0.54 + 0.12 * vary(i, 1);
   const twoHops = vary(i, 2) > 0.45;
-  if (k <= kb) return (1 + o) * (1 - Math.pow(1 - clamp01(k / kb), 3));
+  if (k <= kb) return (1 + o) * (1 - (1 - clamp01(k / kb)) ** 3);
   const rest = 1 - kb;
   const back = -(0.2 + 0.35 * vary(i, 4));
   const h1 = 0.2 + 0.14 * vary(i, 5);
@@ -1395,7 +1400,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         }
         .mds-title {
           font-size: 1.36em;
-          font-weight: 600;
+          font-weight: 500;
           letter-spacing: -0.01em;
           margin: 0 0 1.8em;
         }
@@ -1406,7 +1411,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
            column the task line broke with its closing full stop alone on the
            last line, which reads as a rendering fault rather than as a wrap. */
         .mds-line { margin: 0 0 0.86em; min-height: 1.5em; position: relative; text-wrap: pretty; }
-        .mds-line.h2 { font-size: 1.2em; font-weight: 600; }
+        .mds-line.h2 { font-size: 1.2em; font-weight: 500; }
         .mds-line.row { display: flex; gap: 0.6em; }
         .mds-line.rowmid { margin-bottom: 0.36em; }
         /* The commented row carries its badge at the far end. */
@@ -1450,7 +1455,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
           color: var(--c1);
           display: inline-grid;
           flex: none;
-          font-weight: 600;
+          font-weight: 500;
           line-height: 1;
           place-items: center;
         }

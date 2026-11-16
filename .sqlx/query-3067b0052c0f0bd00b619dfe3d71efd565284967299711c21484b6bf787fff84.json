@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM team_user\n                WHERE user_id = $1 AND team_id = $2\n                UNION SELECT 1 FROM team WHERE id = $2 AND owner_id = $1\n            ) AS \"has_team!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_team!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3067b0052c0f0bd00b619dfe3d71efd565284967299711c21484b6bf787fff84"
+}

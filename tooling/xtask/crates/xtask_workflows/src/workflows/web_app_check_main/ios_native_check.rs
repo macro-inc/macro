@@ -61,6 +61,7 @@ const NOT_SKIPPED: &str = "steps.labels.outputs.skip != 'true'";
 pub(super) fn job() -> Job {
     Job::default()
         .name(JOB_NAME)
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::TinyNoCache.to_string())
         // Reads the PR and base branch; updates one gate-status comment on same-repo PRs.
         .permissions(

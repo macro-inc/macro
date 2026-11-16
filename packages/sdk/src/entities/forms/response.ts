@@ -42,27 +42,47 @@ export class FormResponse {
     return new FormResponse(form, id, snapshot);
   }
 
-  /** Whether this receipt was submitted or stopped by a gate. */
+  /**
+   * Whether this receipt was submitted or stopped by a gate.
+   *
+   * @readonly
+   */
   async status(): Promise<ResponseStatus> {
     return (await this.detail.get()).status;
   }
 
-  /** The receipt's row, if any. Reading that row requires database access. */
+  /**
+   * The receipt's row, if any. Reading that row requires database access.
+   *
+   * @readonly
+   */
   async row(): Promise<DatabaseRow | undefined> {
     return (await this.detail.get()).row;
   }
 
-  /** Answers as submitted or last read. Refresh to include later changes to the row. */
+  /**
+   * Answers as submitted or last read. Refresh to include later changes to the row.
+   *
+   * @readonly
+   */
   async answers(): Promise<FormAnswer[]> {
     return (await this.detail.get()).answers;
   }
 
-  /** The booking step unlocked by this saved response, if any. */
+  /**
+   * The booking step unlocked by this saved response, if any.
+   *
+   * @readonly
+   */
   async booking(): Promise<FormBookingStep | undefined> {
     return (await this.detail.get()).booking;
   }
 
-  /** Reload the caller's current receipt; requires a signed-in respondent. */
+  /**
+   * Reload the caller's current receipt; requires a signed-in respondent.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     const snapshot = await this.load();
     this.detail = new Lazy(() => this.load(), snapshot);

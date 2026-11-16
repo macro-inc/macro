@@ -1,6 +1,7 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { CanvasDocument } from '@block-canvas/component/CanvasDocument';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import {
   getPermissions,
@@ -84,15 +85,18 @@ export function CanvasDetailDocument(props: {
       userAccessLevel={props.data.userAccessLevel}
     >
       <SidePanel.HeaderActions>
-        <AskMacroButton
-          entity={{
-            type: 'document',
-            id: props.documentId,
-            name:
-              props.data.documentMetadata.documentName ?? 'Unknown Filename',
-            fileType: 'canvas',
-          }}
-        />
+        <HeaderActionGroup label="Actions">
+          <AskMacroButton
+            grouped
+            entity={{
+              type: 'document',
+              id: props.documentId,
+              name:
+                props.data.documentMetadata.documentName ?? 'Unknown Filename',
+              fileType: 'canvas',
+            }}
+          />
+        </HeaderActionGroup>
       </SidePanel.HeaderActions>
       <CanvasDocument
         documentId={props.documentId}

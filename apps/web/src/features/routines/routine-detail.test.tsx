@@ -310,6 +310,8 @@ vi.mock('./queries/schedules', () => ({
     },
     refetch: mocks.refetchUpgrades,
   }),
+  useChildrenQuery: () => ({ isSuccess: true, data: [] }),
+  useDetachScheduleMutation: () => ({ mutate: () => {}, isPending: false }),
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
