@@ -119,7 +119,15 @@ async fn a_batch_trashes_only_unlinked_unadopted_live_documents(
     );
     assert_eq!(trashed(&pool).await?, vec![PLAIN.to_string()]);
     assert_eq!(trash_marks(&pool, PLAIN).await?, (true, 0, 0));
-    for kept in [IN_FOLDER, SHARED_WITH_TEAM, SHARING_CHANGED, NEW_VERSION, HIGHLIGHTED, COMMENTED, RELINKED] {
+    for kept in [
+        IN_FOLDER,
+        SHARED_WITH_TEAM,
+        SHARING_CHANGED,
+        NEW_VERSION,
+        HIGHLIGHTED,
+        COMMENTED,
+        RELINKED,
+    ] {
         assert_eq!(trash_marks(&pool, kept).await?, (false, 1, 1), "{kept}");
     }
     assert_eq!(repo.queue().await?, ReleaseQueue::default());
@@ -128,7 +136,9 @@ async fn a_batch_trashes_only_unlinked_unadopted_live_documents(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_batch_claims_the_oldest_rows_up_to_its_limit(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn a_batch_claims_the_oldest_rows_up_to_its_limit(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     seed(&pool).await?;
     let repo = PgReleasedAttachmentRepo::new(pool.clone());
 

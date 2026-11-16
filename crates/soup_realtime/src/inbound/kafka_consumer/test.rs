@@ -174,9 +174,16 @@ fn trashed_email_attachments_are_deleted_from_open_lists() {
     let patches = patches_from_document_event(&event);
 
     assert_eq!(patches.len(), 2);
-    assert!(patches.iter().all(|patch| matches!(patch.patch, Patch::Deleted(_))));
+    assert!(
+        patches
+            .iter()
+            .all(|patch| matches!(patch.patch, Patch::Deleted(_)))
+    );
     assert_eq!(
-        patches.iter().map(|patch| patch_entity(patch).entity_id.clone()).collect::<Vec<_>>(),
+        patches
+            .iter()
+            .map(|patch| patch_entity(patch).entity_id.clone())
+            .collect::<Vec<_>>(),
         vec![DOCUMENT_ID.to_string(), second]
     );
 }
