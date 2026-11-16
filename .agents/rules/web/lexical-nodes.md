@@ -37,7 +37,7 @@ scroll position does not move while the node loads.
 
 ## Keep TypeScript and Rust nodes aligned
 
-Until M3, update the TypeScript and Rust node implementations together when
-changing serialized fields, import/export rules or model behavior. Regenerate
-the S4 §3.6b corpus with `bun packages/lexical-conformance/corpus/synthetic.ts`
+While both TypeScript and Rust node implementations ship, update them together
+when changing serialized fields, import/export rules or model behavior.
+Regenerate the synthetic corpus (`docs/design/lexical-port/S4-tests.md`) with `bun packages/lexical-conformance/corpus/synthetic.ts`
 and require `just lexical-fixtures --check` for either node path.

@@ -239,7 +239,7 @@ database writes only for the original account/session.
 
 - Keep native document editing and the public runtime unavailable until the actual Initialize projection; retain private cleanup ownership during loading and surface initialization errors through the existing error chrome.
 
-Require the maintained [six-step native preview install check](scripts/editor-live-check/README.md) before and after every native preview installation, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
+Use the [native preview install check](scripts/editor-live-check/README.md) to verify a native preview build end to end, including committed delivery and fresh-context common-block JSON/ID/DOM equality.
 
 Verify Await ownership with the actual peer plugin and parsed stored state in `LexicalMarkdown/decorator-host/peer-ownership-source.test.ts`; distinguish the Created listener from the root-sensitive initialization command and preserve the ownerless fallback.
 
@@ -394,10 +394,10 @@ commits without hover, including after a sibling component is disposed.
 
 Keep document-reference Source UI behind the actual narrow mention/card hosts; preserve published selection, Normal Enter timing, preview owner/cache and Source transaction tags when binding native views.
 
-Booking decorators preserve their Source fallback through a narrow host; use published selection, real Normal Enter and generation-bound queued label updates, and qualify Source bytes in `decorator-host/booking-browser-test` before native activation.
+Booking decorators preserve their Source fallback through a narrow host; use published selection, real Normal Enter and generation-bound queued label updates, and qualify Source bytes in `decorator-host/booking-browser-test` when changing the native binding.
 
 Contact decorators use a narrow published-selection/Normal-Enter host; preserve synchronous null-command dispatch, pending-versus-published timing and disposal, and keep raw metadata failures separate from explicit Source-export reimport cohorts in `decorator-host/contact-browser-test`.
-Preserve Snapshot’s captured Source editor, Normal Enter cleanup and Snapshot-only removal predicate through its narrow host; compare literal before/after captures with `decorator-host/interactive-browser-test/playwright.config.ts` before native binding.
+Preserve Snapshot’s captured Source editor, Normal Enter cleanup and Snapshot-only removal predicate through its narrow host; compare literal before/after captures with `decorator-host/interactive-browser-test/playwright.config.ts` when changing the native binding.
 Route PR query enrichment through its narrow host with the Source history, DOM-selection and scroll tags; preserve the public node payload and query/preview UI. Verify PR and Snapshot raw pairs in `decorator-host/reference-browser-test`.
 Selection-only chips may receive a narrow `DecoratorSelectionHost`; preserve their actual LexicalWrapper selection fallback when it is absent. Verify OFF bytes, import-matched native DOM/JSON and actual selection with `decorator-host/selection-browser-test/playwright.config.ts` in all three engines; this fixture is not the complete application registry.
 Prove Source-admitted decorator values through actual parse and mounted controls before widening real UI inputs; keep public node props unchanged and never coerce inputs through an unchecked registry type. The Magic control lives in `decorator-host/magic-source-browser-test`.
@@ -1520,9 +1520,9 @@ Flag-off builds keep the Loro preload.
 
 Use the cached boot engine selection for editor construction; require an app
 reload to change engines and do not reread a later flag value in document loaders.
-Keep the unchanged MarkdownEditor chrome, plugins and node classes over the
-selected Lexical API. Hold document session injection until the typed factory
-supports binding the actual supplied root on the same session. Reuse
+With the flag on, only the document body mounts the native editor
+(`RustMarkdownEditor`); `lexical`/`@lexical/*` imports always resolve to upstream,
+so every other editor keeps upstream Lexical. Reuse
 account/epoch-fenced metadata for offline opens; fetch fresh reconnect credentials
 and invalidate that epoch before logout clearing.
 

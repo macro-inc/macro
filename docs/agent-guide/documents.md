@@ -33,7 +33,7 @@ mention replaces it. Reopen the document and compare the saved mention. Close
 the document while creation is pending and confirm retained callbacks cannot
 write into a newly opened editor. GIF opens the shared search picker; choose a
 result and verify its uploaded image appears at the captured insertion point.
-Link, Query and Database require their document-owned request callbacks. Verify that closing
+Link and Query work in the native body; Database stays hidden until a document-owned request callback supplies it. Verify that closing
 the document retires its menu registrations without affecting a newly opened
 editor.
 
@@ -47,7 +47,7 @@ the same view and verify editing resumes. A rich paste waiting for its HTML
 import must cancel if the view becomes read-only before admission.
 Exercise outside text-node changes with `readonly-text.playwright.config.ts`: cover actual reader/comment-only authority, a local UI lock with edit authority, and editable mutation-only spellcheck. Check literal text/markup repair, no rejected edit or error effect, and the retained canonical text node.
 
-On desktop, selecting native body text opens the compact formatting toolbar. It renders the document body’s FormatTools controls: bold, italic, Link, More, then the block-style menu. More contains underline, strikethrough, highlight, inline code, superscript and subscript in that order. With the inline AI editing flag and edit access, an AI edit button comes first, then one divider, then the formatting controls. AI edit replaces the toolbar with a Describe changes prompt at the same width: Enter submits, Shift+Enter adds a line, and Escape returns to the toolbar and clears the text. Text typed and left unsent survives the popup closing. A running edit keeps the selection highlight past the popup; Escape anywhere stops it. If the editor reloads mid-edit, later chunks are dropped rather than applied to the reloaded document. On a touch device, selecting native body text shows Source's touch selection toolbar instead: Copy, Cut, Share and Edit with AI, plus Show comment, Table, Comment and (on iOS) Paste when they apply, paged with chevrons at phone width. Task is not offered on touch yet (named gap C-TOUCH-TASK-LABEL-01, until the native Task slot supplies Source's exact label). Edit with AI opens the bottom Edit with AI drawer and hides the toolbar; closing the drawer clears the highlight unless an edit is running. A caret, or a selection with no text, inside a comment shows the toolbar in caret mode: only Show comment while a comment thread is highlighted, plus Paste on iOS with edit access; outside a comment it shows nothing, and desktop never shows it. In Chromium, native caret mode matches Source at phone width and on a desktop-width touch tablet. The browser rows (format-host/browser-test/caret-mode.caret-e2e.ts) check toolbar geometry at mid-word and line start, the empty toolbar at an id-less mark (with and without edit access), typing in the mark, focus after Show comment, a DOM-only caret move from a node selection (not adopted) and from a range (adopted), and that a caret outside any comment shows nothing. Source also logs a console error each time its caret toolbar opens; native does not (named difference C-SOURCE-CARET-LOCATION-LOG-01, no visible effect). Real WebKit and the iOS WKWebView are not verified: iOS Paste, the native edit-menu suppression, the virtual keyboard and safe areas stay a named gap (C-TOUCH-CARET-WEBKIT-01), which blocks default-ON for iOS and WebKit. Under a Tauri-iOS runtime-boundary fixture (?ios), the browser rows check that native matches Source on caret-mode Paste (offered with edit access, not read-only), where pasted text lands, the edit-menu suppression calls on toolbar show and hide, and the hide after a tap-away; the real plugins, UIKit menu, keyboard, safe areas, WKWebView and a caret change during the async pasteboard read stay unverified. Check bold, italic, More inline formats and block changes against the selected body text, including backward selections. Link replaces the toolbar with Source's Paste or insert link prompt at the same width: Enter inserts a link over the selection, labelled with the selected text, and Escape returns to the toolbar; on a selection that already has a link it removes the link. This mount does not change the header toolbar or the Lexical title. The toolbar is optional: a presentation failure retires it while the document and sibling menus remain available.
+On desktop, selecting native body text opens the compact formatting toolbar. It renders the document body’s FormatTools controls: bold, italic, Link, More, then the block-style menu. More contains underline, strikethrough, highlight, inline code, superscript and subscript in that order. With the inline AI editing flag and edit access, an AI edit button comes first, then one divider, then the formatting controls. AI edit replaces the toolbar with a Describe changes prompt at the same width: Enter submits, Shift+Enter adds a line, and Escape returns to the toolbar and clears the text. Text typed and left unsent survives the popup closing. A running edit keeps the selection highlight past the popup; Escape anywhere stops it. If the editor reloads mid-edit, later chunks are dropped rather than applied to the reloaded document. On a touch device, selecting native body text shows Source's touch selection toolbar instead: Copy, Cut, Share and Edit with AI, plus Show comment, Table, Comment and (on iOS) Paste when they apply, paged with chevrons at phone width. Task appears on touch only for selected checklist items, with Source's exact label. Edit with AI opens the bottom Edit with AI drawer and hides the toolbar; closing the drawer clears the highlight unless an edit is running. A caret, or a selection with no text, inside a comment shows the toolbar in caret mode: only Show comment while a comment thread is highlighted, plus Paste on iOS with edit access; outside a comment it shows nothing, and desktop never shows it. In Chromium, native caret mode matches Source at phone width and on a desktop-width touch tablet. The browser rows (format-host/browser-test/caret-mode.caret-e2e.ts) check toolbar geometry at mid-word and line start, the empty toolbar at an id-less mark (with and without edit access), typing in the mark, focus after Show comment, a DOM-only caret move from a node selection (not adopted) and from a range (adopted), and that a caret outside any comment shows nothing. Source also logs a console error each time its caret toolbar opens; native does not (named difference C-SOURCE-CARET-LOCATION-LOG-01, no visible effect). Real WebKit and the iOS WKWebView are not verified: iOS Paste, the native edit-menu suppression, the virtual keyboard and safe areas stay a named gap (C-TOUCH-CARET-WEBKIT-01), which blocks default-ON for iOS and WebKit. Under a Tauri-iOS runtime-boundary fixture (?ios), the browser rows check that native matches Source on caret-mode Paste (offered with edit access, not read-only), where pasted text lands, the edit-menu suppression calls on toolbar show and hide, and the hide after a tap-away; the real plugins, UIKit menu, keyboard, safe areas, WKWebView and a caret change during the async pasteboard read stay unverified. Check bold, italic, More inline formats and block changes against the selected body text, including backward selections. Link replaces the toolbar with Source's Paste or insert link prompt at the same width: Enter inserts a link over the selection, labelled with the selected text, and Escape returns to the toolbar; on a selection that already has a link it removes the link. This mount does not change the header toolbar or the Lexical title. The toolbar is optional: a presentation failure retires it while the document and sibling menus remain available.
 
 While the native body loads, its root remains non-editable and its public runtime is unavailable until the actual initial projection. Check readiness using a non-null view generation and root node; disappearing skeletons can also mean an open error. An attach failure must show the existing could-not-open warning rather than leave an endless loading editor. Connection retries keep the native body loading and non-editable, matching the Source body. The sync core owns the reconnect budget; the host reports the warning and closes only when that budget is exhausted, the connection closes terminally, or attachment fails. A separate host deadline must not cancel a scheduled reconnect. The native body also races the same optional cached S3 snapshot loader as Source against its IDB and socket sources, so cached content can initialize while the socket is slow. A cache miss must leave retries running; a late fetch cannot revive a closed editor. Disposed body views stop receiving presentation updates while already accepted session I/O drains; unmount still closes the owning runtime and releases its storage lease. The routed flow records `editor.initial-projection` with the document id, reached phase (including waiting-for-sync, retrying, retries-exhausted, and connection-closed), latest sync status, projection wait, and total open wait.
 
@@ -94,8 +94,8 @@ Channels and Recent agent sessions sections with Off using the same account and
 search. Check section order, row order, View all and paging. Pick a document,
 task, channel and agent session by both keyboard and pointer; the literal search
 must disappear and the referenced mention must render at the current caret after
-tracking completes. Native does not yet offer booking link, contact or company,
-email or calendar-event mentions. Groups such as `@here` appear only in channel
+tracking completes. Native offers the same mention kinds as Off, including booking
+links, contacts and companies, email and calendar events. Groups such as `@here` appear only in channel
 composers, in both engines. For native dates, pick the same date-provider row
 by keyboard and pointer in both engines. Check that search removal precedes
 insertion, that the displayed date matches the selected row, and that subsequent
@@ -126,9 +126,8 @@ placeholder retains the existing visible fallback.
 
 Native body comments use the same margin, drawer and thread queries as the Off
 engine. Selecting text shows Comment in the body formatting popup; it opens a
-draft from the session's durable selection cursors. Native comment-only access
-currently exposes Comment; the Source Task and Copy link to snippet siblings
-remain unmounted. The draft
+draft from the session's durable selection cursors. Comment and Copy link to snippet
+are mounted for commenters; Task needs edit access. The draft
 follows edits until the mark is published through the session's isolated
 staging peer. Existing comment marks bind to their threads, highlight at the
 caret, and open from comment links once the native body is ready.
@@ -146,8 +145,8 @@ history are separate checks.
 
 The isolated GIF menu controls live in
 `LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
-animated-byte upload, cancellation and actual commit errors before enabling a
-native slash host. Source comparison captures assign fixture IDs through real
+animated-byte upload, cancellation and actual commit errors when changing the
+native GIF slash host. Source comparison captures assign fixture IDs through real
 node transforms before publication. A NodeSelection currently reports insertion
 without attaching the new GIF, leaving an orphaned upload; both engines retain
 that behavior until it is corrected together.
@@ -508,8 +507,8 @@ An empty title uses **New Note** when expanding.
 ## Create a task from a Markdown selection
 
 Select text in a Markdown document and choose **Task** in the selection toolbar
-(desktop) or touch toolbar. The native body offers no Task option yet; it lands
-with the native Task slot (on touch, named gap C-TOUCH-TASK-LABEL-01). The task composer opens with the selected text as
+(desktop) or touch toolbar. The native body offers Task only for selected checklist items
+(desktop and touch); a plain text selection does not open the task composer yet. The task composer opens with the selected text as
 the title (truncated to 70 characters) and a **Snippet** mention of the
 selection as the body; opening that mention scrolls to and highlights the
 range. Editors also see a **Link in document** toggle beside **Create More**;

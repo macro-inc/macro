@@ -14,7 +14,6 @@ The compatibility module owns those types; never add optional compatibility
 methods to native types. Native build/cache reuse also checks actual WASM exports, so a previous
 compatibility artifact cannot silently become the native module.
 
-Native feature isolation replaces the former feature-on/off 5% timing gate.
 The compatibility host still requires user-facing measurements against upstream
 Lexical with the full application plugin set; feature isolation is not evidence
 of typing, paste, bulk, startup, document-open or bridge-budget acceptance.
@@ -46,9 +45,7 @@ initialized module synchronously. Never return a deferred stand-in for an
 editor handle or add a separate readiness resource per editor host.
 
 Compatibility classes and constants must evaluate without an initialized WASM
-instance. Editor construction and updates require the ready module. Resolver
-checks preserve exact upstream object identity when off and reject incomplete
-selected exports instead of quietly returning undefined API values.
+instance. Editor construction and updates require the ready module.
 
 `createRustEditorSession` in `create-editor-session.ts` composes a collaborative
 Macro editor from an authorized source identity, native view registry, platform
@@ -70,7 +67,7 @@ and submitted/unavailable/cancelled/error outcome; submitted is not a claim that
 the seed won its race. No projection or rendered state substitutes for Initialize.
 
 
-Compatibility document factories use `createRustSession` from the same module.
+`createRustSession` (used by the readiness browser fixture) comes from the same module.
 It requires the real session constructor and a raw `ViewApplier` output sink,
 returns the actual executor, and allocates no DOM or native view. Normal editor
 sessions retain native output with `headless=false`; headless callers may opt in.
@@ -104,8 +101,9 @@ installer throws; an installer must release partial resources before throwing.
 Close retains one in-flight promise even when a dispose callback reenters it.
 The document feature's old primitive path re-exports this shared implementation.
 
-Local composers and static views use `mountLocalSessionView` from
-`@macro-inc/lexical-wasm-view` instead. It disables transport, persistence and
+`mountLocalSessionView` from `@macro-inc/lexical-wasm-view` mounts a
+transport-free local native view; tests and fixtures use it today, and app
+composers and static views still use upstream Lexical. It disables transport, persistence and
 cross-tab chatter and seeds a fresh local document before host imports. Supply
 the correct native node/plugin preset; a title, calendar description and full
 document do not share the same allowed nodes.
@@ -124,8 +122,7 @@ provider with a deterministic flag source. It checks shell visibility during a
 held binary fetch, flag-off network behavior, a synchronous real durable
 attachment with authorization refused, session-only deferred start and close,
 and failed-load retry without a
-fixture-only error boundary. Resolver checks cover both bundling and the test
-runner's SSR module pipeline. The paste-preparation browser case holds the idle
+fixture-only error boundary. The paste-preparation browser case holds the idle
 callback, observes the actual generated export calling the real WASM, and checks
 that first contentful paint precedes preparation and editor readiness.
 
@@ -149,8 +146,6 @@ calls apply native output and invoke completion before returning. Session-only
 factory bindings borrow host lifetime; unbinding a root does not close the host.
 
 
-The Android host client and its native menu source adapters live on the
-stacked mobile branch with the Tauri native editor plugin.
 
 The document host allocates its clipboard namespace through the same wrapper allocator as the source editor. Pass that exact value to both `view.namespace` and `EditorSession.createMacroWithNamespace`; cross-instance HTML fallback remains required when namespaces differ.
 

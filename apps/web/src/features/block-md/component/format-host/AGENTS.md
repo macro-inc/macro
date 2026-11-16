@@ -28,7 +28,7 @@ Install the actual Source restoreFocusPlugin in app-equivalent fixtures before q
 
 Capture all native formatting query results inside the construction-time latestPublished observer and expose only those data snapshots to reactive UI. Retire presentation without native receivers; terminal key handles stay with the actual view owner until its existing close fence. Ordinary component cleanup still unregisters its actual listeners while admission permits.
 
-Keep native FormatTools in the selected-body withinPopup path; its full-header title/body focus routing is not qualified by this component checkpoint and must retain Source behavior before any broader host wiring.
+Keep native FormatTools in the selected-body withinPopup path; its full-header title/body focus routing is not verified and must retain Source behavior before any broader host wiring.
 
 Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Show the Source FormatTools Link button (Bold, Italic, Link, More order) in the desktop body popup (`views/body-format-popup.tsx`): without a link in the selection it opens the `link` slot prompt (Source MarkdownPopup "Paste or insert link"; `captureLink` keeps the selection, and submit inserts the link over it labelled with the selection text read at submit), and with one it unlinks. The slash Link row reaches the native link host through `requestLink`, which follows Source TRY_INSERT_LINK (create at a caret, Prepare then edit on a range) and throws before the first publication.
 

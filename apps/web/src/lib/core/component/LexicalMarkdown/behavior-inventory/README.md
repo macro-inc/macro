@@ -267,13 +267,10 @@ comment-only authorization or collaboration.
 
 ## Engine acceptance
 
-Current results are flag OFF only. The browser config rejects
-`EDITOR_BEHAVIOR_ENGINE=ON` because this checkout does not provide the production
-compat initializer/resolver. Changing a flag alone does not switch these tests.
-
-Before claiming paired acceptance, build a production compat resolver (none is
-wired today) and real compat preload into both Vitest and this static build. Run the same assertions under each engine and
-record the actual compat/WASM identities. Never alias the core to a test double,
+Results are flag OFF only. The browser config rejects
+`EDITOR_BEHAVIOR_ENGINE=ON`: `lexical` imports always resolve to upstream, so
+these tests cannot run the native engine, and flag ON acceptance belongs to the
+native document parity harness. Never alias the core to a test double,
 use the older native view as compat, update expectations only for ON, or report
 OFF results as parity. Production saved-state equality and full native
 accessibility equality belong to the document parity harness in
