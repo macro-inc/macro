@@ -33,7 +33,7 @@ export function DocxHeader(props: DocxHeaderProps) {
       </SplitHeaderRight>
       <SplitHeaderRight>
         <div class="order-[999] flex items-center">
-          <HeaderActionGroup label="Document actions">
+          <HeaderActionGroup label={t('entityActions.documentActions')}>
             <ChatWithAgentButton
               grouped
               label={t('entityActions.askMacro')}
