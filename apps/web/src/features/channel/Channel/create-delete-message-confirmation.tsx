@@ -11,7 +11,12 @@ export type DeleteMessageConfirmation = {
 
 /** Deleting the root of a discussion deletes the discussion under it. */
 function isDiscussionRoot(input: DeleteMessageInput | undefined) {
-  return !!input && input.parent.type !== 'channel' && !input.threadID;
+  return (
+    !!input &&
+    input.parent.type !== 'channel' &&
+    input.parent.type !== 'call' &&
+    !input.threadID
+  );
 }
 
 /**

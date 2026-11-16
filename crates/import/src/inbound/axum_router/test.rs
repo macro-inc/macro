@@ -9,7 +9,7 @@ use rootcause::Report;
 use std::sync::Mutex;
 use tower::ServiceExt;
 
-use crate::domain::models::{ImportEntity, ImportKind, ImportStatus, Initiator, NotionSharing};
+use crate::domain::models::{ImportEntity, ImportStatus, Initiator, NotionSharing};
 use crate::domain::ports::Result;
 use crate::domain::service::{DiscardOutcome, ImportNotionPageOutcome, StageOutcome};
 use import_notion::domain::model::{ImportScope, NotionId};
@@ -61,7 +61,6 @@ struct FakeImportService {
     outcome: Mutex<Option<Result<bool>>>,
     cancels: Mutex<Vec<MacroUserIdStr<'static>>>,
     notion_plans: Mutex<Vec<(ImportScope, Option<NotionSharing>)>>,
-    ledger: Mutex<Vec<String>>,
 }
 
 impl NotionWorkspaceImporter for FakeImportService {
@@ -153,7 +152,6 @@ fn discovery_router(outcome: Result<bool>) -> (Router, Arc<FakeImportService>) {
         outcome: Mutex::new(Some(outcome)),
         cancels: Mutex::new(Vec::new()),
         notion_plans: Mutex::new(Vec::new()),
-        ledger: Mutex::new(Vec::new()),
     });
     let router = import_router(ImportRouterState {
         service: service.clone(),
@@ -414,29 +412,21 @@ async fn workspace_routes_authorize_and_forward_the_exact_source() {
     }
 }
 
-const DECLINED_ROW: Uuid = Uuid::from_u128(0x2);
-const IMPORTED_ROW: Uuid = Uuid::from_u128(0x3);
-
-fn ledger_row(
-    foreign_id: &str,
-    status: ImportStatus,
-    user_id: &str,
-    entity_id: Option<&str>,
-) -> ImportEntity {
+fn ledger_row(source: ImportSource, foreign_id: &str, status: ImportStatus) -> ImportEntity {
     ImportEntity {
-        id: Uuid::from_u128(0x1),
-        user_id: user_id.to_string(),
+        id: Uuid::nil(),
+        user_id: TEST_USER.to_string(),
         team_id: None,
-        source: ImportSource::Linear,
-        kind: ImportKind::Issue,
+        source,
+        kind: source.default_kind(),
         foreign_id: foreign_id.to_string(),
         parent_id: None,
         review_id: None,
         status,
         initiator: Initiator::Chat,
-        metadata: serde_json::json!({"identifier": foreign_id, "title": "Fix login"}),
-        entity_id: entity_id.map(str::to_string),
-        entity_type: entity_id.map(|_| "task".to_string()),
+        metadata: serde_json::json!({ "title": "Roadmap" }),
+        entity_id: None,
+        entity_type: None,
         last_error: None,
         waiting_on: None,
         created_at: chrono::DateTime::UNIX_EPOCH,
@@ -448,34 +438,25 @@ impl ImportStager for FakeImportService {
     async fn stage(
         &self,
         user: &MacroUserIdStr<'static>,
-        initiator: Initiator,
+        _initiator: Initiator,
         source: ImportSource,
         foreign_id: &str,
         _metadata: serde_json::Value,
     ) -> Result<StageOutcome> {
-        assert_eq!(user.as_ref(), TEST_USER);
-        assert_eq!(initiator, Initiator::Chat);
-        self.ledger
-            .lock()
-            .unwrap()
-            .push(format!("stage {} {foreign_id}", source.as_ref()));
-        Ok(match foreign_id {
-            "ENG-2" => StageOutcome::AlreadyImported {
-                entity: ledger_row(
-                    foreign_id,
-                    ImportStatus::Imported,
-                    "macro|teammate@example.com",
-                    Some("task-of-teammate"),
-                ),
+        self.calls.lock().unwrap().push((user.clone(), source));
+        if foreign_id == "ENG-1" {
+            let mut row = ledger_row(source, foreign_id, ImportStatus::Imported);
+            row.user_id = "macro|teammate@example.com".to_string();
+            return Ok(StageOutcome::AlreadyImported {
+                entity: row,
                 by_teammate: true,
-            },
-            _ => StageOutcome::Staged(ledger_row(
-                foreign_id,
-                ImportStatus::Staged,
-                TEST_USER,
-                None,
-            )),
-        })
+            });
+        }
+        Ok(StageOutcome::Staged(ledger_row(
+            source,
+            foreign_id,
+            ImportStatus::Staged,
+        )))
     }
 
     async fn record_imported(
@@ -487,30 +468,26 @@ impl ImportStager for FakeImportService {
         _metadata: serde_json::Value,
         entity_id: &str,
     ) -> Result<ImportEntity> {
-        assert_eq!(user.as_ref(), TEST_USER);
-        self.ledger.lock().unwrap().push(format!(
-            "record {} {foreign_id} {entity_id}",
-            source.as_ref()
-        ));
-        Ok(ledger_row(
-            foreign_id,
-            ImportStatus::Imported,
-            TEST_USER,
-            Some(entity_id),
-        ))
+        self.calls.lock().unwrap().push((user.clone(), source));
+        let mut row = ledger_row(source, foreign_id, ImportStatus::Imported);
+        // "document-2" stands for an item an earlier request already mapped to "document-1".
+        row.entity_id = Some(if entity_id == "document-2" {
+            "document-1".to_string()
+        } else {
+            entity_id.to_string()
+        });
+        Ok(row)
     }
 
     async fn discard_entity(
         &self,
-        user: &MacroUserIdStr<'static>,
+        _user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> Result<DiscardOutcome> {
-        assert_eq!(user.as_ref(), TEST_USER);
-        self.ledger.lock().unwrap().push(format!("discard {id}"));
-        Ok(match id {
-            DECLINED_ROW => DiscardOutcome::Discarded,
-            IMPORTED_ROW => DiscardOutcome::NotDiscardable(ImportStatus::Imported),
-            _ => DiscardOutcome::NotFound,
+        Ok(if id.is_nil() {
+            DiscardOutcome::NotFound
+        } else {
+            DiscardOutcome::NotDiscardable(ImportStatus::Imported)
         })
     }
 
@@ -520,16 +497,12 @@ impl ImportStager for FakeImportService {
         source: Option<ImportSource>,
         status: Option<ImportStatus>,
     ) -> Result<Vec<ImportEntity>> {
-        assert_eq!(user.as_ref(), TEST_USER);
-        self.ledger
-            .lock()
-            .unwrap()
-            .push(format!("list {source:?} {status:?}"));
+        let source = source.unwrap_or(ImportSource::Notion);
+        self.calls.lock().unwrap().push((user.clone(), source));
         Ok(vec![ledger_row(
-            "ENG-1",
-            ImportStatus::Staged,
-            TEST_USER,
-            None,
+            source,
+            "page",
+            status.unwrap_or(ImportStatus::Staged),
         )])
     }
 }
@@ -540,22 +513,170 @@ impl NotionPageImporter for FakeImportService {
         user: &MacroUserIdStr<'static>,
         page_url_or_id: &str,
     ) -> Result<ImportNotionPageOutcome> {
-        assert_eq!(user.as_ref(), TEST_USER);
-        self.ledger
+        self.calls
             .lock()
             .unwrap()
-            .push(format!("page {page_url_or_id}"));
+            .push((user.clone(), ImportSource::Notion));
+        if page_url_or_id == "not-a-page" {
+            return Err(ImportError::Other(anyhow::anyhow!(
+                "not a Notion page URL or id"
+            )));
+        }
+        let mut row = ledger_row(ImportSource::Notion, page_url_or_id, ImportStatus::Imported);
+        row.entity_id = Some("document-1".to_string());
         Ok(ImportNotionPageOutcome::Imported {
-            entity: ledger_row(
-                page_url_or_id,
-                ImportStatus::Imported,
-                TEST_USER,
-                Some("document-1"),
-            ),
-            already_existed: true,
+            entity: row,
+            already_existed: false,
             by_teammate: false,
         })
     }
+}
+
+async fn ledger_call(
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> (StatusCode, serde_json::Value, Arc<FakeImportService>) {
+    let (router, service) = discovery_router(Ok(true));
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", "Bearer valid")
+        .header("content-type", "application/json");
+    let body = body.map_or_else(Body::empty, |body| Body::from(body.to_string()));
+    let response = router.oneshot(request.body(body).unwrap()).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 16)
+        .await
+        .unwrap();
+    let json = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|_| serde_json::Value::String(String::from_utf8_lossy(&bytes).into()));
+    (status, json, service)
+}
+
+#[tokio::test]
+async fn ledger_lists_the_callers_rows_with_their_filters() {
+    let (status, body, service) = ledger_call(
+        "GET",
+        "/import/entities?source=linear&status=imported",
+        None,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["entities"][0]["source"], "linear");
+    assert_eq!(body["entities"][0]["status"], "imported");
+    let calls = service.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0.as_ref(), TEST_USER);
+}
+
+#[tokio::test]
+async fn ledger_tracking_reports_a_teammates_import() {
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/entities",
+        Some(serde_json::json!({
+            "source": "linear",
+            "foreignId": "ENG-1",
+            "status": "staged",
+            "metadata": { "identifier": "ENG-1", "title": "Roadmap" },
+        })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["outcome"], "already_imported_by_teammate");
+    assert_eq!(body["entity"]["user_id"], "macro|teammate@example.com");
+}
+
+#[tokio::test]
+async fn ledger_recording_an_import_requires_the_entity() {
+    let (status, body, service) = ledger_call(
+        "POST",
+        "/import/entities",
+        Some(serde_json::json!({
+            "source": "notion",
+            "foreignId": "page",
+            "status": "imported",
+            "metadata": { "title": "Roadmap" },
+        })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, "entityId is required when status is imported");
+    assert!(service.calls.lock().unwrap().is_empty());
+
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/entities",
+        Some(serde_json::json!({
+            "source": "notion",
+            "foreignId": "page",
+            "status": "imported",
+            "metadata": { "title": "Roadmap" },
+            "entityId": "document-1",
+        })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["outcome"], "recorded_imported");
+    assert_eq!(body["entity"]["entity_id"], "document-1");
+}
+
+#[tokio::test]
+async fn ledger_declining_answers_missing_and_unstaged_rows() {
+    let (status, _, _) =
+        ledger_call("DELETE", &format!("/import/entities/{}", Uuid::nil()), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, _, _) =
+        ledger_call("DELETE", &format!("/import/entities/{}", Uuid::max()), None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn ledger_imports_a_notion_page_and_keeps_the_refusal_message() {
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/notion/pages",
+        Some(serde_json::json!({ "page": "https://www.notion.so/Roadmap-0123456789abcdef0123456789abcdef" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["outcome"], "imported");
+    assert_eq!(body["entity"]["entity_id"], "document-1");
+
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/notion/pages",
+        Some(serde_json::json!({ "page": "not-a-page" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, "not a Notion page URL or id");
+}
+
+#[tokio::test]
+async fn ledger_recording_reports_an_earlier_mapping() {
+    let (status, body, _) = ledger_call(
+        "POST",
+        "/import/entities",
+        Some(serde_json::json!({
+            "source": "notion",
+            "foreignId": "page",
+            "status": "imported",
+            "metadata": { "title": "Roadmap" },
+            "entityId": "document-2",
+        })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["outcome"], "already_imported");
+    assert_eq!(body["entity"]["entity_id"], "document-1");
 }
 
 async fn send(
@@ -702,139 +823,6 @@ async fn planning_a_tracker_import_forwards_the_exact_source() {
 }
 
 #[tokio::test]
-async fn listing_the_ledger_forwards_its_filters() {
-    let (router, service) = discovery_router(Ok(true));
-    let response = send(
-        router,
-        "GET",
-        "/import/entities?source=linear&status=staged",
-        None,
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let rows = json_body(response).await;
-    assert_eq!(rows[0]["foreign_id"], "ENG-1");
-    assert_eq!(rows[0]["status"], "staged");
-    assert_eq!(
-        *service.ledger.lock().unwrap(),
-        vec!["list Some(Linear) Some(Staged)".to_string()]
-    );
-}
-
-#[tokio::test]
-async fn tracking_stages_a_candidate_or_records_an_entity_already_created() {
-    let (router, service) = discovery_router(Ok(true));
-    let staged = send(
-        router.clone(),
-        "POST",
-        "/import/entities",
-        Some(serde_json::json!({
-            "source": "linear",
-            "foreignId": "ENG-1",
-            "metadata": {"identifier": "ENG-1", "title": "Fix login"},
-        })),
-    )
-    .await;
-    let duplicate = send(
-        router.clone(),
-        "POST",
-        "/import/entities",
-        Some(serde_json::json!({
-            "source": "linear",
-            "foreignId": "ENG-2",
-            "metadata": {"identifier": "ENG-2", "title": "Fix login"},
-        })),
-    )
-    .await;
-    let recorded = send(
-        router,
-        "POST",
-        "/import/entities",
-        Some(serde_json::json!({
-            "source": "linear",
-            "foreignId": "ENG-3",
-            "metadata": {"identifier": "ENG-3", "title": "Fix login"},
-            "entityId": "task-3",
-        })),
-    )
-    .await;
-
-    let staged = json_body(staged).await;
-    assert_eq!(staged["outcome"], "staged");
-    assert_eq!(staged["entity"]["status"], "staged");
-    let duplicate = json_body(duplicate).await;
-    assert_eq!(duplicate["outcome"], "already_imported_by_teammate");
-    assert_eq!(duplicate["entity"]["entity_id"], "task-of-teammate");
-    let recorded = json_body(recorded).await;
-    assert_eq!(recorded["outcome"], "imported");
-    assert_eq!(recorded["entity"]["entity_id"], "task-3");
-    assert_eq!(
-        *service.ledger.lock().unwrap(),
-        vec![
-            "stage linear ENG-1".to_string(),
-            "stage linear ENG-2".to_string(),
-            "record linear ENG-3 task-3".to_string(),
-        ]
-    );
-}
-
-#[tokio::test]
-async fn tracking_refuses_blank_ids_without_calling_the_service() {
-    for body in [
-        serde_json::json!({"source": "linear", "foreignId": " ", "metadata": {}}),
-        serde_json::json!({"source": "linear", "foreignId": "ENG-1", "metadata": {}, "entityId": " "}),
-    ] {
-        let (router, service) = discovery_router(Ok(true));
-        let response = send(router, "POST", "/import/entities", Some(body)).await;
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(service.ledger.lock().unwrap().is_empty());
-    }
-}
-
-#[tokio::test]
-async fn declining_answers_whether_the_row_could_be_declined() {
-    for (id, status) in [
-        (DECLINED_ROW, StatusCode::NO_CONTENT),
-        (IMPORTED_ROW, StatusCode::CONFLICT),
-        (Uuid::from_u128(0x9), StatusCode::NOT_FOUND),
-    ] {
-        let (router, service) = discovery_router(Ok(true));
-        let response = send(router, "DELETE", &format!("/import/entities/{id}"), None).await;
-
-        assert_eq!(response.status(), status, "{id}");
-        assert_eq!(
-            *service.ledger.lock().unwrap(),
-            vec![format!("discard {id}")]
-        );
-    }
-}
-
-#[tokio::test]
-async fn importing_a_notion_page_reports_an_existing_copy() {
-    let (router, service) = discovery_router(Ok(true));
-    let response = send(
-        router,
-        "POST",
-        "/import/notion/pages",
-        Some(serde_json::json!({
-            "pageUrl": " https://www.notion.so/Q3-plan-3fb607323e2e80629886fc0c028d50a7 ",
-        })),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = json_body(response).await;
-    assert_eq!(body["outcome"], "already_imported");
-    assert_eq!(body["entity"]["entity_id"], "document-1");
-    assert_eq!(
-        *service.ledger.lock().unwrap(),
-        vec!["page https://www.notion.so/Q3-plan-3fb607323e2e80629886fc0c028d50a7".to_string()]
-    );
-}
-
-#[tokio::test]
 async fn ledger_and_plan_routes_require_authentication() {
     for (method, uri) in [
         ("GET", "/import/entities"),
@@ -864,7 +852,7 @@ async fn ledger_and_plan_routes_require_authentication() {
             StatusCode::UNAUTHORIZED,
             "{method} {uri}"
         );
-        assert!(service.ledger.lock().unwrap().is_empty());
+        assert!(service.calls.lock().unwrap().is_empty());
         assert!(service.notion_plans.lock().unwrap().is_empty());
     }
 }

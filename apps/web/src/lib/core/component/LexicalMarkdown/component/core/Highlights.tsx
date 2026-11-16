@@ -346,26 +346,25 @@ function getLocationRects(
   );
 }
 
-export function LocationHighlight(props: {
-  editor: LexicalEditor;
-  location?: PersistentLocation;
-  mapping: NodeIdMappings;
-  mountRef: HTMLElement;
-  class?: string;
-  padding?: PaddingValue;
-  captureBoundingDomRect?: (rect: DOMRect) => void;
-}): JSX.Element;
-
-export function LocationHighlight(props: {
-  editor: LexicalEditor;
-  location?: EphemeralLocation;
-  mountRef: HTMLElement;
-  class?: string;
-  padding?: PaddingValue;
-  captureBoundingDomRect?: (rect: DOMRect) => void;
-}): JSX.Element;
-
-export function LocationHighlight(props: {
+export const LocationHighlight: {
+  (props: {
+    editor: LexicalEditor;
+    location?: PersistentLocation;
+    mapping: NodeIdMappings;
+    mountRef: HTMLElement;
+    class?: string;
+    padding?: PaddingValue;
+    captureBoundingDomRect?: (rect: DOMRect) => void;
+  }): JSX.Element;
+  (props: {
+    editor: LexicalEditor;
+    location?: EphemeralLocation;
+    mountRef: HTMLElement;
+    class?: string;
+    padding?: PaddingValue;
+    captureBoundingDomRect?: (rect: DOMRect) => void;
+  }): JSX.Element;
+} = function LocationHighlight(props: {
   editor: LexicalEditor;
   location?: MarkdownLocation;
   mapping?: NodeIdMappings;
@@ -420,4 +419,4 @@ export function LocationHighlight(props: {
       </For>
     </Portal>
   );
-}
+};

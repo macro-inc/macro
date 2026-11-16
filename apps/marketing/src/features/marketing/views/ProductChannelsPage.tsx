@@ -58,7 +58,7 @@ export function RouteChannels() {
           tone: 'chat',
         }}
         title="Macro Agents are first-class, like humans."
-        description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would."
+        description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would, without @mentioning."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"

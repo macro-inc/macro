@@ -6,7 +6,7 @@
  */
 
 /**
- * The Macro entity already created from the item, which records it as
-imported. Without one the item is staged as a candidate.
+ * The Macro entity created from the item; required when `status` is
+`imported`.
  */
 export type TrackImportEntityRequestEntityId = string | null;

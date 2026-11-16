@@ -78,35 +78,10 @@
 .paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-236 { left: 186.5px; }
 .paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-237 { left: 183px; }
 .paper-feature-art[data-compact=true] .paper-database-query .paper-feature-node-238 { left: 111px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-181,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-191,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-195 { left: 8px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-182,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-196 { width: 246px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-190,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-194,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-200 { font-size: 13px; line-height: 20px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-204,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-207,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-210,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-213 { left: 260px; width: 8px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-205,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-208,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-211,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-214 { left: 256px; }
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-206,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-209,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-212,
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-215 { left: 268px; width: 102px; }
 
 .paper-feature-graphic .paper-feature-node-1,
 .paper-feature-graphic .paper-feature-node-2 { background-color: transparent; border-radius: 0; }
 
-.paper-feature-art[data-compact=true] .paper-email-accounts .paper-feature-node-203 {
-  font-size: 13px;
-  line-height: 20px;
-  white-space: nowrap;
-}
 
 html[data-theme-light='true'] .paper-feature-graphic .paper-feature-viewport.paper-feature-art {
   --color-ui-canvas: var(--color-page, var(--b0));

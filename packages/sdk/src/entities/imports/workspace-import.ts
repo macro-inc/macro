@@ -6,7 +6,6 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SessionReview } from '../agent-sessions/review';
-import { ImportItem, type ImportResult } from './import-item';
 
 /** Workspaces imported through a reviewed plan. */
 export type WorkspaceImportSource = ImportReviewSource;
@@ -151,22 +150,5 @@ export class NotionWorkspaceImport extends WorkspaceImport {
     options: NotionPlanOptions = {},
   ): Promise<WorkspaceImportReport> {
     return this.requestPlan({ sharing: options.sharing, roots: options.roots });
-  }
-
-  /**
-   * Import one Notion page, by URL or id, as a Macro document through the
-   * user's Notion connection. Databases, and pages that are mostly a
-   * database, are not imported; plan a workspace import for those.
-   *
-   * @example
-   * const { outcome, item } = await macro.imports.notion.importPage(
-   *   'https://www.notion.so/Q3-plan-3fb607323e2e80629886fc0c028d50a7',
-   * );
-   * return { data: { outcome, document: await item.entity() } };
-   * @write
-   * @openworld
-   */
-  importPage(pageUrl: string): Promise<ImportResult> {
-    return ImportItem.importNotionPage(this.client, pageUrl);
   }
 }

@@ -10,5 +10,5 @@
  */
 export interface ImportNotionPageRequest {
   /** The Notion page URL or 32-character page id. */
-  pageUrl: string;
+  page: string;
 }

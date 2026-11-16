@@ -42,12 +42,12 @@ describe('agent import handoff', () => {
     expect(instructions).not.toContain('ImportFromJira');
   });
 
-  it('keeps the Slack ledger through macro.imports.ledger', () => {
+  it('keeps the Slack ledger through macro.imports', () => {
     const channels = IMPORT_CATEGORIES.channels;
     const slack = channels.providers.find((p) => p.ledger === 'slack')!;
     const { instructions } = agentImportHandoff(channels, slack);
-    expect(instructions).toContain('macro.imports.ledger.list');
-    expect(instructions).toContain('macro.imports.ledger.recordImported');
+    expect(instructions).toContain('macro.imports.list');
+    expect(instructions).toContain('macro.imports.recordImported');
     expect(instructions).not.toMatch(/ListImportEntities|CreateImportEntity/);
   });
 });

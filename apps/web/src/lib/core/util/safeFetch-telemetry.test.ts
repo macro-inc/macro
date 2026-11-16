@@ -73,3 +73,19 @@ describe('safeFetch capability URL privacy', () => {
       expect(JSON.stringify(result.error)).not.toContain('secret-token');
   });
 });
+
+it('returns image responses as bytes for authenticated logo rendering', async () => {
+  mocks.fetch.mockResolvedValue(
+    new Response(new Uint8Array([137, 80, 78, 71]), {
+      headers: {
+        'Content-Type': 'image/png',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+  );
+  const result = await safeFetch<Uint8Array>(
+    'https://gateway.example/logos?domain=example.com'
+  );
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) expect([...result.value]).toEqual([137, 80, 78, 71]);
+});

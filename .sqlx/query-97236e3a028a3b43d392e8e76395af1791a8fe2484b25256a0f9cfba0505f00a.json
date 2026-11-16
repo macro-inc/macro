@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH immediate AS MATERIALIZED (\n            SELECT team_id,id,cleanup_due_at FROM password_item_entities\n            WHERE deleting AND deleted_at IS NULL AND cleanup_due_at IS NULL\n            ORDER BY cleanup_due_at NULLS FIRST,team_id,id LIMIT 100\n        ), due AS MATERIALIZED (\n            SELECT team_id,id,cleanup_due_at FROM password_item_entities\n            WHERE deleting AND deleted_at IS NULL AND cleanup_due_at<=now()\n            ORDER BY cleanup_due_at NULLS FIRST,team_id,id LIMIT 100\n        ), batch AS MATERIALIZED (\n            SELECT team_id,id FROM (SELECT * FROM immediate UNION ALL SELECT * FROM due) candidates\n            ORDER BY cleanup_due_at NULLS FIRST,team_id,id LIMIT 100\n        ), locked AS MATERIALIZED (\n            SELECT item.team_id,item.id FROM batch CROSS JOIN LATERAL (\n                SELECT current_item.team_id,current_item.id,current_item.deleting,\n                    current_item.deleted_at,current_item.cleanup_due_at\n                FROM password_item_entities current_item\n                WHERE current_item.team_id=batch.team_id AND current_item.id=batch.id\n                OFFSET 0 FOR UPDATE SKIP LOCKED\n            ) item WHERE item.deleting AND item.deleted_at IS NULL\n                AND (item.cleanup_due_at IS NULL OR item.cleanup_due_at<=now())\n        ) UPDATE password_item_entities item SET cleanup_due_at=now()+interval '2 minutes'\n        FROM locked WHERE item.team_id=locked.team_id AND item.id=locked.id\n        RETURNING item.team_id AS \"team_id!\",item.id AS \"id!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "97236e3a028a3b43d392e8e76395af1791a8fe2484b25256a0f9cfba0505f00a"
+}

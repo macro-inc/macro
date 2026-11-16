@@ -23,7 +23,7 @@
 //! | Policy | Admitted principals | Narrowed output |
 //! |---|---|---|
 //! | [`UserOrInternal`] | User or internal service acting for a user | [`UserOrInternalAuthorization`] |
-//! | [`AccountHolderOrInternal`] | Same as [`UserOrInternal`], refusing an account manager's credential | [`UserOrInternalAuthorization`] |
+//! | [`AccountHolderOrInternal`] | Same as [`UserOrInternal`], refusing an account manager's credential and a scoped agent run's | [`UserOrInternalAuthorization`] |
 //! | [`UserOrInternalService`] | User or internal service, with optional acting user | [`UserOrInternalServiceAuthorization`] |
 //! | [`ActingUser`] | Any principal with an acting user | [`ActingUserAuthorization`] |
 //! | [`UserOnly`] | Directly authenticated user | [`MacroUserAuthentication`] |

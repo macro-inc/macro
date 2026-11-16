@@ -62,10 +62,13 @@ import type { ChannelAccessRequestState } from './generated/schemas/channelAcces
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
 import { ChannelType } from './generated/schemas/channelType';
 import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
+import type { ClaudeMode } from './generated/schemas/claudeMode';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
+import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
@@ -93,7 +96,10 @@ import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
+import type { CrmContactDetailResponse } from './generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmPreviews } from './generated/schemas/crmPreviews';
+import type { CrmPreviewsRequest } from './generated/schemas/crmPreviewsRequest';
 import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
@@ -127,6 +133,7 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GetUploadExtractStatusHandler200 } from './generated/schemas/getUploadExtractStatusHandler200';
 import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/githubPullRequestChangesPatchResponse';
 import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
 import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
@@ -135,10 +142,13 @@ import type { GithubPullRequestTasksResponse } from './generated/schemas/githubP
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
+import type { HarnessComputerId } from './generated/schemas/harnessComputerId';
+import type { HarnessTeamAgentUserId } from './generated/schemas/harnessTeamAgentUserId';
 import type { ImportPage } from './generated/schemas/importPage';
 import type { ImportProgress } from './generated/schemas/importProgress';
 import type { Item } from './generated/schemas/item';
 import type { JobId } from './generated/schemas/jobId';
+import type { ListCompanyContactsPageParams } from './generated/schemas/listCompanyContactsPageParams';
 import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
@@ -371,6 +381,12 @@ export type Harness = {
   updated_at: string;
   connected: boolean;
   last_connected_at: string | null;
+  /** Set when this is a team's Macro computer. */
+  computer_id?: HarnessComputerId;
+  /** Set when that computer is an agent teammate's, which runs only its agent. */
+  team_agent_user_id?: HarnessTeamAgentUserId;
+  /** How Claude Code on a Macro computer is paid for. */
+  claude_mode?: ClaudeMode;
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */
@@ -2749,6 +2765,13 @@ export const storageServiceClient = {
         )
       ).map((result) => result.data);
     },
+    async getUploadExtractStatus({ requestId }) {
+      return (
+        await dssFetch<GetUploadExtractStatusHandler200>(
+          `/projects/upload_extract/${encodeURIComponent(requestId)}`
+        )
+      ).map((result) => result.data);
+    },
     async permanentlyDelete({ id }) {
       return (
         await dssFetch<SuccessResponse>(`/projects/${id}/permanent`, {
@@ -2890,9 +2913,39 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
-  async getCompany({ companyId }: { companyId: string }) {
-    return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
-      method: 'GET',
+  /** `includeContacts: false` leaves `contacts` empty; page them instead. */
+  async getCompany({
+    companyId,
+    includeContacts = true,
+  }: {
+    companyId: string;
+    includeContacts?: boolean;
+  }) {
+    const query = includeContacts ? '' : '?includeContacts=false';
+    return await dssFetch<CrmCompanyResponse>(
+      `/crm/companies/${companyId}${query}`,
+      { method: 'GET' }
+    );
+  },
+  async listCompanyContactsPage({
+    companyId,
+    ...params
+  }: { companyId: string } & ListCompanyContactsPageParams) {
+    const search = new URLSearchParams();
+    if (params.archived) search.set('archived', 'true');
+    if (params.query) search.set('query', params.query);
+    if (params.cursor) search.set('cursor', params.cursor);
+    if (params.limit) search.set('limit', String(params.limit));
+    return await dssFetch<CompanyContactsPageResponse>(
+      `/crm/companies/${companyId}/contacts/page?${search}`,
+      { method: 'GET' }
+    );
+  },
+  /** Titles of many company and contact chips; records the caller can't open are left out. */
+  async previewCrmRecords(body: CrmPreviewsRequest) {
+    return await dssFetch<CrmPreviews>('/crm/previews', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
   },
   async getCompanyContacts({ companyId }: { companyId: string }) {
@@ -2936,10 +2989,17 @@ export const storageServiceClient = {
       { method: 'DELETE' }
     );
   },
-  async getContact({ contactId }: { contactId: string }) {
-    return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
-      method: 'GET',
-    });
+  async getContact({
+    contactId,
+    signal,
+  }: {
+    contactId: string;
+    signal?: AbortSignal;
+  }) {
+    return await dssFetch<CrmContactDetailResponse>(
+      `/crm/contacts/${contactId}`,
+      { method: 'GET', signal }
+    );
   },
   async getContactByEmail({
     email,
@@ -2985,6 +3045,32 @@ export const storageServiceClient = {
       }
     );
   },
+  async addContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & ContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/emails`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async removeContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & ContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/emails`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
   async setContactCompany({
     contactId,
     ...body
@@ -2996,6 +3082,12 @@ export const storageServiceClient = {
         body: JSON.stringify(body),
         errorResponseHandler: contactEditErrorHandler,
       }
+    );
+  },
+  async unlinkContactCompany({ contactId }: { contactId: string }) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      { method: 'DELETE', errorResponseHandler: contactEditErrorHandler }
     );
   },
   async setContactHidden({

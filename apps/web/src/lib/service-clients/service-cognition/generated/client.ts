@@ -42,12 +42,11 @@ import type {
   GetChatsForAttachmentResponse,
   GetUserActivityParams,
   HttpSendChatMessageRequest,
-  ImportEntity,
-  ImportEntityOutcome,
-  ImportErrorBody,
+  ImportEntitiesResponse,
   ImportNotionPageRequest,
+  ImportNotionPageResponse,
   ImportSource,
-  ListEntitiesHandlerParams,
+  ListImportEntitiesParams,
   ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
@@ -64,7 +63,6 @@ import type {
   PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
-  PlanWorkspaceImportRequest,
   ProjectionStateResponse,
   ReadActivityResponse,
   ReadMyActivityParams,
@@ -89,6 +87,7 @@ import type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
   TrackImportEntityRequest,
+  TrackImportEntityResponse,
   UpdateExplicitMemoryRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
@@ -1727,35 +1726,32 @@ export const generateImage = async (
 };
 
 /**
- * @summary List the user's import ledger, newest first: their own rows plus items
-teammates imported into the team.
+ * @summary List the caller's import ledger: staged candidates, running and finished
+imports (with the team's imports), and declined items.
  */
-export type listEntitiesHandlerResponse200 = {
-  data: ImportEntity[];
+export type listImportEntitiesResponse200 = {
+  data: ImportEntitiesResponse;
   status: 200;
 };
 
-export type listEntitiesHandlerResponse500 = {
+export type listImportEntitiesResponse500 = {
   data: void;
   status: 500;
 };
 
-export type listEntitiesHandlerResponseSuccess =
-  listEntitiesHandlerResponse200 & {
+export type listImportEntitiesResponseSuccess =
+  listImportEntitiesResponse200 & {
     headers: Headers;
   };
-export type listEntitiesHandlerResponseError =
-  listEntitiesHandlerResponse500 & {
-    headers: Headers;
-  };
+export type listImportEntitiesResponseError = listImportEntitiesResponse500 & {
+  headers: Headers;
+};
 
-export type listEntitiesHandlerResponse =
-  | listEntitiesHandlerResponseSuccess
-  | listEntitiesHandlerResponseError;
+export type listImportEntitiesResponse =
+  | listImportEntitiesResponseSuccess
+  | listImportEntitiesResponseError;
 
-export const getListEntitiesHandlerUrl = (
-  params?: ListEntitiesHandlerParams
-) => {
+export const getListImportEntitiesUrl = (params?: ListImportEntitiesParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -1771,71 +1767,74 @@ export const getListEntitiesHandlerUrl = (
     : `/import/entities`;
 };
 
-export const listEntitiesHandler = async (
-  params?: ListEntitiesHandlerParams,
+export const listImportEntities = async (
+  params?: ListImportEntitiesParams,
   options?: RequestInit
-): Promise<listEntitiesHandlerResponse> => {
-  const res = await fetch(getListEntitiesHandlerUrl(params), {
+): Promise<listImportEntitiesResponse> => {
+  const res = await fetch(getListImportEntitiesUrl(params), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: listEntitiesHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
+  const data: listImportEntitiesResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as listEntitiesHandlerResponse;
+  } as listImportEntitiesResponse;
 };
 
 /**
- * @summary Track an external item: stage it as a candidate before creating
-anything, or, with `entityId`, record a Macro entity already created from
-it. Deduplicates against the user's rows and the team's imports.
+ * @summary Track an external item in the ledger: stage it as a candidate, or record a
+Macro entity already created from it. Says when the item was already
+imported, so callers do not create a duplicate.
  */
-export type trackEntityHandlerResponse200 = {
-  data: ImportEntityOutcome;
+export type trackImportEntityResponse200 = {
+  data: TrackImportEntityResponse;
   status: 200;
 };
 
-export type trackEntityHandlerResponse400 = {
+export type trackImportEntityResponse400 = {
   data: void;
   status: 400;
 };
 
-export type trackEntityHandlerResponse500 = {
+export type trackImportEntityResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type trackImportEntityResponse500 = {
   data: void;
   status: 500;
 };
 
-export type trackEntityHandlerResponseSuccess =
-  trackEntityHandlerResponse200 & {
-    headers: Headers;
-  };
-export type trackEntityHandlerResponseError = (
-  | trackEntityHandlerResponse400
-  | trackEntityHandlerResponse500
+export type trackImportEntityResponseSuccess = trackImportEntityResponse200 & {
+  headers: Headers;
+};
+export type trackImportEntityResponseError = (
+  | trackImportEntityResponse400
+  | trackImportEntityResponse422
+  | trackImportEntityResponse500
 ) & {
   headers: Headers;
 };
 
-export type trackEntityHandlerResponse =
-  | trackEntityHandlerResponseSuccess
-  | trackEntityHandlerResponseError;
+export type trackImportEntityResponse =
+  | trackImportEntityResponseSuccess
+  | trackImportEntityResponseError;
 
-export const getTrackEntityHandlerUrl = () => {
+export const getTrackImportEntityUrl = () => {
   return `/import/entities`;
 };
 
-export const trackEntityHandler = async (
+export const trackImportEntity = async (
   trackImportEntityRequest: TrackImportEntityRequest,
   options?: RequestInit
-): Promise<trackEntityHandlerResponse> => {
-  const res = await fetch(getTrackEntityHandlerUrl(), {
+): Promise<trackImportEntityResponse> => {
+  const res = await fetch(getTrackImportEntityUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -1844,77 +1843,77 @@ export const trackEntityHandler = async (
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: trackEntityHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  const data: trackImportEntityResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as trackEntityHandlerResponse;
+  } as trackImportEntityResponse;
 };
 
 /**
- * @summary Decline one of the user's staged candidates; it is remembered as
-declined and not proposed again.
+ * @summary Decline one of the caller's staged candidates; it is remembered as declined
+and not proposed again.
  */
-export type discardEntityHandlerResponse204 = {
+export type declineImportEntityResponse204 = {
   data: void;
   status: 204;
 };
 
-export type discardEntityHandlerResponse404 = {
+export type declineImportEntityResponse404 = {
   data: void;
   status: 404;
 };
 
-export type discardEntityHandlerResponse409 = {
+export type declineImportEntityResponse409 = {
   data: void;
   status: 409;
 };
 
-export type discardEntityHandlerResponse500 = {
+export type declineImportEntityResponse500 = {
   data: void;
   status: 500;
 };
 
-export type discardEntityHandlerResponseSuccess =
-  discardEntityHandlerResponse204 & {
+export type declineImportEntityResponseSuccess =
+  declineImportEntityResponse204 & {
     headers: Headers;
   };
-export type discardEntityHandlerResponseError = (
-  | discardEntityHandlerResponse404
-  | discardEntityHandlerResponse409
-  | discardEntityHandlerResponse500
+export type declineImportEntityResponseError = (
+  | declineImportEntityResponse404
+  | declineImportEntityResponse409
+  | declineImportEntityResponse500
 ) & {
   headers: Headers;
 };
 
-export type discardEntityHandlerResponse =
-  | discardEntityHandlerResponseSuccess
-  | discardEntityHandlerResponseError;
+export type declineImportEntityResponse =
+  | declineImportEntityResponseSuccess
+  | declineImportEntityResponseError;
 
-export const getDiscardEntityHandlerUrl = (id: string) => {
+export const getDeclineImportEntityUrl = (id: string) => {
   return `/import/entities/${id}`;
 };
 
-export const discardEntityHandler = async (
+export const declineImportEntity = async (
   id: string,
   options?: RequestInit
-): Promise<discardEntityHandlerResponse> => {
-  const res = await fetch(getDiscardEntityHandlerUrl(id), {
+): Promise<declineImportEntityResponse> => {
+  const res = await fetch(getDeclineImportEntityUrl(id), {
     ...options,
     method: 'DELETE',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: discardEntityHandlerResponse['data'] = body
+  const data: declineImportEntityResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as discardEntityHandlerResponse;
+  } as declineImportEntityResponse;
 };
 
 /**
@@ -2019,55 +2018,54 @@ export const cancelNotionHandler = async (
 };
 
 /**
- * @summary Import one Notion page as a Macro document through the user's Notion
-connection, deduplicated against the ledger. Databases and pages that
-are mostly a database are not imported.
+ * @summary Import one Notion page as a Macro document through the caller's Notion
+connection, deduplicated against the ledger. Notion databases are not
+imported; a whole workspace goes through a reviewed import instead.
  */
-export type importNotionPageHandlerResponse200 = {
-  data: ImportEntityOutcome;
+export type importNotionPageResponse200 = {
+  data: ImportNotionPageResponse;
   status: 200;
 };
 
-export type importNotionPageHandlerResponse400 = {
+export type importNotionPageResponse400 = {
   data: void;
   status: 400;
 };
 
-export type importNotionPageHandlerResponse409 = {
-  data: ImportErrorBody;
-  status: 409;
+export type importNotionPageResponse422 = {
+  data: void;
+  status: 422;
 };
 
-export type importNotionPageHandlerResponse500 = {
+export type importNotionPageResponse500 = {
   data: void;
   status: 500;
 };
 
-export type importNotionPageHandlerResponseSuccess =
-  importNotionPageHandlerResponse200 & {
-    headers: Headers;
-  };
-export type importNotionPageHandlerResponseError = (
-  | importNotionPageHandlerResponse400
-  | importNotionPageHandlerResponse409
-  | importNotionPageHandlerResponse500
+export type importNotionPageResponseSuccess = importNotionPageResponse200 & {
+  headers: Headers;
+};
+export type importNotionPageResponseError = (
+  | importNotionPageResponse400
+  | importNotionPageResponse422
+  | importNotionPageResponse500
 ) & {
   headers: Headers;
 };
 
-export type importNotionPageHandlerResponse =
-  | importNotionPageHandlerResponseSuccess
-  | importNotionPageHandlerResponseError;
+export type importNotionPageResponse =
+  | importNotionPageResponseSuccess
+  | importNotionPageResponseError;
 
-export const getImportNotionPageHandlerUrl = () => {
+export const getImportNotionPageUrl = () => {
   return `/import/notion/pages`;
 };
 
-export const importNotionPageHandler = async (
+export const importNotionPage = async (
   importNotionPageRequest: ImportNotionPageRequest,
   options?: RequestInit
-): Promise<importNotionPageHandlerResponse> => {
-  const res = await fetch(getImportNotionPageHandlerUrl(), {
+): Promise<importNotionPageResponse> => {
+  const res = await fetch(getImportNotionPageUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -2076,14 +2074,12 @@ export const importNotionPageHandler = async (
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: importNotionPageHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
+  const data: importNotionPageResponse['data'] = body ? JSON.parse(body) : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as importNotionPageHandlerResponse;
+  } as importNotionPageResponse;
 };
 
 /**
@@ -2316,76 +2312,6 @@ export const cancelWorkspaceHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelWorkspaceHandlerResponse;
-};
-
-/**
- * @summary Plan a reviewed workspace import, replacing any earlier plan for this
-source. Planning goes on in the background; this answers within seconds
-with where it got. Nothing is written until the plan's import review is
-approved.
- */
-export type planWorkspaceHandlerResponse200 = {
-  data: NotionImportReport;
-  status: 200;
-};
-
-export type planWorkspaceHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
-
-export type planWorkspaceHandlerResponse409 = {
-  data: ImportErrorBody;
-  status: 409;
-};
-
-export type planWorkspaceHandlerResponse500 = {
-  data: void;
-  status: 500;
-};
-
-export type planWorkspaceHandlerResponseSuccess =
-  planWorkspaceHandlerResponse200 & {
-    headers: Headers;
-  };
-export type planWorkspaceHandlerResponseError = (
-  | planWorkspaceHandlerResponse400
-  | planWorkspaceHandlerResponse409
-  | planWorkspaceHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type planWorkspaceHandlerResponse =
-  | planWorkspaceHandlerResponseSuccess
-  | planWorkspaceHandlerResponseError;
-
-export const getPlanWorkspaceHandlerUrl = (source: ImportSource) => {
-  return `/import/workspaces/${source}/plan`;
-};
-
-export const planWorkspaceHandler = async (
-  source: ImportSource,
-  planWorkspaceImportRequest: PlanWorkspaceImportRequest,
-  options?: RequestInit
-): Promise<planWorkspaceHandlerResponse> => {
-  const res = await fetch(getPlanWorkspaceHandlerUrl(source), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(planWorkspaceImportRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: planWorkspaceHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as planWorkspaceHandlerResponse;
 };
 
 /**

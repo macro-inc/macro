@@ -38,8 +38,8 @@ function createWith(config: ImportCategoryConfig): string {
 function ledgerSteps(provider: ImportProvider): string[] {
   if (!provider.ledger) return [];
   return [
-    `Check macro.imports.ledger.list({source: '${provider.ledger}'}) first and leave out anything already imported or declined.`,
-    `After creating each item, record it with macro.imports.ledger.recordImported, source ${provider.ledger}, and the new Macro item.`,
+    `Check macro.imports.list({source: '${provider.ledger}'}) first and leave out anything already imported or declined.`,
+    `After creating each item, record it with macro.imports.recordImported, source ${provider.ledger}, and the new Macro item.`,
   ];
 }
 

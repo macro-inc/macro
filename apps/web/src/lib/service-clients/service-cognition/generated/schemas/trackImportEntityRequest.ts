@@ -7,22 +7,25 @@
 
 import type { ImportSource } from './importSource';
 import type { TrackImportEntityRequestEntityId } from './trackImportEntityRequestEntityId';
+import type { TrackImportEntityRequestMetadata } from './trackImportEntityRequestMetadata';
+import type { TrackImportStatus } from './trackImportStatus';
 
 /**
- * Body for tracking an external item in the ledger.
+ * Body for tracking one external item in the ledger.
  */
 export interface TrackImportEntityRequest {
-  /** The Macro entity already created from the item, which records it as
-imported. Without one the item is staged as a candidate. */
+  /** The Macro entity created from the item; required when `status` is
+`imported`. */
   entityId?: TrackImportEntityRequestEntityId;
   /** Stable id of the item in its source: a Linear identifier such as
 `ENG-142`, a Notion page URL or id, or a Slack channel id. */
   foreignId: string;
-  /** What the item is. Linear: `{identifier, title, description?, status?,
-priority?, assignee?, assignee_email?, url?}`. Notion: `{title, url?,
-summary?}`, never page content. Slack: `{name, channel_id?, purpose?,
-participants?}`. */
-  metadata: unknown;
+  /** Per-source metadata. Linear: `{identifier, title, …}`; Notion:
+`{title, url?, summary?}`; Slack: `{name, …}`. */
+  metadata: TrackImportEntityRequestMetadata;
   /** The external system the item comes from. */
   source: ImportSource;
+  /** `staged` to propose the item, `imported` to record an entity already
+created from it. */
+  status: TrackImportStatus;
 }

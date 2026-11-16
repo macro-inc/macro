@@ -1,0 +1,173 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            (SELECT id AS \"id!\", owner AS \"owner!\", name AS \"name!\", schedule, kind AS \"kind!\",\n                    timezone, task AS \"task!\", claimed, created_at AS \"created_at!\",\n                    updated_at AS \"updated_at!\", next_run_at, enabled AS \"enabled!\",\n                    trigger_type AS \"trigger_type!\", event_filters,\n                    configuration_revision AS \"configuration_revision!\", event_activated_at,\n                    trigger_config, run_visibility AS \"run_visibility!\", template_id, appearance AS \"appearance: _\",\n                    suggestion_id, description AS \"description!\", parent_id,\n                    created_by_run_id, child_key, paused_by_parent AS \"paused_by_parent!\"\n             FROM scheduled_action\n             WHERE parent_id = $1 AND parent_id IS NOT NULL\n               AND NOT (trigger_type = 'once' AND next_run_at IS NULL))\n            UNION ALL\n            (SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                    updated_at, next_run_at, enabled, trigger_type, event_filters,\n                    configuration_revision, event_activated_at, trigger_config, run_visibility,\n                    template_id, appearance, suggestion_id, description, parent_id, created_by_run_id,\n                    child_key, paused_by_parent\n             FROM scheduled_action\n             WHERE parent_id = $1 AND trigger_type = 'once' AND next_run_at IS NULL\n             ORDER BY created_by_run_id DESC\n             LIMIT $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "task!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "claimed",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "enabled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "trigger_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "event_filters",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "configuration_revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "event_activated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 17,
+        "name": "run_visibility!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "appearance: _",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 20,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "description!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "created_by_run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 24,
+        "name": "child_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "paused_by_parent!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b55805138c9e6781f8328809bdc317c245a3843176f457f9d88a5d2ed44102bb"
+}

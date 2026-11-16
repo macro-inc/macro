@@ -107,7 +107,10 @@ impl From<EmailErr> for SendMessageError {
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
-            | EmailErr::Utf8Error(_) => SendMessageError::Validation(err.to_string()),
+            | EmailErr::Utf8Error(_)
+            | EmailErr::InvalidSender
+            | EmailErr::UnverifiedSendingAlias { .. }
+            | EmailErr::SendAsPermissionRequired => SendMessageError::Validation(err.to_string()),
             _ => SendMessageError::Internal(err),
         }
     }
@@ -147,7 +150,7 @@ pub async fn send_message_handler<T: EmailService, Auth: MacroAuthorizationServi
         &headers,
         None,
     )?;
-    let mut input = body.into_domain();
+    let mut input = body.into_domain()?;
     // Attribute the send to the authenticated caller, who is not necessarily
     // the link owner (delegated inboxes).
     input.actor = Some(authorization.authorization.user.macro_user_id.clone());

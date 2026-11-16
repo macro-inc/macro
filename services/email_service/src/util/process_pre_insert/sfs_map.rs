@@ -13,7 +13,8 @@ use url::Url;
 mod public_http;
 pub(crate) use public_http::RefusedImageUrl;
 
-pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+pub(crate) const MAX_IMAGE_SIZE_BYTES: usize =
+    email::domain::signature_settings::gmail_images::MAX_IMAGE_SIZE_BYTES;
 /// Images one HTML fragment fetches at once.
 const MAX_CONCURRENT_IMAGE_FETCHES: usize = 4;
 

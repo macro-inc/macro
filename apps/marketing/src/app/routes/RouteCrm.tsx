@@ -2,6 +2,7 @@ import { lazy } from 'solid-js';
 import { CrmCaptureDemo } from '../../features/marketing/components/crm/CrmCaptureDemo';
 import { CrmComparison } from '../../features/marketing/components/crm/CrmComparison';
 import { CrmEnrichmentDemo } from '../../features/marketing/components/crm/CrmEnrichmentDemo';
+import { CrmPipelineDatabaseGraphic } from '../../features/marketing/components/crm/CrmPipelineDatabaseGraphic';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import {
   DeferredDemo,
@@ -14,6 +15,7 @@ import {
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import HomepagePipelineDemo from '../../features/marketing/components/HomepagePipelineDemo';
+import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import {
   ProductHero,
   ProductPage,
@@ -131,6 +133,19 @@ export function RouteCrm() {
         />
       </FeaturePageSection>
       <FeaturePageSection
+        id="crm-databases"
+        title="Pipelines are just Macro Databases."
+        description="A pipeline is a database of companies or contacts, so it’s much more flexible than most CRMs. Add your own fields of any type, write formulas, filter and sort into saved views, and create as many pipelines as you need."
+      >
+        <PaperFeatureGraphic
+          height={332}
+          mobileHeight={312}
+          label="A sales pipeline as a database table of deals with company, stage, revenue, and renewal columns. A menu for adding a field lists text, number, select, date, checkbox, people, and formula."
+        >
+          <CrmPipelineDatabaseGraphic />
+        </PaperFeatureGraphic>
+      </FeaturePageSection>
+      <FeaturePageSection
         id="crm-from-email"
         demo={{
           tone: 'crm',
@@ -149,7 +164,7 @@ export function RouteCrm() {
         demo={{
           tone: 'crm',
         }}
-        title="Discuss customers right on the record."
+        title="Every record gets a Macro Chat."
         description="Comments on companies and contacts use the same threading system as your channels, so the conversation about a deal is on the record instead of lost in Slack. @mention a teammate and they get a ping just like in a channel; it all goes into one inbox."
       >
         <DemoInteractionBoundary

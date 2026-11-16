@@ -78,11 +78,13 @@ from this import's other databases into it are not linked.
   (`toolset/import_from_notion.rs` is the workspace import tool).
 - `src/inbound/axum_router.rs`: the `/import/*` routes (state, accept/decline,
   Slack discovery, the Notion import report and cancel, and workspace
-  plan/report/cancel); `axum_router/ledger.rs` serves the ledger
-  (`/import/entities`) and single Notion page imports for the SDK's
-  `macro.imports`, the code-mode replacement for the import tools. Errors
-  the caller can fix (sharing not chosen, not connected, not ready) answer 409
+  plan/report/cancel for the SDK's `macro.imports.notion|linear|jira`). Plan
+  errors the caller can fix (sharing not chosen, not connected) answer 409
   with an `ImportErrorBody` code.
+  `axum_router/ledger.rs` serves the ledger tools' operations to the SDK's
+  `macro.imports`: `GET|POST /import/entities` (list, stage or record),
+  `DELETE /import/entities/{id}` (decline) and `POST /import/notion/pages`
+  (one page), with typed outcomes in place of the tools' prose.
 
 ## Scope
 

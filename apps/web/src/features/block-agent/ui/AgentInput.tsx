@@ -20,10 +20,6 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
-import {
-  ComposerAddDrawer,
-  ComposerAddMenu,
-} from '@channel/Input/ComposerAddMenu';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -31,7 +27,11 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import {
+  type AgentCommandItem,
+  TYPE_AGENT_COMMAND_SYMBOL_COMMAND,
+  TYPE_AT_SYMBOL_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -48,7 +48,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { agentAttachmentItems } from './attachment-menu';
+import { AgentComposerAddMenu } from './AgentComposerAddMenu';
+import { openComposerTypeahead } from './open-composer-typeahead';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -120,7 +121,6 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
-  const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
   const imageUnsupportedReason = () =>
     props.supportsImages === false
       ? t('common.imagesUnsupported', {
@@ -362,6 +362,7 @@ export function AgentInput(props: AgentInputProps) {
               >
                 <div
                   id={AGENT_INPUT_TEXT_AREA_ID}
+                  data-composer-scroll
                   class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
                   classList={{
                     // While empty only the placeholder renders; keep it to one clipped
@@ -402,32 +403,28 @@ export function AgentInput(props: AgentInputProps) {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={props.disabled || props.readOnly}
-                      trigger={(openFiles, openImages) => {
-                        const groups = () => [
-                          {
-                            items: agentAttachmentItems(
-                              openFiles,
-                              openImages,
-                              imageUnsupportedReason()
-                            ),
-                          },
-                        ];
-                        return (
-                          <>
-                            <ComposerAddMenu
-                              groups={groups()}
-                              disabled={props.disabled || props.readOnly}
-                              onOpenDrawer={() => setAttachDrawerOpen(true)}
-                            />
-                            <ComposerAddDrawer
-                              groups={groups()}
-                              open={attachDrawerOpen()}
-                              onOpenChange={setAttachDrawerOpen}
-                              getEditor={() => editor.lexical.getRootElement()}
-                            />
-                          </>
-                        );
-                      }}
+                      trigger={(openFiles, openImages) => (
+                        <AgentComposerAddMenu
+                          openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={imageUnsupportedReason()}
+                          openLibrary={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AT_SYMBOL_COMMAND
+                            )
+                          }
+                          openSkills={() =>
+                            openComposerTypeahead(
+                              editor.lexical,
+                              TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+                            )
+                          }
+                          getEditor={() => editor.lexical.getRootElement()}
+                          session
+                          disabled={props.disabled || props.readOnly}
+                        />
+                      )}
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">

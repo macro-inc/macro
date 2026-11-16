@@ -21,6 +21,7 @@ import {
   downloadPdfDocument,
   printPdfDocument,
 } from '@block-pdf/util/pdf-file-actions';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useIsAuthenticated } from '@core/auth';
@@ -162,15 +163,18 @@ export function PdfDetailDocument(props: {
       userAccessLevel={props.data.userAccessLevel}
     >
       <SidePanel.HeaderActions>
-        <AskMacroButton
-          entity={{
-            type: 'document',
-            id: props.documentId,
-            name:
-              props.data.documentMetadata.documentName ?? 'Unknown Filename',
-            fileType: 'pdf',
-          }}
-        />
+        <HeaderActionGroup label="Actions">
+          <AskMacroButton
+            grouped
+            entity={{
+              type: 'document',
+              id: props.documentId,
+              name:
+                props.data.documentMetadata.documentName ?? 'Unknown Filename',
+              fileType: 'pdf',
+            }}
+          />
+        </HeaderActionGroup>
       </SidePanel.HeaderActions>
       <PdfDocument
         documentId={props.documentId}
