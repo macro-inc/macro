@@ -612,7 +612,7 @@ describe('Home work feed', () => {
 
     setState('search', 'absent');
     expect(ids(source)).toEqual([]);
-    expect(source.error()?.message).toBe('search unavailable');
+    expect(source.error()).toEqual(new Error('search unavailable'));
   });
 
   it('searches only the Soup sources where Home is not the work feed', () => {
