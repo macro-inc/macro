@@ -210,3 +210,33 @@ fn local_bind_keeps_actual_export_callback_order_and_count() -> Result<()> {
     ));
     Ok(())
 }
+
+// Concurrent moves by two Source peers can leave two live maps with one `$.id`; when the
+// first claimant is unbound, the survivor must take over the id.
+#[test]
+fn unbinding_the_first_claimant_of_a_duplicate_id_rebinds_the_survivor() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((first, second), _) = editor
+        .update(|tx| {
+            let first = tx.create(Paragraph::default())?;
+            let second = tx.create(Paragraph::default())?;
+            Ok((first.key(), second.key()))
+        })
+        .expect("nodes");
+    let doc = new_doc(7)?;
+    let mut index = NodeIndex::default();
+    for (name, key) in [("first", first), ("second", second)] {
+        let map = doc.get_map(name);
+        map.insert("type", "paragraph")?;
+        map.insert("$", schema::to_loro(&json!({"id":"shared"})))?;
+        index.bind(key, &map, &PLAIN)?;
+    }
+    assert_eq!(index.ids.get("shared"), Some(&first));
+    index.unbind(first);
+    assert_eq!(index.ids.get("shared"), Some(&second));
+    index.unbind(second);
+    assert_eq!(index.ids.get("shared"), None);
+    Ok(())
+}

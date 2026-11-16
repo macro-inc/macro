@@ -25,6 +25,8 @@ pub(crate) struct NodeIndex {
     pub nodes: OrderedMap<NodeKey, NodeSlots>,
     pub owner: FxHashMap<ContainerID, (NodeKey, Slot)>,
     pub ids: FxHashMap<String, NodeKey>,
+    /// Later live claimants of an id already in `ids`, promoted when the claimant unbinds.
+    duplicate_ids: FxHashMap<String, Vec<NodeKey>>,
     owned: FxHashMap<NodeKey, Vec<ContainerID>>,
 }
 impl NodeIndex {
@@ -59,7 +61,10 @@ impl NodeIndex {
             }
         });
         if let Some(id) = &id {
-            self.ids.entry(id.clone()).or_insert(key);
+            let claimant = *self.ids.entry(id.clone()).or_insert(key);
+            if claimant != key {
+                self.duplicate_ids.entry(id.clone()).or_default().push(key);
+            }
         }
         self.nodes.insert(
             key,
@@ -97,10 +102,23 @@ impl NodeIndex {
     }
     pub fn unbind(&mut self, key: NodeKey) {
         if let Some(old) = self.nodes.swap_remove(&key) {
-            if let Some(id) = old.id
-                && self.ids.get(&id) == Some(&key)
-            {
-                self.ids.remove(&id);
+            if let Some(id) = old.id {
+                let duplicates = self.duplicate_ids.get_mut(&id);
+                if self.ids.get(&id) == Some(&key) {
+                    match duplicates.and_then(|keys| (!keys.is_empty()).then(|| keys.remove(0))) {
+                        Some(survivor) => {
+                            self.ids.insert(id.clone(), survivor);
+                        }
+                        None => {
+                            self.ids.remove(&id);
+                        }
+                    }
+                } else if let Some(keys) = duplicates {
+                    keys.retain(|claimant| *claimant != key);
+                }
+                if self.duplicate_ids.get(&id).is_some_and(Vec::is_empty) {
+                    self.duplicate_ids.remove(&id);
+                }
             }
             if let Some(ids) = self.owned.remove(&key) {
                 for id in ids {
