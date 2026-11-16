@@ -119,7 +119,8 @@ nothing until every finger has lifted. Touches inside an embed being interacted
 with, or inside text being edited, stay with that editor. A pen or mouse that is
 already pressed keeps its gesture, and fingers landing meanwhile (a resting palm)
 are ignored. A flick glides only when the fingers were travelling together as
-they lifted: a pinch, whose midpoint also drifts, does not.
+they lifted: a pinch, whose midpoint also drifts, does not, and neither does a
+gesture the system cancelled.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.
@@ -321,7 +322,9 @@ budget. Mixed-content performance and general spatial indexing remain later work
 T chooses text. Click for auto width, or drag horizontally to choose a wrapping
 width. The text tool acts when the press is released, on new text and on existing
 text or labels alike, so a cancelled press (a second finger landing to pinch)
-opens no editor. Double-click an existing text shape, or select it and press Enter, to edit.
+opens no editor. A pen or mouse press outranks a touch: a palm that lands beside
+the pen cannot take the press, and a pen takes it from a palm already resting.
+Double-click an existing text shape, or select it and press Enter, to edit.
 Double-click empty canvas also creates text. Escape, Cmd/Ctrl+Enter, or a click
 outside commits the edit. Empty drafts disappear without an undo entry.
 
