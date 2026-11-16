@@ -193,7 +193,7 @@ use super::engine::AgentIdentity;
 
 /// One entry of the conversation, in the shape
 /// [`agent::to_rig_messages`] round-trips.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HistoryEntry {
     /// A prompt from a user.
     User {

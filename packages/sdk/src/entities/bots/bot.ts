@@ -124,7 +124,12 @@ export class Bot extends MacroEntity<BotRecord> {
       : { type: 'team', team: Team.byId(this.client, owner.team_id) };
   });
 
-  /** Change the bot's profile; pass only the fields that should change. */
+  /**
+   * Change the bot's profile; pass only the fields that should change.
+   *
+   * @write
+   * @idempotent
+   */
   async update(changes: UpdateBotOptions): Promise<void> {
     const body: PatchBotRequest = {
       name: changes.name,
@@ -138,14 +143,23 @@ export class Bot extends MacroEntity<BotRecord> {
     );
   }
 
-  /** Delete the bot. Its tokens stop working and it leaves every channel. */
+  /**
+   * Delete the bot. Its tokens stop working and it leaves every channel.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteBot({ path: { bot_id: this.id } }),
     );
   }
 
-  /** Channels the bot can post to. */
+  /**
+   * Channels the bot can post to.
+   *
+   * @readonly
+   */
   async channels(): Promise<Channel[]> {
     return unwrap(
       await this.client.storage.listBotChannels({
@@ -158,6 +172,8 @@ export class Bot extends MacroEntity<BotRecord> {
    * One webhook per channel the bot can post to. POST JSON `{ content }` with
    * a token from {@link createToken} in the `x-macro-bot-token` header and
    * `x-macro-bot-scope: user`. Empty until {@link grantChannel}.
+   *
+   * @readonly
    */
   async webhooks(): Promise<BotWebhook[]> {
     const base = this.client.hosts.storage.replace(/\/+$/, '');
@@ -167,7 +183,12 @@ export class Bot extends MacroEntity<BotRecord> {
     }));
   }
 
-  /** Let the bot post to a channel. The caller must be a member of it and manage the bot. */
+  /**
+   * Let the bot post to a channel. The caller must be a member of it and manage the bot.
+   *
+   * @write
+   * @idempotent
+   */
   async grantChannel(channel: Channel): Promise<void> {
     unwrap(
       await this.client.storage.addChannelBot({
@@ -177,7 +198,12 @@ export class Bot extends MacroEntity<BotRecord> {
     );
   }
 
-  /** Remove the bot from a channel. Works after the caller has left the channel. */
+  /**
+   * Remove the bot from a channel. Works after the caller has left the channel.
+   *
+   * @destructive
+   * @idempotent
+   */
   async revokeChannel(channel: Channel): Promise<void> {
     unwrap(
       await this.client.storage.removeBotFromChannelByBot({
@@ -186,7 +212,11 @@ export class Bot extends MacroEntity<BotRecord> {
     );
   }
 
-  /** The bot's tokens, including revoked and expired ones. Secrets are never returned. */
+  /**
+   * The bot's tokens, including revoked and expired ones. Secrets are never returned.
+   *
+   * @readonly
+   */
   async tokens(): Promise<BotToken[]> {
     return unwrap(
       await this.client.storage.listBotTokens({ path: { bot_id: this.id } }),
@@ -197,6 +227,8 @@ export class Bot extends MacroEntity<BotRecord> {
    * Mint a bearer token for the bot's webhooks and API. The secret is returned
    * once and cannot be read again; never write it into chat, documents or
    * results. To hand a user a token, have them mint it in bot settings.
+   *
+   * @write
    */
   async createToken(
     options: { label?: string; expiresAt?: Date } = {},

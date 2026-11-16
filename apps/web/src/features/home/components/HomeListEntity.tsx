@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
+import { groupChatName, isNamedForPeople } from '@channel/group-chat-name';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -190,12 +191,17 @@ function HomeThreadTitle(
       'Someone'
     );
   };
+  // Channels go by "#name"; a DM, or a group chat named for its people, by
+  // those people.
   const location = () => {
-    const name = props.channelName || props.entity.name;
-    return props.entity.type === 'channel_thread' &&
-      props.entity.channelType === 'direct_message'
-      ? name
-      : `#${name.replace(/^#/, '')}`;
+    const name = (props.channelName || props.entity.name).replace(/^#/, '');
+    const channelType =
+      'channelType' in props.entity ? props.entity.channelType : undefined;
+    if (channelType === 'direct_message') return name;
+    if (channelType === 'private' && isNamedForPeople(name)) {
+      return groupChatName(name);
+    }
+    return `#${name}`;
   };
   return (
     <span class="flex min-w-0 items-center">

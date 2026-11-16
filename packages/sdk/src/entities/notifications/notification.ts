@@ -92,12 +92,21 @@ export class Notification extends MacroEntity<NotificationDetail> {
   /** The typed notification payload (tagged by event type). */
   readonly metadata = this.field('notification_metadata');
 
-  /** Whether the notification is acknowledged (seen or done). */
+  /**
+   * Whether the notification is acknowledged (seen or done).
+   *
+   * @readonly
+   */
   async seen(): Promise<boolean> {
     return (await this.state()) !== 'unseen';
   }
 
-  /** Mark the notification as seen. */
+  /**
+   * Mark the notification as seen.
+   *
+   * @write
+   * @idempotent
+   */
   async markSeen(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsSeen({
@@ -106,7 +115,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Mark the notification as done. */
+  /**
+   * Mark the notification as done.
+   *
+   * @write
+   * @idempotent
+   */
   async markDone(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsDone({
@@ -115,7 +129,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Move the notification back to not-done. */
+  /**
+   * Move the notification back to not-done.
+   *
+   * @write
+   * @idempotent
+   */
   async markUndone(): Promise<void> {
     await this.mutate((c) =>
       c.notification.bulkMarkNotificationsUndone({
@@ -124,7 +143,12 @@ export class Notification extends MacroEntity<NotificationDetail> {
     );
   }
 
-  /** Delete the notification. */
+  /**
+   * Delete the notification.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.notification.deleteUserNotificationV2({

@@ -8,9 +8,9 @@ use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
-use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_adapter::{DynToolSetAdapter, provider_definition};
 use crate::tool_result_limit::ToolResultLimit;
-use ai_toolset::tool_search::tools_loaded_by;
+use ai_toolset::tool_search::{ToolMatch, tools_loaded_by};
 use ai_toolset::{
     RequestContext, SearchableTool, ToolCallOrigin, ToolLoader, ToolSet as AiToolSet,
 };
@@ -408,12 +408,28 @@ impl AgentLoop {
             catalog: catalog.clone(),
             loads: ToolLoads::default(),
         };
+        // Resolve each definition once, so `already_available` matches the
+        // description the provider shows the model.
+        let definitions: Vec<_> = toolset
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| provider_definition(schema.name, schema.description, &schema.schema))
+            .collect();
+        let advertised = definitions
+            .iter()
+            .map(|definition| ToolMatch {
+                name: definition.name.clone(),
+                description: definition.description.clone(),
+            })
+            .collect();
         let agent_name = self
             .agent_name
             .clone()
             .unwrap_or_else(|| usage_ctx.feature.to_string());
         let request_context = RequestContext::new(usage_ctx.user.clone())
             .with_tool_search(catalog, loader)
+            .with_advertised_tools(Arc::new(advertised))
             .with_genai_telemetry(self.genai_telemetry)
             .with_origin(self.tool_origin.clone().or_host(agent_name.clone()));
         // TODO this is cringe, make request context a RW lock newtype
@@ -426,7 +442,8 @@ impl AgentLoop {
         let routing: ToolRouter =
             Arc::new(move |name: &str| routing_toolset.routing_description(name));
 
-        let adapters = DynToolSetAdapter::from_toolset(
+        let adapters = DynToolSetAdapter::from_definitions(
+            definitions,
             toolset.clone(),
             context.clone(),
             request_context_rw.clone(),

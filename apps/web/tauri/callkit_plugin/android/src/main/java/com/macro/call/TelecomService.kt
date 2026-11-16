@@ -37,6 +37,8 @@ class TelecomService : ConnectionService() {
 
     inner class MacroConnection(private val id: String) : Connection() {
         private var endpoints: List<CallEndpoint> = emptyList()
+        private var selectedEndpointId: String? = null
+        fun currentEndpointId(): String? = selectedEndpointId
         override fun onShowIncomingCallUi() { if (Calls.offer?.callId == id) Calls.showIncoming(applicationContext) }
         override fun onAnswer() { Calls.answer(applicationContext, id) }
         override fun onAnswer(videoState: Int) { onAnswer() }
@@ -45,9 +47,28 @@ class TelecomService : ConnectionService() {
         override fun onHold() { if (Calls.offer?.callId == id) { Calls.hold(true); setOnHold() } }
         override fun onUnhold() { if (Calls.offer?.callId == id) { Calls.hold(false); setActive() } }
         override fun onCallAudioStateChanged(state: CallAudioState) { if (Calls.offer?.callId == id) Calls.telecomAudio(state) }
-        override fun onAvailableCallEndpointsChanged(available: MutableList<CallEndpoint>) { endpoints = available.toList() }
-        override fun onCallEndpointChanged(endpoint: CallEndpoint) { if (Calls.offer?.callId == id) Calls.endpointAudio(endpoint.endpointType) }
+        override fun onAvailableCallEndpointsChanged(available: MutableList<CallEndpoint>) {
+            endpoints = available.toList()
+            if (Calls.offer?.callId == id) Calls.publishAudioOutput(applicationContext)
+        }
+        fun availableEndpoints(): List<CallEndpoint> = endpoints.toList()
+        override fun onCallEndpointChanged(endpoint: CallEndpoint) {
+            if (Calls.offer?.callId == id) {
+                selectedEndpointId = endpoint.identifier.toString()
+                Calls.endpointAudio(endpoint.endpointType)
+                Calls.publishAudioOutput(applicationContext)
+            }
+        }
         override fun onMuteStateChanged(isMuted: Boolean) { if (Calls.offer?.callId == id) Calls.systemMute(isMuted) }
+        fun selectEndpoint(identifier: String): Boolean {
+            if (Build.VERSION.SDK_INT < 34 || Calls.offer?.callId != id) return false
+            val endpoint = endpoints.firstOrNull { it.identifier.toString() == identifier } ?: return false
+            requestCallEndpointChange(endpoint, mainExecutor, object : OutcomeReceiver<Void, CallEndpointException> {
+                override fun onResult(result: Void?) { Calls.publishAudioOutput(applicationContext) }
+                override fun onError(error: CallEndpointException) { Calls.publishAudioOutput(applicationContext) }
+            })
+            return true
+        }
         fun route(route: Int) {
             if (Build.VERSION.SDK_INT >= 34) {
                 val type = when (route) {

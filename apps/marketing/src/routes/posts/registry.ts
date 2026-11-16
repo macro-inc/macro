@@ -41,6 +41,8 @@ export interface PostMeta {
   category?: string;
   /** Brand key for the hero switch graphic (e.g. "linear", "notion"). */
   coverBrand?: string;
+  /** Lead YouTube video, shown below the title instead of the cover graphic. */
+  heroVideo?: { id: string; title: string; caption?: string };
   /** Absolute or root-relative social-share image path. */
   image?: string;
   /** Post author shown in the byline. */

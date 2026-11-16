@@ -84,13 +84,16 @@ export function createContactDirectoryWindow(
     policy?: Accessor<ContactPeoplePolicy>;
     /** Local eligibility changes also restart paging, without entering IPC. */
     resetKey?: Accessor<string>;
+    /** Wait this long after the last search edit before reading. Callers
+     * whose search text is already debounced pass 0. */
+    debounceMs?: number;
   } = {}
 ) {
   const owner = createUniqueId();
   const client = useQueryClient();
   const [ownSearch, setSearch] = createSignal('');
   const search = options.search ?? ownSearch;
-  const debouncedSearch = debouncedDependent(search, 200);
+  const debouncedSearch = debouncedDependent(search, options.debounceMs ?? 200);
   const input = createMemo(
     () => {
       const value = options.policy?.();
@@ -232,8 +235,11 @@ export function createContactDirectoryWindow(
       setSearch(value);
     },
     data,
-    windowKey: () =>
-      data() ? `${generation()}:${hashKey([request()])}` : undefined,
+    /** Whether the page on screen continues an earlier one. */
+    continued: () => request().cursor !== undefined,
+    /** Names the page on screen (query, eligibility, continuation). A refresh
+     * of that page keeps its key, so callers reset focus only for a new page. */
+    windowKey: () => (data() ? hashKey([request()]) : undefined),
     loading: () => query.isFetching || search() !== debouncedSearch(),
     error: () => query.error,
     next: () => {

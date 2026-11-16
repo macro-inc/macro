@@ -72,7 +72,7 @@ impl<SR> CrmSearchService for CrmSearchServiceImpl<SR>
 where
     SR: CrmSearchRepository,
 {
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip(self, access, term), fields(term_len = term.len()), err)]
     async fn search_company_names(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,

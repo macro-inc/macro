@@ -1,3 +1,3 @@
-//! Which tools a turn presents.
+//! Which tools the public MCP presents a request.
 
 pub use ai_toolset::ToolMode;

@@ -54,6 +54,9 @@ export class WebNamespace {
    *   maxResults: 3,
    * });
    * for (const result of results) console.log(result.title, result.url, result.snippet);
+   *
+   * @write
+   * @openworld
    */
   async search(
     query: string,
@@ -81,6 +84,9 @@ export class WebNamespace {
    * @example
    * const page = await macro.web.fetch('https://tokio.rs/blog/2025-10-tokio-1-48');
    * console.log(page.content);
+   *
+   * @write
+   * @openworld
    */
   async fetch(
     url: string,

@@ -222,7 +222,7 @@ async fn measure_prompt_cache() {
 #[tokio::test]
 #[ignore = "calls the Anthropic API; run under doppler with --nocapture"]
 async fn measure_prompt_cache_turns() {
-    let native = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let native = NativeTools::new();
     let run = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

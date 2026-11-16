@@ -519,12 +519,6 @@ export function UniversalInputFixture(
     rosterLoading: () => false,
     connectAgent: (agent) => setAgentAction(`connect:${agent.id}`),
     createAgent: () => setAgentAction('create'),
-    agentsEnabled: () => !params.has('legacy'),
-    models: () => [
-      { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
-      { id: 'gpt-5', label: 'GPT-5' },
-    ],
-    model: () => '',
     attachmentCount: () => 0,
     clearAttachments: () => {},
   };
@@ -666,7 +660,7 @@ export function UniversalInputFixture(
         if (filters.unresolved.length)
           return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
         if (searchNeedsKeywords(filters.state, input.fields.query))
-          return 'Add at least 3 search characters to search by sender or speaker.';
+          return 'Add search text to search by sender or speaker.';
       }
       if (params.has('person-references')) {
         const fields = input.fields;

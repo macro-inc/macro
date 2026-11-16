@@ -5,14 +5,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntryFieldChangeAfter } from './entryFieldChangeAfter';
+import type { EntryFieldChangeAfterCurrency } from './entryFieldChangeAfterCurrency';
 import type { EntryFieldChangeBefore } from './entryFieldChangeBefore';
+import type { EntryFieldChangeBeforeCurrency } from './entryFieldChangeBeforeCurrency';
 
 /**
  * One field's value before and after an update.
  */
 export interface EntryFieldChange {
   after?: EntryFieldChangeAfter;
+  /** For a monetary field, the currency code of the amount now. */
+  afterCurrency?: EntryFieldChangeAfterCurrency;
   before?: EntryFieldChangeBefore;
+  /** For a monetary field, the currency code of the amount before. */
+  beforeCurrency?: EntryFieldChangeBeforeCurrency;
   /** The field. */
   field: string;
 }

@@ -11,7 +11,7 @@ jobs:
   start:
     if: github.event.label.name == 'run-ci'
     name: Start
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
       issues: write
@@ -501,7 +501,6 @@ jobs:
             - '.github/kafka-cluster-topics.json'
           node_modules_nix:
             - 'bun.lock'
-            - 'packages/sdk/bun.lock'
             - 'package.json'
             - 'apps/**/package.json'
             - 'packages/**/package.json'
@@ -524,6 +523,7 @@ jobs:
             - '.github/workflows/check_tauri_lockfiles.yml'
           sdk:
             - 'packages/sdk/**'
+            - 'bun.lock'
             - '.github/workflows/sdk-check.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
@@ -631,7 +631,7 @@ jobs:
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''
     name: CI gate
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       statuses: write
     timeout-minutes: 5

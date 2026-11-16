@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('keeps the mobile editor focused as forms appear above it and Enter adds a line', async ({
   page,
 }) => {
-  await page.goto('/?mobile-search&eligible&legacy');
+  await page.goto('/?mobile-search&eligible');
   await page
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();
@@ -82,7 +82,7 @@ test('replaces the normal results and filter tabs with the card until the input 
 }) => {
   const failures: string[] = [];
   page.on('pageerror', (error) => failures.push(error.message));
-  await page.goto('/?mobile-search&eligible&legacy');
+  await page.goto('/?mobile-search&eligible');
   await page
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();
@@ -123,7 +123,7 @@ test('replaces the normal results and filter tabs with the card until the input 
 test('keeps mobile email unsent until Send and submits the visible draft once', async ({
   page,
 }) => {
-  await page.goto('/?mobile-search&eligible&legacy');
+  await page.goto('/?mobile-search&eligible');
   await page
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();
@@ -152,7 +152,7 @@ test('keeps mobile email unsent until Send and submits the visible draft once', 
 test('waits for IME composition before predicting from the mobile editor', async ({
   page,
 }) => {
-  await page.goto('/?mobile-search&eligible&legacy');
+  await page.goto('/?mobile-search&eligible');
   await page
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();
@@ -187,7 +187,7 @@ test('waits for IME composition before predicting from the mobile editor', async
 test('uses live global search filters on mobile and opens a filtered hit directly', async ({
   page,
 }) => {
-  await page.goto('/?mobile-search&eligible&legacy');
+  await page.goto('/?mobile-search&eligible');
   await page
     .getByRole('button', { name: 'Open mobile search', exact: true })
     .tap();

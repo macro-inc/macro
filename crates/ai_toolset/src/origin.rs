@@ -18,9 +18,8 @@ const MAX_CLIENT_NAME_CHARS: usize = 64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum ToolMode {
-    /// The direct Macro tools: callers that cannot run code (summaries,
-    /// sessions without a user owner, no code runner reachable, clients that
-    /// refuse generic executors).
+    /// The direct Macro tools, for callers that cannot run code, such as
+    /// public MCP clients that refuse generic executors.
     Standard,
     /// Code mode: the SDK replaces every direct tool it covers.
     Code,

@@ -110,6 +110,7 @@ fn time(value: &str) -> DateTime<Utc> {
 fn property_record(id: u128) -> ActivityRecord {
     ActivityRecord {
         agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(id),
         actor: Actor::new_from_user(user()),
         subject_id: user().to_string(),

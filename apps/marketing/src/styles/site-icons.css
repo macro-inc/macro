@@ -1,0 +1,21 @@
+@layer base {
+  /* Keep source SVGs portable. Match their default root weights so explicit
+     component stroke overrides and inner details retain their own weights. */
+  [data-theme-light='true'] {
+    --macro-icon-regular-weight: 1.7;
+    --macro-icon-bold-weight: 2;
+  }
+
+  [data-theme-light='false'] {
+    --macro-icon-regular-weight: 2;
+    --macro-icon-bold-weight: 2.3;
+  }
+
+  svg[data-macro-icon][stroke-width='2'] {
+    stroke-width: var(--macro-icon-regular-weight, 2);
+  }
+
+  svg[data-macro-icon][stroke-width='2.3'] {
+    stroke-width: var(--macro-icon-bold-weight, 2.3);
+  }
+}

@@ -1,13 +1,17 @@
 mod admission;
+mod appearance;
 mod check;
 mod owned_purge;
+mod sub_routines;
 mod user_cleanup;
 
 use super::*;
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::event_runs::test_support::Rollout;
+use crate::domain::models::ListScope;
 use crate::domain::models::{
-    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
-    MAX_ACTION_TIME, RunVisibility,
+    ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, ExecutionResource,
+    ExecutionResourceType, ListedAction, MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
     execution::ExecutionHandle,
@@ -39,10 +43,125 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 #[derive(Default)]
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
+    activities: Mutex<Vec<activity::Activity>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
+    /// Runs in progress, as claims would show them.
+    running: Mutex<Vec<RunningRun>>,
+}
+
+impl SubRoutines for FakeRepo {
+    async fn running_run(&self, routine: &Uuid) -> Result<Option<RunningRun>> {
+        let running = self.running.lock().unwrap();
+        Ok(running
+            .iter()
+            .find(|run| run.routine_id == *routine)
+            .cloned())
+    }
+
+    async fn running_run_of_session(&self, session: &Uuid) -> Result<Option<RunningRun>> {
+        let running = self.running.lock().unwrap();
+        Ok(running.iter().find(|run| run.run_id == *session).cloned())
+    }
+
+    async fn children(&self, parent: &Uuid) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| action.parent_id() == Some(*parent))
+            .cloned()
+            .collect())
+    }
+
+    async fn active_children(&self, parents: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| {
+                let parent = action.parent_id();
+                parent.is_some_and(|parent| parents.contains(&parent)) && !action.is_finished_once()
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn top_level_by_ids(&self, ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| action.id.is_some_and(|id| ids.contains(&id)))
+            .filter(|action| action.sub_routine.is_none())
+            .cloned()
+            .collect())
+    }
+
+    async fn child_by_key(
+        &self,
+        parent: &Uuid,
+        key: &SubRoutineKey,
+    ) -> Result<Option<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .find(|action| {
+                action
+                    .sub_routine
+                    .as_ref()
+                    .is_some_and(|link| link.parent_id == *parent && link.key.as_ref() == Some(key))
+            })
+            .cloned())
+    }
+
+    async fn detach(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
+        let mut actions = self.actions.lock().unwrap();
+        let stored = actions.iter_mut().find(|action| action.id == Some(*id));
+        Ok(stored.and_then(|action| {
+            action.sub_routine.take()?;
+            Some(action.clone())
+        }))
+    }
+
+    async fn created_by_runs(
+        &self,
+        parent: &Uuid,
+        runs: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::CreatedRoutine)>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter_map(|action| {
+                let link = action.sub_routine.as_ref()?;
+                (link.parent_id == *parent && runs.contains(&link.created_by_run_id)).then(|| {
+                    let created = crate::domain::models::CreatedRoutine {
+                        id: action.id.unwrap(),
+                        name: action.name.clone(),
+                    };
+                    (link.created_by_run_id, created)
+                })
+            })
+            .collect())
+    }
 }
 
 impl ScheduledActionRepo for FakeRepo {
+    async fn set_appearance(
+        &self,
+        change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        let mut actions = self.actions.lock().unwrap();
+        let action = actions
+            .iter_mut()
+            .find(|action| action.id == Some(change.id))
+            .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let Some(activity) = change.activity(&action.appearance) else {
+            return Ok(None);
+        };
+        self.activities.lock().unwrap().push(activity);
+        Ok(Some(std::mem::replace(
+            &mut action.appearance,
+            change.appearance,
+        )))
+    }
+
     async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
         action.id = Some(generate_uuid_v7());
         self.actions.lock().unwrap().push(action.clone());
@@ -89,12 +208,27 @@ impl ScheduledActionRepo for FakeRepo {
     }
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
-        self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
+        let mut actions = self.actions.lock().unwrap();
+        let deleted: Vec<_> = actions
+            .iter()
+            .filter(|action| action.id == Some(*id) || action.parent_id() == Some(*id))
+            .filter_map(|action| action.id.map(|id| id.to_string()))
+            .collect();
+        actions.retain(|action| action.id != Some(*id) && action.parent_id() != Some(*id));
+        self.activities
+            .lock()
+            .unwrap()
+            .retain(|activity| !deleted.contains(&activity.entity_id));
         Ok(())
     }
 
-    async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
-        Ok(vec![])
+    async fn get_execution_records(&self, id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
+        let records = self.records.lock().unwrap();
+        Ok(records
+            .iter()
+            .filter(|record| record.action_id == *id)
+            .cloned()
+            .collect())
     }
     async fn last_runs(
         &self,
@@ -235,13 +369,13 @@ pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
 pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
     let (tx, _) = tokio::sync::mpsc::channel(1);
     Arc::new(
-        TestService::new(
+        ScheduledActionServiceImpl::new(
             Arc::clone(&service.repo),
             Arc::clone(&service.executor),
             tx,
             Arc::clone(&service.grants),
         )
-        .with_event_management_enabled(service.event_management_enabled),
+        .with_event_routines(service.rollout),
     )
 }
 
@@ -256,7 +390,16 @@ pub(crate) fn grant_to(service: &TestService, user_id: &str, id: Uuid) {
         .push(id);
 }
 
-pub(crate) type TestService = ScheduledActionServiceImpl<FakeRepo, FakeExecutor, FakeGrants>;
+pub(crate) type TestService = ScheduledActionServiceImpl<
+    FakeRepo,
+    FakeExecutor,
+    FakeGrants,
+    ModelOnlyTargets,
+    NoGithubLinks,
+    NoRoutineCode,
+    NoCodeUpgrades,
+    Rollout,
+>;
 
 fn grants(repo: &Arc<FakeRepo>) -> Arc<FakeGrants> {
     Arc::new(FakeGrants::all(Arc::clone(repo)))
@@ -267,13 +410,13 @@ pub(crate) fn service(enabled: bool) -> Arc<TestService> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     Arc::new(
-        TestService::new(
+        ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
             Arc::new(FakeExecutor::default()),
             tx,
             grants(&repo),
         )
-        .with_event_management_enabled(enabled),
+        .with_event_routines(Rollout(Some(enabled))),
     )
 }
 
@@ -343,7 +486,7 @@ fn update(config: ActionConfiguration) -> ActionConfigurationUpdate {
 async fn validates_before_persistence_and_rejects_cross_owner_selection() {
     let base = service(false);
     let sessions = Arc::new(Sessions::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -395,7 +538,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
 #[tokio::test]
 async fn without_sessions_agents_are_refused_but_models_and_explicit_switches_are_kept() {
     let base = service(false);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -454,7 +597,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
     for claimed in [false, true] {
         let base = service(false);
         let sessions = Arc::new(Sessions::default());
-        let svc = TestService::new(
+        let svc = ScheduledActionServiceImpl::new(
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
@@ -510,7 +653,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
     ] {
         let base = service(false);
         let sessions = Arc::new(Sessions::default());
-        let svc = TestService::new(
+        let svc = ScheduledActionServiceImpl::new(
             base.repo.clone(),
             base.executor.clone(),
             base.dispatcher_tx.clone(),
@@ -576,7 +719,7 @@ async fn creates_both_triggers_with_server_owned_state() {
 async fn default_gate_rejects_event_creation_and_transition_but_allows_cron() {
     let (tx, _rx) = tokio::sync::mpsc::channel(8);
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -607,13 +750,13 @@ async fn gate_off_rejects_enabling_an_existing_event_action() {
         .create_action(&user_principal(), config.clone())
         .await
         .unwrap();
-    let disabled = TestService::new(
+    let disabled = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
         grants(&enabled.repo),
     )
-    .with_event_management_enabled(false);
+    .with_event_routines(Rollout(Some(false)));
     config.enabled = true;
     assert_policy(
         disabled
@@ -650,18 +793,40 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .await
         .unwrap();
     assert_eq!(
-        svc.get_actions(user(), false).await.unwrap()[0].action.id,
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()[0]
+            .action
+            .id,
         cron.id
     );
-    assert_eq!(svc.get_actions(user(), false).await.unwrap().len(), 1);
-    assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 2);
+    assert_eq!(
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
     svc.get_execution_records(view_receipt(event.id.unwrap()))
         .await
         .unwrap();
     svc.delete_action(owner_receipt(event.id.unwrap()))
         .await
         .unwrap();
-    assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 1);
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -691,7 +856,10 @@ async fn lists_each_routine_with_its_latest_run() {
         .unwrap()
         .extend([record(30, true), record(5, false)]);
 
-    let listed = svc.get_actions(user(), true).await.unwrap();
+    let listed = svc
+        .get_actions(user(), true, ListScope::TopLevel)
+        .await
+        .unwrap();
     let last_run = |id: Option<Uuid>| {
         listed
             .iter()
@@ -706,7 +874,7 @@ async fn lists_each_routine_with_its_latest_run() {
 }
 
 #[tokio::test]
-async fn nonowners_can_read_but_not_manage_routines() {
+async fn nonowners_can_neither_read_nor_manage_routines() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -718,9 +886,15 @@ async fn nonowners_can_read_but_not_manage_routines() {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_eq!(
+            svc.get_action(&view_receipt(id)).await.unwrap().id,
+            Some(id)
+        );
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_policy(
+            svc.get_action(&view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
         assert_policy(
             svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,
@@ -743,7 +917,12 @@ async fn nonowners_can_read_but_not_manage_routines() {
             ActionPolicyError::NotFound,
         );
     }
-    assert!(svc.get_actions(user(), true).await.unwrap().is_empty());
+    assert!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(
         svc.repo
             .actions
@@ -798,7 +977,7 @@ async fn user_and_bot_for_user_record_a_user_and_team_bot_writes_nothing() {
 #[tokio::test]
 async fn disabled_manual_runs_work_for_both_variants_even_with_gate_off() {
     let enabled = service(true);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -890,7 +1069,7 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
             .await,
         ActionPolicyError::UpdateConflict,
     );
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -933,8 +1112,10 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     };
     let expires_at = action
         .claim_expires_at()
@@ -1002,8 +1183,10 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 
@@ -1011,7 +1194,7 @@ fn seeded(
 async fn activation_changes_are_idempotent_and_keep_configuration() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -1103,7 +1286,7 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
         Uuid::from_u128(5),
         Uuid::from_u128(9),
     ]);
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,
@@ -1146,11 +1329,19 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        listed(svc.get_actions(user(), true).await.unwrap()),
+        listed(
+            svc.get_actions(user(), true, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         expected
     );
     assert_eq!(
-        listed(svc.get_actions(user(), false).await.unwrap()),
+        listed(
+            svc.get_actions(user(), false, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }
@@ -1163,7 +1354,7 @@ async fn gate_off_allows_pausing_an_event_action_but_not_resuming_it() {
         .await
         .unwrap();
     let id = action.id.unwrap();
-    let gated = TestService::new(
+    let gated = ScheduledActionServiceImpl::new(
         enabled.repo.clone(),
         enabled.executor.clone(),
         enabled.dispatcher_tx.clone(),
@@ -1210,7 +1401,7 @@ async fn running_actions_can_be_paused_but_not_resumed() {
 async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
     let base = service(false);
     let sessions = Arc::new(Sessions::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         base.repo.clone(),
         base.executor.clone(),
         base.dispatcher_tx.clone(),
@@ -1368,13 +1559,13 @@ async fn conditions_are_rejected_unless_the_host_can_check_them() {
         ActionPolicyError::ConditionsDisabled,
     );
 
-    let with = TestService::new(
+    let with = ScheduledActionServiceImpl::new(
         without.repo.clone(),
         without.executor.clone(),
         without.dispatcher_tx.clone(),
         grants(&without.repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_conditions_enabled(true);
     let created = with
         .create_action(&user_principal(), conditional_configuration())
@@ -1461,13 +1652,13 @@ async fn saving_names_code_steps_and_resaving_without_the_names_changes_nothing(
     let repo = Arc::new(FakeRepo::default());
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         Arc::clone(&repo),
         Arc::new(FakeExecutor::default()),
         tx,
         grants(&repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_code(
         Arc::new(crate::domain::code_check::test::Checker::default()),
         Arc::new(crate::domain::code_upgrade::NoCodeUpgrades),
@@ -1541,13 +1732,13 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         ActionPolicyError::GithubNotLinked,
     );
 
-    let linked = TestService::new(
+    let linked = ScheduledActionServiceImpl::new(
         unlinked.repo.clone(),
         unlinked.executor.clone(),
         unlinked.dispatcher_tx.clone(),
         grants(&unlinked.repo),
     )
-    .with_event_management_enabled(true)
+    .with_event_routines(Rollout(Some(true)))
     .with_github_links(Linked(true));
     assert!(
         linked

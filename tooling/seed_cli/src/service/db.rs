@@ -257,7 +257,11 @@ impl SeedDb {
         &self,
         labels: Vec<service::label::Label>,
     ) -> anyhow::Result<()> {
-        email_db_client::labels::insert::insert_or_update_labels(&self.inner, labels).await
+        email::domain::message_labels::state::insert_or_update_labels(
+            &mut email::outbound::label_state_pg::PgLabelCatalog(&self.inner),
+            labels,
+        )
+        .await
     }
 
     /// Insert an email thread with all its messages, contacts, recipients, and labels.

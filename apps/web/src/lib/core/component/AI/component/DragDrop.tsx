@@ -3,7 +3,7 @@ import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { fileDrop } from '@core/directive/fileDrop';
-import type { Accessor, Component, ParentProps } from 'solid-js';
+import type { Component, ParentProps } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 
 false && fileDrop; // Reference for SolidJS directive
@@ -11,8 +11,6 @@ false && fileDrop; // Reference for SolidJS directive
 type DragDropWrapperProps = ParentProps<{
   class?: string;
   overlayMessage?: string;
-  /** Signal indicating if an entity is being dragged over (from useEntityDropAttachment) */
-  isEntityDraggingOver?: Accessor<boolean>;
 }>;
 
 /**
@@ -25,7 +23,7 @@ export const DragDropWrapper: Component<DragDropWrapperProps> = (props) => {
 
   const [isFileDragging, setIsFileDragging] = createSignal(false);
 
-  const showOverlay = () => isFileDragging() || props.isEntityDraggingOver?.();
+  const showOverlay = () => isFileDragging();
 
   return (
     <div

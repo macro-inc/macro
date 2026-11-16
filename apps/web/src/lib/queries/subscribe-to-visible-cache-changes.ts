@@ -14,9 +14,13 @@ export function subscribeToVisibleCacheChanges(
   options?: {
     searchBuckets?: Accessor<readonly string[]>;
     includeHydration?: boolean;
+    /** Minimum spacing between refreshes during a burst of changes. */
+    intervalMs?: number;
   }
 ): () => void {
-  const visibleRefresh = createVisibleRefresh(refresh);
+  const visibleRefresh = createVisibleRefresh(refresh, {
+    intervalMs: options?.intervalMs,
+  });
   let disposed = false;
   const unsubscribe = host.onCacheChanged(
     (_revision, changes) => {

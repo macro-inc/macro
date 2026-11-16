@@ -85,7 +85,7 @@ function takenIdOf(taken: unknown): TakenId | null {
   const id = taken.id;
   return match(taken.kind)
     .returnType<TakenId | null>()
-    .with('table', 'column', 'option', 'view', (kind) => ({ kind, id }))
+    .with('table', 'column', 'option', 'view', 'row', (kind) => ({ kind, id }))
     .otherwise(() => null);
 }
 
