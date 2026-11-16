@@ -66,7 +66,14 @@ fn render_thread(thread: &[TranscriptMessage]) -> String {
 
 #[async_trait]
 impl InferredTriggerClassifier for FastModelTriggerClassifier {
-    #[tracing::instrument(skip(self, thread), err)]
+    #[tracing::instrument(
+        skip(self, requesting_user, thread),
+        err,
+        fields(
+            thread.message_count = thread.len(),
+            channel_bot.expects_response = tracing::field::Empty,
+        )
+    )]
     async fn expects_response(
         &self,
         requesting_user: &MacroUserIdStr<'static>,
@@ -110,6 +117,9 @@ impl InferredTriggerClassifier for FastModelTriggerClassifier {
         .await?;
 
         let output: ClassifierOutput = serde_json::from_value(value)?;
+        // The outcome is searchable on the span; the model's reason can quote
+        // the message, so it stays at debug.
+        tracing::Span::current().record("channel_bot.expects_response", output.expects_response);
         tracing::debug!(
             expects_response = output.expects_response,
             reason = %output.reason,

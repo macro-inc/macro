@@ -89,6 +89,11 @@ data checks and explicit vault purge. It does not depend on a successful item.
 
 ## Gotchas
 
+- `crm_email_rule_*` and `crm_email_policy_audit` hold private member/mailbox
+  policy history. Selected consent uses its own grant bit and exact revision FK;
+  legacy-write/version triggers and mailbox revocation must survive rollbacks.
+  Keep applied migration files immutable and add forward corrections instead.
+
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
@@ -153,6 +158,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
@@ -168,5 +174,13 @@ identities. Membership or account removal ends access without erasing team data.
 Retain the team closure fence independently of metadata cascades; purge metadata
 only after provider namespace erasure. Keep orphan-discovery candidates durable
 with their cursor advance, and separate retry scheduling from TOTP quarantine.
+If the concurrent `password_activity_agent_requests` build (migration
+`20261116152529`) is interrupted, inspect `pg_index.indisvalid` and drop only its
+invalid index before retrying.
 
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.
+
+`crm_email_thread_exclusions` stores one contributor's private thread exceptions;
+its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
+owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
+veto used by the shared eligibility function and mirrored in set-based ingestion.

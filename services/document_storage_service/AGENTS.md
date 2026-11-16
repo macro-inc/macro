@@ -66,6 +66,9 @@ threads, pins, recents, notifications, folders, activity.
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/server.rs` also runs `bots::inbound::profile_consumer`, which pushes a
+  changed bot's current profile to the people who see it (see
+  `crates/bots/README.md`).
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope
@@ -96,6 +99,9 @@ threads, pins, recents, notifications, folders, activity.
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
+  failed `enable-crm-thread-exclusions` evaluation must refuse API writes.
 
 - Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
   the CRM domain owns authorization, normalization and relation invariants.

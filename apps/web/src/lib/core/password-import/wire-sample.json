@@ -24,7 +24,9 @@
         "passkey": 1,
         "password_history": 2,
         "totp_non_default": 1,
-        "extra_field": 1
+        "extra_field": 1,
+        "empty_field": 1,
+        "uri_match_type": 1
       }
     },
     "folders": [
@@ -500,12 +502,22 @@
     "dropped": [
       {
         "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "uri_match_type",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
         "what": "passkey",
         "count": 1
       },
       {
         "sourceKey": "10000000-0000-4000-8000-000000000001",
         "what": "extra_field",
+        "count": 1
+      },
+      {
+        "sourceKey": "10000000-0000-4000-8000-000000000001",
+        "what": "empty_field",
         "count": 1
       },
       {

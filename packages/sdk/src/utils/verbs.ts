@@ -238,6 +238,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
+      passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
       getTaskTemplate
     `,
@@ -256,7 +257,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listTaskTemplates
     `,
     searched: `
-      searchContacts taskSimilaritySearchHandler
+      searchContacts taskSimilaritySearchHandler passwordsAgentSearch
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
@@ -268,7 +269,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       checkActiveCall getCallRingState getTeamAvailability
     `,
     requested:
-      'requestAccountManager requestChannelAccess accessRequestsSubmit',
+      'requestAccountManager requestChannelAccess accessRequestsSubmit passwordsAgentRequestAccess',
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
@@ -277,9 +278,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
       createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
-      createTaskTemplate
+      createTaskTemplate passwordsAgentCreate
     `,
     edited: `
+      passwordsAgentUpdate passwordsAgentSetTotp
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps

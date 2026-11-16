@@ -8,7 +8,7 @@ import type {
   ControlRequest,
 } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { Suspense } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fold = vi.hoisted(() => ({
@@ -82,6 +82,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
   subscribeGraphqlSoupReconnected: () => () => {},
 }));
 
+const { QueryClient, QueryClientProvider } = await import(
+  '@tanstack/solid-query'
+);
 const { cleanup, render } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
 const { PromptTrace } = await import('@core/agent-session/prompt-telemetry');
@@ -105,11 +108,14 @@ function Destination(props: { id: string }) {
 }
 
 const mount = (id: string) =>
-  render(() => (
-    <Suspense>
-      <Destination id={id} />
-    </Suspense>
-  ));
+  render(
+    () => (
+      <Suspense>
+        <Destination id={id} />
+      </Suspense>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -128,6 +134,12 @@ const snapshots = () =>
   fold.pushSession.mock.calls
     .flatMap((call) => call[1] as FoldInput[])
     .filter((input) => input.kind === 'snapshot');
+
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
 
 beforeEach(() => {
   vi.useFakeTimers();

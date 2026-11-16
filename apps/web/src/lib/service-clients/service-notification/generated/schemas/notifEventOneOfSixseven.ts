@@ -6,13 +6,13 @@
  */
 
 import type { NotifEventOneOfSixsevenTag } from './notifEventOneOfSixsevenTag';
-import type { RoutineRunFinishedMetadata } from './routineRunFinishedMetadata';
+import type { PasswordAccessRequestedMetadata } from './passwordAccessRequestedMetadata';
 
 /**
- * One of the user's routines finished a run, successfully or not.
+ * An agent asked for access to a vault item the user manages.
  */
 export type NotifEventOneOfSixseven = {
-  /** One of the user's routines finished a run, successfully or not. */
-  content: RoutineRunFinishedMetadata;
+  /** An agent asked for access to a vault item the user manages. */
+  content: PasswordAccessRequestedMetadata;
   tag: NotifEventOneOfSixsevenTag;
 };

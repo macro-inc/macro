@@ -147,8 +147,8 @@ export function WebhooksDialog(props: {
                           tooltip="Copy webhook URL"
                           variant="secondary"
                           onClick={() => copy(url())}
+                          icon={<CopyIcon class="size-4" />}
                         >
-                          <CopyIcon class="size-4" />
                           Copy
                         </CopyButton>
                       </div>
@@ -166,8 +166,8 @@ export function WebhooksDialog(props: {
                           size="sm"
                           variant="ghost"
                           onClick={() => copy(curl())}
+                          icon={<CopyIcon class="size-3.5" />}
                         >
-                          <CopyIcon class="size-3.5" />
                           Copy
                         </CopyButton>
                       </div>

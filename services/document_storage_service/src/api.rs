@@ -461,7 +461,15 @@ fn api_router(state: ApiContext) -> Router {
         .nest("/task_templates", task_templates::router())
         .nest(
             "/passwords",
-            passwords::inbound::router::router(state.passwords_state.clone()),
+            passwords::inbound::router::router(state.passwords_state.clone()).merge(
+                passwords::inbound::agent_router::review_router(
+                    state.passwords_agent_state.clone(),
+                ),
+            ),
+        )
+        .nest(
+            "/passwords/agent",
+            passwords::inbound::agent_router::agent_router(state.passwords_agent_state.clone()),
         )
         .layer(axum::middleware::from_fn_with_state(
             (
