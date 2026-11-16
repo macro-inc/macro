@@ -3,7 +3,7 @@ import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
-import { Show } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 import { EmailRecentSearches } from '../../components/EmailRecentSearches';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 
@@ -21,6 +21,24 @@ export function EmailMobileSearch(props: {
   ref: (input: HTMLInputElement) => void;
 }) {
   let input: HTMLInputElement | undefined;
+
+  // Escape leaves the page, as Cancel does, from the field and after Search
+  // has dropped its focus, since a hardware keyboard can still press it.
+  // Android Back arrives as this Escape, so it is marked handled or the app
+  // would also go back. A menu or sheet holds focus while open and keeps its
+  // own Escape.
+  onMount(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (isComposing(event) || !input?.isConnected) return;
+      if (event.target !== input && event.target !== document.body) return;
+
+      event.preventDefault();
+      props.onCancel();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onKeyDown));
+  });
 
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
@@ -54,18 +72,9 @@ export function EmailMobileSearch(props: {
               onFocus={() => props.suggestions.setFocused(true)}
               onBlur={() => props.suggestions.setFocused(false)}
               onKeyDown={(event) => {
-                // Safari reports the Enter that commits a composition as not
-                // composing; its key code still marks it.
-                if (event.isComposing || event.keyCode === 229) return;
+                if (isComposing(event)) return;
                 // Search drops the keyboard to show the results.
                 if (event.key === 'Enter') input?.blur();
-                // Escape leaves the page, as Cancel does. Android Back arrives
-                // as this Escape, so it is marked handled or the app would
-                // also go back.
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  props.onCancel();
-                }
               }}
             />
             <Show when={props.search}>
@@ -101,4 +110,10 @@ export function EmailMobileSearch(props: {
       </Show>
     </>
   );
+}
+
+// Safari reports the Enter that commits a composition as not composing; its
+// key code still marks it.
+function isComposing(event: KeyboardEvent) {
+  return event.isComposing || event.keyCode === 229;
 }

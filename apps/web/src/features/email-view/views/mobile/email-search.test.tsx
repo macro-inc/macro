@@ -132,3 +132,30 @@ it('keeps the keyboard up for the Enter that commits a composition', () => {
   fireEvent.keyDown(field, { key: 'Enter' });
   expect(document.activeElement).not.toBe(field);
 });
+
+it('leaves the page on Escape after Search has dropped focus from the field', () => {
+  const { field, onCancel } = renderPage('budget');
+  field.focus();
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(document.activeElement).not.toBe(field);
+
+  expect(fireEvent.keyDown(document.body, { key: 'Escape' })).toBe(false);
+  expect(onCancel).toHaveBeenCalledOnce();
+});
+
+it('leaves Escape to an open menu, another field and a composition', () => {
+  const { field, onCancel } = renderPage('budget');
+  const menu = document.createElement('div');
+  menu.tabIndex = -1;
+  const other = document.createElement('textarea');
+  document.body.append(menu, other);
+
+  fireEvent.keyDown(menu, { key: 'Escape' });
+  fireEvent.keyDown(other, { key: 'Escape' });
+  field.focus();
+  fireEvent.keyDown(field, { key: 'Escape', isComposing: true });
+
+  expect(onCancel).not.toHaveBeenCalled();
+  menu.remove();
+  other.remove();
+});

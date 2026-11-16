@@ -10,7 +10,10 @@ export function createSearchScrollReset(options: {
   showsPreviousRows: Accessor<boolean>;
   reset: () => void;
 }) {
-  let shownQuery = options.query().trim();
+  // A search still loading when the list mounts has not shown its results.
+  let shownQuery = options.showsPreviousRows()
+    ? undefined
+    : options.query().trim();
 
   createEffect(
     on(
