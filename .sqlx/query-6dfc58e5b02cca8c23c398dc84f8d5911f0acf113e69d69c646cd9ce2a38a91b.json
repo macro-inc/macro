@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_generation_session AS s\n               SET cleanup = 'stopping', ending = 'interrupted', ended_at = $2, cleanup_at = $2,\n                   closed_at = $2\n               WHERE s.session_id IN (\n                   SELECT o.session_id FROM suggestion_generation_session AS o\n                   JOIN suggestion_generation AS g ON g.id = o.generation_id\n                   WHERE o.cleanup = 'open' AND (g.status <> 'generating' OR o.opened_at < $1)\n                   ORDER BY o.opened_at\n                   LIMIT $3\n                   FOR UPDATE OF o SKIP LOCKED)\n                 AND s.cleanup = 'open'\n               RETURNING s.session_id, s.user_id, s.agent_id, s.cleanup_attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "cleanup_attempts",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6dfc58e5b02cca8c23c398dc84f8d5911f0acf113e69d69c646cd9ce2a38a91b"
+}

@@ -453,9 +453,7 @@ export function DoneToast(props: { inbox: HomeInboxState }) {
         <span class="review-toast-icon">
           <Check class="size-3.5" />
         </span>
-        <span class="min-w-0 flex-1 truncate font-semibold">
-          Marked as done
-        </span>
+        <span class="min-w-0 flex-1 truncate font-medium">Marked as done</span>
         <Button size="sm" variant="plain" onClick={props.inbox.undo}>
           <ArrowCounterClockwise class="size-3.5" />
           Undo

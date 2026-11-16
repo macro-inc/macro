@@ -512,7 +512,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // still holds it for the replacement engine, so refusing it would only
       // drop its place in line and leave the caller to ask again behind the
       // rest. A host on its way out keeps nothing waiting.
-      if (entry.typedSearch && state !== 'disposing') continue;
+      if (entry.typedSearch && state !== 'disposing') {
+        // An owner change that never completes must still end the wait.
+        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.timer = setTimeout(() => {
+          if (!pending.delete(id)) return;
+          recordRequestOutcome(entry, 'error', error);
+          entry.reject(error);
+          finishGracefulDisposeIfDrained();
+        }, requestTimeoutMs);
+        continue;
+      }
       pending.delete(id);
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
@@ -1100,6 +1110,26 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
+  const supersededError = () => new Error('cache request was superseded');
+
+  /** Ends this caller's wait on abort; the shared work itself carries on. */
+  async function untilAborted<T>(
+    work: Promise<T>,
+    signal: AbortSignal
+  ): Promise<T> {
+    let onAbort = () => {};
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(supersededError());
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      return await Promise.race([work, aborted]);
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+
   function armRequestTimeout(
     id: number,
     entry: Pending,
@@ -1118,8 +1148,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function request(
     msg: DistributiveOmit<CacheRequest, 'id'>,
-    opKey?: number
+    opKey?: number,
+    signal?: AbortSignal
   ): Promise<unknown> {
+    if (signal?.aborted) return Promise.reject(supersededError());
     if (state === 'failed') {
       return Promise.reject(
         initializationError ?? new Error('cache worker initialization failed')
@@ -1136,9 +1168,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
     const id = nextRequestId++;
     return new Promise((resolve, reject) => {
+      // The coordinator may still run its copy; only the caller stops waiting.
+      const drop = () => {
+        if (!pending.delete(id)) return;
+        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.reject(supersededError());
+        finishGracefulDisposeIfDrained();
+      };
+      // One signal serves every replay of a query, so a settled request must
+      // not stay reachable from it.
+      const forgetSignal = () => signal?.removeEventListener('abort', drop);
       const entry: Pending = {
-        resolve,
-        reject,
+        resolve: (value) => {
+          forgetSignal();
+          resolve(value);
+        },
+        reject: (error) => {
+          forgetSignal();
+          reject(error);
+        },
         kind: msg.kind,
         typedSearch: isTypedSearch({ ...msg, id }),
         opKey,
@@ -1156,6 +1204,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         armRequestTimeout(id, entry, timeoutMs);
       }
       pending.set(id, entry);
+      signal?.addEventListener('abort', drop, { once: true });
       try {
         getAdapter().postMessage({ ...msg, id } as CacheRequest);
         // The first accepted coordinator send is the browser Turso host's
@@ -1168,7 +1217,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         }
         const requestError = asError(error);
         recordRequestOutcome(entry, 'error', requestError);
-        reject(requestError);
+        entry.reject(requestError);
       }
     });
   }
@@ -1334,21 +1383,24 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   async function initializedRequest(
     msg: DistributiveOmit<CacheRequest, 'id'>,
-    opKey?: number
+    opKey?: number,
+    signal?: AbortSignal
   ): Promise<unknown> {
     const generation = transportGeneration;
-    if (state === 'ready') {
-      await ensureInitialized();
-    } else {
-      await readAvailability.waitUntilReady(
-        ensureInitialized,
-        isReadOnlyCacheRequest(msg.kind)
-      );
-    }
+    const ready =
+      state === 'ready'
+        ? ensureInitialized()
+        : readAvailability.waitUntilReady(
+            ensureInitialized,
+            isReadOnlyCacheRequest(msg.kind)
+          );
+    // Every other caller keeps its exact place in line: no extra hop.
+    if (signal) await untilAborted(ready, signal);
+    else await ready;
     // Never admit an interrupted operation to a different transport generation.
     if (generation !== transportGeneration)
       throw transportInterruption ?? new CacheNavigationError();
-    return await request(msg, opKey);
+    return await request(msg, opKey, signal);
   }
 
   function trackActiveOperation(opKey: number): void {
@@ -1434,15 +1486,20 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         document: args.document,
         fragmentName: args.fragmentName,
         keys,
+        ...(args.priority ? { priority: args.priority } : {}),
       })) as ReadRecordsByKeysResult;
     },
 
-    async search(args: SearchCacheArgs): Promise<SearchCachePage> {
+    async search(
+      args: SearchCacheArgs,
+      options?: { signal?: AbortSignal }
+    ): Promise<SearchCachePage> {
       const requestArgs = validateCacheSearchArgs(args);
-      return (await initializedRequest({
-        kind: 'search',
-        request: requestArgs,
-      })) as SearchCachePage;
+      return (await initializedRequest(
+        { kind: 'search', request: requestArgs },
+        undefined,
+        options?.signal
+      )) as SearchCachePage;
     },
 
     async entityFilter(

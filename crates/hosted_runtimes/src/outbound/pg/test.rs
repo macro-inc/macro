@@ -2,6 +2,7 @@ use std::str::FromStr;
 mod quarantine;
 mod redeploy;
 
+mod agents;
 mod billing_races;
 mod boot;
 
@@ -73,6 +74,7 @@ fn standard(id: u128) -> NewReservation {
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         extra_items: vec![],
         provision_traceparent: None,
+        agent: None,
     }
 }
 
@@ -112,6 +114,16 @@ async fn changed(
         Applied::Changed(computer) => *computer,
         Applied::Rejected(rejected) => panic!("rejected: {rejected:?}"),
     }
+}
+
+/// The catalog sizes no host can sell, from what `allocation` reports.
+async fn sold_out(repo: &PgComputerRepo) -> Vec<ComputerSize> {
+    let hosts = repo.allocation().await.unwrap();
+    crate::domain::size::current_catalog()
+        .into_iter()
+        .filter(|entry| !hosts.iter().any(|host| host.sells(entry.resources.units())))
+        .map(|entry| entry.size)
+        .collect()
 }
 
 async fn host(
@@ -154,9 +166,7 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
+        sold_out(&repo).await,
         vec![
             ComputerSize::Standard,
             ComputerSize::Large,
@@ -165,19 +175,6 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
     );
     // Expired reservations still hold capacity: one may yet settle as
     // charged and become a computer.
-    assert_eq!(
-        repo.sold_out_sizes(
-            &crate::domain::size::current_catalog(),
-            now() + Duration::minutes(15)
-        )
-        .await
-        .unwrap(),
-        vec![
-            ComputerSize::Standard,
-            ComputerSize::Large,
-            ComputerSize::Xl
-        ]
-    );
     assert!(matches!(
         repo.reserve(
             standard(10),
@@ -388,7 +385,21 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
-    assert!(matches!(second[0].effect, Effect::Stop { .. }));
+    // The first connection told the buyer setup finished.
+    assert_eq!(
+        second[0].effect,
+        Effect::NotifySetup {
+            outcome: crate::domain::lifecycle::SetupOutcome::Ready,
+        }
+    );
+    repo.complete_effect(second[0].id).await.unwrap();
+
+    let third = repo
+        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .await
+        .unwrap();
+    assert_eq!(third.len(), 1);
+    assert!(matches!(third[0].effect, Effect::Stop { .. }));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -607,9 +618,7 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     );
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog(), now())
-            .await
-            .unwrap(),
+        sold_out(&repo).await,
         vec![ComputerSize::Large, ComputerSize::Xl]
     );
     reserve(&repo, standard(51)).await;
@@ -779,4 +788,19 @@ async fn awake_computers_are_those_awake_with_a_harness(pool: PgPool) {
             ComputerId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00c1)),
         )]
     );
+}
+
+/// A pool timeout reaches the domain as unavailable storage, which the
+/// passes skip quietly; any other database error is still a failure.
+#[test]
+fn only_a_pool_timeout_is_unavailable_storage() {
+    let timed_out = crate::domain::service::ComputerError::Internal(
+        rootcause::Report::new(PgComputerError::from(sqlx::Error::PoolTimedOut)).into_dynamic(),
+    );
+    let missing = crate::domain::service::ComputerError::Internal(
+        rootcause::Report::new(PgComputerError::from(sqlx::Error::RowNotFound)).into_dynamic(),
+    );
+
+    assert!(timed_out.is_storage_unavailable());
+    assert!(!missing.is_storage_unavailable());
 }

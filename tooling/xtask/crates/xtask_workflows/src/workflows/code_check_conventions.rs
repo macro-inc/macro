@@ -35,6 +35,7 @@ pub fn code_check_conventions() -> Workflow {
 
 fn path_check() -> Job {
     Job::default()
+        .timeout_minutes(10u32)
         .runs_on(runners::Runner::Small.to_string())
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_step(steps::checkout(false, false))
@@ -43,6 +44,7 @@ fn path_check() -> Job {
 
 fn ast_grep() -> Job {
     steps::gated_job()
+        .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())
         .add_step(steps::checkout(false, false))
@@ -57,6 +59,7 @@ fn ast_grep() -> Job {
 /// stable because branch protection references it.
 fn status_check() -> Job {
     Job::default()
+        .timeout_minutes(5u32)
         .name("Conventions Status Check")
         .cond(Expression::new("always()"))
         .needs(vec!["path-check".to_string(), "ast-grep".to_string()])
@@ -98,14 +101,16 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "ast-grep: ${{ needs.ast-grep.result }}"
 
-        # Fail if any job failed, or ast-grep was cancelled (skipped and
-        # success are both OK; cancelled means it started and didn't finish)
-        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "failure" ]] || \
-           [[ "${{ needs.ast-grep.result }}" == "cancelled" ]]; then
-          echo "❌ One or more jobs failed"
-          exit 1
-        fi
+        # Only success and skipped are OK. A job that hits its timeout reports
+        # cancelled, and passing on that would merge code whose checks never ran.
+        for result in \
+          "${{ needs.path-check.result }}" \
+          "${{ needs.ast-grep.result }}"; do
+          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+            echo "❌ One or more jobs failed or were cancelled"
+            exit 1
+          fi
+        done
 
         echo "✅ All jobs passed or were skipped"
     "#})

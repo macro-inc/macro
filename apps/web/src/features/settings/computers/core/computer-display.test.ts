@@ -5,6 +5,7 @@ import {
   canTogglePower,
   computerFailureMessage,
   computerStatusLabel,
+  offersFailure,
 } from './computer-display';
 
 const waiting: ComputerStatus = {
@@ -109,5 +110,54 @@ describe('computerFailureMessage', () => {
     expect(computerFailureMessage(new Error('boom'), 'Fallback')).toBe(
       'Fallback'
     );
+  });
+});
+
+describe('offersFailure', () => {
+  const failure = (code: string) =>
+    new ThrownResultError([{ code, message: 'server wording' }]);
+
+  it('sends plan problems to Billing without a retry', () => {
+    expect(offersFailure(failure('NO_PAID_PLAN'))).toEqual({
+      message:
+        'Computers need a paid Macro plan. Your team does not have one yet.',
+      remedy: 'billing',
+    });
+    expect(offersFailure(failure('TEAM_ON_TRIAL'))).toEqual({
+      message:
+        'Computers can be added once your trial ends and your team is on a paid plan.',
+      remedy: 'billing',
+    });
+  });
+
+  it('offers nothing to an account outside the rollout', () => {
+    expect(offersFailure(failure('ROLLOUT_DISABLED'))).toEqual({
+      message: "Computers aren't available for this account yet.",
+      remedy: 'none',
+    });
+  });
+
+  it('names each transient cause and offers a retry', () => {
+    expect(offersFailure(failure('COMPUTERS_UNAVAILABLE'))).toEqual({
+      message: "Computers aren't available right now. Try again later.",
+      remedy: 'retry',
+    });
+    expect(offersFailure(failure('BILLING_PROVIDER_FAILED'))).toEqual({
+      message: "Macro's billing provider didn't answer. Try again in a moment.",
+      remedy: 'retry',
+    });
+    expect(offersFailure(failure('TIMED_OUT'))).toEqual({
+      message: 'Loading computer sizes took too long. Try again.',
+      remedy: 'retry',
+    });
+    expect(offersFailure(failure('NETWORK_ERROR'))).toEqual({
+      message: "Couldn't reach Macro. Check your connection and try again.",
+      remedy: 'retry',
+    });
+    expect(offersFailure(failure('SERVER_ERROR'))).toEqual({
+      message: "Couldn't load computer sizes. Try again.",
+      remedy: 'retry',
+    });
+    expect(offersFailure(new Error('boom')).remedy).toBe('retry');
   });
 });

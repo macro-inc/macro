@@ -10,6 +10,8 @@ resource-row transaction.
 
 - `src/lib.rs`: `insert_entity`, `mark_deleted`, `clear_deleted`,
   `touch_updated`, `delete_entity` — plain, non-committing helpers.
+  `mark_deleted_many`, `clear_deleted_many` and `delete_entities` write a
+  whole set of ids in one statement, for tree-wide trash, restore and purge.
 - `src/owned.rs`: `OwnedEntityRegistrar` — registers an entity row and
   applies `entity_registry`'s `OwnerGrantPolicy` grants atomically (via a
   savepoint), for owned-entity creation flows.

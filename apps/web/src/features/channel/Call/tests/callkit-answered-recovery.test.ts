@@ -111,7 +111,14 @@ describe('native answered-call recovery', () => {
       answer('channel-1', nativeMedia);
       await settle();
       const navigation = nativeMedia ? bridge.open : bridge.join;
-      expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1');
+      if (nativeMedia) {
+        expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1');
+      } else {
+        expect(navigation).toHaveBeenCalledExactlyOnceWith('channel-1', {
+          kind: 'join',
+          callId: undefined,
+        });
+      }
       expect(bridge.pending).toBeNull();
       await vi.advanceTimersByTimeAsync(3000);
       resume();
@@ -190,6 +197,9 @@ describe('native answered-call recovery', () => {
     };
     resume();
     await settle();
-    expect(bridge.join).toHaveBeenCalledExactlyOnceWith('channel-2');
+    expect(bridge.join).toHaveBeenCalledExactlyOnceWith('channel-2', {
+      kind: 'join',
+      callId: 'call-2',
+    });
   });
 });

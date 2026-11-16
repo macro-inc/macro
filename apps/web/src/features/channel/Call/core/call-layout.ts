@@ -12,7 +12,8 @@ export function activeCallPin<T extends object>(
   shares: readonly T[],
   localSharing: boolean
 ): CallPin<T> | undefined {
-  if (pin === 'local') return participants.length ? pin : undefined;
+  // A solo call still has its local participant.
+  if (pin === 'local') return pin;
   if (pin === 'local-share') return localSharing ? pin : undefined;
   if (pin && 'share' in pin)
     return shares.includes(pin.share) ? pin : undefined;

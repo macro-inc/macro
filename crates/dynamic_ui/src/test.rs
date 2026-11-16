@@ -39,7 +39,7 @@ fn a_view_of_every_widget_decodes() {
             },
             { "type": "channelMessage", "channelId": "channel-1", "messageId": "message-1" },
             { "type": "events", "title": "This week", "events": [{ "eventId": "event-1", "occurrenceKey": "2026-10-14" }] },
-            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }] },
+            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }, { "type": "database", "id": "database-1" }] },
             {
                 "type": "tags",
                 "title": "Engineering tags",
@@ -199,7 +199,7 @@ fn what_the_renderer_cannot_draw_is_named_by_its_place() {
         ),
         (
             json!({ "widgets": [{ "type": "cards", "items": [{ "type": "spaceship", "id": "s-1" }] }] }),
-            "view.widgets[0] should be one of `document`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
+            "view.widgets[0] should be one of `document`, `database`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
                 .to_owned(),
         ),
         (

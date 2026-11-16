@@ -8,7 +8,7 @@ import {
 } from '@playwright/test';
 import { splitContainerSelector } from '../../src/lib/core/dom-selectors';
 import { captureView, type ViewCapture } from './capture';
-import { PARITY_VIEWS, type ParityView } from './views';
+import { PARITY_VIEWS, type ParityState, type ParityView } from './views';
 
 const ORIGINS = {
   baseline: process.env.PARITY_BASELINE_URL,
@@ -140,8 +140,13 @@ for (const view of views) {
     const branch = await openSide(browser, 'branch', view);
     const touch = test.info().project.use.hasTouch === true;
 
-    const states = [{ name: 'open', go: view.ready }, ...view.states];
+    const states: ParityState[] = [
+      { name: 'open', go: view.ready },
+      ...view.states,
+    ];
     for (const state of states) {
+      if (state.only === 'touch' && !touch) continue;
+
       const name = `${view.id}-${state.name}`;
 
       try {
@@ -165,7 +170,8 @@ for (const view of views) {
         pointerCoarse: touch,
         attribute: String(touch),
       });
-      expect(actual, name).toEqual(expected);
+      // Soft, so one difference does not hide those in the states after it.
+      expect.soft(actual, name).toEqual(expected);
     }
   });
 }

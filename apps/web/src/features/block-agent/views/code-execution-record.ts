@@ -5,13 +5,15 @@ import {
   codeExecutionInput,
   codeExecutionReceipt,
   programEnded,
+  programFailures,
   programSteps,
 } from '../state/code-execution';
 import { isToolActive } from '../ui/types';
 
 /**
  * A program call's saved record, and the steps it shows. Its tool group reads
- * the same record to count them, and the cache shares the one request.
+ * the same record to count them and name them on its live line, and the cache
+ * shares the one request.
  */
 export function useCodeExecutionRecord(
   part: Accessor<ToolUsePart>,
@@ -50,6 +52,17 @@ export function useCodeExecutionRecord(
       calls: record()?.calls.length ?? 0,
       ended: ended(),
     });
+  const failures = () => {
+    const saved = record();
+    return programFailures({
+      statuses: [
+        ...(saved?.activity ?? []).map((operation) => operation.status),
+        ...(saved?.calls ?? []).map((call) => call.status),
+      ],
+      ended: ended(),
+      cancelled: (saved?.status ?? receipt()?.status) === 'cancelled',
+    });
+  };
 
   return {
     receipt,
@@ -61,5 +74,6 @@ export function useCodeExecutionRecord(
     error,
     ended,
     steps,
+    failures,
   };
 }

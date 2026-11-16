@@ -179,6 +179,10 @@ pub enum ProjectError {
     /// The caller is not authorized, with a client-facing explanation.
     #[error("{0}")]
     UnauthorizedWithMessage(String),
+    /// The caller may not make this change, such as a share from a session
+    /// whose scope shares nothing.
+    #[error("forbidden: {0}")]
+    Forbidden(String),
     /// The request is invalid.
     #[error("bad request: {0}")]
     BadRequest(String),

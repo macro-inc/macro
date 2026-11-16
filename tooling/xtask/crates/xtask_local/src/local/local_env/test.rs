@@ -158,6 +158,9 @@ fn emits_required_keys() {
         "LOCAL_CONTAINER_NETWORK",
         "DAYTONA_API_KEY",
         "HARNESS_BOT_ID",
+        "REPO_STORAGE_ROOT",
+        "MAX_REPO_SIZE_BYTES",
+        "PUSHES_PER_MINUTE",
     ] {
         assert!(
             env.contains_key(key),
@@ -274,6 +277,10 @@ fn emits_in_network_service_url_overrides() {
         (
             "OVERRIDE_MCP_SERVICE_URL",
             "http://agent-harness-service:8080",
+        ),
+        (
+            "OVERRIDE_AGENT_GIT_SERVICE_URL",
+            "http://agent-harness-service:8080/agent-git",
         ),
         (
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",

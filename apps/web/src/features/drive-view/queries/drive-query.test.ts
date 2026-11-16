@@ -149,6 +149,32 @@ describe('buildDriveQuery', () => {
     });
   });
 
+  it('orders names ascending and every other sort newest first', () => {
+    expect(request({ ...selection, sort: 'name' }).params).toMatchObject({
+      sort_method: 'name',
+      sort_direction: 'asc',
+    });
+    expect(request({ ...selection, sort: 'created_at' }).params).toMatchObject({
+      sort_method: 'created_at',
+      sort_direction: 'desc',
+    });
+  });
+
+  it('drops the folder email target a name-sorted page cannot return', () => {
+    const folder = {
+      ...selection,
+      location: { kind: 'folder', id: 'folder' },
+    } satisfies DriveSelection;
+
+    expect(request(folder).body.ef).toEqual({ l: { ProjectId: 'folder' } });
+
+    const byName = request({ ...folder, sort: 'name' });
+    expect(byName.body.ef).toBeUndefined();
+    expect(byName.body.emailView).toBeUndefined();
+    expect(byName.body.pf).toEqual({ l: { pid: 'folder' } });
+    expect(byName.body.cf).toEqual({ l: { pid: 'folder' } });
+  });
+
   it('uses touched_by_me for Recent without unsupported email/channel trees', () => {
     const recent = request({
       ...selection,
