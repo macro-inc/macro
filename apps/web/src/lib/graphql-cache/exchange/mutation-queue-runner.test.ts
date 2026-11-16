@@ -406,17 +406,71 @@ it('releases a lease whose runner is gone and claims the head at once', async ()
   expect(claims).toHaveBeenCalledTimes(2);
 });
 
-it.each([
-  ['its runner is alive', 'other-tab', true],
-  ['this runner holds it', 'owner', false],
-])('waits out a lease when %s', async (_case, leaseOwner, alive) => {
+it('waits out a lease when its runner is alive', async () => {
   const { runner, host } = fixture(
     {},
-    { hold: async () => {}, isAlive: async () => alive }
+    { hold: async () => {}, isAlive: async () => true }
   );
-  host.inspectMutations = async () => [leasedHead(leaseOwner)];
+  host.inspectMutations = async () => [leasedHead('other-tab')];
 
   runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+});
+
+it('releases a lease this runner holds without sending under it', async () => {
+  // An enqueue claimed the head for this runner and its answer was lost.
+  const { runner, host } = fixture();
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('owner')] : []);
+  const claims = vi.fn(async () => undefined);
+  host.claimNextMutation = claims;
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+
+  expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+    '1',
+    { owner: 'owner', generation: '3' },
+    expect.any(Number),
+    'Lease was never routed'
+  );
+  expect(claims).toHaveBeenCalledTimes(2);
+});
+
+it('keeps its own lease while the enqueue that may have taken it is on its way', async () => {
+  const { runner, host } = fixture();
+  let leased = true;
+  host.inspectMutations = async () => (leased ? [leasedHead('owner')] : []);
+  vi.mocked(host.deferOptimisticWrite).mockImplementation(async () => {
+    leased = false;
+    return { kind: 'deferred' } as never;
+  });
+  const enqueueEnded = runner.enqueueStarted();
+
+  runner.start();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+
+  // The answer never came: the next look at the head releases it.
+  enqueueEnded();
+  runner.wake();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+});
+
+it('keeps the lease it is sending under', async () => {
+  const { runner, host, forwarded } = fixture();
+  host.inspectMutations = async () => [leasedHead('owner')];
+  await runner.admit(operation(), enqueue(operation(), '3'), runner.epoch());
+  expect(forwarded).toHaveLength(1);
+
+  runner.wake();
   await vi.advanceTimersByTimeAsync(1);
 
   expect(host.deferOptimisticWrite).not.toHaveBeenCalled();

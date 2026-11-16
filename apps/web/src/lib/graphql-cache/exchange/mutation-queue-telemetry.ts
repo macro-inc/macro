@@ -67,6 +67,8 @@ export type MutationQueueSkipReason =
   | 'claim-failed'
   /** The head was leased to a runner that is gone; its lease was released. */
   | 'lease-owner-gone'
+  /** This runner held the head's lease without sending it; it was released. */
+  | 'lease-unrouted'
   | 'recovery-signed-out'
   | 'recovery-session-inactive'
   | 'recovery-inspection-unavailable'

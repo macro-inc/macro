@@ -81,6 +81,22 @@ it('sends again what a page that is gone noted and never saw stored', async () =
   expect(resend).toHaveBeenCalledExactlyOnceWith(send('m1'), CREATED_AT);
 });
 
+it('sends again in the order the messages were written', async () => {
+  const { deps, host, resend } = world(['new-page']);
+  // Storage holds the later message first.
+  noteUnqueuedSend(send('m2'), '2026-01-01T00:00:01.000Z', deps('old-page'));
+  noteUnqueuedSend(send('m3'), '2026-01-01T00:00:01.000Z', deps('old-page'));
+  noteUnqueuedSend(send('m1'), CREATED_AT, deps('old-page'));
+
+  await resendUnqueuedSends(host, SENDER, resend, deps('new-page'));
+
+  expect(resend.mock.calls.map(([sent]) => sent.id)).toEqual([
+    'm1',
+    'm2',
+    'm3',
+  ]);
+});
+
 it('leaves alone a send whose page still runs, and one the queue stored', async () => {
   const { storage, deps, host, resend } = world(['other-tab', 'new-page']);
   noteUnqueuedSend(send('m1'), CREATED_AT, deps('other-tab'));
@@ -114,10 +130,11 @@ it('forgets a send the queue already holds instead of sending it twice', async (
   expect(storage.length).toBe(0);
 });
 
-it('drops a send a day old, an unreadable one, and leaves another person’s', async () => {
+it('drops a send a day old, an unreadable or undated one, and leaves another person’s', async () => {
   const { storage, deps, host, resend } = world(['new-page']);
   noteUnqueuedSend(send('old'), '2025-12-30T00:00:00.000Z', deps('old-page'));
   storage.setItem(`channel-send-awaiting-queue:v1:${SENDER}:broken`, '{');
+  noteUnqueuedSend(send('undated'), 'not a time', deps('old-page'));
   noteUnqueuedSend(send('theirs', 'person-2'), CREATED_AT, deps('old-page'));
 
   expect(

@@ -43,7 +43,7 @@ export type ChannelCatchUp =
 
 /** The server keeps 1000 changes replayable, 200 a page. */
 const MAX_CHANGE_PAGES = 6;
-/** Pushes inside this window share one request for their changes. */
+/** Pushes that closely follow one being stored share one request. */
 const PUSH_SETTLE_MS = 250;
 const MAX_PUSH_RERUNS = 3;
 /** How many times one device read is made again for pushes that keep arriving. */
@@ -239,6 +239,17 @@ export function noteChannelPush(channelId: string, seq: number | string): void {
   const state = stateOf(channelId);
   state.pushed.add(String(seq));
   noteUnstoredPush(channelId);
+  // A reload can come at any moment, so a quiet channel's push is stored at
+  // once; one that arrives while another is being stored waits to share.
+  armStore(host, channelId, state, state.storing ? PUSH_SETTLE_MS : 0);
+}
+
+function armStore(
+  host: ChannelCatchUpHost,
+  channelId: string,
+  state: ChannelSyncState,
+  delayMs: number
+): void {
   if (state.timer !== undefined) return;
   let done = () => {};
   const promise = new Promise<void>((resolve) => {
@@ -252,7 +263,7 @@ export function noteChannelPush(channelId: string, seq: number | string): void {
       storePushes(host, channelId, state, storing),
       'channel-local-sync'
     );
-  }, PUSH_SETTLE_MS);
+  }, delayMs);
 }
 
 async function storePushes(

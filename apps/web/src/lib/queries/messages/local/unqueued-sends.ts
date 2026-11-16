@@ -225,7 +225,8 @@ export async function resendUnqueuedSends(
       )
     );
     for (const { key, entry } of readEntries(storage, senderId)) {
-      if (!entry || now - Date.parse(entry.createdAt) > MAX_AGE_MS) {
+      // A time that does not parse is neither young nor sortable.
+      if (!entry || !(now - Date.parse(entry.createdAt) <= MAX_AGE_MS)) {
         storage.removeItem(key);
         continue;
       }
@@ -238,6 +239,13 @@ export async function resendUnqueuedSends(
     }
   });
   if (adopted.length === 0) return 0;
+  // Storage lists its keys in no order a person would know; the sends go
+  // out as they were written.
+  adopted.sort(
+    (a, b) =>
+      Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
+      (a.send.id < b.send.id ? -1 : 1)
+  );
 
   // A send the queue stored just before its page went is already on its way.
   const queued = new Set(

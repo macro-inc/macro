@@ -177,10 +177,9 @@ describe('pushesStored', () => {
     const waiting = pushesStored(CHANNEL_ID).then((answer) => {
       stored = answer;
     });
-    await vi.advanceTimersByTimeAsync(100);
     expect(stored).toBeUndefined();
 
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(0);
     await waiting;
     expect(stored).toBe(true);
     expect(await pushesStored(CHANNEL_ID)).toBe(false);
@@ -216,9 +215,8 @@ describe('pushesStored', () => {
     const waiting = (async () => {
       stored = await pushesStored(CHANNEL_ID, '7');
     })();
-    await vi.advanceTimersByTimeAsync(100);
     expect(stored).toBeUndefined();
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(0);
     await waiting;
     expect(stored).toBe(true);
   });
