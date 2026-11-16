@@ -38,7 +38,7 @@ checked a native cropped image and actual DOM bounds after fitting at 24px.
 ![Live measured rectangle and ellipse labels at readable font sizes](text-fitting.png)
 
 The artifact fixture (`artifact.html`, run by `reference.playwright.config.ts`)
-covers sandboxed artifacts, the slide-position bar above each artifact (its
+covers sandboxed artifacts, the slide-position tab on each artifact's top edge (its
 place, size at any zoom and hiding when zoomed out) and present mode. The fitted
 deck draws slides too small for their bar, so the suite presents it from the
 inspector (`artifact-helpers.ts`). `?deck` lays four slides across the

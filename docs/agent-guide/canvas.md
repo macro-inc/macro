@@ -30,9 +30,9 @@ for multiple selections, groups, videos, and non-image shapes.
 ## Artifacts
 
 Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
-**Artifact**, which places a node with starter HTML. A bar above each artifact's
-top-right corner (`[data-canvas-artifact-controls="<id>"]`, always visible, hidden
-when zoomed too far out to fit and while presenting) shows its slide position
+**Artifact**, which places a node with starter HTML. A tab on each artifact's
+top edge, near its right corner (`[data-canvas-artifact-controls="<id>"]`, always visible, hidden
+when zoomed too far out to fit, on a narrow selected artifact, and while presenting) shows its slide position
 (`1/2`), **Interact** and **Present**. The document runs in a sandboxed frame;
 **Interact** or a double-click passes pointer input to it, and **Done** on the bar,
 Esc or a click elsewhere returns to the canvas. With the flag off, an artifact

@@ -47,15 +47,17 @@ test('shows each slide position above its artifact, at any zoom', async ({
     '2/2'
   );
 
-  // The bar sits just above the artifact, flush with its right edge.
+  // The tab sits on the artifact's top edge, inset from its right corner. Its
+  // box runs 16px on under the edge, where it is clipped away.
   const node = await page
     .locator('[data-canvas-artifact="First"]')
     .boundingBox();
   const bar = await first.boundingBox();
   if (!node || !bar) throw new Error('Artifact or its controls are missing');
-  expect(Math.abs(bar.x + bar.width - (node.x + node.width))).toBeLessThan(1);
-  expect(node.y - (bar.y + bar.height)).toBeGreaterThan(0);
-  expect(node.y - (bar.y + bar.height)).toBeLessThan(12);
+  expect(Math.abs(bar.x + bar.width - (node.x + node.width - 8))).toBeLessThan(
+    1
+  );
+  expect(Math.abs(bar.y + bar.height - 16 - node.y)).toBeLessThan(1);
 
   // Zooming in keeps the bar's size; zoomed far out, it no longer fits.
   const zoomTo = async (percent: number) => {

@@ -11,20 +11,21 @@ import {
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 
-// Screen pixels between the bar and the artifact's top edge.
-const GAP = 8;
-// A selected shape's rotation handle: a circle this far above its top edge.
-const ROTATION_HANDLE_OFFSET = 16;
+// The tab's inset from the artifact's right edge, in screen pixels.
+const INSET = 8;
+// How far the tab's box runs on under the artifact's top edge. That part is
+// clipped away, so the tab ends flat on the edge, as if it peeks out from
+// behind the slide, with its rim and shadow cut at the seam.
+const TUCK = 16;
+// A selected shape's rotation handle sits at the middle of its top edge.
 const ROTATION_HANDLE_RADIUS = 6;
-const ROTATION_HANDLE_CLEARANCE =
-  ROTATION_HANDLE_OFFSET + ROTATION_HANDLE_RADIUS + GAP;
 
 const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, index) => id === b[index]);
 
 /**
- * Each artifact's slide position, Interact and Present, in a bar just above
- * its top-right corner. The bar lives in screen space, so it keeps its size at
+ * Each artifact's slide position, Interact and Present, in a tab peeking out
+ * from the top edge near its right corner. The bar lives in screen space, so it keeps its size at
  * any zoom, and it hides while a gesture moves or resizes shapes.
  */
 export function ArtifactControls(props: {
@@ -99,17 +100,18 @@ function ArtifactControlBar(props: {
       frame.corners.map((point) => worldToScreen(props.camera, point))
     );
   });
-  const fits = () => (bounds()?.width ?? 0) >= width();
+  const fits = () => (bounds()?.width ?? 0) >= width() + INSET * 2;
 
-  // A narrow selected artifact's rotation handle, at the middle of its top
-  // edge, would sit under the bar; lift the bar above the handle then.
-  const offset = () => {
+  // On a narrow selected artifact the tab would cover the rotation handle at
+  // the middle of the top edge. The tab stays on the edge, so it steps aside
+  // (hides) then; the inspector still offers Present. While interacting it
+  // stays, since Done lives on it.
+  const coversHandle = () => {
     const box = bounds();
-    if (!box || !props.clearRotationHandle) return GAP;
+    if (!box || !props.clearRotationHandle || props.active) return false;
 
-    const barLeft = box.x + box.width - width();
-    const handleRight = box.x + box.width / 2 + ROTATION_HANDLE_RADIUS;
-    return barLeft < handleRight ? ROTATION_HANDLE_CLEARANCE : GAP;
+    const tabLeft = box.x + box.width - INSET - width();
+    return tabLeft < box.x + box.width / 2 + ROTATION_HANDLE_RADIUS;
   };
 
   return (
@@ -120,12 +122,14 @@ function ArtifactControlBar(props: {
           data-canvas-artifact-controls={props.id}
           data-canvas-embed-active={props.active ? props.id : undefined}
           class={cn(
-            'absolute top-0 left-0 z-10 flex items-center gap-1 rounded-full p-1 text-ink',
+            'absolute top-0 left-0 z-10 flex items-center gap-1 rounded-t-xl p-1 text-ink',
             isMobile() ? 'island' : 'menu-surface'
           )}
           style={{
-            transform: `translate(${box().x + box().width}px, ${box().y - offset()}px) translate(-100%, -100%)`,
-            visibility: fits() ? undefined : 'hidden',
+            'padding-bottom': `${TUCK + 4}px`,
+            'clip-path': `inset(-48px -48px ${TUCK}px -48px)`,
+            transform: `translate(${box().x + box().width - INSET}px, ${box().y + TUCK}px) translate(-100%, -100%)`,
+            visibility: fits() && !coversHandle() ? undefined : 'hidden',
           }}
         >
           <span

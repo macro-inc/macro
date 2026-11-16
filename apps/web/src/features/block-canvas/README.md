@@ -89,12 +89,13 @@ downloaded canvas loses its library.
 AI can create and edit artifacts and the library for users with the flag. See
 [Canvas architecture](../../../../../docs/architecture/canvas.md#artifacts).
 
-`views/artifact-controls.tsx` draws a bar just above each artifact's top-right
-corner, always visible (no hover): the slide's place in the presentation (`1/5`),
+`views/artifact-controls.tsx` draws a tab on each artifact's top edge near its
+right corner, flat against the edge as if it peeks out from behind the slide, always visible (no hover): the slide's place in the presentation (`1/5`),
 **Interact** (**Done** while interacting) and **Present**. It is drawn in screen
 space over the scene, so it keeps its size at any zoom; it hides while shapes are
 moved or resized, while presenting, and when the artifact is narrower on screen
-than the bar. A narrow selected artifact lifts the bar above its rotation handle.
+than the tab. On a narrow selected artifact the tab would cover the rotation
+handle, so it hides; the inspector still offers Present.
 Read-only canvases show the same bar. Canvas pointer handlers ignore presses
 inside it (`ARTIFACT_CONTROLS_SELECTOR`), and the active artifact's bar counts as
 inside the artifact, so **Done** is not taken for a click elsewhere.
