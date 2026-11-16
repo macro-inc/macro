@@ -415,60 +415,6 @@ describe('MessageNotificationIndexProvider', () => {
     expect(notificationsByEntity).not.toHaveBeenCalled();
   });
 
-  it("keeps a parent's query through a release and ends it 30 s after its last reader", () => {
-    setEdges({ 'document-1': [] });
-    const first = render(() => <Thread parent={DOCUMENT} messageIds={['a']} />);
-    const second = render(() => (
-      <Thread parent={DOCUMENT} messageIds={['b']} />
-    ));
-    first.unmount();
-    second.unmount();
-    vi.advanceTimersByTime(29_999);
-
-    const returning = render(() => (
-      <Thread parent={DOCUMENT} messageIds={['a']} />
-    ));
-    expect(queries).toHaveLength(1);
-    expect(queries[0].options().enabled).toBe(true);
-    expect(queries[0].refetch).not.toHaveBeenCalled();
-
-    returning.unmount();
-    vi.advanceTimersByTime(30_000);
-    render(() => <Thread parent={DOCUMENT} messageIds={['a']} />);
-    expect(queries).toHaveLength(2);
-  });
-
-  it('reads again for a delivery during a read, failing only when the last read fails', async () => {
-    const consoleError = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
-    setEdges({ 'document-1': [] });
-    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
-    const deliver = mocks.subscribe.mock.calls[0][0];
-    let failFirstRead = (_error: Error) => {};
-    queries[0].refetch.mockImplementationOnce(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          failFirstRead = reject;
-        })
-    );
-
-    deliver({
-      __typename: 'GraphqlNewNotification',
-      notification: { id: 'first', entityId: 'document-1' },
-    } as GraphqlNotificationPatch);
-    const reconciled = revalidateNotificationReaders(mocks.client as never);
-    expect(queries[0].refetch).toHaveBeenCalledOnce();
-    failFirstRead(new Error('first read failed'));
-    await reconciled;
-    expect(queries[0].refetch).toHaveBeenCalledTimes(2);
-    expect(consoleError).not.toHaveBeenCalled();
-
-    queries[0].refetch.mockRejectedValueOnce(new Error('last read failed'));
-    await revalidateNotificationReaders(mocks.client as never);
-    expect(consoleError).toHaveBeenCalledOnce();
-  });
-
   it('reads again for an update to a held row only when no cache keeps it current', async () => {
     mocks.cacheHost = false;
     setEdges({ 'document-1': [notification('held', { messageId: 'root' })] });
@@ -494,23 +440,5 @@ describe('MessageNotificationIndexProvider', () => {
       notification: { id: 'held', entityId: 'document-1', state: 'SEEN' },
     } as GraphqlNotificationPatch);
     expect(queries[0].refetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('reads again when a held notification is deleted, and for no other deletion', () => {
-    setEdges({ 'document-1': [notification('held', { messageId: 'root' })] });
-    render(() => <Thread parent={DOCUMENT} messageIds={['root']} />);
-    const deliver = mocks.subscribe.mock.calls[0][0];
-    const deletion = (graphqlTypeName: string, entityId: string) =>
-      deliver({
-        __typename: 'GraphqlCacheDeletion',
-        graphqlTypeName,
-        entityId,
-      });
-
-    deletion('GraphqlNotification', 'not-held');
-    deletion('GraphqlSoupDocument', 'document-1');
-    expect(queries[0].refetch).not.toHaveBeenCalled();
-    deletion('GraphqlNotification', 'held');
-    expect(queries[0].refetch).toHaveBeenCalledOnce();
   });
 });

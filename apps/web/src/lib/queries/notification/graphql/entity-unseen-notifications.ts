@@ -1,38 +1,20 @@
-import { createUrqlQuery } from '@app/lib/urql-solid';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import type { UnifiedNotification } from '@notifications/types';
 import {
   SoupUnseenNotificationsDocument,
   type SoupUnseenNotificationsQuery,
 } from '@service-storage/graphql/generated/graphql';
-import {
-  getGraphqlSoupClient,
-  hasGraphqlCacheHost,
-  mapGraphqlNotification,
-  subscribeGraphqlSoupReconnected,
-} from '@service-storage/graphql-soup';
-import {
-  type GraphqlNotificationPatch,
-  subscribeToGraphqlNotificationPatches,
-} from '@service-storage/graphql-soup-websocket';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createRoot,
-  createSignal,
-  onCleanup,
-  type Setter,
-  untrack,
-} from 'solid-js';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import { type Accessor, createMemo } from 'solid-js';
 import { createChannelNotificationsQuery } from '../../channel/notifications';
 import {
   buildGraphqlEntitySoupInput,
   type SoupEntityRef,
 } from '../../soup/graphql/entity-input';
-import { createHiddenDeferral } from '../../visible-refresh';
-import { registerNotificationReader } from '../revalidation';
+import {
+  createLiveNotificationQuery,
+  createSharedNotificationReads,
+} from './shared-notification-query';
 
 function selectUnseenNotifications(
   data: SoupUnseenNotificationsQuery,
@@ -44,158 +26,43 @@ function selectUnseenNotifications(
   ).map(mapGraphqlNotification);
 }
 
-/**
- * Whether a live patch changes which unseen notifications the entity's edge
- * holds. The normalized cache rewrites the state of a row the edge holds in
- * place; a row it does not hold matters only once it is unseen.
- */
-function patchChangesUnseenNotifications(
-  patch: GraphqlNotificationPatch,
-  entityId: string,
-  shownIds: readonly string[],
-  cacheMaintained: boolean
-): boolean {
-  if (patch.__typename === 'GraphqlCacheDeletion') {
-    return (
-      patch.graphqlTypeName === 'GraphqlNotification' &&
-      shownIds.includes(patch.entityId)
-    );
-  }
-  if (patch.notification.entityId !== entityId) return false;
-  if (patch.__typename === 'GraphqlNewNotification') return true;
-  if (shownIds.includes(patch.notification.id)) return !cacheMaintained;
-  return patch.notification.state === 'UNSEEN';
-}
-
 /** Complete, live unseen notifications of one Soup entity; never the global feed. */
 function createEntityUnseenNotificationsQuery(
   entityType: SoupEntityRef['entityType'],
   entityId: string,
   enabled: Accessor<boolean>
 ) {
-  const variables = {
-    input: buildGraphqlEntitySoupInput(entityType, entityId)!,
-  };
-  const select = (data: SoupUnseenNotificationsQuery) =>
-    selectUnseenNotifications(data, entityId);
-  const query = createUrqlQuery(() => ({
+  return createLiveNotificationQuery({
+    entityId,
     query: SoupUnseenNotificationsDocument,
-    client: getGraphqlSoupClient(),
-    variables,
-    enabled: enabled(),
-    requestPolicy: 'cache-and-network',
-    select,
-  }));
-
-  let disposed = false;
-  let inFlight: Promise<void> | undefined;
-  let queued = false;
-  const read = async () => {
-    let failure: { error: unknown } | undefined;
-    do {
-      queued = false;
-      try {
-        await query.refetch({
-          requestPolicy: 'network-only',
-          throwOnError: true,
-        });
-        // A later read supersedes an earlier failure.
-        failure = undefined;
-      } catch (error) {
-        failure = { error };
-      }
-    } while (queued && !disposed);
-    inFlight = undefined;
-    if (failure) throw failure.error;
-  };
-  // A delivery during a read needs a read issued after it.
-  const refresh = (): Promise<void> => {
-    if (inFlight) {
-      queued = true;
-      return inFlight;
-    }
-    inFlight = read();
-    return inFlight;
-  };
-
-  // A signed-out session reads and listens for nothing.
-  const isEnabled = createMemo(enabled);
-  createEffect(() => {
-    if (!isEnabled()) return;
-    onCleanup(
-      registerNotificationReader({
-        client: getGraphqlSoupClient,
-        isEnabled: () => query.isEnabled,
-        // Rows render each notification's cached state.
-        cacheMaintained: hasGraphqlCacheHost,
-        refresh,
-      })
-    );
-    // Every open tab hears each delivery; a hidden one reads once on return.
-    const background = createHiddenDeferral(() =>
-      fireAndForget(refresh(), 'entity-unseen-notifications')
-    );
-    onCleanup(background.dispose);
-    onCleanup(
-      subscribeToGraphqlNotificationPatches((patch) => {
-        if (
-          patchChangesUnseenNotifications(
-            patch,
-            entityId,
-            (query.data ?? []).map(({ id }) => id),
-            hasGraphqlCacheHost()
-          )
-        )
-          background.request();
-      })
-    );
-    // Deliveries missed while the socket was down.
-    onCleanup(subscribeGraphqlSoupReconnected(background.request));
+    variables: { input: buildGraphqlEntitySoupInput(entityType, entityId)! },
+    select: (data) => selectUnseenNotifications(data, entityId),
+    enabled,
+    // A row the edge does not hold matters only once an update makes it unseen.
+    updateChangesEdge: (update, held, cacheMaintained) =>
+      held ? !cacheMaintained : update.state === 'UNSEEN',
+    surface: 'entity-unseen-notifications',
   });
-  onCleanup(() => {
-    disposed = true;
-  });
-
-  return query;
 }
 
-type UnseenNotificationsHolder = { enabled: Accessor<boolean> };
-type SharedUnseenNotifications = {
-  notifications: Accessor<readonly UnifiedNotification[]>;
-  holders: Accessor<readonly UnseenNotificationsHolder[]>;
-  setHolders: Setter<readonly UnseenNotificationsHolder[]>;
-  dispose: () => void;
-  release?: ReturnType<typeof setTimeout>;
-};
-
-/**
- * How long a query outlives its last reader. A virtualized card scrolling out
- * and back in reads the live query again instead of the network.
- */
-const UNSEEN_NOTIFICATIONS_RELEASE_MS = 30_000;
-
-const sharedReads = new Map<string, SharedUnseenNotifications>();
+const sharedUnseenNotifications =
+  createSharedNotificationReads<Accessor<readonly UnifiedNotification[]>>();
 
 /**
  * One entity's unseen notifications, from one live query however many threads
  * show its messages. A channel reads the unread edge its open view and detail
- * share. Empty until the first read lands; the query ends
- * `UNSEEN_NOTIFICATIONS_RELEASE_MS` after its last reader leaves.
+ * share. Empty until the first read lands; the query ends a grace period
+ * after its last reader leaves.
  */
 export function useEntityUnseenNotifications(
   entityType: SoupEntityRef['entityType'],
   entityId: string,
   enabled: Accessor<boolean>
 ): Accessor<readonly UnifiedNotification[]> {
-  const key = `${entityType}:${entityId}`;
-  let shared = sharedReads.get(key);
-  if (!shared) {
-    // Under its own root, so the first reader to unmount does not end it.
-    shared = createRoot((dispose) => {
-      const [holders, setHolders] = createSignal<
-        readonly UnseenNotificationsHolder[]
-      >([]);
-      const anyEnabled = () => holders().some((holder) => holder.enabled());
+  return sharedUnseenNotifications(
+    `${entityType}:${entityId}`,
+    enabled,
+    (anyEnabled) => {
       const query =
         entityType === 'CHANNEL'
           ? createChannelNotificationsQuery(entityId, anyEnabled)
@@ -204,35 +71,11 @@ export function useEntityUnseenNotifications(
               entityId,
               anyEnabled
             );
-      const notifications = createMemo((): readonly UnifiedNotification[] => {
+      return createMemo((): readonly UnifiedNotification[] => {
         if (!query.isEnabled || query.isPending) return [];
         if (query.error && !isTransientRequestError(query.error)) return [];
         return query.data ?? [];
       });
-      return { notifications, holders, setHolders, dispose };
-    });
-    sharedReads.set(key, shared);
-  }
-  const entry = shared;
-  const holder = { enabled };
-  if (entry.release === undefined) {
-    entry.setHolders((holders) => [...holders, holder]);
-  } else {
-    // The released reader kept the query enabled and live until now.
-    clearTimeout(entry.release);
-    entry.release = undefined;
-    entry.setHolders([holder]);
-  }
-  onCleanup(() => {
-    const holders = untrack(entry.holders);
-    if (holders.length > 1) {
-      entry.setHolders(holders.filter((other) => other !== holder));
-      return;
     }
-    entry.release = setTimeout(() => {
-      sharedReads.delete(key);
-      entry.dispose();
-    }, UNSEEN_NOTIFICATIONS_RELEASE_MS);
-  });
-  return entry.notifications;
+  );
 }
