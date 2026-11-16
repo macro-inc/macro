@@ -466,6 +466,56 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.state.kind).toBe('failed');
   });
 
+  it('fails at once, storage untouched, when this build’s WASM is no longer served', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'activation-failed',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'cache WASM download returned HTTP 403',
+      failureCode: 'assets-unavailable',
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // No other owner is elected: every engine of this build downloads the
+    // same missing binary.
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'failed',
+      reason: expect.stringContaining('cache WASM download returned HTTP 403'),
+      storageUntouched: true,
+      assetsUnavailable: true,
+    });
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'terminal-error')).toEqual([
+        expect.objectContaining({
+          storageUntouched: true,
+          assetsUnavailable: true,
+        }),
+      ]);
+    }
+
+    // A fresh host of the same build is told at once instead of downloading again.
+    const tabC = new FakePort();
+    await register(router, tabC, 'tab-c');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(router.snapshot()?.state.kind).toBe('failed');
+    expect(messagesOfKind(tabC, 'terminal-error')).toEqual([
+      expect.objectContaining({ assetsUnavailable: true }),
+    ]);
+  });
+
   it('registers only after independent liveness-lock contention succeeds', async () => {
     let releaseVerification: ((held: boolean) => void) | undefined;
     const verification = new Promise<boolean>((resolve) => {

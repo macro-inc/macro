@@ -1,4 +1,7 @@
-import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
+import {
+  CacheAssetsUnavailableError,
+  CacheBootstrapExhaustedError,
+} from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createCacheRecovery } from './cache-recovery';
 
@@ -51,6 +54,22 @@ it('allows another foreground attempt after repeated bootstrap failures', async 
   rebuild.mockResolvedValueOnce(undefined);
   await recovery.retry();
   expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});
+
+it('does not retry on its own once this build cache assets are gone', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  recovery.failed(
+    new CacheAssetsUnavailableError('cache WASM download returned HTTP 403')
+  );
+  expect(recovery.state()).toBe('unavailable');
+  window.dispatchEvent(new Event('online'));
+  document.dispatchEvent(new Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(120_000);
+  expect(rebuild).not.toHaveBeenCalled();
+  await recovery.retry();
+  expect(rebuild).toHaveBeenCalledOnce();
   recovery.reset();
 });
 

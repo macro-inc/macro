@@ -372,6 +372,7 @@ const mocks = vi.hoisted(() => {
     ) => initializationErrorHandler?.(error),
     supersede: () => supersededHandler?.(),
     reloadForNewerBuild: vi.fn(),
+    recoverFromFailedLoad: vi.fn(),
     plainClient,
     realtimeClient,
     replaceSubscriptions,
@@ -422,6 +423,7 @@ vi.mock('@core/util/cookies', () => ({
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   reloadForNewerBuild: mocks.reloadForNewerBuild,
+  recoverFromFailedLoad: mocks.recoverFromFailedLoad,
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
 // Recovery lifecycle is covered with its real store in local-drafts.test.ts.
@@ -1368,6 +1370,29 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })
+    );
+  });
+
+  it('moves to the deployed build instead of toasting when this build cache assets are gone', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const soup = await import('./graphql-soup');
+    const { CacheAssetsUnavailableError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    soup.getGraphqlSoupClient();
+
+    mocks.failInitialization(
+      new CacheAssetsUnavailableError('cache WASM download returned HTTP 403')
+    );
+
+    expect(mocks.recoverFromFailedLoad).toHaveBeenCalledOnce();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(mocks.telemetryError).toHaveBeenCalledOnce();
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('using the network until Macro reloads')
     );
   });
 

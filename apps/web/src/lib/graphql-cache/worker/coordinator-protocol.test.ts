@@ -653,6 +653,13 @@ describe('coordinator runtime protocol', () => {
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
     { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
+    {
+      ...version,
+      kind: 'terminal-error',
+      error: 'cache WASM download returned HTTP 403',
+      storageUntouched: true,
+      assetsUnavailable: true,
+    },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });

@@ -957,6 +957,26 @@ describe('CoordinatorCore', () => {
     expect(core.snapshot().activeOwnerCount).toBe(1);
   });
 
+  it('keeps a build whose cache assets are gone failed for every tab of that build', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('failed-host');
+    core.ownerLost('failed-host', 1, 'cache WASM download returned HTTP 403');
+    const failure = {
+      kind: 'terminal-failure',
+      error: 'assets gone',
+      storageUntouched: true,
+      assetsUnavailable: true,
+    };
+    expect(core.terminalFailure('assets gone', true)).toEqual([failure]);
+    expect(core.registerTab('replacement')).toEqual([failure]);
+    expect(core.state).toEqual({
+      kind: 'failed',
+      reason: 'assets gone',
+      storageUntouched: true,
+      assetsUnavailable: true,
+    });
+  });
+
   it('makes retry exhaustion terminal for current and future tabs', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');

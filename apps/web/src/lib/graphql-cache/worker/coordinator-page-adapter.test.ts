@@ -8,6 +8,10 @@ import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import {
+  CacheAssetsUnavailableError,
+  CacheBootstrapExhaustedError,
+} from './startup';
 
 class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
@@ -792,6 +796,49 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(terminalErrors).toEqual(['cache recovery failed after 5 attempts']);
     expect(coordinatorPort.closed).toBe(true);
   });
+
+  it.each([
+    [{}, Error],
+    [{ storageUntouched: true }, CacheBootstrapExhaustedError],
+    [
+      { storageUntouched: true, assetsUnavailable: true },
+      CacheAssetsUnavailableError,
+    ],
+  ] as const)(
+    'maps a terminal error with %o to %o',
+    async (flags, errorClass) => {
+      const coordinatorPort = new FakeCoordinatorPort();
+      const terminalErrors: Error[] = [];
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId: 'tab-a',
+        lockManager: heldLockManager(),
+        createSharedWorker: () => ({
+          port: coordinatorPort as unknown as MessagePort,
+        }),
+        createDedicatedWorker: () => new FakeWorker(),
+        onTerminalError: (error) => terminalErrors.push(error),
+      });
+      const started = adapter.start();
+      await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
+      coordinatorPort.receive({
+        ...version,
+        kind: 'registered',
+        tabId: 'tab-a',
+      });
+      await started;
+
+      coordinatorPort.receive({
+        ...version,
+        kind: 'terminal-error',
+        error: 'failed',
+        ...flags,
+      });
+
+      expect(terminalErrors).toHaveLength(1);
+      expect(terminalErrors[0]?.constructor).toBe(errorClass);
+    }
+  );
 
   it('terminates an owned engine before closing a failed SharedWorker transport', async () => {
     const order: string[] = [];

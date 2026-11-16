@@ -40,7 +40,12 @@ export type CoordinatorState =
       databaseAction: DatabaseAction;
       reason: string;
     }
-  | { kind: 'failed'; reason: string; storageUntouched?: true };
+  | {
+      kind: 'failed';
+      reason: string;
+      storageUntouched?: true;
+      assetsUnavailable?: true;
+    };
 
 export type CoordinatorSnapshot = {
   scope: string;
@@ -115,7 +120,12 @@ export type CoordinatorAction =
       reason: 'stale-epoch' | 'unknown-route' | 'inactive-engine';
     }
   | { kind: 'protocol-violation'; error: string }
-  | { kind: 'terminal-failure'; error: string; storageUntouched?: true };
+  | {
+      kind: 'terminal-failure';
+      error: string;
+      storageUntouched?: true;
+      assetsUnavailable?: true;
+    };
 
 export type EngineReady = {
   tabId: string;
@@ -231,9 +241,14 @@ export class CoordinatorCore {
         },
       ];
     }
-    if (this.stateValue.kind === 'failed' && this.stateValue.storageUntouched) {
+    if (
+      this.stateValue.kind === 'failed' &&
+      this.stateValue.storageUntouched &&
+      !this.stateValue.assetsUnavailable
+    ) {
       // A fresh host may retry asset bootstrap, but never reopen a database
       // whose recovery required a reset. Failed hosts stay excluded below.
+      // Assets the deployment no longer serves stay missing for this build.
       this.stateValue = {
         kind: 'waiting-for-tab',
         nextDatabaseAction: 'open-existing',
@@ -246,6 +261,9 @@ export class CoordinatorCore {
           error: this.stateValue.reason,
           ...(this.stateValue.storageUntouched
             ? { storageUntouched: true as const }
+            : {}),
+          ...(this.stateValue.assetsUnavailable
+            ? { assetsUnavailable: true as const }
             : {}),
         },
       ];
@@ -606,8 +624,12 @@ export class CoordinatorCore {
     return actions;
   }
 
-  /** Stops this recovery cycle. Only untouched storage permits a new host to retry. */
-  terminalFailure(reason: string): CoordinatorAction[] {
+  /** Stops this recovery cycle. Only untouched storage permits a new host to
+   * retry, and only while this build's assets are still served. */
+  terminalFailure(
+    reason: string,
+    assetsUnavailable = false
+  ): CoordinatorAction[] {
     if (this.stateValue.kind === 'failed') return [];
     const storageUntouched =
       this.stateValue.kind === 'resetting-after-loss' &&
@@ -615,19 +637,15 @@ export class CoordinatorCore {
     this.queuedRequests.length = 0;
     this.inFlight.clear();
     for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
-    this.stateValue = {
-      kind: 'failed',
-      reason,
+    const flags = {
       ...(storageUntouched ? { storageUntouched: true as const } : {}),
+      ...(assetsUnavailable ? { assetsUnavailable: true as const } : {}),
     };
+    this.stateValue = { kind: 'failed', reason, ...flags };
     this.assertInvariants();
     return [
       ...this.broadcastCacheChanges(this.cacheChanges.flush()),
-      {
-        kind: 'terminal-failure',
-        error: reason,
-        ...(storageUntouched ? { storageUntouched: true as const } : {}),
-      },
+      { kind: 'terminal-failure', error: reason, ...flags },
     ];
   }
 

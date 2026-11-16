@@ -1111,6 +1111,7 @@ export class CoordinatorRouter {
               kind: 'terminal-error',
               error: action.error,
               ...(action.storageUntouched ? { storageUntouched: true } : {}),
+              ...(action.assetsUnavailable ? { assetsUnavailable: true } : {}),
             })
           );
           break;
@@ -1407,6 +1408,24 @@ export class CoordinatorRouter {
     }
     this.postTerminateEngine(tabId, ownerEpoch, reason);
     this.clearEngineWatchdogs();
+    if (
+      failureCode === 'assets-unavailable' &&
+      core.state.kind === 'resetting-after-loss'
+    ) {
+      // Every engine of this build downloads the same missing binary, so
+      // electing another owner only repeats the failure. End the cycle now.
+      this.resetRecoveryRetries();
+      this.applyActions([
+        ...actions.filter(
+          (action) => action.kind !== 'schedule-reset-activation'
+        ),
+        ...core.terminalFailure(
+          `cache assets of this app version are no longer served: ${reason}`,
+          true
+        ),
+      ]);
+      return;
+    }
     this.applyActions(actions);
   }
 

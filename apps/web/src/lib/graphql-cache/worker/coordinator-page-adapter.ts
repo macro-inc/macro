@@ -31,7 +31,10 @@ import {
   listOpfsRootNames,
   staleCacheDatabaseIdentities,
 } from './stale-databases';
-import { CacheBootstrapExhaustedError } from './startup';
+import {
+  CacheAssetsUnavailableError,
+  CacheBootstrapExhaustedError,
+} from './startup';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -681,7 +684,9 @@ export class CacheCoordinatorPageAdapter {
       case 'terminal-error':
         this.failTerminal(
           message.storageUntouched
-            ? new CacheBootstrapExhaustedError(message.error)
+            ? message.assetsUnavailable
+              ? new CacheAssetsUnavailableError(message.error)
+              : new CacheBootstrapExhaustedError(message.error)
             : new Error(message.error)
         );
         break;

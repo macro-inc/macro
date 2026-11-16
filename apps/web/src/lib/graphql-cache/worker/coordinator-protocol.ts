@@ -58,11 +58,14 @@ export type EngineOpenOutcome =
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
 /** `storage-busy`: another context kept the database files open through the
  * engine's bounded wait. An open changed nothing; a wipe may have removed one
- * file, so the coordinator keeps the attempt's database action. */
+ * file, so the coordinator keeps the attempt's database action.
+ * `assets-unavailable`: the deployment no longer serves this build's cache
+ * WASM, so no engine of this build can start until the page reloads. */
 export type ActivationFailureCode =
   | 'initialization-failed'
   | 'recovery-open-failed'
-  | 'storage-busy';
+  | 'storage-busy'
+  | 'assets-unavailable';
 
 export type TabToCoordinatorEnvelope =
   | {
@@ -189,6 +192,8 @@ export type CoordinatorToTabEnvelope =
       kind: 'terminal-error';
       error: string;
       storageUntouched?: true;
+      /** This build's cache assets are gone; only a reload can recover. */
+      assetsUnavailable?: true;
     }
   | {
       /** Another context holds the database; stop using the cache until reload. */
@@ -423,7 +428,8 @@ const isActivationFailureCode = (
 ): value is ActivationFailureCode =>
   value === 'initialization-failed' ||
   value === 'recovery-open-failed' ||
-  value === 'storage-busy';
+  value === 'storage-busy' ||
+  value === 'assets-unavailable';
 
 const isOptionalRecord = (
   value: unknown
@@ -1125,10 +1131,13 @@ export function validateCoordinatorToTabEnvelope(
           'kind',
           'error',
           'storageUntouched',
+          'assetsUnavailable',
         ]) &&
         isNonEmptyString(value.error) &&
         (value.storageUntouched === undefined ||
-          value.storageUntouched === true)
+          value.storageUntouched === true) &&
+        (value.assetsUnavailable === undefined ||
+          value.assetsUnavailable === true)
       )
         return pass(value as CoordinatorToTabEnvelope);
       break;

@@ -20,7 +20,7 @@ import {
   EFFECT_WORKER_RESPONSE_TAG,
 } from './effect-worker-transport';
 import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
-import type { CacheWasmModule } from './wasm-module';
+import { type CacheWasmModule, CacheWasmUnavailableError } from './wasm-module';
 import type { CacheWorkerCoreOptions } from './worker-core';
 
 class FakePort extends EventTarget {
@@ -304,6 +304,41 @@ describe('cache engine worker runtime', () => {
     expect(handleRequest).not.toHaveBeenCalled();
     expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(0);
     expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(0);
+    expect(messagesOfKind(direct, 'activation-failed')).toEqual([
+      expect.objectContaining({ failureCode: 'initialization-failed' }),
+    ]);
+  });
+
+  it('reports a WASM binary the deployment no longer serves as assets-unavailable', async () => {
+    for (const databaseAction of [
+      'open-existing',
+      'wipe-before-open',
+    ] as const) {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      installCacheEngineWorker({
+        scope,
+        createCore: () => ({
+          prepare: async () => {
+            throw new CacheWasmUnavailableError(
+              'cache WASM download returned HTTP 403'
+            );
+          },
+          handleRequest: vi.fn(),
+          addPort: vi.fn(),
+          drain: vi.fn(),
+        }),
+      });
+      scope.activate(activation(databaseAction), direct);
+      await vi.waitFor(() =>
+        expect(messagesOfKind(direct, 'activation-failed')).toEqual([
+          expect.objectContaining({
+            reason: 'cache WASM download returned HTTP 403',
+            failureCode: 'assets-unavailable',
+          }),
+        ])
+      );
+    }
   });
 
   it('retries a busy owner lock, reporting each attempt, and opens once it frees', async () => {

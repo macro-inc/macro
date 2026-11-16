@@ -11,7 +11,10 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import {
+  recoverFromFailedLoad,
+  reloadForNewerBuild,
+} from '@core/util/reloadForNewerBuild';
 import {
   createMutationQueueTelemetry,
   type MutationQueueClearCause,
@@ -40,6 +43,7 @@ import {
 } from '@graphql-cache/protocol';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { CacheAssetsUnavailableError } from '@graphql-cache/worker/startup';
 import { TauriWebSocketWrapper } from '@macro-inc/collaboration/websocket/platform/tauri-websocket';
 import { Telemetry } from '@macro-inc/observability';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
@@ -760,6 +764,15 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
+      // A deploy retired this build's cache assets. Retrying cannot fetch
+      // them, so move to the deployed build like a failed lazy chunk does.
+      if (error instanceof CacheAssetsUnavailableError) {
+        recoverFromFailedLoad();
+        console.info(
+          `[graphql-cache] ${error.message}; using the network until Macro reloads`
+        );
+        return;
+      }
       if (error instanceof NativeCacheUpgradeRequiredError) {
         requireNativeUpdate(error.message);
       } else {

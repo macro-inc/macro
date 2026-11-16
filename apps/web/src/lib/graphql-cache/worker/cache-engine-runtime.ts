@@ -41,6 +41,7 @@ import {
 import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
 import {
   type CacheWasmModule,
+  CacheWasmUnavailableError,
   cacheWasmLinearMemoryBytes,
   loadCacheWasm,
 } from './wasm-module';
@@ -536,9 +537,11 @@ async function activate(
               reason: errorMessage(error),
               failureCode: storageBusy
                 ? 'storage-busy'
-                : activation.databaseAction === 'wipe-before-open'
-                  ? 'recovery-open-failed'
-                  : 'initialization-failed',
+                : error instanceof CacheWasmUnavailableError
+                  ? 'assets-unavailable'
+                  : activation.databaseAction === 'wipe-before-open'
+                    ? 'recovery-open-failed'
+                    : 'initialization-failed',
             })
       );
     }

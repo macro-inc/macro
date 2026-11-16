@@ -1348,8 +1348,10 @@ remains ordinary typing.
 
 ### Cache initialization recovery
 
-With the GraphQL draft queue enabled, block the cache WASM download until its
-bootstrap retries fail. Compose text and verify it remains saved on this device
+With the GraphQL draft queue enabled, abort the cache WASM download as a network
+failure until its bootstrap retries fail. Do not answer it with 403 or 404: those
+mean the deployment retired this build's assets, so the tab reloads (or prompts
+to reload) into the deployed build instead of retrying. Compose text and verify it remains saved on this device
 with a synchronization status and Retry. Restore network access and reconnect or
 press Retry: the same composer and working copy must remain, and synchronization
 must resume only after the preserved queue is readable. Repeat while another tab

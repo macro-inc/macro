@@ -3,7 +3,10 @@ import {
   isOwnerHandoffBlockedError,
   isOwnerLockUnavailableError,
 } from '@graphql-cache/protocol';
-import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
+import {
+  CacheAssetsUnavailableError,
+  CacheBootstrapExhaustedError,
+} from '@graphql-cache/worker/startup';
 import { createSignal } from 'solid-js';
 
 export type CacheRecoveryState =
@@ -64,7 +67,12 @@ export function createCacheRecovery(rebuild: () => Promise<void>) {
       isOwnerLockUnavailableError(error) ||
       isOwnerHandoffBlockedError(error);
     setState(recoverable ? 'unavailable' : 'recovery-required');
-    if (recoverable) schedule();
+    // This build's assets stay missing, so only a reload into the deployed
+    // build recovers; an explicit retry is still allowed.
+    if (error instanceof CacheAssetsUnavailableError) {
+      clearTimer();
+      unlisten();
+    } else if (recoverable) schedule();
     else {
       clearTimer();
       unlisten();

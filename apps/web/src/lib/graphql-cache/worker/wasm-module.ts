@@ -255,6 +255,22 @@ export interface CacheWasmModule {
   cacheBuildInfo?(): unknown;
 }
 
+/**
+ * The deployment no longer serves this build's WASM binary. CloudFront answers
+ * a missing S3 key with 403, so 403 counts as missing too. Downloading again
+ * cannot succeed; only a reload into the deployed build can.
+ */
+export class CacheWasmUnavailableError extends Error {}
+
+const MISSING_ASSET_STATUSES: ReadonlySet<number> = new Set([403, 404, 410]);
+
+export function cacheWasmDownloadError(status: number): Error {
+  const message = `cache WASM download returned HTTP ${status}`;
+  return MISSING_ASSET_STATUSES.has(status)
+    ? new CacheWasmUnavailableError(message)
+    : new Error(message);
+}
+
 let modulePromise: Promise<CacheWasmModule> | undefined;
 let wasmMemory: WebAssembly.Memory | undefined;
 
@@ -282,11 +298,7 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       let bytes: ArrayBuffer;
       try {
         const response = await fetch(wasmUrl);
-        if (!response.ok) {
-          throw new Error(
-            `cache WASM download returned HTTP ${response.status}`
-          );
-        }
+        if (!response.ok) throw cacheWasmDownloadError(response.status);
         bytes = await response.arrayBuffer();
         telemetry.record({
           name: 'graphql_cache.wasm_download',

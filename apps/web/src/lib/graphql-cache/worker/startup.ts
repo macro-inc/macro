@@ -34,3 +34,8 @@ export const COORDINATOR_CONNECT_ATTEMPTS =
  * the open grant. A missing progress message is not proof of untouched storage.
  */
 export class CacheBootstrapExhaustedError extends Error {}
+
+/** Bootstrap stopped before storage because the deployment no longer serves
+ * this build's cache assets. Retrying this build fails the same way; the page
+ * must reload into the deployed build. */
+export class CacheAssetsUnavailableError extends CacheBootstrapExhaustedError {}
