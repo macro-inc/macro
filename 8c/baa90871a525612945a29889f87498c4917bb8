@@ -1,0 +1,49 @@
+crates/code_execution/src/outbound/deno/test.rs
+  s_e7fba64acbc356::t_e9c1277c74962d 48,161,242,309,447,475,602,648,710
+  s_e7fba64acbc356::t_b883e883f40453 918-919
+crates/code_execution/src/outbound/ocaml/check.rs
+  s_e7fba64acbc356::t_54ad130697fe26 1-61,69-84,93-94,96-138
+  s_e7fba64acbc356::t_cf5593983b7768 62-68,85
+  s_e7fba64acbc356::t_1a04b9d61b01ec 86-92,95
+crates/code_execution/src/outbound/ocaml.rs
+  s_e7fba64acbc356::t_c0bb25dc17469b 1-296,301-311,314-316,321-449
+  s_e7fba64acbc356::t_3ee47a988340b7 312-313,317-318
+  s_e7fba64acbc356::t_cf5593983b7768 297-300,319-320
+crates/code_execution/src/outbound/deno.rs
+  s_e7fba64acbc356::t_57e182fd59d9dd 196-207,225
+  s_e7fba64acbc356::t_cf5593983b7768 251-254
+  s_e7fba64acbc356::t_a34a46812187c5 1-3,5,14,25,45-47,52,67,72,76-81,117-138,140-143,195,242-250,255,322,351,368-373,423,433-434
+crates/code_mode_assets/src/lib.rs
+  s_e7fba64acbc356::t_82b8bd3076f146 26-32
+crates/code_execution/src/outbound.rs
+  s_e7fba64acbc356::t_bf499a8643ff61 1-2,5
+crates/code_execution/src/outbound/deno/test/ocaml.rs
+  s_e7fba64acbc356::t_cf5593983b7768 8-9,145-148,182-185,193-199,209-220,243-246,341-344,397-400,418-419,494-497,526-529,551-552,564-567,598-603,610-613,616-619,625-630,633-636,680-686,700-703,713-718,721-725,747-750,780-787,792-799,801-804,811-820
+  s_e7fba64acbc356::t_3a5dbdabd35193 67-80,247,425,570-572
+  s_e7fba64acbc356::t_4ca00e823560bf 1-7,10-66,81-144,149-181,186-192,200-208,221-242,248-340,345-396,401-416,420-424,426-493,498-525,530-550,553-563,568-569,573-597,604-609,614-615,620-624,631-632,637-679,687-699,704-712,719-720,726-746,751-779,788-791,800,805-810,821-822
+  s_e7fba64acbc356::t_8be9b00d7b324e 417
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_e7fba64acbc356::t_a89cbfeb388560 94,117,128,144-170,177
+  s_e7fba64acbc356::t_45e2ef999dd535 2-5,80-93,95-116,118-127,129-143,171-176,178-179,181,195-210,213,230-251,264-276,281
+crates/code_mode_assets/build.rs
+  s_e7fba64acbc356::t_82b8bd3076f146 41-42
+crates/code_execution/src/outbound/ocaml/test.rs
+  s_e7fba64acbc356::t_cf5593983b7768 17-33
+  s_e7fba64acbc356::t_e6ac5e2808acba 1-16,34-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8cbaa90871a525612945a29889f87498c4917bb8",
+  "prompts": {},
+  "sessions": {
+    "s_e7fba64acbc356": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc72e5c9-e8a1-4e3f-8b52-3eec63bb16f2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
