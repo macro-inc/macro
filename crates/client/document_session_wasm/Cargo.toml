@@ -12,6 +12,8 @@ default = ["bebop-owned-all"]
 dev-probes = ["document_session/dev-probes"]
 # Only the explicit Lexical compatibility web artifact hosts JS classes.
 compat-web = ["bebop-owned-all", "compatibility"]
+# Artifact-identity marker, not a code switch: apps/web/scripts/native-editor-features.ts
+# reads it to tell the production artifact's feature set apart.
 bebop-owned-all = []
 compatibility = ["document_session/compatibility"]
 
