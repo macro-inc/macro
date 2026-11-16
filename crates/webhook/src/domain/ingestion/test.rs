@@ -170,6 +170,8 @@ struct MockAccessService {
     stale_users: Option<Vec<MacroUserIdStr<'static>>>,
     /// Teams holding access to the entity themselves.
     teams: Arc<Mutex<Vec<Uuid>>>,
+    /// Who may see a CRM record through a team; everyone asked when unset.
+    crm_viewers: Arc<Mutex<Option<Vec<String>>>>,
     team_calls: Arc<Mutex<Vec<(String, EntityType, Option<AccessLevel>)>>>,
 }
 
@@ -182,6 +184,7 @@ impl MockAccessService {
             levels: Arc::default(),
             stale_users: None,
             teams: Arc::default(),
+            crm_viewers: Arc::default(),
             team_calls: Arc::default(),
         }
     }
@@ -205,6 +208,83 @@ impl EntityTeamAccess for MockAccessService {
             None => Ok(lock(&self.teams).clone()),
         }
     }
+
+    async fn get_team_crm_viewers(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _team_id: Uuid,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(match lock(&self.crm_viewers).as_ref() {
+            Some(viewers) => users
+                .iter()
+                .filter(|user| viewers.iter().any(|viewer| viewer == user.as_ref()))
+                .cloned()
+                .collect(),
+            None => users.to_vec(),
+        })
+    }
+}
+
+/// A team directory with fixed members per team.
+#[derive(Default)]
+struct Members {
+    teams: Mutex<std::collections::HashMap<Uuid, Vec<MacroUserIdStr<'static>>>>,
+}
+
+impl Members {
+    fn of(team: &str, members: &[&str]) -> Arc<Self> {
+        let directory = Self::default();
+        lock(&directory.teams).insert(
+            Uuid::parse_str(team).unwrap(),
+            members.iter().map(|member| user_id(member)).collect(),
+        );
+        Arc::new(directory)
+    }
+}
+
+impl event_stream::domain::ports::TeamDirectory for Members {
+    async fn members(
+        &self,
+        team_id: Uuid,
+    ) -> Result<
+        Vec<(
+            MacroUserIdStr<'static>,
+            event_stream::domain::ports::TeamRole,
+        )>,
+        rootcause::Report,
+    > {
+        Ok(lock(&self.teams)
+            .get(&team_id)
+            .into_iter()
+            .flatten()
+            .map(|member| {
+                (
+                    member.clone(),
+                    event_stream::domain::ports::TeamRole::Member,
+                )
+            })
+            .collect())
+    }
+
+    async fn teams_of(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<(Uuid, event_stream::domain::ports::TeamRole)>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+}
+
+/// The service under test, with team membership from `members`.
+fn service_with_members(
+    access: MockAccessService,
+    repository: MockRepository,
+    enqueuer: MockEnqueuer,
+    members: Arc<Members>,
+) -> TestService {
+    WebhookEventIngestionServiceImpl::new(Arc::new(access), repository, enqueuer)
+        .with_audience_directories(members, Arc::new(Unconfigured))
 }
 
 impl EntityAccessService for MockAccessService {
@@ -466,15 +546,23 @@ impl WebhookEventEnqueuer for MockEnqueuer {
     }
 }
 
-type TestService =
-    WebhookEventIngestionServiceImpl<MockAccessService, MockRepository, MockEnqueuer>;
+type TestService = WebhookEventIngestionServiceImpl<
+    MockAccessService,
+    MockRepository,
+    MockEnqueuer,
+    NoPreview,
+    Members,
+    Unconfigured,
+>;
 
+/// The service under test, with a team directory where no team has members:
+/// team workspace webhooks need [`service_with_members`].
 fn service(
     access: MockAccessService,
     repository: MockRepository,
     enqueuer: MockEnqueuer,
 ) -> TestService {
-    WebhookEventIngestionServiceImpl::new(Arc::new(access), repository, enqueuer)
+    service_with_members(access, repository, enqueuer, Arc::default())
 }
 
 fn webhook(id: &str, workspace_id: &str) -> Webhook {
@@ -1050,6 +1138,7 @@ async fn internal_document_events_skip_webhook_delivery() {
         levels: Arc::default(),
         stale_users: None,
         teams: Arc::default(),
+        crm_viewers: Arc::default(),
         team_calls: Arc::default(),
     };
     let repository = MockRepository::new(vec![webhook("wh_match", PERSONAL_WORKSPACE_ID)]);
@@ -1089,11 +1178,17 @@ async fn normalizes_all_webhook_variants_with_direct_workspace_ownership() {
             levels: Arc::default(),
             stale_users: None,
             teams: Arc::default(),
+            crm_viewers: Arc::default(),
             team_calls: Arc::default(),
         };
         let repository = MockRepository::new(vec![webhook("wh_match", event_case.workspace_id)]);
         let enqueuer = MockEnqueuer::default();
-        let service = service(access.clone(), repository.clone(), enqueuer.clone());
+        let service = service_with_members(
+            access.clone(),
+            repository.clone(),
+            enqueuer.clone(),
+            Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+        );
         let expected_envelope = serde_json::to_value(&event_case.event).unwrap();
         let before_ingestion = Utc::now();
 
@@ -1159,7 +1254,12 @@ async fn webhook_event_fans_out_complete_envelope_to_every_match() {
         webhook("wh_second_match", event_case.workspace_id),
     ]);
     let enqueuer = MockEnqueuer::default();
-    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let service = service_with_members(
+        access.clone(),
+        repository.clone(),
+        enqueuer.clone(),
+        Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+    );
 
     service
         .ingest_webhook_event(event_case.event)
@@ -1281,7 +1381,12 @@ async fn fans_out_exact_envelope_once_per_personal_and_team_webhook() {
         webhook("wh_team", TEAM_WORKSPACE_ID),
     ]);
     let enqueuer = MockEnqueuer::default();
-    let service = service(access, repository.clone(), enqueuer.clone());
+    let service = service_with_members(
+        access,
+        repository.clone(),
+        enqueuer.clone(),
+        Members::of(TEAM_WORKSPACE_ID, &[PERSONAL_WORKSPACE_ID]),
+    );
 
     event.ingest(&service).await.expect("fan-out succeeds");
 
@@ -1396,6 +1501,7 @@ async fn entity_access_internal_error_is_not_transient() {
         levels: Arc::default(),
         stale_users: None,
         teams: Arc::default(),
+        crm_viewers: Arc::default(),
         team_calls: Arc::default(),
     };
     let repository = MockRepository::new(Vec::new());
@@ -2236,6 +2342,8 @@ mod preview_and_wildcards {
         MockRepository,
         MockEnqueuer,
         OnlyFlagged,
+        Members,
+        Unconfigured,
     > {
         service(
             MockAccessService::with_users(Vec::new()),
@@ -2590,8 +2698,8 @@ mod team_and_installation_audiences {
 
     #[tokio::test]
     async fn without_directories_these_audiences_stay_unsupported() {
-        let service = service(
-            MockAccessService::with_users(Vec::new()),
+        let service = WebhookEventIngestionServiceImpl::new(
+            Arc::new(MockAccessService::with_users(Vec::new())),
             MockRepository::new(Vec::new()),
             MockEnqueuer::default(),
         );
@@ -2611,6 +2719,40 @@ mod team_and_installation_audiences {
             result,
             Err(WebhookEventIngestionError::UnsupportedAudience(_))
         ));
+    }
+
+    /// Without a team directory no creator's membership can be confirmed, so
+    /// team workspace webhooks receive nothing.
+    #[tokio::test]
+    async fn without_a_team_directory_team_webhooks_get_nothing() {
+        let enqueuer = MockEnqueuer::default();
+        let service = WebhookEventIngestionServiceImpl::new(
+            Arc::new(MockAccessService::with_users(Vec::new())),
+            MockRepository::new(vec![
+                super::webhook("wh_team", &TEAM.to_string()),
+                super::webhook("wh_personal", PERSONAL_WORKSPACE_ID),
+            ]),
+            enqueuer.clone(),
+        );
+
+        service
+            .resolve_audience_and_enqueue(
+                event("team.updated"),
+                Stage::Stable,
+                &Audience::Team {
+                    team_id: TEAM,
+                    min_role: MinTeamRole::Member,
+                },
+            )
+            .await
+            .unwrap();
+
+        let enqueued: Vec<String> = lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect();
+        assert_eq!(enqueued, vec!["wh_personal".to_string()]);
     }
 }
 
@@ -2765,6 +2907,87 @@ mod team_workspaces {
             ],
             "every event asks current access"
         );
+    }
+
+    fn delivered(enqueuer: &MockEnqueuer) -> Vec<String> {
+        lock(&enqueuer.state)
+            .attempted_messages
+            .iter()
+            .map(|message| message.webhook_id.clone())
+            .collect()
+    }
+
+    /// A team webhook delivers to its creator's endpoint, so it stops the
+    /// moment the creator leaves the team, on a stable topic too.
+    #[tokio::test]
+    async fn a_team_webhook_stops_when_its_creator_leaves_the_team() {
+        let access = MockAccessService::with_users(vec![user_id(MEMBER)]).with_teams(vec![team()]);
+        let mut team_webhook = webhook("wh_team", TEAM_WORKSPACE_ID);
+        team_webhook.created_by_user_id = MEMBER.to_string();
+        let repository = MockRepository::new(vec![team_webhook]);
+        let enqueuer = MockEnqueuer::default();
+        let members = Members::of(TEAM_WORKSPACE_ID, &[MEMBER]);
+        let service = service_with_members(access, repository, enqueuer.clone(), members.clone());
+        let updated = document_event_cases().remove(1);
+        assert_eq!(updated.event_name, "document.updated");
+
+        updated.event.ingest(&service).await.unwrap();
+        assert_eq!(delivered(&enqueuer), vec!["wh_team".to_string()]);
+
+        lock(&members.teams).insert(team(), Vec::new());
+        updated.event.ingest(&service).await.unwrap();
+        assert_eq!(
+            delivered(&enqueuer),
+            vec!["wh_team".to_string()],
+            "the removed creator's webhook matches nothing"
+        );
+    }
+
+    fn crm_note() -> TestBrokerEvent {
+        let company = Uuid::parse_str("66666666-6666-6666-6666-666666666666").unwrap();
+        let message_id = Uuid::parse_str("55555555-5555-5555-5555-555555555555").unwrap();
+        TestBrokerEvent::Message(Event::with_schema_version(
+            MessageTopicEvent::Posted(MessagePostedMetadata {
+                parent: MessageParent::parse("crm_company", &company.to_string()).unwrap(),
+                message_id,
+                thread_id: None,
+                root_id: message_id,
+                sender: sender(MEMBER),
+                triggered_by: None,
+                content: "a note".to_string(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            }),
+            1,
+        ))
+    }
+
+    /// A note on a team CRM record reaches a team webhook only while its
+    /// creator has CRM access in that team.
+    #[tokio::test]
+    async fn a_crm_note_reaches_a_team_webhook_only_with_the_creators_crm_access() {
+        for (crm_access, expected) in [(false, vec![]), (true, vec!["wh_team".to_string()])] {
+            let access = MockAccessService::with_users(Vec::new()).with_teams(vec![team()]);
+            *lock(&access.crm_viewers) = Some(if crm_access {
+                vec![MEMBER.to_string()]
+            } else {
+                Vec::new()
+            });
+            let mut team_webhook = webhook("wh_team", TEAM_WORKSPACE_ID);
+            team_webhook.created_by_user_id = MEMBER.to_string();
+            let enqueuer = MockEnqueuer::default();
+            let service = service_with_members(
+                access,
+                MockRepository::new(vec![team_webhook]),
+                enqueuer.clone(),
+                Members::of(TEAM_WORKSPACE_ID, &[MEMBER]),
+            );
+
+            crm_note().ingest(&service).await.unwrap();
+
+            assert_eq!(delivered(&enqueuer), expected, "crm_access = {crm_access}");
+        }
     }
 
     /// An owner audience names a person, not their teams.

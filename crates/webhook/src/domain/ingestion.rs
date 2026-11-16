@@ -32,6 +32,7 @@ use macro_event_broker::access::{
 use macro_event_broker::{Event, TopicEvent};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::outbound::broker::MessageTopicEvent;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
@@ -317,8 +318,10 @@ impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I> 
         }
     }
 
-    /// Resolve team-admin audiences through `teams` and GitHub-installation
-    /// audiences through `github`.
+    /// Resolve team-admin audiences, and whether a team webhook's creator is
+    /// still a member, through `teams`, and GitHub-installation audiences
+    /// through `github`. Without `teams`, team workspace webhooks match
+    /// nothing.
     pub fn with_audience_directories<T2, G2>(
         self,
         teams: Arc<T2>,
@@ -487,6 +490,7 @@ where
         stage: Stage,
         workspace_ids: Vec<String>,
         claim_gates: &[ClaimGate],
+        crm_gates: &[CrmGate],
     ) -> Result<(), WebhookEventIngestionError> {
         let candidates = self
             .repository
@@ -499,8 +503,94 @@ where
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         let webhooks = self.admitted_webhooks(candidates, &event, stage).await;
         let webhooks = self.claim_gated(webhooks, claim_gates).await?;
+        let webhooks = self.creator_member_gated(webhooks).await?;
+        let webhooks = self.crm_gated(webhooks, crm_gates).await?;
         tracing::Span::current().record("match_count", webhooks.len());
         self.enqueue_all(webhooks, event).await
+    }
+
+    /// A team workspace's webhook delivers to whatever endpoint its creator
+    /// configured, so it is admitted only while that creator is a member of
+    /// the team: one member read per team among the candidates. Personal
+    /// workspaces (user ids, never UUIDs) are not gated here.
+    async fn creator_member_gated(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+    ) -> Result<Vec<crate::domain::models::Webhook>, WebhookEventIngestionError> {
+        let team_ids: BTreeSet<Uuid> = webhooks.iter().filter_map(team_workspace).collect();
+        if team_ids.is_empty() {
+            return Ok(webhooks);
+        }
+        let Some(teams) = &self.teams else {
+            // Without a team directory no membership can be confirmed: team
+            // webhooks get nothing rather than everything.
+            tracing::error!(
+                team_count = team_ids.len(),
+                "no team directory configured; dropping team workspace webhooks"
+            );
+            return Ok(webhooks
+                .into_iter()
+                .filter(|webhook| team_workspace(webhook).is_none())
+                .collect());
+        };
+        let mut members: HashMap<Uuid, HashSet<String>> = HashMap::with_capacity(team_ids.len());
+        for team_id in team_ids {
+            let team_members = teams.members(team_id).await.map_err(directory_error)?;
+            members.insert(
+                team_id,
+                team_members
+                    .into_iter()
+                    .map(|(user, _)| user.as_ref().to_ascii_lowercase())
+                    .collect(),
+            );
+        }
+        Ok(webhooks
+            .into_iter()
+            .filter(|webhook| match team_workspace(webhook) {
+                Some(team_id) => members.get(&team_id).is_some_and(|members| {
+                    members.contains(&webhook.created_by_user_id.to_ascii_lowercase())
+                }),
+                None => true,
+            })
+            .collect())
+    }
+
+    /// Drop the webhooks of a team workspace reached through a CRM record
+    /// whose creator may not see that record as a member of the team (no CRM
+    /// access, or a hidden record and no admin role): one batched read per
+    /// gate.
+    async fn crm_gated(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+        crm_gates: &[CrmGate],
+    ) -> Result<Vec<crate::domain::models::Webhook>, WebhookEventIngestionError> {
+        let mut admitted = webhooks;
+        for gate in crm_gates {
+            let creators: Vec<MacroUserIdStr<'static>> = admitted
+                .iter()
+                .filter(|webhook| webhook.workspace_id == gate.workspace_id)
+                .filter_map(|webhook| {
+                    MacroUserIdStr::try_from(webhook.created_by_user_id.clone()).ok()
+                })
+                .collect();
+            if creators.is_empty() {
+                continue;
+            }
+            let viewers = self
+                .entity_access_service
+                .get_team_crm_viewers(&gate.entity_id, gate.entity_type, gate.team_id, &creators)
+                .await
+                .map_err(WebhookEventIngestionError::EntityAccess)?;
+            admitted.retain(|webhook| {
+                webhook.workspace_id != gate.workspace_id
+                    || viewers.iter().any(|viewer| {
+                        viewer
+                            .as_ref()
+                            .eq_ignore_ascii_case(&webhook.created_by_user_id)
+                    })
+            });
+        }
+        Ok(admitted)
     }
 
     /// Drop webhooks in an installation's owning team workspaces whose
@@ -638,6 +728,12 @@ fn normalize_staged<E: TopicEvent>(
     Ok(Some((public.event, public.audience, public.stage)))
 }
 
+/// The team a webhook's workspace is, when it is a team workspace (a team
+/// id); personal workspaces are user ids.
+fn team_workspace(webhook: &crate::domain::models::Webhook) -> Option<Uuid> {
+    Uuid::parse_str(&webhook.workspace_id).ok()
+}
+
 /// The access level an [`MinAccessLevel`] floor names.
 fn access_level(min_level: MinAccessLevel) -> AccessLevel {
     match min_level {
@@ -683,6 +779,10 @@ struct WorkspaceAudience {
     workspace_ids: Vec<String>,
     /// People reached through an entity's access, for the span.
     accessor_count: usize,
+    /// Team workspaces reached through a CRM record the team holds.
+    crm_teams: Vec<CrmGate>,
+    /// Team workspaces reached some other way, which no CRM gate narrows.
+    ungated_teams: HashSet<String>,
 }
 
 impl WorkspaceAudience {
@@ -690,6 +790,46 @@ impl WorkspaceAudience {
         if !self.workspace_ids.contains(&workspace_id) {
             self.workspace_ids.push(workspace_id);
         }
+    }
+
+    /// A workspace the audience names outright (a team, a workspace, an
+    /// installation's owners): no CRM gate applies to it.
+    fn add_ungated(&mut self, workspace_id: String) {
+        self.ungated_teams.insert(workspace_id.clone());
+        self.add(workspace_id);
+    }
+
+    /// Teams holding an entity. A CRM record admits only the team webhooks
+    /// whose creator may see it, so its teams carry a gate.
+    fn add_entity_teams(&mut self, entity_type: EntityType, entity_id: &str, teams: Vec<Uuid>) {
+        let crm = matches!(
+            entity_type,
+            EntityType::CrmCompany | EntityType::CrmContact | EntityType::CrmPipeline
+        );
+        for team_id in teams {
+            let workspace_id = team_id.to_string();
+            if crm {
+                self.crm_teams.push(CrmGate {
+                    workspace_id: workspace_id.clone(),
+                    team_id,
+                    entity_id: entity_id.to_owned(),
+                    entity_type,
+                });
+                self.add(workspace_id);
+            } else {
+                self.add_ungated(workspace_id);
+            }
+        }
+    }
+
+    /// The CRM gates that still apply: a team workspace also reached without
+    /// a CRM record is not narrowed by one.
+    fn crm_gates(&self) -> Vec<CrmGate> {
+        self.crm_teams
+            .iter()
+            .filter(|gate| !self.ungated_teams.contains(&gate.workspace_id))
+            .cloned()
+            .collect()
     }
 
     fn add_person(&mut self, person: &MacroUserIdStr<'static>) {
@@ -702,12 +842,16 @@ impl WorkspaceAudience {
             self.add_person(accessor);
         }
     }
+}
 
-    fn add_teams(&mut self, teams: Vec<Uuid>) {
-        for team in teams {
-            self.add(team.to_string());
-        }
-    }
+/// A team workspace reached through a CRM record: its webhooks are admitted
+/// only when their creator may see the record as a member of that team.
+#[derive(Debug, Clone)]
+struct CrmGate {
+    workspace_id: String,
+    team_id: Uuid,
+    entity_id: String,
+    entity_type: EntityType,
 }
 
 impl<A, R, Q, P, T, G, I> WebhookEventIngestionServiceImpl<A, R, Q, P, T, G, I>
@@ -773,10 +917,10 @@ where
                 } => {
                     workspaces
                         .add_accessors(self.users_with_access(entity_id, *entity_type).await?);
-                    workspaces.add_teams(
-                        self.teams_with_access(entity_id, *entity_type, None)
-                            .await?,
-                    );
+                    let teams = self
+                        .teams_with_access(entity_id, *entity_type, None)
+                        .await?;
+                    workspaces.add_entity_teams(*entity_type, entity_id, teams);
                 }
                 Audience::EntityAtLeast {
                     entity_type,
@@ -787,14 +931,10 @@ where
                         self.accessors_at_least(entity_id, *entity_type, *min_level)
                             .await?,
                     );
-                    workspaces.add_teams(
-                        self.teams_with_access(
-                            entity_id,
-                            *entity_type,
-                            Some(access_level(*min_level)),
-                        )
-                        .await?,
-                    );
+                    let teams = self
+                        .teams_with_access(entity_id, *entity_type, Some(access_level(*min_level)))
+                        .await?;
+                    workspaces.add_entity_teams(*entity_type, entity_id, teams);
                 }
                 // Named people match their personal workspace only.
                 Audience::Owner { user_id }
@@ -808,11 +948,13 @@ where
                         workspaces.add_person(user_id);
                     }
                 }
-                Audience::Workspace { workspace_id } => workspaces.add(workspace_id.clone()),
+                Audience::Workspace { workspace_id } => {
+                    workspaces.add_ungated(workspace_id.clone());
+                }
                 Audience::Team {
                     team_id,
                     min_role: MinTeamRole::Member,
-                } => workspaces.add(team_id.to_string()),
+                } => workspaces.add_ungated(team_id.to_string()),
                 Audience::Team {
                     team_id,
                     min_role: MinTeamRole::Admin,
@@ -828,7 +970,7 @@ where
                         .into_iter()
                         .chain(owning_teams.iter().cloned())
                     {
-                        workspaces.add(workspace_id);
+                        workspaces.add_ungated(workspace_id);
                     }
                     claim_gates.push(ClaimGate {
                         installation_id: installation_id.clone(),
@@ -843,10 +985,11 @@ where
             }
         }
         tracing::Span::current().record("accessor_count", workspaces.accessor_count);
+        let crm_gates = workspaces.crm_gates();
         let workspace_ids = workspaces.workspace_ids;
         tracing::Span::current().record("workspace_count", workspace_ids.len());
 
-        self.match_and_enqueue(event, stage, workspace_ids, &claim_gates)
+        self.match_and_enqueue(event, stage, workspace_ids, &claim_gates, &crm_gates)
             .await
     }
 }
