@@ -22,7 +22,7 @@ and the traps. To add a whole service, follow the
 | `infra/packages/service` | `EcrImage`, least-privilege DynamoDB, cluster stack reference. |
 | `infra/packages/lambda` | `Lambda` component and `WorkerTrigger`. |
 | `infra/packages/vpc` | IDs of the one VPC everything runs in (`get_coparse_api_vpc()`). |
-| `infra/stacks/vpc-network` | What Pulumi owns of that VPC's routing: gateway endpoints today. Prod stack only; dev runs in the same VPC. |
+| `infra/stacks/vpc-network` | What Pulumi owns of that VPC's routing: gateway endpoints and the us-east-1b/1c NATs. Prod stack only; dev runs in the same VPC. |
 
 Stacks are `macro-inc/dev` and `macro-inc/prod`; a few are prod-only
 (`monitoring`, `doppler-projects`, `vpc-network`) or dev-only (`github-runners`,

@@ -1,3 +1,6 @@
 # Dev and prod run in the same VPC, so this project has only a prod stack.
 config:
   aws:region: us-east-1
+  # Rollout switches for the per-zone NATs; see AGENTS.md.
+  vpc-network:adoptSubnetAssociations: true
+  vpc-network:zonalEgressZones: []

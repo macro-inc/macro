@@ -39,3 +39,23 @@ export function coparse_api_vpc_filtered_subnets(az: string[]) {
   }
   return result.map((n) => n.value);
 }
+
+// The private route tables of the legacy CDK stack. Both default-route to its
+// one NAT, in us-east-1a.
+export const SHARED_PRIVATE_ROUTE_TABLE_IDS = [
+  'rtb-00dfae8780d5d8d84',
+  'rtb-027a26d11875ac278',
+] as const;
+
+// Zones whose private subnets get their own NAT and route table in the
+// vpc-network stack. us-east-1a uses the CDK NAT, which is already there.
+export const ZONAL_EGRESS_ZONES = ['us-east-1b', 'us-east-1c'] as const;
+export type ZonalEgressZone = (typeof ZONAL_EGRESS_ZONES)[number];
+
+// Keys of the vpc-network stack's `privateRouteTableIds` output: every route
+// table a private subnet can use. The shared tables are keyed by their id,
+// the zonal ones by zone.
+export const PRIVATE_ROUTE_TABLE_KEYS = [
+  ...SHARED_PRIVATE_ROUTE_TABLE_IDS,
+  ...ZONAL_EGRESS_ZONES,
+] as const;

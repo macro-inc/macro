@@ -28,7 +28,9 @@ From `infra/`: `bun run check`, `bunx biome check stacks/computers-dev-gateway`;
   file through stdin, never on the command line.
 - `hostEndpointAddress` is runtime-dev-1's ephemeral external IP. When it
   changes, update the config; the user data changes and the instance is replaced.
-- The private route tables are shared with prod. The route is a `/32` for the
+- The private route tables are shared with prod and come from the
+  `vpc-network` prod stack's `privateRouteTableIds` output; deploy this stack
+  after that one adds a route table. The route is a `/32` for the
   host only, and the gateway's security group admits only the dev harness.
 - The host side (its peer config and the GCP firewall rule for UDP 51820 from
   the Elastic IP) lives outside this stack.
