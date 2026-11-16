@@ -353,13 +353,24 @@ let iterator state =
   let forged_request expression
       (fields : (Data_types.label_description * record_label_definition) array)
       =
+    (* A record type can re-export the request's fields
+       ([type r = Macro_sdk.Request.t = { ... }]): expand it first. *)
+    let env = environment expression.exp_env in
+    let is_request type_ =
+      match Types.get_desc (Ctype.expand_head env type_) with
+      | Tconstr (path, _, _) ->
+          let path =
+            try Env.normalize_type_path None env path with Not_found -> path
+          in
+          is_request_path path
+      | _ -> false
+    in
     if
-      Array.exists
-        (fun ((label : Data_types.label_description), _) ->
-          match Types.get_desc label.lbl_res with
-          | Tconstr (path, _, _) -> is_request_path path
-          | _ -> false)
-        fields
+      is_request expression.exp_type
+      || Array.exists
+           (fun ((label : Data_types.label_description), _) ->
+             is_request label.lbl_res)
+           fields
     then
       refuse state expression.exp_loc
         "builds a Macro_sdk_runtime.Request.t by hand, so its operation cannot \
