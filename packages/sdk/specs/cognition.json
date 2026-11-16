@@ -2321,6 +2321,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Privacy review is unavailable; nothing was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
           }
         }
       }
