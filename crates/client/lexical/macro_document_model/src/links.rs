@@ -55,8 +55,10 @@ fn encode_uri_segment(segment: &str) -> String {
     ] {
         encoded = encoded.replace(escape, text);
     }
-    let regex =
-        RegexMatcher::new("%25([\\da-f]{2})", "i").expect("source encoded percent expression");
+    static ENCODED_PERCENT: LazyLock<RegexMatcher> = LazyLock::new(|| {
+        RegexMatcher::new("%25([\\da-f]{2})", "i").expect("source encoded percent expression")
+    });
+    let regex = &*ENCODED_PERCENT;
     let mut output = String::new();
     let mut cursor = 0;
     // The encoded input is ASCII, so UTF-16 match offsets are byte offsets here.
@@ -84,15 +86,17 @@ pub fn normalize_link_url(input: &str) -> Option<String> {
         return None;
     }
     let probe = trimmed.replace(['\t', '\n', '\r'], "");
-    let regex =
-        RegexMatcher::new(r"^([a-z][a-z\d+.-]*):", "i").expect("source URL scheme expression");
-    let scheme = regex.exec(&probe);
+    static SCHEME: LazyLock<RegexMatcher> = LazyLock::new(|| {
+        RegexMatcher::new(r"^([a-z][a-z\d+.-]*):", "i").expect("source URL scheme expression")
+    });
+    static HOST_PORT: LazyLock<RegexMatcher> = LazyLock::new(|| {
+        RegexMatcher::new(r"^\d+(?:[/?#]|$)", "").expect("source host port expression")
+    });
+    let scheme = SCHEME.exec(&probe);
     let is_host_with_port = scheme.as_ref().is_some_and(|m| {
         let name = m.get(1).unwrap_or("").to_lowercase();
         (name == "localhost" || name.contains('.'))
-            && RegexMatcher::new(r"^\d+(?:[/?#]|$)", "")
-                .expect("source host port expression")
-                .test(probe.strip_prefix(m.full()).unwrap_or(""))
+            && HOST_PORT.test(probe.strip_prefix(m.full()).unwrap_or(""))
     });
     let candidate = if scheme.is_some() && !is_host_with_port {
         trimmed.to_owned()

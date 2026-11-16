@@ -7,8 +7,25 @@ use base64::{
 use lexical_model::{js_string, js_trim, js_truthy};
 use lexical_rich_nodes::utils::matcher::{Match, RegexMatcher};
 use serde_json::Value;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+thread_local! {
+    // Projections run over whole documents; compile each fixed tag expression once.
+    static COMPILED: RefCell<HashMap<(String, String), Rc<RegexMatcher>>> =
+        RefCell::new(HashMap::new());
+}
+fn compiled(source: &str, flags: &str) -> Rc<RegexMatcher> {
+    COMPILED.with(|compiled| {
+        compiled
+            .borrow_mut()
+            .entry((source.to_owned(), flags.to_owned()))
+            .or_insert_with(|| {
+                Rc::new(RegexMatcher::new(source, flags).expect("source tag parser expression"))
+            })
+            .clone()
+    })
+}
 fn replace(text: &str, source: &str, flags: &str, render: impl Fn(&Match) -> String) -> String {
-    let regex = RegexMatcher::new(source, flags).expect("source tag parser expression");
+    let regex = compiled(source, flags);
     let units: Vec<_> = text.encode_utf16().collect();
     let mut cursor = 0;
     let mut output = String::new();
@@ -123,11 +140,10 @@ pub fn parse_agent_session_mentions(text: &str) -> String {
 }
 fn github_ref(url: &str) -> Option<String> {
     use lexical_rich_nodes::utils::matcher::Matcher;
-    let m = RegexMatcher::new(
+    let m = compiled(
         r"github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)/pull/([1-9][0-9]*)",
         "",
     )
-    .expect("source PR reference expression")
     .exec(url)?;
     Some(format!("{}/{}#{}", m.get(1)?, m.get(2)?, m.get(3)?))
 }
@@ -248,11 +264,10 @@ pub fn parse_snapshots(text: &str) -> String {
 /// Strip one valid leading private context envelope, leaving user-authored tags visible.
 pub fn strip_agent_context(text: &str) -> String {
     use lexical_rich_nodes::utils::matcher::Matcher;
-    let regex = RegexMatcher::new(
+    let regex = compiled(
         r"^<m-agent-context>(.*?)</m-agent-context>(?:\r?\n\r?\n)?",
         "s",
-    )
-    .expect("source context prefix expression");
+    );
     let Some(m) = regex.exec(text) else {
         return text.into();
     };
@@ -346,10 +361,8 @@ fn flatten_tables(text: &str) -> String {
         r"<m-table(?:\s[^>]*)?>(.*?)</m-table>",
         "s",
         |table| {
-            let rows = RegexMatcher::new(r"<m-table-row(?:\s[^>]*)?>(.*?)</m-table-row>", "s")
-                .expect("source table row expression");
-            let cells = RegexMatcher::new(r"<m-table-cell(?:\s[^>]*)?>(.*?)</m-table-cell>", "s")
-                .expect("source table cell expression");
+            let rows = compiled(r"<m-table-row(?:\s[^>]*)?>(.*?)</m-table-row>", "s");
+            let cells = compiled(r"<m-table-cell(?:\s[^>]*)?>(.*?)</m-table-cell>", "s");
             rows.find_all(table.get(1).unwrap_or(""))
                 .iter()
                 .map(|row| {
