@@ -1,4 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
+import { MessageProvider } from '@channel/Message/context';
+import { SenderIcon } from '@channel/Message/SenderIcon';
 import { SenderName } from '@channel/Message/SenderName';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -6,7 +8,6 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
 import { AvatarGroup } from '@ui';
 import { For, Show } from 'solid-js';
-import { DiscussionAvatar } from './discussion-avatar';
 import type { discussionPreview } from './discussion-preview';
 
 export function DiscussionEntry(props: {
@@ -25,9 +26,9 @@ export function DiscussionEntry(props: {
       <Show when={props.preview.newest}>
         {(message) => (
           <div class="flex gap-2 [--avatar-group-separator:var(--color-panel)]">
-            <div class="size-8 shrink-0">
-              <DiscussionAvatar message={message()} size="fill" />
-            </div>
+            <MessageProvider value={message}>
+              <SenderIcon class="size-8" interactive={false} />
+            </MessageProvider>
             <div class="min-w-0 flex-1">
               <div class="flex items-baseline gap-2 text-sm">
                 <span class="truncate font-medium">
@@ -76,7 +77,9 @@ export function DiscussionEntry(props: {
             <AvatarGroup size="sm">
               <For each={props.preview.commenters.slice(0, 3)}>
                 {(commenter) => (
-                  <DiscussionAvatar message={commenter} size="sm" />
+                  <MessageProvider value={() => commenter}>
+                    <SenderIcon class="size-4" interactive={false} />
+                  </MessageProvider>
                 )}
               </For>
               <Show when={props.preview.commenters.length > 3}>

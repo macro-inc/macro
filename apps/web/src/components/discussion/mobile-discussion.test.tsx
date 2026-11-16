@@ -15,6 +15,9 @@ import { createSignal, For } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MobileDiscussion } from './mobile-discussion';
 
+vi.mock('@channel/Message/SenderIcon', () => ({
+  SenderIcon: () => null,
+}));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
   getDisplayName: () => 'Member',
