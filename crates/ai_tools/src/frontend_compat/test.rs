@@ -101,10 +101,7 @@ fn retired_tools_are_generated_but_no_host_offers_them() {
                 "{name}"
             );
         }
-        assert!(
-            !crate::base_toolset().tools.contains_key(name),
-            "{name}"
-        );
+        assert!(!crate::base_toolset().tools.contains_key(name), "{name}");
         assert!(!crate::database_tools().tools.contains_key(name), "{name}");
     }
 }
