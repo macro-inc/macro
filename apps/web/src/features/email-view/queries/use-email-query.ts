@@ -55,6 +55,16 @@ export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
   reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
   /** Keeps rows in place while an action changes their sort. */
   positions?: { hold: (entityIds: readonly string[]) => void };
+  /** The rows are the previous search's, shown while the next one loads. */
+  showsPreviousRows?: Accessor<boolean>;
+};
+
+type ShownEmailRows = {
+  items: EmailDataSourceItem[];
+  tab: EmailViewState['tab'];
+  searching: boolean;
+  /** The items belong to the query before the one now loading. */
+  previous: boolean;
 };
 
 export type EmailDataSourceInput = Pick<
@@ -78,6 +88,8 @@ export type UseEmailDataSourceOptions = {
   savedView?: Accessor<EmailSavedViewScope | undefined>;
   /** False while the list must not query, such as a loading saved view. */
   enabled?: Accessor<boolean>;
+  /** Keep the rows on screen, marked as previous, while a search loads. */
+  keepRowsWhileSearching?: Accessor<boolean>;
 };
 
 /**
@@ -614,9 +626,7 @@ export function useEmailDataSource(
 
     return result;
   });
-  const items = createSoupRowStore(builtItems);
-
-  const isLoading = () => {
+  const awaitsRows = () => {
     if (localRows().length > 0) return false;
     if (search.isSearching() && showsFavorites() && favorites.isError)
       return false;
@@ -635,12 +645,43 @@ export function useEmailDataSource(
     return search.isSearchServiceLoading();
   };
 
+  // A search that is still loading keeps the rows it replaces on screen: a
+  // blank list between two queries reads as "no results". The rows stay
+  // until the new ones arrive, and never cross a tab change.
+  const shownRows = createMemo<ShownEmailRows>(
+    (previous) => {
+      const searching = search.isSearching();
+      const keepsPrevious =
+        (options.keepRowsWhileSearching?.() ?? false) &&
+        awaitsRows() &&
+        previous.tab === state.tab &&
+        previous.items.length > 0 &&
+        (searching || previous.searching);
+      if (keepsPrevious) return { ...previous, searching, previous: true };
+
+      return {
+        items: builtItems(),
+        tab: state.tab,
+        searching,
+        previous: false,
+      };
+    },
+    { items: [], tab: state.tab, searching: false, previous: false }
+  );
+  const items = createSoupRowStore(() => shownRows().items);
+  const isLoading = () => awaitsRows() && !shownRows().previous;
+
   return {
     positions: {
       hold: (entityIds) => positions.hold(listEntities(), entityIds),
     },
     reminderForThread: (threadId) =>
       showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
+    showsPreviousRows: () =>
+      !showsReminders() &&
+      !showsScheduled() &&
+      !showsFocus() &&
+      shownRows().previous,
     items: () =>
       showsReminders()
         ? reminders.items()

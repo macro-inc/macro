@@ -120,7 +120,7 @@ const ids = (source: EmailDataSource) =>
     .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []));
 
 let dispose: (() => void) | undefined;
-function mount(search = '') {
+function mount(search = '', keepRowsWhileSearching = false) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [state, setState] = createStore<EmailViewState>({
@@ -292,6 +292,7 @@ function mount(search = '') {
     const source = useEmailDataSource(state, {
       tagSets: () => [],
       tagSetsReady,
+      keepRowsWhileSearching: () => keepRowsWhileSearching,
     });
     return {
       source,
@@ -323,6 +324,49 @@ function mount(search = '') {
 }
 
 describe('Email list query transitions', () => {
+  it('keeps the rows on screen as previous rows while a search loads', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('', true);
+      expect(ids(root.source)).toEqual(['noise']);
+
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+      expect(ids(root.source)).toEqual(['noise']);
+      expect(root.source.showsPreviousRows?.()).toBe(true);
+      expect(root.source.isLoading()).toBe(false);
+
+      root.setSearchFetching(false);
+      expect(ids(root.source)).toEqual(['search']);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+
+      // Another tab's rows are never shown under this one's name.
+      root.setSearchFetching(true);
+      root.setState('tab', 'important');
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('blanks the list while a search loads unless rows are kept', () => {
+    vi.useFakeTimers();
+    try {
+      const root = mount('');
+      root.setSearchFetching(true);
+      root.setState('search', 'budget');
+      vi.advanceTimersByTime(1000);
+
+      expect(ids(root.source)).toEqual([]);
+      expect(root.source.showsPreviousRows?.()).toBe(false);
+      expect(root.source.isLoading()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   const alias = { inboxId: 'inbox-a', emailAddress: 'resident@example.com' };
 
   it.each(['spam', 'trash'] as const)(
