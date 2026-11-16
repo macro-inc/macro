@@ -12,9 +12,10 @@ let persistenceAvailable = true;
 let volatileEpoch = crypto.randomUUID();
 let validatedEpoch: string | undefined;
 
-/** Fence native loads that begin before user-info hydration supplies an identity. */
-export function documentSessionEpoch(): string {
-  if (!persistenceAvailable) return volatileEpoch;
+type SessionEpoch = { epoch: string; durable: boolean };
+
+function readSessionEpoch(): SessionEpoch {
+  if (!persistenceAvailable) return { epoch: volatileEpoch, durable: false };
   try {
     const epoch = localStorage.getItem(EPOCH_KEY) ?? crypto.randomUUID();
     // Probe once per epoch, not on every editor/status callback.
@@ -22,23 +23,32 @@ export function documentSessionEpoch(): string {
       localStorage.setItem(EPOCH_KEY, epoch);
       validatedEpoch = epoch;
     }
-    return epoch;
+    return { epoch, durable: true };
   } catch {
     // Keep source authorization session-bound even without durable storage.
-    return volatileEpoch;
+    return { epoch: volatileEpoch, durable: false };
   }
+}
+
+/** Fence native loads that begin before user-info hydration supplies an identity. */
+export function documentSessionEpoch(): string {
+  return readSessionEpoch().epoch;
 }
 
 export const offlineDocumentContextCache = createOfflineDocumentContextCache({
   store: createPerQueryIDBStore({ dbName: 'native-document-open-persist-v1' }),
   identity: () => {
-    if ((!isNativeMobilePlatform() && !RUST_EDITOR_ENGINE) || !hasLoginCookie())
-      return;
+    const native = isNativeMobilePlatform();
+    if ((!native && !RUST_EDITOR_ENGINE) || !hasLoginCookie()) return;
     const state = queryClient.getQueryState<UserInfoData>(
       authKeys.userInfo.queryKey
     );
     if (!state?.data?.authenticated || !state.data.id) return;
-    return { userId: state.data.id, epoch: documentSessionEpoch() };
+    const { epoch, durable } = readSessionEpoch();
+    // A flag-off web logout finds web contexts by their recorded epoch, so
+    // never store one without it. Native logout always clears.
+    if (!native && !durable) return;
+    return { userId: state.data.id, epoch };
   },
 });
 
@@ -53,8 +63,8 @@ function hasPersistedEpoch(): boolean {
 
 /** Rotate before asynchronous clearing so late work cannot restore a logged-out session. */
 export async function clearOfflineDocumentContexts(): Promise<void> {
-  // Web writes this store only while the engine is on, and every write first
-  // records the epoch. A flag-off load still clears what an earlier flag-on load
+  // Web writes this store only while the engine is on, and only under a
+  // recorded epoch. A flag-off load still clears what an earlier flag-on load
   // left; a web origin that never wrote it keeps main's untouched storage.
   if (!isNativeMobilePlatform() && !RUST_EDITOR_ENGINE && !hasPersistedEpoch())
     return;

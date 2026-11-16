@@ -478,6 +478,31 @@ describe('engine choice after boot', () => {
 });
 
 describe('unflagged browser logout', () => {
+  it('stores nothing a later flag-off logout could miss when the epoch cannot be recorded', async () => {
+    await clearOfflineDocumentContexts();
+    localStorage.removeItem('document-open-context:epoch');
+    mocks.native = false;
+    mocks.rustEngine = true;
+    queryClient.setQueryData(authKeys.userInfo.queryKey, identity);
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      });
+    try {
+      const session = offlineDocumentContextCache.capture();
+      if (session)
+        await offlineDocumentContextCache.write(session, documentContext);
+    } finally {
+      setItem.mockRestore();
+    }
+
+    mocks.rustEngine = false;
+    await clearOfflineDocumentContexts();
+
+    expect(await storedContextCount()).toBe(0);
+  });
+
   it('clears contexts an earlier flag-on load left behind', async () => {
     // beforeEach wrote a context and its epoch, as a flag-on load does.
     expect(await storedContextCount()).toBe(1);
