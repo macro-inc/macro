@@ -976,7 +976,7 @@ impl Replayer {
     ) -> Result<Value> {
         let type_name = view.node_or_err(key)?.type_name();
         let editor = self.record_editor.unwrap_or(self.editor_id);
-        let identity = self.record_ids.fresh()?;
+        let identity = self.record_ids.fresh_ephemeral()?;
         self.ephemeral_text.insert(identity, (key, text));
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":self.version,"editor":editor,"type":type_name}),

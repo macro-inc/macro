@@ -897,3 +897,57 @@ fn caret_and_iterator_handles_cross_mutable_callback_frames()
     tx.commit()?;
     Ok(())
 }
+
+// An ephemeral text clone shares its source's key: anything its own frame cannot answer
+// from the clone's owned text must fail, never fall back to the live node by key.
+#[test]
+fn ephemeral_text_clones_fail_closed_outside_their_owned_text_methods()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_text("01234")?.key();
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    let mut owner = Replayer::default();
+    let clone = owner.ephemeral_text_node(tx.view(), text, "12".into())?;
+    // The owning frame answers the supported methods from the clone's own text.
+    assert_eq!(
+        api::call(
+            &mut owner,
+            &mut tx,
+            &json!({"fn":"TextNode.getTextContent","this":clone,"args":[]}),
+        )?,
+        "12"
+    );
+    // A raw field read would bypass the owned text and read the live record.
+    let error = api::call(
+        &mut owner,
+        &mut tx,
+        &json!({"fn":"get:__text","this":clone,"args":[]}),
+    )
+    .expect_err("raw field on an ephemeral clone");
+    assert_eq!(
+        error.to_string(),
+        "unsupported use of an ephemeral text clone: get:__text"
+    );
+    // A frame that shares identities but not the owning store must not read the live node.
+    let mut other = Replayer {
+        record_ids: owner.record_ids.clone(),
+        ..Replayer::default()
+    };
+    let error = api::call(
+        &mut other,
+        &mut tx,
+        &json!({"fn":"TextNode.getTextContent","this":clone,"args":[]}),
+    )
+    .expect_err("ephemeral clone outside its frame");
+    assert_eq!(
+        error.to_string(),
+        "unsupported use of an ephemeral text clone: TextNode.getTextContent"
+    );
+    assert_eq!(tx.text_content(text), "01234");
+    Ok(())
+}

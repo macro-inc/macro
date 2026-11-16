@@ -33,6 +33,17 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         .map(EditorState::view)
         .unwrap_or(tx.view());
     let short = name.rsplit('.').next().unwrap_or(name);
+    // An ephemeral clone shares its source's key, so anything not answered from its owned
+    // text would read or write the live node: only its frame's text methods are supported.
+    if receiver.get("$node").is_some()
+        && let Some(identity) = receiver.get("identity").and_then(Value::as_u64)
+        && r.record_ids.is_ephemeral(identity)?
+        && (name.starts_with("get:") || !r.ephemeral_text.contains_key(&identity))
+    {
+        return Err(fail(format!(
+            "unsupported use of an ephemeral text clone: {name}"
+        )));
+    }
     if receiver.get("$caretValue").is_some()
         || short.contains("Caret")
         || short == "$caretRangeFromSelection"

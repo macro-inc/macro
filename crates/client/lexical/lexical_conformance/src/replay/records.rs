@@ -12,6 +12,8 @@ pub(crate) struct RecordIdentities(Arc<Mutex<Records>>);
 #[derive(Default)]
 struct Records {
     by_record: HashMap<(u64, NodeKey, ForeignRecordIdentity), (u64, u64)>,
+    /// Identities minted for ephemeral clones, which no live record owns.
+    ephemeral: std::collections::HashSet<u64>,
     next: u64,
 }
 
@@ -41,8 +43,9 @@ impl RecordIdentities {
         Ok(record)
     }
 
-    /// An identity no record owns, from the same sequence as record identities.
-    pub fn fresh(&self) -> Result<u64> {
+    /// An identity for an ephemeral clone: no live record owns it, and every frame sharing
+    /// these identities can tell it apart from a record's.
+    pub fn fresh_ephemeral(&self) -> Result<u64> {
         let mut records = self
             .0
             .lock()
@@ -52,7 +55,17 @@ impl RecordIdentities {
             .next
             .checked_add(1)
             .ok_or_else(|| fail("record identity overflow"))?;
+        records.ephemeral.insert(identity);
         Ok(identity)
+    }
+
+    pub fn is_ephemeral(&self, identity: u64) -> Result<bool> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| fail("record identity store poisoned"))?
+            .ephemeral
+            .contains(&identity))
     }
 
     pub fn retain(
