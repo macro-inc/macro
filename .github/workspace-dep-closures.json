@@ -4174,6 +4174,7 @@
       "crates/notification",
       "crates/notification_state",
       "crates/pairing_id",
+      "crates/password_events",
       "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
@@ -5912,6 +5913,7 @@
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
       "crates/pairing_id",
+      "crates/password_events",
       "crates/password_import",
       "crates/passwords",
       "crates/pipedream_mcp",
@@ -12929,6 +12931,20 @@
       "crates/pairing_id",
       "crates/workspace-hack"
     ],
+    "password_events": [
+      "crates/agent_correlation",
+      "crates/cowlike",
+      "crates/kafka_util",
+      "crates/macro_auth",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_event_broker",
+      "crates/macro_event_topics",
+      "crates/macro_user_id",
+      "crates/password_events",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
+    ],
     "password_import": [
       "crates/password_import"
     ],
@@ -16816,6 +16832,7 @@
       "crates/notification",
       "crates/notification_state",
       "crates/pairing_id",
+      "crates/password_events",
       "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",

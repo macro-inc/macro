@@ -69,6 +69,25 @@ reveals an explicitly selected version. The generator
 picks a length (12–128) and character classes; every selected class is always
 present, and characters are drawn uniformly with rejection sampling.
 
+When an agent asks to use an item, the item's human creator and the team's
+admins get an inbox row, "<agent> requested access to <item>", grouped under
+the current team while Passwords is enabled. Opening the row or a notification
+in its stack selects the requested item in Passwords; teams have no separate
+inbox page, and requests for another team are hidden. In the detail pane,
+people who can manage the item see Agent access: a pending request offers Allow
+view, Allow edit and Deny, and an agent that can use the item or still holds a
+grant offers Remove access ("Remove approval" also appears for an approved
+shared grant). Remove approval keeps the grant: the row then reads "<agent>
+requires approval to use this item" and keeps Remove access, also while a later
+request is pending or after it is denied. Once the grant is removed, the row
+disappears unless a request is pending. A request
+that changed meanwhile shows the latest state with a notice after a successful
+refresh. The section loads inside the item pane using a local skeleton; a
+failed read offers Retry, and obsolete actions stay hidden until that retry
+succeeds. The section is
+hidden when the agent vault is off or the viewer can't review, and ordinary
+sharing never lists agents.
+
 ## Importing from 1Password or Bitwarden
 
 The New menu (desktop sidebar and list header) and the phone's floating New end
@@ -141,3 +160,4 @@ Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the Nix Chrome binary when required
 Its import case uses the real wasm parser: run `just ensure-password-import-wasm`
 in `apps/web` first.
 The fixture suite complements authenticated local-stack verification.
+
