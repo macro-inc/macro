@@ -381,3 +381,47 @@ fn cross_parent_remote_move_reports_the_reused_key_as_touched() -> Result<()> {
     assert!(changes.touched.contains(&text.key()));
     Ok(())
 }
+// A host that keeps committing after a remote import it never projected would splice
+// keystrokes at stale offsets, and every peer would see them. The projection refuses
+// instead, so the host resyncs from Loro.
+#[test]
+fn a_local_commit_with_unprojected_remote_text_events_diverges() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.set_state(p, &ID, "p".into())?;
+        tx.set_state(text, &ID, "t".into())?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text)
+    })?;
+    let doc = new_doc(1)?;
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PLAIN, 0)?;
+    let peer = fork_doc(&doc, 2)?;
+    let before = peer.oplog_vv();
+    let map = projection.index.map(&peer, text.key())?;
+    let Some(loro::ValueOrContainer::Container(loro::Container::Text(remote))) = map.get("text")
+    else {
+        panic!("text container");
+    };
+    remote.insert(0, "R")?;
+    peer.commit_with(loro::CommitOptions::new().timestamp(1));
+    doc.import(&peer.export(ExportMode::updates(&before))?)?;
+    let stored_before = doc.get_deep_value();
+    let (_, commit) = editor.update(|tx| {
+        tx.text(text)?.set_text_content("abcd")?;
+        Ok(())
+    })?;
+    let error = projection
+        .local_commit(&doc, &[commit], LOCAL_ORIGIN, 2)
+        .expect_err("pending remote events");
+    assert!(
+        error.to_string().contains("pending remote events"),
+        "{error}"
+    );
+    assert_eq!(doc.get_deep_value(), stored_before);
+    Ok(())
+}

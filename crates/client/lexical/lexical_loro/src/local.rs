@@ -98,6 +98,19 @@ impl LoroProjection {
         if !matches!(origin, LOCAL_ORIGIN | FIXUP_ORIGIN) {
             return Err(diverged("unsupported projection origin"));
         }
+        // Text splices diff against the editor's previous text, so unprojected changes to
+        // projected containers would put them at stale offsets for every peer. Changes
+        // elsewhere (unrelated maps, a checkout that leaves projected containers alone)
+        // cannot.
+        if self
+            .events
+            .lock()
+            .map_err(|_| diverged("event buffer poisoned"))?
+            .iter()
+            .any(|batch| batch.touches_projection(&self.index))
+        {
+            return Err(diverged("pending remote events on projected containers"));
+        }
         let mut all = Vec::new();
         let mut seen = OrderedSet::default();
         for commit in commits {

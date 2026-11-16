@@ -15,6 +15,13 @@ pub(crate) struct OwnedDiff {
     text_replaced: bool,
 }
 impl PendingBatch {
+    /// Whether a diff changed a container a projected node owns, directly or below it.
+    pub fn touches_projection(&self, index: &crate::index::NodeIndex) -> bool {
+        self.diffs.iter().any(|diff| {
+            index.owner.contains_key(&diff.target)
+                || diff.path.iter().any(|(id, _)| index.owner.contains_key(id))
+        })
+    }
     pub fn from_event(event: loro::event::DiffEvent<'_>) -> Self {
         let diffs=event.events.into_iter().map(|event| {
             let children_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("children"));
