@@ -104,11 +104,15 @@ function MobileDrawerContent(
         class={cn(
           'portal-scope',
           'fixed! z-modal glass flex flex-col data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          // Sheets stay inside the horizontal safe area, like the app frame:
+          // the iPhone Duo's control column and landscape notches are there.
           horizontal()
-            ? 'inset-y-0 h-full w-80 max-w-full border-edge-frame shadow-menu [--mobile-sheet-safe-padding:var(--safe-bottom,0px)]'
-            : 'inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] mobile-sheet max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))]',
+            ? 'inset-y-0 h-full w-80 max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px))] border-edge-frame shadow-menu [--mobile-sheet-safe-padding:var(--safe-bottom,0px)]'
+            : 'left-[calc(var(--safe-left,0px)+8px)] right-[calc(var(--safe-right,0px)+8px)] bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] mobile-sheet max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))]',
           horizontal() &&
-            (drawer.side() === 'left' ? 'left-0 border-r' : 'right-0 border-l'),
+            (drawer.side() === 'left'
+              ? 'left-(--safe-left) border-r'
+              : 'right-(--safe-right) border-l'),
           local.opaque
             ? 'bg-menu [--color-dialog:var(--color-menu)]'
             : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
