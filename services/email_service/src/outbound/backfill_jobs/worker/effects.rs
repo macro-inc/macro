@@ -61,12 +61,6 @@ impl BackfillEffects for BackfillWorkerEffects {
     ) -> Result<(), rootcause::Report> {
         self.contacts_ingress.enqueue_contacts(users).await
     }
-    async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
-        self.redis_client
-            .acquire_crm_population_slot(team)
-            .await
-            .map_err(anyhow::Error::new)
-    }
     async fn notify_failed(&self, link: &Link) {
         crate::pubsub::util::cg_refresh_email(
             &self.connection_gateway_client,
@@ -108,25 +102,6 @@ impl BackfillCrm for BackfillWorkerCrm {
         user: &str,
     ) -> Result<Option<EmailContributionMailbox>, CrmError> {
         self.0.contribution_mailbox(team, user).await
-    }
-    async fn populate_contact(
-        &self,
-        team: &Uuid,
-        link: &Link,
-        p: &PopulateCrmContactPayload,
-    ) -> Result<(), CrmError> {
-        self.0
-            .populate_contact(
-                team,
-                &link.id,
-                link.email_address.0.as_ref(),
-                &p.contact_email,
-                p.contact_name.as_deref(),
-                p.first_at,
-                p.last_at,
-                p.is_sent,
-            )
-            .await
     }
     async fn depopulate_contact(
         &self,

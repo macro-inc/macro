@@ -7,6 +7,8 @@ use email::outbound::label_state_pg::PgLabelCatalog;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service;
 use models_email::service::attachment::AttachmentUploadMetadata;
+use models_email::service::backfill::PopulateCrmContactPayload;
+use rootcause::compat::anyhow1::IntoAnyhow as _;
 use std::collections::{HashMap, HashSet};
 
 impl InboxSyncHistoryFacts for PgInboxSync {
@@ -97,6 +99,16 @@ impl InboxSyncMessageStore for PgInboxSync {
         )
         .await
         .map_err(Into::into)
+    }
+    async fn request_crm_population(
+        &self,
+        link: Uuid,
+        requests: &[PopulateCrmContactPayload],
+    ) -> Result<(), Self::Err> {
+        let traceparent = sqs_client::email::trace_context::current();
+        email::outbound::crm_population_pg::request(&self.0, link, requests, traceparent.as_deref())
+            .await
+            .map_err(|report| report.into_anyhow().into())
     }
 }
 impl InboxSyncAttachmentStore for PgInboxSync {

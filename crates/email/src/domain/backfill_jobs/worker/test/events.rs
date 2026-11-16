@@ -86,7 +86,7 @@ async fn user_crm_skip_events_have_no_payload_fields() {
             false,
             "populate_crm_for_user",
             String::new(),
-            "User has no team; skipping CRM fan-out",
+            "User has no team; skipping CRM seed",
         ),
         (
             population(),
@@ -94,7 +94,7 @@ async fn user_crm_skip_events_have_no_payload_fields() {
             true,
             "populate_crm_for_user",
             String::new(),
-            "User has no consented mailbox; skipping CRM fan-out",
+            "User has no consented mailbox; skipping CRM seed",
         ),
         (
             depopulation(),

@@ -130,7 +130,7 @@ pub async fn fetch_sent_message_recipient_contacts_by_link(
 /// out automatically. `first_at` / `last_at` are MIN/MAX of
 /// `internal_date_ts` over the contact's received messages.
 ///
-/// Used by the `PopulateCrmForUser` backfill step to enumerate
+/// Used by the `PopulateCrmForUser` backfill step to request population for
 /// external parties the link has received mail from so they can bump
 /// `last_interaction` on already-tracked CRM companies (and create
 /// contacts at those companies). Received-direction populates never

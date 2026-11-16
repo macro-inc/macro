@@ -1,6 +1,7 @@
 use super::*;
 use email::domain::mailbox::inbox_sync::CrmContactRecipient;
-use models_email::service::link::Link;
+use models_email::service::{backfill::PopulateCrmContactPayload, link::Link};
+use rootcause::compat::anyhow1::IntoAnyhow as _;
 
 impl BackfillRepository for PgBackfillWorker {
     type Err = InboxPersistenceError;
@@ -55,6 +56,21 @@ impl BackfillRepository for PgBackfillWorker {
         email_db_client::contacts::get::fetch_received_sender_contacts_by_link(&self.jobs.0, link)
             .await
             .map_err(Into::into)
+    }
+    async fn request_crm_population(
+        &self,
+        link: Uuid,
+        requests: &[PopulateCrmContactPayload],
+    ) -> Result<(), Self::Err> {
+        let traceparent = sqs_client::email::trace_context::current();
+        email::outbound::crm_population_pg::request(
+            &self.jobs.0,
+            link,
+            requests,
+            traceparent.as_deref(),
+        )
+        .await
+        .map_err(|report| report.into_anyhow().into())
     }
     async fn begin_metadata(&self) -> Result<Self::Metadata, Self::Err> {
         self.jobs

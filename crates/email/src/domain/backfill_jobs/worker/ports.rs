@@ -104,6 +104,14 @@ pub trait BackfillRepository:
         &self,
         link: Uuid,
     ) -> impl Future<Output = Result<Vec<CrmContactRecipient>, Self::Err>> + Send;
+    /// Record the CRM population requests a mailbox's mail implies. Requests
+    /// for one correspondent merge, and a mailbox that contributes to no CRM
+    /// records none.
+    fn request_crm_population(
+        &self,
+        link: Uuid,
+        requests: &[PopulateCrmContactPayload],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Begin the metadata transaction.
     fn begin_metadata(&self) -> impl Future<Output = Result<Self::Metadata, Self::Err>> + Send;
     /// Make the existing completion outbox row eligible for republication.
@@ -209,11 +217,6 @@ pub trait BackfillEffects:
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// Acquire a team's existing CRM write lease.
-    fn acquire_crm(
-        &self,
-        team: Uuid,
-    ) -> impl Future<Output = Result<Option<Self::Permit>, anyhow::Error>> + Send;
     /// Publish a failed-job refresh, best effort.
     fn notify_failed(&self, link: &Link) -> impl Future<Output = ()> + Send;
 }
@@ -231,13 +234,6 @@ pub trait BackfillCrm: Send + Sync + 'static {
         team: Uuid,
         user: &str,
     ) -> impl Future<Output = Result<Option<EmailContributionMailbox>, CrmError>> + Send;
-    /// Record one contact's interaction under the caller's write lease.
-    fn populate_contact(
-        &self,
-        team: &Uuid,
-        link: &Link,
-        payload: &PopulateCrmContactPayload,
-    ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// Remove one contact's contribution.
     fn depopulate_contact(
         &self,

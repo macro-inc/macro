@@ -41,6 +41,7 @@ pub(super) struct State {
     pub sent_contacts: Vec<CrmContactRecipient>,
     pub received_contacts: Vec<CrmContactRecipient>,
     pub sent: Vec<(BackfillPubsubMessage, Option<(i32, u32)>)>,
+    pub requests: Vec<PopulateCrmContactPayload>,
     pub connections: Vec<HashSet<MacroUserIdStr<'static>>>,
 }
 impl Default for State {
@@ -65,6 +66,7 @@ impl Default for State {
             sent_contacts: vec![],
             received_contacts: vec![],
             sent: vec![],
+            requests: vec![],
             connections: vec![],
         }
     }
@@ -264,6 +266,16 @@ impl BackfillRepository for Fake {
         assert_eq!(id, LINK);
         self.call("link")?;
         Ok(self.0.lock().unwrap().link.clone())
+    }
+    async fn request_crm_population(
+        &self,
+        link: Uuid,
+        requests: &[PopulateCrmContactPayload],
+    ) -> Result<(), Error> {
+        assert_eq!(link, LINK);
+        self.call("request_crm")?;
+        self.0.lock().unwrap().requests.extend_from_slice(requests);
+        Ok(())
     }
     async fn link_by_email(&self, owner: &str, email: &str) -> Result<Option<Link>, Error> {
         assert_eq!(owner, "macro|owner@example.com");
@@ -509,12 +521,6 @@ impl BackfillEffects for Fake {
         self.0.lock().unwrap().connections.push(users);
         Ok(())
     }
-    async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self>> {
-        assert_eq!(team, TEAM);
-        self.call("acquire")
-            .map_err(ConnectionSourceError::into_original)?;
-        Ok(self.0.lock().unwrap().slot.then(|| self.clone()))
-    }
     async fn notify_failed(&self, link: &Link) {
         assert_eq!(link.id, LINK);
         let _ = self.call("notify");
@@ -554,17 +560,6 @@ impl BackfillCrm for Fake {
                 link_id: LINK,
                 email_address: "OWNER@example.com".into(),
             }))
-    }
-    async fn populate_contact(
-        &self,
-        team: &Uuid,
-        link: &Link,
-        p: &PopulateCrmContactPayload,
-    ) -> Result<(), CrmError> {
-        assert_eq!(*team, TEAM);
-        assert_eq!(link.id, LINK);
-        assert_eq!(p.contact_email, "contact@example.com");
-        self.crm_call("populate")
     }
     async fn depopulate_contact(
         &self,

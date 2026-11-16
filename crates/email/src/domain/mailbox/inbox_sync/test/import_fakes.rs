@@ -106,6 +106,13 @@ impl InboxSyncCatalog for Fake {
     }
 }
 impl InboxSyncMessageStore for Fake {
+    async fn request_crm_population(
+        &self,
+        _: Uuid,
+        requests: &[models_email::service::backfill::PopulateCrmContactPayload],
+    ) -> Result<(), Failure> {
+        self.io("request_crm", requests)
+    }
     async fn thread_ids(&self, _: Uuid, provider: &str) -> Result<HashMap<String, Uuid>, Failure> {
         self.io("thread_ids", provider)?;
         Ok(if self.0.lock().unwrap().import.thread_exists {

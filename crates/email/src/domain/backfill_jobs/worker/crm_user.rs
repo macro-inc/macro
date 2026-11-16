@@ -1,12 +1,17 @@
+use super::crm_contact::record_crm_population;
 use super::*;
+use crate::domain::crm_population::population_requests;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::enqueue_crm_contacts;
 use models_email::service::{
     backfill::*,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
-/// Fans out historical contacts only for the user's explicitly consented
-/// primary mailbox. Consent and exclusions are rechecked by each contact job.
+/// Requests recorded per ledger write while seeding a mailbox.
+const SEED_BATCH: usize = 500;
+
+/// Requests a population for every stored correspondent of the user's
+/// explicitly consented primary mailbox. Each population rechecks consent and
+/// exclusions.
 ///
 /// Stale requests after withdrawal, account switching, or team removal no-op.
 #[tracing::instrument(skip_all, err, fields(team_id, link_id))]
@@ -34,7 +39,7 @@ where
         })?;
 
     let Some(team_id) = team_id else {
-        tracing::debug!("User has no team; skipping CRM fan-out");
+        tracing::debug!("User has no team; skipping CRM seed");
         return Ok(());
     };
 
@@ -49,7 +54,7 @@ where
             })
         })?;
     let Some(mailbox) = mailbox else {
-        tracing::debug!("User has no consented mailbox; skipping CRM fan-out");
+        tracing::debug!("User has no consented mailbox; skipping CRM seed");
         return Ok(());
     };
 
@@ -58,15 +63,14 @@ where
     let self_email = mailbox.email_address.to_ascii_lowercase();
 
     // The by_link queries aggregate MIN/MAX of `internal_date_ts` per
-    // contact, so each fan-out job carries the contact's full known
-    // activity range. The consumer recomputes the eligible range from stored
-    // messages so stale jobs and mixed-domain threads cannot bypass blocks.
+    // contact, so each request carries the contact's full known activity
+    // range. The population recomputes the eligible range from stored
+    // messages so stale requests and mixed-domain threads cannot bypass blocks.
     //
-    // Two fan-outs: sent recipients (`is_sent=true`, may create new
-    // `crm_companies` rows), then received senders (`is_sent=false`,
-    // only updates already-tracked rows). Sent first so received-pass
-    // contacts at brand-new companies can also land. Both passes are
-    // idempotent.
+    // Sent recipients (`is_sent=true`, may create new `crm_companies` rows)
+    // and received senders (`is_sent=false`, only updates already-tracked
+    // rows) are requested separately; a correspondent in both merges into one
+    // request in the ledger. A redelivered seed merges into the same requests.
     let sent_recipients = ctx
         .repository
         .sent_contacts(mailbox.link_id)
@@ -79,21 +83,6 @@ where
                     .context("Failed to fetch sent-message recipients"),
             })
         })?;
-
-    enqueue_crm_contacts(
-        mailbox.link_id,
-        &self_email,
-        sent_recipients,
-        true,
-        |message| async {
-            ctx.queue
-                .enqueue(message)
-                .await
-                .map_err(ConnectionSourceError::into_original)
-        },
-    )
-    .await?;
-
     let received_senders = ctx
         .repository
         .received_contacts(mailbox.link_id)
@@ -107,17 +96,11 @@ where
             })
         })?;
 
-    enqueue_crm_contacts(
-        mailbox.link_id,
-        &self_email,
-        received_senders,
-        false,
-        |message| async {
-            ctx.queue
-                .enqueue(message)
-                .await
-                .map_err(ConnectionSourceError::into_original)
-        },
-    )
-    .await
+    for (contacts, is_sent) in [(sent_recipients, true), (received_senders, false)] {
+        let requests = population_requests(&self_email, contacts, is_sent);
+        for batch in requests.chunks(SEED_BATCH) {
+            record_crm_population(ctx, mailbox.link_id, batch).await?;
+        }
+    }
+    Ok(())
 }

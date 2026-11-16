@@ -13,6 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
+use models_email::service::backfill::PopulateCrmContactPayload;
 use models_email::{db, service};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -104,6 +105,14 @@ pub trait InboxSyncMessageStore: InboxSyncRepository {
         link: Uuid,
         provider: &str,
     ) -> impl Future<Output = Result<(Uuid, Uuid), Self::Err>> + Send;
+    /// Record the CRM population requests the stored message implies.
+    /// Requests for one correspondent merge, and a mailbox that contributes
+    /// to no CRM records none.
+    fn request_crm_population(
+        &self,
+        link: Uuid,
+        requests: &[PopulateCrmContactPayload],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Existing AttachmentStore capabilities for inbox imports.

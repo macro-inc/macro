@@ -4,10 +4,28 @@ use super::{
     *,
 };
 use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
+use models_email::service::backfill::PopulateCrmContactPayload;
 fn operation() -> InboxSyncOperation {
     InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
         provider_message_id: "message-1".into(),
     })
+}
+/// The CRM population requests of the one ledger write a message makes.
+fn crm_requests(fake: &fakes::Fake) -> Vec<PopulateCrmContactPayload> {
+    let writes: Vec<_> = fake
+        .calls()
+        .into_iter()
+        .filter_map(|call| match call {
+            Call::Import("request_crm", value) => Some(value),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(writes.len(), 1);
+    assert!(
+        !names(&fake.calls()).contains(&"backfill_queue"),
+        "CRM population is requested in the ledger, not queued"
+    );
+    serde_json::from_value(writes[0].clone()).unwrap()
 }
 fn names(calls: &[Call]) -> Vec<&'static str> {
     calls
@@ -435,7 +453,7 @@ async fn deleted_and_other_upload_failures_continue_with_the_remaining_attachmen
     assert!(!n.contains(&"release"));
 }
 #[tokio::test]
-async fn crm_fanout_normalizes_deduplicates_and_omits_self_and_invalid_addresses() {
+async fn crm_requests_normalize_deduplicate_and_omit_self_and_invalid_addresses() {
     let (svc, fake) = setup();
     {
         let mut s = fake.0.lock().unwrap();
@@ -460,27 +478,13 @@ async fn crm_fanout_normalizes_deduplicates_and_omits_self_and_invalid_addresses
         svc.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
-    let sends: Vec<_> = fake
-        .calls()
-        .into_iter()
-        .filter_map(|c| {
-            if let Call::Import("backfill_queue", v) = c {
-                Some(v)
-            } else {
-                None
-            }
-        })
-        .collect();
-    assert_eq!(sends.len(), 1);
-    assert!(sends[0].to_string().contains("friend@example.com"));
-    assert!(sends[0].to_string().contains("friend"));
+    let requests = crm_requests(&fake);
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].contact_email, "friend@example.com");
+    assert_eq!(requests[0].contact_name.as_deref(), Some("friend"));
 }
 #[tokio::test]
-async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours() {
-    use models_email::service::backfill::{
-        BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-    };
-
+async fn crm_requests_reject_each_malformed_shape_and_preserve_valid_neighbours() {
     for malformed in ["@example.com", "local@", "local@extra@example.com"] {
         let (svc, fake) = setup();
         let at = chrono::DateTime::from_timestamp(123, 0).unwrap();
@@ -520,41 +524,25 @@ async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours(
             svc.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
-        let sent: Vec<_> = fake
-            .calls()
-            .into_iter()
-            .filter_map(|call| match call {
-                Call::Import("backfill_queue", value) => Some(
-                    serde_json::from_value::<BackfillPubsubMessage>(value)
-                        .unwrap()
-                        .backfill_operation,
-                ),
-                _ => None,
-            })
-            .collect();
         let expected = [
             ("first@example.com", "First"),
             ("second@example.com", "Second"),
             ("third@example.com", "Third"),
         ]
-        .map(|(email, name)| {
-            BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                link_id: LINK,
-                payload: PopulateCrmContactPayload {
-                    contact_email: email.into(),
-                    contact_name: Some(name.into()),
-                    first_at: at,
-                    last_at: at,
-                    is_sent: true,
-                },
-            })
+        .map(|(email, name)| PopulateCrmContactPayload {
+            contact_email: email.into(),
+            contact_name: Some(name.into()),
+            first_at: at,
+            last_at: at,
+            is_sent: true,
         });
+        let sent = crm_requests(&fake);
         assert_eq!(sent, expected, "malformed address: {malformed}");
     }
 }
 
 #[tokio::test]
-async fn a_failed_crm_fanout_remains_retryable_after_the_message_was_committed() {
+async fn failed_crm_requests_remain_retryable_after_the_message_was_committed() {
     let (svc, fake) = setup();
     {
         let mut s = fake.0.lock().unwrap();
@@ -570,11 +558,11 @@ async fn a_failed_crm_fanout_remains_retryable_after_the_message_was_committed()
             name: None,
             photo_url: None,
         });
-        s.failures.push(("backfill_queue", 1));
+        s.failures.push(("request_crm", 1));
     }
     let (delete, error) = failure(svc.process(Ok(input(operation()))).await);
     assert!(!delete);
-    assert_eq!(error.reason, FailureReason::SqsEnqueueFailed);
+    assert_eq!(error.reason, FailureReason::DatabaseQueryFailed);
     let n = names(&fake.calls());
     assert!(n.contains(&"insert_message"));
     assert!(!n.contains(&"refresh"));

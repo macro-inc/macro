@@ -38,6 +38,10 @@ tools — hexagonal, heavily feature-gated.
   delivery disposition.
 - `src/domain/crm_cleanup.rs` (feature `mailbox`): nightly cleanup job lifecycle,
   candidate pruning and dispatch, teardown guards, and delivery disposition.
+- `src/domain/crm_population.rs` (feature `mailbox`): the ledger of CRM
+  population requests: attempt outcomes, retry and parking policy, mailbox
+  pauses and what is logged at which level. `outbound/crm_population_pg.rs`
+  holds the ledger's queries, including the upsert every producer calls.
 - `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
   push-token rotation retry and notification intake; lifecycle also owns ordered
   deletion requests for a deleted user's inboxes.
@@ -48,7 +52,7 @@ tools — hexagonal, heavily feature-gated.
   cancellation, active-job reuse, and initialization publication. Its `worker`
   module owns queue admission, retry/deferral policy, listing, thread/message
   import, initialization, completion accounting and leases, metadata, attachments,
-  sent contact seeding and CRM operations. Its `outbox` module owns durable
+  sent contact seeding, CRM removal and CRM population requests. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
   CRM normalization and pending-label snapshot rules. Inbox sync and link manager
@@ -63,7 +67,7 @@ tools — hexagonal, heavily feature-gated.
 - `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
   disposition, provider-error routing, message deletion, and label reconciliation.
   It also owns history/catalog reconciliation, recovery backfills, provider-message
-  imports, attachment claim release, contact fan-out and notification selection.
+  imports, attachment claim release, CRM population requests and notification selection.
   Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
@@ -125,6 +129,23 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- CRM population is requested, never performed, by mail ingestion. A producer
+  upserts `crm_population_requests` rows keyed `(link_id, contact_email)`
+  (`crm_population_pg::request`), which records nothing for a mailbox without
+  enabled consent and merges a repeat request into the pending row. Lanes claim
+  rows under a lease in passes over the mailboxes, one request per mailbox per
+  pass, at most `MAILBOX_CONCURRENCY` in flight per mailbox and
+  `FLEET_CONCURRENCY` in total, so a backlog cannot delay another mailbox or
+  take more than a fixed number of database backends. Both limits are checked
+  at claim time and can be exceeded briefly by claims that race. A failure records its cause, pauses the mailbox
+  with backoff and retries the request up to `MAX_ATTEMPTS`; then the request
+  is parked and only a new request after `PARK_COOLDOWN` revives it. Constants
+  live in `domain/crm_population/policy.rs`. Keep the rules: a claim statement
+  reads a bounded number of rows however many requests are pending (`MAX_HOPS`
+  mailboxes, one index probe each); a settle statement presents the lease it
+  claimed with; completion deletes a row only at the generation it claimed; and
+  only a parked request or a mailbox's `ALERT_AFTER_FAILURES`-th consecutive
+  failure logs at ERROR.
 - Moving a thread into a folder (`update_thread_project`) calls
   `entity_access_db_utils::project_grants::refuse_filing_in` in the
   transaction that writes `project_id`, so a scoped agent session can't file

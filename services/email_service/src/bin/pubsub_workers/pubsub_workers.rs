@@ -410,6 +410,18 @@ async fn main() -> anyhow::Result<()> {
         metadata_resolver,
     );
 
+    // CRM population has its own lanes: however many requests are pending,
+    // this task runs at most `LANES` populations at once, the fleet at most
+    // the ledger's limit, and none of them on a backfill or sync worker.
+    let crm_population =
+        email_service::crm_population_worker::service(&db_backfill, crm_service_backfill.clone());
+    for _ in 0..email_service::crm_population_worker::LANES {
+        worker_tracker.spawn(email_service::crm_population_worker::run(
+            crm_population.clone(),
+            worker_cancellation_token.clone(),
+        ));
+    }
+
     if config.outlook_sync_enabled {
         worker_tracker.spawn(email_service::mailbox_sync_worker::run_watches(
             email::domain::mailbox::watches::MailboxWatchService::new(
@@ -505,7 +517,6 @@ async fn main() -> anyhow::Result<()> {
                 broker: macro_event_broker.clone(),
                 notification: notification_ingress_service.clone(),
                 contacts: contacts_ingress.clone(),
-                queue: sqs_client.clone(),
                 gateway: connection_gateway_client.clone(),
                 dss: dss_client.clone(),
                 sfs: sfs_client.clone(),

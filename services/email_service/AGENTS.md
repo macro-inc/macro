@@ -79,6 +79,11 @@ the gateway `/email` prefix.
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
   `pubsub_workers`. It requires no enrichment-provider key or selection flag.
+- `src/crm_population_worker.rs`: the lanes that attempt CRM population
+  requests from the ledger, `LANES` per process on their own small database
+  pool with statement and lock timeouts. Adding lanes or processes does not
+  raise the database load: the ledger's `FLEET_CONCURRENCY` does. `outbound/crm_population.rs` adapts
+  `CrmService` to the domain's populator port.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
   contacts, drafts, commands, settings, watches) and `run_health`, the
   per-minute Outlook health snapshot.
@@ -190,11 +195,12 @@ the gateway `/email` prefix.
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
   stored ([`database_error::is_unstorable`](src/outbound/backfill_jobs/worker/database_error.rs))
-  is skipped and logged, and the rest of the thread commits. The CRM fan-out is
-  enqueued after the write slot is taken and before the write: after the commit
-  nothing in the handler may request a
-  retry, because a retry would find the thread and skip it, and an operation
-  deferred for a busy slot must not repeat the fan-out. Invitation and attachment fan-outs only log their
+  is skipped and logged, and the rest of the thread commits. The thread's CRM
+  population requests are recorded after the write slot is taken and before
+  the write: after the commit nothing in the handler may request a retry,
+  because a retry would find the thread and skip it. They are recorded again
+  after the write, best effort, for an attempt that ran in between. Invitation
+  and attachment fan-outs only log their
   failures, and the metadata step is enqueued last. BackfillMessage only drains
   operations enqueued before thread writes.
 - Backfill keeps a message hidden while its operation runs
@@ -210,10 +216,15 @@ the gateway `/email` prefix.
   `BackfillWriteSlot::hold`, which renews the 120 s lease while the write runs,
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
-- Each CRM contact population holds one of four per-team Redis slots
-  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
-  database connection per worker. A refused slot, or a population that timed
-  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
+- CRM contact population never runs on a queue worker. Sync, backfill and the
+  consent seed only upsert rows in `crm_population_requests`
+  (`email::outbound::crm_population_pg::request`); the
+  `crm_population_worker` lane of each `pubsub_workers` process is the only
+  caller of `CrmService::populate_contact`, and the ledger lets at most
+  `FLEET_CONCURRENCY` attempts run at once across all processes. Don't call it from a queue
+  handler, and don't enqueue population on SQS: a queued `PopulateCrmContact`
+  is only moved into the ledger. See the crate guide's CRM population notes
+  for the ledger's rules.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
