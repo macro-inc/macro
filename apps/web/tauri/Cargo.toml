@@ -12,7 +12,6 @@ members = [
   "logger",
   "macro_bundle_updater_plugin",
   "navigation_plugin",
-  "native_editor_plugin",
   "network_status_plugin",
   "pasteboard_plugin",
   "photo_library_plugin",
