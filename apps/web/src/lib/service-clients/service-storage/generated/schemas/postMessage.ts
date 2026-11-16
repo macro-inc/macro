@@ -30,7 +30,8 @@ already carries its final id; the server mints one when absent. */
   /** Client nonce for optimistic reconciliation. */
   nonce?: PostMessageNonce;
   /** Who hears about this post. `Silent` still delivers and shows the
-message, but sends no notification of any kind, mentions included. */
+message, but sends no notification of any kind, mentions included.
+Channel messages only; other parents accept only `Default`. */
   notification_policy?: PostMessageNotificationPolicy;
   /** Root to reply to, if this is a reply. */
   thread_id?: PostMessageThreadId;

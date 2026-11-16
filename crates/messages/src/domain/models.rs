@@ -519,8 +519,8 @@ pub struct MessageThread {
     pub replies: Vec<Message>,
 }
 
-/// Who hears about a posted message. A caller may choose it for its own post,
-/// since every choice only narrows who is notified.
+/// Who hears about a posted message. A caller may choose it for its own
+/// channel message, since every choice only narrows who is notified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -591,6 +591,7 @@ pub struct PostMessage {
     pub attribution: MessageAttribution,
     /// Who hears about this post. `Silent` still delivers and shows the
     /// message, but sends no notification of any kind, mentions included.
+    /// Channel messages only; other parents accept only `Default`.
     #[serde(default)]
     pub notification_policy: PostMessageNotificationPolicy,
     /// Client-minted UUIDv7 for the new message, so an optimistic message

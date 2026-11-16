@@ -17206,6 +17206,7 @@ export type PostMessage = {
     /**
      * Who hears about this post. `Silent` still delivers and shows the
      * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
      */
     notification_policy?: PostMessageNotificationPolicy;
     /**
@@ -17215,8 +17216,8 @@ export type PostMessage = {
 };
 
 /**
- * Who hears about a posted message. A caller may choose it for its own post,
- * since every choice only narrows who is notified.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 

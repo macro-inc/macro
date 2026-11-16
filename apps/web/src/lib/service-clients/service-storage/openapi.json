@@ -57496,7 +57496,7 @@
           },
           "notification_policy": {
             "$ref": "#/components/schemas/PostMessageNotificationPolicy",
-            "description": "Who hears about this post. `Silent` still delivers and shows the\nmessage, but sends no notification of any kind, mentions included."
+            "description": "Who hears about this post. `Silent` still delivers and shows the\nmessage, but sends no notification of any kind, mentions included.\nChannel messages only; other parents accept only `Default`."
           },
           "thread_id": {
             "type": ["string", "null"],
@@ -57507,7 +57507,7 @@
       },
       "PostMessageNotificationPolicy": {
         "type": "string",
-        "description": "Who hears about a posted message. A caller may choose it for its own post,\nsince every choice only narrows who is notified.",
+        "description": "Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.",
         "enum": ["Default", "MentionsOnly", "Silent"]
       },
       "PostSoupAstRequest": {

@@ -7070,7 +7070,7 @@ export const postChannelBotWebhookBody = zod
       .enum(['Default', 'MentionsOnly', 'Silent'])
       .optional()
       .describe(
-        'Who hears about a posted message. A caller may choose it for its own post,\nsince every choice only narrows who is notified.'
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
       ),
   })
   .describe('Request to post a channel webhook message.');
@@ -74767,7 +74767,7 @@ export const entityMessageCreateBody = zod
       .enum(['Default', 'MentionsOnly', 'Silent'])
       .optional()
       .describe(
-        'Who hears about a posted message. A caller may choose it for its own post,\nsince every choice only narrows who is notified.'
+        'Who hears about a posted message. A caller may choose it for its own\nchannel message, since every choice only narrows who is notified.'
       ),
     thread_id: zod
       .uuid()
