@@ -1,0 +1,19 @@
+apps/web/src/features/block-canvas/browser-test/artifact.e2e.ts
+  s_934636a8e47d04::t_0915810cd6db40 239-240,248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9cea3642766b8fa99de0ab49809bab5453b61b75",
+  "prompts": {},
+  "sessions": {
+    "s_934636a8e47d04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d87ebef5-3bea-40ed-a6de-d1faf318cb64",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
