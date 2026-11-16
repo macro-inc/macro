@@ -70,11 +70,12 @@ export function NewItemMenu(props: {
             )}
           </For>
         </Dropdown.Group>
-        <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted" />
-        <Dropdown.Item onSelect={props.onImport}>
-          <TrayArrowDownIcon class="size-4 shrink-0" />
-          <span class="truncate">{t('passwords.import')}</span>
-        </Dropdown.Item>
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={props.onImport}>
+            <TrayArrowDownIcon class="size-4 shrink-0" />
+            <span class="truncate">{t('passwords.import')}</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );
