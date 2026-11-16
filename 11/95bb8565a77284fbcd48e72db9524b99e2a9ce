@@ -1,0 +1,25 @@
+.github/workflows/pr-ci.yml
+  s_10c67a472f88f0::t_b9c2075ff4e2e4 535
+.github/workflows/sdk-ocaml-check.yml
+  s_10c67a472f88f0::t_b9c2075ff4e2e4 14,42,45-50
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check/test.rs
+  s_10c67a472f88f0::t_b9c2075ff4e2e4 30
+tooling/xtask/crates/xtask_workflows/src/workflows/sdk_ocaml_check.rs
+  s_10c67a472f88f0::t_88d94fb5b3b9f6 3-6,19-20,27,62-63,76-79,82-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1195bb8565a77284fbcd48e72db9524b99e2a9ce",
+  "prompts": {},
+  "sessions": {
+    "s_10c67a472f88f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b8a53bc-f5f2-4b55-951b-9e87a11bb2ea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
