@@ -1,0 +1,47 @@
+apps/web/src/lib/service-clients/service-calendar/generated/schemas/bookingLinkEvent.ts
+  s_bec78062e28411::t_928b46cf03fe26 57
+apps/web/src/lib/service-clients/service-calendar/openapi.json
+  s_bec78062e28411::t_4c106750d28651 2027
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_bec78062e28411::t_455331c8f09810 7157
+crates/calendar_scheduling/src/domain/booking_link_models.rs
+  s_bec78062e28411::t_ee6a3d51beac5b 24
+packages/sdk/generated/calendar/types.gen.ts
+  s_bec78062e28411::t_31d4ed8ca453ef 369
+packages/sdk/specs/calendar.json
+  s_bec78062e28411::t_b9a85d53eacd68 2027
+packages/sdk/src/entities/ai/namespace.ts
+  s_bec78062e28411::t_c5652fd40b0fb8 22,62
+packages/sdk/src/entities/calendar/booking-namespace.ts
+  s_bec78062e28411::t_df7354bd36ca53 111
+packages/sdk/src/entities/entity.ts
+  s_bec78062e28411::t_535b1998e856cf 300-301
+packages/sdk/src/entities/foreign/namespace.ts
+  s_bec78062e28411::t_4b1b39a593a36f 47
+packages/sdk/src/entities/harnesses/namespace.ts
+  s_bec78062e28411::t_ca263f6792f14a 12
+packages/sdk/src/entities/me/namespace.ts
+  s_bec78062e28411::t_e4da2146a90c7a 31
+packages/sdk/src/entities/referrals/namespace.ts
+  s_bec78062e28411::t_1e25f0d7c97de7 46
+packages/sdk/src/entities/teams/team.ts
+  s_bec78062e28411::t_90fb8c9d6d3c54 128
+packages/sdk/src/entities/web/namespace.ts
+  s_bec78062e28411::t_b922370c82f01d 58,88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4cca47a9b4252dfe8635e6ad30a9d9633bde9aa1",
+  "prompts": {},
+  "sessions": {
+    "s_bec78062e28411": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36c0ff1a-3e55-44b7-a4a3-5becc353bd90",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
