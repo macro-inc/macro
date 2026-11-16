@@ -80,8 +80,8 @@ export function OwnerSettingsSection(props: {
       }
       disabled={!source.profile()?.revision}
       onClick={copyPageLink}
+      icon={<Copy aria-hidden="true" class="size-4" />}
     >
-      <Copy aria-hidden="true" class="size-4" />
       Copy link
     </CopyButton>
   );

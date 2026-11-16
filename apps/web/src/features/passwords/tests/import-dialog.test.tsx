@@ -137,6 +137,7 @@ function mount(
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => reply,
         importResume,
       }}
@@ -371,6 +372,7 @@ it('finishes a verification code an earlier run could not set up, even beside a 
           recipientsLoading: () => false,
           recipientsError: () => false,
           writeClipboard: async () => {},
+          displayName: (accountId) => accountId.replace(/^macro\|/, ''),
           parseExport: async () => reply,
           importResume: resume,
         }}
@@ -594,6 +596,7 @@ it('returns to the file picker when the file cannot be read at all', async () =>
         recipientsError: () => false,
         writeClipboard: async () => {},
         // As when the parser module fails to load.
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: () => Promise.reject(new Error('chunk load failed')),
         importResume: createMemoryImportResume(),
       }}
@@ -634,6 +637,7 @@ it('matches names in the vault while its list is unavailable', async () => {
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => PARSED,
         importResume: createMemoryImportResume(),
       }}
@@ -665,6 +669,7 @@ it('says duplicates went unchecked when the vault could not be asked', async () 
         recipientsLoading: () => false,
         recipientsError: () => false,
         writeClipboard: async () => {},
+        displayName: (accountId) => accountId.replace(/^macro\|/, ''),
         parseExport: async () => PARSED,
         importResume: createMemoryImportResume(),
       }}

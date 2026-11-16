@@ -214,7 +214,8 @@ require separate review.
 The browser parses supported unencrypted exports locally and submits normalized
 items to `POST /passwords/teams/{team}/imports/{import_id}/items`. The UUIDv7
 `import_id` stays stable across batches and retries. Requests include `format`
-(`one_password_pux`, `one_password_csv`, `bitwarden_json`, or `bitwarden_csv`), a
+(`one_password_pux`, `one_password_csv`, `bitwarden_json`, `bitwarden_csv`, or
+`bitwarden_zip`), a
 `target` (`new` with a name, `existing` with `folderId`, or `root`), `private`,
 source `folders`, and `items`. The server requires the same human session,
 per-user rollout, current team membership, CSRF header and private no-store

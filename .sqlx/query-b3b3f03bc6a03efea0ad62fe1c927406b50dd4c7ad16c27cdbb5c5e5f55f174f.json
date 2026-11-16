@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE password_item_entities SET grants=$3,revision=revision+1 WHERE team_id=$1 AND id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3b3f03bc6a03efea0ad62fe1c927406b50dd4c7ad16c27cdbb5c5e5f55f174f"
+}
