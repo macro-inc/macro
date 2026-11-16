@@ -8,6 +8,7 @@ vi.mock('@service-connection/bulkUpload', () => ({
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 
 import {
+  FOLDER_UPLOAD_GIVE_UP_AFTER_MS,
   FOLDER_UPLOAD_STALLED_AFTER_MS,
   type FolderUploadSources,
   waitForFolderUpload,
@@ -63,7 +64,7 @@ describe('waitForFolderUpload', () => {
     const outcome = waitForFolderUpload(
       'request-1',
       (fraction) => fractions.push(fraction),
-      server.sources
+      { sentAt: Date.now(), sources: server.sources }
     );
 
     for (let stored = 0; stored <= 8000; stored += 1000) {
@@ -90,7 +91,10 @@ describe('waitForFolderUpload', () => {
 
   it('ends as soon as the server pushes the result between polls', async () => {
     const server = fakeServer();
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
     await vi.advanceTimersByTimeAsync(0);
 
     server.push({
@@ -111,7 +115,10 @@ describe('waitForFolderUpload', () => {
       status: 'processing',
       progress: { filesTotal: 814, filesStored: 700, filesFailed: 1 },
     });
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
     await vi.advanceTimersByTimeAsync(0);
 
     server.setStatus({
@@ -135,7 +142,10 @@ describe('waitForFolderUpload', () => {
   it('ends on the pushed result while a status request hangs', async () => {
     const server = fakeServer();
     server.hangReads();
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
     await vi.advanceTimersByTimeAsync(1000);
 
     server.push({ status: 'failed', requestId: 'request-1' });
@@ -146,7 +156,10 @@ describe('waitForFolderUpload', () => {
   it('still gives up as unknown when every status request hangs', async () => {
     const server = fakeServer();
     server.hangReads();
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
 
     await vi.advanceTimersByTimeAsync(FOLDER_UPLOAD_STALLED_AFTER_MS + 20000);
 
@@ -155,7 +168,10 @@ describe('waitForFolderUpload', () => {
 
   it('finds the result by polling when the pushed one is missed', async () => {
     const server = fakeServer();
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
     await vi.advanceTimersByTimeAsync(9000);
 
     server.setStatus({ status: 'failed' });
@@ -167,7 +183,10 @@ describe('waitForFolderUpload', () => {
   it('keeps waiting while the status cannot be read', async () => {
     const server = fakeServer();
     server.setStatus(undefined);
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
 
     await vi.advanceTimersByTimeAsync(10 * MINUTE);
     await expect(
@@ -185,10 +204,42 @@ describe('waitForFolderUpload', () => {
   it('gives up as unknown, not failed, once nothing changes for longer than the extractor can run', async () => {
     const server = fakeServer();
     server.setStatus({ status: 'processing' });
-    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now(),
+      sources: server.sources,
+    });
 
     await vi.advanceTimersByTimeAsync(FOLDER_UPLOAD_STALLED_AFTER_MS + 3000);
 
     await expect(outcome).resolves.toEqual({ status: 'unknown' });
+  });
+
+  it('gives up at once on a folder still unfinished after every retry', async () => {
+    const server = fakeServer();
+    server.setStatus({ status: 'processing' });
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now() - FOLDER_UPLOAD_GIVE_UP_AFTER_MS - 1,
+      sources: server.sources,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    await expect(outcome).resolves.toEqual({ status: 'unknown' });
+  });
+
+  it('still reports a finished folder that was sent long ago', async () => {
+    const server = fakeServer();
+    server.setStatus({ status: 'completed', projectId: 'p' });
+    const outcome = waitForFolderUpload('request-1', () => {}, {
+      sentAt: Date.now() - FOLDER_UPLOAD_GIVE_UP_AFTER_MS - 1,
+      sources: server.sources,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    await expect(outcome).resolves.toEqual({
+      status: 'completed',
+      projectId: 'p',
+    });
   });
 });

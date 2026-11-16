@@ -58,6 +58,91 @@ describe('Task.forPullRequest', () => {
   });
 });
 
+describe('Task.slug', () => {
+  function serveTaskAndTeams(
+    requests: Request[],
+    documentMetadata: Record<string, unknown>,
+  ) {
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      const path = new URL(request.url).pathname;
+      if (path === '/documents/0198a4cc-e138-7670-a308-a6b766602730') {
+        return Response.json({
+          data: {
+            documentMetadata: {
+              documentId: '0198a4cc-e138-7670-a308-a6b766602730',
+              documentName: 'Fix imported timestamps',
+              subType: 'task',
+              ...documentMetadata,
+            },
+            userAccessLevel: 'owner',
+          },
+        });
+      }
+      if (path === '/team/user') {
+        return Response.json([
+          { id: '0198a4cc-e138-7670-a308-a6b7666027a1', slug: 'ENG' },
+          { id: '0198a4cc-e138-7670-a308-a6b7666027a2', slug: 'DB' },
+        ]);
+      }
+      return new Response(`unexpected ${path}`, { status: 404 });
+    }) as typeof fetch;
+    return new Macro({
+      token: 'user-token',
+      hosts: {
+        storage: 'https://storage.example.test',
+        auth: 'https://auth.example.test',
+      },
+    });
+  }
+
+  test("names the task by its team's slug and its number in that team", async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {
+      teamId: '0198a4cc-e138-7670-a308-a6b7666027a2',
+      teamTaskId: 245,
+    });
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBe('DB-245');
+    expect(requests.map((request) => new URL(request.url).host)).toEqual([
+      'storage.example.test',
+      'auth.example.test',
+    ]);
+  });
+
+  test('is undefined for a task without a team number', async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {});
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBeUndefined();
+    expect(requests).toHaveLength(1);
+  });
+
+  test("is undefined when the task's team is not one of the caller's", async () => {
+    const requests: Request[] = [];
+    const macro = serveTaskAndTeams(requests, {
+      teamId: '0198a4cc-e138-7670-a308-a6b7666027a9',
+      teamTaskId: 12,
+    });
+
+    const slug = await macro.tasks
+      .byId('0198a4cc-e138-7670-a308-a6b766602730')
+      .slug();
+
+    expect(slug).toBeUndefined();
+  });
+});
+
 describe('Task.create', () => {
   test('sends initiative, assignees and due date with the create', async () => {
     const requests: Request[] = [];

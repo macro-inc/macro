@@ -148,6 +148,7 @@ async fn grants_scope_writes_per_database() {
             name: "Venue".into(),
             owner_id: user(VIEWER),
             acting_bot: None,
+            first_table: None,
         })
         .await
         .unwrap();

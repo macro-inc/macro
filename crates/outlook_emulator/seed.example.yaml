@@ -1,10 +1,96 @@
-# Two Macro users' Outlook mailboxes, and one outside correspondent's.
+# Two Macro users' Outlook mailboxes and calendars, and one outside
+# correspondent's.
 mailboxes:
   - email: ada@example.com
     name: Ada Example
     # The email_links.id this mailbox is connected as, for the
     # authentication-service stand-in.
     link_id: 0195a000-0000-7000-8000-00000000a11c
+    # mailboxSettings.timeZone, as Outlook names it.
+    time_zone: Pacific Standard Time
+    # Events are the JSON a client posts to Graph, with times in an IANA
+    # zone. Series repeat without end, so a stack has something on its
+    # calendars whenever it runs.
+    calendars:
+      - name: Calendar
+        default: true
+        events:
+          - subject: Team sync
+            iCalUId: team-sync@example.com
+            start: { dateTime: "2026-01-05T10:00:00", timeZone: America/Los_Angeles }
+            end: { dateTime: "2026-01-05T10:30:00", timeZone: America/Los_Angeles }
+            originalStartTimeZone: Pacific Standard Time
+            location: { displayName: Room 4 }
+            body: { contentType: html, content: "<p>Weekly priorities and blockers.</p>" }
+            attendees:
+              - { emailAddress: { address: bob@example.com, name: Bob Example }, type: required, status: { response: accepted, time: "2026-01-02T17:00:00Z" } }
+              - { emailAddress: { address: carol@example.com, name: Carol Example }, type: optional }
+            recurrence:
+              pattern: { type: weekly, interval: 1, daysOfWeek: [monday], firstDayOfWeek: sunday }
+              range: { type: noEnd, startDate: "2026-01-05" }
+            # One week's meeting moved to the Tuesday, and one deleted.
+            exceptions:
+              - date: "2026-11-16"
+                subject: Team sync (moved)
+                start: { dateTime: "2026-11-17T14:00:00", timeZone: America/Los_Angeles }
+                end: { dateTime: "2026-11-17T14:30:00", timeZone: America/Los_Angeles }
+            cancelledOccurrences: ["2026-11-23"]
+          - subject: Standup
+            start: { dateTime: "2026-01-05T09:00:00", timeZone: America/Los_Angeles }
+            end: { dateTime: "2026-01-05T09:15:00", timeZone: America/Los_Angeles }
+            showAs: tentative
+            recurrence:
+              pattern: { type: weekly, interval: 1, daysOfWeek: [monday, tuesday, wednesday, thursday, friday], firstDayOfWeek: sunday }
+              range: { type: noEnd, startDate: "2026-01-05" }
+          - subject: 1:1 with Grace
+            organizer: { emailAddress: { address: grace@example.com, name: Grace Example } }
+            responseStatus: { response: accepted, time: "2026-01-06T18:00:00Z" }
+            start: { dateTime: "2026-01-08T13:00:00", timeZone: America/New_York }
+            end: { dateTime: "2026-01-08T13:45:00", timeZone: America/New_York }
+            attendees:
+              - { emailAddress: { address: ada@example.com, name: Ada Example }, type: required, status: { response: accepted, time: "2026-01-06T18:00:00Z" } }
+            recurrence:
+              pattern: { type: relativeMonthly, interval: 1, daysOfWeek: [thursday], index: second }
+              range: { type: noEnd, startDate: "2026-01-08" }
+          - subject: Quarterly numbers review
+            start: { dateTime: "2026-11-12T15:00:00", timeZone: America/Los_Angeles }
+            end: { dateTime: "2026-11-12T16:00:00", timeZone: America/Los_Angeles }
+            sensitivity: private
+          - subject: Out of office
+            isAllDay: true
+            showAs: oof
+            start: { dateTime: "2026-11-26T00:00:00", timeZone: UTC }
+            end: { dateTime: "2026-11-28T00:00:00", timeZone: UTC }
+      - name: Apollo launch
+        color: lightBlue
+        hex_color: "#0078d4"
+        events:
+          - subject: Launch checkpoint
+            start: { dateTime: "2026-01-07T11:00:00", timeZone: America/Los_Angeles }
+            end: { dateTime: "2026-01-07T11:30:00", timeZone: America/Los_Angeles }
+            recurrence:
+              pattern: { type: weekly, interval: 2, daysOfWeek: [wednesday], firstDayOfWeek: sunday }
+              range: { type: noEnd, startDate: "2026-01-07" }
+      - name: United States holidays
+        read_only: true
+        online_meeting_providers: []
+        events:
+          - subject: New Year's Day
+            isAllDay: true
+            showAs: free
+            start: { dateTime: "2026-01-01T00:00:00", timeZone: UTC }
+            end: { dateTime: "2026-01-02T00:00:00", timeZone: UTC }
+            recurrence:
+              pattern: { type: absoluteYearly, interval: 1, dayOfMonth: 1, month: 1 }
+              range: { type: noEnd, startDate: "2026-01-01" }
+          - subject: Thanksgiving Day
+            isAllDay: true
+            showAs: free
+            start: { dateTime: "2026-11-26T00:00:00", timeZone: UTC }
+            end: { dateTime: "2026-11-27T00:00:00", timeZone: UTC }
+            recurrence:
+              pattern: { type: relativeYearly, interval: 1, daysOfWeek: [thursday], index: fourth, month: 11 }
+              range: { type: noEnd, startDate: "2026-11-26" }
     folders:
       - name: Projects
       - name: Apollo
@@ -56,6 +142,32 @@ mailboxes:
         date: "2026-11-09T07:00:00Z"
   - email: bob@example.com
     name: Bob Example
+    time_zone: Eastern Standard Time
+    calendars:
+      - name: Calendar
+        default: true
+        events:
+          # Bob's copy of Ada's meeting: the same iCalUId, her as organizer.
+          - subject: Team sync
+            iCalUId: team-sync@example.com
+            organizer: { emailAddress: { address: ada@example.com, name: Ada Example } }
+            responseStatus: { response: accepted, time: "2026-01-02T17:00:00Z" }
+            start: { dateTime: "2026-01-05T10:00:00", timeZone: America/Los_Angeles }
+            end: { dateTime: "2026-01-05T10:30:00", timeZone: America/Los_Angeles }
+            originalStartTimeZone: Pacific Standard Time
+            location: { displayName: Room 4 }
+            attendees:
+              - { emailAddress: { address: bob@example.com, name: Bob Example }, type: required, status: { response: accepted, time: "2026-01-02T17:00:00Z" } }
+              - { emailAddress: { address: carol@example.com, name: Carol Example }, type: optional }
+            recurrence:
+              pattern: { type: weekly, interval: 1, daysOfWeek: [monday], firstDayOfWeek: sunday }
+              range: { type: noEnd, startDate: "2026-01-05" }
+            exceptions:
+              - date: "2026-11-16"
+                subject: Team sync (moved)
+                start: { dateTime: "2026-11-17T14:00:00", timeZone: America/Los_Angeles }
+                end: { dateTime: "2026-11-17T14:30:00", timeZone: America/Los_Angeles }
+            cancelledOccurrences: ["2026-11-23"]
     messages:
       - from: Carol Example <carol@example.com>
         subject: Welcome aboard

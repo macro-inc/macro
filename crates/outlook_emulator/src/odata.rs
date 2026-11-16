@@ -45,6 +45,9 @@ pub(crate) struct Query {
     pub(crate) filter: Option<Filter>,
     /// The extended property ids `$expand` asks for.
     pub(crate) properties: Vec<String>,
+    /// The `$select` of `$expand=exceptionOccurrences(…)`: a series'
+    /// changed occurrences.
+    pub(crate) exceptions: Option<Vec<String>>,
     pub(crate) skip_token: Option<String>,
     pub(crate) delta_token: Option<String>,
 }
@@ -62,7 +65,10 @@ impl Query {
                 "$skip" => query.skip = count(name, value)?,
                 "$orderby" => query.order_by = Some(order_by(value)?),
                 "$filter" => query.filter = Some(filter(value)?),
-                "$expand" => query.properties = expand(value)?,
+                "$expand" => match expand(value)? {
+                    Expand::Properties(ids) => query.properties = ids,
+                    Expand::Exceptions(select) => query.exceptions = Some(select),
+                },
                 "$skiptoken" => query.skip_token = Some(value.clone()),
                 "$deltatoken" => query.delta_token = Some(value.clone()),
                 "$count" => {}
@@ -208,19 +214,32 @@ fn filter(input: &str) -> Result<Filter, GraphError> {
     }
 }
 
-/// `singleValueExtendedProperties($filter=id eq 'A' or id eq 'B')`
-fn expand(input: &str) -> Result<Vec<String>, GraphError> {
+enum Expand {
+    Properties(Vec<String>),
+    Exceptions(Vec<String>),
+}
+
+/// `singleValueExtendedProperties($filter=id eq 'A' or id eq 'B')`, or
+/// `exceptionOccurrences($select=id,occurrenceId)`.
+fn expand(input: &str) -> Result<Expand, GraphError> {
     let id = preceded((tag("id"), equals), quoted);
     let or = (multispace1, tag_no_case("or"), multispace1);
-    let mut parser = all_consuming(delimited(
+    let properties = delimited(
         tag("singleValueExtendedProperties($filter="),
         separated_list1(or, id),
         char(')'),
-    ));
-    let parsed: IResult<&str, Vec<String>> = parser.parse(input.trim());
-    parsed.map(|(_, ids)| ids).map_err(|_| {
+    );
+    let names = separated_list1(char(','), map(identifier, str::to_string));
+    let exceptions = delimited(tag("exceptionOccurrences($select="), names, char(')'));
+    let mut parser = all_consuming(alt((
+        map(properties, Expand::Properties),
+        map(exceptions, Expand::Exceptions),
+    )));
+    let parsed: IResult<&str, Expand> = parser.parse(input.trim());
+    parsed.map(|(_, expand)| expand).map_err(|_| {
         GraphError::bad_request(
-            "Invalid $expand: the emulator expands only singleValueExtendedProperties($filter=id eq '…').",
+            "Invalid $expand: the emulator expands only singleValueExtendedProperties($filter=id eq '…') \
+             and exceptionOccurrences($select=…).",
         )
     })
 }

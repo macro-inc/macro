@@ -3,6 +3,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::calendar::AccessRole;
+
 /// Everything an emulator starts with. Every field is optional.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -123,6 +125,10 @@ pub struct SeedMailbox {
     /// Messages, oldest first.
     #[serde(default)]
     pub messages: Vec<NewMessage>,
+    /// Google Calendar: the user's primary calendar, when an entry has no
+    /// `id`, and the other calendars on their list.
+    #[serde(default)]
+    pub calendars: Vec<SeedCalendar>,
 }
 
 impl SeedMailbox {
@@ -131,6 +137,94 @@ impl SeedMailbox {
         Self {
             email: email.to_string(),
             ..Self::default()
+        }
+    }
+}
+
+/// One calendar on a user's calendar list.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeedCalendar {
+    /// The calendar id. Without one the entry describes the user's primary
+    /// calendar, whose id is their address, unless `secondary` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Another calendar under a generated id, shaped like Google's
+    /// `c_…@group.calendar.google.com`.
+    #[serde(default)]
+    pub secondary: bool,
+    /// Its name. Defaults to the calendar id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Its description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Its IANA time zone. Defaults to UTC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<chrono_tz::Tz>,
+    /// Its colour, as `#rrggbb`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_color: Option<String>,
+    /// What the user may do with it. Defaults to `owner`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_role: Option<AccessRole>,
+    /// Whether it is ticked in Google Calendar's list. Defaults to true for
+    /// the primary calendar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected: Option<bool>,
+    /// The reminders of an event that uses the calendar's defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_reminders: Option<Vec<SeedReminder>>,
+    /// Whether `events.watch` works on it. Google refuses it on some
+    /// calendars, such as public holidays.
+    #[serde(default = "default_true")]
+    pub push_supported: bool,
+    /// Its events.
+    #[serde(default)]
+    pub events: Vec<NewEvent>,
+}
+
+impl Default for SeedCalendar {
+    fn default() -> Self {
+        Self {
+            id: None,
+            secondary: false,
+            summary: None,
+            description: None,
+            time_zone: None,
+            background_color: None,
+            access_role: None,
+            selected: None,
+            default_reminders: None,
+            push_supported: true,
+            events: Vec::new(),
+        }
+    }
+}
+
+/// A calendar's default reminder.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeedReminder {
+    /// `popup` or `email`.
+    pub method: String,
+    /// How long before the event, in minutes.
+    pub minutes: u32,
+}
+
+/// An event to put on a calendar, or a change to one: Google's own event
+/// resource, as `events.insert` and `events.patch` take it. An event needs
+/// `start` and `end`; an `id` must be base32hex (`0-9`, `a-v`).
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct NewEvent(pub serde_json::Map<String, serde_json::Value>);
+
+impl NewEvent {
+    /// An event from a JSON object. Anything else is an empty event.
+    pub fn from_json(value: serde_json::Value) -> Self {
+        match value {
+            serde_json::Value::Object(fields) => Self(fields),
+            _ => Self::default(),
         }
     }
 }

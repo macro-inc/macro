@@ -43,7 +43,12 @@ alwaysApply: false
   caches, and unregister; it must not intercept requests.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression
   limit; split it rather than raising the limit.
-- The build also fails if a chunk has no source map or a map exceeds PostHog's
-  25 MB symbolication limit. `startupChunks()` in `vite.base.ts` splits the
-  code the entry loads into `app`, `vendor`, and `api-schemas` chunks so each
-  map stays under it; it moves only modules the entry already imports.
+- The build also fails if a chunk with source code has no source map or a map
+  exceeds PostHog's 25 MB symbolication limit. `startupChunks()` in
+  `vite.base.ts` splits the code each HTML entry loads into `vendor-<n>`,
+  `api-schemas-<n>`, and `startup-<entries>-<n>` chunks of about
+  `STARTUP_PART_CODE_BYTES` of module code (a single module or an import cycle
+  stays whole), cut along the import order so they never import each other in
+  a cycle; the build fails if they do. It moves only modules an entry already
+  imports. Don't use Rolldown's `maxSize` for startup groups; its parts import
+  each other in cycles.

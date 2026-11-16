@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use crate::EmulatorError;
+use crate::calendar::{Calendars, Writer};
 use crate::error::GraphError;
 use crate::seed::{NewMessage, SeedMailbox};
 
@@ -264,13 +265,34 @@ pub(crate) struct Change {
     pub(crate) etag: String,
 }
 
+/// The delegated permissions a seeded mailbox has already granted Macro:
+/// the ones a mail and calendar consent asks for.
+pub(crate) const SEEDED_SCOPES: [&str; 7] = [
+    "User.Read",
+    "Mail.ReadWrite",
+    "Mail.Send",
+    "Calendars.ReadWrite",
+    "MailboxSettings.ReadWrite",
+    "Contacts.Read",
+    "offline_access",
+];
+
 pub(crate) struct Mailbox {
     pub(crate) user_id: String,
     pub(crate) tenant_id: String,
     pub(crate) email: String,
     pub(crate) name: String,
+    /// The refresh token the grant started with. Refreshing hands out
+    /// further ones, which the state holds.
     pub(crate) refresh_token: String,
     pub(crate) revoked: bool,
+    /// How many grants the mailbox has had: one, plus one per consent that
+    /// followed a revocation.
+    pub(crate) grants: u32,
+    /// The delegated permissions the grant covers.
+    pub(crate) scopes: Vec<String>,
+    /// Whether ID tokens say Microsoft verified the address's domain.
+    pub(crate) email_domain_verified: bool,
     /// The sequence number of the last change.
     pub(crate) seq: u64,
     /// Bumped when the mailbox's sync state is dropped, which expires every
@@ -294,6 +316,7 @@ pub(crate) struct Mailbox {
     window: VecDeque<i64>,
     /// Changes not yet turned into notifications.
     pub(crate) changes: Vec<Change>,
+    pub(crate) calendar: Calendars,
 }
 
 impl Mailbox {
@@ -311,6 +334,12 @@ impl Mailbox {
                 .unwrap_or_else(|| format!("refresh-{email}")),
             email,
             revoked: false,
+            grants: 1,
+            scopes: SEEDED_SCOPES
+                .iter()
+                .map(|scope| scope.to_string())
+                .collect(),
+            email_domain_verified: !seed.unverified_email_domain,
             seq: 0,
             delta_epoch: 0,
             delta_token_lifetime_ms: seed
@@ -332,6 +361,13 @@ impl Mailbox {
                 .unwrap_or(GRAPH_REQUESTS_PER_TEN_MINUTES),
             window: VecDeque::new(),
             changes: Vec::new(),
+            calendar: Calendars::new(
+                Address {
+                    address: seed.email.to_lowercase(),
+                    name: seed.name.clone(),
+                },
+                seed.time_zone.clone().unwrap_or_else(|| "UTC".to_string()),
+            ),
         };
 
         let root = mailbox.new_id("folder");
@@ -377,6 +413,15 @@ impl Mailbox {
         }
         for message in &seed.messages {
             mailbox.add_message(message, now)?;
+        }
+        for calendar in &seed.calendars {
+            let id = mailbox.calendar.seed_calendar(calendar);
+            for event in &calendar.events {
+                mailbox
+                    .calendar
+                    .create(&id, &event.0, Writer::Emulator, now)
+                    .map_err(|error| EmulatorError::InvalidEvent(error.message))?;
+            }
         }
         // Seeding is not a change a subscriber could have watched.
         mailbox.changes.clear();

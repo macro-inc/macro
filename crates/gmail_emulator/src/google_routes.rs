@@ -1,6 +1,6 @@
 //! The other Google endpoints Macro's email code calls: the People API,
-//! OAuth token refresh, token info and revocation, and the certificates
-//! that verify push tokens.
+//! the OAuth token endpoint (code exchange and refresh), token info and
+//! revocation, and the certificates that verify push and ID tokens.
 
 use std::collections::HashMap;
 
@@ -8,7 +8,9 @@ use axum::extract::{Query, State as AxumState};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Form, Json, Router};
+use axum::{Json, Router};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
 
 use crate::GmailEmulator;
@@ -16,9 +18,12 @@ use crate::error::ApiError;
 use crate::fault::Route;
 use crate::gate::{Params, mailbox_request, open_request};
 use crate::gmail_routes::mailbox;
+use crate::mailbox::Mailbox;
 use crate::people::{PeoplePage, person_json};
+use crate::push::SigningKey;
 use crate::seed::SeedContact;
-use crate::state::{ACCESS_TOKEN_LIFETIME_SECONDS, State};
+use crate::sign_in::{grants_id_token, id_token};
+use crate::state::{ACCESS_TOKEN_LIFETIME_SECONDS, CodeRefusal, State};
 
 const CONTACTS_SCOPE: &str = "https://www.googleapis.com/auth/contacts.readonly";
 const OTHER_CONTACTS_SCOPE: &str = "https://www.googleapis.com/auth/contacts.other.readonly";
@@ -146,10 +151,51 @@ fn oauth_error(error: &str, description: &str) -> Response {
         .into_response()
 }
 
+/// The client id on tokens whose request names no client.
+const DEFAULT_CLIENT_ID: &str = "gmail-emulator.apps.googleusercontent.com";
+
+fn token_response(
+    key: &SigningKey,
+    mailbox: &Mailbox,
+    client_id: &str,
+    access_token: &str,
+    refresh_token: Option<&str>,
+    scopes: &[String],
+    nonce: Option<&str>,
+) -> Response {
+    let mut response = json!({
+        "access_token": access_token,
+        "expires_in": ACCESS_TOKEN_LIFETIME_SECONDS,
+        "scope": scopes.join(" "),
+        "token_type": "Bearer",
+    });
+    if let Some(refresh_token) = refresh_token {
+        response["refresh_token"] = json!(refresh_token);
+    }
+    if grants_id_token(scopes) {
+        match id_token(key, mailbox, client_id, nonce) {
+            Ok(id_token) => response["id_token"] = json!(id_token),
+            Err(error) => {
+                tracing::error!(error = ?error, "ID token could not be signed");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    }
+    Json(response).into_response()
+}
+
 /// Refreshes a mailbox's access token. Returns the mailbox the refresh
 /// token belongs to, and Google's answer.
-pub(crate) fn refresh(state: &mut State, refresh_token: &str) -> (Option<String>, Response) {
-    let Some(mailbox) = state.mailbox_for_refresh_token(refresh_token) else {
+fn refresh(
+    state: &mut State,
+    key: &SigningKey,
+    client_id: &str,
+    refresh_token: &str,
+) -> (Option<String>, Response) {
+    let Some(email) = state
+        .mailbox_for_refresh_token(refresh_token)
+        .map(|mailbox| mailbox.email.clone())
+    else {
         let owner = state
             .mailboxes
             .values()
@@ -161,41 +207,125 @@ pub(crate) fn refresh(state: &mut State, refresh_token: &str) -> (Option<String>
         );
     };
 
-    let (email, scope) = (mailbox.email.clone(), mailbox.scopes.join(" "));
-    let response = match state.issue_access_token(&email) {
-        Ok(access_token) => Json(json!({
-            "access_token": access_token,
-            "expires_in": ACCESS_TOKEN_LIFETIME_SECONDS,
-            "scope": scope,
-            "token_type": "Bearer",
-        }))
-        .into_response(),
-        Err(_) => oauth_error("invalid_grant", "Token has been expired or revoked."),
+    let response = match (
+        state.issue_access_token(&email),
+        state.mailboxes.get(&email),
+    ) {
+        (Ok(access_token), Some(mailbox)) => token_response(
+            key,
+            mailbox,
+            client_id,
+            &access_token,
+            None,
+            &mailbox.scopes,
+            None,
+        ),
+        _ => oauth_error("invalid_grant", "Token has been expired or revoked."),
     };
     (Some(email), response)
 }
 
-async fn token(
-    AxumState(emulator): Emulator,
-    Form(form): Form<HashMap<String, String>>,
-) -> Response {
+/// Exchanges the sign-in page's authorization code for tokens.
+fn exchange(
+    state: &mut State,
+    key: &SigningKey,
+    client_id: &str,
+    code: &str,
+    redirect_uri: &str,
+) -> (Option<String>, Response) {
+    let exchanged = match state.exchange_code(code, client_id, redirect_uri) {
+        Ok(exchanged) => exchanged,
+        Err(CodeRefusal::Invalid) => return (None, oauth_error("invalid_grant", "Bad Request")),
+        Err(CodeRefusal::WrongClient) => {
+            return (None, oauth_error("invalid_client", "Unauthorized"));
+        }
+        Err(CodeRefusal::RedirectMismatch) => {
+            return (None, oauth_error("redirect_uri_mismatch", "Bad Request"));
+        }
+    };
+
+    let response = match state.mailboxes.get(&exchanged.email) {
+        Some(mailbox) => token_response(
+            key,
+            mailbox,
+            client_id,
+            &exchanged.access_token,
+            exchanged.refresh_token.as_deref(),
+            &exchanged.scopes,
+            exchanged.nonce.as_deref(),
+        ),
+        None => oauth_error("invalid_grant", "Bad Request"),
+    };
+    (Some(exchanged.email), response)
+}
+
+/// The parameters of a token request. Google reads a form body, and a JSON
+/// object as well; a client may name itself in a Basic `Authorization`
+/// header instead of the body.
+fn token_request(headers: &HeaderMap, body: &str) -> HashMap<String, String> {
+    let is_json = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("application/json"));
+    let mut request: HashMap<String, String> = match is_json {
+        true => serde_json::from_str(body).unwrap_or_default(),
+        false => serde_urlencoded::from_str(body).unwrap_or_default(),
+    };
+
+    let basic_client_id = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Basic "))
+        .and_then(|encoded| STANDARD.decode(encoded).ok())
+        .and_then(|decoded| String::from_utf8(decoded).ok())
+        .and_then(|pair| pair.split_once(':').map(|(id, _)| id.to_string()));
+    if let Some(client_id) = basic_client_id {
+        request.entry("client_id".to_string()).or_insert(client_id);
+    }
+    request
+}
+
+async fn token(AxumState(emulator): Emulator, headers: HeaderMap, body: String) -> Response {
+    let request = token_request(&headers, &body);
+    let parameter = |name: &str| request.get(name).map(String::as_str);
+    let key = match emulator.signing_key().await {
+        Ok(key) => key,
+        Err(error) => {
+            tracing::error!(error = ?error, "signing key is unavailable");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let client_id = parameter("client_id").unwrap_or(DEFAULT_CLIENT_ID);
+    let missing = |name: &str| {
+        (
+            None,
+            oauth_error(
+                "invalid_request",
+                &format!("Missing required parameter: {name}"),
+            ),
+        )
+    };
+
     open_request(&emulator, Route::OauthToken, |state| {
-        if form.get("grant_type").map(String::as_str) != Some("refresh_token") {
-            return (
+        match parameter("grant_type") {
+            Some("refresh_token") => match parameter("refresh_token") {
+                Some(refresh_token) => refresh(state, key, client_id, refresh_token),
+                None => missing("refresh_token"),
+            },
+            Some("authorization_code") => {
+                match (parameter("code"), parameter("redirect_uri")) {
+                    (Some(code), Some(redirect_uri)) => {
+                        exchange(state, key, client_id, code, redirect_uri)
+                    }
+                    (None, _) => missing("code"),
+                    (_, None) => missing("redirect_uri"),
+                }
+            }
+            _ => (
                 None,
                 oauth_error(
                     "unsupported_grant_type",
-                    "The emulator only refreshes tokens: grant_type=refresh_token.",
-                ),
-            );
-        }
-        match form.get("refresh_token") {
-            Some(refresh_token) => refresh(state, refresh_token),
-            None => (
-                None,
-                oauth_error(
-                    "invalid_request",
-                    "Missing required parameter: refresh_token",
+                    "The emulator serves grant_type=authorization_code and grant_type=refresh_token.",
                 ),
             ),
         }
@@ -240,8 +370,8 @@ async fn token_info(
         };
 
         let info = json!({
-            "azp": "gmail-emulator.apps.googleusercontent.com",
-            "aud": "gmail-emulator.apps.googleusercontent.com",
+            "azp": DEFAULT_CLIENT_ID,
+            "aud": DEFAULT_CLIENT_ID,
             "scope": mailbox.scopes.join(" "),
             "exp": (expires_at_ms / 1000).to_string(),
             "expires_in": ((expires_at_ms - now_ms) / 1000).to_string(),
@@ -258,7 +388,7 @@ async fn certs(AxumState(emulator): Emulator) -> Response {
     let key = match emulator.signing_key().await {
         Ok(key) => key,
         Err(error) => {
-            tracing::error!(error = ?error, "push signing key is unavailable");
+            tracing::error!(error = ?error, "signing key is unavailable");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };

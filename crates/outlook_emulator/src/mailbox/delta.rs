@@ -70,9 +70,11 @@ impl Mailbox {
         cursor.e == self.delta_epoch && cursor.n <= self.seq && fresh
     }
 
-    /// Drops the mailbox's sync state: every delta token now answers 410.
+    /// Drops the mailbox's sync state: every delta token, a folder's or the
+    /// calendar view's, now answers 410.
     pub(crate) fn expire_delta_tokens(&mut self) {
         self.delta_epoch += 1;
+        self.calendar.expire_delta_tokens();
     }
 
     /// One page of a folder's changes, of up to `page_size` entries. A cursor

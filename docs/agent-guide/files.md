@@ -192,7 +192,11 @@ the submenu cancels the pending close. While the mouse heads toward an open
 submenu, including one that opens to the left, the categories it crosses on the
 way do not take over. A category the mouse moves to directly, or rests on for
 300 ms, opens in its place. Escape and outside clicks still dismiss immediately.
-`Sort files` offers modified, created, and viewed dates.
+`Sort files` offers modified, created, and viewed dates, plus **Name**, which
+reads A to Z case-insensitively, punctuation before digits before letters and accented letters beside their base letter, with unnamed rows last. A name-sorted page
+comes from one Soup query over its own entities, so a folder sorted by Name
+lists files, chats, and subfolders without filed email threads; the date sorts
+still show them.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
 and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
@@ -328,12 +332,23 @@ The upload indicator above the toasts follows one folder through every stage:
 The indicator polls the upload's status
 (`GET /projects/upload_extract/{request_id}`) as well as listening for the
 `bulk_upload` websocket result, so a dropped socket still ends in the true
-state. A reload during processing loses the indicator; the folder still appears
-in Drive when the server finishes.
+state. Once a folder is sent, the browser remembers it for the signed-in account
+until its end toast shows. After a reload or a crash, and in every other tab of
+the same account, whether opened while it processes or already open when it was
+sent, the indicator shows **Processing &lt;folder&gt;** and ends in the same
+toasts; each tab shows a folder's end once. Signing out keeps the record, and
+the folder resumes when that account signs in again; another account never
+sees it. A reload while a folder
+is still preparing or uploading cancels that upload. A folder sent more than a
+day earlier is dropped without a toast, and one still unfinished 90 minutes
+after it was sent, past every extractor retry, ends at once in **Couldn't
+confirm**.
 
 Verification: the shared headless Chrome runs in Docker and cannot read files on
 the host, so feed real folders through a private Playwright Chromium on the same
 machine: open **Upload folders**, catch the file chooser and pass the folder's
 path to `fileChooser.setFiles`. Check each stage's label and percentage, the
-end toast, and the uploaded tree in Drive; delete the uploaded folders
+end toast, and the uploaded tree in Drive. To check resuming, reload during
+**Processing**, open a second tab of the same account, and keep a tab of that
+account open while another sends a folder. Delete the uploaded folders
 afterwards.

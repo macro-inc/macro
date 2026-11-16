@@ -1,5 +1,7 @@
 //! Handler for soft-deleting projects.
 
+use std::sync::Arc;
+
 use axum::{Extension, Json, extract::State};
 use entity_access::{
     domain::{models::OwnerAccessLevel, ports::EntityAccessService},
@@ -9,10 +11,26 @@ use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService
 use model::project::BasicProject;
 use model::response::{GenericSuccessResponse, SuccessResponse, TypedSuccessResponse};
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 use utoipa::ToSchema;
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
+
+/// Run a folder tree operation on its own task and wait for it. Trash,
+/// restore and purge write every item in the tree, so a dropped request must
+/// not cancel them partway: the task carries on to completion, including a
+/// purge's document cleanup after its commit. The task keeps the request's
+/// agent attribution, which the operation's events carry.
+pub(super) async fn run_on_own_task<R, F>(work: F) -> Result<R, ProjectError>
+where
+    R: Send + 'static,
+    F: Future<Output = Result<R, ProjectError>> + Send + 'static,
+{
+    tokio::spawn(agent_correlation::context::capture(work.in_current_span()))
+        .await
+        .map_err(|error| ProjectError::Internal(anyhow::anyhow!(error)))?
+}
 
 /// Identifiers affected by a recursive project soft deletion.
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
@@ -56,14 +74,15 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let deleted = state
-        .service
-        .soft_delete_project(
-            access.entity_access_receipt,
-            project.0,
-            user.authorization.user.macro_user_id.to_string(),
-        )
-        .await?;
+    let service = Arc::clone(&state.service);
+    let receipt = access.entity_access_receipt;
+    let actor_user_id = user.authorization.user.macro_user_id.to_string();
+    let deleted = run_on_own_task(async move {
+        service
+            .soft_delete_project(receipt, project.0, actor_user_id)
+            .await
+    })
+    .await?;
 
     Ok(Json(ProjectDeleteResponse {
         error: false,
@@ -105,9 +124,9 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    state
-        .service
-        .permanently_delete_project(access.entity_access_receipt, project)
+    let service = Arc::clone(&state.service);
+    let receipt = access.entity_access_receipt;
+    run_on_own_task(async move { service.permanently_delete_project(receipt, project).await })
         .await?;
 
     Ok(Json(SuccessResponse {

@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH scope AS (\n                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1\n                UNION ALL\n                SELECT $2::uuid\n            )\n            SELECT co.id AS \"company_id?\", NULL::uuid AS \"contact_id?\",\n                   LOWER(BTRIM(d.domain)) AS \"domain?\", NULL::text AS \"email?\"\n            FROM crm_companies co\n            LEFT JOIN LATERAL (\n                SELECT d.domain FROM crm_domains d WHERE d.company_id = co.id OFFSET 0\n            ) d ON TRUE\n            WHERE NOT co.hidden\n              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))\n            UNION ALL\n            -- Contacts under a visible company.\n            SELECT NULL, ct.id, NULL, address.email\n            FROM crm_companies co\n            JOIN crm_contacts ct\n                ON ct.company_id = co.id AND ct.team_id = co.team_id AND NOT ct.hidden\n            LEFT JOIN LATERAL (\n                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0\n            ) address ON TRUE\n            WHERE NOT co.hidden\n              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))\n            UNION ALL\n            -- Contacts without a company.\n            SELECT NULL, ct.id, NULL, address.email\n            FROM (\n                SELECT ct.id, ct.company_id, ct.hidden\n                FROM crm_contacts ct\n                WHERE ct.team_id = ANY(ARRAY(SELECT team_id FROM scope))\n                OFFSET 0\n            ) ct\n            LEFT JOIN LATERAL (\n                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0\n            ) address ON TRUE\n            WHERE ct.company_id IS NULL\n              AND NOT ct.hidden\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "domain?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "43521150b6c23d47e117f97511872b8d076810849b3ba978538dfdaa3186eb85"
+}

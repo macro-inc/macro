@@ -1,0 +1,5 @@
+# Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
+preload = ["temporal-polyfill/global"]
+
+[test]
+preload = ["temporal-polyfill/global"]

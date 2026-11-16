@@ -222,7 +222,7 @@ async fn unsupported_queries_and_paths_fail_loudly() {
     assert_eq!(filter.status(), 400);
     let select = get("me/messages?$select=nonsense").await.unwrap();
     assert_eq!(select.status(), 400);
-    let path = get("me/calendars").await.unwrap();
+    let path = get("me/todo/lists").await.unwrap();
     assert_eq!(path.status(), 400);
     let anonymous = http
         .get(format!("{}/me/messages", emulator.graph_url()))

@@ -18,7 +18,9 @@ viewer pattern), which apply to every type defined here.
   route applies, not through the viewer's inbox scope; Soup's email leg only
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
-  inbox.
+  inbox. Spam-only and trash-only threads render as their folder rows; the
+  mutation reply reader (`mutation_thread.rs`) reads through the same rule
+  with the email service's ownership check.
 - Build `AgentSessionEntityLoader` and `PrimarySoupItemLoader` with `::new`,
   which rechecks the viewer's team. PRs are stored for the team; without it,
   a session row reads `pullRequestState: null` and overwrites the list's
@@ -27,6 +29,7 @@ viewer pattern), which apply to every type defined here.
   caller-defined half-open UTC `ranges`, and `missingValueBucketKey`; client query
   keys restart pagination when ranges change.
 - Use `PROPERTY`, `sortPropertyDefinitionId`, and `sortDirection` for numeric property sorting through ordinary Soup requests; preserve timestamp cursor decoding.
+- `NAME` orders by each item's own name and takes no property definition; it shares the selected-sort cursor, so its continuations decode as property positions.
 - Property sorts and date-range groups use source-owned item access gates without a separate property-definition check; validate ranges during input conversion.
 - Build `groupSoup` through Soup's shared `build_grouped_response`; keep `document_server_facts` in `GroupedSoup::from_response` for cache projections.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`

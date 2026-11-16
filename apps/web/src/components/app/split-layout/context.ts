@@ -117,6 +117,17 @@ export type SplitPanelContextType = {
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
+  /**
+   * Set while a mobile view's `MobileHeader` owns this pane's header. Other
+   * header contributions stand down, so the header shows only what that view
+   * composes.
+   */
+  mobileHeaderOwner: Signal<symbol | undefined>;
+  /**
+   * How many header contributions declared 32px controls (`SplitHeaderRight`
+   * with `size="md"`), so the header's own controls match them.
+   */
+  headerMdControls?: Signal<number>;
   titleFileMenuRef: Accessor<HTMLDivElement | undefined>;
   setTitleFileMenuRef: Setter<HTMLDivElement | undefined>;
   titleFileMenuTrigger: Accessor<(() => void) | undefined>;

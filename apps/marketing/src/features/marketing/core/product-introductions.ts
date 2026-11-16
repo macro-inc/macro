@@ -1,4 +1,8 @@
-/ Product introductions, based on the founder's README and product guides. */;
+/**
+ * Product introductions, based on the founder's README and product guides.
+ * [[Macro Routines]] renders as that product's linked mention, and *asterisks*
+ * italicize a word.
+ */
 export const productIntroductions: Partial<Record<string, readonly string[]>> =
   {
     Workspace: [
@@ -18,8 +22,9 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'In Macro, access follows channel membership. Share a document, email, or task in a channel and its members can open it. New members get that context too; people who leave lose the access that channel gave them. You can still manage access to an individual item from Share.',
     ],
     'Workspace events': [
-      'We wanted agents to help when something happens, without someone remembering to start a chat. A customer email arrives, a task gets completed, or a call ends. Those are natural moments to do the next piece of work.',
-      'Macro gives email, chat, docs, tasks, and calls one event system. Choose a trigger and instructions for a routine, and an agent can draft a reply, post an update, or turn a call into follow-up tasks. It works with the context already in your workspace and the permissions of the person who set it up.',
+      'We want agents to be able to help when something happens at our company... but how do you know “when something happens”?',
+      'If your company is spread across a bunch of software tools, there is no event system. Your agents have to constantly poll every business system to see what’s been updated, and many tools don’t even expose MCPs for events!',
+      'In Macro, not only are there events for everything — customer email comes in, an @mention in a channel, a task updated — there’s a *unified* event bus for everything, so your agents only have to subscribe to one feed, and so [[Macro Routines]] can kick off when things happen.',
     ],
     'Unified search': [
       'You can remember what someone said without remembering whether it was in an email, a document, or a call. We wanted one place to look. Agents need that too: finding the right context shouldn’t depend on guessing which app to search first.',
@@ -30,7 +35,7 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro Mail brings those pieces together. Your emails are connected to your team’s conversations, tasks, and customer records. Share a thread in chat, turn a request into a task, or ask an agent to draft a reply using the context already in your workspace.',
     ],
     Tasks: [
-      'The main problem with traditional task manager is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
+      'The problem with traditional task managers is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
       'Macro Tasks are auto-created where you already work: in your team chat, from an email, or in the background via ambient agents. No need to go to ever create or organize tasks manually. They’re also built natively for human-agent teams: you can assign tasks to agents and they’ll write the code, or complete the creative, or to a human.',
     ],
     Chat: [
