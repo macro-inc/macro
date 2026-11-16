@@ -329,3 +329,47 @@ fn deeply_nested_export_imports_again() {
         .expect("no stack overflow")
         .expect("round trip");
 }
+
+// A document exactly at MAX_JSON_DEPTH imports; one level deeper is rejected before
+// deserializing. The release wasm build, with its 1 MiB stack, parses, installs, edits,
+// exports and writes to Loro a 510-element document at the cap, and traps only past
+// about 1,300 nested elements. Debug native frames are larger, hence the 16 MiB thread.
+#[test]
+fn document_at_max_json_depth_imports_and_one_level_deeper_is_rejected() {
+    let nested = |levels: usize| {
+        let elements = (levels - 3) / 2;
+        let mut text = String::from("{\"root\":{\"type\":\"root\",\"version\":1,\"children\":[");
+        for _ in 0..elements {
+            text.push_str("{\"type\":\"paragraph\",\"version\":1,\"children\":[");
+        }
+        if levels % 2 == 0 {
+            text.push_str("{\"type\":\"text\",\"version\":1,\"text\":\"x\"}");
+        }
+        for _ in 0..elements {
+            text.push_str("]}");
+        }
+        text.push_str("]}}");
+        text
+    };
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(move || {
+            let mut editor = Editor::builder(EditorMode::Headless)
+                .build()
+                .expect("builder");
+            editor
+                .parse_editor_state_str(&nested(MAX_JSON_DEPTH))
+                .expect("at the cap");
+            let error = editor
+                .parse_editor_state_str(&nested(MAX_JSON_DEPTH + 1))
+                .expect_err("past the cap");
+            assert!(
+                error
+                    .to_string()
+                    .contains("JSON nesting deeper than 1024 levels")
+            );
+        })
+        .expect("spawn")
+        .join()
+        .expect("no stack overflow");
+}
