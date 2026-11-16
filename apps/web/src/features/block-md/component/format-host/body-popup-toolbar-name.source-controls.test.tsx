@@ -122,7 +122,7 @@ test('Source control: the MarkdownPopup selection toolbar has no accessible name
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
-            bodyFormatPopup: desktopBodyFormatPopup,
+            bodyFormatPopup: () => desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

@@ -220,7 +220,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
     },
     persistedName: () => props.persistedName,
     fallbackName: () => props.fallbackName,
-    bodyFormatPopup: props.bodyFormatPopup,
+    bodyFormatPopup: () => props.bodyFormatPopup,
     state,
     element: surfaceElement,
   };

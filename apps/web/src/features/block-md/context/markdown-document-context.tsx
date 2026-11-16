@@ -19,7 +19,7 @@ export type MarkdownDocumentContextValue = {
   persistedName: Accessor<string | undefined>;
   fallbackName: Accessor<string | undefined>;
   /** The view entry's desktop or touch body popup composition. */
-  bodyFormatPopup: NativeBodyPopupComposition;
+  bodyFormatPopup: Accessor<NativeBodyPopupComposition>;
   state: MarkdownDocumentState;
   element: Accessor<HTMLElement | undefined>;
 };

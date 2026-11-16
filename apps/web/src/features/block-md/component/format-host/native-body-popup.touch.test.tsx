@@ -112,6 +112,8 @@ function mount(
     canEdit?: boolean;
     /** The entry's composition; this file's touch toolbar by default. */
     composition?: 'desktop' | 'touch';
+    /** A live device choice, as the entries' isTouchDevice() signal is. */
+    device?: () => 'desktop' | 'touch';
   } = {}
 ) {
   const scope = document.createElement('div');
@@ -121,6 +123,7 @@ function mount(
   scope.append(root);
   document.body.append(scope);
   let popup: { visible(value: boolean): boolean } | undefined;
+  let registrations = 0;
   const host: DocumentFormattingHost = {
     selection: () => undefined,
     focused: () => true,
@@ -137,6 +140,7 @@ function mount(
     rectangle: () => DOMRect.fromRect({ x: 10, y: 10, width: 80, height: 16 }),
     selectionText: () => options.text ?? 'Select this phrase',
     registerPopup: (callbacks) => {
+      registrations++;
       popup = callbacks;
     },
     registerListeners: () => {},
@@ -201,6 +205,10 @@ function mount(
   });
   const [closed, setClosed] = createSignal(0);
   const documentState = createMarkdownDocumentState();
+  const composition = () =>
+    (options.device?.() ?? options.composition) === 'desktop'
+      ? desktopBodyFormatPopup
+      : mobileBodyFormatPopup;
   const rendered = render(() => (
     <MarkdownDocumentProvider
       context={{
@@ -214,21 +222,14 @@ function mount(
         },
         persistedName: () => undefined,
         fallbackName: () => undefined,
-        bodyFormatPopup:
-          options.composition === 'desktop'
-            ? desktopBodyFormatPopup
-            : mobileBodyFormatPopup,
+        bodyFormatPopup: composition,
         state: documentState,
         element: () => root,
       }}
     >
       <FloatingMenuGroup>
         <NativeBodyFormatPopup
-          composition={
-            options.composition === 'desktop'
-              ? desktopBodyFormatPopup
-              : mobileBodyFormatPopup
-          }
+          composition={composition()}
           host={host}
           popup={bodyPopup}
           slots={[ai, task]}
@@ -242,7 +243,13 @@ function mount(
     if (!popup) throw new Error('Popup did not register');
     popup.visible(value);
   };
-  return { show, calls, closed, unmount: rendered.unmount };
+  return {
+    show,
+    calls,
+    closed,
+    unmount: rendered.unmount,
+    registrations: () => registrations,
+  };
 }
 
 /** The touch toolbar's visible page, not its hidden measuring row. */
@@ -479,3 +486,24 @@ test.each(['desktop', 'touch'] as const)(
     expect(document.querySelector('[data-popup], .z-action-menu')).toBeNull();
   }
 );
+
+test('a live device flip swaps the toolbar without remounting the popup shell', () => {
+  const [device, setDevice] = createSignal<'desktop' | 'touch'>('desktop');
+  const { show, closed, registrations } = mount({ device });
+  show(true);
+  vi.advanceTimersByTime(100);
+  expect(options()).toContain('AI edit');
+  expect(options()).not.toContain('Copy');
+  setDevice('touch');
+  vi.advanceTimersByTime(100);
+  expect(options()).toContain('Copy');
+  expect(options()).not.toContain('AI edit');
+  expect(closed()).toBe(1);
+  setDevice('desktop');
+  vi.advanceTimersByTime(100);
+  expect(options()).toContain('AI edit');
+  expect(options()).not.toContain('Copy');
+  expect(closed()).toBe(2);
+  // One shell for the whole session: the popup registered with the host once.
+  expect(registrations()).toBe(1);
+});

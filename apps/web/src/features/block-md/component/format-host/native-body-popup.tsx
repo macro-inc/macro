@@ -18,6 +18,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { BodyPopupSlot } from './body-popup-slots';
 import type { BodyFormattingPopupHost, DocumentFormattingHost } from './types';
 
@@ -180,7 +181,6 @@ export function NativeBodyFormatPopup(
       height: rect.height,
     };
   });
-  const Popup = props.composition.Popup;
   return (
     <>
       <Show when={position()}>
@@ -199,7 +199,7 @@ export function NativeBodyFormatPopup(
           </ScopedPortal>
         )}
       </Show>
-      <Popup frame={frame} />
+      <Dynamic component={props.composition.Popup} frame={frame} />
     </>
   );
 }

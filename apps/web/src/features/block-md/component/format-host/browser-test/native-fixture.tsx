@@ -255,7 +255,7 @@ function NativeFormattingFixture() {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
-            bodyFormatPopup: composition,
+            bodyFormatPopup: () => composition,
             state,
             element: () => body,
           }}

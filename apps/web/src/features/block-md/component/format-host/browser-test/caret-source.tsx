@@ -157,7 +157,7 @@ function SourceCaretPage() {
               },
               persistedName: () => undefined,
               fallbackName: () => undefined,
-              bodyFormatPopup: desktopBodyFormatPopup,
+              bodyFormatPopup: () => desktopBodyFormatPopup,
               state,
               element: () => body,
             }}

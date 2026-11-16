@@ -24,8 +24,9 @@ import { createNativeBodyTouchActions } from './native-touch-actions';
 
 /** Own only the optional body menu; the document owns its actual native view. */
 export function createNativeBodyFormattingOverlay(options: {
-  /** The view entry's desktop or touch popup composition. */
-  composition: NativeBodyPopupComposition;
+  /** The view entry's desktop or touch popup composition; live, since the
+   *  touch signal can flip mid-session. */
+  composition: Accessor<NativeBodyPopupComposition>;
   canEdit: Accessor<boolean>;
   alive: Accessor<boolean>;
   /** Copy link to snippet for every viewer of this document. */
@@ -144,7 +145,7 @@ export function createNativeBodyFormattingOverlay(options: {
           <Show when={formatting.controller()}>
             {(controller) => (
               <NativeBodyFormatPopup
-                composition={options.composition}
+                composition={options.composition()}
                 host={controller().host}
                 popup={controller().bodyPopup}
                 commentAction={commentAction}

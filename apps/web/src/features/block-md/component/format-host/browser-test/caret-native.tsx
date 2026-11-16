@@ -92,7 +92,7 @@ function NativeCaretPage() {
   // comment). Values follow the Source page: no comment capability (canComment false) and the
   // inline AI edit flag off (no PostHog flags in the fixture).
   const formatting = createNativeBodyFormattingOverlay({
-    composition,
+    composition: () => composition,
     canEdit: () => !caretReadOnly,
     alive: () => !closed,
     aiEdit: {
@@ -226,7 +226,7 @@ function NativeCaretPage() {
               },
               persistedName: () => undefined,
               fallbackName: () => undefined,
-              bodyFormatPopup: composition,
+              bodyFormatPopup: () => composition,
               state,
               element: () => body,
             }}

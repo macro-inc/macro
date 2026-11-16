@@ -6,7 +6,7 @@ import { mount, select, state } from './native-test-fixture';
 
 test('optional body formatting releases its own listeners without closing the real document', async () => {
   const formatting = createNativeBodyFormattingOverlay({
-    composition: desktopBodyFormatPopup,
+    composition: () => desktopBodyFormatPopup,
     canEdit: () => true,
     alive: () => true,
   });
@@ -31,7 +31,7 @@ test('optional body formatting releases its own listeners without closing the re
 
 test('missing actual ordered command ports retire optional formatting while the document stays live', async () => {
   const formatting = createNativeBodyFormattingOverlay({
-    composition: desktopBodyFormatPopup,
+    composition: () => desktopBodyFormatPopup,
     canEdit: () => true,
     alive: () => true,
   });

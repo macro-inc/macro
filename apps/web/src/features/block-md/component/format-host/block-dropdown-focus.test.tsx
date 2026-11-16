@@ -164,7 +164,7 @@ for (const engine of ['source', 'native'] as const) {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
-            bodyFormatPopup: desktopBodyFormatPopup,
+            bodyFormatPopup: () => desktopBodyFormatPopup,
             state: documentState,
             element: () => body,
           };

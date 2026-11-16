@@ -50,7 +50,7 @@ it('saves a title edited just before the document closes', () => {
         },
         persistedName: () => 'Old title',
         fallbackName: () => 'New Document',
-        bodyFormatPopup: desktopBodyFormatPopup,
+        bodyFormatPopup: () => desktopBodyFormatPopup,
         state,
         element: () => undefined,
       }}

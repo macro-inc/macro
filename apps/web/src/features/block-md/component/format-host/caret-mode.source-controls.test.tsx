@@ -285,7 +285,7 @@ function mount(options: {
             },
             persistedName: () => undefined,
             fallbackName: () => undefined,
-            bodyFormatPopup: desktopBodyFormatPopup,
+            bodyFormatPopup: () => desktopBodyFormatPopup,
             state,
             element: () => body,
           }}

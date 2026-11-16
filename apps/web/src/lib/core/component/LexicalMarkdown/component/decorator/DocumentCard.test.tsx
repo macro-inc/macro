@@ -285,7 +285,7 @@ it.each(['code', 'canvas', 'pdf'] as const)(
         },
         persistedName: () => 'Embeds',
         fallbackName: () => 'Embeds',
-        bodyFormatPopup: desktopBodyFormatPopup,
+        bodyFormatPopup: () => desktopBodyFormatPopup,
         state: createMarkdownDocumentState(),
         element: () => undefined,
       };

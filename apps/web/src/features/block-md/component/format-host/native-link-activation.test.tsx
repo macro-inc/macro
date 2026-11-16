@@ -57,7 +57,7 @@ function setup() {
   const [canEdit, setCanEdit] = createSignal(true);
   const optionalErrors = vi.spyOn(Telemetry, 'error');
   const formatting = createNativeBodyFormattingOverlay({
-    composition: desktopBodyFormatPopup,
+    composition: () => desktopBodyFormatPopup,
     canEdit,
     alive: () => true,
   });
@@ -88,7 +88,7 @@ function setup() {
           },
           persistedName: () => undefined,
           fallbackName: () => undefined,
-          bodyFormatPopup: desktopBodyFormatPopup,
+          bodyFormatPopup: () => desktopBodyFormatPopup,
           state: documentState,
           element: () => runtime.root,
         }}
