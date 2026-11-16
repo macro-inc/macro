@@ -57,8 +57,11 @@ async fn queued(pool: &Pool<Postgres>) -> anyhow::Result<Vec<String>> {
     .await?)
 }
 
+// A document still linked elsewhere is queued too: under concurrent deletes
+// only the worker, once they commit, can tell whether a link is left. So is
+// one already in the Trash, which stops being an attachment as well.
 #[sqlx::test]
-async fn deleting_a_message_queues_the_live_documents_it_leaves_unlinked(
+async fn deleting_a_message_queues_every_document_it_unlinks(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     seed(&pool).await?;
@@ -68,13 +71,50 @@ async fn deleting_a_message_queues_the_live_documents_it_leaves_unlinked(
         .execute(&pool)
         .await?;
 
-    assert_eq!(queued(&pool).await?, vec![ONLY_ON_MESSAGE.to_string()]);
+    assert_eq!(
+        queued(&pool).await?,
+        [ONLY_ON_MESSAGE, ALSO_ELSEWHERE, IN_TRASH]
+            .map(String::from)
+            .to_vec()
+    );
+
+    Ok(())
+}
+
+// Touching the row locks it, so the worker's claim skips it until the delete
+// commits instead of deciding while a link is still being removed.
+#[sqlx::test]
+async fn a_document_already_queued_is_queued_again_at_its_new_release(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    seed(&pool).await?;
+    sqlx::query(
+        "INSERT INTO released_email_attachment_documents (document_id, released_at)
+         VALUES ($1, '2026-01-01')",
+    )
+    .bind(ONLY_ON_MESSAGE)
+    .execute(&pool)
+    .await?;
+
+    sqlx::query("DELETE FROM email_messages WHERE id = $1::uuid")
+        .bind(MESSAGE)
+        .execute(&pool)
+        .await?;
+
+    let released_again: bool = sqlx::query_scalar(
+        "SELECT released_at > '2026-01-01' FROM released_email_attachment_documents
+         WHERE document_id = $1",
+    )
+    .bind(ONLY_ON_MESSAGE)
+    .fetch_one(&pool)
+    .await?;
+    assert!(released_again);
 
     Ok(())
 }
 
 #[sqlx::test]
-async fn removing_an_inbox_queues_every_live_document_it_imported(
+async fn removing_an_inbox_queues_every_document_it_imported(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     seed(&pool).await?;
@@ -86,7 +126,9 @@ async fn removing_an_inbox_queues_every_live_document_it_imported(
 
     assert_eq!(
         queued(&pool).await?,
-        vec![ONLY_ON_MESSAGE.to_string(), ALSO_ELSEWHERE.to_string()]
+        [ONLY_ON_MESSAGE, ALSO_ELSEWHERE, IN_TRASH]
+            .map(String::from)
+            .to_vec()
     );
 
     Ok(())

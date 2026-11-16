@@ -6,13 +6,22 @@
 -- paths delete through cascades from email_links, so the hook lives on the
 -- link row rather than on each path.
 --
--- When a statement removes a live document's last link, the trigger records
--- the document in released_email_attachment_documents and notifies
--- email_attachment_documents_released. Document storage drains that queue and
--- moves each document to the Trash through the documents domain unless its
--- owner adopted it, re-checking everything at that time. The trigger is
--- statement-level, so a statement that removes many links, cascades included,
--- records them in one insert and sends one notification.
+-- When a statement removes links of documents, the trigger records each of
+-- those documents in released_email_attachment_documents and notifies
+-- email_attachment_documents_released. Document storage drains that queue: a
+-- document with no link left goes to the Trash unless its owner adopted it or
+-- it is there already, re-checking everything at that time, and every one
+-- without a link is reported as no longer an email attachment. Documents
+-- already in the Trash are queued too: search stops treating them as
+-- attachments, so a later restore brings back a plain file. The trigger does not skip documents that still look linked: two
+-- transactions removing a document's last two links each still see the
+-- other's, so only the worker, after both commit, can tell. A document already
+-- queued is touched rather than skipped: the row lock its update takes keeps
+-- the worker's SKIP LOCKED claim off it until this transaction commits, so the
+-- worker never decides about a document while one of its links is still being
+-- deleted. The trigger is statement-level, so a statement that removes many
+-- links, cascades included, records them in one insert and sends one
+-- notification.
 --
 -- The queue is safe to fill before any worker drains it: ids wait.
 
@@ -32,25 +41,21 @@ CREATE FUNCTION enqueue_released_email_attachment_documents()
     AS
 $$
     BEGIN
-        -- The transition table has no statistics. Without the OFFSET fences a
-        -- statement releasing many links under stale statistics on "Document"
-        -- hashed every live document; fenced, each check is a probe per id.
+        -- A purge deletes the document in the same statement, so it is gone
+        -- here and not queued. The transition table has no statistics.
+        -- Without the OFFSET fence a statement releasing many links under
+        -- stale statistics on "Document" hashed the whole table; fenced, the
+        -- check is a probe per id.
         INSERT INTO released_email_attachment_documents (document_id)
         SELECT DISTINCT released.document_id
         FROM released_links released
-        WHERE NOT EXISTS (
-                SELECT 1
-                FROM document_email de
-                WHERE de.document_id = released.document_id
-                OFFSET 0
-            )
-            AND EXISTS (
+        WHERE EXISTS (
                 SELECT 1
                 FROM "Document" d
-                WHERE d.id = released.document_id AND d."deletedAt" IS NULL
+                WHERE d.id = released.document_id
                 OFFSET 0
             )
-        ON CONFLICT (document_id) DO NOTHING;
+        ON CONFLICT (document_id) DO UPDATE SET released_at = EXCLUDED.released_at;
 
         IF FOUND THEN
             PERFORM pg_notify('email_attachment_documents_released', '');
