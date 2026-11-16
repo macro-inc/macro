@@ -50,6 +50,9 @@ mod pinned_properties;
 mod pr_mention_actions;
 mod selection_snippet;
 mod tag_mention_actions;
+mod task_mention_insert;
+#[cfg(test)]
+mod task_mention_insert_test;
 pub use media_properties::{MediaMountAction, media_mount_action};
 mod metadata;
 mod movement;
@@ -155,6 +158,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = document_find::register(builder);
     let builder = menu_insert::register(builder);
     let builder = checkbox_tasks::register(builder);
+    let builder = task_mention_insert::register(builder);
     let builder = date_mention_actions::register(builder);
     let builder = agent_session_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
@@ -274,6 +278,9 @@ pub fn decode_command(
     if let Some(command) = checkbox_tasks::decode(name, json, generation)? {
         return Ok(Some(command));
     }
+    if let Some(command) = task_mention_insert::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = date_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -325,6 +332,9 @@ pub fn decode_command(
 /// Serialize Group B host requests without exposing model event identities.
 pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
     if let Some(payload) = text_paste::event_payload(event)? {
+        return Ok(Some(payload));
+    }
+    if let Some(payload) = task_mention_insert::event_payload(event)? {
         return Ok(Some(payload));
     }
     if let Some(payload) = code::event_payload(event)? {
