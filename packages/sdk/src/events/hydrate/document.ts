@@ -83,11 +83,16 @@ export function hydrateDocumentEvent(
       document: Document.byId(client, metadata.document_id),
     }))
     .with(
-      { event_type: 'document.email_attachments_trashed' },
+      { event_type: 'document.email_attachments_released' },
       ({ metadata }) => ({
-        event_type: 'document.email_attachments_trashed' as const,
+        event_type: 'document.email_attachments_released' as const,
         metadata,
-        documents: metadata.document_ids.map((id) => Document.byId(client, id)),
+        trashedDocuments: metadata.trashed_document_ids.map((id) =>
+          Document.byId(client, id),
+        ),
+        keptDocuments: metadata.kept_document_ids.map((id) =>
+          Document.byId(client, id),
+        ),
       }),
     )
     .exhaustive((unknown) => {

@@ -7585,13 +7585,14 @@ export type DocumentTopicEvent = {
      */
     metadata: DocumentInteractionMetadata;
 } | {
-    event_type: 'document.email_attachments_trashed';
+    event_type: 'document.email_attachments_released';
     /**
-     * Email attachments whose mail is gone were moved to the Trash by the
-     * system, in one batch. Like the documents in a trashed folder, they are
-     * removed from open lists and trigger nothing per document.
+     * Documents whose mail is gone stopped being email attachments, in one
+     * batch: the system moved some to the Trash and left the rest. Like the
+     * documents in a trashed folder, the trashed ones are removed from open
+     * lists and trigger nothing per document.
      */
-    metadata: EmailAttachmentsTrashedMetadata;
+    metadata: EmailAttachmentsReleasedMetadata;
 };
 
 /**
@@ -9258,13 +9259,19 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
- * Metadata for [`DocumentTopicEvent::EmailAttachmentsTrashed`].
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentsReleased`]: the
+ * documents of one queue batch that lost their last email link.
  */
-export type EmailAttachmentsTrashedMetadata = {
+export type EmailAttachmentsReleasedMetadata = {
     /**
-     * The documents moved to the Trash, at most one queue batch.
+     * Documents left as they were: kept by their owner, or already in the
+     * Trash. They are no longer email attachments either.
      */
-    document_ids: Array<string>;
+    kept_document_ids: Array<string>;
+    /**
+     * Documents the batch moved to the Trash.
+     */
+    trashed_document_ids: Array<string>;
 };
 
 /**
