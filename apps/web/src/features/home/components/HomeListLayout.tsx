@@ -1,4 +1,4 @@
-import { SearchBar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -27,7 +27,7 @@ export function HomeListLayout(
     footer?: JSX.Element;
   }>
 ) {
-  const { state, setState } = useHomeView();
+  const { state, setState, focusList } = useHomeView();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
@@ -46,11 +46,13 @@ export function HomeListLayout(
             actions={<HomeFilterDropdown />}
             searchLabel="Search Home"
             search={() => (
-              <SearchBar
+              <ViewSidebar.Search
                 label="Search Home"
-                placeholder="Search Home"
                 value={state.search}
                 onValueChange={(search) => setState('search', search)}
+                focusResults={() => {
+                  focusList();
+                }}
               />
             )}
           />

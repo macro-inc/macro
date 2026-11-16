@@ -4,6 +4,7 @@ import { passwordRecipients } from '../queries/recipients';
 
 it('limits recipient names to current-team humans and the current team', () => {
   const team: TeamWithMembers = {
+    crm_member_access: {},
     team: {
       id: 'team-1',
       name: 'Product team',

@@ -233,12 +233,12 @@ vi.mock('@service-storage/util/filename', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: () =>
-    untrack(mocks.graphqlEnabled)
+    untrack(mocks.graphqlEnabled) && mocks.cacheEnabled
       ? {
           search: mocks.search,
           onCacheChanged: mocks.onCacheChanged,
           readRecordsByKeys: mocks.readRecordsByKeys,
-          disabled: !mocks.cacheEnabled,
+          disabled: false,
         }
       : undefined,
 }));

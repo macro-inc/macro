@@ -1,5 +1,6 @@
 mod interaction_parity;
 mod linked_personal;
+mod thread_exclusions;
 
 #[cfg(feature = "inbound")]
 mod http;
