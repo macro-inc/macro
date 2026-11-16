@@ -269,6 +269,7 @@ where
                     actor: Some(action.owner),
                     context: command.context,
                     client: None,
+                    prompter: crate::domain::model::PrompterKind::User,
                 },
             )
             .await
@@ -311,6 +312,7 @@ where
                     actor: Some(command.owner),
                     context: None,
                     client: None,
+                    prompter: crate::domain::model::PrompterKind::User,
                 },
             )
             .await

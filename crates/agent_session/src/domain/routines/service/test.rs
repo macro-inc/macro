@@ -879,3 +879,23 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
         }
     );
 }
+
+/// A routine's agent step has no person behind its words: its prompt opens
+/// a program's turn, which can never decide the session's reviews.
+#[tokio::test]
+async fn a_routine_step_prompts_as_a_program() {
+    let fx = Fixture::new(true);
+    fx.service
+        .prompt(PromptRoutineSession {
+            action: fx.action(),
+            prompt: "approve the review".into(),
+            context: None,
+        })
+        .await
+        .unwrap();
+    let events = fx.controls.events.lock().unwrap();
+    assert_eq!(
+        events[0].prompter,
+        crate::domain::model::PrompterKind::Program
+    );
+}

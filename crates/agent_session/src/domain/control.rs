@@ -89,6 +89,7 @@ impl ControlEvent {
             actor,
             context,
             client,
+            prompter: super::model::PrompterKind::User,
         })
     }
 }

@@ -64,6 +64,9 @@ pub struct QueuedEntry {
     pub context: Option<TriggerContext>,
     /// The app tab the prompt was typed in, recorded on the turn it opens.
     pub client: Option<UiClientId>,
+    /// Whether a person or a program for them wrote the prompt; a system
+    /// turn is told apart by its notifications instead.
+    pub prompter: PrompterKind,
     /// The chip message, once posted. Set by the dispatch that posts it and
     /// carried through a requeue, so a dispatch that fails *after*
     /// announcing retries without posting a second chip.
@@ -207,6 +210,7 @@ impl QueuedEntry {
             announced_message_id: self.announced,
             context: self.context.clone(),
             client: self.client,
+            prompter: self.prompter,
         })
     }
 
@@ -220,6 +224,7 @@ impl QueuedEntry {
             announced: stored.announced_message_id,
             context: stored.context,
             client: stored.client,
+            prompter: stored.prompter,
             created_at: stored.created_at,
         })
     }
@@ -367,7 +372,9 @@ impl SessionQueues {
         action_id: AgentActionId,
         prompt: String,
         actor: Option<MacroUserIdStr<'static>>,
+        prompter: PrompterKind,
     ) -> Result<(), QueueError> {
+        let _ = prompter;
         let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
         let entry = queue
             .iter_mut()

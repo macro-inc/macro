@@ -371,6 +371,8 @@ pub struct FirstPrompt {
     /// first turn like a control prompt's, so the turn can show them things
     /// in that tab.
     pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 impl FirstPrompt {
@@ -381,6 +383,7 @@ impl FirstPrompt {
             prompt: prompt.into(),
             attachments: Vec::new(),
             client: None,
+            prompter: super::model::PrompterKind::User,
         }
     }
 
@@ -1325,6 +1328,8 @@ pub struct ControlEvent {
     /// The app tab a person typed the prompt in; see
     /// [`UiClientId`](super::model::UiClientId).
     pub client: Option<super::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    pub prompter: super::model::PrompterKind,
 }
 
 /// What accepting a control operation did with it.

@@ -198,6 +198,7 @@ where
                 action_id,
                 prompt,
                 actor,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         )
         .await

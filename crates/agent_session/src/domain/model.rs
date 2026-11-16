@@ -624,14 +624,45 @@ pub struct SessionBot {
 }
 
 /// The authority behind an invocation. System events never borrow owner access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::AsRefStr)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Default,
+    strum::AsRefStr,
+    strum::EnumString,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum PrompterKind {
     /// A human or runtime prompt; user identifies any acting human.
     #[default]
     User,
     /// An internal event with no user authority.
     System,
+    /// A program prompting for the user (an agent's code-mode run, or a
+    /// routine): it acts with the user's access, but no person stands behind
+    /// its words, so nothing in the turn counts as the user deciding.
+    Program,
+}
+
+impl PrompterKind {
+    /// Whether this is [`Self::User`], for `skip_serializing_if`.
+    #[must_use]
+    pub fn is_user(&self) -> bool {
+        *self == Self::User
+    }
+
+    /// The stored `turn_prompter_kind`; anything unknown reads as `User`, as
+    /// every row did before the column held more than `user` and `system`.
+    #[must_use]
+    pub fn from_stored(value: &str) -> Self {
+        value.parse().unwrap_or_default()
+    }
 }
 
 /// Who prompted the turn a session is running, or last ran.
@@ -720,6 +751,10 @@ pub struct StoredQueuedAction {
     /// The app tab the prompt was typed in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<UiClientId>,
+    /// Who wrote the prompt: a person, or a program for them. Rows written
+    /// before it was kept read as a person's.
+    #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+    pub prompter: PrompterKind,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {
