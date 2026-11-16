@@ -38,6 +38,7 @@ import {
   NativeUserMentionsOverlay,
 } from './NativeUserMentionsOverlay';
 import type { NativeMarkdownOverlayInstallation } from './nativeOverlayPorts';
+import type { NativeActionCommands } from './overlay-hosts/native-actions';
 import {
   createNativeComments,
   type NativeComments,
@@ -82,6 +83,8 @@ export function installNativeMarkdownOverlays(
   const [tagsAvailable, setTagsAvailable] = createSignal(true);
   const tagsAlive = () => renderActive() && tagsAvailable() && view.isMounted;
   const [actionsAvailable, setActionsAvailable] = createSignal(true);
+  const [actionCommands, setActionCommands] =
+    createSignal<NativeActionCommands>();
   let actionsRetired = false;
   const actionsAlive = () =>
     !disposed &&
@@ -401,6 +404,7 @@ export function installNativeMarkdownOverlays(
                   alive: actionsAlive,
                   own,
                   onUnavailable: unavailable,
+                  publish: (commands) => setActionCommands(() => commands),
                 });
               },
             })
@@ -464,6 +468,7 @@ export function installNativeMarkdownOverlays(
       prependParagraph: () => focusAfter('group-b.prepend-paragraph'),
     },
     menuOpen: () => openMenus.some((isOpen) => isOpen()),
+    actions: () => (actionsAlive() ? actionCommands() : undefined),
     dispose,
   };
 }

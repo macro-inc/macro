@@ -1,4 +1,6 @@
+import type { NativeActionCommands } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-actions';
 import { ACTIONS } from '@core/component/LexicalMarkdown/plugins/actions/actions';
+import type { Action } from '@core/component/LexicalMarkdown/plugins/actions/types';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -104,6 +106,49 @@ const ACTION_ID_TO_TOKEN: Record<string, HotkeyToken> = {
   hr: TOKENS.md.divider,
 };
 
+/** What the command menu's markdown commands act on: the Source editor or the native body. */
+export interface MarkdownCommandTarget {
+  formatText(format: TextFormatType): void;
+  /** The action is installed and its node dependencies are registered. */
+  available(action: Action): boolean;
+  run(action: Action): void;
+  focus(): void;
+}
+
+/** Source: FORMAT_TEXT_COMMAND, the ACTIONS handler and editor.hasNodes. */
+export function lexicalCommandTarget(
+  editor: LexicalEditor
+): MarkdownCommandTarget {
+  return {
+    formatText: (format) => editor.dispatchCommand(FORMAT_TEXT_COMMAND, format),
+    available: (action) => editor.hasNodes(action.dependencies ?? []),
+    run: (action) => action.action(editor),
+    focus: () => editor.focus(),
+  };
+}
+
+/** Native body: the formatting host's text formats and the slash-action host. */
+export function nativeCommandTarget(native: {
+  formatting(): { formatText(format: TextFormatType): void } | undefined;
+  actions(): NativeActionCommands | undefined;
+  focus(): void;
+}): MarkdownCommandTarget {
+  return {
+    formatText: (format) => native.formatting()?.formatText(format),
+    available: (action) => native.actions()?.available(action) ?? false,
+    run: (action) => native.actions()?.perform(action),
+    focus: native.focus,
+  };
+}
+
+/** The document body the command menu acts on. */
+export function markdownCommandTarget(md: {
+  editor?: LexicalEditor;
+  nativeCommands?: MarkdownCommandTarget;
+}): MarkdownCommandTarget | undefined {
+  return md.editor ? lexicalCommandTarget(md.editor) : md.nativeCommands;
+}
+
 type LexicalStateDebuggerCommandOptions = {
   canUseStateDebugger?: () => boolean;
   toggleStateDebugger: () => void;
@@ -142,7 +187,7 @@ function registerLexicalStateDebuggerHotkey(
  */
 export function registerMarkdownCommands(
   scopeId: string,
-  getEditor: () => LexicalEditor | undefined,
+  getTarget: () => MarkdownCommandTarget | undefined,
   condition?: () => boolean,
   options?: {
     canUseStateDebugger?: () => boolean;
@@ -163,10 +208,10 @@ export function registerMarkdownCommands(
       icon: def.icon,
       proxiedHotkey: !!def.hotkey,
       keyDownHandler: () => {
-        const editor = getEditor();
-        if (!editor) return false;
-        editor.dispatchCommand(FORMAT_TEXT_COMMAND, def.format);
-        editor.focus();
+        const target = getTarget();
+        if (!target) return false;
+        target.formatText(def.format);
+        target.focus();
         return true;
       },
     }).withGroup(group);
@@ -183,22 +228,18 @@ export function registerMarkdownCommands(
       description: action.name,
       icon: action.icon,
       keyDownHandler: () => {
-        const editor = getEditor();
-        if (!editor) return false;
-        action.action(editor);
-        editor.focus();
+        const target = getTarget();
+        if (!target) return false;
+        target.run(action);
+        target.focus();
         return true;
       },
       hide: () => {
-        const editor = getEditor();
-        if (!editor) return true;
-        return !editor.hasNodes(action.dependencies ?? []);
+        const target = getTarget();
+        if (!target) return true;
+        return !target.available(action);
       },
-      condition: () => {
-        const editor = getEditor();
-        if (!editor) return false;
-        return editor.hasNodes(action.dependencies ?? []);
-      },
+      condition: () => getTarget()?.available(action) ?? false,
     }).withGroup(group);
   }
 

@@ -25,6 +25,7 @@ import type {
 import type { CommentDraftControls } from '../comments/NativeCommentDraft';
 
 import type { RustMarkdownRuntime } from '../component/RustMarkdownEditor';
+import type { MarkdownCommandTarget } from '../component/useMarkdownCommands';
 
 type MdData = {
   nativeRuntime?: RustMarkdownRuntime;
@@ -43,6 +44,8 @@ type MdData = {
   commentMargin?: HTMLElement;
   contentRef?: HTMLElement;
   locationReady?: boolean;
+  /** Native body command-menu target; the Lexical body uses its editor. */
+  nativeCommands?: MarkdownCommandTarget;
   /** Native body draft lifecycle; the Lexical body uses its editor commands. */
   commentDraft?: CommentDraftControls;
 };

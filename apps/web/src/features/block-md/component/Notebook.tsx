@@ -63,7 +63,10 @@ import { SkillDescriptionField } from './SkillDescriptionField';
 import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import { registerMarkdownCommands } from './useMarkdownCommands';
+import {
+  markdownCommandTarget,
+  registerMarkdownCommands,
+} from './useMarkdownCommands';
 
 /**
  * Whether the Lexical state debugger panel is open, persisted across reloads so
@@ -358,7 +361,7 @@ export function Notebook(props: {
     const group = untrack(() =>
       registerMarkdownCommands(
         currentScopeId,
-        () => md.editor,
+        () => markdownCommandTarget(md),
         editorHasFocus,
         {
           canUseStateDebugger: canUseLexicalStateDebugger,

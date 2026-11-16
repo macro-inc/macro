@@ -144,6 +144,7 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createRustEditorSession } from '../primitives/create-rust-editor-session';
 import { createEditorAuthorization } from '../queries/editor-authorization';
 import { createNativeBodyFormattingOverlay } from './format-host/native-overlay';
+import { nativeCommandTarget } from './useMarkdownCommands';
 
 export type RustMarkdownRuntime = Awaited<
   ReturnType<typeof createRustEditorSession>
@@ -628,6 +629,18 @@ export default function RustMarkdownEditor(props: {
             }
             setRuntime(mounted);
             bindLocationAndBlame(mounted);
+            // Command menu (Cmd+K) formats and slash actions on the native body.
+            state.editor.setMd(
+              'nativeCommands',
+              nativeCommandTarget({
+                formatting: formatting.host,
+                actions: () => mounted.overlays?.actions?.(),
+                focus: () => mounted.view.focus(),
+              })
+            );
+            overlayLifecycle.add(() =>
+              state.editor.setMd('nativeCommands', undefined)
+            );
             overlayLifecycle.add(
               registerNativeTextPaste(mounted.view, resolveAppLink)
             );

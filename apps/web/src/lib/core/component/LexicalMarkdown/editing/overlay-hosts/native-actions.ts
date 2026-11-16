@@ -42,12 +42,30 @@ const blockKinds = new Map([
   ['list-check', 'list-check'],
 ]);
 
+/**
+ * The slash menu runs behind DOM-key admission; the command menu (Cmd+K) has
+ * none, so its writes are admitted at actual entry against the current session
+ * access and the generation they captured.
+ */
+type Admission = 'key' | 'session-edit';
+
+/** The command menu's (Cmd+K) view of the slash actions: run without a slash search. */
+export interface NativeActionCommands {
+  /** Installed here and its node dependencies are registered. */
+  available(action: Action): boolean;
+  perform(action: Action): void;
+}
+
 /** Catalog classes supply dependency names; the native registry owns availability. */
 export function createNativeActionMenuHost(
   view: EditorView,
   requests: NativeActionRequests,
   alive: () => boolean
-): ActionMenuHost & { supports(action: Action): boolean; dispose(): void } {
+): ActionMenuHost &
+  NativeActionCommands & {
+    supports(action: Action): boolean;
+    dispose(): void;
+  } {
   let disposed = false;
   const rootListeners = new Set<() => void>();
   const active = () => !disposed && alive() && view.isMounted;
@@ -99,16 +117,26 @@ export function createNativeActionMenuHost(
   const command = async (
     name: string,
     payload: string | Record<string, never>,
-    current: () => boolean
+    current: () => boolean,
+    admission: Admission
   ) => {
     if (!current()) return;
-    const result = await dispatchApplicationCommandSettled(view, name, payload);
+    const result =
+      admission === 'session-edit'
+        ? await dispatchApplicationCommandSettledIfSessionEdit(
+            view,
+            name,
+            () => payload,
+            { admit: current }
+          )
+        : await dispatchApplicationCommandSettled(view, name, payload);
     if (result.status === 'error') throw result.error;
   };
   const run = async (
     item: Action,
     current: () => boolean,
-    context?: ActionContext
+    context?: ActionContext,
+    admission: Admission = 'key'
   ) => {
     const additional = requests.additionalActions?.get(item);
     if (additional) {
@@ -122,11 +150,11 @@ export function createNativeActionMenuHost(
     }
     const block = blockKinds.get(item.id);
     if (block) {
-      await command('group-b.node-transform', block, current);
+      await command('group-b.node-transform', block, current, admission);
       return;
     }
     if (item.id === 'hr') {
-      await command('group-b.horizontal-rule', {}, current);
+      await command('group-b.horizontal-rule', {}, current, admission);
       return;
     }
     if (
@@ -208,8 +236,31 @@ export function createNativeActionMenuHost(
       span.end();
     }
   };
+  const perform = async (item: Action) => {
+    if (!active() || !supports(item)) return;
+    const span = Telemetry.span('editor.action');
+    span.setAttr('action.id', item.id);
+    span.setAttr('action.origin', 'command');
+    try {
+      const generation = view.mirror.keyGeneration;
+      const current = () =>
+        active() && view.mirror.keyGeneration === generation;
+      await span.run(() => run(item, current, undefined, 'session-edit'));
+    } catch (error) {
+      span.error(error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  };
   return {
     supports,
+    available: (item) =>
+      supports(item) &&
+      (!item.dependencies || hasDependencies(item.dependencies)),
+    perform(item) {
+      fireAndForget(perform(item), 'native-action-command');
+    },
     root: () => (active() ? view.root : null),
     subscribeRoot(listener) {
       rootListeners.add(listener);

@@ -16,6 +16,7 @@ import { insertNativeTable } from '../plugins/tables/native';
 import type { MenuOperations } from '../shared/inlineMenu';
 import {
   createNativeActionMenuHost,
+  type NativeActionCommands,
   type NativeActionRequests,
 } from './overlay-hosts/native-actions';
 import { createNativeListenerScope } from './overlay-hosts/native-listeners';
@@ -35,6 +36,8 @@ export function NativeActionsOverlay(props: {
   alive: () => boolean;
   own(cleanup: () => void): void;
   onUnavailable(error: unknown): void;
+  /** The ready host for the command menu; undefined once it retires. */
+  publish?(commands: NativeActionCommands | undefined): void;
 }) {
   if (!props.alive()) return null;
   const listeners = createNativeListenerScope();
@@ -67,6 +70,7 @@ export function NativeActionsOverlay(props: {
     props.alive
   );
   listeners.add(host.dispose);
+  listeners.add(() => props.publish?.(undefined));
   const picker = createNativeTablePickerHost(() =>
     props.alive() ? props.view : undefined
   );
@@ -117,6 +121,7 @@ export function NativeActionsOverlay(props: {
       initialized = true;
       stopReady();
       setReady(true);
+      props.publish?.(host);
     } catch (error) {
       unavailable(error);
     }

@@ -1,4 +1,5 @@
 import type { Accessor, Component } from 'solid-js';
+import type { NativeActionCommands } from './overlay-hosts/native-actions';
 import type { NativeComments } from './overlay-hosts/native-comments';
 
 /** Capabilities actually installed on the native document body. */
@@ -16,5 +17,7 @@ export interface NativeMarkdownOverlayInstallation {
   };
   /** Whether a native inline menu (mentions, tags, actions) is open. */
   readonly menuOpen?: Accessor<boolean>;
+  /** The slash actions for the command menu, once the action menu is ready. */
+  readonly actions?: Accessor<NativeActionCommands | undefined>;
   dispose(): void;
 }
