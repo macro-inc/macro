@@ -12,7 +12,7 @@ import {
 export type NativeUserMentionsOptions = NativeUserMentionSource &
   Pick<MentionsMenuOptions, 'users' | 'entities' | 'portalScope'>;
 
-/** Keep the actual shared providers and ordering for supported mention sources. */
+/** The Source body menu: every mention source, with the native insertion host. */
 export function NativeUserMentionsOverlay(props: {
   view: EditorView;
   menu: MenuOperations;
@@ -30,9 +30,6 @@ export function NativeUserMentionsOverlay(props: {
         disableMentionTracking={props.source.disableMentionTracking}
         useBlockBoundary={true}
         showOpenTabs
-        sources={['users', 'documents', 'channels', 'agentSessions', 'dates']}
-        includeGroups={false}
-        includeContacts={false}
         createHost={(blockId) =>
           createNativeUserMentionMenuHost(
             props.view,

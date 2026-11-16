@@ -1,13 +1,18 @@
-import type { EntityItem } from '@core/context/quickAccess';
-import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { selectionMessage } from '@macro-inc/lexical-wasm-view/view/session-port';
+import { match } from 'ts-pattern';
 import {
   type AgentSessionMentionInsertion,
+  type CrmMentionInsertion,
   handleAgentSessionMentionWithInsertion,
   handleBookingLinkMentionWithInsertion,
+  handleCalendarEventMentionWithInsertion,
+  handleCrmMentionWithInsertion,
   handleDateMentionWithInsertion,
   handleEntityMentionWithInsertion,
+  handleExternalChatMentionWithInsertion,
+  handleGroupMentionWithInsertion,
+  handleRoutineMentionWithInsertion,
   tracksMentions,
 } from '../../component/menu/MentionsMenu/utils/mentionHandlers';
 import {
@@ -15,8 +20,8 @@ import {
   dispatchApplicationCommandSettled,
 } from '../../plugins/group-b/command';
 import type {
-  BookingLinkMentionItem,
   HandlerDependencies,
+  MentionItem,
 } from '../../utils/mentionsUtils';
 import {
   handleUserMentionWithInsertion,
@@ -42,19 +47,22 @@ export function createNativeUserMentionMenuHost(
     source;
   const active = () => alive() && view.isMounted;
   /**
-   * Source handleBookingLinkMention: no tracking; the payload, including the
-   * url from the one shared builder, is built when the insert is admitted.
+   * Source removes the search first, then inserts at the model selection that
+   * is current once any tracking or sharing I/O settles. Menu close does not
+   * cancel it; edit access and the captured key generation are checked at each
+   * write, and a retired generation inserts nothing
+   * (C-NATIVE-GENERATION-RETIRE-NO-RETARGET-01).
    */
-  async function selectBookingLink(
-    item: BookingLinkMentionItem
+  async function withRemovedSearch(
+    insert: (
+      command: (name: string, buildPayload: () => unknown) => Promise<boolean>
+    ) => Promise<void>
   ): Promise<void> {
     const generation = view.mirror.keyGeneration;
     if (!active() || generation === null) return;
     const port = view.port;
     if (!port.inputSettledIfSessionEdit)
-      throw new Error(
-        'Booking link mentions require settled session edit admission'
-      );
+      throw new Error('Mentions require settled session edit admission');
     const inputSettled = port.inputSettledIfSessionEdit.bind(port);
     const current = () => active() && view.mirror.keyGeneration === generation;
     const command = async (name: string, buildPayload: () => unknown) => {
@@ -73,142 +81,94 @@ export function createNativeUserMentionMenuHost(
     };
     if (!(await command('group-a.search-remove', () => ({}))) || !current())
       return;
-    await handleBookingLinkMentionWithInsertion(item, () => ({
-      async insert(buildPayload) {
-        await command('group-b.insert-booking-link-mention', buildPayload);
-      },
-    }));
+    await insert(command);
   }
-  async function selectDate(dateOption: DateOption): Promise<void> {
-    const generation = view.mirror.keyGeneration;
-    if (!active() || generation === null) return;
-    const port = view.port;
-    if (!port.inputSettledIfSessionEdit)
-      throw new Error('Date mentions require settled session edit admission');
-    const inputSettled = port.inputSettledIfSessionEdit.bind(port);
-    const current = () => active() && view.mirror.keyGeneration === generation;
-    const command = async (name: string, buildPayload: () => unknown) => {
-      if (!current()) return false;
-      const result = await inputSettled(
-        () => ({
-          name,
-          json: JSON.stringify(buildPayload()),
-          generation,
-          selection: selectionMessage({ kind: 'keep' }),
-        }),
-        { admit: current }
-      );
-      if (result.status === 'error') throw result.error;
-      return result.status === 'success';
+  const tracks = () =>
+    tracksMentions({
+      blockId: sourceDocumentId,
+      blockName,
+      disableMentionTracking,
+    });
+  function write(
+    command: (name: string, buildPayload: () => unknown) => Promise<boolean>,
+    name: string
+  ) {
+    return {
+      async insert(buildPayload: () => unknown) {
+        await command(name, buildPayload);
+      },
     };
-    if (!(await command('group-a.search-remove', () => ({}))) || !current())
-      return;
-    await handleDateMentionWithInsertion(dateOption, () => ({
-      async insert(buildPayload) {
-        await command('group-a.insert-date-mention', buildPayload);
-      },
-    }));
   }
-  /**
-   * Source handleAgentSessionMention: track, then insert at the model selection
-   * current when tracking settles. Menu close does not cancel it; edit access
-   * and the captured key generation are checked at the insert, and a retired
-   * generation inserts nothing (C-NATIVE-GENERATION-RETIRE-NO-RETARGET-01).
-   */
   function agentSessionInsertion(
     command: (name: string, buildPayload: () => unknown) => Promise<boolean>
   ): AgentSessionMentionInsertion {
     return {
       blockId: sourceDocumentId,
-      tracksMentions: () =>
-        tracksMentions({
-          blockId: sourceDocumentId,
-          blockName,
-          disableMentionTracking,
-        }),
-      async insert(buildPayload) {
-        await command('group-b.insert-agent-session-mention', buildPayload);
-      },
+      tracksMentions: tracks,
+      ...write(command, 'group-b.insert-agent-session-mention'),
     };
   }
-  async function selectAgentSession(session: {
-    id: string;
-    name?: string;
-  }): Promise<void> {
-    const generation = view.mirror.keyGeneration;
-    if (!active() || generation === null) return;
-    const port = view.port;
-    if (!port.inputSettledIfSessionEdit)
-      throw new Error(
-        'Agent session mentions require settled session edit admission'
-      );
-    const inputSettled = port.inputSettledIfSessionEdit.bind(port);
-    const current = () => active() && view.mirror.keyGeneration === generation;
-    const command = async (name: string, buildPayload: () => unknown) => {
-      if (!current()) return false;
-      const result = await inputSettled(
-        () => ({
-          name,
-          json: JSON.stringify(buildPayload()),
-          generation,
-          selection: selectionMessage({ kind: 'keep' }),
-        }),
-        { admit: current }
-      );
-      if (result.status === 'error') throw result.error;
-      return result.status === 'success';
-    };
-    if (!(await command('group-a.search-remove', () => ({}))) || !current())
-      return;
-    await handleAgentSessionMentionWithInsertion(session, () =>
-      agentSessionInsertion(command)
-    );
-  }
-  async function selectEntity(item: EntityItem): Promise<void> {
-    const generation = view.mirror.keyGeneration;
-    if (!active() || generation === null) return;
-    const port = view.port;
-    if (!port.inputSettledIfSessionEdit)
-      throw new Error('Entity mentions require settled session edit admission');
-    const inputSettled = port.inputSettledIfSessionEdit.bind(port);
-    const current = () => active() && view.mirror.keyGeneration === generation;
-    const command = async (name: string, buildPayload: () => unknown) => {
-      if (!current()) return false;
-      const result = await inputSettled(
-        () => ({
-          name,
-          json: JSON.stringify(buildPayload()),
-          generation,
-          // Source insertion uses the actual model selection after tracking I/O.
-          selection: selectionMessage({ kind: 'keep' }),
-        }),
-        { admit: current }
-      );
-      if (result.status === 'error') throw result.error;
-      return result.status === 'success';
-    };
-    if (!(await command('group-a.search-remove', () => ({}))) || !current())
-      return;
-    await handleEntityMentionWithInsertion(item, () => ({
+  function crmInsertion(
+    command: (name: string, buildPayload: () => unknown) => Promise<boolean>
+  ): CrmMentionInsertion {
+    return {
       blockId: sourceDocumentId,
-      onDocumentMention: source.onDocumentMention,
-      onEmailMention: source.onEmailMention,
-      // Source handleEntityMention routes agent_session entities here too.
-      selectAgent: (session) =>
-        handleAgentSessionMentionWithInsertion(session, () =>
-          agentSessionInsertion(command)
-        ),
-      tracksMentions: () =>
-        tracksMentions({
-          blockId: sourceDocumentId,
-          blockName,
-          disableMentionTracking,
-        }),
-      async insert(buildPayload) {
-        if (!current()) return;
-        await command('group-b.insert-document-mention', buildPayload);
-      },
-    }));
+      tracksMentions: tracks,
+      ...write(command, 'group-b.insert-document-mention'),
+    };
+  }
+  function selectOther(item: Exclude<MentionItem, { kind: 'user' }>) {
+    return withRemovedSearch((command) => {
+      const document = () => write(command, 'group-b.insert-document-mention');
+      return match(item)
+        .with({ kind: 'entity' }, (entity) =>
+          handleEntityMentionWithInsertion(entity, () => ({
+            blockId: sourceDocumentId,
+            onDocumentMention: source.onDocumentMention,
+            onEmailMention: source.onEmailMention,
+            // Source handleEntityMention routes agent_session and CRM entities too.
+            selectAgent: (session) =>
+              handleAgentSessionMentionWithInsertion(session, () =>
+                agentSessionInsertion(command)
+              ),
+            selectCrm: (crm) =>
+              handleCrmMentionWithInsertion(crm, () => crmInsertion(command)),
+            tracksMentions: tracks,
+            ...document(),
+          }))
+        )
+        .with({ kind: 'date' }, (date) =>
+          handleDateMentionWithInsertion(date.data, () =>
+            write(command, 'group-a.insert-date-mention')
+          )
+        )
+        .with({ kind: 'agentSession' }, (session) =>
+          handleAgentSessionMentionWithInsertion(
+            { id: session.id, name: session.data.name },
+            () => agentSessionInsertion(command)
+          )
+        )
+        .with({ kind: 'bookingLink' }, (booking) =>
+          handleBookingLinkMentionWithInsertion(booking, () =>
+            write(command, 'group-b.insert-booking-link-mention')
+          )
+        )
+        .with({ kind: 'group' }, (group) =>
+          handleGroupMentionWithInsertion(group.data, () =>
+            write(command, 'group-b.insert-group-mention')
+          )
+        )
+        .with({ kind: 'calendarEvent' }, (event) =>
+          handleCalendarEventMentionWithInsertion(event, document)
+        )
+        .with({ kind: 'externalChat' }, (chat) =>
+          handleExternalChatMentionWithInsertion(chat.data, document)
+        )
+        .with({ kind: 'routine' }, (routine) =>
+          handleRoutineMentionWithInsertion(routine.data, document)
+        )
+        .exhaustive();
+    });
   }
   return {
     root: () => (active() ? view.root : null),
@@ -222,15 +182,7 @@ export function createNativeUserMentionMenuHost(
         );
     },
     async select(item) {
-      if (item.kind === 'entity') return await selectEntity(item);
-      if (item.kind === 'date') return await selectDate(item.data);
-      if (item.kind === 'agentSession')
-        return await selectAgentSession({ id: item.id, name: item.data.name });
-      if (item.kind === 'bookingLink') return await selectBookingLink(item);
-      if (item.kind !== 'user')
-        throw new Error(
-          'This native mention stage supports user, date, agent session, booking link and document entity choices only'
-        );
+      if (item.kind !== 'user') return await selectOther(item);
       if (!active()) return;
       const removal = await dispatchApplicationCommandSettled(
         view,

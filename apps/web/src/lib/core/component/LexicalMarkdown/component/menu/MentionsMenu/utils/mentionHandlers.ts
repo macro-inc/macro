@@ -8,6 +8,7 @@ import type {
   BookingLinkMentionInfo,
   DateMentionInfo,
   DocumentMentionInfo,
+  GroupMentionInfo,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
@@ -115,18 +116,43 @@ export async function handleAgentSessionMentionWithInsertion(
  * CRM record, so the record's References list includes this document. A CRM
  * reference does not share a file, invite a user, or notify the contact.
  */
-async function handleCrmMention(
+function handleCrmMention(
   item: EntityItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor, blockId } = dependencies;
+  return handleCrmMentionWithInsertion(item, () => {
+    const { editor, blockId } = dependencies;
+    return {
+      blockId,
+      tracksMentions: () => tracksMentions(dependencies),
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+      },
+    };
+  });
+}
+
+/** Writes a mention as a document-mention payload. */
+export type DocumentMentionWrite = {
+  insert(buildPayload: () => DocumentMentionInfo): void | Promise<void>;
+};
+
+export type CrmMentionInsertion = Pick<HandlerDependencies, 'blockId'> &
+  DocumentMentionWrite & { tracksMentions(): boolean };
+
+/** Share CRM tracking and the chip payload without an editor facade. */
+export async function handleCrmMentionWithInsertion(
+  item: EntityItem,
+  prepare: () => CrmMentionInsertion
+): Promise<void> {
+  const { blockId, tracksMentions, insert } = prepare();
   const entity = item.data;
   if (entity.type !== 'crm_contact' && entity.type !== 'crm_company') return;
   const mentionUuid =
-    blockId && tracksMentions(dependencies)
+    blockId && tracksMentions()
       ? await trackMention(blockId, entity.type, entity.id)
       : undefined;
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: entity.id,
     documentName:
       entity.type === 'crm_contact'
@@ -134,7 +160,8 @@ async function handleCrmMention(
         : entityDisplayName(item),
     blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
     ...(mentionUuid ? { mentionUuid } : {}),
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
@@ -268,14 +295,32 @@ function handleDateMentionFromOption(
 /**
  * Handle group mention (e.g., @here).
  */
-async function handleGroupMentionItem(
+function handleGroupMentionItem(
   group: { id: string; groupAlias: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, {
-    groupAlias: group.groupAlias,
+  return handleGroupMentionWithInsertion(group, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, buildPayload());
+      },
+    };
   });
+}
+
+export type GroupMentionInsertion = {
+  insert(buildPayload: () => GroupMentionInfo): void | Promise<void>;
+};
+
+/** Share the audience-group payload without an editor facade. */
+export async function handleGroupMentionWithInsertion(
+  group: { id: string; groupAlias: string },
+  prepare: () => GroupMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({ groupAlias: group.groupAlias }));
+  if (completion !== undefined) await completion;
 }
 
 function buildBookingUrl(profileId: string, slug: string): string {
@@ -332,32 +377,69 @@ export async function handleBookingLinkMentionWithInsertion(
  * mention for a single event, an instance mention for a repeating one.
  * Posting it in a channel shares the event with the channel's members.
  */
-async function handleCalendarEventMention(
+function handleCalendarEventMention(
   item: CalendarEventMentionItem,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { eventId, title, occurrenceKey } = item.data;
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: eventId,
-    documentName: title,
-    blockName: 'calendar',
-    blockParams: occurrenceKey ? { occurrenceKey } : undefined,
+  return handleCalendarEventMentionWithInsertion(item, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share the calendar chip payload without an editor facade. */
+export async function handleCalendarEventMentionWithInsertion(
+  item: CalendarEventMentionItem,
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => {
+    const { eventId, title, occurrenceKey } = item.data;
+    return {
+      documentId: eventId,
+      documentName: title,
+      blockName: 'calendar',
+      blockParams: occurrenceKey ? { occurrenceKey } : undefined,
+    };
   });
+  if (completion !== undefined) await completion;
+}
+
+function editorDocumentWrite(
+  dependencies: HandlerDependencies
+): DocumentMentionWrite {
+  const { editor } = dependencies;
+  return {
+    insert(buildPayload) {
+      editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, buildPayload());
+    },
+  };
 }
 
 /**
  * Insert a WhatsApp group chip. Posting it in a channel shares the group with
  * the channel's members; nothing else tracks or attaches it.
  */
-async function handleExternalChatMention(
+function handleExternalChatMention(
   group: { id: string; name: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  return handleExternalChatMentionWithInsertion(group, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share the WhatsApp group chip payload without an editor facade. */
+export async function handleExternalChatMentionWithInsertion(
+  group: { id: string; name: string },
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({
     documentId: group.id,
     documentName: group.name,
     blockName: 'external_chat',
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
@@ -365,10 +447,21 @@ async function handleExternalChatMention(
  * message can activate their own copy from its card. The chip goes in only
  * once the template reflects the routine's current setup.
  */
-async function handleRoutineMention(
+function handleRoutineMention(
   routine: { id: string; name: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
+  return handleRoutineMentionWithInsertion(routine, () =>
+    editorDocumentWrite(dependencies)
+  );
+}
+
+/** Share routine publishing and its chip payload without an editor facade. */
+export async function handleRoutineMentionWithInsertion(
+  routine: { id: string; name: string },
+  prepare: () => DocumentMentionWrite
+): Promise<void> {
+  const { insert } = prepare();
   const shared = await Telemetry.span(
     'routine.template.share',
     async (span) => {
@@ -392,11 +485,12 @@ async function handleRoutineMention(
     });
     return;
   }
-  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+  const completion = insert(() => ({
     documentId: routine.id,
     documentName: routine.name,
     blockName: 'routine',
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**
