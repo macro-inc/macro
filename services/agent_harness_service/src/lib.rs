@@ -998,6 +998,7 @@ pub async fn run() -> anyhow::Result<()> {
             agent_memory: Arc::new(bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
+                computers::harness_service(&pool),
             )),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },

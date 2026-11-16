@@ -1357,27 +1357,31 @@ async fn an_agents_owner_edits_its_memory_and_a_stale_edit_conflicts(
 ) -> anyhow::Result<()> {
     const AGENT_OWNER_ID: &str = "macro|agent-memory-owner@example.com";
     insert_user(&pool, AGENT_OWNER_ID).await?;
-    let agent = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
-        .create_agent(
-            macro_user_id(AGENT_OWNER_ID),
-            CreateAgentRequest {
-                team_id: None,
-                name: "Release helper".to_string(),
-                handle: "release-helper".to_string(),
-                description: None,
-                avatar_url: None,
-                instructions: "Help ship releases.".to_string(),
-                harness: "in-memory".to_string(),
-                harness_id: None,
-                default_model: "claude".to_string(),
-                channel_scope: crate::domain::models::AgentChannelScope::All,
-                channel_ids: Vec::new(),
-                mcp: crate::domain::models::AgentMcpServers::OwnerConnections,
-                auto_accept_permissions: None,
-                is_coding: false,
-            },
-        )
-        .await?;
+    let agent = BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        NoopMacroEventBroker,
+        crate::domain::service::test::TeamAgentHarnesses::default(),
+    )
+    .create_agent(
+        macro_user_id(AGENT_OWNER_ID),
+        CreateAgentRequest {
+            team_id: None,
+            name: "Release helper".to_string(),
+            handle: "release-helper".to_string(),
+            description: None,
+            avatar_url: None,
+            instructions: "Help ship releases.".to_string(),
+            harness: "in-memory".to_string(),
+            harness_id: None,
+            default_model: "claude".to_string(),
+            channel_scope: crate::domain::models::AgentChannelScope::All,
+            channel_ids: Vec::new(),
+            mcp: crate::domain::models::AgentMcpServers::OwnerConnections,
+            auto_accept_permissions: None,
+            is_coding: false,
+        },
+    )
+    .await?;
     let router = real_router(pool, AGENT_OWNER_ID);
     let put = |revision: i64, content: &str| {
         Request::builder()
