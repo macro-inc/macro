@@ -782,6 +782,7 @@ test('CRM access can be revoked and restored while privileged roles retain acces
   const backend = await scriptAuthService(page);
   await page.goto('/');
   const ownerRow = page.locator(`[data-team-member="${OWNER}"]`);
+  await ownerRow.waitFor();
   await expect(ownerRow.getByRole('switch')).toHaveCount(0);
   await expect(
     ownerRow.getByText('Owners and admins always have access')

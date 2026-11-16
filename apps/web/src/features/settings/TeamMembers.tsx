@@ -284,10 +284,7 @@ function MemberRow(props: {
         </SettingsRow>
       </Show>
       <Show when={props.showPlan}>
-        <SettingsRow
-          label="Seat plan"
-          class="touch:[&_button]:min-h-11 touch:[&_button]:min-w-11"
-        >
+        <SettingsRow label="Seat plan">
           <Show
             when={props.canEditPlan}
             fallback={

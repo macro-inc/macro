@@ -108,6 +108,9 @@ export async function crmResponseScope(
     }
   }
   if (service === 'storage') {
+    // Even a document attachment can be referenced from a private CRM comment.
+    if (/^\/channels\/attachments\/[^/]+\/[^/]+\/references$/.test(path))
+      return read;
     const root = path.split('/')[1];
     if (
       independentResources.has(root) ||

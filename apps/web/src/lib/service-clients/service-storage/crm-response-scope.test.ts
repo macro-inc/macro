@@ -5,6 +5,18 @@ describe('CRM response content scope', () => {
   it.each([
     ['/documents', 'POST', false, true],
     ['/documents/document-1', 'GET', false, false],
+    [
+      '/channels/attachments/document/document-1/references',
+      'GET',
+      true,
+      false,
+    ],
+    [
+      '/channels/attachments/crm_company/company-1/references',
+      'GET',
+      true,
+      false,
+    ],
     ['/messages/channel/channel-1', 'POST', false, true],
     [
       '/messages/channel/channel-1/items/message-1/reactions',

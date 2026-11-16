@@ -116,6 +116,37 @@ afterEach(() => {
 });
 
 describe('CRM HTTP response admission', () => {
+  it.each(['headers', 'body'] as const)(
+    'rejects CRM-bearing document attachment references revoked before %s finish',
+    async (phase) => {
+      await verifiedViewer();
+      const request: RequestInit = {};
+      const observe = await prepareResponseObservers(
+        'http://localhost/dss/channels/attachments/document/document-1/references',
+        request
+      );
+      expect(
+        new Headers(request.headers).get('x-macro-crm-access-signal')
+      ).toBe('1');
+      const response = responseWithHint(true);
+      const decoding = Promise.withResolvers<unknown>();
+      response.json = () => decoding.promise;
+      const body =
+        phase === 'body' ? (await observe(response)).json() : undefined;
+      mocks.proof.mockResolvedValue(proof(false));
+      await crmAccessAuthority.refresh();
+      if (phase === 'headers')
+        await expect(observe(response)).rejects.toBeInstanceOf(
+          StaleCacheAuthorityError
+        );
+      else {
+        decoding.resolve({
+          references: [{ message_content: 'Private record comment' }],
+        });
+        await expect(body).rejects.toBeInstanceOf(StaleCacheAuthorityError);
+      }
+    }
+  );
   it('closes cache admission when a later normalization authority lookup fails, while keeping the write payload', async () => {
     const current = await verifiedViewer();
     const observe = await prepareResponseObservers(

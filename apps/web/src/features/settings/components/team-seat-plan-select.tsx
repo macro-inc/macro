@@ -66,7 +66,7 @@ export function TeamSeatPlanSelect(props: {
         <Select.Trigger
           variant="ghost"
           as={Button}
-          class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
+          class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10 touch:min-h-11 touch:min-w-11"
           disabled={props.disabled}
           aria-label="Seat plan"
         >
@@ -85,6 +85,7 @@ export function TeamSeatPlanSelect(props: {
         <Button
           size="sm"
           variant="secondary"
+          class="touch:min-h-11 touch:min-w-11"
           disabled={props.disabled}
           onClick={() => props.onChange('max')}
         >
