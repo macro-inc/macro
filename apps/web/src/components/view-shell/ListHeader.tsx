@@ -1,5 +1,7 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { getActiveCommandByToken } from '@core/hotkey/utils';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
@@ -27,9 +29,6 @@ export function ListHeader(props: {
   );
 }
 
-/** Where the keyboard lands when the search field hands it to the results. */
-export type ListSearchResultsRow = 'first' | 'current';
-
 /**
  * The query belongs to the view; only the expanded presentation is local.
  *
@@ -44,7 +43,7 @@ export function ListHeaderSearch(props: {
   value: string;
   onValueChange: (value: string) => void;
   /** Moves keyboard focus into the view's result list. */
-  focusResults?: (row: ListSearchResultsRow) => void;
+  focusResults?: () => void;
   registerFocus: (focus: () => void) => void;
   ref?: (element: HTMLDivElement) => void;
 }) {
@@ -67,19 +66,31 @@ export function ListHeaderSearch(props: {
     clear();
     trigger?.focus();
   };
-  const leave = (row: ListSearchResultsRow) => {
+  // Escape leaves the list where it was; ArrowDown and Enter start at the top.
+  const leave = (row: 'first' | 'current') => {
     // An empty field has no search to keep on screen.
     const collapses = !props.value.trim();
     if (collapses) clear();
 
-    input?.blur();
-    if (props.focusResults) {
-      props.focusResults(row);
+    if (!props.focusResults) {
+      input?.blur();
+      // Without a list to move to, a collapsed field hands focus to its button.
+      if (collapses) queueMicrotask(() => trigger?.focus());
       return;
     }
 
-    // Without a list to move to, a collapsed field hands focus to its button.
-    if (collapses) queueMicrotask(() => trigger?.focus());
+    props.focusResults();
+    // A view whose results are not on screen (a tab without a list) has
+    // nowhere to send the keyboard, so the keys stay with the field.
+    if (document.activeElement === input) {
+      if (row === 'current') input?.blur();
+      return;
+    }
+
+    // The list's own "go to first item" also scrolls that row into view.
+    if (row !== 'first') return;
+    const goToFirst = getActiveCommandByToken(TOKENS.entity.jump.home);
+    if (goToFirst?.condition?.() ?? true) goToFirst?.keyDownHandler?.();
   };
   onMount(() => props.registerFocus(focus));
 
@@ -134,6 +145,8 @@ export function ListHeaderSearch(props: {
           placeholder={props.placeholder ?? props.label}
           value={props.value}
           onValueChange={props.onValueChange}
+          // The browser's own history popup would take ArrowDown and Enter.
+          autocomplete="off"
           onClose={close}
           onKeyDown={(event) => {
             // A view without a keyboard list keeps the keys for the field.

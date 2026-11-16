@@ -7,7 +7,6 @@ import {
 import {
   ListHeader,
   ListHeaderSearch,
-  type ListSearchResultsRow,
 } from '@app/components/view-shell/ListHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -27,7 +26,7 @@ import { TasksMobileTabs } from './TasksMobileTabs';
 
 export type TasksHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
-  focusSearchResults?: (row: ListSearchResultsRow) => void;
+  focusSearchResults?: () => void;
 };
 
 export function TaskViewBreadcrumbItem() {

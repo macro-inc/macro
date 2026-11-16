@@ -100,7 +100,8 @@ function registerSplitEscapeHotkey(
       if (clearMultiCondition()) {
         const length = selection.count();
         selection.clear();
-        if (length > 1) return true;
+        // One Escape steps back one level, so a search waits for the next.
+        if (length > 1 || hasListSearch(scopeId)) return true;
       }
       // This override eclipses the header search field's own Escape whenever
       // the field registered first, so the search is cleared from here.

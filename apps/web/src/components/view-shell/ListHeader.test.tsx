@@ -9,11 +9,12 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { setActiveScope } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ListHeaderSearch, type ListSearchResultsRow } from './ListHeader';
+import { ListHeaderSearch } from './ListHeader';
 import { clearListSearch, hasListSearch } from './list-search-escape';
 
 afterEach(() => setActiveScope('global'));
@@ -34,7 +35,8 @@ function setup(
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
   const [selected, setSelected] = createSignal(options.selected ?? 0);
-  const focusedRows: ListSearchResultsRow[] = [];
+  const focusResults = vi.fn();
+  const goToFirst = vi.fn(() => true);
   const backToDefaultTab = vi.fn(() => true);
   let list!: HTMLDivElement;
 
@@ -52,8 +54,8 @@ function setup(
           label="Search tasks"
           value={search()}
           onValueChange={setSearch}
-          focusResults={(row) => {
-            focusedRows.push(row);
+          focusResults={() => {
+            focusResults();
             list.focus();
           }}
           registerFocus={() => {}}
@@ -89,6 +91,14 @@ function setup(
     const [attachSplit, splitScope] = useHotkeyDOMScope('tasks-split');
     // The list's own Escape steps, as use-list-interactions and a view
     // register them: clear a selection first, leave the view last.
+    // The list's own jump to its first row, as use-list-interactions has it.
+    registerHotkey({
+      hotkey: 'home',
+      hotkeyToken: TOKENS.entity.jump.home,
+      scopeId: splitScope,
+      description: 'Go to first item',
+      keyDownHandler: goToFirst,
+    });
     registerHotkey({
       hotkey: 'escape',
       scopeId: splitScope,
@@ -134,38 +144,46 @@ function setup(
     field,
     search,
     selected,
-    focusedRows,
+    focusResults,
+    goToFirst,
     backToDefaultTab,
     list: () => list,
   };
 }
 
 it('moves from the field to the first result on ArrowDown and on Enter', () => {
-  const { field, search, focusedRows, list } = setup({ search: 'budget' });
+  const { field, search, goToFirst, list } = setup({ search: 'budget' });
 
   field().focus();
   type(field(), 'ArrowDown');
-  expect(focusedRows).toEqual(['first']);
   expect(document.activeElement).toBe(list());
+  expect(goToFirst).toHaveBeenCalledTimes(1);
 
   field().focus();
   type(field(), 'Enter');
-  expect(focusedRows).toEqual(['first', 'first']);
+  expect(document.activeElement).toBe(list());
+  expect(goToFirst).toHaveBeenCalledTimes(2);
   expect(search()).toBe('budget');
 });
 
+it('turns off the browser history popup that would take the arrow keys', () => {
+  const { field } = setup({ search: 'budget' });
+
+  expect(field().getAttribute('autocomplete')).toBe('off');
+});
+
 it('leaves modified and composing keys to the field', () => {
-  const { field, focusedRows } = setup({ search: 'budget' });
+  const { field, focusResults } = setup({ search: 'budget' });
 
   field().focus();
   type(field(), 'Enter', { isComposing: true });
   type(field(), 'ArrowDown', { shiftKey: true });
-  expect(focusedRows).toEqual([]);
+  expect(focusResults).not.toHaveBeenCalled();
   expect(document.activeElement).toBe(field());
 });
 
 it('keeps the search when Escape leaves the field', () => {
-  const { view, field, search, focusedRows, list } = setup({
+  const { view, field, search, goToFirst, list } = setup({
     search: 'budget',
   });
 
@@ -173,7 +191,8 @@ it('keeps the search when Escape leaves the field', () => {
   type(field(), 'Escape');
 
   expect(search()).toBe('budget');
-  expect(focusedRows).toEqual(['current']);
+  // The list keeps the row it was on.
+  expect(goToFirst).not.toHaveBeenCalled();
   expect(document.activeElement).toBe(list());
   expect(view.getByRole('searchbox', { name: 'Search tasks' })).toBeTruthy();
 });
@@ -199,14 +218,14 @@ it('clears the search on Escape in the list, after a selection', () => {
 });
 
 it('collapses an empty field on Escape', () => {
-  const { view, focusedRows } = setup();
+  const { view, focusResults } = setup();
 
   fireEvent.click(view.getByRole('button', { name: 'Search tasks' }));
   const field = view.getByRole('searchbox', { name: 'Search tasks' });
   type(field, 'Escape');
 
   expect(view.queryByRole('searchbox')).toBeNull();
-  expect(focusedRows).toEqual(['current']);
+  expect(focusResults).toHaveBeenCalledOnce();
 });
 
 it('clears the search when a list has taken over the split Escape', () => {
@@ -273,5 +292,39 @@ it('refocuses the field with its query through the registered focus', async () =
   focusSearch();
   await Promise.resolve();
   expect(document.activeElement).toBe(field);
+  expect(search()).toBe('budget');
+});
+
+it('keeps the keyboard in the field when the view has no list on screen', () => {
+  const [search, setSearch] = createSignal('budget');
+  const view = render(() => (
+    <ListHeaderSearch
+      label="Search routines"
+      value={search()}
+      onValueChange={setSearch}
+      // The tab on screen has no list to focus.
+      focusResults={() => {}}
+      registerFocus={() => {}}
+    />
+  ));
+  const field = view.getByRole('searchbox', { name: 'Search routines' });
+  field.focus();
+
+  type(field, 'ArrowDown');
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'Escape');
+  expect(document.activeElement).not.toBe(field);
+  expect(search()).toBe('budget');
+});
+
+it('leaves an Escape that cancels a composition to the field', () => {
+  const { field, search, focusResults } = setup({ search: 'budget' });
+
+  field().focus();
+  type(field(), 'Escape', { isComposing: true });
+
+  expect(document.activeElement).toBe(field());
+  expect(focusResults).not.toHaveBeenCalled();
   expect(search()).toBe('budget');
 });

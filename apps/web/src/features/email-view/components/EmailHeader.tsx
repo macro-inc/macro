@@ -6,7 +6,6 @@ import {
 import {
   ListHeader,
   ListHeaderSearch,
-  type ListSearchResultsRow,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -36,7 +35,7 @@ import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
-  focusSearchResults?: (row: ListSearchResultsRow) => void;
+  focusSearchResults?: () => void;
   /** Hands the search field's focus to the view's search keys. */
   registerSearch?: (focus: () => void) => () => void;
   tabOnly?: boolean;

@@ -82,10 +82,7 @@ function Fixture() {
               label="Search files"
               value={search()}
               onValueChange={setSearch}
-              focusResults={(row) => {
-                if (row === 'first') list.navigate.toFirst();
-                grid.focus();
-              }}
+              focusResults={() => grid.focus()}
               registerFocus={() => {}}
             />
           </SplitPanelContext.Provider>

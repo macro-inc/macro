@@ -1025,8 +1025,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
   New; a view with a list header searches from `ListHeaderSearch` alone.
   `ListHeaderSearch` owns the search keys: pass `focusResults` so ArrowDown,
-  Enter and Escape can move the keyboard into the list (`'first'` lands on the
-  first row), and never clear the query on Escape yourself. It registers the
+  Enter and Escape can move the keyboard into the list, and never clear the
+  query on Escape yourself. ArrowDown and Enter then run the list's own "go to
+  first item" command, so a list on `useListInteractions` lands on its first
+  row with no code in the view. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.

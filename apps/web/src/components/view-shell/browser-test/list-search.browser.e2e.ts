@@ -39,6 +39,13 @@ test('moves from the search field into the results and back out', async ({
   await page.keyboard.press('Enter');
   await expect(grid).toBeFocused();
   await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget 2026');
+
+  // Escape leaves the list on the row it was on.
+  await page.keyboard.press('j');
+  await field.focus();
+  await page.keyboard.press('Escape');
+  await expect(grid).toBeFocused();
+  await expect(grid).toHaveAttribute('aria-activedescendant', 'Budget notes');
 });
 
 test('keeps the search on Escape in the field and clears it from the list', async ({

@@ -3,7 +3,6 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
-import type { ListSearchResultsRow } from '@app/components/view-shell/ListHeader';
 import {
   useSavedView,
   useSavedViews,
@@ -102,11 +101,7 @@ function EmailPanes(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
-  const { state, closeThread, list } = useEmailView();
-  const focusSearchResults = (row: ListSearchResultsRow) => {
-    if (row === 'first') list.navigate.toFirst();
-    props.focusList();
-  };
+  const { state, closeThread } = useEmailView();
 
   const search = useEmailSearchHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -119,7 +114,7 @@ function EmailPanes(props: {
     <>
       <EmailHeader
         tabOnly={beside === 'reader'}
-        focusSearchResults={focusSearchResults}
+        focusSearchResults={props.focusList}
         registerSearch={search.registerListSearch}
       />
       <ViewTour tour={emailTour} />
