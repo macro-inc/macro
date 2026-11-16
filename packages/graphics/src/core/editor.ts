@@ -1,6 +1,8 @@
 import { enclosing } from './affine';
 import type { GraphicsBackend } from './backend';
 import {
+  type FitViewport,
+  fitBoundsCamera,
   fitImageCamera,
   INITIAL_CAMERA,
   MAX_SCALE,
@@ -237,32 +239,9 @@ function createEditor(
     for (const listener of listeners) listener(camera);
   }
 
-  function fitBounds(
-    bounds: Bounds,
-    viewport: { width: number; height: number }
-  ) {
-    if (
-      (bounds.width <= 0 && bounds.height <= 0) ||
-      ![viewport.width, viewport.height].every(
-        (size) => Number.isFinite(size) && size > 0
-      )
-    )
-      return;
-    // Screen-space margins; leave usable room even in a small embedded view.
-    const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
-    const scale = Math.max(
-      MIN_SCALE,
-      Math.min(
-        MAX_SCALE,
-        (viewport.width - padding * 2) / bounds.width,
-        (viewport.height - padding * 2) / bounds.height
-      )
-    );
-    publish({
-      scale,
-      x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
-      y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
-    });
+  function fitBounds(bounds: Bounds, viewport: FitViewport) {
+    const fitted = fitBoundsCamera(bounds, viewport);
+    if (fitted) publish(fitted);
   }
 
   function beginShape(kind: DrawingKind, point: DrawingSample) {
@@ -447,11 +426,11 @@ function createEditor(
     setImageSurface(surface: ImageSurface) {
       resetDocument({ ...createScene(), surface });
     },
-    fitScene(viewport: { width: number; height: number }) {
+    fitScene(viewport: FitViewport) {
       const bounds = worldBounds(document, document.rootId);
       fitBounds(bounds, viewport);
     },
-    fitSelection(viewport: { width: number; height: number }) {
+    fitSelection(viewport: FitViewport) {
       const points = selection
         .getState()
         .selectedIds.flatMap((id) => nodeBoundsPoints(document, id));

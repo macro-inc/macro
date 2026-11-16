@@ -18,6 +18,7 @@ import {
 import { MobileCanvasChrome } from './canvas-chrome';
 import { MobileCanvasInsertMenu } from './canvas-insert';
 import {
+  INSPECTOR_PANEL_CLEARANCE,
   MobileCanvasInspectorPanel,
   MobileCanvasInspectorSheet,
 } from './canvas-inspector';
@@ -63,6 +64,8 @@ const LONG_PRESS_REACH = 10;
  */
 function MobileCanvasBottomBar(props: {
   groupFaces: CanvasToolGroupFaces;
+  /** The side panel is showing, and takes its share of the canvas's width. */
+  panelOpen: boolean;
   styleOpen: boolean;
   onStyle: () => void;
   onView: () => void;
@@ -122,7 +125,10 @@ function MobileCanvasBottomBar(props: {
   );
 
   return (
-    <MobileCanvasChrome>
+    <MobileCanvasChrome
+      frame={view.frameWithin}
+      clearRight={props.panelOpen ? INSPECTOR_PANEL_CLEARANCE : undefined}
+    >
       <div
         ref={setBar}
         class="flex w-full flex-col items-center gap-(--mobile-chrome-gutter)"
@@ -189,6 +195,7 @@ function MobileCanvasLayout() {
   const groupFaces = createToolGroupFaces(state.tool);
   const hasSelection = () => state.selection().length > 0;
   const styleOpen = () => (isMobile() ? sheetOpen() : !panelCollapsed());
+  const panelOpen = () => !isMobile() && hasSelection() && !panelCollapsed();
   const toggleStyle = () => {
     if (isMobile())
       setSheetSelection(sheetOpen() ? undefined : state.selection());
@@ -225,7 +232,7 @@ function MobileCanvasLayout() {
         onArtifact={insertArtifact()}
         onClose={thenFocus(view.insert.close)}
       />
-      <Show when={!isMobile() && hasSelection() && !panelCollapsed()}>
+      <Show when={panelOpen()}>
         <MobileCanvasInspectorPanel />
       </Show>
       {/* The browser's own long-press menu and callout have nothing to offer
@@ -242,6 +249,7 @@ function MobileCanvasLayout() {
       <CanvasViewParts.EmptyState />
       <MobileCanvasBottomBar
         groupFaces={groupFaces()}
+        panelOpen={panelOpen()}
         styleOpen={styleOpen()}
         onStyle={toggleStyle}
         onView={() => setViewOpen(true)}

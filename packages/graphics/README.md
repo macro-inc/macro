@@ -71,6 +71,9 @@ The optional backend owns its own history; Loro continues using its UndoManager.
 
 `fitScene(viewport)` centers the full scene's world bounds and zooms in or out
 until the first axis fills the current viewport with 100 screen pixels per side.
+A host whose controls cover part of the view passes them as `viewport.inset`
+(the content is fitted to and centred in what is left), and may pass its own
+`viewport.padding` in place of the 100 pixels.
 It respects camera zoom limits and reduces padding in small embedded viewports.
 The host supplies its actual current dimensions; selection and current camera
 offset do not influence the fit.

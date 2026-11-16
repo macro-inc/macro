@@ -32,6 +32,12 @@ places what is chosen at the middle of the view. Check that nothing sits under
 the dock or the home indicator, that every button answers a real tap, and that
 closing a sheet leaves the selection as it was.
 
+**Zoom to fit** in the zoom sheet shows the whole scene between the header and
+the bottom chrome, 24px clear of both and of the screen's sides, and left of the
+inspector panel when it is open. Turn the device: a canvas nobody has moved since
+the fit is fitted again, and one that was moved keeps what was in the middle of
+the view in the middle.
+
 Handles are drawn small but a finger takes them from further away: a drag that
 starts within 16px of a corner or of the rotation knob, or within 12px outside
 an edge, resizes or rotates; a drag from the middle of the shape moves it. A tap
