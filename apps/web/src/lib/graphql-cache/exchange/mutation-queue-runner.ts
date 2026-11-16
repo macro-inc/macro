@@ -55,6 +55,7 @@ import type {
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
   MutationClaim,
+  MutationInspection,
   QueryRevalidationWire,
 } from '../protocol';
 import {
@@ -402,6 +403,11 @@ export type MutationQueueRunner = {
   epoch: () => StorageEpoch;
   /** False once a storage reset has retired `epoch`. */
   isCurrent: (epoch: StorageEpoch) => boolean;
+  /**
+   * Marks an enqueue as on its way to the host, which may claim the head for
+   * this runner. Call the answer once the enqueue resolved or failed.
+   */
+  enqueueStarted: () => () => void;
   /** Holds a durably enqueued caller until the strict queue routes it. */
   admit: (
     op: Operation,
@@ -435,6 +441,7 @@ export function createMutationQueueRunner(
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
   let activeAttempt: AttemptToken | undefined;
+  let enqueuesInFlight = 0;
   // Queue IDs advance in order; retries advance their lease.
   // Keep the watermark after settlement so a late claim cannot revive an old head.
   let latestClaim:
@@ -882,35 +889,51 @@ export function createMutationQueueRunner(
   }
 
   /**
-   * Releases the head's lease when the runner that took it is gone, so the
-   * head is claimable now instead of when the lease lapses. The head keeps
-   * its optimism and is sent again; the server makes a repeated request safe.
+   * Releases the head's lease when nothing is sending under it: the runner
+   * that took it is gone, or this runner holds it without an attempt. The
+   * head is then claimable now instead of when the lease lapses. It keeps its
+   * optimism and is sent again; the server makes a repeated request safe.
    */
   async function releaseAbandonedLease(
     epoch: StorageEpoch,
     now: number
   ): Promise<boolean> {
-    if (!liveness || !host.inspectMutations) return false;
+    if (!host.inspectMutations) return false;
     const [blocked] = await host.inspectMutations();
     if (
       !blocked?.leaseOwner ||
       blocked.leaseGeneration === undefined ||
-      blocked.leaseOwner === owner ||
       (blocked.leaseExpiresAtMs ?? Infinity) <= now
     ) {
       return false;
     }
-    if (await liveness.isAlive(blocked.leaseOwner)) return false;
+    const unrouted = blocked.leaseOwner === owner;
+    if (unrouted) {
+      // An enqueue claims the head for this runner in the host. When its
+      // answer is lost, nothing here sends that head, and no other runner
+      // may take it before the lease lapses.
+      if (enqueuesInFlight > 0 || sendsLease(blocked)) return false;
+    } else if (!liveness || (await liveness.isAlive(blocked.leaseOwner))) {
+      return false;
+    }
     if (!isCurrent(epoch)) return false;
     // Fenced by the lease itself: a head claimed again meanwhile is kept.
     await host.deferOptimisticWrite(
       blocked.transactionId,
       { owner: blocked.leaseOwner, generation: blocked.leaseGeneration },
       now,
-      'Lease owner is gone'
+      unrouted ? 'Lease was never routed' : 'Lease owner is gone'
     );
-    telemetry.skipped('lease-owner-gone');
+    telemetry.skipped(unrouted ? 'lease-unrouted' : 'lease-owner-gone');
     return true;
+  }
+
+  /** Whether this runner's current attempt was made under `lease`. */
+  function sendsLease(lease: MutationInspection): boolean {
+    return (
+      activeAttempt?.transactionId === lease.transactionId &&
+      activeAttempt.leaseGeneration === lease.leaseGeneration
+    );
   }
 
   async function prepareQueueRecovery(): Promise<void> {
@@ -1268,6 +1291,15 @@ export function createMutationQueueRunner(
   return {
     epoch: () => ({ storageGeneration }),
     isCurrent,
+    enqueueStarted: () => {
+      enqueuesInFlight += 1;
+      let ended = false;
+      return () => {
+        if (ended) return;
+        ended = true;
+        enqueuesInFlight -= 1;
+      };
+    },
     admit,
     settle,
     ownerRegistration: () => ownerRegistration,
