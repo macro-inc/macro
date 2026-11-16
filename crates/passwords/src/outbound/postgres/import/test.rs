@@ -189,7 +189,7 @@ async fn format_check_widening_keeps_old_rows_valid_and_migrates_up_down_up(pool
     assert!(insert_activity(&pool, team, "bitwarden_zip").await.is_err());
 
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
-    assert_eq!(format_check_validated(&pool).await, true);
+    assert!(format_check_validated(&pool).await);
     insert_activity(&pool, team, "bitwarden_zip").await.unwrap();
     insert_activity(&pool, team, "one_password_pux")
         .await
@@ -201,12 +201,12 @@ async fn format_check_widening_keeps_old_rows_valid_and_migrates_up_down_up(pool
         .undo(&pool, WIDEN_FORMAT_CHECK - 1)
         .await
         .unwrap();
-    assert_eq!(format_check_validated(&pool).await, false);
+    assert!(!format_check_validated(&pool).await);
     assert!(insert_activity(&pool, team, "bitwarden_zip").await.is_err());
     insert_activity(&pool, team, "bitwarden_csv").await.unwrap();
 
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
-    assert_eq!(format_check_validated(&pool).await, true);
+    assert!(format_check_validated(&pool).await);
     insert_activity(&pool, team, "bitwarden_zip").await.unwrap();
     let formats = sqlx::query_scalar!(
         "SELECT format FROM password_import_activity WHERE team_id=$1 ORDER BY id",
