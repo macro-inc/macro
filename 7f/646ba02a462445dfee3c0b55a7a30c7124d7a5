@@ -1,0 +1,21 @@
+packages/sdk/src/events/subscribe.ts
+  s_c40fd2f0323f22::t_47de1d6765733f 293,295-299,360,363-364,372-374,380,405-406,447,452,464-467,470,490
+packages/sdk/tests/events-subscribe.test.ts
+  s_c40fd2f0323f22::t_e2ecced3bf3902 1-2,370-419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7f646ba02a462445dfee3c0b55a7a30c7124d7a5",
+  "prompts": {},
+  "sessions": {
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
