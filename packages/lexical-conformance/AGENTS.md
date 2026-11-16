@@ -55,6 +55,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 ## Gotchas
 
 - `--filter=<file>` is for recorder development only; release fixtures use the full suite.
+- Run the generators and recorder with the devshell's Bun (`nix develop`); Bun 1.4 loads `prism-json` before Prism and fails importing `node-list.ts`.
 - Recorder unit tests require the pinned `target/lexical-upstream/` checkout; the differential oracle uses a separate disposable checkout.
 - The upstream pin is independent of the app's patched npm packages.
 - Macro tests run separately with markdown indent 2; upstream fixtures keep indent 4.

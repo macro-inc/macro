@@ -8,7 +8,7 @@
       "document mentions without a cached name",
       "imports a document card without documentName"
     ],
-    "recordedWith": "lexical-conformance@c2adcbe73f13b41da8cc436c2b7b7003f48fb453eebba81d97cd1ebe81928e80"
+    "recordedWith": "lexical-conformance@b4c65d3b7c6adf50e5709a5e929acc4fccf301a181a0dcc69f6f65cb3cbadc7a"
   },
   "tier": "A-rec",
   "partial": false,
