@@ -64,8 +64,20 @@ def configure_kv(client, namespace, newly_mounted, mount="passwords"):
             time.sleep(min(0.05 * 2 ** attempt, 0.5))
 
 
-def provision_team(client, team_id, public_key, issuer):
-    """Idempotently provision one team namespace; never deletes or replaces values."""
+JWT_ALGORITHMS = ("ES256", "RS256")
+
+
+def provision_team(client, team_id, public_keys, issuer, algorithms):
+    """Idempotently provision one team namespace; never deletes or replaces values.
+
+    `public_keys` and `algorithms` replace the JWT mounts' trusted keys and
+    algorithms. Passing the old and new key together keeps logins working while
+    the document storage service switches signers.
+    """
+    if not public_keys or not algorithms:
+        raise ValueError("at least one JWT public key and algorithm is required")
+    if any(algorithm not in JWT_ALGORITHMS for algorithm in algorithms):
+        raise ValueError("JWT algorithms must be ES256 or RS256")
     namespace = f"team-{team_id}"
     audits = client.request("GET", "sys/audit")["data"]
     if "passwords/" not in audits:
@@ -96,9 +108,9 @@ def provision_team(client, team_id, public_key, issuer):
     if not existing:
         client.request("POST", "sys/auth/macro", {"type": "jwt"}, namespace)
     client.request("POST", "auth/macro/config", {
-        "jwt_validation_pubkeys": [public_key],
+        "jwt_validation_pubkeys": list(public_keys),
         "bound_issuer": issuer,
-        "jwt_supported_algs": ["RS256"],
+        "jwt_supported_algs": list(algorithms),
     }, namespace)
     policy = '\n'.join((
         'path "passwords/data/*" { capabilities = ["create", "read", "update"] }',
@@ -132,9 +144,9 @@ def provision_team(client, team_id, public_key, issuer):
     if not lifecycle_mount:
         client.request("POST", "sys/auth/macro-lifecycle", {"type": "jwt"})
     client.request("POST", "auth/macro-lifecycle/config", {
-        "jwt_validation_pubkeys": [public_key],
+        "jwt_validation_pubkeys": list(public_keys),
         "bound_issuer": issuer,
-        "jwt_supported_algs": ["RS256"],
+        "jwt_supported_algs": list(algorithms),
     })
     lifecycle_policy = f"passwords-lifecycle-{team_id}"
     client.request("PUT", f"sys/policies/acl/{lifecycle_policy}", {
