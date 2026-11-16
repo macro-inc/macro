@@ -268,3 +268,24 @@ fn nested_html_blockquotes_in_an_editor_fail_before_descending_past_the_bound() 
     });
     assert!(is_nesting_too_deep(&outcome), "{outcome:?}");
 }
+
+#[test]
+fn the_cached_details_set_is_filtered_per_editor_on_one_thread() -> Result<()> {
+    // The per-thread set cache holds the unfiltered list; each use filters it by the
+    // nodes that editor registered, as Source `$editorTransformers` does.
+    let markdown = "<details>\n<summary>Hi</summary>\n\n<details>\n<summary>In</summary>\n\nBody\n\n</details>\n\n</details>";
+    let has_details = |json: &serde_json::Value| json.to_string().contains(r#""type":"details""#);
+    for _ in 0..2 {
+        let (editor, _) = import(markdown)?;
+        let json = serde_json::to_value(editor.state().to_json()?)?;
+        assert!(has_details(&json), "{json}");
+        let state = markdown::markdown_to_serialized_editor_state_with_ids(markdown, &context())?;
+        let json = serde_json::to_value(&state)?;
+        assert!(!has_details(&json), "{json}");
+        assert!(
+            json.to_string().contains("&lt;details&gt;") || json.to_string().contains("<details>"),
+            "{json}"
+        );
+    }
+    Ok(())
+}
