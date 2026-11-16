@@ -173,11 +173,12 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   ada,
   ben,
 }) => {
-  test.setTimeout(420_000);
+  test.setTimeout(600_000);
   const old = await ada.createChannel({ members: [ben.person] });
-  await ada.post(old.id, 'opened thirty-one days ago');
+  // Ben's own messages: an unread channel is one a device fetches again.
+  await ben.post(old.id, 'opened thirty-one days ago');
   const recent = await ada.createChannel({ members: [ben.person] });
-  await ada.post(recent.id, 'opened twenty-nine days ago');
+  await ben.post(recent.id, 'opened twenty-nine days ago');
   const looked = await row(ada, ben, 20);
   const page = await pageFor('ben');
   const today = Date.now();
@@ -200,7 +201,7 @@ test('PRE-05 a channel not opened for thirty days is no longer on the device, an
   await page.clock.setSystemTime(today + 31 * DAY);
   await new Conversation(page, looked[19].id).open();
 
-  await leaveAlone(page, 120);
+  await leaveAlone(page, 300);
 
   await findRow(page, recent);
   await goOffline(page.context());

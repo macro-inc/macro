@@ -166,8 +166,14 @@ export async function loseWriteAnswers(
       await route.fallback();
       return;
     }
-    await route.fetch();
-    await route.abort('connectionreset');
+    // A request still on its way when the connection is restored, or when
+    // its page goes, has nothing left to drop.
+    try {
+      await route.fetch();
+      await route.abort('connectionreset');
+    } catch {
+      return;
+    }
   };
   await context.route(SERVICES, handler);
   return () => context.unroute(SERVICES, handler);
