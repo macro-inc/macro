@@ -694,6 +694,11 @@ export const SearchableMultiSelectInline = (
     setSearchQuery(value);
     props.source?.setSearch(value);
   };
+  const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
+    event
+  ) => {
+    if (props.source) onInputChange(event.currentTarget.value);
+  };
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -814,7 +819,11 @@ export const SearchableMultiSelectInline = (
       }
       value={activeOptions()}
       onChange={handleChange}
-      onInputChange={onInputChange}
+      onInputChange={(value) => {
+        // Kobalte also clears its input when selected option objects refresh.
+        // Only native edits change a query-driven source.
+        if (!props.source) onInputChange(value);
+      }}
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
@@ -829,6 +838,8 @@ export const SearchableMultiSelectInline = (
       >
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
         <PickerSearchInput
+          value={props.source?.search()}
+          onInput={onSourceInput}
           onReady={(element) => {
             props.inputRef?.(element);
           }}
