@@ -83,6 +83,8 @@ tools/HTTP/GraphQL surfaces over them.
   checks format/resource bounds only. Target authorization and activation are
   separate operations. Dormant selected storage keeps legacy `enabled` false;
   never treat that bit as the effective selected consent or bypass its guards.
+  Private rule controls use the membership boundary of `/crm/email-privacy`,
+  including after CRM viewing denial; resolving CRM details still needs record access.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -155,9 +157,10 @@ tools/HTTP/GraphQL surfaces over them.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
 - CRM availability requires current membership and effective `team_user.crm_access`;
-  admins/owners always qualify. Recheck `CrmTeamReceipt::check_access` on every
-  team operation; aggregate Soup/search paths return no denied records. Entity
-  receipts and requester-side email grants use the same primary-backed predicate.
+  admins/owners always qualify. Recheck `CrmTeamReceipt::check_access` on CRM
+  record and shared-setting operations; aggregate Soup/search paths return no
+  denied records. Entity receipts and requester-side email grants use the same
+  primary-backed predicate.
   Contribution consent is independent and remains manageable after CRM denial.
   Team preference writes remain disabled by the rollout gate until old removal
   writers have drained; that gate never weakens these read checks.

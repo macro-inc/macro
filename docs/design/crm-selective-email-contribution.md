@@ -2,7 +2,7 @@
 
 Status: implementation in phases. The product direction is direct agent
 activation, whole-thread matching, live contact/company selectors and retained
-CRM records after narrowing. Source observations are from `76c2186fa4d`.
+CRM records after narrowing. Source observations are from `ebde683f33f`.
 The first phase supplies dormant storage and compatibility guards; selected
 contribution must remain unavailable until every eligibility path is upgraded.
 
@@ -87,10 +87,12 @@ consent and its active revision.
 Contact and company selectors **follow the record as it changes**. Adding or
 removing an address/domain changes matching without a rule activation. A source
 with no current targets matches nothing and carries a warning; it may match later.
-Deletion, loss of applicable visibility or a move outside the team makes the
-reference inactive. A rename does not retarget it. A merge that deletes the old
-ID does not silently transfer consent to another ID. The agent can replace the
-reference explicitly. Preserve existing record/parent authorization checks.
+Deletion, loss of record-level visibility or a move outside the team makes the
+reference inactive. The contributor's CRM viewing preference alone does not
+change an existing grant or its live matching. A rename does not retarget it.
+A merge that deletes the old ID does not silently transfer consent to another
+ID. The agent can replace the reference explicitly. Preserve existing
+record/parent authorization checks.
 
 Scope rules to `(team_id, user_id, link_id)`, never a team allowlist. Derive
 member/team from authenticated receipts; reject those IDs in mutation bodies.
@@ -154,6 +156,10 @@ excludes it. A later message can change either outcome. Existing record/parent
 authorization and personal-contact population gates still apply at their current
 boundaries. Inclusion grants no new record visibility.
 
+CRM viewing checks belong to the requester-side read boundary. Never add the
+contributor's `crm_access` preference to eligibility: changing viewing permission
+does not withdraw consent, deactivate rules or stop contribution.
+
 Reuse the thread-exclusion dependency's
 `crm_email_thread_exclusions(team_id, user_id, thread_id)` retaining `link_id`,
 and `crm_email_thread_excluded(team, user, link, thread)`. Its mutations verify
@@ -195,8 +201,17 @@ scope restrictions on sharing still apply; an agent cannot use a narrower
 credential to escape its permissions. An admin cannot enroll or edit another
 member. An autonomous agent identity manages only its own mailbox.
 
+Rule, history, preview and consent methods use the same membership/own-mailbox
+boundary as `/crm/email-privacy`; they remain reachable with `crm_access = false`.
+Do not require a CRM-viewing receipt to inspect, edit or withdraw private rules.
+Resolving CRM record details remains separately authorized. When details are
+unavailable, show stored source IDs and the member's own literal rules instead
+of resolving additional CRM names, addresses or domains through this exception.
+Existing shared privacy lists keep their current contract.
+
 The member's privacy settings show mode, exact mailbox, active definition,
-current live targets, warnings, applicable denials, last change and its actor.
+current live targets when record access permits, warnings, applicable denials,
+last change and its actor.
 Provide a plain JSON editing surface with validation and a readable selector
 list, plus immediate withdrawal. Link to owner-only, keyset-paginated history:
 who changed what, when, the before/after definition and the resulting state.
@@ -305,6 +320,7 @@ private synthetic fixtures. Set absolute rollout budgets from the baseline.
 Parity tests cover every selector, all/selected/empty states, sender/To/CC/BCC,
 drafts, all vetoes, contact/company mutation/deletion/visibility, mailbox lifecycle
 and stale backfill generations in the function, ingestion and inlined reader.
+CRM viewing denial must preserve contribution and access to private rule controls.
 Performance approval must not rely on a tiny correctness fixture.
 
 **Alternatives rejected:** materializing all allowed thread IDs requires mailbox-
@@ -414,13 +430,15 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    target/audit tables, additive consent fields, legacy-write/version/lifecycle
    guards and the default-off key. Test existing consents and old writers. No
    activation API or eligibility edits. This can ship before thread exclusions.
-2. **Eligibility and live resolution.** After PR 1 **and merged thread exclusions**,
+2. **Eligibility and live resolution.** After PR 1 **and merged
+   [thread exclusions](https://github.com/macro-inc/macro/pull/10836)**,
    update `crm_email_thread_allowed`, set-based ingestion and the inlined Team
    reader together, plus compatible consent readers. Reuse its veto, add indexed
    live-target joins/reverse references and parity/performance evidence. Still
    expose no selected activation. Base new migrations after the latest merged
    dependency; never change an applied migration.
-3. **Policy API and historical work.** Own-member/agent authorization, bounded
+3. **Policy API and historical work.** Own-member/agent authorization independent
+   of CRM viewing, bounded
    validation/count preview, direct CAS activation, audit, live-source durable
    reconciliation and revision-safe backfill. Default-off backend flag; legacy
    and modern transitions share effective consent semantics. Depends on PR 2

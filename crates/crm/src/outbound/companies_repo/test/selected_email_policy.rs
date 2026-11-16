@@ -2,6 +2,7 @@
 //! Direct SQL below seeds states that no public API can activate in this phase.
 
 use super::helpers::*;
+use crate::domain::auth::CrmMemberAccess;
 use crate::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyRepository};
 use crate::domain::email_rules::{
     EmailInclusionRule, EmailRuleDefinitionError, EmailRuleSet, MAX_EMAIL_RULE_BYTES,
@@ -52,6 +53,70 @@ async fn selected_enabled(pool: &PgPool, team: Uuid) -> sqlx::Result<bool> {
     )
     .fetch_one(pool)
     .await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn crm_viewing_denial_preserves_private_policy_control(pool: PgPool) -> anyhow::Result<()> {
+    let (team, link) = setup(&pool).await?;
+    let version = seed_selected(&pool, team).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    sqlx::query!(
+        "UPDATE team_user SET crm_access = FALSE WHERE team_id = $1 AND user_id = $2",
+        team,
+        OWNER
+    )
+    .execute(&pool)
+    .await?;
+    assert!(!repo.member_has_crm_access(team, OWNER).await?);
+    assert!(selected_enabled(&pool, team).await?);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT policy_version FROM crm_email_consent WHERE team_id = $1 AND user_id = $2",
+            team,
+            OWNER
+        )
+        .fetch_one(&pool)
+        .await?,
+        version
+    );
+    assert_eq!(
+        repo.email_privacy(team, OWNER).await?.mailbox_link_id,
+        Some(link)
+    );
+    // No public rule writer exists yet. The dormant storage must still allow
+    // a new owner-bound revision when that owner's CRM viewing is disabled.
+    sqlx::query!(
+        "INSERT INTO crm_email_rule_revisions (team_id, user_id, revision, link_id, schema_version, definition) VALUES ($1, $2, 2, $3, 1, '{\"schema_version\":1,\"include\":[]}'::jsonb)",
+        team, OWNER, link
+    ).execute(&pool).await?;
+    assert_eq!(
+        sqlx::query_scalar!(
+            "UPDATE crm_email_consent SET active_rule_revision = 2 WHERE team_id = $1 AND user_id = $2 RETURNING policy_version",
+            team, OWNER
+        ).fetch_one(&pool).await?,
+        version + 1
+    );
+    repo.change_email_privacy(
+        team,
+        OWNER,
+        EmailPrivacyChange::SetConsent {
+            enabled: false,
+            link_id: None,
+        },
+    )
+    .await?;
+    assert!(!selected_enabled(&pool, team).await?);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM crm_email_rule_revisions WHERE team_id = $1 AND user_id = $2",
+            team,
+            OWNER
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(2)
+    );
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
