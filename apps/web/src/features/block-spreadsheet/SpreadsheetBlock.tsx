@@ -24,11 +24,12 @@ import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import { clipboardTargetInScope } from './core/clipboard-scope';
 import type { SpreadsheetData } from './definition';
 import { createSpreadsheetDownload } from './primitives/create-spreadsheet-download';
+import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
@@ -99,6 +100,14 @@ function SpreadsheetBlockContent(props: { share?: string }) {
     return value?.__block === 'spreadsheet' ? value : undefined;
   };
   const sheetDownload = createSpreadsheetDownload();
+  // The open sheet's store, so the header's Ask Macro sends the selection
+  // the editor's button does.
+  const [sheetStore, setSheetStore] = createSignal<SpreadsheetStore>();
+  const chatContext = () => {
+    const store = sheetStore();
+    if (!store?.ready()) return undefined;
+    return spreadsheetChatContext(store.activeSheet(), store.selection());
+  };
 
   return (
     <DocumentBlockContainer>
@@ -111,6 +120,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
               name={() => name() ?? ''}
               openShare={openShare}
               download={sheetDownload.download}
+              chatContext={chatContext}
             />
           }
         >
@@ -119,6 +129,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
             name={() => name() ?? ''}
             openShare={openShare}
             download={sheetDownload.download}
+            chatContext={chatContext}
           />
         </Show>
         <Show when={data()?.syncSource} keyed>
@@ -144,6 +155,12 @@ function SpreadsheetBlockContent(props: { share?: string }) {
               },
               canEdit,
             });
+            setSheetStore(store);
+            onCleanup(() =>
+              setSheetStore((current) =>
+                current === store ? undefined : current
+              )
+            );
             return (
               <>
                 <SplitHeaderRight>

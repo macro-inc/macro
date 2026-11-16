@@ -17,6 +17,11 @@ export interface SpreadsheetHeaderProps {
   name: () => string;
   openShare: () => void;
   download: (format: 'xlsx' | 'csv') => void;
+  /**
+   * The open sheet and selection, for Ask Macro; undefined until the workbook
+   * has synced, so Ask Macro then asks about the whole spreadsheet.
+   */
+  chatContext: () => Record<string, string> | undefined;
 }
 
 /** The spreadsheet block's title menu operations and named header actions. */
@@ -60,6 +65,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
         id: props.documentId,
         name: props.name(),
         fileType: 'spreadsheet',
+        blockParams: props.chatContext(),
       }),
   };
 
