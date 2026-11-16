@@ -26,8 +26,9 @@ host lives in `../block-calendar/`.
   Root/parts over `primitives/create-calendar-composer.ts`; preserved behavior has
   temporary old/new conformance coverage. `views/composer/StandaloneComposer.tsx`
   owns the new desktop data composition, with `DesktopComposer.tsx` as its layout.
-  Keep the current `views/composer/EventForm.tsx` and `context/event-form-context.ts`
-  intact until the replacement is ready.
+  `../calendar-view/views/composer/` owns floating/pinned placement and navigation
+  dismissal through `primitives/create-calendar-composer-session.ts`. Keep the
+  legacy form and split components for touch until the phone replacement is ready.
 - `primitives/create-composer-metadata.ts` owns explicit visibility/time-zone edits;
   the optional metadata argument to `useEventEditor.save` preserves legacy callers.
   Initialize the zone to the zone represented by the form's wall-clock fields.
@@ -42,6 +43,8 @@ host lives in `../block-calendar/`.
   tests out of commits, and retain replaced components unwired for reference.
 - Place standalone composer instances under a caller-owned `TraceFlow`; flags and
   delayed suggestions register loading phases without owning placement or navigation.
+- Keep desktop creation menus non-modal during their handoff to the composer;
+  pinning changes its virtual anchor and dock space, never its mounted editor.
 - Keep new behavior in `primitives/`, pure domain code in `core/`, transport
   adapters in `queries/`, and host composition in `views/`.
 - Keep presentation components independent of production services; use the

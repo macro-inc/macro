@@ -75,6 +75,11 @@ export function createCalendarComposerSession(options: {
     state,
     open,
     close,
+    completeClose: (key: number) => {
+      const session = state.session;
+      if (disposed || session?.key !== key) return false;
+      return finishClose(session);
+    },
     setPinned: (key: number, pinned: boolean) => {
       if (!disposed && state.session?.key === key) setState('pinned', pinned);
     },

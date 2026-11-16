@@ -103,4 +103,8 @@ export default {
   providerDeclinesWarning:
     'Macro checks for conflicts in the background while this calendar is connected. Replies already sent cannot be undone by changing this event.',
   declineReply: 'Auto-decline reply: “{{message}}”',
+  discardTitle: 'You still have remaining changes',
+  discardBody: 'Closing this event will discard your changes.',
+  discard: 'Discard',
+  keepEditing: 'Keep editing',
 };

@@ -11,9 +11,11 @@ export function CalendarCreateMenu(props: {
   size?: ButtonSize;
   label?: string;
   presentation?: 'sidebar' | 'toolbar';
+  restoreFocus?: boolean;
 }) {
   return (
     <Dropdown
+      modal={props.presentation === undefined}
       placement={
         props.presentation === 'toolbar' ? 'bottom-end' : 'bottom-start'
       }
@@ -42,6 +44,9 @@ export function CalendarCreateMenu(props: {
       </Show>
       <Dropdown.Content
         class={props.contentClass ?? 'w-80 max-w-[calc(100vw-2rem)]'}
+        onCloseAutoFocus={(event) => {
+          if (props.restoreFocus === false) event.preventDefault();
+        }}
       >
         <Dropdown.Group>{props.children}</Dropdown.Group>
       </Dropdown.Content>

@@ -21,10 +21,19 @@ desktop and mobile Join with work and personal Google accounts signed in; a work
 calendar should open Meet with the work account. Search results without loaded
 calendar account metadata and other conferencing providers keep their original URL.
 
+Desktop event creation and editing use a 384px composer rather than a second
+split inside Calendar. A selected grid range or event anchors it beside that
+selection. **Pin event composer** reserves a right-side panel; unpinning keeps the
+same draft and field state. Pinned editors ignore outside clicks. Close, Cancel,
+Escape, and leaving the view ask before discarding edits; an open field menu
+handles Escape first. Touch continues to use its existing sheet.
+
 The desktop composer orders kind, title, time, description, guests, call, location,
 and calendar in aligned icon/value rows. Its title grows to three lines, then scrolls.
-Location is an inline text field. **More options** reveals Notifications and authorized
-Guest permissions; it also reveals an empty description on an existing event.
+Location is an inline text field. **More options** reveals Notifications, authorized
+Guest permissions, and Visibility; it also reveals an empty description on an
+existing event. Pinning keeps those options expanded. Visibility for **This event**
+is unavailable because occurrence reads do not expose that override.
 The plain duration value opens duration choices and **All day**. Choosing a duration
 keeps that length when the start moves; explicitly picking an end keeps that end fixed.
 Dropdown triggers and date/time inputs use the theme control surface. Their menus
@@ -38,6 +47,12 @@ Moving the start date or time moves the end with it, keeping the event's length
 (all-day dates keep their day count), until the end is picked in the same edit;
 after that the end stays put, and a start past it shows the end-before-start
 error.
+
+The time-zone selector describes the displayed wall-clock fields, initially in
+the viewer's local zone. Explicitly selecting another zone reinterprets those
+fields in that zone. Date-only events hide the selector; imported point events
+keep it read-only. A nonexistent DST time shows an error rather than moving the
+event silently. Time-zone-only edits retain provider RRULE fields such as `WKST`.
 
 Calendar time fields follow the calendar's 12/24-hour display preference without
 changing their stored local times. The explicit 12-hour display uses `11:30am`

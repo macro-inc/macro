@@ -8,6 +8,26 @@ afterEach(() => {
 });
 
 describe('calendar composer sessions', () => {
+  it('closes an approved navigation only when navigation commits', async () => {
+    const onClose = vi.fn();
+    const source = createRoot((dispose) => {
+      disposers.push(dispose);
+      return createCalendarComposerSession({
+        confirmDiscard: async () => true,
+      });
+    });
+    const key = await source.open({ onClose });
+    if (key === undefined) throw new Error('Session did not open');
+    source.setDirty(key, true);
+    expect(await source.state.session?.guard.confirmClose()).toBe(true);
+    expect(source.state.session?.key).toBe(key);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(source.completeClose(key)).toBe(true);
+    expect(source.state.session).toBeUndefined();
+    expect(source.completeClose(key)).toBe(false);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('keeps the editor identity and close guard while pinning', async () => {
     const confirmDiscard = vi.fn().mockResolvedValue(true);
     const source = createRoot((dispose) => {

@@ -6,6 +6,7 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/CalendarViewTabs';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
@@ -83,6 +84,7 @@ export function Header(props: {
   leading?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
+  const composerHost = useCalendarComposerHost();
   // Inline previews use the host's shell, not Calendar's sidebar state.
   const shell = props.presentation === 'workspace' ? useViewShell() : undefined;
   const navigation = useCalendarNavigation();
@@ -179,6 +181,7 @@ export function Header(props: {
   );
   const headerCreateMenu = () => (
     <CalendarCreateMenu
+      restoreFocus={!composerHost?.sessions.state.session}
       presentation={!isTouchDevice() ? 'toolbar' : undefined}
       size={breakpoints.labeledNew() ? 'md' : 'icon-md'}
       label="New"
@@ -294,6 +297,7 @@ export function Header(props: {
             {todayButton(isTouchDevice())}
             <Show when={props.presentation === 'preview'}>
               <CalendarCreateMenu
+                restoreFocus={!composerHost?.sessions.state.session}
                 size="icon-lg"
                 class="shrink-0 rounded-full border-transparent bg-transparent"
                 label="New"

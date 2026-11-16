@@ -37,6 +37,8 @@ import { CALENDAR_TOUR, calendarTour } from '../tour';
 import { AgendaContent } from '../views/agenda/AgendaContent';
 import { AgendaNavigation } from '../views/agenda/AgendaNavigation';
 import { AgendaSetup } from '../views/agenda/AgendaSetup';
+import { CalendarComposerDock } from '../views/composer/CalendarComposerDock';
+import { CalendarComposerHost } from '../views/composer/CalendarComposerHost';
 import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
@@ -231,6 +233,7 @@ function WorkspaceContent(props: {
           <Header presentation="preview" leading={props.headerLeading} />
           <main class="flex min-h-0 flex-1">
             <CalendarPageContent agenda={props.agenda} />
+            <CalendarComposerDock />
           </main>
         </div>
       </Match>
@@ -253,6 +256,7 @@ function WorkspaceContent(props: {
                 <ViewTour tour={calendarTour} />
                 <ViewShell.Content class="flex min-h-0 flex-1">
                   <CalendarPageContent agenda={props.agenda} />
+                  <CalendarComposerDock />
                 </ViewShell.Content>
               </ViewShell.Main>
             </ViewShell.Root>
@@ -278,31 +282,33 @@ export function Workspace(props: { headerLeading?: JSX.Element }) {
   };
 
   return (
-    <Show
-      when={gridView()}
-      fallback={
-        <AgendaNavigation date={date()} onDateChange={setDate}>
-          <WorkspaceContent headerLeading={props.headerLeading} agenda />
-        </AgendaNavigation>
-      }
-    >
-      {(period) => (
-        <CalendarPagerContextProvider
-          initialView={period()}
-          initialDate={date()}
-          showWeekends={() => calendarView.displaySettings.showWeekends}
-          weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
-          onNavigate={calendarView.closeEventDetails}
-          onViewChange={calendarView.setPeriodView}
-        >
-          <CalendarGridNavigation onAgendaSelect={openAgenda}>
-            <WorkspaceContent
-              headerLeading={props.headerLeading}
-              agenda={false}
-            />
-          </CalendarGridNavigation>
-        </CalendarPagerContextProvider>
-      )}
-    </Show>
+    <CalendarComposerHost>
+      <Show
+        when={gridView()}
+        fallback={
+          <AgendaNavigation date={date()} onDateChange={setDate}>
+            <WorkspaceContent headerLeading={props.headerLeading} agenda />
+          </AgendaNavigation>
+        }
+      >
+        {(period) => (
+          <CalendarPagerContextProvider
+            initialView={period()}
+            initialDate={date()}
+            showWeekends={() => calendarView.displaySettings.showWeekends}
+            weekStartsOn={() => calendarView.displaySettings.weekStartsOn}
+            onNavigate={calendarView.closeEventDetails}
+            onViewChange={calendarView.setPeriodView}
+          >
+            <CalendarGridNavigation onAgendaSelect={openAgenda}>
+              <WorkspaceContent
+                headerLeading={props.headerLeading}
+                agenda={false}
+              />
+            </CalendarGridNavigation>
+          </CalendarPagerContextProvider>
+        )}
+      </Show>
+    </CalendarComposerHost>
   );
 }

@@ -472,7 +472,13 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const canEdit = () => canEditCalendarEvent(props.event);
   const canDelete = () => canDeleteCalendarEvent(props.event);
   const openEditor = () => {
-    openEventComposer({ event: props.event });
+    const anchor = props.anchor;
+    openEventComposer({
+      event: props.event,
+      anchorRect: () =>
+        anchor.isConnected ? anchor.getBoundingClientRect() : undefined,
+      returnFocus: anchor,
+    });
     props.onOpenChange(false);
   };
   const forwardEventEmail = useForwardEventEmail();

@@ -1,28 +1,22 @@
-import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
-import type { CalendarEvent } from '@app/features/calendar/types';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
+import type { ComposerOpenRequest } from '@app/features/calendar/core/composer-session';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
-
-/** Values and lifecycle callbacks used to open an event composer. */
-export interface OpenEventComposerOptions {
-  event?: CalendarEvent;
-  initialValues?: EventEditorInitialValues;
-  /** Values that arrive after the composer opens, applied only to an untouched form. */
-  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
-  onCalendarChange?: (calendarId: string, color: string) => void;
-  /** Called with a new event once it exists, before the composer closes. */
-  onCreated?: (created: CreatedCalendarEvent) => void;
-  onClose?: () => void;
-}
 
 /** Opens an event composer with confirmation before discarding changes. */
 export function useOpenEventComposer() {
   const { popoverSplit } = useSplitLayout();
   const owner = getOwner();
+  const host = useCalendarComposerHost();
 
-  return (options: OpenEventComposerOptions = {}) => {
+  return (options: ComposerOpenRequest = {}) => {
+    if (host && !isTouchDevice()) {
+      fireAndForget(host.open(options), 'calendar-composer-open');
+      return;
+    }
     let eventSaved = false;
     let formDirty = false;
     let closeConfirmationPending = false;

@@ -264,8 +264,16 @@ export function Page(props: {
       return;
     }
     const calendar = firstWritableCalendar();
+    const gridElement = pager.activePage()?.element();
     setSelectionColor(calendar?.color ?? DEFAULT_CALENDAR_SOURCE.color);
     openEventComposer({
+      anchorRect: () => {
+        if (!isActive() || !gridElement?.isConnected) return undefined;
+        return gridElement
+          .querySelector<HTMLElement>('.fc-highlight')
+          ?.getBoundingClientRect();
+      },
+      returnFocus: gridElement,
       initialValues: {
         ...calendarSelectionToEditorInitialValues(
           selection,

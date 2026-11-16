@@ -8,6 +8,7 @@ export interface ComposerOpenRequest {
   initialValues?: EventEditorInitialValues;
   suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
   anchorRect?: Accessor<DOMRectReadOnly | undefined>;
+  returnFocus?: HTMLElement;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onCreated?: (created: CreatedCalendarEvent) => void;
   onClose?: () => void;
