@@ -575,6 +575,12 @@ export const enableCrmActivity = defineFlag({
   env: 'ENABLE_CRM_ACTIVITY',
 });
 
+// Stay off until all ingestion and Team email reader binaries support exceptions.
+// No dev default or local override: the server independently requires this flag.
+export const enableCrmThreadExclusions = defineFlag({
+  key: 'enable-crm-thread-exclusions',
+});
+
 // Company collections are paused until ready; preserve stored lists while off.
 export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',

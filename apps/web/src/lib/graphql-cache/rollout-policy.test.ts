@@ -12,6 +12,7 @@ describe('browser Turso cache rollout policy', () => {
       for (const posthogDisable of values) {
         const decision = resolveBrowserTursoCacheRollout({
           isTauri: false,
+          browserSupported: true,
           disableEnvOverride,
           posthogDisable,
         });
@@ -31,6 +32,7 @@ describe('browser Turso cache rollout policy', () => {
     expect(
       resolveBrowserTursoCacheRollout({
         isTauri: false,
+        browserSupported: true,
         disableEnvOverride: undefined,
         posthogDisable: undefined,
       })
@@ -46,6 +48,7 @@ describe('browser Turso cache rollout policy', () => {
     expect(
       resolveBrowserTursoCacheRollout({
         isTauri: true,
+        browserSupported: false,
         // Browser emergency values are irrelevant on native.
         disableEnvOverride: true,
         posthogDisable: true,
@@ -55,6 +58,22 @@ describe('browser Turso cache rollout policy', () => {
       cohort: 'unknown',
       reason: 'tauri-native-unchanged',
       nativeCacheUnchanged: true,
+    });
+  });
+
+  it('keeps browsers without the cache APIs uncached', () => {
+    expect(
+      resolveBrowserTursoCacheRollout({
+        isTauri: false,
+        browserSupported: false,
+        disableEnvOverride: undefined,
+        posthogDisable: undefined,
+      })
+    ).toEqual({
+      enabled: false,
+      cohort: 'unknown',
+      reason: 'browser-unsupported',
+      nativeCacheUnchanged: false,
     });
   });
 });

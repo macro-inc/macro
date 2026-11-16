@@ -407,10 +407,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Read reactively: if the session abandons its cache mid-session, Quick
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
-  const cacheHost = createMemo(() => {
-    const graphqlCacheHost = getGraphqlSoupCacheHost();
-    return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
-  });
+  const cacheHost = createMemo(() => getGraphqlSoupCacheHost());
   const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
     localDraftQuickAccessItems(localDrafts.drafts())

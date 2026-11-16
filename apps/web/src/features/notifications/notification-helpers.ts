@@ -243,6 +243,19 @@ export async function markNotificationsForEntityAsRead(
   );
 }
 
+/**
+ * Marks every notification of the given channels as read. It writes by
+ * entity, so it never loads the notification feed to find them.
+ */
+export async function markChannelsAsRead(
+  channelIds: Iterable<string>
+): Promise<void> {
+  await updateNotificationsForEntities({
+    entities: [...new Set(channelIds)].map((id) => ({ type: 'channel', id })),
+    operation: 'MARK_SEEN',
+  });
+}
+
 /** Best-effort read marker for navigation/timer callers with no awaiting UI. */
 export async function markNotificationsForEntityAsReadInBackground(
   notificationSource: NotificationSource,

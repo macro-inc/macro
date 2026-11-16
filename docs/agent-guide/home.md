@@ -40,8 +40,18 @@ opens **Filter Home**.
 
 Desktop Signal reads
 the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
-instead of merging sources in the browser; Noise, search, and touch devices keep
-the merged feed. Verify these against a backend that serves the work feed: a
+instead of merging sources in the browser; Noise and touch devices keep
+the merged feed.
+
+Typing in **Search Home** there filters the feed first: every loaded Home row
+whose name matches the query is listed, in Home's order, whatever its type or
+age, followed by the search service's hits (content matches in mail, documents,
+tasks and chats that pass Home's notification filters). The Watch tutorial row
+is hidden while the field has text. Rows on feed pages that have not loaded
+yet, and a row whose only match is its sender or body, are found only if the
+search service returns them. To check, type a word from the title of a row of
+each type further down the list (an agent session, a task older than two
+weeks, a channel, a project): each must appear. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
 What an agent session does for you is the session's work, not yours: a task or
 document it creates stays out of Home unless a notification brings it in, and
@@ -292,3 +302,29 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Suggestions on Home
+
+With `enable-suggestions` on (desktop only), the idle pane shows, below the composer
+and in place of the recommended actions:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: the five most important open suggestions, as the
+  server ranks them. A row opens For you with that suggestion first; **All in
+  For you** opens the page.
+
+On For you, each card has one main action for its kind: **Open in chat** opens
+the composer with the prompt, unsent; **Run in background** starts the run at
+once (the card says what it will post or send first), then shows Running and,
+when done, a row with **Open result**; **Open** or **Open draft** opens the
+item or the drafted reply; **Turn on** saves a routine suggestion and
+**Review** opens it in the routine editor. The `x` (shown on hover or focus)
+dismisses at once and leaves an Undo row for the visit; Undo restores the
+suggestion, which the server allows for a few minutes. Dismissing a running
+suggestion stops its run, and restoring it brings it back open, not running.
+**Refresh suggestions** in the header asks for a fresh run, at most once an
+hour; while one runs it reads "Looking for suggestions", and during the
+cooldown "Available at" a time.
+

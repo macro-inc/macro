@@ -129,8 +129,7 @@ export function useHistoryQuery() {
   const activeQueryClient = useQueryClient();
   const graphqlCacheHost = () => {
     if (authenticated() !== true) return undefined;
-    const cacheHost = getGraphqlSoupCacheHost();
-    return cacheHost?.disabled ? undefined : cacheHost;
+    return getGraphqlSoupCacheHost();
   };
 
   createEffect(() => {

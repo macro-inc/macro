@@ -2035,9 +2035,8 @@ export function ShareTrigger(props: {
           tooltip="Copy Share Link"
           size={iconSize()}
           onClick={ShareLinkAction().action}
-        >
-          <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
-        </CopyButton>
+          icon={<Dynamic component={ShareLinkAction().icon} class="size-3.5" />}
+        />
       </div>
     </HeaderActionGroup>
   );

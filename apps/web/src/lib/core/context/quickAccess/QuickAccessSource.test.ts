@@ -227,12 +227,15 @@ vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupCacheHost: () => ({
-    search: mocks.search,
-    onCacheChanged: mocks.onCacheChanged,
-    readRecordsByKeys: mocks.readRecordsByKeys,
-    disabled: !mocks.cacheEnabled,
-  }),
+  getGraphqlSoupCacheHost: () =>
+    mocks.cacheEnabled
+      ? {
+          search: mocks.search,
+          onCacheChanged: mocks.onCacheChanged,
+          readRecordsByKeys: mocks.readRecordsByKeys,
+          disabled: false,
+        }
+      : undefined,
 }));
 
 let dispose: (() => void) | undefined;

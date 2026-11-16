@@ -174,6 +174,32 @@ function delegatedDoneUndoLifecycle(
   };
 }
 
+/** Says what was saved: rows that stayed open, or only their notifications. */
+function markDoneToastMessage(
+  total: number,
+  operation: GraphqlDoneOperation
+): string {
+  const completed = operation.completedCount();
+  if (operation.hasFailures()) {
+    if (completed === total)
+      return t('entityActions.toastMarkedDoneNotificationsUnsaved', {
+        count: total,
+      });
+    return t('entityActions.toastMarkedDonePartialUnsaved', {
+      completed: String(completed),
+      count: total,
+    });
+  }
+  if (operation.hasNoopRows())
+    return t('entityActions.toastMarkedDonePartial', {
+      completed: String(completed),
+      count: total,
+    });
+  if (total > 1)
+    return t('entityActions.toastMarkedDoneCount', { count: total });
+  return t('entityActions.toastMarkedDone');
+}
+
 type PendingDoneUndo = {
   requested: boolean;
   result: Promise<boolean>;
@@ -240,19 +266,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       const total = variables.entities.length;
       const failed = context.operation.hasFailures();
       const partial = failed || context.operation.hasNoopRows();
-      const message = partial
-        ? t(
-            failed
-              ? 'entityActions.toastMarkedDonePartialUnsaved'
-              : 'entityActions.toastMarkedDonePartial',
-            {
-              completed: String(context.operation.completedCount()),
-              count: total,
-            }
-          )
-        : total > 1
-          ? t('entityActions.toastMarkedDoneCount', { count: total })
-          : t('entityActions.toastMarkedDone');
+      const message = markDoneToastMessage(total, context.operation);
       toastId = (partial ? toast.alert : toast.success)(message, {
         dismissStyle: 'icon',
         actionLayout: 'inline',

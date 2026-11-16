@@ -57,9 +57,11 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error. Interactive contact suggestions stay local:
-partial sync returns partial local results; unavailable or older hosts never fall
-back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+window, never an authorization error. Interactive contact suggestions read locally:
+partial sync returns partial local results. Only a tab with no usable local cache
+(none, retired, unsupported, unbound or older host) reads bounded server
+`ContactDirectoryPage` pages, and only online; a server continuation keeps paging the
+server until a cache change restarts the window. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -222,6 +224,10 @@ Give browser fixtures the app's viewport metadata and assert the CSS viewport wi
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
+The same suite's `list-search.browser.e2e.ts` drives the list header's search
+field over the real hotkey engine and list controller: ArrowDown and Enter move
+to the first result, and Escape keeps the search in the field and clears it
+from the list after a selection.
 
 A project's Tasks header keeps search, filters, Add existing tasks and New task on
 screen at 320–430px phone widths, with search closed and open, by collapsing both
@@ -727,6 +733,8 @@ reads retain client-scoped denial state across remounts and immediately reauthor
 previous-viewer cache hits; older requests never clear newer denial decisions.
 A project view mounts one full project read (`createProjectSource`): breadcrumbs
 and labels use the identity read, and embedded lists take the view's source.
+Keep editable breadcrumb icons on that identity read, including owner metadata;
+never load project counts or task membership just to open the appearance editor.
 Project reads refresh only through the activity registry (pushes, websocket
 connects, the app's own project writes; `registerProjectRevalidation`); never
 add a timer or focus refetch to them.
@@ -812,6 +820,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
   `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
   task/contact/mixed/thread/generic source pagination on desktop and touch.
+- Keep the owner-only **Keep this thread out of CRM** action in both thread
+  menus, and removal/pagination in the existing CRM Email settings surface.
+  Use the shared privacy mutation so contact/company contribution email readers
+  and owner exception pages refresh even when another reader fails; report
+  refresh failures separately from a successfully saved change;
+  gate thread actions and exception settings with `enableCrmThreadExclusions`,
+  which has no dev/local override while backend ingestion rolls out;
+  another contributor's copy remains eligible. Desktop/phone coverage lives in
+  `src/features/crm/browser-test/privacy`.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -1018,6 +1035,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   search field only when the sidebar is the list it searches (Home, Chat, Agents),
   in `ViewSidebar.Header` so its icon precedes collapse and its field opens above
   New; a view with a list header searches from `ListHeaderSearch` alone.
+  `ListHeaderSearch` owns the search keys: pass `focusResults` so ArrowDown,
+  Enter and Escape can move the keyboard into the list, and never clear the
+  query on Escape yourself. ArrowDown and Enter then run the list's own "go to
+  first item" command, so a list on `useListInteractions` lands on its first
+  row with no code in the view. It registers the
+  split's Escape that clears a search from the list; keep a view's own Escape
+  steps (leaving a tab) conditional on no search, and selection clearing at
+  `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
@@ -1041,6 +1066,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
+- Suggestions (the For you page and Home's Today strip and top priorities) live in `src/features/suggestions`; read its `AGENTS.md`. Gate every entry point with `useSuggestionsFlag` (`enable-suggestions`, desktop only).
 - Keep added external chats (WhatsApp today) in External at `/external/chat/:chatId` with their own queries (`features/external-chat`); sharing controls viewing and the viewer's own provider membership controls sending. Never route them through channel context or services.
 - All API/network calls live in service-clients.
 - Preview Home project rows with the shared `ProjectDetail`; preserve its project
@@ -1098,7 +1124,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
+- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
@@ -1659,6 +1685,18 @@ Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx
 import it directly from Tasks and legacy `next-soup` consumers.
 Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
+### Tag picker selection and creation
+
+Keep tag checkbox toggles open for pointer and keyboard input; desktop row picks
+save the staged selection and close only the picker, while touch sheets retain
+explicit Done. Keep the parent More menu open after a tag pick or Escape, and
+prevent reopening the picker until its pending selection save settles. Dismiss
+the parent only when opening the tag editor or navigating to tagged items.
+Return from sharing to color to name with Back or Escape, preserving the draft
+and chosen color; native Back-button activation must not advance the flow.
+Keep tag-creation headers compact beside Back and show the current draft color
+beside the title throughout the color and sharing steps.
+
 ### Sidebar tag dragging
 
 The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
@@ -1775,5 +1813,8 @@ or install a nested provider. Scope drag cancellation and auto-scroll to the
 current vault's own drag. Register its desktop composable split layout
 and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
 legacy header does not reserve an empty band. The responsive vault fixture is exercised with
-`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
-See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`
+(its import case needs `just ensure-password-import-wasm`). Imports parse in a
+per-file worker (`lib/core/password-import`); the parsed export lives only in
+the import primitive's closure while the dialog is open, and sessionStorage
+holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

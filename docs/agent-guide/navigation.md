@@ -248,6 +248,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
+| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -696,6 +697,16 @@ Agents. Click it to reveal the search field between the title and New, at the
 same height as the New button; click again to hide it. The field focuses when
 opened. Every other view searches from the expandable Search icon in its list
 header.
+That header field hands the keyboard to the results: `ArrowDown` or `Enter`
+moves to the first row, where `j`/`k` and the arrows continue, and `Escape`
+leaves the field with the search still on screen. `Escape` in the list then
+steps back one level at a time: it clears a selection first, then the search.
+`Cmd/Ctrl+F` (and `/` in Email) returns to the field with the query selected;
+only the field's X clears from inside it. An empty field collapses on `Escape`.
+Check it in Email, Tasks, Drive, and Projects, which land on the first row and
+scroll it into view; a list without the shared list keys keeps the row it was
+on. Where the view has no keyboard list on screen (Passwords, the booking
+lists, Routines' Discover tab), `ArrowDown` and `Enter` stay in the field.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
