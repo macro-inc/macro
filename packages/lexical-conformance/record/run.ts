@@ -320,13 +320,34 @@ for (const macroScope of [false, true]) {
 }
 const fixtures = path.join(pkg, 'fixtures');
 if (check) {
-  if (
-    recordedFiles(fixtures).join('\n') !== [...files.keys()].sort().join('\n')
-  )
-    throw new Error('Fixture file set drift');
+  const committed = new Set(recordedFiles(fixtures));
+  const missing = [...files.keys()].filter((name) => !committed.has(name));
+  const extra = [...committed].filter((name) => !files.has(name));
+  const describe = (name: string) => {
+    const row = index.find((entry) => entry.file === name);
+    return `${name}${row ? ` (${row.id})` : ''}`;
+  };
+  if (missing.length || extra.length)
+    throw new Error(
+      [
+        'Fixture file set drift',
+        ...missing.map(
+          (name) => `  recorded, not committed: ${describe(name)}`
+        ),
+        ...extra.map((name) => `  committed, not recorded: ${name}`),
+      ].join('\n')
+    );
   for (const [name, content] of files) {
-    if (readFixtureText(path.join(fixtures, name)) !== content)
-      throw new Error(`Fixture drift: ${name}`);
+    const expected = readFixtureText(path.join(fixtures, name));
+    if (expected === content) continue;
+    const before = expected.split('\n');
+    const after = content.split('\n');
+    const differs = after.findIndex((text, at) => text !== before[at]);
+    // A recording that only drops trailing lines first differs past its end.
+    const line = differs < 0 ? after.length : differs;
+    throw new Error(
+      `Fixture drift: ${name} at line ${line + 1}\n  committed: ${before[line]}\n  recorded:  ${after[line]}`
+    );
   }
 } else {
   removeRecordedFiles(fixtures);

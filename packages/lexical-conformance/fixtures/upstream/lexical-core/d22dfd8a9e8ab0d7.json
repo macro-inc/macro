@@ -8,7 +8,7 @@
       "database query node",
       "degrades malformed payloads to unavailable chips: <m-db-query>{\"sql\":\"SELECT 1\",\"prompt\":\"Count\",\"displayMode\":\"scalar\"}</m-db-query>"
     ],
-    "recordedWith": "lexical-conformance@b4c65d3b7c6adf50e5709a5e929acc4fccf301a181a0dcc69f6f65cb3cbadc7a"
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
   },
   "tier": "A-rec",
   "partial": false,

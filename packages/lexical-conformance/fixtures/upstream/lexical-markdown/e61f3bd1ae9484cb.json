@@ -8,7 +8,7 @@
       "Markdown",
       "should not select when importing \"**Hello** world\""
     ],
-    "recordedWith": "lexical-conformance@b4c65d3b7c6adf50e5709a5e929acc4fccf301a181a0dcc69f6f65cb3cbadc7a"
+    "recordedWith": "lexical-conformance@a9cdd366bfcb8ceb435bb252033e328861fd8b0d6c8c62ea7acdf2869ff6f65c"
   },
   "tier": "A-rec",
   "partial": false,

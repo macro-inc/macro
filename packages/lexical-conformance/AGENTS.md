@@ -60,7 +60,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - The upstream pin is independent of the app's patched npm packages.
 - Macro tests run separately with markdown indent 2; upstream fixtures keep indent 4.
 - `--filter=macro:<file>` selects the worktree lexical-core pool.
-- Regenerate the full corpus after changing copied Macro or Loro source.
+- Regenerate the full corpus after changing copied Macro or Loro source, including changes a merge from main brings; every fixture's `recordedWith` hashes them.
 - Review fixtures for account identities beyond the machine privacy scanner.
 - Entropy, node keys, handles and callback tapes reset for every test.
 
