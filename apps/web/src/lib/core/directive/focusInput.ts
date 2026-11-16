@@ -99,6 +99,24 @@ export function triggerFocusInput(
 }
 
 /**
+ * Focuses the next element matching `selector` to mount, through
+ * `triggerFocusInput`, so call it synchronously in the tap that opens it.
+ * Matches already on the page are skipped: a closing sheet's field lingers
+ * through its exit animation, and an open composer shares the new one's id.
+ * `touchOnly` leaves desktop focus to the opened view. Does nothing while
+ * another stand-in already holds the keyboard.
+ */
+export function triggerFocusNewElement(
+  selector: string,
+  options: { touchOnly?: boolean } = {}
+) {
+  if ((options.touchOnly && !isTouchDevice()) || focusStandInActive()) return;
+  const matches = () => document.querySelectorAll<HTMLElement>(selector);
+  const present = new Set(matches());
+  triggerFocusInput(() => Array.from(matches()).find((el) => !present.has(el)));
+}
+
+/**
  * Directive: focuses a target input when the host element is clicked.
  *
  * Pass a callback to the target element — it need not exist in the DOM at click

@@ -11,10 +11,11 @@ import {
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
-import { raiseKeyboardForRenameField } from '@entity/utils/rename-field-focus';
+import { RENAME_FIELD_SELECTOR } from '@entity/utils/rename-field-focus';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -145,7 +146,7 @@ function projectMenuEntries(
         )
         .with('rename', (id) =>
           action(id, t('entityActions.rename'), () => {
-            raiseKeyboardForRenameField();
+            triggerFocusNewElement(RENAME_FIELD_SELECTOR, { touchOnly: true });
             single(props.onRename)();
           })
         )
