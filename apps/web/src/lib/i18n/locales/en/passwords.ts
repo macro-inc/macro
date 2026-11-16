@@ -188,7 +188,7 @@ export default {
   import: 'Import…',
   importTitle: 'Import passwords',
   importIntro:
-    'Import an export from 1Password (.1pux or CSV) or Bitwarden (unencrypted JSON or CSV). The file is read on this device and never uploaded.',
+    'Import an export from 1Password (.1pux or CSV) or Bitwarden (unencrypted JSON, CSV or .zip). The file is read on this device and never uploaded.',
   importDrop: 'Drop an export file here',
   importChoose: 'Choose file',
   importReading: 'Reading the export…',
@@ -198,6 +198,7 @@ export default {
   importSource_one_password_csv: '1Password CSV',
   importSource_bitwarden_json: 'Bitwarden JSON',
   importSource_bitwarden_csv: 'Bitwarden CSV',
+  importSource_bitwarden_zip: 'Bitwarden export (.zip)',
   importItems: { one: '{{count}} item', other: '{{count}} items' },
   importFolderCount: { one: '{{count}} folder', other: '{{count}} folders' },
   importResumed:
@@ -247,6 +248,9 @@ export default {
   importNotCarried_totp_non_default:
     'Extra verification codes (kept as fields)',
   importNotCarried_extra_field: 'Unsupported fields',
+  importNotCarried_empty_field: 'Empty fields',
+  importNotCarried_reprompt: 'Master password re-prompt',
+  importNotCarried_uri_match_type: 'Website match rules',
   importTooManyFolders:
     'This import would bring the team to {{total}} folders; the limit is {{limit}}. Import into an existing folder or remove folders first.',
   importTooDeep:
@@ -296,11 +300,12 @@ export default {
   importError_too_many_items: 'The export has more than 20,000 items.',
   importError_path_traversal: 'The archive contains unsafe file names.',
   importError_invalid_zip: 'The archive could not be opened.',
-  importError_missing_export_data: 'The archive is not a 1Password export.',
+  importError_missing_export_data:
+    'The archive is not a 1Password or Bitwarden export.',
   importError_encrypted_bitwarden:
-    'This Bitwarden export is encrypted. Export again as unencrypted JSON or CSV.',
+    'This Bitwarden export is encrypted. Export again as unencrypted JSON, CSV or .zip.',
   importError_unsupported_version:
-    'This export version is not supported. From 1Password, export a .1pux file or a 1Password 8 CSV; from Bitwarden, an unencrypted JSON or CSV.',
+    'This export version is not supported. From 1Password, export a .1pux file or a 1Password 8 CSV; from Bitwarden, an unencrypted JSON, CSV or .zip.',
   importError_invalid_json: 'The file is not valid JSON (line {{line}}).',
   importError_invalid_csv: 'The file is not valid CSV (row {{row}}).',
   importError_unreadable: 'The file could not be read. Try again.',
