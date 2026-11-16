@@ -68,10 +68,10 @@ function Root(props: RootProps): JSX.Element {
       onClick={props.onClick}
       onKeyDown={onKeyDown}
     >
-      {/* Mobile-only unread dot in the left rail. */}
+      {/* Touch-only unread dot in the left rail. */}
       <span
         aria-hidden="true"
-        class="absolute left-(--soup-inbox-unread-indicator-padding-x) top-1/2 hidden size-(--soup-inbox-unread-indicator-diameter) -translate-y-1/2 rounded-full bg-accent opacity-0 group-data-unread/inbox-item:opacity-100 mobile:block"
+        class="absolute left-(--soup-inbox-unread-indicator-padding-x) top-1/2 hidden size-(--soup-inbox-unread-indicator-diameter) -translate-y-1/2 rounded-full bg-accent opacity-0 group-data-unread/inbox-item:opacity-100 touch:block"
       />
       {props.children}
     </div>
