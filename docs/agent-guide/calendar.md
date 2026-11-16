@@ -545,11 +545,8 @@ calendars (a minus when only some show), and its trailing caret (`Expand <addres
 opens one check row per calendar with the same swatch, warning and RSS marks. Accounts
 start collapsed each time the sheet opens. The rows write the same browser-local
 visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
-expanded the sheet scrolls under its pinned handle. The dropdown form of the header
-gear, which only a tablet's inline Calendar preview shows, nests the same choices the
-way it nests Week starts on: each account under `Calendars` opens a submenu with
-`All calendars` (mixed while only some show) and one checkbox per calendar, and the
-account row carries an accent dot while any of its calendars is hidden.
+expanded the sheet scrolls under its pinned handle. The gear's dropdown form (the
+sidebar footer's `Settings`) has no `Calendars` group: the sidebar lists them itself.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
