@@ -1,11 +1,12 @@
 # Client document sessions
 
 How the browser (and native hosts) edit, persist and sync a collaborative
-document. Three Rust crates hold all policy; the host only executes effects.
+document. Rust crates hold all policy; the host only executes effects.
 The server side of the socket is described in [sync-router.md](sync-router.md).
 
 ```text
-packages/collaboration/src/session/   JS executor: sockets, timers, IndexedDB, DOM view
+packages/lexical-wasm-view            DOM view: rendering, input, selection
+packages/collaboration/src/session/   JS executor: sockets, timers, IndexedDB
         |  Bebop cold messages + flat Diff + primitive hot inputs
 crates/client/document_session_wasm   wasm-bindgen cdylib (EditorSession, DocSession, SyncRouter)
         |
@@ -14,12 +15,30 @@ crates/client/document_session        EditorCore or generic Loro containers + sy
 crates/client/doc_sync_core           deterministic sync machines: WAL, convergence, router
 ```
 
+`crates/client/document_session_ffi` exposes the same session to native hosts
+through UniFFI; no native host integration is in this tree.
+
+## Editor layer
+
+The editor model is a Rust port of Lexical 0.45 under `crates/client/lexical/`:
+`lexical_model` (values, registry, transactions, commands), `lexical_rich_nodes`,
+`lexical_markdown`, `lexical_html`, `lexical_loro` (commit projection into Loro)
+and `macro_document_model` (Macro's nodes, plugins and application registry).
+`document_session` composes them with `doc_sync_core`.
+
+In the web app the `rust-editor-model` feature flag (`RUST_EDITOR_ENGINE`, read
+once at boot) selects this engine for the document body only
+(`RustMarkdownEditor`); every other editor, and every `lexical`/`@lexical/*`
+import, stays on upstream Lexical. Code tokenizing stays in TypeScript: the body
+supplies Source's Prism tokenizer to the session.
+
 ## Host contract
 
 - The core is deterministic: no I/O, clock reads, random generation or
   unordered output iteration. The host supplies both clocks (monotonic and
   wall), peer ids and entropy, and executes the returned effects. The
-  `rust-sync-core-determinism` ast-grep rule enforces this in `doc_sync_core`.
+  `rust-sync-core-determinism` ast-grep rule enforces this in `doc_sync_core`
+  and `document_session`.
 - `SyncCore::handle` consumes one input and clears and refills one output
   buffer. Each host input enters the shared handle path exactly once; surface
   imports queue their view effects in the same output as the sync input that

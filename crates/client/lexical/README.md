@@ -75,6 +75,11 @@ The conformance test covers this distinction over the complete BMP input.
 
 The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; `lexical_html` supplies export-only DOM construction and linkedom serialization; rich-node exporters and clipboard HTML are behind the rich package’s `html` feature.
 
+`macro_document_model` holds Macro's node payloads, plugins, mentions, XML and
+Markdown exports and the application registry used by document sessions.
+`lexical_conformance_wasm` exposes development-only differential facades over the
+model for the conformance harness.
+
 `lexical_markdown` provides portable markdown import/export, ordered transformer
 contracts, standard block/inline groups and sans-IO insertion/Enter shortcuts. The conformance replay routes markdown
 conversion through this engine; the regex corpus is checked against pinned V8.
