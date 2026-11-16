@@ -178,3 +178,54 @@ export async function loseWriteAnswers(
   await context.route(SERVICES, handler);
   return () => context.unroute(SERVICES, handler);
 }
+
+/** The requests a page reads its list of channels with, a hundred to a page. */
+const CHANNEL_LIST = '**/dss/comms/channels?**';
+
+/**
+ * Resolves when the page has read its whole list of channels. Start it before
+ * the page opens. A person with thousands of channels reads the list for
+ * seconds, and a rename saved meanwhile never shows in the header (CHN-16);
+ * a cast that has run the suite some forty times is such a person.
+ */
+export function channelListRead(page: Page): Promise<void> {
+  return page
+    .waitForResponse(
+      async (response) => {
+        if (!response.url().includes('/dss/comms/channels?')) return false;
+        if (!response.ok()) return false;
+        const body: { next_cursor?: string | null } = await response.json();
+        return !body.next_cursor;
+      },
+      { timeout: 120_000 }
+    )
+    .then(() => undefined);
+}
+
+/**
+ * Holds back the answers to the page's reading of its list of channels: the
+ * services have answered, the page has not been told. Returns the step that
+ * lets them through, which first waits for one to be held.
+ */
+export async function holdChannelList(
+  page: Page
+): Promise<() => Promise<void>> {
+  const held: Array<() => void> = [];
+  let holding = true;
+  await page.route(CHANNEL_LIST, async (route) => {
+    const answer = await route.fetch();
+    if (holding) await new Promise<void>((letGo) => held.push(letGo));
+    try {
+      await route.fulfill({ response: answer });
+    } catch {
+      // the page that asked is gone
+    }
+  });
+  return async () => {
+    await expect
+      .poll(() => held.length, { message: 'an answer is held back' })
+      .toBeGreaterThan(0);
+    holding = false;
+    for (const letGo of held) letGo();
+  };
+}

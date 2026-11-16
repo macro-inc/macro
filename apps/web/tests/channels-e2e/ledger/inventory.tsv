@@ -33,7 +33,7 @@ first-unread	The first message in a new channel marks it unread for the other me
 direct-messages	A direct message or named group I start reaches the others, continues one conversation, and can be answered	DM-01,DM-02,DM-03,DM-04,DM-05	
 dm-by-name	A teammate is offered by name in New direct message	DM-06	
 create	A private or team channel made in the app opens, lists and takes messages; its history starts with a created line	CHN-01,CHN-02,CHN-13,CHN-14	
-rename	Renaming a channel updates header and list for every member and is announced	CHN-03,CHN-04	
+rename	Renaming a channel updates header and list for every member and is announced	CHN-03,CHN-04,CHN-16	
 favorites	A channel can be made a favorite and taken out again	CHN-05	
 channel-link	Copy Link on a channel gives an address that opens it for another member	CHN-06	
 delete-channel	Deleting a channel removes it for owner and members at once; only the owner is offered it	CHN-07,CHN-08,CHN-09,CHN-15	

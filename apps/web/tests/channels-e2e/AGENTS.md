@@ -94,3 +94,12 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   time, so only what the device itself dates moves with it.
 - `blockWrites` and `loseWriteAnswers` match the four message mutations by
   name; a broader match also stops the read-marker writes a page makes.
+- Every run leaves its channels on the stack, and a page reads its whole
+  list of channels, a hundred to a request, after every load: a cast that has
+  run the suite some forty times reads for seconds. A rename saved meanwhile
+  never reaches the header (CHN-16), so a test that renames in the app waits
+  with `channelListRead` first (CHN-03). Check a test that started failing on
+  an old stack against a cast that has run little (`CHANNELS_E2E_FIRST_CAST`).
+- The Invite dialog's one row reads "Invite <address>" until the device's own
+  list of people answers, then becomes that person's row, sometimes under the
+  click: find the row by the address (`inviteByEmail`), not by that name.
