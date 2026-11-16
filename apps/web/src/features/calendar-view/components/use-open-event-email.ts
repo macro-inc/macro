@@ -1,8 +1,9 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { eventDisplayTitle } from '@app/features/calendar/utils/event-forward-summary';
 import { eventEmailRecipients } from '@app/features/calendar/utils/guest-emails';
+import { EMAIL_COMPOSE_TO_INPUT_SELECTOR } from '@app/features/email-compose/core/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { focusNewComposerTo } from './focus-new-composer';
+import { triggerFocusNewElement } from '@core/directive/focusInput';
 
 /**
  * Opens a new email addressed to the event's other guests, with the event's
@@ -17,7 +18,7 @@ export function useOpenEventEmail() {
   const { openWithSplit } = useSplitLayout();
 
   return (event: CalendarEvent) => {
-    focusNewComposerTo();
+    triggerFocusNewElement(EMAIL_COMPOSE_TO_INPUT_SELECTOR);
     openWithSplit(
       {
         type: 'component',
