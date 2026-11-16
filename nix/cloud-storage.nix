@@ -132,6 +132,16 @@
       # pruned sources; only changes when a manifest or the lock changes.
       deployDummySrc = craneLib.mkDummySrc { inherit src; };
 
+      # Dependency-only builds compile registry crates against the
+      # [patch.crates-io] crates under vendor/ (loro against the patched
+      # loro-internal), so those must keep their real sources, not stubs.
+      depsDummySrc = pkgs.runCommand "cloud-storage-deps-dummy-src" { } ''
+        cp -rT ${deployDummySrc} $out
+        chmod -R +w $out
+        rm -rf $out/vendor
+        cp -rT ${rootDepsSrc}/vendor $out/vendor
+      '';
+
       # Real sources of one workspace crate dir, same filter as the full tree
       # (keeps per-crate assets: pdfium blobs, .sql migrations, templates).
       crateDirSrc =
@@ -273,6 +283,7 @@
 
       commonArgs = {
         inherit src;
+        dummySrc = depsDummySrc;
         pname = "cloud-storage";
         version = "0.1.0";
         strictDeps = true;
@@ -1170,6 +1181,8 @@
           grep -q "pub struct LoroDoc" "$pruned_src/vendor/loro-server/loro/src/lib.rs"
           test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
           grep -q "IANA_TZDB_VERSION" "$pruned_src/vendor/chrono-tz/src/prebuilt/directory.rs"
+          # Dependency-only builds compile loro against the real patched loro-internal.
+          grep -q "pub mod handler" "${depsDummySrc}/vendor/loro-editor/loro-internal/src/lib.rs"
           touch $out
         '';
         pruned-deploy-src-starter-agent =
