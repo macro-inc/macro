@@ -364,6 +364,9 @@ pub enum Error {
     #[error("vault provider unavailable")]
     /// Provider, metadata storage, or rollout evaluation is unavailable.
     Unavailable,
+    #[error("team vault is not provisioned")]
+    /// The team's provider namespace does not exist yet; retrying cannot help.
+    NotProvisioned,
 }
 
 /// A metadata-only change never reads or writes a secret value.
