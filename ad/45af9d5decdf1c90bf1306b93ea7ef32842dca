@@ -1,0 +1,77 @@
+packages/sdk-ocaml/e2e/tasks.ml
+  s_2902879595f308::t_e2b36f79964a7b 1-69,73-88
+  s_2902879595f308::t_a84a12beebcf17 70-72
+packages/sdk-ocaml/e2e/properties.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-51
+packages/sdk-ocaml/e2e/search.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-23
+packages/sdk-ocaml/e2e/notifications.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-25
+packages/sdk-ocaml/e2e/email_draft.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-29
+packages/sdk-ocaml/e2e/cleanup.ml
+  s_2902879595f308::t_a84a12beebcf17 92-150
+  s_c40fd2f0323f22::t_30b825a6e223e8 1-91,151-154
+packages/sdk-ocaml/e2e/common.ml
+  s_2902879595f308::t_866fa2b17455c0 1-58,60-150
+  s_2902879595f308::t_a84a12beebcf17 59
+packages/sdk-ocaml/e2e/calendar.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-19,23-30,34-42
+  s_2902879595f308::t_a84a12beebcf17 20-22,31-33
+packages/sdk-ocaml/e2e/contacts.ml
+  s_2902879595f308::t_a84a12beebcf17 14-15
+  s_2902879595f308::t_2ffecc94dfcbfa 1-13,16-18
+packages/sdk-ocaml/e2e/chats.ml
+  s_2902879595f308::t_a84a12beebcf17 8-9,27
+  s_2902879595f308::t_2ffecc94dfcbfa 1-7,10-26,28-52
+packages/sdk-ocaml/e2e/run.sh
+  s_2902879595f308::t_0b1589275195e5 1-238
+packages/sdk-ocaml/e2e/workspace.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-21
+packages/sdk-ocaml/e2e/documents.ml
+  s_2902879595f308::t_503a9dd40c3b2d 1-13,16-65
+  s_2902879595f308::t_a84a12beebcf17 14-15
+packages/sdk-ocaml/e2e/projects.ml
+  s_2902879595f308::t_e2b36f79964a7b 1-33,36-44
+  s_2902879595f308::t_a84a12beebcf17 34-35
+packages/sdk-ocaml/e2e/channels.ml
+  s_2902879595f308::t_2ffecc94dfcbfa 1-19,23-50
+  s_2902879595f308::t_a84a12beebcf17 20-22
+packages/sdk-ocaml/e2e/dune
+  s_2902879595f308::t_503a9dd40c3b2d 1-7,9-27
+  s_2902879595f308::t_e2b36f79964a7b 8
+  s_2902879595f308::t_e27727d2125b15 28-30
+  s_c40fd2f0323f22::t_c77222ff2f2e1e 31-77
+packages/sdk-ocaml/.gitignore
+  s_c40fd2f0323f22::t_466c630a64a972 2,4
+packages/sdk-ocaml/AGENTS.md
+  s_c40fd2f0323f22::t_42cb303f31b1bd 25-26,44-45
+packages/sdk-ocaml/README.md
+  s_c40fd2f0323f22::t_ed41af3b950d6a 110-116
+packages/sdk-ocaml/e2e/README.md
+  s_c40fd2f0323f22::t_88135b1e276081 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ad45af9d5decdf1c90bf1306b93ea7ef32842dca",
+  "prompts": {},
+  "sessions": {
+    "s_2902879595f308": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "032e234d-3e13-4851-bcf6-8822aee1bbe8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c40fd2f0323f22": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "697afab3-8e52-40d8-935b-b7e2a318efb2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
