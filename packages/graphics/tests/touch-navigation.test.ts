@@ -111,28 +111,28 @@ it('pans with two fingers that move together', () => {
   expect(editor.getCamera()).toEqual({ x: 30, y: 60, scale: 1 });
 });
 
-it.each([
-  'rectangle',
-  'pencil',
-] as const)('drops a %s the first finger started', (tool) => {
-  const { editor, finger } = setup({ tool: () => tool });
-  const before = editor.document;
+it.each(['rectangle', 'pencil'] as const)(
+  'drops a %s the first finger started',
+  (tool) => {
+    const { editor, finger } = setup({ tool: () => tool });
+    const before = editor.document;
 
-  finger(1, 'pointerdown', 150, 150);
-  finger(1, 'pointermove', 180, 190);
-  expect(editor.getPreview()).toBeDefined();
+    finger(1, 'pointerdown', 150, 150);
+    finger(1, 'pointermove', 180, 190);
+    expect(editor.getPreview()).toBeDefined();
 
-  finger(2, 'pointerdown', 260, 150);
-  expect(editor.getPreview()).toBeUndefined();
-  finger(1, 'pointermove', 140, 190);
-  finger(2, 'pointermove', 300, 150);
-  finger(2, 'pointerup', 300, 150);
-  finger(1, 'pointerup', 140, 190);
+    finger(2, 'pointerdown', 260, 150);
+    expect(editor.getPreview()).toBeUndefined();
+    finger(1, 'pointermove', 140, 190);
+    finger(2, 'pointermove', 300, 150);
+    finger(2, 'pointerup', 300, 150);
+    finger(1, 'pointerup', 140, 190);
 
-  expect(editor.document).toBe(before);
-  expect(editor.getSession().canUndo).toBe(false);
-  expect(editor.getCamera().scale).not.toBe(1);
-});
+    expect(editor.document).toBe(before);
+    expect(editor.getSession().canUndo).toBe(false);
+    expect(editor.getCamera().scale).not.toBe(1);
+  }
+);
 
 it('drops a marquee and restores what it had deselected', () => {
   const { editor, finger } = setup({ tool: () => 'select' });
