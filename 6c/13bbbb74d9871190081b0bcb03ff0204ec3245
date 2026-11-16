@@ -1,0 +1,71 @@
+crates/agent_monitor_tui/src/view.rs
+  s_564ae7a9b7392a::t_c0e5ec68157574 507
+crates/agent_monitor_tui/src/app.rs
+  s_564ae7a9b7392a::t_1404a6cab95c44 292,354,357,362
+  s_564ae7a9b7392a::t_0ebd8b4c7c1d14 318-320,360-361
+  s_5654e5f7d715d4::t_c0c2962d1d8cbe 317,321
+crates/agent_monitor_tui/src/ui/changes/page.rs
+  s_564ae7a9b7392a::t_82314b8f0c8c44 39-49
+  s_564ae7a9b7392a::t_0ebd8b4c7c1d14 25-32,34-38,51-52,56
+  s_564ae7a9b7392a::t_d8be60ee5775ba 1,5,8-10,24,50,53-55,57,60
+crates/agent_monitor_tui/src/ui/changes/draw.rs
+  s_564ae7a9b7392a::t_0ebd8b4c7c1d14 57-61,102-103,111,240-245,255,260,291-292
+  s_5654e5f7d715d4::t_b20ed35b0e67b3 17,54-56,62,101,104
+crates/agent_monitor_tui/src/ui/changes/detail.rs
+  s_564ae7a9b7392a::t_1404a6cab95c44 1-189
+crates/agent_monitor_tui/src/ui/changes.rs
+  s_564ae7a9b7392a::t_c0e5ec68157574 5
+  s_564ae7a9b7392a::t_1404a6cab95c44 1-2,22
+  s_564ae7a9b7392a::t_9d25d20e4a6c14 20
+crates/agent_monitor_tui/src/ui.rs
+  s_564ae7a9b7392a::t_1404a6cab95c44 207
+crates/agent_monitor_tui/src/app/test.rs
+  s_564ae7a9b7392a::t_0ebd8b4c7c1d14 275-279
+  s_564ae7a9b7392a::t_0db27c8b71e84d 259,280
+crates/agent_monitor_tui/AGENTS.md
+  s_564ae7a9b7392a::t_ead5a8f8512511 34-40,89-93
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_puts_a_pr_in_an_unmapped_repository_on_its_own_tab.snap
+  s_5654e5f7d715d4::t_08d7ecb2cc258d 6-48
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_without_repositories_lists_the_prs_and_enter_opens_the_author.snap
+  s_5654e5f7d715d4::t_2bd60a919aa771 6-48
+crates/coding_agent_worker/README.md
+  s_564ae7a9b7392a::t_f84bd7519b0538 247-252
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_200x56.snap
+  s_564ae7a9b7392a::t_feddc19eaa1918 6-59
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_240x45.snap
+  s_564ae7a9b7392a::t_6c67d2fcbe271a 6-48
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_compact_80x24.snap
+  s_564ae7a9b7392a::t_e25c6de6232af2 7-27
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_failing_lane_selected_and_enter_drills_into_the_author.snap
+  s_564ae7a9b7392a::t_133bea8b2bb1f6 6-48
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_inspect_narrow_80x24.snap
+  s_564ae7a9b7392a::t_a86f1f023f0eb7 7,12,19,24-26
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_narrow_100x30.snap
+  s_564ae7a9b7392a::t_41c48b8aa68880 7-24,28-33
+crates/agent_monitor_tui/src/ui/snapshots/agent_monitor_tui__ui__test__changes_timeline_200x56.snap
+  s_564ae7a9b7392a::t_e21861c4bc4286 6-7,50-53,59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6c13bbbb74d9871190081b0bcb03ff0204ec3245",
+  "prompts": {},
+  "sessions": {
+    "s_564ae7a9b7392a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e266-9e70-7091-9ea4-3b7a56db33fe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_5654e5f7d715d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6f433909-1581-4719-a979-d38b98209ab6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
