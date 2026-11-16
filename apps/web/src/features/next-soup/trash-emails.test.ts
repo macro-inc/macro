@@ -84,7 +84,6 @@ vi.mock('@queries/soup/cache', () => ({
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: {
-    flagArchived: vi.fn(async () => {}),
     getUserLabels: vi.fn(async () => ({ labels: [] })),
     updateThreadState: operationMocks.updateThreadState,
   },
