@@ -152,7 +152,8 @@ function isRetryable(code: ImportErrorCode | undefined) {
  * Sends `run` one batch at a time. A batch whose request fails for want of
  * an answer, a busy vault or a server error is sent again; a rejected one is
  * not. Items answered busy, unavailable or folder missing go into a later
- * round, after a wait. Item ids derive from the
+ * round, after a wait. Once the team's vault turns out not to be set up,
+ * nothing more is sent and every unsent item fails for that reason. Item ids derive from the
  * import id and source key on the server, so a resent item is never doubled.
  */
 export async function sendImport(
@@ -187,7 +188,11 @@ export async function sendImport(
   for (let round = 0; pending.length > 0; round++) {
     if (round > 0) await wait(RETRY_BACKOFF_MS * 2 ** (round - 1));
     const retry: ParsedImportItem[] = [];
+    let sent = 0;
+    let notProvisioned = false;
     for (const items of planBatches(pending, run.folders)) {
+      if (notProvisioned) break;
+      sent += items.length;
       const body: ImportBatchBody = {
         format: run.format,
         target,
@@ -213,7 +218,8 @@ export async function sendImport(
       if (result.isErr()) {
         // Folder-phase and request failures fail the whole batch.
         fail(result.error.reason, items.length);
-        outcome.interrupted = true;
+        notProvisioned = result.error.reason === 'not_provisioned';
+        if (!notProvisioned) outcome.interrupted = true;
         options.onProgress(
           outcome.created + outcome.alreadyPresent + outcome.failed
         );
@@ -237,6 +243,8 @@ export async function sendImport(
             outcome.alreadyPresent++;
           })
           .with('failed', () => {
+            if (answer.errorCode === 'vault_not_provisioned')
+              notProvisioned = true;
             if (isRetryable(answer.errorCode) && round + 1 < ITEM_RETRY_ROUNDS)
               retry.push(item);
             else fail(itemFailureReason(answer.errorCode));
@@ -250,6 +258,14 @@ export async function sendImport(
       options.onProgress(
         outcome.created + outcome.alreadyPresent + outcome.failed
       );
+    }
+    if (notProvisioned) {
+      // No item can land in a team vault that doesn't exist: send no more.
+      fail('not_provisioned', pending.length - sent + retry.length);
+      options.onProgress(
+        outcome.created + outcome.alreadyPresent + outcome.failed
+      );
+      break;
     }
     pending = retry;
   }
