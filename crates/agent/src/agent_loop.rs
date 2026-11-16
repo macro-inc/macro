@@ -140,6 +140,8 @@ pub struct AgentLoop {
     genai_telemetry: bool,
     /// See [`Self::with_streamed_tool_calls`].
     stream_tool_calls: bool,
+    /// See [`Self::with_unknown_tool_hint`].
+    unknown_tool_hint: Arc<str>,
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
@@ -168,6 +170,7 @@ impl AgentLoop {
             agent_name: None,
             genai_telemetry: true,
             stream_tool_calls: false,
+            unknown_tool_hint: Arc::from(crate::hook::UNKNOWN_TOOL_HINT),
             router: None,
         }
     }
@@ -300,6 +303,13 @@ impl AgentLoop {
     /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
     pub fn with_streamed_tool_calls(mut self) -> Self {
         self.stream_tool_calls = true;
+        self
+    }
+
+    /// Tell a model that calls a tool that exists nowhere what to do instead,
+    /// for a host that has no `SearchTools`.
+    pub fn with_unknown_tool_hint(mut self, hint: impl Into<Arc<str>>) -> Self {
+        self.unknown_tool_hint = hint.into();
         self
     }
 
@@ -538,6 +548,7 @@ impl AgentLoop {
                 user_tool_finisher: self.user_tool_finisher.clone(),
                 stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
+                unknown_tool_hint: Arc::clone(&self.unknown_tool_hint),
             },
             recorder: self.recorder.clone(),
             usage_ctx,
