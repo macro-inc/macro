@@ -433,12 +433,23 @@ async fn run_server() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Availability checks on interactive paths must fail closed promptly.
+        Duration::from_millis(300),
+        config.environment,
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     // DSS only reads CRM rows — no-op resolver keeps reqwest/scraper
     // out of this binary.
     let crm_service = crm::domain::service::CrmServiceImpl::new(
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
-    );
+    )
+    .with_thread_exclusion_gate(Arc::new(
+        crm::outbound::thread_exclusions::FlaggedThreadExclusions(flags.clone()),
+    ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(db.clone()),
@@ -908,14 +919,7 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder
         .with_voice_repo(PgVoiceRepo::new(db.clone()))
         .with_event_broker(macro_event_broker.clone());
-    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-        config.posthog_api_key.as_ref().to_owned(),
-        // Flag evaluation is on the call-start path; fall back promptly.
-        Duration::from_millis(300),
-        config.environment,
-    )
-    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+
     let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> = match (
         config.openbao_address.value(),
         config.passwords_jwt_issuer.value(),
