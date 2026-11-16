@@ -339,7 +339,8 @@
       # The bundle's path, the way CODE_MODE_ASSETS_DIR is: a build of
       # crates/code_mode_assets with it set compiles and runs OCaml programs
       # against this bundle (crates/code_execution); without it they fail
-      # with a message saying so. No service build merges it yet.
+      # with a message saying so. The agent harness's deploy build merges it
+      # (deployServiceBinaryPackage).
       codeModeOcamlEnv = {
         CODE_MODE_OCAML_DIR = "${codeModeOcaml}";
       };
@@ -718,6 +719,10 @@
           // pkgs.lib.optionalAttrs (builtins.elem "crates/code_mode_assets" (
             workspaceDepClosures.${packageName} or [ ]
           )) codeModeAssetsEnv
+          # The agent harness runs code mode's OCaml programs: its binary
+          # names the OCaml bundle, so the bundle's closure ships in its
+          # image (the deploy copies the binary's whole runtime closure).
+          // pkgs.lib.optionalAttrs (packageName == "agent_harness_service") codeModeOcamlEnv
           // {
             # Pruned source: this derivation only rebuilds when a crate in
             # the service's own workspace closure changes.
