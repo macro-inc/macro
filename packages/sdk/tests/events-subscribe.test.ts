@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { EventStream } from '../src/events/subscribe';
 import { EventStreamResetError, Macro } from '../src/macro';
 import { MacroError } from '../src/utils';
 
@@ -364,6 +365,56 @@ describe('macro.events.subscribe', () => {
 
     expect(pulled).toBeLessThan(400);
     await iterator.return?.();
+  });
+
+  test('keeps its backoff after a long attempt the server never accepted', async () => {
+    // A clock that jumps two and a half minutes while the second and third
+    // requests are open: one is refused late (503), one is accepted (200).
+    let now = 0;
+    const clock = spyOn(Date, 'now').mockImplementation(() => now);
+    const answers: Connection[] = [
+      { status: 503 },
+      { status: 503 },
+      { frames: [] },
+    ];
+    const requests: Request[] = [];
+    const server = fakeServer(answers);
+    const fake = globalThis.fetch;
+    globalThis.fetch = (async (input: Request | string | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (requests.length === 2 || requests.length === 3) now += 150_000;
+      return fake(request);
+    }) as typeof fetch;
+    const attempts: number[] = [];
+    const controller = new AbortController();
+    const stream = new EventStream(
+      macro()._client,
+      {
+        filters: [{ events: ['document.created'] }],
+        scope: 'user',
+        signal: controller.signal,
+        backoff: (attempt) => {
+          attempts.push(attempt);
+          if (attempts.length === 3) controller.abort();
+          return 0;
+        },
+      },
+      (event) => event,
+    );
+
+    try {
+      for await (const _ of stream) {
+        // no events
+      }
+    } finally {
+      clock.mockRestore();
+    }
+
+    expect(server).toHaveLength(3);
+    // The hung, refused attempt grows the backoff; the accepted long-lived
+    // connection resets it.
+    expect(attempts).toEqual([1, 2, 1]);
   });
 
   test('can be iterated only once', async () => {

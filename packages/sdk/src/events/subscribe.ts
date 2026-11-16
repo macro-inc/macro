@@ -290,12 +290,13 @@ export class EventStream<T> implements AsyncIterable<T> {
     const signal = this.controller.signal;
     const retry = { attempt: 0, idle: 0, revoked: 0 };
     while (!signal.aborted) {
-      const { end, delivered, lastedMs } = yield* this.connection(signal);
+      const { end, delivered, opened, lastedMs } = yield* this.connection(signal);
       if (signal.aborted) break;
-      // A connection that delivered, or stayed up past two credential
-      // re-checks, was healthy: back off from scratch, and only short-lived
-      // revoked closes count toward giving up.
-      if (delivered || lastedMs >= LONG_LIVED_MS) {
+      // A connection that delivered, or was accepted and stayed up past two
+      // credential re-checks, was healthy: back off from scratch, and only
+      // short-lived revoked closes count toward giving up. An attempt that
+      // hung without being accepted keeps the grown backoff.
+      if (delivered || (opened && lastedMs >= LONG_LIVED_MS)) {
         retry.attempt = 0;
         retry.revoked = 0;
       }
@@ -356,10 +357,11 @@ export class EventStream<T> implements AsyncIterable<T> {
     signal: AbortSignal,
   ): AsyncGenerator<
     T,
-    { end: ConnectionEnd; delivered: boolean; lastedMs: number },
+    { end: ConnectionEnd; delivered: boolean; opened: boolean; lastedMs: number },
     undefined
   > {
-    const opened = Date.now();
+    const started = Date.now();
+    let opened = false;
     const queue = new FrameQueue();
     const connection = new AbortController();
     const stopConnection = () => connection.abort();
@@ -367,12 +369,15 @@ export class EventStream<T> implements AsyncIterable<T> {
     // Settles by calling `finish`; it never rejects.
     const connected = this.settle(
       connection.signal,
+      () => {
+        opened = true;
+      },
       (frame) => queue.push(frame),
       (end) => queue.finish(end),
     );
     let delivered = false;
     let end: ConnectionEnd | undefined;
-    let closed = opened;
+    let closed = started;
     try {
       for (
         let frame = await queue.next(signal);
@@ -397,7 +402,8 @@ export class EventStream<T> implements AsyncIterable<T> {
     return {
       end: end ?? queue.ended ?? { kind: 'reconnect', immediate: false },
       delivered,
-      lastedMs: closed - opened,
+      opened,
+      lastedMs: closed - started,
     };
   }
 
@@ -438,11 +444,12 @@ export class EventStream<T> implements AsyncIterable<T> {
   /** Run one connection and report how it ended, failures included. */
   private async settle(
     signal: AbortSignal,
+    onOpen: () => void,
     push: (frame: Frame) => Promise<void>,
     finish: (end: ConnectionEnd) => void,
   ): Promise<void> {
     try {
-      finish(await this.connect(signal, push));
+      finish(await this.connect(signal, onOpen, push));
     } catch (error) {
       finish({
         kind: 'fatal',
@@ -454,9 +461,13 @@ export class EventStream<T> implements AsyncIterable<T> {
     }
   }
 
-  /** Hold one connection open, pushing its frames, until it ends. */
+  /**
+   * Hold one connection open, pushing its frames, until it ends. `onOpen`
+   * runs once the server accepts it (a 2xx response).
+   */
   private async connect(
     signal: AbortSignal,
+    onOpen: () => void,
     push: (frame: Frame) => Promise<void>,
   ): Promise<ConnectionEnd> {
     let status: number | undefined;
@@ -476,6 +487,7 @@ export class EventStream<T> implements AsyncIterable<T> {
         async (request: Request) => {
           const response = await globalThis.fetch(request);
           status = response.status;
+          if (response.ok) onOpen();
           return response;
         },
         { preconnect: globalThis.fetch.preconnect },
