@@ -207,6 +207,7 @@ fn handle_replace(tx: &mut Transaction<'_>, command: &Replace) -> Result<(), Err
     let mut length_diff: i64 = 0;
     let mut replaced = 0;
     let mut next_key = None;
+    let mut rewritten = std::collections::HashSet::new();
     for (key, piece) in &command.pieces {
         if skip.contains(&piece.pair_key) {
             continue;
@@ -239,18 +240,48 @@ fn handle_replace(tx: &mut Transaction<'_>, command: &Replace) -> Result<(), Err
                 } else {
                     tx.text(*key)?
                         .set_text_content(&String::from_utf16_lossy(&next))?;
+                    rewritten.insert(*key);
                 }
             }
             length_diff += units(text.len()) - units(next.len());
         }
         previous = Some(*key);
     }
+    clamp_rewritten_points(tx, &rewritten)?;
     if let Some(key) = next_key {
         let mut nodes = NodeSelection::new();
         nodes.add(key);
         tx.set_selection(Some(Selection::Node(nodes)))?;
     }
     Ok(())
+}
+
+// Source setTextContent leaves the selection alone, so an in-range offset keeps
+// its number; a point past a rewritten node's new end would be an invalid model
+// selection here, so only that point is clamped to the end.
+fn clamp_rewritten_points(
+    tx: &mut Transaction<'_>,
+    rewritten: &std::collections::HashSet<NodeKey>,
+) -> Result<(), Error> {
+    let Some(Selection::Range(range)) = tx.selection() else {
+        return Ok(());
+    };
+    let clamp = |point: Point| match point {
+        Point::Text { key, offset }
+            if rewritten.contains(&key) && tx.view().text(key).is_some() =>
+        {
+            Point::text(key, offset.min(tx.view().text_content_size(key)))
+        }
+        other => other,
+    };
+    let (anchor, focus) = (clamp(range.anchor), clamp(range.focus));
+    if anchor == range.anchor && focus == range.focus {
+        return Ok(());
+    }
+    let mut next = range.clone();
+    next.anchor = anchor;
+    next.focus = focus;
+    tx.set_selection(Some(Selection::Range(next)))
 }
 
 pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {

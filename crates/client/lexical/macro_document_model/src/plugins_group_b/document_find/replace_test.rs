@@ -136,3 +136,102 @@ fn replace_requests_must_be_objects() -> Result<(), Error> {
     );
     Ok(())
 }
+
+#[test]
+fn replace_all_keeps_a_caret_past_the_shortened_text_inside_it() -> Result<(), Error> {
+    let input = json!({"root": {
+        "type":"root", "version":1, "direction":null, "format":"", "indent":0,
+        "children":[{"type":"paragraph","version":1,"direction":null,"format":"","indent":0,
+            "textFormat":0,"textStyle":"",
+            "children":[{"type":"text","version":1,"text":"apple one Apple two apple",
+                "detail":0,"format":0,"mode":"normal","style":""}]}]
+    }});
+    let mut editor = editor(&input)?;
+    let text = editor
+        .state()
+        .view()
+        .descendants(NodeKey::ROOT)
+        .map(|(key, _)| key)
+        .find(|key| editor.state().view().text(*key).is_some())
+        .expect("text node");
+    // The caret at the end of the text, as typing leaves it before Find.
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(text, Utf16Offset(25)),
+        ))))
+    })?;
+    let pieces = find_pieces(&editor, "apple")?;
+    let command = decode_command(
+        REPLACE_NAME,
+        &json!({"replaceString": "pear", "once": false, "pieces": pieces}).to_string(),
+        editor.state().max_key().generation(),
+        None,
+    )?
+    .expect("replace command");
+    assert_eq!(editor.dispatch(&command)?.0, Handled::Yes);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(text), "pear one pear two pear");
+    let Some(Selection::Range(range)) = view.selection() else {
+        panic!("range selection");
+    };
+    assert_eq!(range.anchor, Point::text(text, Utf16Offset(22)));
+    assert_eq!(range.focus, Point::text(text, Utf16Offset(22)));
+    editor.state().to_json()?;
+    Ok(())
+}
+
+/// Source keeps an in-range numeric offset after Replace (setTextContent never
+/// touches the selection); only a point past the new end is clamped.
+fn replace_with_caret(offset: u32, once_pair: Option<u32>) -> Result<(String, Point), Error> {
+    let input = json!({"root": {
+        "type":"root", "version":1, "direction":null, "format":"", "indent":0,
+        "children":[{"type":"paragraph","version":1,"direction":null,"format":"","indent":0,
+            "textFormat":0,"textStyle":"",
+            "children":[{"type":"text","version":1,"text":"apple one Apple two apple",
+                "detail":0,"format":0,"mode":"normal","style":""}]}]
+    }});
+    let mut editor = editor(&input)?;
+    let text = editor
+        .state()
+        .view()
+        .descendants(NodeKey::ROOT)
+        .map(|(key, _)| key)
+        .find(|key| editor.state().view().text(*key).is_some())
+        .expect("text node");
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(text, Utf16Offset(offset)),
+        ))))
+    })?;
+    let pieces: Vec<_> = find_pieces(&editor, "apple")?
+        .into_iter()
+        .filter(|piece| once_pair.is_none_or(|pair| piece.pair_key == pair))
+        .collect();
+    let command = decode_command(
+        REPLACE_NAME,
+        &json!({"replaceString": "pear", "once": once_pair.is_some(), "pieces": pieces})
+            .to_string(),
+        editor.state().max_key().generation(),
+        None,
+    )?
+    .expect("replace command");
+    assert_eq!(editor.dispatch(&command)?.0, Handled::Yes);
+    editor.state().to_json()?;
+    let view = editor.state().view();
+    let Some(Selection::Range(range)) = view.selection() else {
+        panic!("range selection");
+    };
+    assert_eq!(range.anchor, range.focus);
+    Ok((view.text_content(text).into_owned(), range.anchor))
+}
+
+#[test]
+fn replace_keeps_an_in_range_caret_offset_and_clamps_only_past_the_end() -> Result<(), Error> {
+    let (text, caret) = replace_with_caret(12, None)?;
+    assert_eq!(text, "pear one pear two pear");
+    assert_eq!(caret.offset(), 12);
+    let (text, caret) = replace_with_caret(25, Some(3))?;
+    assert_eq!(text, "apple one Apple two pear");
+    assert_eq!(caret.offset(), 24);
+    Ok(())
+}
