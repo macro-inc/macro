@@ -16,10 +16,10 @@ postcard. Remote definitions mirror native types and are checked by Rust.
 
 ## Checks
 
-- `TMPDIR=/home/wolf/tmp cargo test -p document_session_ffi -j2`
-- `TMPDIR=/home/wolf/tmp cargo clippy -p document_session_ffi --all-targets -j2 -- -D warnings`
-- `TMPDIR=/home/wolf/tmp cargo check -p document_session_ffi --target aarch64-apple-ios-sim -j2`
-- `TMPDIR=/home/wolf/tmp cargo check -p document_session_ffi --target aarch64-linux-android -j2`
+- `cargo test -p document_session_ffi -j2`
+- `cargo clippy -p document_session_ffi --all-targets -j2 -- -D warnings`
+- `cargo check -p document_session_ffi --target aarch64-apple-ios-sim -j2`
+- `cargo check -p document_session_ffi --target aarch64-linux-android -j2`
 - `cargo x deps --check`, `just check`, `just pr-privacy`
 
 On Linux, iOS validation stops before linking. Android linking requires an NDK.

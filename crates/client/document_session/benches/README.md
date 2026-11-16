@@ -1,10 +1,9 @@
 # Native bulk measurements
 
-Run from the worktree root inside its devshell, with an owned target directory:
+Run from the worktree root inside its devshell:
 
 ```sh
-TMPDIR=/home/wolf/tmp CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR="$PWD/target" \
-  direnv exec . cargo bench -p document_session --bench bulk -j2 -- \
+direnv exec . cargo bench -p document_session --bench bulk -- \
   --save-baseline codec-before 'json-parse|json-serialize|markdown-export'
 ```
 
