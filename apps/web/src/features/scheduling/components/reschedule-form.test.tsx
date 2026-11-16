@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RescheduleForm } from './reschedule-form';
 
-vi.mock('./TimezoneSelect', () => ({
+vi.mock('@app/components/timezone-select/TimezoneSelect', () => ({
   TimezoneSelect: (props: {
     value: string;
     onChange: (zone: string) => void;

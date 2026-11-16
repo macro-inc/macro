@@ -1,3 +1,5 @@
+import { TimezoneSelect } from '@app/components/timezone-select/TimezoneSelect';
+import { timezoneOptions } from '@app/components/timezone-select/timezone-options';
 import { SearchBar } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -11,14 +13,10 @@ import { BookingStatusTabs, BookingsPanel } from '../components/bookings-panel';
 import { SelectInput } from '../components/fields';
 import { SchedulingFilterSection } from '../components/scheduling-filter-section';
 import { SchedulingFilters } from '../components/scheduling-filters';
-import { TimezoneSelect } from '../components/TimezoneSelect';
 import type { Booking, EventType, SchedulingMember } from '../core/types';
 import { createBookingsView } from '../primitives/create-bookings-view';
 
-const TIME_ZONES = Intl.supportedValuesOf('timeZone').map((value) => ({
-  value,
-  label: value.replaceAll('_', ' '),
-}));
+const TIME_ZONES = timezoneOptions();
 
 export function BookingsView(props: {
   headerTitle?: JSX.Element;

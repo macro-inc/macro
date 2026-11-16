@@ -782,6 +782,9 @@ not to account-wide paired machine count; a user can pair several computers.
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+- Reuse `components/timezone-select/` for searchable time-zone fields; retain an
+  unlisted current zone, scope nested popups locally, and close on permission loss.
+
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring

@@ -41,4 +41,7 @@ export default {
   optionsIncomplete: 'Cached options or selected names may be incomplete.',
   noOptionsInWindow: 'No matches in this page or cached snapshot.',
   settings: 'Settings',
+  timezone: 'Timezone',
+  searchTimezones: 'Search timezones...',
+  noMatchingTimezones: 'No timezones match "{{query}}"',
 };
