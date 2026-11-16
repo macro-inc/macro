@@ -107,6 +107,10 @@ data checks and explicit vault purge. It does not depend on a successful item.
   caller with many small sources, because it estimates each at the table's
   average grant count. Keep the fences, and re-measure both paths on a
   production-size seed before changing the limit.
+- `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
+  partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
+  batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must
+  stay in those indexes, and the list must not read without a page limit.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;

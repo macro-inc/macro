@@ -28013,8 +28013,30 @@
     "/recents/deleted": {
       "get": {
         "tags": ["recents"],
-        "summary": "Gets the users recently deleted items.",
+        "summary": "Gets one page of the user's trashed documents, chats and folders, most\nrecently trashed first.",
         "operationId": "recently_deleted",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-500, default 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "The previous page's next_cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -58502,7 +58524,11 @@
             "items": {
               "$ref": "#/components/schemas/Item"
             },
-            "description": "The items returned from the call"
+            "description": "The items returned from the call, most recently trashed first"
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Pass as `cursor` to get the next page; absent on the last page"
           }
         }
       },
@@ -66347,7 +66373,11 @@
                     "items": {
                       "$ref": "#/components/schemas/Item"
                     },
-                    "description": "The items returned from the call"
+                    "description": "The items returned from the call, most recently trashed first"
+                  },
+                  "next_cursor": {
+                    "type": ["string", "null"],
+                    "description": "Pass as `cursor` to get the next page; absent on the last page"
                   }
                 }
               }
