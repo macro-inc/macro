@@ -204,6 +204,11 @@ export default {
     other:
       'Marked {{completed}} of {{count}} items as done. Some changes could not be saved.',
   },
+  toastMarkedDoneNotificationsUnsaved: {
+    one: "Marked {{count}} item as done, but its notifications couldn't be cleared.",
+    other:
+      "Marked {{count}} items as done, but their notifications couldn't be cleared.",
+  },
   toastMarkDoneUnsaved:
     'Some changes could not be saved. Undo will reverse the accepted changes.',
   toastMarkDoneFailed: 'Failed to mark as done',

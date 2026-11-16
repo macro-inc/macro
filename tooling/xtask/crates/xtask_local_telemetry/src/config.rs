@@ -194,7 +194,8 @@ struct ConfigFile {
     provisioned: Option<bool>,
     /// Also forward the local stack's own traces, logs and metrics.
     services: Option<bool>,
-    /// The name those are tagged with, instead of the short hostname.
+    /// The machine's name, instead of the short hostname: on forwarded
+    /// telemetry and, even without forwarding, on the run events.
     machine: Option<String>,
 }
 

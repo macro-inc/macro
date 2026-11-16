@@ -72,6 +72,10 @@ pub enum CapabilityProbeError {
     /// A required live runtime, or the caller's Cursor account, is not connected.
     #[error("the requested harness is disconnected")]
     Disconnected,
+    /// The provider refused the caller's connected credential; carries what
+    /// to tell them.
+    #[error("{0}")]
+    CredentialRejected(String),
     /// Provider-specific probing failed.
     #[error("capability probe failed: {0}")]
     Failed(String),
@@ -89,6 +93,10 @@ pub enum DiscoverAgentCapabilitiesError {
     /// A required runtime is disconnected.
     #[error("the requested harness is disconnected")]
     Disconnected,
+    /// The provider refused the caller's connected credential; carries what
+    /// to tell them.
+    #[error("{0}")]
+    CredentialRejected(String),
     /// The bounded request expired.
     #[error("capability probe timed out")]
     Timeout,
@@ -223,6 +231,9 @@ impl<Access, InMemory, Cursor, Macrod>
             Ok(RawCapabilityProbe::Unsupported) => Ok(AgentCapabilities::unsupported()),
             Err(CapabilityProbeError::Disconnected) => {
                 Err(DiscoverAgentCapabilitiesError::Disconnected)
+            }
+            Err(CapabilityProbeError::CredentialRejected(message)) => {
+                Err(DiscoverAgentCapabilitiesError::CredentialRejected(message))
             }
             Err(CapabilityProbeError::Failed(message)) => {
                 Err(DiscoverAgentCapabilitiesError::Probe(message))

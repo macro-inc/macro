@@ -66,7 +66,9 @@ const policies = {
   MarkNotificationInboxRowsDone:
     'custom: inbox rows stay hidden until the server removes them',
   ClearNotificationInbox:
-    'custom: cleared rows stay hidden until the server removes them',
+    'custom: rows the stored clear covers stay hidden while the server works through it',
+  UndoNotificationInboxClear:
+    'custom: cleared rows show again at once; the server restores each state',
   MarkNotificationInboxNotificationDone:
     'custom: the notification stays hidden until the server returns its row',
   UndoNotificationInboxRowsDone:

@@ -26,6 +26,7 @@ import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
+import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
@@ -34,6 +35,7 @@ import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
+import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import tutorials from './en/tutorials';
@@ -65,6 +67,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  suggestions,
   localRuntime,
   markdownEditor,
   mobile,
@@ -72,6 +75,7 @@ export default {
   notificationsInbox,
   passwords,
   routineDrafts,
+  routineMenu,
   routineSuggestions,
   settingsBilling,
   runtimeSharing,
