@@ -368,6 +368,7 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
 mail-builder = "0.4.3"
 mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
+log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "1.16.2"
