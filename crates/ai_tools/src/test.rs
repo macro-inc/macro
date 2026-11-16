@@ -861,6 +861,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "EditCanvas",
         "ApplyCanvasEdits",
         "ListAgentUpdates",
+        "RenderCanvas",
         "ReadSpreadsheet",
         "CalculateSpreadsheet",
         "EditSpreadsheet",
@@ -873,9 +874,8 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.toolset.tools.contains_key(name), "{name}");
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
-    // The SDK cannot show the model a render.
+    // Tools the SDK does not replace.
     for name in [
-        "RenderCanvas",
         "SearchTools",
         "LoadTools",
         "BashCodeExecution",

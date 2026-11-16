@@ -317,3 +317,5 @@ the existing gateway prefixes.
 - Keep LiveKit and OpenTelemetry external in the calls build so room objects and
   tracing use the consumer's runtime instances. Do not re-export calls helpers
   or their runtime types from `src/macro.ts`.
+
+- `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.
