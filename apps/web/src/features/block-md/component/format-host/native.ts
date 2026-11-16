@@ -223,6 +223,20 @@ export function createNativeDocumentFormattingHost(
       if (!dom || dom.rangeCount === 0) return;
       if (popup.visible(true)) popup.selection(dom);
     };
+    // Source popupPlugin hides and re-requests the popup on every
+    // SELECTION_CHANGE, which onSelectionChange dispatches for each
+    // selectionchange in the editor, so the popup's 100 ms debounce never
+    // elapses while a drag keeps moving the DOM caret. A native TableSelection
+    // stays through those carets without a publication, so restart it here.
+    const doc = view.root.ownerDocument;
+    const tableSelectionChange = () => {
+      if (!active() || view.selection().selection.kind !== 'table') return;
+      const anchor = doc.getSelection()?.anchorNode;
+      if (!anchor || !view.root.contains(anchor)) return;
+      updatePopup();
+    };
+    doc.addEventListener('selectionchange', tableSelectionChange);
+    own(() => doc.removeEventListener('selectionchange', tableSelectionChange));
     const observer: LatestPublishedObserver = {
       published(actual) {
         if (!active()) return;
