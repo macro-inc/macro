@@ -426,7 +426,19 @@ between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
 another. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
-persisted data.
+persisted data. A page whose build was superseded (`cache-superseded`) never
+retries: that coordinator never hands the database back, so the page waits for
+the reload prompt. A page also stops after ten relapses in a row
+(`MAX_RECOVERY_RELAPSES`): restarts that succeeded but whose cache failed again
+before staying up for a minute. A successful restart no longer resets the
+backoff on its own; the count and backoff reset only once the restarted cache
+stays up. A restart that fails outright, such as a lock another context still
+holds, keeps retrying at the capped backoff. `graphql.cache_recovery` records
+each attempt and its failure, `graphql.cache_recovery_relapse` a restarted host
+that failed before staying up, and `graphql.cache_recovery_stopped` why the page
+stopped.
+Cache failure telemetry adds `cache.error_name` and `cache.error_detail`, each
+from a fixed list (`describeCacheError`), so the message itself never leaves.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -443,7 +455,8 @@ and only the coordinator whose engine holds the database, or is opening or
 draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
-  `cache-superseded`. Each page retires its host to the network. The owner's
+  `cache-superseded`, and later requests are refused with the
+  `cache-superseded` error code rather than `owner-lock-unavailable`. Each page retires its host to the network. The owner's
   page leaves the way a navigating page does: it terminates its engine, which
   releases the owner lock without counting as a lost owner. An enqueue that was
   already sent is reported as uncertain rather than sent again, because it may
@@ -464,7 +477,8 @@ while hidden, online, not holding work (a call or an upload, via
 Otherwise it retries the next time it is hidden or comes back online. A page
 that registers with a superseded coordinator later, for example after a
 rollback or from stale HTML, only runs uncached, because a reload could land on
-the same build again.
+the same build again. Its `cache-unavailable` notice carries `superseded: true`,
+so its host retires with `cache-superseded` and recovery does not retry it.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. An unanswered request is posted again
@@ -984,6 +998,19 @@ so equal IDs in different entity types remain independent. Channel lookups use
 refreshes. Soup exposes generic revalidation descriptors rather than registering
 channel notification readers. Consumers receive rows and unresolved IDs without
 coordinating query lifetimes.
+
+A predicate that still trails the observed cache revision after three consecutive
+reads reports a cache error instead of holding initial hydration indefinitely.
+The existing missing-record hydration path can then fetch unresolved identities.
+Already-resolved rows remain visible without a forced full-identity refresh;
+a later cache change retries the predicate and replaces its membership on success.
+Explicit refreshes still use the existing query refresh path. Recovery does not
+depend on the selected projection or add a second row/removal store.
+A change received during the final stale read is deferred to a new task rather
+than lost or retried indefinitely in the same microtask chain. Revision and
+generation checks continue to govern which local or network snapshot is shown;
+there is no separate recovery authority.
+
 Deletion markers use the same `typename:id` identity through pending mutations,
 retention, display filtering, and restore confirmation. Deleting or restoring a
 document must not hide or restore an unrelated channel with the same ID. The

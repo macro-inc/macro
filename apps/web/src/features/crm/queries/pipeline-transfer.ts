@@ -119,7 +119,10 @@ export function createPipelineTransfer(
       await runConcurrently(missing, CONCURRENCY, async (id) => {
         signal.throwIfAborted();
         if (pipeline.recordType === 'company') {
-          const company = await storage.getCompany({ companyId: id });
+          const company = await storage.getCompany({
+            companyId: id,
+            includeContacts: false,
+          });
           if (company.isOk())
             records.set(id, {
               name: company.value.name ?? '',

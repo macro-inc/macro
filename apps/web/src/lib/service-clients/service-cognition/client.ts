@@ -26,7 +26,6 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
 import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
-import type { ProjectionStateResponse } from './generated/schemas/projectionStateResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
 import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
 import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
@@ -35,7 +34,6 @@ import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamR
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
 import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
-import type { UpsertProjectionRequest } from './generated/schemas/upsertProjectionRequest';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -456,19 +454,6 @@ export const cognitionApiServiceClient = {
         method: 'POST',
         body: JSON.stringify(args),
         errorResponseHandler: aiUsageErrorResponseHandler,
-      })
-    ).map((result) => result);
-  },
-
-  /** Gets or creates an AI projection and the requesting user's instance of
-   * it, triggering (or, with `await: true`, awaiting) materialization when
-   * needed. Completion updates are also pushed over the connection gateway as
-   * `ai_projection_updated` messages. */
-  async upsertAiProjection(args: UpsertProjectionRequest) {
-    return (
-      await dcsFetch<ProjectionStateResponse>(`/ai-projections`, {
-        method: 'POST',
-        body: JSON.stringify(args),
       })
     ).map((result) => result);
   },

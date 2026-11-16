@@ -100,6 +100,7 @@ const CATEGORY_BY_EVENT: Record<
   new_email: 'email',
   calendar_event_reminder: 'meetings',
   calendar_event_join_request: 'meetings',
+  password_access_requested: 'other',
   reminder: 'meetings',
   task_assigned: 'tasks',
   ai_response: 'agents',

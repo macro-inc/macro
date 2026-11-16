@@ -220,10 +220,19 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
 
     /// Process a bounded batch. A failed user retains its expiring lease while
     /// other users continue; cancellation never marks an unfinished day complete.
+    /// `paused` is asked before every claim, so a kill switch stops the batch
+    /// after the user in progress.
     #[tracing::instrument(skip_all, err)]
-    pub async fn refresh_pending(&self) -> Result<()> {
+    pub async fn refresh_pending<P, F>(&self, mut paused: P) -> Result<()>
+    where
+        P: FnMut() -> F,
+        F: Future<Output = bool>,
+    {
         let yesterday = Utc::now().date_naive() - Duration::days(1);
         for _ in 0..25 {
+            if paused().await {
+                break;
+            }
             let Some(claim) = self.repo.claim_refresh(yesterday).await? else {
                 break;
             };

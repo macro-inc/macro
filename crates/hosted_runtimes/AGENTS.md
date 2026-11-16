@@ -26,6 +26,9 @@ read it before changing behaviour.
   macrod presence); wired in `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*`, mounted by
   authentication_service.
+- `src/outbound/pg/agents.rs`: `ComputerAgents`, also alone as
+  `PgComputerAgents`, which implements harnesses' `ComputerTeamAgents` so
+  harness listings mark an agent teammate's computer.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 

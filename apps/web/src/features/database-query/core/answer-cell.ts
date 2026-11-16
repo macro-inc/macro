@@ -1,14 +1,18 @@
+import { type PluralKey, t } from '@app/lib/i18n';
 import type { AnswerColumn, AnswerOption } from '@core/database-sql/answer';
 import type { Cell, EntityKind } from '@core/database-sql/generated/types';
-import { formatTime } from '@core/util/date';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
-import { formatDate, formatTimeRange } from '@property/utils/formatting';
 import { match } from 'ts-pattern';
 import {
   timeRangeFromInstants,
   toCellRange,
 } from '../../database/core/cell-date-range';
 import type { DatabaseEntityType } from '../../database/core/column-inference';
+import {
+  formatAnswerDate,
+  formatAnswerTime,
+  formatAnswerTimeRange,
+} from './answer-format';
 import { formatQueryValue } from './query';
 
 /** What one result value shows, drawn with the database grid's own pieces. */
@@ -36,8 +40,6 @@ export type ReferenceNames = (reference: {
 }) => string | undefined;
 
 export const unknownNames: ReferenceNames = () => undefined;
-
-const UNKNOWN_OPTION = 'Unknown option';
 
 /** A result value as the grid would show it, from the column it was read from. */
 export function resultCell(
@@ -67,7 +69,7 @@ export function resultCell(
       const range = timeRangeFromInstants(value);
       return {
         kind: 'text',
-        text: range ? formatTimeRange(range) : toCellRange(value),
+        text: range ? formatAnswerTimeRange(range) : toCellRange(value),
       };
     })
     .with({ type: 'options' }, ({ value }) =>
@@ -79,7 +81,7 @@ export function resultCell(
               (id) =>
                 source?.options.find((option) => option.id === id) ?? {
                   id,
-                  label: UNKNOWN_OPTION,
+                  label: t('databaseAnswers.unknownOption'),
                   color: null,
                 }
             ),
@@ -136,8 +138,8 @@ function dateCell(value: string): ResultCell {
 /** A calendar day reads as the grid's date; a moment keeps its time. */
 function formatResultDate(date: Date, calendarDay: boolean): string {
   return calendarDay
-    ? formatDate(date)
-    : `${formatDate(date)}, ${formatTime(date)}`;
+    ? formatAnswerDate(date)
+    : `${formatAnswerDate(date)}, ${formatAnswerTime(date)}`;
 }
 
 /** A cell as plain text, for chart labels, titles and accessible names. */
@@ -151,7 +153,9 @@ export function resultCellText(
     .with({ kind: 'markdown' }, ({ markdown }) => markdownToPlainText(markdown))
     .with({ kind: 'link' }, ({ url }) => url)
     .with({ kind: 'number' }, ({ value }) => formatQueryValue(value))
-    .with({ kind: 'boolean' }, ({ checked }) => (checked ? 'True' : 'False'))
+    .with({ kind: 'boolean' }, ({ checked }) =>
+      checked ? t('databaseAnswers.true') : t('databaseAnswers.false')
+    )
     .with({ kind: 'date' }, ({ date, calendarDay }) =>
       formatResultDate(date, calendarDay)
     )
@@ -207,19 +211,20 @@ export function referenceList(
 }
 
 function referenceCount(type: DatabaseEntityType, count: number): string {
-  const [one, many] = match(type)
-    .with('USER', () => ['person', 'people'])
-    .with('DOCUMENT', () => ['document', 'documents'])
-    .with('TASK', () => ['task', 'tasks'])
-    .with('CHANNEL', () => ['channel', 'channels'])
-    .with('PROJECT', 'INITIATIVE', () => ['project', 'projects'])
-    .with('CHAT', () => ['chat', 'chats'])
-    .with('THREAD', () => ['email', 'emails'])
-    .with('COMPANY', () => ['company', 'companies'])
-    .with('CONTACT', () => ['contact', 'contacts'])
-    .with('CALL_RECORD', () => ['call', 'calls'])
-    .with('CALENDAR_EVENT', () => ['event', 'events'])
-    .with('DATABASE_ROW', () => ['linked record', 'linked records'])
-    .exhaustive(() => ['item', 'items']);
-  return `${count} ${count === 1 ? one : many}`;
+  const key = match(type)
+    .returnType<PluralKey>()
+    .with('USER', () => 'databaseAnswers.peopleCount')
+    .with('DOCUMENT', () => 'databaseAnswers.documentCount')
+    .with('TASK', () => 'databaseAnswers.taskCount')
+    .with('CHANNEL', () => 'databaseAnswers.channelCount')
+    .with('PROJECT', 'INITIATIVE', () => 'databaseAnswers.projectCount')
+    .with('CHAT', () => 'databaseAnswers.chatCount')
+    .with('THREAD', () => 'databaseAnswers.emailCount')
+    .with('COMPANY', () => 'databaseAnswers.companyCount')
+    .with('CONTACT', () => 'databaseAnswers.contactCount')
+    .with('CALL_RECORD', () => 'databaseAnswers.callCount')
+    .with('CALENDAR_EVENT', () => 'databaseAnswers.eventCount')
+    .with('DATABASE_ROW', () => 'databaseAnswers.linkedRecordCount')
+    .exhaustive(() => 'databaseAnswers.itemCount');
+  return t(key, { count });
 }

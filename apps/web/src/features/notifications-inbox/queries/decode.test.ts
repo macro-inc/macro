@@ -9,7 +9,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import {
+  encodeClearScope,
+  encodeInboxScope,
+  toInboxClear,
+  toInboxGroup,
+} from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -187,6 +192,45 @@ describe('toInboxGroup', () => {
     ]);
   });
 
+  it('opens password access requests with their typed review target', () => {
+    const entry = inboxEntry({
+      docId: 'doc-a',
+      sortAt: '2026-02-01T10:09:00Z',
+      rows: [
+        {
+          id: 'password-request:r1',
+          rowType: 'PASSWORD_ACCESS_REQUESTED',
+          latestAt: '2026-02-01T10:09:00Z',
+          actions: [{ kind: 'OPEN', targetId: null, url: null }],
+        },
+      ],
+    });
+    entry.rows[0].notifications[0] = {
+      ...entry.rows[0].notifications[0],
+      eventType: 'password_access_requested',
+      metadata: {
+        __typename: 'GraphqlPasswordAccessRequestedMetadata',
+        passwordAccessRequestedRequestId: 'request-1',
+        passwordAccessRequestedTeamId: 'team-1',
+        passwordAccessRequestedItemId: 'item-1',
+        passwordAccessRequestedItemName: 'Synthetic login',
+      },
+    };
+
+    const row = toInboxGroup(entry)?.rows[0];
+    expect(row?.type).toBe('access_requested');
+    expect(row?.actions).toEqual([{ kind: 'open' }]);
+    expect(row?.content.notifications[0].notification_metadata).toEqual({
+      tag: 'password_access_requested',
+      content: {
+        requestId: 'request-1',
+        teamId: 'team-1',
+        itemId: 'item-1',
+        itemName: 'Synthetic login',
+      },
+    });
+  });
+
   it('reads who a row is from and what the viewer can do', () => {
     const group = toInboxGroup(
       inboxEntry({
@@ -288,6 +332,29 @@ describe('toInboxGroup', () => {
 });
 
 describe('encodeInboxScope', () => {
+  it('reads both access-request kinds without duplicating kinds or reordering ordinary rows', () => {
+    expect(
+      encodeInboxScope({
+        rowTypes: [
+          'email',
+          'access_requested',
+          'task',
+          'access_requested',
+          'email',
+        ],
+        unreadOnly: true,
+      })
+    ).toEqual({
+      rowTypes: [
+        'EMAIL',
+        'ACCESS_REQUESTED',
+        'PASSWORD_ACCESS_REQUESTED',
+        'TASK',
+      ],
+      unreadOnly: true,
+    });
+  });
+
   it('reads every row, new types included, when every type is chosen', () => {
     expect(encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({
       rowTypes: [],
@@ -304,6 +371,73 @@ describe('encodeInboxScope', () => {
     expect(
       encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
     ).toEqual({ rowTypes: [], unreadOnly: true });
+  });
+});
+
+describe('encodeClearScope', () => {
+  it('clears both access-request kinds without duplicating kinds or reordering ordinary rows', () => {
+    expect(
+      encodeClearScope({
+        rowTypes: [
+          'email',
+          'access_requested',
+          'task',
+          'access_requested',
+          'email',
+        ],
+        unreadOnly: true,
+      })
+    ).toEqual({
+      rowTypes: [
+        'EMAIL',
+        'ACCESS_REQUESTED',
+        'PASSWORD_ACCESS_REQUESTED',
+        'TASK',
+      ],
+      unreadOnly: true,
+    });
+  });
+
+  it('names every kind it takes, never an empty or missing list', () => {
+    const every = encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(every.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length + 1);
+    expect(
+      encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ rowTypes: every.rowTypes, unreadOnly: true });
+  });
+
+  it('names the chosen kinds', () => {
+    expect(encodeClearScope({ rowTypes: ['email'] })).toEqual({
+      rowTypes: ['EMAIL'],
+    });
+  });
+});
+
+describe('toInboxClear', () => {
+  it('reads a clear as the server stores it', () => {
+    expect(
+      toInboxClear({
+        clearId: 'clear-1',
+        status: 'APPLYING',
+        rowTypes: ['TASK', 'EMAIL'],
+        unreadOnly: true,
+        since: '2026-02-01T00:00:00+00:00',
+        asOf: '2026-02-01T10:00:00+00:00',
+        rowCount: 40,
+        revision: 3,
+      })
+    ).toEqual({
+      id: 'clear-1',
+      status: 'applying',
+      takes: {
+        rowTypes: ['task', 'email'],
+        unreadOnly: true,
+        since: Date.parse('2026-02-01T00:00:00Z'),
+      },
+      asOf: Date.parse('2026-02-01T10:00:00Z'),
+      rows: 40,
+      revision: 3,
+    });
   });
 });
 
@@ -372,6 +506,76 @@ describe('toInboxGroup for a runtime', () => {
           {
             entity_type: 'harness',
             notification_metadata: { tag: 'entity_access_requested' },
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe('toInboxGroup for a team', () => {
+  it('lists a vault access request filed under the team as a row about it', () => {
+    const group = toInboxGroup({
+      groupId: 'team:0198a4cc-e138-7670-a308-a6b766602799',
+      sortAt: '2026-02-01T10:09:00Z',
+      entity: {
+        __typename: 'GraphqlSoupTeam',
+        id: '0198a4cc-e138-7670-a308-a6b766602799',
+        entityType: 'TEAM',
+        teamName: 'Synthetic team',
+        ownerId: 'macro|viewer@example.com',
+      },
+      rows: [
+        {
+          id: 'team:0198a4cc-e138-7670-a308-a6b766602799#password_access_requested:request-1',
+          rowType: 'ACCESS_REQUESTED',
+          revision: 'rev',
+          latestAt: '2026-02-01T10:09:00Z',
+          unseen: true,
+          count: 1,
+          actor: null,
+          actions: [],
+          notifications: [
+            {
+              id: 'n-1',
+              eventType: 'password_access_requested',
+              entityType: 'TEAM',
+              targetEntityType: 'TEAM',
+              entityId: '0198a4cc-e138-7670-a308-a6b766602799',
+              sent: false,
+              state: 'UNSEEN',
+              createdAt: '2026-02-01T10:09:00Z',
+              viewedAt: null,
+              updatedAt: '2026-02-01T10:09:00Z',
+              senderId: 'macro|agent@example.com',
+              metadata: {
+                __typename: 'GraphqlPasswordAccessRequestedMetadata',
+                passwordAccessRequestedRequestId: 'request-1',
+                passwordAccessRequestedTeamId:
+                  '0198a4cc-e138-7670-a308-a6b766602799',
+                passwordAccessRequestedItemId: 'item-1',
+                passwordAccessRequestedItemName: 'Synthetic login',
+              },
+            },
+          ],
+        },
+      ],
+    } as unknown as NotificationInboxEntryFieldsFragment);
+
+    expect(group?.rows).toHaveLength(1);
+    expect(group?.rows[0]).toMatchObject({
+      type: 'access_requested',
+      content: {
+        entity: {
+          type: 'team',
+          id: '0198a4cc-e138-7670-a308-a6b766602799',
+          name: 'Synthetic team',
+          ownerId: 'macro|viewer@example.com',
+        },
+        notifications: [
+          {
+            entity_type: 'team',
+            notification_metadata: { tag: 'password_access_requested' },
           },
         ],
       },

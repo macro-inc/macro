@@ -130,6 +130,14 @@ describe('grid values as cell values', () => {
       ok({ type: 'number', value: 42 })
     );
   });
+
+  it('reads a displayed percent as the stored fraction', () => {
+    const share = { ...column('NUMBER'), percentage: true };
+    expect(cellValue(share, '25%')).toEqual(
+      ok({ type: 'number', value: 0.25 })
+    );
+    expect(cellValue(share, 0.25)).toEqual(ok({ type: 'number', value: 0.25 }));
+  });
 });
 
 describe('grid values as time ranges', () => {
