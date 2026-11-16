@@ -50,7 +50,7 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
               ref={setHeading}
               class="sticky top-0 z-10 flex h-14 items-center gap-2 bg-panel px-4"
             >
-              <ProjectProgress project={props.project} />
+              <ProjectProgress project={props.project} size="md" />
               <h2 class="text-base font-semibold">{t('nav.tasks')}</h2>
               <span class="text-sm text-ink-muted">
                 {t('common.progressTasksDone', {

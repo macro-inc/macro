@@ -7,6 +7,7 @@ import type { Project } from '../core/project';
 export function ProjectProgress(props: {
   project: Pick<Project, 'taskCount' | 'completedTaskCount'>;
   tabIndex?: number;
+  size?: 'sm' | 'md';
 }) {
   const label = () => {
     const total = props.project.taskCount ?? 0;
@@ -34,7 +35,11 @@ export function ProjectProgress(props: {
           aria-valuemax={props.project.taskCount ?? 0}
           aria-valuenow={props.project.completedTaskCount ?? 0}
           tabIndex={props.tabIndex ?? 0}
-          class="flex size-[22px] shrink-0 items-center justify-center [&_svg]:size-3.5"
+          class="flex shrink-0 items-center justify-center"
+          classList={{
+            'size-6 [&_svg]:size-5': props.size === 'md',
+            'size-[22px] [&_svg]:size-3.5': props.size !== 'md',
+          }}
         >
           <ProgressRing fraction={fraction()} />
         </Tooltip.Trigger>
