@@ -4,6 +4,7 @@ use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolCallStart, ToolResponse, Usage};
 use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{SearchableTool, ToolInfo};
+use genai_telemetry::{GenAiSpanExt as _, attr, current_span_is_named};
 use rig_agent::agent::hook::{
     AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
     StreamResponseFinish, TextDelta, ToolCallAction, ToolCallDelta, ToolResultAction,
@@ -597,6 +598,7 @@ impl StreamBridge {
 
         // The stream carries the whole result; only the model's copy is cut.
         // Images reach the model as images and are never cut as text.
+        let rendered = presentation.render();
         let view = self
             .result_limit
             .as_ref()
@@ -604,7 +606,8 @@ impl StreamBridge {
                 json.as_ref()
                     .is_none_or(|json| json.get("modelMedia").is_none())
             })
-            .and_then(|limit| limit.view(&id, &presentation.render()));
+            .and_then(|limit| limit.view(&id, &rendered));
+        record_result_size(rendered.len(), view.is_some());
         let response = if let Some(json) = json {
             ToolResponse::Json {
                 id,
@@ -629,6 +632,18 @@ impl StreamBridge {
         })));
         ObservationAction::Continue
     }
+}
+
+/// Record how large a tool's result was and whether the model read only its
+/// beginning, on the `execute_tool` span rig runs the call in. Sizes, not
+/// content: recorded whatever the content policy.
+fn record_result_size(bytes: usize, cut_for_model: bool) {
+    if !current_span_is_named(attr::span_name::EXECUTE_TOOL) {
+        return;
+    }
+    let span = tracing::Span::current();
+    span.set_u64(attr::MACRO_TOOL_RESULT_BYTES, bytes as u64);
+    span.set_bool(attr::MACRO_TOOL_RESULT_CUT, cut_for_model);
 }
 
 impl AgentHook for StreamBridge {

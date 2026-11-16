@@ -34,6 +34,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { FailureNotice } from '../components/failure-notice';
 import { FavoriteToggle, ItemDetailBody } from '../components/item-detail';
 import { ItemForm } from '../components/item-form';
 import { ItemList } from '../components/item-list';
@@ -247,10 +248,13 @@ function ItemPane(props: {
           when={editEntry()}
           fallback={
             <>
-              <Show when={props.vault.failure() === 'failed'}>
-                <p role="alert" class="pt-3 text-sm text-failure-ink">
-                  {t('passwords.failed')}
-                </p>
+              <Show
+                when={
+                  props.vault.failure() === 'failed' ||
+                  props.vault.failure() === 'unreachable'
+                }
+              >
+                <FailureNotice failure={props.vault.failure()} class="pt-3" />
               </Show>
               <ItemDetailBody
                 item={props.item}
@@ -341,23 +345,7 @@ function DraftEditor(props: { vault: VaultController; draftKey: string }) {
     <Show when={entry()}>
       {(current) => (
         <div class="flex flex-col gap-4 pt-4">
-          <Switch>
-            <Match when={current().failure === 'totp'}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.totpFailed')}
-              </p>
-            </Match>
-            <Match when={current().failure === 'folderMissing'}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.folderMissing')}
-              </p>
-            </Match>
-            <Match when={current().failure}>
-              <p role="alert" class="text-sm text-failure-ink">
-                {t('passwords.failed')}
-              </p>
-            </Match>
-          </Switch>
+          <FailureNotice failure={current().failure} />
           <ItemForm
             idPrefix={`passwords-${props.draftKey}`}
             draft={current().draft}
@@ -898,6 +886,23 @@ export function VaultView(props: {
                   </div>
                 </Match>
                 <Match when={true}>
+                  <Show when={vault.unreachable()}>
+                    <div class="flex items-center gap-2 px-4 py-2">
+                      <p
+                        role="status"
+                        class="min-w-0 flex-1 text-sm text-ink-muted"
+                      >
+                        {t('passwords.unreachable')}
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => vault.retryConnection()}
+                      >
+                        {t('passwords.retry')}
+                      </Button>
+                    </div>
+                  </Show>
                   <ItemList
                     items={vault.visibleItems()}
                     drafts={vault.drafts()}

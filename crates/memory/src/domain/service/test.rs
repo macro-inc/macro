@@ -134,12 +134,7 @@ const PROFILE: &str = "Engineer profile";
 
 #[derive(Default)]
 struct Generator {
-    /// Reject every judged content.
-    reject: bool,
-    /// Reject only this content.
-    reject_content: Option<&'static str>,
     inputs: Mutex<Vec<(String, String)>>,
-    judged: Mutex<usize>,
 }
 #[async_trait::async_trait]
 impl MemoryGenerator for Generator {
@@ -166,8 +161,25 @@ impl MemoryGenerator for Generator {
             .push((instructions.into(), sources.into()));
         Ok("Project progress".into())
     }
-    async fn judge(&self, _: MacroUserIdStr<'static>, content: &str) -> Result<()> {
-        *self.judged.lock().unwrap() += 1;
+}
+
+#[derive(Default)]
+struct Judge {
+    /// Reject every reviewed content.
+    reject: bool,
+    /// Reject only this content.
+    reject_content: Option<&'static str>,
+    kinds: Mutex<Vec<MemoryKind>>,
+}
+#[async_trait::async_trait]
+impl MemoryJudge for Judge {
+    async fn review(
+        &self,
+        _: MacroUserIdStr<'static>,
+        kind: MemoryKind,
+        content: &str,
+    ) -> Result<()> {
+        self.kinds.lock().unwrap().push(kind);
         if self.reject || self.reject_content == Some(content) {
             Err(MemoryError::Rejected("private".into()))
         } else {
@@ -176,11 +188,24 @@ impl MemoryGenerator for Generator {
     }
 }
 impl Generator {
-    /// Model calls so far: research, summarize and judge.
+    /// Model calls so far: research and summarize.
     fn calls(&self) -> usize {
-        self.inputs.lock().unwrap().len() + *self.judged.lock().unwrap()
+        self.inputs.lock().unwrap().len()
     }
 }
+impl Judge {
+    fn reviews(&self) -> usize {
+        self.kinds.lock().unwrap().len()
+    }
+}
+
+fn rejecting() -> Arc<Judge> {
+    Arc::new(Judge {
+        reject: true,
+        ..Default::default()
+    })
+}
+
 struct Teams(Mutex<Vec<(Uuid, Vec<String>)>>);
 #[async_trait::async_trait]
 impl MemoryTeams for Teams {
@@ -211,10 +236,8 @@ async fn rejected_preferences_never_write_but_forgetting_is_allowed() {
     };
     let service = MemoryServiceImpl::new(
         repo.clone(),
-        Arc::new(Generator {
-            reject: true,
-            ..Default::default()
-        }),
+        Arc::new(Generator::default()),
+        rejecting(),
         Arc::new(Teams(Mutex::new(vec![]))),
         active(),
     );
@@ -265,7 +288,13 @@ async fn current_membership_controls_profiles_and_activity() {
         vec!["macro|teammate@example.com".into()],
     )])));
     let generator = Arc::new(Generator::default());
-    let service = MemoryServiceImpl::new(repo, generator.clone(), teams.clone(), active());
+    let service = MemoryServiceImpl::new(
+        repo,
+        generator.clone(),
+        Arc::new(Judge::default()),
+        teams.clone(),
+        active(),
+    );
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let teammate = MacroUserIdStr::parse_from_str("macro|teammate@example.com").unwrap();
     let date = NaiveDate::from_ymd_opt(2026, 6, 17).unwrap();
@@ -294,7 +323,14 @@ async fn failed_day_is_retried_before_later_days_and_completed_day_is_noop() {
     repo.0.lock().unwrap().snapshot.through_date = Some(date - Duration::days(1));
     repo.0.lock().unwrap().explicit.content = "Never rewrite this".into();
     let generator = Arc::new(Generator::default());
-    let service = MemoryServiceImpl::new(repo.clone(), generator.clone(), no_teams(), active());
+    let judge = Arc::new(Judge::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        judge.clone(),
+        no_teams(),
+        active(),
+    );
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     assert!(matches!(
         service
@@ -313,6 +349,16 @@ async fn failed_day_is_retried_before_later_days_and_completed_day_is_noop() {
     assert_eq!(inputs.len(), 5);
     assert!(inputs[1].1.contains("Verified work"));
     assert!(!inputs[1].1.contains("Project progress"));
+    assert_eq!(
+        *judge.kinds.lock().unwrap(),
+        [
+            MemoryKind::Activity,
+            MemoryKind::Activity,
+            MemoryKind::Activity,
+            MemoryKind::Activity,
+            MemoryKind::Profile,
+        ]
+    );
 }
 
 #[tokio::test]
@@ -323,10 +369,8 @@ async fn refresh_through_fills_every_missing_day_and_rejections_write_nothing() 
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let rejected = MemoryServiceImpl::new(
         repo.clone(),
-        Arc::new(Generator {
-            reject: true,
-            ..Default::default()
-        }),
+        Arc::new(Generator::default()),
+        rejecting(),
         Arc::new(Teams(Mutex::new(vec![]))),
         active(),
     );
@@ -338,6 +382,7 @@ async fn refresh_through_fills_every_missing_day_and_rejections_write_nothing() 
     let service = MemoryServiceImpl::new(
         repo.clone(),
         Arc::new(Generator::default()),
+        Arc::new(Judge::default()),
         Arc::new(Teams(Mutex::new(vec![]))),
         active(),
     );
@@ -356,6 +401,7 @@ async fn first_failed_generation_catches_up_from_enrollment() {
     let service = MemoryServiceImpl::new(
         repo.clone(),
         Arc::new(Generator::default()),
+        Arc::new(Judge::default()),
         Arc::new(Teams(Mutex::new(vec![]))),
         active(),
     );
@@ -376,6 +422,7 @@ async fn a_paused_batch_claims_nobody() {
     let service = MemoryServiceImpl::new(
         repo.clone(),
         Arc::new(Generator::default()),
+        Arc::new(Judge::default()),
         no_teams(),
         active(),
     );
@@ -395,15 +442,18 @@ async fn inactive_day_commits_without_model_calls() {
         data.snapshot.profile = "Existing profile".into();
     }
     let generator = Arc::new(Generator::default());
+    let judge = Arc::new(Judge::default());
     let service = MemoryServiceImpl::new(
         repo.clone(),
         generator.clone(),
+        judge.clone(),
         no_teams(),
         Arc::new(Active(false)),
     );
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     service.refresh(user, date).await.unwrap();
     assert_eq!(generator.calls(), 0);
+    assert_eq!(judge.reviews(), 0);
     let data = repo.0.lock().unwrap();
     assert_eq!(data.snapshot.through_date, Some(date));
     assert!(data.snapshot.activity.is_empty());
@@ -416,11 +466,17 @@ async fn retry_reuses_pieces_that_passed_review() {
     let date = NaiveDate::from_ymd_opt(2026, 6, 17).unwrap();
     repo.0.lock().unwrap().snapshot.through_date = Some(date - Duration::days(1));
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let failing = Arc::new(Generator {
+    let failing = Arc::new(Judge {
         reject_content: Some(PROFILE),
         ..Default::default()
     });
-    let service = MemoryServiceImpl::new(repo.clone(), failing.clone(), no_teams(), active());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        Arc::new(Generator::default()),
+        failing,
+        no_teams(),
+        active(),
+    );
     assert!(matches!(
         service.refresh(user.clone(), date).await,
         Err(MemoryError::Rejected(_))
@@ -433,12 +489,19 @@ async fn retry_reuses_pieces_that_passed_review() {
     );
 
     let generator = Arc::new(Generator::default());
-    let service = MemoryServiceImpl::new(repo.clone(), generator.clone(), no_teams(), active());
+    let judge = Arc::new(Judge::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        judge.clone(),
+        no_teams(),
+        active(),
+    );
     service.refresh(user, date).await.unwrap();
     let inputs = generator.inputs.lock().unwrap();
     assert_eq!(inputs.len(), 1, "only the profile is researched again");
     assert!(!inputs[0].0.contains("own activity on"));
-    assert_eq!(*generator.judged.lock().unwrap(), 1);
+    assert_eq!(judge.reviews(), 1);
     let data = repo.0.lock().unwrap();
     assert_eq!(data.writes, 1);
     assert_eq!(data.snapshot.profile, PROFILE);
@@ -464,11 +527,13 @@ async fn failing_day_backs_off_then_commits_kept_pieces_and_moves_on() {
             })
             .collect();
     }
-    let generator = Arc::new(Generator {
+    let generator = Arc::new(Generator::default());
+    let judge = Arc::new(Judge {
         reject_content: Some(PROFILE),
         ..Default::default()
     });
-    let service = MemoryServiceImpl::new(repo.clone(), generator.clone(), no_teams(), active());
+    let service =
+        MemoryServiceImpl::new(repo.clone(), generator.clone(), judge, no_teams(), active());
     service.refresh_pending(|| async { false }).await.unwrap();
     let data = repo.0.lock().unwrap();
     assert_eq!(
@@ -507,9 +572,17 @@ async fn claim_past_the_cap_gives_up_without_model_calls() {
         }];
     }
     let generator = Arc::new(Generator::default());
-    let service = MemoryServiceImpl::new(repo.clone(), generator.clone(), no_teams(), active());
+    let judge = Arc::new(Judge::default());
+    let service = MemoryServiceImpl::new(
+        repo.clone(),
+        generator.clone(),
+        judge.clone(),
+        no_teams(),
+        active(),
+    );
     service.refresh_pending(|| async { false }).await.unwrap();
     assert_eq!(generator.calls(), 0);
+    assert_eq!(judge.reviews(), 0);
     let data = repo.0.lock().unwrap();
     assert_eq!(data.released, vec![MAX_REFRESH_ATTEMPTS + 1]);
     assert_eq!(data.snapshot.through_date, Some(date));
