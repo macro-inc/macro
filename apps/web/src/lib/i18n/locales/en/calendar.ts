@@ -58,6 +58,7 @@ export default {
   seeGuestList: 'See guest list',
   conferencing: 'Video conferencing',
   addMeetingLink: 'Add meeting link',
+  addGuests: 'Add guests…',
   addNotification: 'Add notification',
   add: 'Add',
   removeNotification: 'Remove {{offset}} notification',
