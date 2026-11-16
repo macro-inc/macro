@@ -1,6 +1,5 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
 import { ViewSidebar } from '@app/components/view-shell/ViewSidebar';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -15,7 +14,7 @@ export function Topbar(props: {
   return (
     <ViewShell.TopBar class="touch:flex">
       <Show when={props.onBack}>
-        <HeaderIsland class="px-1">
+        <ViewShell.TopBarIsland>
           <Button
             aria-label="Back to conversations"
             tooltip="Back to conversations"
@@ -25,7 +24,7 @@ export function Topbar(props: {
           >
             <ArrowLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
-        </HeaderIsland>
+        </ViewShell.TopBarIsland>
       </Show>
       <ViewShell.TopBarTitle>
         <div class="flex min-w-0 items-center gap-1">

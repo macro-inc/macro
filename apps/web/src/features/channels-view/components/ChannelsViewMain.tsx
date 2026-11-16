@@ -1,10 +1,10 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type JSX, Show } from 'solid-js';
 
 export function ChannelsViewMain(props: {
   mobileLayout: boolean;
-  hasDetail?: boolean;
+  /** Wide touch with nothing open: the list's Show sidebar pill leads Main. */
+  sidebarToggle?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -18,7 +18,7 @@ export function ChannelsViewMain(props: {
           : undefined
       }
     >
-      <Show when={isTouchDevice() && !props.mobileLayout && !props.hasDetail}>
+      <Show when={props.sidebarToggle}>
         <ViewShell.Header class="empty:hidden">
           <ViewSidebar.Toggle action="expand" presentation="pill" />
         </ViewShell.Header>

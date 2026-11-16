@@ -5,7 +5,6 @@ import {
   PendingDirectMessage,
   PendingDirectMessageTitle,
 } from '@channel/views/pending-direct-message';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { RedirectSplit } from '@components/app/split-layout/split-router/app-route-shell';
 import { Show } from 'solid-js';
 
@@ -32,12 +31,12 @@ export function PendingDirectMessageDetail(props: { pendingId: string }) {
           scrollBehindHeader
           header={
             <ViewShell.TopBar class="gap-3 py-0 touch:flex touch:h-10 touch:px-0 touch:py-0">
-              <HeaderIsland class="min-w-0 shrink">
+              <ViewShell.TopBarTitle class="px-3">
                 <PendingDirectMessageTitle
                   pendingId={props.pendingId}
                   recipientId={recipient}
                 />
-              </HeaderIsland>
+              </ViewShell.TopBarTitle>
             </ViewShell.TopBar>
           }
         >

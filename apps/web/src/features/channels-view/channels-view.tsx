@@ -327,7 +327,9 @@ function ChannelsViewRoot() {
           </Show>
           <ChannelsViewMain
             mobileLayout={mobileLayout()}
-            hasDetail={!!selectedChannel()}
+            sidebarToggle={
+              isTouchDevice() && !mobileLayout() && !selectedChannel()
+            }
           >
             <Show
               when={!mobileLayout()}

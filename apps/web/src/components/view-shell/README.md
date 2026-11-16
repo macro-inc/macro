@@ -89,8 +89,9 @@ their measured local chrome.
 
 On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
 `CollectionPanes` detail floats over the pane as mobile chrome, like the split
-header of a standalone view. Wrap its title in `ViewShell.TopBarTitle` and its
-trailing actions in `ViewShell.TopBarActions` (or other parts in `HeaderIsland`);
+header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
+trailing actions in `ViewShell.TopBarActions`, and a lone leading control such
+as Back in `ViewShell.TopBarIsland`;
 each becomes an island on touch and renders inline on desktop. The pane reserves
 the bar's measured height as `--mobile-content-inset-top` and fades content
 beneath it. A bar nested in a hosted detail stacks below the bars before it.

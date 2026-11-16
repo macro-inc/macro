@@ -385,7 +385,7 @@ export function DriveList() {
                   <div ref={setListStart}>
                     <div
                       aria-hidden
-                      class="hidden touch:block touch:h-(--mobile-content-inset-top)"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
                     />
                     <Show when={state.value().location.kind === 'tab'}>
                       <TutorialRow tutorial="drive" />

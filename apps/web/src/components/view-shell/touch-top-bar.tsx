@@ -138,6 +138,15 @@ export function TopBarTitle(props: ParentProps<{ class?: string }>) {
   );
 }
 
+/** A lone leading control, such as Back: an island on touch, inline on desktop. */
+export function TopBarIsland(props: ParentProps<{ class?: string }>) {
+  return (
+    <HeaderIsland class={cn('px-1', props.class)}>
+      {props.children}
+    </HeaderIsland>
+  );
+}
+
 /** The bar's trailing actions: an island on touch, inline on desktop. */
 export function TopBarActions(props: ParentProps<{ class?: string }>) {
   return (

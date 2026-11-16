@@ -1,10 +1,10 @@
-import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
+import { TouchTopBarFade } from '@app/components/view-shell/touch-top-bar';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 
 /** Keep touch conversation chrome inside its preview and messages full-frame. */
 export function ChannelDetailLayout(props: {
@@ -58,9 +58,7 @@ export function ChannelDetailLayout(props: {
         >
           {props.children}
         </div>
-        <Show when={isTouchDevice()}>
-          <MobileTopEdgeFade />
-        </Show>
+        <TouchTopBarFade height={contentOffsetTop()} />
       </div>
     </SplitPanelContext.Provider>
   );

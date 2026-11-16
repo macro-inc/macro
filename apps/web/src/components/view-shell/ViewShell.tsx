@@ -39,6 +39,7 @@ import { NavigationSheet } from './NavigationSheet';
 import {
   createTouchTopBarInset,
   TopBarActions,
+  TopBarIsland,
   TopBarTitle,
   TouchTopBarFade,
   TouchTopBarInsetProvider,
@@ -1009,6 +1010,7 @@ export const ViewShell = Object.assign(Root, {
   Aside,
   Main,
   TopBar,
+  TopBarIsland,
   TopBarTitle,
   TopBarActions,
   Header,

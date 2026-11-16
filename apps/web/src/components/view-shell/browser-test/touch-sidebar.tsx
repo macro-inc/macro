@@ -157,7 +157,7 @@ function ChannelsWorkspaceFixture() {
           </Show>
           <ChannelsViewMain
             mobileLayout={!wide()}
-            hasDetail={selected() !== undefined}
+            sidebarToggle={wide() && selected() === undefined}
           >
             <Show when={wide()} fallback={list()}>
               <Show
