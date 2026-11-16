@@ -20,6 +20,12 @@ stacks. Process isolation belongs to
 - `SKILL.md`: the agent-facing JavaScript contract and examples.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  A session program may return up to two SDK images (`images: [await
+  canvas.render()]`); records keep only their static file ids, and every
+  receipt (a saved retry too) loads their PNGs through the `ModelImages` port
+  into a top-level `modelMedia`, which `agent::tool_media` turns into image
+  blocks as it does for `RenderCanvas`. The harness adapter is
+  `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
@@ -112,7 +118,9 @@ Reviews persist the immutable acting account. Only that account may edit or
 submit.
 ACP presentation uses the session owner's transcript capability, independently
 of the account that later sends the email or creates the event. Cards require
-direct user authentication; `DecideReview` requires a real turn prompted by the
+direct user authentication; programs (`macro_authorization::is_program_run`:
+agent or routine attribution, or the execution header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
+which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
 review's acting account, and its Submit waits for `ReviewActions::approvable`
 (default: always), the hook a kind uses to refuse until it is ready. `GetReview`
 reads final

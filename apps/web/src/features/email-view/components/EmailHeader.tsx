@@ -23,6 +23,7 @@ import {
   isEmailInboxTab,
 } from '../constants';
 import { useEmailView } from '../email-view-context';
+import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
 import {
@@ -34,10 +35,15 @@ import {
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
-  /** Restores list focus when Escape leaves the search field. */
-  onSearchEscape?: () => void;
+  /** Moves the keyboard from the search field into the list. */
+  focusSearchResults?: () => void;
   /** Hands the search field's focus to the view's search keys. */
   registerSearch?: (focus: () => void) => () => void;
+  /**
+   * The wide search: the open field takes over the header and lists recent
+   * searches. Absent, the field stays compact beside the other actions.
+   */
+  searchSuggestions?: EmailSearchSuggestions;
   tabOnly?: boolean;
 };
 
@@ -130,6 +136,11 @@ export function EmailHeader(props: EmailHeaderProps) {
     },
   });
 
+  // The filter menu is unmounted with the other actions, so the search only
+  // takes the header while it is closed.
+  const searchOwnsHeader = () =>
+    !!props.searchSuggestions?.open() && canSearch() && !filterOpen();
+
   return (
     <ListHeader
       title={
@@ -167,27 +178,33 @@ export function EmailHeader(props: EmailHeaderProps) {
         </div>
       }
     >
-      <EmailSavedViewActions />
-      <EmailSaveViewButton />
-      <Show when={state.tab !== 'scheduled'}>
-        <EmailControls
-          filterOpen={filterOpen()}
-          onFilterOpenChange={setFilterOpen}
-        />
+      <Show when={!searchOwnsHeader()}>
+        <EmailSavedViewActions />
+        <EmailSaveViewButton />
+        <Show when={state.tab !== 'scheduled'}>
+          <EmailControls
+            filterOpen={filterOpen()}
+            onFilterOpenChange={setFilterOpen}
+          />
+        </Show>
+        <div class="contents @max-[640px]/split-header:hidden">
+          <ViewCreateButton
+            aria-label="New email"
+            onClick={() => composeEmail(openWithSplit, state.inboxIds)}
+          />
+        </div>
       </Show>
-      <div class="contents @max-[640px]/split-header:hidden">
-        <ViewCreateButton
-          aria-label="New email"
-          onClick={() => composeEmail(openWithSplit, state.inboxIds)}
-        />
-      </div>
       <Show when={canSearch()}>
         <ListHeaderSearch
           ref={searchTarget}
           label="Search email"
           value={state.search}
           onValueChange={(search) => setState('search', search)}
-          onEscape={props.onSearchEscape}
+          focusResults={props.focusSearchResults}
+          wide={!!props.searchSuggestions}
+          onOpenChange={props.searchSuggestions?.setOpen}
+          onFocusChange={props.searchSuggestions?.setFocused}
+          suggestions={props.searchSuggestions}
           registerFocus={(focus) => {
             releaseSearch = props.registerSearch?.(focus);
           }}

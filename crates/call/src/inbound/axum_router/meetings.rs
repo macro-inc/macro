@@ -307,7 +307,7 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
                 actor.authorization.user.macro_user_id.clone(),
                 request,
                 is_program,
-                actor.authorization.user.agent_id.is_some(),
+                actor.authorization.user.attribution() == CredentialAttribution::Agent,
             )
             .await?,
     ))

@@ -39,4 +39,4 @@ post from the TypeScript SDK).
 
 Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).
 
-CRM: [selective email contribution proposal](design/crm-selective-email-contribution.md).
+CRM: [selective email contribution design](design/crm-selective-email-contribution.md).
