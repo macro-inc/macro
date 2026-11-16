@@ -2,6 +2,7 @@ import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMe
 import { seedMockDisplayNames } from '@core/user/displayName';
 import { PENDING_REPLY_TEXT } from '@macro-inc/lexical-core';
 import { composeAgentChatReply } from '@macro-inc/lexical-core/utils/agent-chat-reply';
+import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { render, waitFor } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -387,6 +388,11 @@ it('keeps static preview name updates on the inherited Source wrapper under a na
     isInteractable: () => true,
   });
   const native = createNativeSelectionDecoratorContext(theme);
+  const previousIdentity = queryClient.getQueryData(authKeys.userInfo.queryKey);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'macro|static-viewer@example.com',
+    authenticated: true,
+  });
   seedMockDisplayNames([
     { id: 'macro|static-preview@example.com', firstName: 'Preview' },
   ]);
@@ -430,5 +436,11 @@ it('keeps static preview name updates on the inherited Source wrapper under a na
     release();
     native.dispose();
     wrapper.cleanup();
+    queryClient.removeQueries({
+      queryKey: authKeys.userInfo.queryKey,
+      exact: true,
+    });
+    if (previousIdentity !== undefined)
+      queryClient.setQueryData(authKeys.userInfo.queryKey, previousIdentity);
   }
 });
