@@ -140,7 +140,9 @@ impl crate::domain::agent::ComputerAgents for FakeRepo {
             .iter()
             .find(|(id, linked)| {
                 linked.as_ref() == agent.as_ref()
-                    && computers.get(id).is_some_and(|c| c.team_id == team_id)
+                    && computers
+                        .get(id)
+                        .is_some_and(|c| c.team_id() == Some(team_id))
             })
             .map(|(id, _)| *id))
     }

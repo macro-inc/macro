@@ -121,7 +121,6 @@ async fn a_retried_create_reuses_the_data_volume_an_earlier_attempt_made() {
     .unwrap();
     let computer = Computer {
         id: COMPUTER_ID,
-        team_id: Uuid::nil(),
         name: crate::domain::models::ComputerName::try_new("Fixture computer").unwrap(),
         size: crate::domain::size::ComputerSize::Standard,
         resources: ComputerResources {
@@ -131,15 +130,18 @@ async fn a_retried_create_reuses_the_data_volume_an_earlier_attempt_made() {
         },
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-10".to_owned())
             .unwrap(),
-        funding: crate::domain::models::Funding::Stripe {
-            price_id: stripe::PriceId::from_str("price_saved").unwrap(),
-        },
         host: crate::domain::ids::HostId::new(Uuid::nil()),
         state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Provisioning {
             start: false,
         }),
+        owner: Some(crate::domain::models::Ownership {
+            team_id: Uuid::nil(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+            funding: crate::domain::models::Funding::Stripe {
+                price_id: stripe::PriceId::from_str("price_saved").unwrap(),
+            },
+        }),
         harness_id: None,
-        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         setup_completed_at: None,

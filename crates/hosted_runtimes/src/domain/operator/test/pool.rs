@@ -11,7 +11,7 @@ const ONE_STANDARD: PoolTargets = PoolTargets {
 
 /// Computer 1, the one [`HARNESS`] runs on, as a pool computer.
 async fn add_pool_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
 ) -> ComputerId {
     let catalog = crate::domain::size::current_catalog();
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
@@ -36,7 +36,7 @@ async fn add_pool_computer(
 }
 
 fn pool_computers(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FakeSetupNotices>,
 ) -> Vec<Computer> {
     operator
         .repo
@@ -90,6 +90,7 @@ async fn a_purchased_pool_computer_joins_its_team_and_the_pool_refills() {
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
                 provision_traceparent: None,
+                agent: None,
             },
             ClaimBilling::Comped {
                 reason: "internal team".to_owned(),

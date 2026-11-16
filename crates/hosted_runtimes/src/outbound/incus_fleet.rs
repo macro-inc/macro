@@ -511,7 +511,8 @@ impl Fleet for IncusFleet {
             memory_gb,
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
-            image: self.image.clone(),
+            // Pool computers run no agent, so they use the regular image.
+            image: self.images.regular.name.clone(),
         })
     }
 

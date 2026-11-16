@@ -271,7 +271,6 @@ async fn an_agent_computer_is_created_and_recreated_from_the_agent_image() {
         fleet.command = Some(runner.clone());
         let computer = Computer {
             id: COMPUTER_ID,
-            team_id: Uuid::nil(),
             name: ComputerName::try_new("Fixture computer").unwrap(),
             size: crate::domain::size::ComputerSize::Standard,
             resources: crate::domain::size::ComputerResources {
@@ -283,15 +282,18 @@ async fn an_agent_computer_is_created_and_recreated_from_the_agent_image() {
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            funding: crate::domain::models::Funding::Comped {
-                reason: "fixture".to_owned(),
-            },
             host: crate::domain::ids::HostId::new(Uuid::nil()),
             state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Provisioning {
                 start: true,
             }),
+            owner: Some(crate::domain::models::Ownership {
+                team_id: Uuid::nil(),
+                created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+                funding: crate::domain::models::Funding::Comped {
+                    reason: "fixture".to_owned(),
+                },
+            }),
             harness_id: None,
-            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),
             enrolled_at: None,
             setup_completed_at: None,
