@@ -88,3 +88,18 @@ async fn a_refusal_is_recorded_with_the_request_that_made_it() {
     })
     .await;
 }
+
+#[tokio::test]
+async fn only_a_channel_mention_program_may_not_delegate() {
+    assert!(!refuses_delegation());
+    let mention = Attribution {
+        channel_mention_id: Some(Uuid::from_u128(1)),
+        ..Attribution::default()
+    };
+    scope_attribution(mention, async { assert!(refuses_delegation()) }).await;
+    let routine = Attribution {
+        routine_id: Some(Uuid::from_u128(2)),
+        ..Attribution::default()
+    };
+    scope_attribution(routine, async { assert!(!refuses_delegation()) }).await;
+}
