@@ -16,10 +16,11 @@ readiness checks are documented in `apps/web/src/lib/core/document-session/READM
 Both engines use the same Notebook layout, title, document properties, discussion
 and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Copy as prompt and task platform actions also capture the
-mounted body engine’s external markdown before fetching discussion threads.
+body engine’s external markdown before fetching discussion threads.
 Check the complete body and comments in the copied prompt or generated launch
-URL. An unavailable body or failed export reports the existing failure and must
-not copy, launch or update the last-used action; a genuinely empty body is valid.
+URL. Before the body editor exists the prompt has empty content, as in Source; a
+failed export reports the existing failure and must not copy, launch or update
+the last-used action.
 Verify engine parity before treating the flagged path as ready; native menus and
 anchored comments also require their view installers.
 

@@ -118,3 +118,27 @@ it('reports clipboard failure instead of triggering copy success feedback', asyn
   dispose();
   error.mockRestore();
 });
+
+it('builds the prompt with empty content before the body editor exists', async () => {
+  sourceEditor = undefined;
+  const { result, dispose } = actions();
+  expect(await result.executeLastUsed()).toBe(true);
+  expect(mocks.copy).toHaveBeenCalledWith(
+    expect.stringContaining('<document identifier="DOC-1">')
+  );
+  expect(mocks.copy).not.toHaveBeenCalledWith(
+    expect.stringContaining('Document body')
+  );
+  expect(mocks.failure).not.toHaveBeenCalled();
+  dispose();
+});
+
+it('reads the body editor whether or not its root is attached', async () => {
+  sourceEditor?.setRootElement(null);
+  const { result, dispose } = actions();
+  expect(await result.executeLastUsed()).toBe(true);
+  expect(mocks.copy).toHaveBeenCalledWith(
+    expect.stringContaining('Document body')
+  );
+  dispose();
+});

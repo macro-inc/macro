@@ -6,18 +6,13 @@ type DocumentBody = Pick<
   'editor' | 'nativeRuntime'
 >;
 
-/** External markdown from the mounted document body; an empty body is valid. */
+/**
+ * External markdown from the document body's model, preferring its native
+ * runtime. As Source's prompt builder does, a body that has no editor yet
+ * reads as empty and a model is read whether or not its view is attached.
+ */
 export function readDocumentMarkdown(body: DocumentBody): string {
-  const runtime = body.nativeRuntime;
-  if (runtime) {
-    if (!runtime.view.isMounted)
-      throw new Error('Document body is not mounted');
-    return runtime.executor.session.markdown(1);
-  }
-
-  const editor = body.editor;
-  const root = editor?.getRootElement();
-  if (!editor || !root?.isConnected)
-    throw new Error('Document body is not mounted');
-  return editorStateAsMarkdown(editor, 'external');
+  if (body.nativeRuntime)
+    return body.nativeRuntime.executor.session.markdown(1);
+  return body.editor ? editorStateAsMarkdown(body.editor, 'external') : '';
 }

@@ -258,31 +258,27 @@ it('allows genuinely empty bodies from both actual engines', async () => {
   expect(expected).not.toContain('<document-content>');
 });
 
-it('reports missing engine instead of successfully copying an empty prompt', async () => {
-  const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+it('builds an empty-content prompt when no body engine exists, as Source does', async () => {
   const hook = actions({});
   expect(hook.lastUsed().key).toBe('copy');
-  const before = localStorage.getItem('dispatch-agent-last-used');
-  expect(await hook.executeLastUsed()).toBe(false);
-  expect(mocks.copy).not.toHaveBeenCalled();
-  expect(mocks.threads).not.toHaveBeenCalled();
-  expect(mocks.failure).toHaveBeenCalledWith('Failed to generate prompt');
-  expect(localStorage.getItem('dispatch-agent-last-used')).toBe(before);
+  expect(await hook.executeLastUsed()).toBe(true);
+  expect(mocks.copy).toHaveBeenCalledOnce();
+  expect(mocks.copy.mock.calls[0]?.[0]).not.toContain('<document-content>');
+  expect(mocks.failure).not.toHaveBeenCalled();
   expect(hook.lastUsed().key).toBe('copy');
-  expect(error).toHaveBeenCalledOnce();
 });
 
 for (const mode of ['null-root', 'detached-root']) {
-  it(`requires a mounted Source editor for this UI action (${mode})`, async () => {
-    const fixture = body('Not available after retirement');
+  it(`reads a Source editor whether or not its root is attached (${mode})`, async () => {
+    const fixture = body('Body without an attached root');
     if (mode === 'null-root') fixture.source.editor.setRootElement(null);
     else fixture.source.root.remove();
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(
       await actions({ editor: fixture.source.editor }).executeLastUsed()
-    ).toBe(false);
-    expect(mocks.copy).not.toHaveBeenCalled();
-    expect(mocks.threads).not.toHaveBeenCalled();
+    ).toBe(true);
+    expect(mocks.copy.mock.calls.at(-1)?.[0]).toContain(
+      'Body without an attached root'
+    );
   });
 }
 
@@ -309,19 +305,18 @@ it('prefers the actual native engine without reading a stale Source body', async
   expect(mocks.copy.mock.calls.at(-1)?.[0]).not.toContain('Stale Source body');
 });
 
-it('does not fall back to Source when the present native view is retired', async () => {
-  const fixture = body('Stale Source body');
+it('reads the native model, not Source, after its view is retired', async () => {
+  const fixture = body('Native body after its view');
   fixture.native.view.dispose();
   const read = vi.spyOn(fixture.source.editor, 'read');
-  vi.spyOn(console, 'error').mockImplementation(() => {});
   expect(
     await actions({
       editor: fixture.source.editor,
       nativeRuntime: fixture.native,
     }).executeLastUsed()
-  ).toBe(false);
+  ).toBe(true);
   expect(read).not.toHaveBeenCalled();
-  expect(mocks.copy).not.toHaveBeenCalled();
+  expect(mocks.copy.mock.calls.at(-1)?.[0]).toContain(fixture.nativeMarkdown);
 });
 
 for (const thrown of [undefined, null, { marker: 'injected-export-fault' }]) {
