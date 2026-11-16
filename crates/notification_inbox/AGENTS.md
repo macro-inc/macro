@@ -5,7 +5,7 @@
 The unified notifications inbox: the viewer's pending notifications grouped
 by the entity they are filed under and cut into rows (one per channel thread,
 channel top level, entity's comments, email thread, task, pull request, request,
-agent session or runtime). Built on the shared feed layer, `crates/attention_feed`.
+agent session, runtime or team-scoped vault access request). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Start here
 

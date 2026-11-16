@@ -401,9 +401,12 @@
           runHook postCheck
         '';
 
+        # The app streams web-hosted/ (videos) from the web deploy, like the
+        # mobile apps (`build-tauri`), so the desktop bundle leaves it out.
         installPhase = ''
           runHook preInstall
           cp -r apps/web/dist "$out"
+          rm -rf "$out/web-hosted"
           runHook postInstall
         '';
       };

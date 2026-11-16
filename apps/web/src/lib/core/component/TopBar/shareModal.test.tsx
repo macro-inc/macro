@@ -1,3 +1,4 @@
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { AppProviders } from '@components/app/AppProviders';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { EditorEngineProvider } from '@core/document-session/editor-engine';
@@ -8,6 +9,16 @@ import { createSignal, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { openShareModal, useShareModal } from './shareModal';
+
+// The real flag provider owns its normal context; only its transport is inert here.
+vi.mock('@app/lib/analytics/analytics-context', () => ({
+  useAnalytics: () => ({
+    posthog: {
+      featureFlags: { getFlags: () => [] },
+      onFeatureFlags: () => () => {},
+    },
+  }),
+}));
 
 let observedOrchestrator:
   | ReturnType<typeof useGlobalBlockOrchestrator>
@@ -214,13 +225,15 @@ describe('useShareModal', () => {
 
     const view = render(() => (
       <Show when={showApp()}>
-        <EditorEngineProvider>
-          <AppProviders>
-            <Show when={showMenu()}>
-              <Menu />
-            </Show>
-          </AppProviders>
-        </EditorEngineProvider>
+        <PosthogProvider>
+          <EditorEngineProvider>
+            <AppProviders>
+              <Show when={showMenu()}>
+                <Menu />
+              </Show>
+            </AppProviders>
+          </EditorEngineProvider>
+        </PosthogProvider>
       </Show>
     ));
 
