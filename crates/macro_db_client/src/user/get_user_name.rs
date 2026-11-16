@@ -74,7 +74,7 @@ pub async fn get_user_names(
 }
 
 /// gets macro user names for passed user profile ids, falling back to the user's email contacts if they have any
-#[tracing::instrument(skip(db), err)]
+#[tracing::instrument(skip_all, err)]
 pub async fn get_user_names_with_email(
     db: &sqlx::PgPool,
     macro_user_id: &str,

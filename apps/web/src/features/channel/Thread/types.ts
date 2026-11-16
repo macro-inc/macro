@@ -1,7 +1,11 @@
 import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
-import type { MessageListItem, MessageParent } from '@service-storage/messages';
+import type {
+  Message,
+  MessageListItem,
+  MessageParent,
+} from '@service-storage/messages';
 import type { Accessor, JSX, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
@@ -61,6 +65,8 @@ export type ThreadProps = {
   /** See `hideTriggeredBy` on the channel message. */
   hideTriggeredBy?: boolean;
   data: Accessor<MessageListItem>;
+  /** Complete replies supplied by a host that already loaded the thread. */
+  replies?: Accessor<Message[]>;
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */
   inputMode?: 'inline' | 'unified';
@@ -90,6 +96,8 @@ export type ThreadProps = {
   monorail?: boolean;
   /** Flat chat surfaces do not draw thread connector rails. */
   hideRail?: boolean;
+  /** Render replies with root-message headers, without changing thread ownership. */
+  repliesAsRoots?: boolean;
   /** Draws the root as something other than a message, such as a call's row. */
   rootSlot?: () => JSX.Element;
   /** Collapse to the indicator alone rather than previewing replies. */

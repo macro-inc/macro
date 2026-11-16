@@ -59,6 +59,7 @@ const context: CrmContext = {
   userId: unused,
   isTeamAdmin: unused,
   createCompanySource: unused,
+  createCompanyContactsSource: unused,
   createContactSource: unused,
   createTeamSource: unused,
   createTeamConfigSource: unused,

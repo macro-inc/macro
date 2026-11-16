@@ -31,6 +31,7 @@ fn new_rows_and_deletions_report_only_their_projection_bucket() {
         ("GraphqlSoupChat", "chat"),
         ("GraphqlSoupProject", "project"),
         ("GraphqlSoupCrmCompany", "crm_company"),
+        ("GraphqlContact", "person"),
     ] {
         let value = record(typename);
         let expected = BTreeSet::from([bucket.to_owned()]);
@@ -54,6 +55,24 @@ fn unrelated_fields_do_not_refresh_search_and_are_not_snapshotted() {
     let snapshot = snapshot_search_fields(&EntityKey::entity(typename, &["one"]), &after).unwrap();
     assert_eq!(snapshot, before);
     assert!(changes("GraphqlProperty", None, Some(&record("GraphqlProperty"))).is_empty());
+}
+
+#[test]
+fn contact_target_changes_refresh_materialized_people() {
+    let before = record("GraphqlContact");
+    let mut after = before.clone();
+    after.fields.insert(
+        "userId".into(),
+        CacheValue::String("macro|person@example.com".into()),
+    );
+    assert_eq!(
+        changes("GraphqlContact", Some(&before), Some(&after)),
+        BTreeSet::from(["person".into()])
+    );
+    assert_eq!(
+        snapshot_search_fields(&EntityKey::entity("GraphqlContact", &["one"]), &after),
+        Some(after)
+    );
 }
 
 #[test]
@@ -161,4 +180,36 @@ fn email_subject_sender_and_visibility_refresh_but_bodies_do_not() {
             .insert(field.into(), CacheValue::String("teo".into()));
         assert!(changes(typename, Some(&before), Some(&after)).is_empty());
     }
+}
+
+#[test]
+fn icon_edits_and_initiative_timestamps_refresh_the_rows_that_show_them() {
+    let document = record("GraphqlSoupDocument");
+    let mut recoloured = document.clone();
+    recoloured
+        .fields
+        .insert("appearance".into(), CacheValue::String("blue".into()));
+    assert_eq!(
+        changes("GraphqlSoupDocument", Some(&document), Some(&recoloured)),
+        BTreeSet::from(["document".to_owned()])
+    );
+
+    let mut initiative = record("GraphqlSoupInitiative");
+    initiative
+        .fields
+        .insert("displayName".into(), CacheValue::String("Launch".into()));
+    let mut viewed = initiative.clone();
+    viewed
+        .fields
+        .insert("metadata".into(), CacheValue::String("viewed later".into()));
+    assert_eq!(
+        changes("GraphqlSoupInitiative", Some(&initiative), Some(&viewed)),
+        BTreeSet::from(["initiative".to_owned()])
+    );
+    // Only initiatives list from `metadata`.
+    let mut annotated = document.clone();
+    annotated
+        .fields
+        .insert("metadata".into(), CacheValue::String("large".into()));
+    assert!(changes("GraphqlSoupDocument", Some(&document), Some(&annotated)).is_empty());
 }

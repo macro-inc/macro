@@ -3,11 +3,9 @@
  * vite.prerender.config.ts` into dist-prerender/, then driven by
  * scripts/prerender.ts under Bun — no browser involved.
  */
-import {
-  generateHydrationScript,
-  renderToString,
-  renderToStringAsync,
-} from 'solid-js/web';
+
+import { pages as docPages } from 'virtual:macro-docs';
+import { generateHydrationScript, renderToStringAsync } from 'solid-js/web';
 import { App } from '../src/app/main/App';
 import {
   buildSeoTagsHtml,
@@ -15,7 +13,6 @@ import {
   consumeServerSeo,
   type PageSeo,
 } from '../src/app/utils/utilSeo';
-import { Homepage } from '../src/features/setup/Homepage';
 import { themes } from '../src/lib/theme/signals/themeSignals';
 import { posts } from '../src/routes/posts/registry';
 
@@ -95,7 +92,7 @@ export function criticalCss(themeId = 'Macro'): string {
     '}',
     '@media (max-width:700px){:root{--page-gutter:12px}}',
     'html,body{background-color:var(--b0)}',
-    "body{margin:0;color:var(--c2);font-family:'body';font-size:14px}",
+    "body{margin:0;color:var(--c2);font-family:'body';font-size:14px;font-weight:370}",
     '.ssg-mobile,.ssg-desktop{display:contents}',
     '@media (min-width:700px){.ssg-mobile{display:none}}',
     '@media (max-width:699px){.ssg-desktop{display:none}}',
@@ -106,9 +103,16 @@ export function criticalCss(themeId = 'Macro'): string {
 }
 
 /** Real Solid SSR markup, so the browser keeps the headline instead of replacing it. */
-export function renderHomepage(): { html: string; hydration: string } {
+export async function renderHomepage(): Promise<{
+  html: string;
+  hydration: string;
+}> {
   return {
-    html: renderToString(() => <Homepage />),
+    html: await renderToStringAsync(() => <App url="/" />),
     hydration: generateHydrationScript(),
   };
 }
+
+export const documentationRoutes = docPages
+  .filter((page) => page.href.startsWith('/docs/'))
+  .map((page) => page.href);

@@ -4,6 +4,7 @@
  */
 
 import { match } from 'ts-pattern';
+import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
   CachePush,
@@ -20,7 +21,12 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision, parseStorageGeneration } from '../protocol';
+import {
+  isTypedSearch,
+  isTypedSearchRowRead,
+  parseCacheRevision,
+  parseStorageGeneration,
+} from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -92,6 +98,21 @@ export interface CacheWorkerCoreOptions {
   wallClockNow?: () => number;
   queueDiagnosticsIntervalMs?: number;
   queueDiagnosticsTimeoutMs?: number;
+  /** Calls `resume` once the messages already delivered have been handled. */
+  afterArrivedMessages?: (resume: () => void) => void;
+}
+
+// A burst that keeps arriving must not hold back the requests already here.
+const MAX_ARRIVAL_YIELDS = 256;
+
+/** Runs `resume` in a later task, after a message that was already waiting. */
+function afterArrivedMessages(resume: () => void): void {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = () => {
+    port1.close();
+    resume();
+  };
+  port2.postMessage(undefined);
 }
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
@@ -100,7 +121,10 @@ export interface CacheWorkerCoreOptions {
 const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
-const CACHE_WRITE_PRIORITY = 2;
+// Someone is typing and waiting on it, and unlike a list read it has no
+// network fallback, so it runs before the rereads of lists already on screen.
+const TYPED_SEARCH_PRIORITY = 2;
+const CACHE_WRITE_PRIORITY = 3;
 
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
 function isOrderingBarrier(request: CacheRequest): boolean {
@@ -112,12 +136,28 @@ function isOrderingBarrier(request: CacheRequest): boolean {
   );
 }
 
+/** A new engine or cleared storage: not even a typed search runs ahead. */
+function stopsTypedSearch(request: CacheRequest): boolean {
+  return request.kind === 'init' || request.kind === 'clear';
+}
+
+/** A change made on this device rather than a result from the network. */
+function isLocalChange(request: CacheRequest): boolean {
+  return (
+    request.kind === 'enqueue-optimistic-mutation' ||
+    request.kind === 'defer-optimistic-write' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'rollback-optimistic-write'
+  );
+}
+
 function isAuthoritativeWrite(request: CacheRequest): boolean {
   // A calendar commit records coverage for data written just before it, so it
   // must never overtake that write or hydration.
   return (
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
+    request.kind === 'people-update' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'delete-records' ||
     request.kind === 'calendar-commit'
@@ -139,6 +179,7 @@ function revisionAdvancementCategory(
     .with(
       'write',
       'hydrate',
+      'people-update',
       'calendar-commit',
       () => 'authoritative-write' as const
     )
@@ -152,7 +193,9 @@ function revisionAdvancementCategory(
 }
 
 function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate') return BACKGROUND_HYDRATION_PRIORITY;
+  if (request.kind === 'hydrate' || request.kind === 'people-update')
+    return BACKGROUND_HYDRATION_PRIORITY;
+  if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -193,6 +236,9 @@ export class CacheWorkerCore {
   /** Serializes engine calls while allowing safe read prioritization. */
   private readonly queue: QueuedEngineRequest[] = [];
   private running = false;
+  /** Between two requests, while arrivals join the queue. */
+  private yielding = false;
+  private readonly afterArrivedMessages: (resume: () => void) => void;
   private acceptingRequests = true;
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
@@ -219,6 +265,8 @@ export class CacheWorkerCore {
     this.queueDiagnosticsIntervalMs =
       options.queueDiagnosticsIntervalMs ?? 60_000;
     this.queueDiagnosticsTimeoutMs = options.queueDiagnosticsTimeoutMs ?? 250;
+    this.afterArrivedMessages =
+      options.afterArrivedMessages ?? afterArrivedMessages;
   }
 
   addPort(port: PortLike): void {
@@ -371,9 +419,25 @@ export class CacheWorkerCore {
     }
   }
 
+  /**
+   * The rows a typed search named rank with it, as the search is not answered
+   * for the person waiting until they list. They may run before a network
+   * result queued ahead of them: that is the result arriving a moment later,
+   * and its cache change refreshes the list. A change this page made itself
+   * must show in rows read after it, so behind one of those a row read orders
+   * like any other record read.
+   */
+  private arrivalPriority(request: CacheRequest): number {
+    if (!isTypedSearchRowRead(request)) return requestPriority(request);
+
+    return this.queue.some((queued) => isLocalChange(queued.request))
+      ? NORMAL_READ_PRIORITY
+      : TYPED_SEARCH_PRIORITY;
+  }
+
   private enqueue(request: CacheRequest): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const priority = requestPriority(request);
+      const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
 
       // Coalesce only within the current lifecycle segment. In particular, a
@@ -393,7 +457,7 @@ export class CacheWorkerCore {
         if (duplicate) {
           duplicate.priority = Math.max(duplicate.priority, priority);
           duplicate.waiters.push({ resolve, reject });
-          this.drainQueue();
+          this.collectArrivalsThenDrain();
           return;
         }
       }
@@ -404,7 +468,7 @@ export class CacheWorkerCore {
         readSignature: signature,
         waiters: [{ resolve, reject }],
       });
-      this.drainQueue();
+      this.collectArrivalsThenDrain();
     });
   }
 
@@ -414,7 +478,7 @@ export class CacheWorkerCore {
    * may observe the newer state, which is linearizable and avoids stale work.
    */
   private drainQueue(): void {
-    if (this.running || this.queue.length === 0) return;
+    if (this.running || this.yielding || this.queue.length === 0) return;
 
     let segmentEnd = this.queue.findIndex((queued) =>
       isOrderingBarrier(queued.request)
@@ -444,6 +508,8 @@ export class CacheWorkerCore {
       }
     }
 
+    index = this.pickPastFences(index, segmentEnd);
+
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
     this.running = true;
@@ -462,9 +528,78 @@ export class CacheWorkerCore {
       )
       .finally(() => {
         this.running = false;
-        this.drainQueue();
+        this.collectArrivalsThenDrain();
         this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * A typed search registers nothing and writes nothing, so the generation
+   * checks and operation teardowns that fence other reads do not order it.
+   * After an engine restart those fences sit between it and the head of the
+   * replayed backlog. It can then run before a write queued ahead of it:
+   * its rows are only older, and that write's cache change refreshes them.
+   * A row read that ranks with the search crosses the same fences; it carries
+   * no operation, and no local change was queued ahead of it when it arrived.
+   */
+  private pickPastFences(selectedIndex: number, segmentEnd: number): number {
+    let index = selectedIndex;
+    let searchEnd = this.queue.findIndex((queued) =>
+      stopsTypedSearch(queued.request)
+    );
+    if (searchEnd === -1) searchEnd = this.queue.length;
+    for (let i = segmentEnd; i < searchEnd; i += 1) {
+      const candidate = this.queue[i];
+      const selected = this.queue[index];
+      if (
+        candidate &&
+        selected &&
+        candidate.priority === TYPED_SEARCH_PRIORITY &&
+        candidate.priority > selected.priority
+      ) {
+        index = i;
+      }
+    }
+    return index;
+  }
+
+  /**
+   * Starts the next request only once the requests already sent have joined
+   * the queue. The browser delivers one message per task and engine calls
+   * run to completion, so a request started the moment it arrives always
+   * finishes before the next is even seen: the queue never holds two, and
+   * its priorities never apply. Each yield lets waiting messages in; it
+   * repeats while they keep coming, up to a bound.
+   */
+  private collectArrivalsThenDrain(yieldsLeft = MAX_ARRIVAL_YIELDS): void {
+    if (this.running || this.yielding || this.queue.length === 0) return;
+
+    // Nothing still on its way would be picked ahead of a typed search, and
+    // it is the one request someone is waiting on.
+    if (this.queue.every((queued) => isTypedSearch(queued.request))) {
+      this.drainQueue();
+      return;
+    }
+
+    const seen = this.queue.length;
+    const resume = () => {
+      this.yielding = false;
+      if (this.queue.length > seen && yieldsLeft > 1) {
+        this.collectArrivalsThenDrain(yieldsLeft - 1);
+        return;
+      }
+
+      this.drainQueue();
+      this.resolveDrainWaitersIfIdle();
+    };
+    this.yielding = true;
+    try {
+      this.afterArrivedMessages(resume);
+    } catch {
+      // Without a way to yield, keep the queue moving in arrival order.
+      this.yielding = false;
+      this.drainQueue();
+    }
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
@@ -526,6 +661,22 @@ export class CacheWorkerCore {
           revision: parseCacheRevision(result.revision),
         };
       })
+      .with(
+        { kind: 'people-context' },
+        { kind: 'people-update' },
+        { kind: 'people-search' },
+        { kind: 'people-references' },
+        { kind: 'people-sql' },
+        { kind: 'contact-snapshot' },
+        { kind: 'contact-reconcile' },
+        (request) =>
+          executePeopleRequest(
+            this.requireEngine(),
+            request,
+            (message) => this.push(message),
+            (result) => this.fanOut(result, true)
+          )
+      )
       .with({ kind: 'search' }, async (request) => {
         const result: SearchCachePage = await this.requireEngine().search(
           request.request
@@ -582,7 +733,8 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
-          request.identity
+          request.identity,
+          request.hydrationScope
         );
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate

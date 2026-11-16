@@ -2,6 +2,7 @@ use super::*;
 
 mod conjunction_cost;
 mod conjunction_semantics;
+mod contact_search;
 mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
@@ -12,7 +13,9 @@ mod page_retention;
 mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
+mod search_options;
 mod search_projection;
+mod search_streaming;
 mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
@@ -22,6 +25,22 @@ use turso_core::{
     Buffer, Clock, Completion, CompletionError, File, IO, LimboError, MemoryIO, MonotonicInstant,
     OpenFlags, WallClockInstant,
 };
+
+// Projection inspection only: production text search never collects this list.
+impl TursoStorage {
+    async fn load_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+    ) -> Result<Vec<SearchDocument>, TursoStorageError> {
+        let mut rows = Vec::new();
+        self.visit_search_documents(profile, bucket, &SearchQuery::new(""), |row| {
+            rows.push(row.into_owned())
+        })
+        .await?;
+        Ok(rows)
+    }
+}
 
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
@@ -1007,6 +1026,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             -- UNIQUE(value), CHECK(id), and COLLATE NOCASE are only comment text.
             primary key ([__typename], `id`)
         )"#,
+        super::contact_search::CREATE_INDEX,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
             "uuid" text not null,
@@ -1282,6 +1302,9 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
         let storage = database.open("scope").unwrap();
         for sql in statements {
             raw_execute(&storage, sql, Vec::new());
+        }
+        if name.starts_with("records-") {
+            raw_execute(&storage, super::contact_search::CREATE_INDEX, Vec::new());
         }
         assert_eq!(
             storage.try_close().unwrap(),

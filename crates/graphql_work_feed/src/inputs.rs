@@ -63,6 +63,8 @@ pub enum GraphqlWorkFeedItemType {
     PullRequest,
     /// Agent sessions.
     AgentSession,
+    /// Paired runtimes, through their access notifications.
+    Runtime,
 }
 
 impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
@@ -79,6 +81,7 @@ impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
             GraphqlWorkFeedItemType::CalendarEvent => Self::CalendarEvent,
             GraphqlWorkFeedItemType::PullRequest => Self::PullRequest,
             GraphqlWorkFeedItemType::AgentSession => Self::AgentSession,
+            GraphqlWorkFeedItemType::Runtime => Self::Runtime,
         }
     }
 }

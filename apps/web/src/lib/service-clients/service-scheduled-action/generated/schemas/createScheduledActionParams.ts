@@ -11,4 +11,10 @@ export type CreateScheduledActionParams = {
    * The routine suggestion it is saved from, recorded on the routine.
    */
   suggestion_id?: string;
+  /**
+ * A name for a routine a routine's run creates: the same key under the
+same parent updates that sub-routine instead of adding another.
+Rejected outside a routine's run.
+ */
+  key?: string;
 };

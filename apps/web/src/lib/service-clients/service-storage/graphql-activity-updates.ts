@@ -1,4 +1,5 @@
-import type { Client, OperationResult } from '@urql/core';
+import type { Client, Operation, OperationResult } from '@urql/core';
+import { Kind } from 'graphql';
 import {
   type ActivityInvalidation,
   revalidateActivityQueries,
@@ -7,6 +8,19 @@ import type { ActivityUpdatesSubscription } from './graphql/generated/graphql';
 
 export const ACTIVITY_PUSH_DEBOUNCE_MS = 300;
 export const ACTIVITY_PUSH_JITTER_MS = 700;
+
+/**
+ * A push only tells mounted activity queries to refetch; no reader takes
+ * pushed events from the cache. A bulk upload or delete sends one
+ * push per item to everyone with access to the folder.
+ */
+export function isActivityUpdatesSubscription(operation: Operation): boolean {
+  return operation.query.definitions.some(
+    (definition) =>
+      definition.kind === Kind.OPERATION_DEFINITION &&
+      definition.name?.value === 'ActivityUpdates'
+  );
+}
 
 /** Coalesces pushes and reconnect recovery for this connection's mounted queries. */
 export function createActivityUpdatesHandler(

@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@components/app/GlobalAppState', () => ({
-  useGlobalNotificationSource: () => mocks.notificationSource,
+  useOptionalGlobalNotificationSource: () => mocks.notificationSource,
 }));
 
 function documentMentionNotification(

@@ -1,9 +1,12 @@
+use crate::outbound::sfs_deletion::{PgSfsDeletion, SfsDeletionClient};
 use crate::pubsub::sfs_deleter::context::SFSDeleteContext;
 use crate::pubsub::sfs_deleter::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
+use email::domain::attachment_cleanup::sfs_deletion::SfsDeletionService;
 use futures::StreamExt;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
@@ -15,6 +18,21 @@ pub async fn run_worker(
     run_worker_with_cancellation(worker, db, sfs_client, CancellationToken::new()).await;
 }
 
+/// Builds the production context for the worker loop.
+pub(crate) fn context(
+    worker: &sqs_worker::SQSWorker,
+    db: PgPool,
+    sfs_client: StaticFileServiceClient,
+) -> SFSDeleteContext {
+    SFSDeleteContext {
+        service: Arc::new(SfsDeletionService {
+            repository: PgSfsDeletion(db),
+            files: SfsDeletionClient(sfs_client),
+        }),
+        sqs_worker: worker.clone(),
+    }
+}
+
 /// Ingests SFS deleter messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -24,11 +42,7 @@ pub async fn run_worker_with_cancellation(
     sfs_client: StaticFileServiceClient,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = SFSDeleteContext {
-        db,
-        sfs_client,
-        sqs_worker: worker.clone(),
-    };
+    let ctx = context(&worker, db, sfs_client);
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();

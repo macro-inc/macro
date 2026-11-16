@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE stripe_audit_run\n            SET run_id = $2,\n                locked_by = $3,\n                locked_until = now() + $5::bigint * interval '1 second',\n                last_started_at = now()\n            WHERE name = $1\n              AND (last_finished_at IS NULL OR last_finished_at < now() - $4::bigint * interval '1 second')\n              AND (locked_until IS NULL OR locked_until < now())\n            RETURNING run_id AS \"run_id!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "run_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ecb8f616c2458c765b20fe982b582ad4d7f7a5d57e8ef7a062cc965101132e78"
+}

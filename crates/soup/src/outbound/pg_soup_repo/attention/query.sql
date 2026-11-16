@@ -144,6 +144,8 @@ attention_page AS (
         WHEN 'agent_session' THEN {agent_session_gate}
         WHEN 'crm_company' THEN {crm_company_gate}
         WHEN 'crm_contact' THEN {crm_contact_gate}
+        -- Runtimes have no own work: only their notifications place them.
+        WHEN 'harness' THEN {harness_gate}
         ELSE FALSE
     END
     ORDER BY nc.attention_at DESC, nc.entity_id DESC

@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 // Text fields and bucket eligibility come from the projection itself. These
 // additional fields affect ordering or the rows materialized from search hits.
 const PRESENTATION_FIELDS: &[&str] = &[
+    "userId",
     "ownerId",
     "teamId",
     "createdAt",
@@ -27,16 +28,31 @@ const PRESENTATION_FIELDS: &[&str] = &[
     "isImportant",
     "inboxVisible",
     "linkId",
+    // Icon and colour edits change nothing else on the record.
+    "appearance",
 ];
+
+// Initiatives keep their timestamps in this object rather than at the top
+// level. Other types' `metadata` can be large and is not listed anywhere.
+const INITIATIVE_FIELDS: &[&str] = &["metadata"];
+
+fn type_fields(typename: &str) -> &'static [&'static str] {
+    if typename == "GraphqlSoupInitiative" {
+        INITIATIVE_FIELDS
+    } else {
+        &[]
+    }
+}
 
 /// Retains only the projection/row fields needed for a before/after comparison.
 /// Large unrelated fields (email bodies, properties, cached Soup pages) are
 /// never cloned just to decide whether a consumer needs refreshing.
 pub(crate) fn snapshot_search_fields(key: &EntityKey<'_>, record: &Record) -> Option<Record> {
-    let (_, _, text_fields) = quick_access_fields(key, record)?;
+    let (typename, _, text_fields) = quick_access_fields(key, record)?;
     let fields = text_fields
         .iter()
         .chain(PRESENTATION_FIELDS)
+        .chain(type_fields(typename))
         .chain(["__typename", "deletedAt", "hidden"].iter())
         .filter_map(|field| {
             record
@@ -65,10 +81,14 @@ pub(crate) fn collect_search_changes(
         (Some((old_type, old_bucket, _)), Some((new_type, new_bucket, text_fields)))
             if old_type == new_type && old_bucket == new_bucket =>
         {
-            text_fields.iter().chain(PRESENTATION_FIELDS).any(|field| {
-                before.and_then(|record| record.fields.get(*field))
-                    != after.and_then(|record| record.fields.get(*field))
-            })
+            text_fields
+                .iter()
+                .chain(PRESENTATION_FIELDS)
+                .chain(type_fields(new_type))
+                .any(|field| {
+                    before.and_then(|record| record.fields.get(*field))
+                        != after.and_then(|record| record.fields.get(*field))
+                })
         }
         _ => true,
     };

@@ -8,7 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
-import type { CrmContact } from '../core/contact';
+import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
   groups: Accessor<ListFilterGroup<string, string>[]>;
@@ -28,6 +28,8 @@ import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
+  CompanyContactsFilter,
+  CompanyContactsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -101,7 +103,7 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   createContactEmails(
-    email: Accessor<string | undefined>,
+    emails: Accessor<string[]>,
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
@@ -179,6 +181,10 @@ export type CrmContext = {
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
+  /** A company's Team list; disabled while `filter` is undefined. */
+  createCompanyContactsSource(
+    filter: Accessor<CompanyContactsFilter | undefined>
+  ): CompanyContactsSource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;
@@ -204,11 +210,11 @@ export type CrmContext = {
     name: string;
   }>;
   editContactEmail(): CrmMutation<
-    { contact: CrmContact; email: string },
+    { contact: CrmContact; email: string; change: ContactEmailChange },
     CrmContact
   >;
   editContactCompany(): CrmMutation<
-    { contact: CrmContact; companyId: string },
+    { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;

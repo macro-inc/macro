@@ -15,8 +15,12 @@ threads, pins, recents, notifications, folders, activity.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
-- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy.
+- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- Personal contact pages use `graphql_contacts` and the contacts directory service.
+  Compose primary-backed graph and name readers in `server.rs`, and insert the
+  context through the shared GraphQL HTTP/websocket request-data function.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
@@ -40,9 +44,11 @@ threads, pins, recents, notifications, folders, activity.
   `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
   `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
-  across item types. Folder duplication runs on its own task and copies
-  documents and chats through `entity_mutation/project_contents.rs`, the
-  projects domain's `ProjectContentCopier` port.
+  across item types. Folder duplication, trash, restore and permanent delete
+  run on their own task (`run_on_own_task`), so a dropped request cannot stop
+  them partway; duplication copies documents and chats through
+  `entity_mutation/project_contents.rs`, the projects domain's
+  `ProjectContentCopier` port.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
@@ -104,17 +110,40 @@ threads, pins, recents, notifications, folders, activity.
   disabled locally can hide a bug that only shows in deployed builds.
 - CRM-scoped Soup email previews read the primary so consent withdrawal and
   exclusions take effect without replica lag; ordinary inbox lists keep the replica.
+- The list Soup reader gets its own CRM service, which reads the Sales views'
+  activity edges from the replica (`with_activity_edges_replica`); its record
+  and access reads, and the primary-backed Soup reader, keep the primary.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
-- Dev's readonly pool keeps 2–20 connections per task, independently of the
-  primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
-  sessions, or 120 while a rolling deployment overlaps all three. Old tasks
-  retain their previous cap until they drain during the initial rollout.
-  Production and local pools retain their existing primary/readonly limits.
+- Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
+  apart from the primary. Dev's readonly pool keeps 2–20 connections: three
+  tasks allow 60 replica sessions, or 120 while a rolling deployment overlaps
+  all three. Production's keeps 10–50, so 7 tasks allow 350 and a deployment
+  700. Both pools wait 30 s for a connection.
+- A read is never retried on the primary. The only fallback is at startup: a
+  task that cannot reach the replica reads the primary for its lifetime and
+  reports no `readonly` pool metrics.
+- Sessions carry the application name `document_storage_service`, so
+  `pg_stat_activity` and database monitoring can attribute them.
+- Each pool reports `db.client.connection.count` (state `idle`/`used`),
+  `db.client.connection.max`, `db.client.connection.used` (a histogram of the
+  in-use count sampled every second, for peaks the once-a-minute gauges miss)
+  and `db.client.connection.wait_time`, tagged
+  `db.client.connection.pool.name` (`primary`/`readonly`). The wait is a
+  once-a-second probe, not a per-query timing: sqlx acquires inside each query.
+  It reports zero while a connection is idle. When none is, it waits like a
+  query: in the queue at the limit, or for a new connection below it. It does
+  not time the health check sqlx runs on an idle connection, so sqlx's
+  slow-acquire warnings can appear while the probe reads zero.
 - The GraphQL calendar feed (occurrence ranges and `calendarChanges`) reads the
   primary, like the REST calendar routes: a `refresh_calendar` poke goes out as
   a write commits, so a replica-backed delta misses the change it announces.
+- Thread edits (`api/threads/edit_thread.rs`) and saved view definition
+  creates and updates refuse sharing changes from a scoped agent session
+  (`agent_correlation::context::refuse_sharing`, 403); a new sharing field
+  joins that check. Every agent session scope is refused `/soup/graphql` and
+  its WebSocket (`agent_correlation::scope`).
 
 ## Related
 
@@ -123,3 +152,25 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+## Passwords vault
+
+`/passwords` hosts human-only team vault routes, with policy in `passwords`.
+Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_SIGNING_KEY`
+together. Partial configuration fails startup; absent configuration denies vault work.
+Human requests evaluate `enable-passwords-v1` for their authenticated user only;
+missing, disabled or failed evaluations fail closed. Local explicitly enables it.
+Cleanup, reconciliation and internal team purge do not evaluate rollout flags.
+Postgres stores metadata; values stay in OpenBao. Admission checks current human
+account classification and membership, including session-shaped agent accounts.
+
+`src/passwords_cleanup.rs` retries explicit item deletion and TOTP generation erasure
+every minute. Empty passes require no provider configuration; retained work checks
+provider readiness and failed erasure keeps its journal.
+The task tracker cancels and drains the worker. Membership/account deletion never
+erases vault items. Internal `/internal/passwords/teams/{team}` DELETE accepts only
+service credentials and provider readiness, independently of user rollout. Team cleanup skips
+RPC only on authoritative empty metadata rechecked under the existing team lease;
+the returned guard stays in the deletion proof through team-row deletion. Retained
+state requires acknowledged purge before ordinary cleanup; release the guard before RPC.
+- The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.

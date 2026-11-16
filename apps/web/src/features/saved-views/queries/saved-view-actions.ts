@@ -8,6 +8,9 @@ import {
   DeleteSavedViewDocument,
   type DeleteSavedViewMutation,
   type DeleteSavedViewMutationVariables,
+  ReorderSavedViewsDocument,
+  type ReorderSavedViewsMutation,
+  type ReorderSavedViewsMutationVariables,
   UpdateSavedViewDocument,
   type UpdateSavedViewMutation,
   type UpdateSavedViewMutationVariables,
@@ -105,6 +108,32 @@ export function useDeleteSavedView(options: Options) {
           .toPromise();
         if (!result.error && !result.data) result.error = unconfirmed();
         if (result.error) span.error('Saved view delete failed');
+        else if (client === getGraphqlSoupClient())
+          fireAndForget(options.refresh(), 'saved-views');
+        return result;
+      }),
+  }));
+}
+
+/** Replaces the viewer's own order of one kind; definitions are unchanged. */
+export function useReorderSavedViews(options: Options) {
+  return createUrqlMutation<
+    ReorderSavedViewsMutation,
+    ReorderSavedViewsMutationVariables,
+    ReorderSavedViewsMutationVariables['input']
+  >(() => ({
+    client: getGraphqlSoupClient(),
+    mutation: ReorderSavedViewsDocument,
+    execute: ({ client, input, context }) =>
+      Telemetry.span('saved_view.reorder', async (span) => {
+        span.setAttr('saved_view.kind', input.kind);
+        span.setAttr('saved_view.count', input.ids.length);
+        const result = await client
+          .mutation(ReorderSavedViewsDocument, { input }, context)
+          .toPromise();
+        if (!result.error && !result.data?.reorderSavedViews)
+          result.error = unconfirmed();
+        if (result.error) span.error('Saved view reorder failed');
         else if (client === getGraphqlSoupClient())
           fireAndForget(options.refresh(), 'saved-views');
         return result;

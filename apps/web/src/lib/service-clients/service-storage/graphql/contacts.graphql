@@ -1,0 +1,68 @@
+query ContactDirectoryIdentity {
+  user {
+    id
+  }
+}
+
+fragment ContactDirectoryFields on GraphqlContact {
+  id
+  userId
+  email
+  name
+}
+
+# Hydration persists normalized contacts but returns only the cursor projection.
+query ContactDirectoryBackfill($limit: Int, $after: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after) {
+      nodes @cacheOnly {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query ContactDirectoryByUserIds($userIds: [ID!]!) {
+  user {
+    id
+    contactsByUserIds(userIds: $userIds) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+query ContactDirectoryByEmails($emails: [String!]!) {
+  user {
+    id
+    contactsByEmails(emails: $emails) {
+      ...ContactDirectoryFields
+    }
+  }
+}
+
+# Reference lookup keeps matching server-side, before the bounded page limit.
+query ContactReferencePage($limit: Int, $after: String, $search: String!, $matching: GraphqlContactMatching!) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search, matching: $matching) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query ContactDirectoryPage($limit: Int, $after: String, $search: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after, search: $search) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}

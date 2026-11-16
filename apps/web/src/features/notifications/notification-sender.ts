@@ -8,6 +8,9 @@ type SenderMetadataContent = {
   senderProfilePictureUrl?: string | null;
   botName?: string;
   routineName?: string;
+  computerName?: string;
+  /** An agent teammate's computer setup names the agent. */
+  agent?: { name: string } | null;
   mentionedBy?: string;
 };
 
@@ -31,6 +34,8 @@ export function getNotificationSenderFallbackName(
     .with('new_email', () => content?.sender ?? undefined)
     .with('ai_response', () => 'Macro agent')
     .with('routine_run_finished', () => content?.routineName)
+    .with('agent_sign_in_expiry', () => content?.computerName)
+    .with('computer_setup', () => content?.agent?.name ?? content?.computerName)
     .with(
       'agent_session_settled',
       'agent_session_waiting_for_input',

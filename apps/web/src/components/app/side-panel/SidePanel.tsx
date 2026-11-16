@@ -1,5 +1,6 @@
 import { CollapsibleSection } from '@app/components/view-shell/CollapsibleSection';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
@@ -43,10 +44,10 @@ import {
   type SidePanelSectionEntry,
 } from './context';
 import { registerSidePanelInstance } from './registry';
+import { DEFAULT_SIDE_PANEL_WIDTH } from './sizing';
 
 const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
-const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
 // The floating card's width, and its inset from the pane's top and right.
 const FLOATING_WIDTH_PX = 320;
@@ -87,6 +88,8 @@ function Root(
     defaultOpen?: boolean;
     persistKey?: string;
     floating?: boolean;
+    /** Persist wide floating state and leave its content clickable at 900px+. */
+    persistentFloating?: boolean;
   }>
 ) {
   const splitPanel = useSplitPanel();
@@ -159,7 +162,11 @@ function Root(
     });
   }
 
+  const [unseenSource, setUnseenSource] = createSignal<Accessor<number>>();
+
   const ctx: SidePanelContextType = {
+    unseenCount: () => unseenSource()?.() ?? 0,
+    reportUnseenCount: (count) => setUnseenSource(() => count),
     headerActionsMount,
     setHeaderActionsMount,
     register,
@@ -174,6 +181,7 @@ function Root(
     setOpenSectionIds: setOpenIds,
     openSectionIds: openIds,
     isFloating: () => props.floating ?? false,
+    persistentFloating: () => props.persistentFloating ?? false,
   };
 
   return (
@@ -196,8 +204,12 @@ function Layout(
     defaultOpen?: boolean;
     persistKey?: string;
     headerToggle?: boolean;
+    /** Desktop height of the header toggle; `md` matches a list header's New. */
+    headerToggleSize?: 'sm' | 'md';
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
+    /** Match Root's persistent floating behavior when Layout owns the Root. */
+    persistentFloating?: boolean;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -211,7 +223,7 @@ function Layout(
     return (
       <>
         <Show when={props.headerToggle ?? true}>
-          <SidePanelHeaderToggle />
+          <SidePanelHeaderToggle size={props.headerToggleSize} />
         </Show>
         <Resize.Zone direction="horizontal" gutter={0} resizable={false}>
           <SidePanelLayoutInner
@@ -222,6 +234,9 @@ function Layout(
             setIsOpen={ctx.setIsOpen}
             setIsOverlayMode={ctx.setIsOverlayMode}
             floating={props.floating ?? ctx.isFloating()}
+            persistentFloating={
+              props.persistentFloating ?? ctx.persistentFloating()
+            }
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -238,6 +253,7 @@ function Layout(
           defaultOpen={props.defaultOpen}
           persistKey={props.persistKey}
           floating={props.floating}
+          persistentFloating={props.persistentFloating}
         >
           <Panels />
         </Root>
@@ -257,6 +273,7 @@ function SidePanelLayoutInner(
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
+    persistentFloating: boolean;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -270,9 +287,17 @@ function SidePanelLayoutInner(
     () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
   );
   const hasSections = createMemo(() => props.sections().length > 0);
+  const persistentFloatingWide = () =>
+    props.floating &&
+    props.persistentFloating &&
+    !isTouchDevice() &&
+    zoneCtx.size() >= 900;
 
   createEffect(() =>
-    props.setIsOverlayMode(props.floating || isTouchDevice() || isNarrow())
+    props.setIsOverlayMode(
+      !persistentFloatingWide() &&
+        (props.floating || isTouchDevice() || isNarrow())
+    )
   );
 
   const showSplit = createMemo(
@@ -304,7 +329,7 @@ function SidePanelLayoutInner(
         <Resize.Panel
           id="side-panel-side"
           minSize={SIDE_MIN_PX}
-          maxSize={SIDE_MAX_PX}
+          maxSize={DEFAULT_SIDE_PANEL_WIDTH}
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
@@ -373,8 +398,9 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={props.floating && !isTouchDevice()}>
         <div class="absolute inset-0 z-split-panel-chrome pointer-events-none">
-          <Show when={showFloating()}>
+          <Show when={showFloating() && !persistentFloatingWide()}>
             <div
+              data-side-panel-scrim
               class="absolute inset-0 pointer-events-auto bg-transparent"
               onClick={() => props.setIsOpen(false)}
             />
@@ -416,6 +442,7 @@ function SidePanelLayoutInner(
   );
 }
 
+/** Sections report `unseenCount` through the context; zero hides the badge. */
 function Toggle(props: { size?: 'sm' | 'md' } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
@@ -465,6 +492,16 @@ function Toggle(props: { size?: 'sm' | 'md' } = {}) {
               class={cn('size-6 shrink-0', ctx.isOpen() && 'text-accent')}
             />
           </Show>
+          <Show when={ctx.unseenCount() > 0 && !ctx.isOpen()}>
+            <span
+              aria-label={t('nav.unseenItems', {
+                count: ctx.unseenCount(),
+              })}
+              class="absolute -right-1 -top-1 flex min-w-4 h-4 items-center justify-center rounded-full bg-button-accent-bg px-0.5 text-[10px] font-semibold text-button-accent-ink"
+            >
+              {ctx.unseenCount()}
+            </span>
+          </Show>
         </ButtonGroup.Button>
       </HeaderActionGroup>
     </Show>
@@ -498,7 +535,7 @@ function HeaderActionsOutlet() {
   );
 }
 
-function SidePanelHeaderToggle() {
+function SidePanelHeaderToggle(props: { size?: 'sm' | 'md' }) {
   const panel = useSplitPanel();
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
@@ -510,7 +547,7 @@ function SidePanelHeaderToggle() {
       <Show when={!isTouchDevice() && !panel?.isInlinePreview}>
         <SplitHeaderRight>
           <div class="order-[1001] flex shrink-0 items-center">
-            <Toggle />
+            <Toggle size={props.size} />
           </div>
         </SplitHeaderRight>
       </Show>
@@ -737,6 +774,7 @@ function useSidePanel() {
     isOpen: ctx.isOpen,
     setIsOpen: ctx.setIsOpen,
     toggle: ctx.toggle,
+    reportUnseenCount: ctx.reportUnseenCount,
     isOverlayMode: ctx.isOverlayMode,
     hasSections: ctx.hasSections,
     setOpenSectionIds: ctx.setOpenSectionIds,

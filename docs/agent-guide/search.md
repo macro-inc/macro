@@ -6,6 +6,12 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+`Featured Results` are the name matches, listed before the search service
+answers. They obey the Type filter and tags like the rows below them, and
+featured documents and tasks show the same properties. They are not listed
+while the search is scoped to a channel, a sender, or a task facet (status,
+priority, assignee, created by), which name matches cannot be checked against.
+
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 **All** name results, and in the desktop Search page's `Featured Results`. They
 come from the routines list (Quick Access `routine` bucket), not the search
@@ -30,12 +36,36 @@ first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
 first message creates when there isn't one yet. Verify both
 categories with a teammate who has no conversation or CRM record.
-Name search here, in Command K, and in the Chat sidebar finds a conversation by
-its participants in any order, separated by spaces or commas, with name prefixes
-allowed. A query naming exactly its participants ranks it right after exact
-names, above a larger group holding the same people. In Command K and mobile
-name search, a person's first name alone also counts as exact for their DM or
-person row.
+Conversation search here, in Command K, and in the Chat sidebar matches participants
+in any order, separated by spaces or commas, with name prefixes allowed. Naming
+exactly its participants ranks a conversation after exact names, above a larger
+group holding the same people. Ordinary DM entity matches also treat a first name
+as exact; bounded personal-contact windows use their separate policy below.
+
+Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
+exact normalized names, then every query word prefixing a name word in any order,
+then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
+addresses and Macro IDs are exact identities, never display-name aliases.
+Incomplete typed addresses use email-prefix matching.
+
+Personal-contact suggestions now use bounded windows. Paging replaces the person
+window and resets its virtual focus/scroll instead of retaining the directory.
+CRM aliases resolve against personal contacts for only their current window;
+late resolution must preserve the row's UI identity. Sender/speaker/creator facets
+search local contact windows while open and retain selected labels independently.
+Assignee facets keep their team/agent roster, including selected outsiders.
+Verify off-page selection and Only on desktop and phone. A short/empty window
+may still offer Next; it is not proof that the directory is exhausted.
+Returning to a previously paged query or exclusion policy restarts at its first
+window. An offline picker waiting for local context should recover when that
+context arrives. Partial caches stay local even online; Refresh schedules background
+sync rather than remote search. A tab with no usable local cache (unsupported
+browser, or a cache taken over by a newer build) lists server contact pages while
+online instead of showing options as unavailable. Hydration/context changes restart stale windows and
+must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
+person target. Resolving 500 selected people keeps all 500 and looks up self
+separately when that would otherwise overflow the batch.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 
@@ -45,8 +75,17 @@ in full-text mode while editing or switching categories. Clearing the query,
 including whitespace-only input, returns to name search and retains the category.
 Projects is always name-only: selecting it returns to name results and omits the
 full-text action. People full-text search uses the existing channel-content scope.
-Name mode makes no full-text requests; explicit full-text mode retains the search
-service's validation for short queries.
+Name mode makes no full-text requests; explicit full-text mode sends any query
+that is not blank or only quote marks, a single character included. A term
+under three characters matches as a whole word in document, chat, call and
+email content (`pr` finds "PR", not "project"); names and channel messages
+still match it as a prefix.
+
+Contacts, agent sessions and commands list before the local cache answers a
+typed query. While it has not, Command-K and phone name search show
+**Searching…** under the listed rows, once the wait passes 300 ms. It is most
+visible right after returning to the tab, when the cache engine restarts; a
+search refused during that restart is repeated as soon as the engine is back.
 
 Email Quick Access searches cached thread subjects, sender display names, and
 sender addresses, including the thread's earlier senders after someone else

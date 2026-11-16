@@ -20,6 +20,7 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
+arrayvec = { version = "0.7" }
 async-graphql = { version = "7", features = ["chrono", "dataloader"] }
 async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
@@ -135,6 +136,7 @@ rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
+rustix = { version = "1", default-features = false, features = ["process", "pty", "std", "termios"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -186,6 +188,7 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
+arrayvec = { version = "0.7" }
 async-graphql = { version = "7", features = ["chrono", "dataloader"] }
 async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
@@ -306,6 +309,7 @@ rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
+rustix = { version = "1", default-features = false, features = ["process", "pty", "std", "termios"] }
 rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
@@ -366,7 +370,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "mman"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 spin = { version = "0.9" }
@@ -385,7 +389,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "mman"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 smallvec = { version = "1", default-features = false, features = ["union"] }
 spin = { version = "0.9" }
@@ -404,7 +408,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 security-framework-sys = { version = "2" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
@@ -422,7 +426,7 @@ mio = { version = "1", features = ["net", "os-ext"] }
 nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
-rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+rustix = { version = "1", features = ["event", "net", "pipe", "system", "time"] }
 security-framework-sys = { version = "2" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }

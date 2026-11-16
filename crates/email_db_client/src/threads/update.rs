@@ -89,42 +89,135 @@ pub async fn update_thread_provider_id(
     Ok(())
 }
 
-/// Recomputes the denormalized `email_threads.has_calendar_attachment` flag
-/// from the thread's calendar attachments and saved invitations. Mirrors the
-/// CalendarOnly predicate in the email crate's dynamic query builder.
+/// MIME type prefixes behind the email filter's PDF attachment kind. Mirrors
+/// the web client's attachment filters in `next-soup/filters/predicates.ts`.
+pub const PDF_MIME_PREFIXES: &[&str] = &["application/pdf"];
+
+/// MIME type prefixes behind the image attachment kind.
+pub const IMAGE_MIME_PREFIXES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+];
+
+/// MIME type prefixes behind the document attachment kind.
+pub const DOCUMENT_MIME_PREFIXES: &[&str] = &[
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+];
+
+/// `LIKE` patterns matching any of `prefixes` as a literal prefix.
+fn like_prefixes(prefixes: &[&str]) -> Vec<String> {
+    prefixes
+        .iter()
+        .map(|prefix| {
+            let escaped = prefix
+                .replace('\\', r"\\")
+                .replace('%', r"\%")
+                .replace('_', r"\_");
+            format!("{escaped}%")
+        })
+        .collect()
+}
+
+/// Recomputes the thread's denormalized attachment flags from its messages'
+/// attachments: `has_calendar_attachment` (also set by saved invitations) and
+/// `has_pdf_attachment`, `has_image_attachment`, `has_document_attachment`.
+/// Mirrors the CalendarOnly and Attachment predicates in the email crate's
+/// dynamic query builder.
 #[tracing::instrument(skip(tx), err)]
-pub async fn sync_thread_calendar_flag(
+pub async fn sync_thread_attachment_flags(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
         UPDATE email_threads t
-        SET has_calendar_attachment = calc.has_cal
+        SET has_calendar_attachment = calc.has_calendar,
+            has_pdf_attachment = calc.has_pdf,
+            has_image_attachment = calc.has_image,
+            has_document_attachment = calc.has_document
         FROM (
-            SELECT EXISTS (
-                SELECT 1
-                FROM email_messages m
-                JOIN email_attachments a ON a.message_id = m.id
-                WHERE m.thread_id = $1
-                  AND (a.filename ILIKE '%.ics'
-                       OR a.mime_type = 'text/calendar'
-                       OR a.mime_type = 'application/ics')
-            ) OR EXISTS (
-                SELECT 1 FROM email_messages m
-                JOIN email_message_calendar_invites i ON i.message_id = m.id
-                WHERE m.thread_id = $1
-            ) AS has_cal
+            SELECT
+                COALESCE(bool_or(a.filename ILIKE '%.ics'
+                                 OR a.mime_type = 'text/calendar'
+                                 OR a.mime_type = 'application/ics'), false)
+                OR EXISTS (
+                    SELECT 1 FROM email_messages im
+                    JOIN email_message_calendar_invites i ON i.message_id = im.id
+                    WHERE im.thread_id = $1
+                ) AS has_calendar,
+                COALESCE(bool_or(a.mime_type LIKE ANY($2::text[])), false) AS has_pdf,
+                COALESCE(bool_or(a.mime_type LIKE ANY($3::text[])), false) AS has_image,
+                COALESCE(bool_or(a.mime_type LIKE ANY($4::text[])), false) AS has_document
+            FROM email_messages m
+            JOIN email_attachments a ON a.message_id = m.id
+            WHERE m.thread_id = $1
         ) calc
         WHERE t.id = $1
-          AND t.has_calendar_attachment IS DISTINCT FROM calc.has_cal
+          AND (t.has_calendar_attachment, t.has_pdf_attachment,
+               t.has_image_attachment, t.has_document_attachment)
+              IS DISTINCT FROM (calc.has_calendar, calc.has_pdf,
+                                calc.has_image, calc.has_document)
         "#,
-        thread_db_id
+        thread_db_id,
+        &like_prefixes(PDF_MIME_PREFIXES),
+        &like_prefixes(IMAGE_MIME_PREFIXES),
+        &like_prefixes(DOCUMENT_MIME_PREFIXES),
     )
     .execute(tx)
     .await?;
 
     Ok(())
+}
+
+/// Sets the PDF, image and document attachment flags on every thread of one
+/// link that has a matching attachment, for threads ingested before the
+/// flags existed. Only ever sets flags; ingest and delete maintain them after.
+/// Returns the number of threads updated.
+#[tracing::instrument(skip(pool), err)]
+pub async fn backfill_link_attachment_kind_flags(
+    pool: &sqlx::PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<u64> {
+    Ok(sqlx::query!(
+        r#"
+        UPDATE email_threads t
+        SET has_pdf_attachment = t.has_pdf_attachment OR kinds.has_pdf,
+            has_image_attachment = t.has_image_attachment OR kinds.has_image,
+            has_document_attachment = t.has_document_attachment OR kinds.has_document
+        FROM (
+            SELECT
+                m.thread_id,
+                COALESCE(bool_or(a.mime_type LIKE ANY($2::text[])), false) AS has_pdf,
+                COALESCE(bool_or(a.mime_type LIKE ANY($3::text[])), false) AS has_image,
+                COALESCE(bool_or(a.mime_type LIKE ANY($4::text[])), false) AS has_document
+            FROM email_messages m
+            JOIN email_attachments a ON a.message_id = m.id
+            WHERE m.link_id = $1
+            GROUP BY m.thread_id
+        ) kinds
+        WHERE t.id = kinds.thread_id
+          AND ((kinds.has_pdf AND NOT t.has_pdf_attachment)
+               OR (kinds.has_image AND NOT t.has_image_attachment)
+               OR (kinds.has_document AND NOT t.has_document_attachment))
+        "#,
+        link_id,
+        &like_prefixes(PDF_MIME_PREFIXES),
+        &like_prefixes(IMAGE_MIME_PREFIXES),
+        &like_prefixes(DOCUMENT_MIME_PREFIXES),
+    )
+    .execute(pool)
+    .await?
+    .rows_affected())
 }
 
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the

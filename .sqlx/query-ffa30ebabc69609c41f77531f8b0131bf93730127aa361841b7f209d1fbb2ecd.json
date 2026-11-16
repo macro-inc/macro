@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM hosted_runtime_timer WHERE computer_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ffa30ebabc69609c41f77531f8b0131bf93730127aa361841b7f209d1fbb2ecd"
+}

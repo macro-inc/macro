@@ -13,7 +13,7 @@ const workspaceDirectory = fileURLToPath(
 const adapters = `${directory}preview-adapters.tsx`;
 
 /**
- * The real Share menu and Teammates' runtimes section, their queries and
+ * The real Share menu, Pending requests and Teammates' runtimes sections, their queries and
  * service client, over a scripted network. Only the signed-in viewer, their
  * team, and how names render are stand-ins.
  */

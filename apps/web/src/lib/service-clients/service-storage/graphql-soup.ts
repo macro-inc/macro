@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import {
   captureTraceParentExchange,
   traceParentExchange,
@@ -114,6 +115,7 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
@@ -435,6 +437,12 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+/** Fetch-only transport for callers that must validate scope/cancellation before
+ * explicitly admitting a response to the normalized cache. */
+export function getGraphqlSoupNetworkClient(): Client {
+  return graphqlSoupClient;
+}
+
 const reconnectListeners = new Set<() => void>();
 
 /**
@@ -660,6 +668,13 @@ let cachedClient: Client | undefined;
 let cachedCacheHost: CacheHost | undefined;
 let cachedCacheCleanup: (() => void) | undefined;
 let browserCacheClientActivated = false;
+let externalMutationVersion = 0;
+
+/** Fence stale GraphQL responses after a confirmed write through another transport. */
+export function acknowledgeGraphqlRestWrite(host: object): void {
+  if (host === cachedCacheHost && !cachedCacheHost.disabled)
+    externalMutationVersion += 1;
+}
 
 /** An unavailable queue may still hold older writes; never bypass its ordering. */
 export function graphqlDraftQueueBlocked(): boolean {
@@ -888,6 +903,7 @@ export function getGraphqlSoupClient(): Client {
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
             ...localDraftQueueLifecycle(host),
+            externalMutationVersion: () => externalMutationVersion,
             deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {
               // Initialization failure already reports before retiring the host;
@@ -917,6 +933,7 @@ export function getGraphqlSoupClient(): Client {
             mutationQueueTelemetry,
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
+            isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
@@ -953,11 +970,12 @@ export function getGraphqlSoupClient(): Client {
   return cachedClient;
 }
 
-/** Returns the cache host backing the flagged GraphQL Soup client. */
+/** Returns the cache host backing the flagged GraphQL Soup client, or
+ * undefined while that host is retired or unusable. */
 export function getGraphqlSoupCacheHost(): CacheHost | undefined {
   if (!graphqlCacheEnabled()) return undefined;
   getGraphqlSoupClient();
-  return cachedCacheHost;
+  return getGraphqlCacheHost();
 }
 
 /** Shared entity GraphQL client used by both Soup queries and mutations. */
@@ -1521,6 +1539,56 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'routine_run_finished'>
     )
     .with(
+      { __typename: 'GraphqlAgentSignInExpiryMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_sign_in_expiry',
+          content: {
+            agent: match(metadata.agentSignInExpiryAgent)
+              .with('CLAUDE', () => 'claude' as const)
+              // Claude is the only agent this build signs in.
+              .exhaustive(() => 'claude' as const),
+            harnessId: metadata.agentSignInExpiryHarnessId,
+            computerName: metadata.agentSignInExpiryComputerName,
+            stage: match(metadata.agentSignInExpiryStage)
+              .with('EXPIRES_SOON', () => 'expires_soon' as const)
+              .with('EXPIRES_TODAY', () => 'expires_today' as const)
+              .with('EXPIRED', () => 'expired' as const)
+              // A stage this build doesn't know still asks for a new sign-in.
+              .exhaustive(() => 'expires_soon' as const),
+            expiresAt: metadata.agentSignInExpiryExpiresAt,
+          },
+        }) satisfies NotifEventMember<'agent_sign_in_expiry'>
+    )
+    .with(
+      { __typename: 'GraphqlComputerSetupMetadata' },
+      (metadata) =>
+        ({
+          tag: 'computer_setup',
+          content: {
+            computerId: metadata.computerSetupComputerId,
+            harnessId: metadata.computerSetupHarnessId ?? null,
+            computerName: metadata.computerSetupComputerName,
+            agent:
+              metadata.computerSetupAgentUserId &&
+              metadata.computerSetupAgentName
+                ? {
+                    userId: metadata.computerSetupAgentUserId,
+                    name: metadata.computerSetupAgentName,
+                  }
+                : null,
+            outcome: match(metadata.computerSetupOutcome)
+              .with('READY', () => ({ kind: 'ready' as const }))
+              .with('FAILED', () => ({
+                kind: 'failed' as const,
+                failureReason: metadata.computerSetupFailureReason ?? '',
+              }))
+              // An outcome this build doesn't know reads as finished setup.
+              .exhaustive(() => ({ kind: 'ready' as const })),
+          },
+        }) satisfies NotifEventMember<'computer_setup'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({
@@ -1940,6 +2008,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.displayName ?? 'Untitled project',
             ownerId: entity.metadata.ownerId ?? '',
             createdAt: entity.metadata.createdAt ?? '',
@@ -1959,6 +2028,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.documentName,
             ownerId: entity.ownerId,
             fileType: entity.fileType ?? undefined,
@@ -2132,6 +2202,13 @@ export function mapGraphqlSoupItem(
                     createdAt: notification.createdAt,
                   }))
                 : undefined,
+            unreadMentions:
+              'unreadMentions' in entity
+                ? entity.unreadMentions.map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )
@@ -2249,6 +2326,23 @@ export function mapGraphqlSoupItem(
               createdAt: entity.createdAt,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupHarness' },
+      (entity) =>
+        ({
+          tag: 'harness',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.harnessName,
+            ownerId: entity.ownerId,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
