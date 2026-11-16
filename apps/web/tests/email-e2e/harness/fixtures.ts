@@ -9,7 +9,13 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import { record } from '../ledger/record';
-import { FROM_TEST, type Front, type SignedInUser, startFront } from './front';
+import {
+  bundleFile,
+  FROM_TEST,
+  type Front,
+  type SignedInUser,
+  startFront,
+} from './front';
 import { LocalStack, localStackAddresses } from './local-stack';
 import {
   type EmailStack,
@@ -189,19 +195,24 @@ export const test = base.extend<
         }
         // A change of the machine's network (another container starting)
         // makes Chrome drop the requests in flight and leaves the page
-        // without part of the app. The test process fetches the app's own
-        // files instead; no such change reaches it.
+        // without part of the app. The test process answers for the app's
+        // own files instead, with what the front would have sent: no such
+        // change reaches it, and nothing is fetched to be passed on.
         await page.route(
           (url) => url.pathname.startsWith('/app/'),
           async (route) => {
             if (route.request().method() !== 'GET') return route.fallback();
-            try {
-              const response = await route.fetch();
-              await route.fulfill({ response });
-            } catch {
-              // The test ended meanwhile, or the fetch could not be made.
-              await route.fallback().catch(() => undefined);
-            }
+            const path = new URL(route.request().url()).pathname;
+            const found = bundleFile(DIST, path);
+            if (!found) return route.fallback();
+            // A failure here is the test having ended meanwhile.
+            await route
+              .fulfill({
+                status: 200,
+                headers: found.headers,
+                body: found.body,
+              })
+              .catch(() => undefined);
           }
         );
         // The local stack runs the gateway; the front pipes its socket.
@@ -241,7 +252,13 @@ export const test = base.extend<
                   found = page.items.find((item) => item.name === subject);
                   return found !== undefined;
                 },
-                { message: `Macro never synced "${subject}"`, timeout: 60_000 }
+                {
+                  message: `Macro never synced "${subject}"`,
+                  timeout: 60_000,
+                  // The default grows to a second between looks, which a
+                  // test with several messages waits for each of.
+                  intervals: [50, 100, 100, 250],
+                }
               )
               .toBe(true);
             return found as ThreadPreview;

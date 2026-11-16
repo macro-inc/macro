@@ -127,6 +127,37 @@ function isFile(path: string): boolean {
   return existsSync(path) && statSync(path).isFile();
 }
 
+/** One of the bundle's files, as the front answers a request for it. */
+export type BundleFile = { body: Buffer; headers: Record<string, string> };
+
+/**
+ * The bundle's file for a path, or its page for any other path of the app;
+ * nothing for a path that is not the app's. Read once and kept: every test
+ * of a worker loads the same files.
+ */
+export function bundleFile(dist: string, path: string): BundleFile | undefined {
+  const found = [
+    join(dist, path),
+    join(dist, path.replace(/^\/app\//, '/')),
+  ].find(isFile);
+  if (found) {
+    return {
+      body: file(found),
+      headers: {
+        ...ISOLATION,
+        'content-type': MIME[extname(found)] ?? 'application/octet-stream',
+      },
+    };
+  }
+  if (path === '/' || path === '/app' || path.startsWith('/app/')) {
+    return {
+      body: file(join(dist, 'index.html')),
+      headers: { ...ISOLATION, 'content-type': 'text/html' },
+    };
+  }
+  return undefined;
+}
+
 /** What the gateway adds to a request it has authenticated. */
 function internalHeaders(options: FrontOptions): Record<string, string> {
   return {
@@ -369,22 +400,10 @@ export async function startFront(options: FrontOptions): Promise<Front> {
     const method = request.method ?? 'GET';
 
     if (method === 'GET') {
-      const candidates = [
-        join(options.dist, path),
-        join(options.dist, path.replace(/^\/app\//, '/')),
-      ];
-      const found = candidates.find(isFile);
+      const found = bundleFile(options.dist, path);
       if (found) {
-        response.writeHead(200, {
-          ...ISOLATION,
-          'content-type': MIME[extname(found)] ?? 'application/octet-stream',
-        });
-        response.end(file(found));
-        return;
-      }
-      if (path === '/' || path === '/app' || path.startsWith('/app/')) {
-        response.writeHead(200, { ...ISOLATION, 'content-type': 'text/html' });
-        response.end(file(join(options.dist, 'index.html')));
+        response.writeHead(200, found.headers);
+        response.end(found.body);
         return;
       }
     }
