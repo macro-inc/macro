@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { useBlockId } from '@core/block';
@@ -51,7 +52,9 @@ export function useVideoHeaderTools() {
     { op: 'moveToProject' },
     {
       group: 'file',
-      label: 'Download',
+      get label() {
+        return t('entityActions.download');
+      },
       icon: Download,
       action: downloadDocument,
     },
@@ -60,7 +63,7 @@ export function useVideoHeaderTools() {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     focusTarget: getShareDrawerRecipientInput,

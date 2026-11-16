@@ -2,6 +2,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import { useHasModificationData } from '@block-pdf/signal/save';
 import { useHasComments } from '@block-pdf/store/comments/commentStore';
 import {
@@ -97,13 +98,17 @@ export function usePdfHeaderTools() {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      label: 'Print',
+      get label() {
+        return t('entityActions.print');
+      },
       icon: Printer,
       action: () => printFile(),
     },
     {
       group: 'file',
-      label: 'Download',
+      get label() {
+        return t('entityActions.download');
+      },
       icon: DownloadIcon,
       action: download,
     },
@@ -111,7 +116,9 @@ export function usePdfHeaderTools() {
       ? [
           {
             group: 'file',
-            label: 'Download DOCX',
+            get label() {
+              return t('entityActions.downloadAsDocx');
+            },
             icon: DownloadIcon,
             action: downloadDocx,
           } as const,
@@ -121,7 +128,7 @@ export function usePdfHeaderTools() {
   ];
 
   const askMacro: BlockTool = {
-    label: 'Ask Macro',
+    label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
       openChatWithAgent({
@@ -134,7 +141,7 @@ export function usePdfHeaderTools() {
 
   const share: BlockTool = {
     group: 'sharing',
-    label: 'Share',
+    label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,
     focusTarget: getShareDrawerRecipientInput,
