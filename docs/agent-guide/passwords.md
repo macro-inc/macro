@@ -58,7 +58,9 @@ it when it expires; a failed load offers Retry.
 
 The detail header shows the logo tile, name, folder path and kind, then
 Favorite, Share, Edit and "…" (Activity, Delete item). Usernames load with a
-Copy action and never reveal the password. Any signed-in team member with
+Copy action and never reveal the password. An empty account identifier or API Key
+shows a dash; lookup failures stay visible. Missing provider username slots read as
+empty without requiring a re-import. Any signed-in team member with
 access can reveal and copy the password, notes and verification code; there is
 no separate re-sign-in step. Revealed values and codes clear on Lock
 Passwords (a client-side conceal only), after a minute, when the window loses
