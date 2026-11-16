@@ -55,6 +55,7 @@ test('native : closing shortcode resolves the emoji', async ({ page }) => {
 });
 
 for (const [key, bit] of [
+  ['b', 1],
   ['e', 16],
   ['Shift+x', 4],
   ['Shift+h', 128],
@@ -67,5 +68,8 @@ for (const [key, bit] of [
     await page.keyboard.press('Shift+Home');
     await page.keyboard.press(`ControlOrMeta+${key}`);
     await expect(page.locator('#live-state')).toContainText(`"format":${bit}`);
+    expect(await page.evaluate(() => document.getSelection()?.toString())).toBe(
+      'word'
+    );
   });
 }
