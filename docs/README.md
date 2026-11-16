@@ -19,6 +19,9 @@ Document sync: [DSS sync router](architecture/sync-router.md).
 
 Email: [frontend architecture](architecture/email.md) and
 [backend composition and boundaries](architecture/email-backend.md).
+
+Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
+
 Macro computers: [architecture](architecture/macro-computers.md) and the
 [setup trace runbook](runbooks/computer-setup-traces.md).
 
@@ -33,3 +36,5 @@ Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
 
 Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).
+
+CRM: [selective email contribution proposal](design/crm-selective-email-contribution.md).

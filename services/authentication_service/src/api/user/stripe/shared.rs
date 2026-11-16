@@ -29,17 +29,6 @@ pub struct StripePrices {
 }
 
 impl StripePrices {
-    /// Which plan a subscription item's price belongs to, if any.
-    pub fn plan_for_price(&self, price_id: &str) -> Option<PaidPlan> {
-        if price_id == self.premium {
-            Some(PaidPlan::Premium)
-        } else if self.max.as_deref() == Some(price_id) {
-            Some(PaidPlan::Max)
-        } else {
-            None
-        }
-    }
-
     /// The same prices, for the teams crate's per-plan seat items.
     pub fn seat_prices(&self) -> anyhow::Result<SeatPrices> {
         Ok(SeatPrices {
