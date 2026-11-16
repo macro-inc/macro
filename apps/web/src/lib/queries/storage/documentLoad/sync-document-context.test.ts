@@ -129,6 +129,26 @@ afterEach(async () => {
   await clearOfflineDocumentContexts();
 });
 
+async function storedContextCount(): Promise<number> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('native-document-open-persist-v1');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const request = db
+        .transaction('queries', 'readonly')
+        .objectStore('queries')
+        .count();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 const expectCachedOpen = async (
   opening: ReturnType<typeof fetchSyncDocumentOpenContext>
 ) => {
@@ -458,6 +478,18 @@ describe('engine choice after boot', () => {
 });
 
 describe('unflagged browser logout', () => {
+  it('clears contexts an earlier flag-on load left behind', async () => {
+    // beforeEach wrote a context and its epoch, as a flag-on load does.
+    expect(await storedContextCount()).toBe(1);
+    mocks.native = false;
+    const epoch = localStorage.getItem('document-open-context:epoch');
+
+    await clearOfflineDocumentContexts();
+
+    expect(await storedContextCount()).toBe(0);
+    expect(localStorage.getItem('document-open-context:epoch')).not.toBe(epoch);
+  });
+
   it('leaves the native document context storage untouched', async () => {
     mocks.native = false;
     localStorage.removeItem('document-open-context:epoch');

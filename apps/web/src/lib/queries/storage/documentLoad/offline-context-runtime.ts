@@ -42,10 +42,22 @@ export const offlineDocumentContextCache = createOfflineDocumentContextCache({
   },
 });
 
+function hasPersistedEpoch(): boolean {
+  try {
+    return localStorage.getItem(EPOCH_KEY) !== null;
+  } catch {
+    // Unknown: clear rather than risk leaving another account's contexts.
+    return true;
+  }
+}
+
 /** Rotate before asynchronous clearing so late work cannot restore a logged-out session. */
 export async function clearOfflineDocumentContexts(): Promise<void> {
-  // Only these platforms ever write this store; leave web storage as it was.
-  if (!isNativeMobilePlatform() && !RUST_EDITOR_ENGINE) return;
+  // Web writes this store only while the engine is on, and every write first
+  // records the epoch. A flag-off load still clears what an earlier flag-on load
+  // left; a web origin that never wrote it keeps main's untouched storage.
+  if (!isNativeMobilePlatform() && !RUST_EDITOR_ENGINE && !hasPersistedEpoch())
+    return;
   volatileEpoch = crypto.randomUUID();
   try {
     localStorage.setItem(EPOCH_KEY, volatileEpoch);
