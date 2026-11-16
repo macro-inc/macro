@@ -356,3 +356,87 @@ it('keeps an empty field open when the view has no list on screen', async () => 
     view.getByRole('button', { name: 'Search routines' })
   );
 });
+
+function setupSuggestions(initial: string[]) {
+  const [search, setSearch] = createSignal('bu');
+  const [active, setActive] = createSignal(-1);
+  const [open, setOpen] = createSignal(false);
+  const picked: number[] = [];
+  let list!: HTMLDivElement;
+
+  const view = render(() => (
+    <div>
+      <ListHeaderSearch
+        label="Search email"
+        value={search()}
+        onValueChange={setSearch}
+        focusResults={() => list.focus()}
+        registerFocus={() => {}}
+        wide
+        onOpenChange={setOpen}
+        suggestions={{
+          count: () => initial.length,
+          active,
+          setActive,
+          pick: (index) => {
+            picked.push(index);
+            setSearch(initial[index] ?? '');
+          },
+        }}
+      />
+      <div ref={list} tabIndex={0} />
+    </div>
+  ));
+  const field = view.getByRole('searchbox', { name: 'Search email' });
+  field.focus();
+  return {
+    view,
+    field,
+    search,
+    setSearch,
+    active,
+    open,
+    picked,
+    list: () => list,
+  };
+}
+
+it('walks suggestions with the arrows before it reaches the results', () => {
+  const { field, active, list } = setupSuggestions(['budget', 'build']);
+
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  expect(active()).toBe(1);
+  expect(document.activeElement).toBe(field);
+
+  type(field, 'ArrowUp');
+  type(field, 'ArrowUp');
+  expect(active()).toBe(-1);
+
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  type(field, 'ArrowDown');
+  expect(document.activeElement).toBe(list());
+});
+
+it('runs the active suggestion on Enter and moves to its results', () => {
+  const { field, search, picked, list } = setupSuggestions(['budget']);
+
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+
+  expect(picked).toEqual([0]);
+  expect(search()).toBe('budget');
+  expect(document.activeElement).toBe(list());
+});
+
+it('reports a wide field open, and closed once it is left empty', () => {
+  const { view, field, setSearch, open } = setupSuggestions([]);
+  expect(open()).toBe(true);
+
+  setSearch('');
+  fireEvent.blur(field);
+
+  expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});

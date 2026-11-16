@@ -1028,7 +1028,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Enter and Escape can move the keyboard into the list, and never clear the
   query on Escape yourself. ArrowDown and Enter then run the list's own "go to
   first item" command, so a list on `useListInteractions` lands on its first
-  row with no code in the view. It registers the
+  row with no code in the view. `wide` lets the open field take the rest of
+  the header (the view hides its other actions from `onOpenChange`), and
+  `suggestions` lists rows under the field that the arrows walk before the
+  results; Email's wide search uses both. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.

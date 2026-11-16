@@ -13,9 +13,11 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import { createMemo, createSignal, For } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListHeaderSearch } from '../ListHeader';
+
+const RECENT = ['budget', 'roadmap'];
 
 const FILES = [
   'Budget 2026',
@@ -31,6 +33,17 @@ function Fixture() {
   const [attachSplit, scopeId] = useHotkeyDOMScope('files-split');
   const [search, setSearch] = createSignal('');
   const [tab, setTab] = createSignal('Archived');
+  // `?wide` is Email's layout: the open field owns the header and lists
+  // recent searches above the results.
+  const wide = new URLSearchParams(window.location.search).has('wide');
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const [active, setActive] = createSignal(-1);
+  const recent = createMemo(() =>
+    wide && focused()
+      ? RECENT.filter((query) => query.includes(search().trim()))
+      : []
+  );
   let grid!: HTMLDivElement;
 
   const items = createMemo(() =>
@@ -77,6 +90,9 @@ function Fixture() {
           <h1 class="text-sm font-medium" data-testid="tab">
             {tab()}
           </h1>
+          <Show when={!(wide && open())}>
+            <button type="button">New</button>
+          </Show>
           <SplitPanelContext.Provider value={panel}>
             <ListHeaderSearch
               label="Search files"
@@ -84,8 +100,30 @@ function Fixture() {
               onValueChange={setSearch}
               focusResults={() => grid.focus()}
               registerFocus={() => {}}
+              wide={wide}
+              onOpenChange={setOpen}
+              onFocusChange={setFocused}
+              suggestions={
+                wide
+                  ? {
+                      count: () => recent().length,
+                      active,
+                      setActive,
+                      pick: (index) => setSearch(recent()[index] ?? ''),
+                    }
+                  : undefined
+              }
             />
           </SplitPanelContext.Provider>
+        </div>
+        <div role="listbox" aria-label="Recent searches">
+          <For each={recent()}>
+            {(query, index) => (
+              <div role="option" aria-selected={active() === index()}>
+                {query}
+              </div>
+            )}
+          </For>
         </div>
         <div
           ref={grid}
