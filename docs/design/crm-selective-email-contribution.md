@@ -15,9 +15,10 @@ can manage through the SDK. Existing all-mail consents remain unchanged. There
 is no visual rule builder in v1 and no required member confirmation for each
 agent activation. The member can inspect, edit or withdraw their rules anytime.
 
-Contribution controls what a mailbox shares, not who can use CRM. Restricting
-some team members from CRM or databases remains a separate authorization project.
-Selected consent does not provide a restricted member role.
+Contribution controls what a mailbox shares. CRM viewing is a separate
+permission managed through the member-access API; client controls follow
+separately. A member whose CRM viewing is off can still manage their consent
+and private rules. Selected consent does not grant CRM or database viewing.
 
 ## Current behavior and constraints
 
