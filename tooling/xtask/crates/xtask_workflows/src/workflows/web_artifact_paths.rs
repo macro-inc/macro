@@ -23,6 +23,17 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/client/doc_sync_core/**"),
     RepoGlob::new("crates/client/lexical/**"),
     RepoGlob::new("crates/sync_protocol/**"),
+    // Path crates the document-session wasm links.
+    RepoGlob::new("crates/client/mention_date/**"),
+    RepoGlob::new("crates/cowlike/**"),
+    RepoGlob::new("crates/document_id/**"),
+    RepoGlob::new("crates/lexical_node_id/**"),
+    RepoGlob::new("crates/macro_user_id/**"),
+    RepoGlob::new("crates/sync_doc_id/**"),
+    // Workspace [patch] crates the browser wasm packages compile.
+    RepoGlob::new("vendor/loro-editor/**"),
+    RepoGlob::new("vendor/regress/**"),
+    RepoGlob::new("vendor/chrono-tz/**"),
     RepoGlob::new("crates/client/turso-opfs/**"),
     RepoGlob::new("crates/database_sql/**"),
     RepoGlob::new("crates/filter_ast/**"),

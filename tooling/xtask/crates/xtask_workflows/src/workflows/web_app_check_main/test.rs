@@ -595,30 +595,53 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
     );
 }
 
-/// The native editor view's browser suite runs real document-session wasm, so a
-/// change to the view, the session executor or the crates behind that wasm runs
-/// both of its Playwright configs in the job that builds the wasm.
+/// The native editor view's browser suite runs real document-session wasm and
+/// app modules, so any web artifact input runs it, including Rust-only, lockfile,
+/// protocol and patched-vendor changes, in the job that builds that wasm.
 #[test]
-fn native_editor_view_browser_tests_run_when_the_view_or_its_wasm_changes() {
+fn native_editor_view_browser_tests_run_for_every_web_artifact_input() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let filters = yaml
         .split("filters: |")
         .nth(1)
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
-    let view = filters
-        .split("lexical_wasm_view_changed:")
+    let artifact = filters
+        .split("web_artifact_changed:")
         .nth(1)
-        .expect("lexical_wasm_view_changed filter");
+        .and_then(|rest| rest.split("codegen_inputs:").next())
+        .expect("web_artifact_changed filter");
+    let should_run = filters
+        .split("should_run:")
+        .nth(1)
+        .and_then(|rest| rest.split("web_artifact_changed:").next())
+        .expect("should_run filter");
     for path in [
-        "packages/lexical-wasm-view/**",
-        "packages/collaboration/src/session/**",
+        "packages/**",
+        "apps/web/**",
+        "crates/client/mention_date/**",
+        "crates/cowlike/**",
+        "crates/document_id/**",
+        "crates/lexical_node_id/**",
+        "crates/macro_user_id/**",
+        "crates/sync_doc_id/**",
         "crates/client/document_session/**",
         "crates/client/document_session_wasm/**",
         "crates/client/doc_sync_core/**",
         "crates/client/lexical/**",
+        "crates/sync_protocol/**",
+        "vendor/loro-editor/**",
+        "vendor/regress/**",
+        "vendor/chrono-tz/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "package.json",
+        "bun.lock",
     ] {
-        assert!(view.contains(path), "{path} runs the suite: {view}");
+        let line = format!("- '{path}'\n");
+        assert!(artifact.contains(&line), "{path} runs the suite: {artifact}");
+        assert!(should_run.contains(&line), "{path} starts the job: {should_run}");
     }
     let job = browser_job(&yaml);
     let step = job
@@ -627,10 +650,10 @@ fn native_editor_view_browser_tests_run_when_the_view_or_its_wasm_changes() {
         .and_then(|rest| rest.split("- name:").next())
         .expect("native editor view browser step");
     assert!(
-        step.contains("needs.path-check.outputs.lexical_wasm_view_changed == 'true'")
-            && step.contains("bun run test:browser")
-            && step.contains("packages/lexical-wasm-view"),
-        "the step runs the suite when the view changes: {step}"
+        step.contains("needs.path-check.outputs.web_artifact_changed == 'true'")
+            && step.contains("env -u LD_LIBRARY_PATH bun run test:browser")
+            && step.contains("working-directory: packages/lexical-wasm-view"),
+        "the step runs both configs from the package: {step}"
     );
     let build = job
         .find("- name: Build document-session WASM for tests")
