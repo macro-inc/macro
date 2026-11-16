@@ -127,6 +127,8 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
         ),
         ("GET", item.clone(), serde_json::json!({})),
         ("GET", format!("{item}/username"), serde_json::json!({})),
+        ("PUT", format!("{item}/favorite"), serde_json::json!({})),
+        ("DELETE", format!("{item}/favorite"), serde_json::json!({})),
         (
             "POST",
             format!("{item}/username/copy"),

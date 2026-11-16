@@ -164,7 +164,7 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep the human-session-only Passwords vault endpoints, including batch import
-  and name matching and the human review of agent access requests, in coverage
+  and name matching, private favorites and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
   outside v1 agent capabilities.
 - `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the

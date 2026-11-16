@@ -831,3 +831,132 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         Err(Error::NotFound)
     ));
 }
+
+#[tokio::test]
+async fn a_creators_initial_favorite_is_not_shared_with_a_viewer() {
+    let repository = Arc::new(FakeRepository::new());
+    let service = PasswordService {
+        repository: repository.clone(),
+        provider: Arc::new(FakeProvider::new()),
+        availability: Arc::new(FakeAvailability),
+    };
+    let owner = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|favorite-owner@example.test")
+            .expect("fixture")
+            .into_owned(),
+    };
+    let viewer = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|favorite-viewer@example.test")
+            .expect("fixture")
+            .into_owned(),
+    };
+    let team = TeamId(Uuid::now_v7());
+    for actor in [&owner, &viewer] {
+        repository
+            .memberships
+            .lock()
+            .expect("fixture")
+            .insert(actor.user_id.to_string(), vec![team]);
+    }
+    let item = service
+        .create(
+            &owner,
+            team,
+            WriteItem {
+                operation_id: Uuid::now_v7(),
+                name: "Favorite fixture".into(),
+                kind: ItemKind::Login,
+                url: None,
+                folder_id: None,
+                favorite: true,
+                private: false,
+                expected_version: None,
+                values: SecretValues {
+                    username: SecretString::default(),
+                    password: SecretString::default(),
+                    notes: SecretString::default(),
+                    fields: vec![],
+                },
+            },
+        )
+        .await
+        .expect("create");
+    service
+        .share(
+            &owner,
+            team,
+            item.id,
+            vec![Grant {
+                kind: GranteeKind::User,
+                id: viewer.user_id.to_string(),
+                permission: Permission::View,
+            }],
+        )
+        .await
+        .expect("share");
+    assert!(
+        service
+            .get(&owner, team, item.id)
+            .await
+            .expect("owner view")
+            .favorite
+    );
+    assert!(
+        !service
+            .get(&viewer, team, item.id)
+            .await
+            .expect("viewer view")
+            .favorite
+    );
+    let before = repository.get(team, item.id).await.expect("snapshot");
+    let leases = repository.lock_calls.load(Ordering::SeqCst);
+    let audits = repository.audits.lock().expect("fixture").len();
+    repository
+        .busy_items
+        .lock()
+        .expect("fixture")
+        .insert(team.0);
+    service
+        .set_favorite(&viewer, team, item.id, true)
+        .await
+        .expect("viewer stars while credential lease busy");
+    service
+        .set_favorite(&viewer, team, item.id, true)
+        .await
+        .expect("idempotent star");
+    assert!(
+        service
+            .get(&viewer, team, item.id)
+            .await
+            .expect("viewer")
+            .favorite
+    );
+    service
+        .set_favorite(&owner, team, item.id, false)
+        .await
+        .expect("owner removes own favorite");
+    assert!(
+        !service
+            .get(&owner, team, item.id)
+            .await
+            .expect("owner")
+            .favorite
+    );
+    assert!(service.list(&viewer, team, "").await.expect("viewer list")[0].favorite);
+    assert!(!service.list(&owner, team, "").await.expect("owner list")[0].favorite);
+    assert_eq!(repository.lock_calls.load(Ordering::SeqCst), leases);
+    assert_eq!(repository.audits.lock().expect("fixture").len(), audits);
+    let after = repository.get(team, item.id).await.expect("snapshot");
+    assert_eq!(before.revision, after.revision);
+    assert_eq!(before.metadata.version, after.metadata.version);
+    assert_eq!(before.metadata.updated_at, after.metadata.updated_at);
+    repository
+        .memberships
+        .lock()
+        .expect("fixture")
+        .remove(viewer.user_id.as_ref());
+    assert!(matches!(
+        service.set_favorite(&viewer, team, item.id, false).await,
+        Err(Error::NotFound)
+    ));
+}

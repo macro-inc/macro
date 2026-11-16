@@ -80,7 +80,8 @@ pub trait Repository: Send + Sync {
     ) -> Result<Record, Error>;
     /// Commit a reconciled intent's metadata with its version guard, record the
     /// agent audit retained on the intent and mark the intent complete, in one
-    /// transaction. A live record's folder is share-locked as in `save`.
+    /// transaction. Initial publication seeds the creator's favorite as in `save`.
+    /// A live record's folder is share-locked as in `save`.
     async fn save_reconciled(
         &self,
         record: &Record,
@@ -99,8 +100,25 @@ pub trait Repository: Send + Sync {
         team: TeamId,
         names: &[String],
     ) -> Result<Vec<Record>, Error>;
+    /// Personal favorites among at most MAX_LIST_ITEMS supplied item identities.
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error>;
+    /// Set a personal preference without a credential lease or item revision change.
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error>;
     /// Load an item and its authorization facts without resolving secret values.
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error>;
+    /// Initial publication atomically seeds the creator's preference from the
+    /// supplied initial favorite flag; later saves never change personal favorites.
     /// Commit metadata with its observed version guard. A live record's folder is
     /// share-locked in the same transaction; a deleted one fails with `FolderMissing`.
     async fn save(&self, record: &Record, expected_version: Option<i32>) -> Result<(), Error>;
