@@ -119,13 +119,16 @@ test('real native paste, reconcile and scroll export sampled facade spans withou
   );
   const expected = JSON.parse(before);
   expected.root.$ = { ...expected.root.$, id: undone.root.$.id };
-  for (const paragraph of expected.root.children) {
-    for (const key of ['direction', 'indent', 'textFormat', 'textStyle'])
-      if (!(key in paragraph)) paragraph[key] = null;
-    for (const text of paragraph.children)
-      for (const key of ['detail', 'format', 'style'])
-        if (!(key in text)) text[key] = null;
-  }
+  const storageNullKeys: Record<string, readonly string[]> = {
+    paragraph: ['direction', 'indent', 'textFormat', 'textStyle'],
+    text: ['detail', 'format', 'style'],
+  };
+  const withStoredNulls = (node: Record<string, unknown>) => {
+    for (const key of storageNullKeys[String(node.type)] ?? [])
+      if (!(key in node)) node[key] = null;
+    if (Array.isArray(node.children)) node.children.forEach(withStoredNulls);
+  };
+  expected.root.children.forEach(withStoredNulls);
   expect(undone.root.$.id).toEqual(expect.any(String));
   expect(undone).toEqual(expected);
 });
