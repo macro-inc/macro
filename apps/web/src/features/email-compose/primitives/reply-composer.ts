@@ -640,7 +640,7 @@ export function createReplyComposer(
     const recipients = form.recipients();
     if (
       !hasDraftContent(
-        prepared.bodyText,
+        prepared.hasWrittenContent,
         form.subject(),
         form.attachments.list().length,
         // A forward's recipients are typed in, not derived from the thread,
