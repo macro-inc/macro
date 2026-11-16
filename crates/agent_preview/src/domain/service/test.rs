@@ -157,7 +157,7 @@ async fn expiry_stop_and_token_timeout_close_access() {
         .unwrap()
         .1
         .expires = now_ms() + 120000;
-    // The refusal backs the credential off without consuming it.
+    // A refused credential waits out its backoff before storage is asked again.
     tokio::time::pause();
     assert!(
         service

@@ -27,7 +27,7 @@ on stock OpenSSH reverse forwarding.
 
 ## Boundaries
 
-- Depends on: `agent_egress` (shares the sandbox's egress credential path).
+- Depends on: `agent_credentials` (hashed user ids in telemetry).
 - Used by: `agent_harness_service` (its sole host).
 
 ## Recipes

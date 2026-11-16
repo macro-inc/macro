@@ -220,8 +220,8 @@ impl<S: AsyncRead + Unpin> AsyncRead for Identified<S> {
         if self.client.get().is_none() {
             for &byte in &buf.filled()[start..] {
                 if byte == b'\n' || self.line.len() >= MAX_IDENTIFICATION {
-                    let software = client_software(&self.line);
-                    let _ = self.client.set(software);
+                    let line = std::mem::take(&mut self.line);
+                    let _ = self.client.set(client_software(&line));
                     break;
                 }
                 self.line.push(byte);

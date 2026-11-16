@@ -309,6 +309,30 @@ fn client_software_keeps_only_the_bounded_software_field() {
 }
 
 #[tokio::test]
+async fn identification_split_across_reads_is_captured_and_passed_through() {
+    let (mut client, server) = tokio::io::duplex(64);
+    let captured = Arc::new(OnceLock::new());
+    let mut server = Identified {
+        stream: server,
+        line: Vec::new(),
+        client: captured.clone(),
+    };
+    let sent = b"SSH-2.0-OpenSSH_9.6p1 Debian\r\n\x00\x00\x01\x0ckex";
+    let mut received = Vec::new();
+    for chunk in [&sent[..5], &sent[5..17], &sent[17..]] {
+        client.write_all(chunk).await.unwrap();
+        let mut buf = [0; 64];
+        let read = server.read(&mut buf).await.unwrap();
+        received.extend_from_slice(&buf[..read]);
+        if received.len() <= 17 {
+            assert!(captured.get().is_none());
+        }
+    }
+    assert_eq!(received, sent);
+    assert_eq!(captured.get().unwrap(), "OpenSSH_9.6p1");
+}
+
+#[tokio::test]
 async fn stop_closes_authenticated_ssh_before_a_forward_is_registered() {
     struct Client {
         key: russh::keys::PublicKey,

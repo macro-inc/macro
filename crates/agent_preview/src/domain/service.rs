@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -357,9 +357,10 @@ impl PreviewService {
         let lifecycle = self.lifecycle.lock().await;
         let id = PreviewId::generate();
         let token = format!("{SSH_TOKEN_PREFIX}{}", random());
+        let hash = digest(&token);
         let span = tracing::Span::current();
         span.record("preview_id", tracing::field::display(&id));
-        span.record("credential_id", credential_id(&digest(&token)));
+        span.record("credential_id", credential_id(&hash));
         let preview = Preview {
             id: id.clone(),
             agent_session_id: identity.session,
@@ -376,7 +377,7 @@ impl PreviewService {
                     replica: None,
                 },
                 StoredCredential {
-                    hash: digest(&token),
+                    hash,
                     preview: id,
                     user: None,
                     expires: now_ms() + TOKEN_TTL.as_millis() as i64,
@@ -514,7 +515,7 @@ impl PreviewService {
         let waiting = self
             .ssh_backoff
             .lock()
-            .expect("ssh backoff mutex")
+            .unwrap_or_else(PoisonError::into_inner)
             .waiting(&hash, tokio::time::Instant::now());
         if waiting {
             span.record("ssh.outcome", "backoff");
@@ -527,10 +528,12 @@ impl PreviewService {
             let refusals = self
                 .ssh_backoff
                 .lock()
-                .expect("ssh backoff mutex")
+                .unwrap_or_else(PoisonError::into_inner)
                 .refused(hash, tokio::time::Instant::now());
             span.record("ssh.outcome", "refused");
-            span.record("ssh.refusals", i64::from(refusals));
+            if let Some(refusals) = refusals {
+                span.record("ssh.refusals", i64::from(refusals));
+            }
             return Ok(None);
         };
         span.record("preview_id", tracing::field::display(&stored.preview.id));
@@ -565,11 +568,13 @@ impl PreviewService {
             self.finish(&old, PreviewStatus::Offline).await;
         }
         if let Err(error) = self.authority.active(session).await {
+            span.record("ssh.outcome", "session_inactive");
             self.finish(&lease, PreviewStatus::Offline).await;
             return Err(error);
         }
         // A replacement/stop racing the SSH handshake cannot install a live obsolete lease.
         if self.repository.preview(&lease.preview().id).await.is_err() {
+            span.record("ssh.outcome", "replaced");
             self.finish(&lease, PreviewStatus::Offline).await;
             return Err(PreviewError::Offline);
         }
