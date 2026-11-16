@@ -43,7 +43,7 @@ export class TaskNamespace {
     dueDate?: Date;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
-    /** Defaults to true. */
+    /** Defaults to team sharing, or private when the session cannot share. */
     shareWithTeam?: boolean;
   }): Promise<Task> {
     return Task.create(this.client, opts);

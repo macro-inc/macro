@@ -251,6 +251,12 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Task creation
+
+Task creation leaves an omitted `shareWithTeam` to the backend: tasks default to
+team sharing, or private when the calling session cannot share. Explicit `true`
+still requests sharing and is subject to the backend's permission checks.
+
 ### Task templates
 
 `macro.taskTemplates` manages personal and team templates. Selected fields can

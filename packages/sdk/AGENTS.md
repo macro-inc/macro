@@ -270,6 +270,7 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- Omit `shareWithTeam` from task requests when unspecified so the backend applies session-aware defaults; preserve explicit true and false.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;

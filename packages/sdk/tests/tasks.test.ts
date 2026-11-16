@@ -176,7 +176,6 @@ describe('Task.create', () => {
       markdown: null,
       projectId: null,
       teamId: null,
-      shareWithTeam: true,
       propertyValues: [
         {
           propertyId: '00000001-0000-0000-0000-000000000002',
@@ -293,6 +292,35 @@ describe('Task.create', () => {
 
     expect(requests).toHaveLength(1);
     expect((await requests[0].json()).propertyValues).toBeNull();
+  });
+
+  test.each([
+    undefined,
+    false,
+    true,
+  ])('preserves the caller sharing choice %s without supplying a default', async (shareWithTeam) => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json({
+        documentId: '0198a4cc-e138-7670-a308-a6b766602722',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    await macro.tasks.create({ name: 'Plain task', shareWithTeam });
+
+    expect(requests).toHaveLength(1);
+    const body = await requests[0].json();
+    expect(body.shareWithTeam).toBe(shareWithTeam);
+    expect(Object.hasOwn(body, 'shareWithTeam')).toBe(
+      shareWithTeam !== undefined,
+    );
   });
 });
 
