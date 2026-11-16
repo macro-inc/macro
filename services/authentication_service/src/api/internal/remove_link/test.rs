@@ -34,6 +34,18 @@ fn find_idp_link_selects_secondary_inbox_not_owner_primary() {
 }
 
 #[test]
+fn find_idp_link_ignores_email_capitalization() {
+    let links = vec![
+        link("another@example.com", "google-primary"),
+        link("Inbox@Example.com", "google-secondary"),
+    ];
+
+    let found = find_idp_link(links, "inbox@example.com").expect("the same email should match");
+
+    assert_eq!(found.identity_provider_user_id, "google-secondary");
+}
+
+#[test]
 fn find_idp_link_returns_none_when_absent() {
     let links = vec![link("gab@macro.com", "google-primary")];
 
