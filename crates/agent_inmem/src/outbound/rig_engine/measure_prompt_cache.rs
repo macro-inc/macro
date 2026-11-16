@@ -101,10 +101,7 @@ async fn send(
     Vec<(u64, u64, u64)>,
     Vec<agent::types::AssistantMessagePart>,
 ) {
-    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = Arc::new(DeferredToolSet::new(
-        native.for_turn(false),
-        Arc::clone(&native.deferred),
-    ));
+    let tools: Arc<dyn AiToolSet<InMemToolContext> + Send + Sync> = native.for_turn(false);
     let user = MacroUserIdStr::try_from_email("cache-measure@macro.com").unwrap();
     let usage = UsageContext::new(AiFeature::AgentSession, user);
     let recorded = Arc::new(RecordedUsage::default());

@@ -1348,7 +1348,7 @@ and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 `EditSpreadsheet` are hidden in code mode), and
 results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
-routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
+routed through the SDK are absent from direct schemas;
 they remain discoverable through `DescribeCodeTools`. The only native tools a
 session keeps are the ones a program cannot replace: the Notion, Linear and Jira import planners
 and `AskUser`. Nothing is deferred, so there is no `SearchTools` or `LoadTools`.

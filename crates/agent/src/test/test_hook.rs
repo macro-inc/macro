@@ -47,7 +47,7 @@ fn inputs(
         user_tool_finisher,
         stream_tool_calls: false,
         result_limit: None,
-        unknown_tool_hint: Arc::from(crate::hook::UNKNOWN_TOOL_HINT),
+        unknown_tool_hint: Arc::from(crate::hook::SEARCH_TOOLS_HINT),
     }
 }
 

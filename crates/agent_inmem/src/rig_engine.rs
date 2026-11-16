@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
-use ai_tools::{DeferredToolSet, ToolServiceContext};
+use ai_tools::ToolServiceContext;
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
@@ -41,8 +41,8 @@ use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPo
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
-#[path = "outbound/rig_engine/macro_tools_only.rs"]
-mod macro_tools_only;
+#[path = "outbound/rig_engine/mcp_allowlist.rs"]
+mod mcp_allowlist;
 #[path = "outbound/rig_engine/opener.rs"]
 mod opener;
 #[cfg(test)]
@@ -312,7 +312,6 @@ struct NativeTools {
     /// [`Self::prompt`] without area guidance, for turns that route SDK
     /// entities.
     routed_prompt: String,
-    deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
     /// direction a reply will take.
     tool_names: String,
@@ -331,7 +330,6 @@ impl NativeTools {
             .tools
             .keys()
             .map(String::as_str)
-            .chain(tools.deferred.iter().map(|tool| tool.name.as_str()))
             .collect::<Vec<_>>()
             .join(", ");
         Self {
@@ -343,7 +341,6 @@ impl NativeTools {
             ),
             prompt: tools.prompt.to_string(),
             routed_prompt: tools.routed_prompt.to_string(),
-            deferred: tools.deferred,
             tool_names,
         }
     }
@@ -628,11 +625,10 @@ async fn drive_turn(
             )
         })
     };
-    let (system_prompt, toolset, deferred, loaded_skills) = if summarizing {
+    let (system_prompt, toolset, loaded_skills) = if summarizing {
         (
             SystemPrompt::from(instructions.unwrap_or_default()),
             Arc::new(AsyncToolCollection::<InMemToolContext>::new()),
-            Arc::from(Vec::new()),
             Vec::new(),
         )
     } else {
@@ -705,17 +701,11 @@ async fn drive_turn(
             user_memory.as_deref(),
         );
         if unseen {
-            (
-                prompt,
-                Arc::clone(&native_tools.unseen),
-                Arc::from(Vec::new()),
-                loaded_skills,
-            )
+            (prompt, Arc::clone(&native_tools.unseen), loaded_skills)
         } else {
             (
                 prompt,
                 native_tools.for_turn(user_input.is_some()),
-                Arc::clone(&native_tools.deferred),
                 loaded_skills,
             )
         }
@@ -757,7 +747,7 @@ async fn drive_turn(
         .with_speed(speed)?
         .with_genai_telemetry(false)
         .with_streamed_tool_calls()
-        .with_unknown_tool_hint(macro_tools_only::UNKNOWN_TOOL_HINT)
+        .with_unknown_tool_hint(mcp_allowlist::CONNECTED_APPS_FROM_CODE_HINT)
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
@@ -774,21 +764,18 @@ async fn drive_turn(
     // connected apps through `macro.connectedApps`.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
         Some(mcp) if unseen => Arc::new(
-            mcp_select::CombinedToolSet::new(toolset, unseen::CodeModeOnly::new(mcp))
+            mcp_select::CombinedToolSet::new(toolset, unseen::code_mode_only(mcp))
                 .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS),
         ),
         Some(mcp) => Arc::new(
             mcp_select::CombinedToolSet::new(
                 toolset,
-                macro_tools_only::MacroToolsOnly::new(mcp, EAGER_INTERNAL_MCP_TOOLS),
+                mcp_allowlist::McpAllowlist::new(mcp, EAGER_INTERNAL_MCP_TOOLS),
             )
             .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
         ),
         None => toolset,
     };
-    // Most of Macro's tools go out by name only; the model loads the rest.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> =
-        Arc::new(DeferredToolSet::new(toolset, deferred));
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
         tools: toolset,
         gate,

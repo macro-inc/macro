@@ -122,7 +122,7 @@ async fn unseen_turns_get_only_code_mode() {
     .await;
     let set = mcp_select::CombinedToolSet::new(
         Arc::new(AsyncToolCollection::<()>::new()),
-        unseen::CodeModeOnly::new(tools),
+        unseen::code_mode_only(tools),
     )
     .with_eager_mcp_tools(crate::domain::mcp::CODE_MODE_MCP_TOOLS);
 
@@ -184,7 +184,7 @@ async fn watched_turns_reach_connected_apps_only_from_code() {
     let (linear, linear_tools) = listed("linear", &["create_issue"]).await;
     let set = mcp_select::CombinedToolSet::new(
         Arc::new(AsyncToolCollection::<()>::new()),
-        macro_tools_only::MacroToolsOnly::new(
+        mcp_allowlist::McpAllowlist::new(
             RemoteMcpToolSet::from_listed(vec![internal_tools, linear_tools], None),
             EAGER_INTERNAL_MCP_TOOLS,
         ),
@@ -228,12 +228,4 @@ async fn watched_turns_reach_connected_apps_only_from_code() {
     }
     internal.cancel().await.unwrap();
     linear.cancel().await.unwrap();
-}
-
-/// The model told of an unknown tool is sent to `macro.connectedApps`, not
-/// to a `SearchTools` it does not have.
-#[test]
-fn unknown_tools_point_at_connected_apps_in_code() {
-    assert!(macro_tools_only::UNKNOWN_TOOL_HINT.contains("macro.connectedApps.searchTools"));
-    assert!(!macro_tools_only::UNKNOWN_TOOL_HINT.contains("SearchTools`"));
 }

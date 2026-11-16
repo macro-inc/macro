@@ -110,7 +110,7 @@ impl NativeToolGate for Open {
     }
 }
 
-/// A generation session's native tools are code mode's and finding tools
+/// A generation session's native tools are code mode's and the result pager
 /// only; any other session's go to the owner's gate as before.
 #[tokio::test]
 async fn a_generation_session_uses_only_code_tools() {

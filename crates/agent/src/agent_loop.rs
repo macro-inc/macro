@@ -170,7 +170,7 @@ impl AgentLoop {
             agent_name: None,
             genai_telemetry: true,
             stream_tool_calls: false,
-            unknown_tool_hint: Arc::from(crate::hook::UNKNOWN_TOOL_HINT),
+            unknown_tool_hint: Arc::from(crate::hook::SEARCH_TOOLS_HINT),
             router: None,
         }
     }

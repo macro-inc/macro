@@ -159,14 +159,14 @@ pub struct BridgeInputs {
     /// [`StreamPart::ToolCallStarted`]).
     pub stream_tool_calls: bool,
     /// What the retry feedback for a call to a tool that exists nowhere tells
-    /// the model to do instead; [`UNKNOWN_TOOL_HINT`] unless the host has
+    /// the model to do instead; [`SEARCH_TOOLS_HINT`] unless the host has
     /// another way to its connected apps.
     pub unknown_tool_hint: Arc<str>,
 }
 
 /// The default [`BridgeInputs::unknown_tool_hint`], for hosts whose model
 /// finds connected apps' tools with `SearchTools`.
-pub const UNKNOWN_TOOL_HINT: &str =
+pub const SEARCH_TOOLS_HINT: &str =
     "Use `SearchTools` to find the right tool, or continue without it.";
 
 /// A call announced from its first argument delta and not yet finished.
@@ -219,11 +219,11 @@ pub struct StreamBridge {
     register_loaded: RegisterFn,
     /// Records which result loaded which tools.
     tool_loads: ToolLoads,
+    /// See [`BridgeInputs::unknown_tool_hint`].
+    unknown_tool_hint: Arc<str>,
     /// The session's full searchable catalog. Read by
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
-    /// See [`BridgeInputs::unknown_tool_hint`].
-    unknown_tool_hint: Arc<str>,
     searchable_catalog: Arc<Vec<SearchableTool>>,
     /// Retries spent this run on names not in the catalog; capped at
     /// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`].
