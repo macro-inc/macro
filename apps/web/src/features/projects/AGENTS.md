@@ -29,6 +29,7 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - Use one Add task dropdown on desktop and a filled PillButton in centered empty states. On phones, let the project page own the floating Task menu after the summary scrolls away; reserve its height while hidden and keep an inline Add task action for empty lists. Projects-list creation remains separate.
 - Resolve the phone Projects creation action with `TOKENS.create.initiative`; `TOKENS.create.project` creates a Drive folder.
 - Compose phone rows in the page's scroller with the shared task list's external scroll host; offset pinned group headers by the Tasks heading, and keep summary/description changes in the virtualizer's start margin.
+- Keep measuring a short description after focus expands it so typing past three lines exposes Show less without remounting the editor.
 - Reuse `components/discussion/` for the phone Discussion entry and fixed-height sheet; keep existing conversation queries, permissions, paging, and desktop inline threads.
 - Choose the task empty state from the authorized project's unfiltered task IDs before consulting layout queries; retain filtered-empty results when linked tasks exist. Center both project and task empty states in EmptyStatePanel with PROJECTS_DOCS_URL documentation; filtered project results offer Clear Filters without changing the built-in scope.
 - Keep existing-task assignment failures selected for retry and reject stale completion after the project or picker lifetime changes.

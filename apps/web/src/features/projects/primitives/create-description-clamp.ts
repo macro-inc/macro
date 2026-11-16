@@ -1,13 +1,12 @@
 import { createStore } from 'solid-js/store';
 
-/** Keep the disclosure available while expanded, even though overflow disappears. */
+/** Track natural content overflow without remounting the expanded editor. */
 export function createDescriptionClamp() {
   const [state, setState] = createStore({
     expanded: false,
     overflowing: false,
   });
   const measure = (scrollHeight: number, collapsedHeight: number) => {
-    if (state.expanded) return;
     setState('overflowing', scrollHeight > collapsedHeight + 1);
   };
   return {
