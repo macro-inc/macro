@@ -5,6 +5,8 @@ use async_trait::async_trait;
 #[async_trait]
 /// Metadata storage and cross-replica serialization. Object-safe for composition.
 pub trait Repository: Send + Sync {
+    /// Item futures that fit alongside the batch's independently held lease connection.
+    fn import_capacity(&self) -> std::num::NonZeroUsize;
     /// Current authoritative account classification; missing accounts are not humans.
     async fn is_human(
         &self,
