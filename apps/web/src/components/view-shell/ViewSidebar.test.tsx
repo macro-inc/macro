@@ -40,13 +40,15 @@ function setup(
     /** The sidebar keeps its search open itself, as Chat does. */
     controlled?: boolean;
     withoutList?: boolean;
+    /** The search found nothing, so the list has no first row. */
+    empty?: boolean;
   } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
   const [open, setOpen] = createSignal(Boolean(options.search));
   const [selected, setSelected] = createSignal(options.selected ?? 0);
   const focusResults = vi.fn();
-  const goToFirst = vi.fn(() => true);
+  const goToFirst = vi.fn(() => !options.empty);
   const leaveView = vi.fn(() => true);
   let list!: HTMLDivElement;
   let detail!: HTMLDivElement;
@@ -179,6 +181,22 @@ it('moves from the field to the first result on ArrowDown and on Enter', async (
   expect(document.activeElement).toBe(list());
   expect(goToFirst).toHaveBeenCalledTimes(2);
   expect(search()).toBe('hello');
+});
+
+it('keeps ArrowDown and Enter in the field when the search found nothing', async () => {
+  const { openField, search, focusResults } = setup({
+    search: 'zzz',
+    empty: true,
+  });
+  const field = await openField();
+
+  field.focus();
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+
+  expect(document.activeElement).toBe(field);
+  expect(focusResults).not.toHaveBeenCalled();
+  expect(search()).toBe('zzz');
 });
 
 it('turns off the browser history popup that would take the arrow keys', async () => {
