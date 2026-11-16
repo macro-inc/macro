@@ -221,6 +221,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -658,7 +659,6 @@ dependencies = [
  "agent_session_realtime",
  "agent_trigger",
  "ai_billing",
- "ai_projections",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -768,7 +768,6 @@ dependencies = [
  "model-error-response",
  "model_notifications",
  "model_owner",
- "models_ai_projection",
  "models_dcs",
  "models_permissions",
  "models_search",
@@ -802,7 +801,6 @@ dependencies = [
  "soup_realtime",
  "sqlx",
  "sqs_client",
- "sqs_worker",
  "sse-core",
  "static_file",
  "static_file_service_client",
@@ -1232,44 +1230,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai_projections"
-version = "0.1.0"
-dependencies = [
- "agent",
- "ai_tools",
- "ai_toolset",
- "ai_usage",
- "anyhow",
- "aws-sdk-sqs",
- "axum",
- "chrono",
- "connection_gateway_client",
- "futures",
- "http-body-util",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "model-entity",
- "model-error-response",
- "model_user",
- "models_ai_projection",
- "rootcause",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "sqs_client",
- "sqs_worker",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
- "utoipa",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
@@ -1328,6 +1288,7 @@ dependencies = [
  "initiative",
  "initiative_description",
  "item_filters",
+ "jev",
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
@@ -3694,11 +3655,13 @@ dependencies = [
  "bot_token",
  "channels",
  "chrono",
+ "connection_gateway_client",
  "entity_access",
  "entity_registry",
  "harness_id",
  "harnesses",
  "hex",
+ "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -3707,9 +3670,11 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mockall",
+ "model-entity",
  "model-error-response",
  "model_owner",
  "rand 0.9.4",
+ "rdkafka",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -6440,6 +6405,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6885,6 +6851,7 @@ dependencies = [
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
+ "password_events",
  "passwords",
  "projects",
  "properties",
@@ -13321,7 +13288,9 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "feature_flags",
  "futures",
+ "jev",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",
@@ -13723,14 +13692,6 @@ dependencies = [
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_ai_projection"
-version = "0.1.0"
-dependencies = [
- "serde",
  "workspace-hack",
 ]
 
@@ -15404,6 +15365,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
+]
+
+[[package]]
+name = "password_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -19897,16 +19872,17 @@ dependencies = [
  "chrono",
  "futures",
  "model",
- "models_ai_projection",
  "models_email",
  "opentelemetry",
  "s3_key",
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -22802,6 +22778,7 @@ dependencies = [
  "model-error-response",
  "model_owner",
  "model_user",
+ "password_events",
  "rate_limit",
  "rdkafka",
  "reqwest 0.13.4",

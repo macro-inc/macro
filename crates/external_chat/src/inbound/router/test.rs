@@ -45,6 +45,7 @@ fn verified_owner_api_credentials_remain_distinct_from_sessions_and_bots() {
             origin: origin.clone(),
             agent_id,
             agent_via: None,
+            routine_id: None,
             macro_user_id: "macro|person@example.com".to_string().try_into().unwrap(),
             user_context: Default::default(),
         };

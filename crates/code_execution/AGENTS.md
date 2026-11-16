@@ -30,8 +30,9 @@ must be listed in the generator's `postReads`, or dry runs skip it.
 The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
-Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
-run under a plain user token (public MCP) has. APIs that ask a program to
+Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
+credential it carries; it is the only mark a run under a plain user
+token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
