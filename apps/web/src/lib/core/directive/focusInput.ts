@@ -75,6 +75,10 @@ export function triggerFocusInput(
     // the real target once it appears in the DOM.
     tempEl = document.createElement('input');
     tempEl.setAttribute(STAND_IN_ATTRIBUTE, '');
+    // Kobalte's focus trap leaves top-layer elements alone. Without this, a
+    // menu still open during the tap (a sidebar folder's long-press menu)
+    // pulls focus straight back, and the keyboard never opens.
+    tempEl.setAttribute('data-kb-top-layer', '');
     // Use fixed positioning (viewport-relative) so focusing the temp element
     // doesn't cause the page to scroll.
     const anchorRect = anchor?.getBoundingClientRect();
