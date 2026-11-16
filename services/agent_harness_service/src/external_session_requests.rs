@@ -134,24 +134,29 @@ where
             context: None,
             runtime_user,
         });
-        self.broker
+        // The broker publishes on a task of its own, so the event can reach
+        // the runtime even if this request is dropped while it waits.
+        let publication = self
+            .broker
             .send_event(&event)
-            .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?
-            .await
-            .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?
             .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?;
 
         // The runtime creates the row; there is no other signal to wait on.
-        // The wait, and what the row is given once it appears, run on in a
-        // task of their own: a caller that stops waiting (a route's timeout,
-        // a dropped connection) must not leave a hidden session listed.
+        // Waiting for the publication, waiting for the row, and what the row
+        // is given once it appears all run on in a task of their own: a
+        // caller that stops waiting (a route's timeout, a dropped
+        // connection) at any of them must not leave a hidden session listed.
+        // A publication that fails ends the task: no runtime was asked.
         // Giving the row its model and origin twice changes nothing. The
-        // task is bounded, database calls and all, and its failure is logged
-        // there: its caller may be gone.
+        // task is bounded, publication and database calls and all, and its
+        // failure is logged there: its caller may be gone.
         let sessions = self.sessions.clone();
         let settling = async move {
-            let settled = tokio::time::timeout(
-                SETTLE_TIMEOUT,
+            let settled = tokio::time::timeout(SETTLE_TIMEOUT, async move {
+                publication
+                    .await
+                    .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?
+                    .map_err(|error| AgentSessionError::Unknown(anyhow::anyhow!(error)))?;
                 settle(
                     sessions,
                     Settle {
@@ -161,8 +166,9 @@ where
                         model: request.model,
                         origin,
                     },
-                ),
-            )
+                )
+                .await
+            })
             .await
             .unwrap_or_else(|_| {
                 Err(AgentSessionError::Unknown(anyhow::anyhow!(

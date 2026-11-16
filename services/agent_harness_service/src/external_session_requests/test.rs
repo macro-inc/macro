@@ -21,7 +21,8 @@ fn owner() -> MacroUserIdStr<'static> {
 
 /// A runtime that answers a session request the way macrod does: it creates
 /// the row under the requested id itself, as a person's listed session; when
-/// `opens` is set, only once told to.
+/// `opens` is set, only once told to. When `publishes` is set, the request
+/// is only published, and the row only created, once told to.
 #[derive(Clone)]
 struct Runtime {
     sessions: InMemoryAgentSessionRepo,
@@ -29,6 +30,7 @@ struct Runtime {
     bot: BotId,
     requests: Arc<Mutex<usize>>,
     opens: Option<Arc<Notify>>,
+    publishes: Option<Arc<Notify>>,
     /// Whether the row it creates is someone else's.
     taken: bool,
 }
@@ -53,13 +55,19 @@ impl MacroEventBroker for Runtime {
         session.visibility = SessionVisibility::Listed;
         let sessions = self.sessions.clone();
         let opens = self.opens.clone();
-        tokio::spawn(async move {
-            if let Some(opens) = opens {
-                opens.notified().await;
+        let publishes = self.publishes.clone();
+        Ok(tokio::spawn(async move {
+            if let Some(publishes) = publishes {
+                publishes.notified().await;
             }
-            sessions.insert_session(session);
-        });
-        Ok(tokio::spawn(async { Ok(()) }))
+            tokio::spawn(async move {
+                if let Some(opens) = opens {
+                    opens.notified().await;
+                }
+                sessions.insert_session(session);
+            });
+            Ok(())
+        }))
     }
 }
 
@@ -90,6 +98,7 @@ async fn a_hidden_session_a_runtime_opens_is_recorded_hidden() {
         bot,
         requests: Arc::default(),
         opens: None,
+        publishes: None,
         taken: false,
     };
     let requests = BrokerExternalSessionRequests::new(
@@ -135,6 +144,7 @@ async fn a_session_a_runtime_opens_after_its_caller_left_is_still_hidden() {
         bot,
         requests: Arc::default(),
         opens: Some(opens.clone()),
+        publishes: None,
         taken: false,
     };
     let requests =
@@ -156,6 +166,59 @@ async fn a_session_a_runtime_opens_after_its_caller_left_is_still_hidden() {
         "the caller gave up before the row appeared"
     );
     opens.notify_one();
+    let mut stored = None;
+    for _ in 0..20 {
+        tokio::time::sleep(super::POLL_INTERVAL).await;
+        if let Ok(session) = sessions.get(session_id).await
+            && session.visibility == SessionVisibility::Hidden
+        {
+            stored = Some(session);
+            break;
+        }
+    }
+
+    let stored = stored.expect("the row ends up hidden");
+    assert_eq!(stored.source, SessionSource::User);
+}
+
+/// A caller can stop waiting while the request is still being published:
+/// the publication goes on without it, the runtime creates the row, and the
+/// row is still given the requested visibility.
+#[tokio::test(start_paused = true)]
+async fn a_session_published_after_its_caller_left_is_still_hidden() {
+    let sessions = InMemoryAgentSessionRepo::new();
+    let session_id = AgentSessionId::new();
+    let bot = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let publishes = Arc::new(Notify::new());
+    let runtime = Runtime {
+        sessions: sessions.clone(),
+        creates: session_id,
+        bot,
+        requests: Arc::default(),
+        opens: None,
+        publishes: Some(publishes.clone()),
+        taken: false,
+    };
+    let requests =
+        BrokerExternalSessionRequests::new(runtime, sessions.clone(), Owners, TaskTracker::new());
+    let request = RequestedExternalSession {
+        session_id,
+        bot_id: bot,
+        owner: owner(),
+        model: None,
+        repo_url: None,
+        source: SessionSource::User,
+        visibility: SessionVisibility::Hidden,
+        origin: trigger_context::TriggerOrigin::Requested { by: owner() },
+    };
+
+    let waited = tokio::time::timeout(Duration::from_secs(30), requests.request(request)).await;
+    assert!(
+        waited.is_err(),
+        "the caller gave up before the request was published"
+    );
+    publishes.notify_one();
+
     let mut stored = None;
     for _ in 0..20 {
         tokio::time::sleep(super::POLL_INTERVAL).await;
@@ -215,6 +278,7 @@ async fn a_settle_that_fails_after_its_caller_left_is_logged() {
         bot,
         requests: Arc::default(),
         opens: Some(opens.clone()),
+        publishes: None,
         taken: true,
     };
     let tasks = TaskTracker::new();
