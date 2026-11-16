@@ -36,7 +36,7 @@ times a second, and ticks at `fps` only while something animates.
   `app.rs`.
 - `src/body.rs`: the `BodyPane` trait behind 7 BODY, and the `Vitals` placeholder.
 - `src/theme.rs`: the design tokens (`Token`, a colour role such as `Alert`
-  or `Rule`), the `Theme` that colours them, and the HUD dressing: bracket
+  or `Rule`), the `Theme` that colours them, and the HUD dressing: thin
   frames, orange title chips, segmented meters, the dot grid and the glitch
   on fresh errors. The themes (`ThemeName`: classic, ember, phosphor, dusk)
   are in `src/theme/themes.rs`; Ctrl-T, a backtick (for terminals in a
@@ -114,10 +114,8 @@ times a second, and ticks at `fps` only while something animates.
   `theme::active()` is thread-local and `ui::draw` sets it from `App::theme`
   each frame, so render through `ui::draw` (or call `theme::set_active`). Pick the token
   by role, not by the hue you want: see the doc on each `Token` variant.
-- Box every pane with `theme::pane` or `theme::frame`: `ui::draw` finishes
-  each frame with `theme::grid` (dots on blank pane rows) and
-  `theme::brackets` (keys on the `┏┓┗┛` corners), so never draw those four
-  glyphs as content.
+- Use thin outlines for every pane through `theme::pane` or `theme::frame`;
+  `ui::draw` finishes each frame with `theme::grid` (dots on blank pane rows).
 - The glitch follows the frame clock, so it moves only while frames are drawn
   and settles after `theme::GLITCH_MS`; snapshots at the fixed clock are stable.
 - Unix only beyond the pure modules: `feed`, `runner` and `run` are `cfg(unix)`

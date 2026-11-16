@@ -2,7 +2,7 @@
 //!
 //! UI code never names a colour. It names a [`Token`], a role such as
 //! [`Token::Alert`] or [`Token::Rule`], and the active [`Theme`] gives each
-//! role its colour. The HUD dressing lives here too: bracket-cornered frames,
+//! role its colour. The HUD dressing lives here too: thin pane frames,
 //! orange title chips, segmented meters and the glitch on fresh values.
 
 #[cfg(test)]
@@ -31,7 +31,7 @@ pub enum Token {
     Bg,
     /// Barely there: grid dots and the empty cells of meters and gauges.
     Ghost,
-    /// Pane edges between the bright corner brackets.
+    /// Thin pane edges.
     Frame,
     /// Rules, separators, quiet labels and settled values (done agents,
     /// zero counts).
@@ -192,25 +192,11 @@ pub fn selected() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-/// Frame corners: heavy brackets on light edges. [`brackets`] grows each
-/// corner an arm along its edges after drawing, so every pane reads as a
-/// bracketed HUD frame. Nothing else draws these four glyphs.
-pub const FRAME: border::Set = border::Set {
-    top_left: "┏",
-    top_right: "┓",
-    bottom_left: "┗",
-    bottom_right: "┛",
-    vertical_left: "│",
-    vertical_right: "│",
-    horizontal_top: "─",
-    horizontal_bottom: "─",
-};
-
 /// A bordered block in the HUD frame, its edges in `token`'s colour.
 pub fn frame(token: Token) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
-        .border_set(FRAME)
+        .border_set(border::PLAIN)
         .border_style(ink(token))
         .style(base())
 }
@@ -232,7 +218,7 @@ fn hud_title(title: &str) -> String {
     }
 }
 
-/// A pane: the bracket frame, a numbered title chip, and extra
+/// A pane: a thin frame, a numbered title chip, and extra
 /// title spans after it. A focused pane gets a highlighted frame.
 pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'static> {
     let border = if focused {
@@ -240,55 +226,10 @@ pub fn pane(title: &str, extra: Vec<Span<'static>>, focused: bool) -> Block<'sta
     } else {
         Token::Frame
     };
-    let mut spans = vec![Span::styled("━", Style::new().fg(corner(border.color())))];
+    let mut spans = vec![Span::styled("─", ink(border))];
     spans.extend(strip_title(&hud_title(title)));
     spans.extend(extra);
     frame(border).title(Line::from(spans))
-}
-
-/// The brighter ink of a frame's corners.
-fn corner(border: Color) -> Color {
-    let theme = active();
-    if border == theme.frame {
-        theme.text_dim
-    } else if border == theme.rule {
-        theme.text
-    } else {
-        border
-    }
-}
-
-/// Grows every [`FRAME`] corner in `area` into a bracket: the corner and
-/// the edge cells next to it turn heavy and bright. Run once a frame, after
-/// everything is drawn.
-pub fn brackets(buffer: &mut Buffer, area: Rect) {
-    let area = area.intersection(buffer.area);
-    let mut corners = Vec::new();
-    for y in area.top()..area.bottom() {
-        for x in area.left()..area.right() {
-            let Some(cell) = buffer.cell((x, y)) else {
-                continue;
-            };
-            let arms: (i32, i32) = match cell.symbol() {
-                "┏" => (1, 1),
-                "┓" => (-1, 1),
-                "┗" => (1, -1),
-                "┛" => (-1, -1),
-                _ => continue,
-            };
-            corners.push((x, y, arms, cell.fg));
-        }
-    }
-    for (x, y, (across, down), color) in corners {
-        let color = corner(color);
-        if let Some(cell) = buffer.cell_mut((x, y)) {
-            cell.set_fg(color);
-        }
-        for step in 1..=BRACKET_ARM {
-            heavy(buffer, (x, y), (across * step, 0), ("─", "━"), color);
-        }
-        heavy(buffer, (x, y), (0, down), ("│", "┃"), color);
-    }
 }
 
 /// Columns and rows between grid dots.
@@ -306,7 +247,7 @@ pub fn grid(buffer: &mut Buffer, area: Rect) {
         for x in area.left()..area.right() {
             let symbol = buffer.cell((x, y)).map_or("", |cell| cell.symbol());
             match symbol {
-                "│" | "┃" => {
+                "│" => {
                     if let Some(from) = start.take() {
                         dots(buffer, y, from, x);
                     }
@@ -337,30 +278,6 @@ fn dots(buffer: &mut Buffer, y: u16, from: u16, to: u16) {
         if let Some(cell) = buffer.cell_mut((x, y)) {
             cell.set_symbol("·").set_fg(Token::Ghost.color());
         }
-    }
-}
-
-/// Edge cells a bracket's horizontal arm covers.
-const BRACKET_ARM: i32 = 3;
-
-/// Turns the `light` edge cell at an offset from a corner `heavy`.
-fn heavy(
-    buffer: &mut Buffer,
-    (x, y): (u16, u16),
-    (dx, dy): (i32, i32),
-    (light, heavy): (&str, &str),
-    color: Color,
-) {
-    let (Ok(x), Ok(y)) = (
-        u16::try_from(i32::from(x) + dx),
-        u16::try_from(i32::from(y) + dy),
-    ) else {
-        return;
-    };
-    if let Some(cell) = buffer.cell_mut((x, y))
-        && cell.symbol() == light
-    {
-        cell.set_symbol(heavy).set_fg(color);
     }
 }
 
