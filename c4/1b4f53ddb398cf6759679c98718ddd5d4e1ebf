@@ -1,0 +1,22 @@
+packages/sdk-mcp/AGENTS.md
+  h_659b58cf3b37bf 60-67
+packages/sdk-mcp/scripts/generate.ts
+  h_659b58cf3b37bf 639-662,666-668,670,786-787,843-844,855-900
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  h_659b58cf3b37bf 2-4,6-8,15-16,35-37,69-71,90,104-105,110
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  h_659b58cf3b37bf 66,820-821
+packages/sdk-mcp/src/tools.test.ts
+  h_659b58cf3b37bf 112-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c41b4f53ddb398cf6759679c98718ddd5d4e1ebf",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
