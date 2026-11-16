@@ -35,7 +35,7 @@ import { useExternalChatsQuery } from '@queries/external-chats';
 import { queryReadyGate } from '@queries/gate';
 import { Key } from '@solid-primitives/keyed';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { Button, Surface } from '@ui';
+import { Surface } from '@ui';
 import {
   createEffect,
   createMemo,

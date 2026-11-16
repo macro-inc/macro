@@ -306,43 +306,38 @@ export class SessionPort implements EditorPort {
     let acknowledgement: object | undefined;
     const entry = this.sessionEditEntry(() => {
       const flags = session.textFromView(
-          input.key,
-          input.text,
-          input.anchorOffset,
-          input.focusOffset,
-          input.selectionKind === 'keep'
-            ? 1
-            : input.selectionKind === 'none'
-              ? 2
-              : 0,
-          input.compositionEnd ? 1 : 0,
-          input.compositionData,
-          this.executor.now()
-        );
+        input.key,
+        input.text,
+        input.anchorOffset,
+        input.focusOffset,
+        input.selectionKind === 'keep'
+          ? 1
+          : input.selectionKind === 'none'
+            ? 2
+            : 0,
+        input.compositionEnd ? 1 : 0,
+        input.compositionData,
+        this.executor.now()
+      );
       acknowledgement = this.commands?.output.captureAcknowledgement(flags);
       return flags;
     }, refused);
-    this.executor.run(
-      entry.call,
-      (flags) => {
-        if (entry.refused()) return;
-        const accepted =
-          this.commands?.output.consumeAcknowledgement(
-            acknowledgement,
-            flags
-          ) ?? false;
-        // Preserve legacy zero, or the exact current qualified metadata-only echo.
-        if (flags === 0 || accepted) this.view.acknowledgeText(input);
-        if (this.debug) {
-          const expected = session.nodeText(input.key);
-          const actual = this.view.text(input.key) ?? '';
-          if (actual !== expected)
-            throw new Error(
-              `TextFromView mirror divergence at key ${input.key}: mirror length=${actual.length}, Rust length=${expected.length}`
-            );
-        }
+    this.executor.run(entry.call, (flags) => {
+      if (entry.refused()) return;
+      const accepted =
+        this.commands?.output.consumeAcknowledgement(acknowledgement, flags) ??
+        false;
+      // Preserve legacy zero, or the exact current qualified metadata-only echo.
+      if (flags === 0 || accepted) this.view.acknowledgeText(input);
+      if (this.debug) {
+        const expected = session.nodeText(input.key);
+        const actual = this.view.text(input.key) ?? '';
+        if (actual !== expected)
+          throw new Error(
+            `TextFromView mirror divergence at key ${input.key}: mirror length=${actual.length}, Rust length=${expected.length}`
+          );
       }
-    );
+    });
   }
   selectionFromView(
     selection: ViewSelection,

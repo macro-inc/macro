@@ -412,7 +412,7 @@ export const LocationHighlight: {
       padding={props.padding}
     />
   );
-}
+};
 
 /** Highlight boxes for viewport rects, positioned inside a highlight layer. */
 export function HighlightRects(props: {
@@ -440,4 +440,4 @@ export function HighlightRects(props: {
       </For>
     </Portal>
   );
-};
+}

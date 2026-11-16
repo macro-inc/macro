@@ -51,8 +51,8 @@ import {
   findAndReplacePlugin,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { createHeadingFolds } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import { createLexicalDocumentFind } from '@core/component/LexicalMarkdown/plugins/find-and-replace/documentFindEngine';
+import { createHeadingFolds } from '@core/component/LexicalMarkdown/plugins/heading-folds';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,

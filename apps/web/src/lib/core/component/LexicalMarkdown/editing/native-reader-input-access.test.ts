@@ -201,7 +201,11 @@ for (const [label, comment, access] of [
           r.leaf().nodeValue = 'boxdy';
           r.moveDomCaret(3);
           r.root.dispatchEvent(
-            new InputEvent('input', { inputType: 'insertText', data: 'x', bubbles: true })
+            new InputEvent('input', {
+              inputType: 'insertText',
+              data: 'x',
+              bubbles: true,
+            })
           );
         }
       }));
@@ -263,7 +267,9 @@ for (const [label, comment, access] of [
         const data = new Map<string, string>();
         const event = new Event('cut', { bubbles: true, cancelable: true });
         Object.defineProperty(event, 'clipboardData', {
-          value: { setData: (type: string, value: string) => data.set(type, value) },
+          value: {
+            setData: (type: string, value: string) => data.set(type, value),
+          },
         });
         r.root.dispatchEvent(event);
       }));
@@ -323,7 +329,11 @@ describe('an editor is unaffected', () => {
       r.leaf().nodeValue = 'boxdy';
       r.moveDomCaret(3);
       r.root.dispatchEvent(
-        new InputEvent('input', { inputType: 'insertText', data: 'x', bubbles: true })
+        new InputEvent('input', {
+          inputType: 'insertText',
+          data: 'x',
+          bubbles: true,
+        })
       );
       expect(r.errors).toEqual([]);
       expect(r.root.textContent).toBe('boxdy');

@@ -1048,12 +1048,12 @@ export class EditorView implements ViewSink {
     const selection = readSelection(this);
     this.port.textFromView(
       {
-      key,
-      text: dom.nodeValue ?? '',
-      anchorOffset: selection.kind === 'range' ? selection.anchor.offset : 0,
-      focusOffset: selection.kind === 'range' ? selection.focus.offset : 0,
-      selectionKind: selection.kind === 'range' ? 'range' : 'keep',
-      compositionEnd,
+        key,
+        text: dom.nodeValue ?? '',
+        anchorOffset: selection.kind === 'range' ? selection.anchor.offset : 0,
+        focusOffset: selection.kind === 'range' ? selection.focus.offset : 0,
+        selectionKind: selection.kind === 'range' ? 'range' : 'keep',
+        compositionEnd,
         compositionData,
       },
       // DOM text is DOM-origin input; a refusal is never acknowledged.
