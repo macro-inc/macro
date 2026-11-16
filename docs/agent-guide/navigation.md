@@ -626,8 +626,11 @@ dot. Channel/thread scoping happens before the witness limit; seen thread reason
 still affect that scoping. Reading or completing a witness refreshes the bounded
 edge so an older unread item can keep the dot lit. These witnesses must never be
 used as the complete mark-read/done input. The experimental notification-time
-sort remains on its existing REST path; disabling GraphQL or enabling that sort
-must not construct an unsupported GraphQL input or blank the app shell.
+sort is REST-only and does not move the dot: with GraphQL enabled the dot keeps
+the updated-at `HomeUnreadPresence` page whatever Home's list sorts by, and never
+reads the REST list or the notification feed. Only disabling GraphQL returns the
+dot to the REST list. Neither may construct an unsupported GraphQL input or
+blank the app shell.
 Cold offline launch must retain navigation even while notification preferences
 or badge queries are pending. Unknown preferences use the default enabled
 behavior; loaded disabled preferences still suppress Email's dot, including
