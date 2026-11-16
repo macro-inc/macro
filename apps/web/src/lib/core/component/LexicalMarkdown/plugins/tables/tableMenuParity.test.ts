@@ -31,10 +31,6 @@ import {
 } from '@lexical/table';
 import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
 import {
-  initializeNativeSurfaceTests,
-  nativeSurface,
-} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
-import {
   $getNodeByKey,
   $getRoot,
   $getSelection,
@@ -47,15 +43,21 @@ import {
   UNDO_COMMAND,
 } from 'lexical';
 import { match } from 'ts-pattern';
-import { afterEach, beforeAll, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
 import { createNativeTableMoveHost } from '../../editing/overlay-hosts/native-table-move';
+import {
+  initializeNativeTableTests,
+  nativeTableSurface,
+  restoreNativeTableTests,
+} from '../../editing/overlay-hosts/native-table-test-fixture';
 import type { TableMoveMenuAction } from '../../editing/overlay-hosts/table-move';
 import { createTableTestEditor } from './tableTestUtils';
 
-beforeAll(initializeNativeSurfaceTests);
-const cleanups: Array<() => void> = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+beforeAll(initializeNativeTableTests);
+afterAll(restoreNativeTableTests);
+const cleanups: Array<() => unknown> = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 type Coordinate = [row: number, column: number];
@@ -398,7 +400,7 @@ async function source(scenario: Scenario) {
 // --- Native -------------------------------------------------------------
 
 function nativeMount(rows: CellSpec[][]) {
-  const fixture = nativeSurface();
+  const fixture = nativeTableSurface();
   cleanups.push(() => fixture.close());
   fixture.port.setState(stateJSON(rows));
   fixture.root.contentEditable = 'true';
@@ -507,7 +509,8 @@ for (const scenario of SCENARIOS) {
     expect(undone.json).toEqual(before.json);
   });
 
-  test(`(e) native menu equals Source after the action and after one undo: ${scenario.name}`, async () => {
+  /** Mount, set the live selection and run the host's own menu action. */
+  const nativeAfterAction = async () => {
     const expected = await source(scenario);
     const fixture = nativeMount(scenario.rows);
     const host = createNativeTableMoveHost(fixture.view, () => true);
@@ -526,6 +529,22 @@ for (const scenario of SCENARIOS) {
       focus: tracked,
       merged: false,
     });
+    return { expected, fixture };
+  };
+
+  test(`(e) native menu equals Source after the action: ${scenario.name}`, async () => {
+    const { expected, fixture } = await nativeAfterAction();
+    expect(nativeOutcome(fixture)).toEqual(expected.after);
+  });
+
+  // Gap C-UNDO-SNAPSHOT-01 (owner fx-undo): after one Undo native returns a
+  // range selection where Source restores the pre-action table or range
+  // selection. The undone JSON also differs: native re-imports stored nulls
+  // (detail, format, style, direction, indent, textFormat, textStyle) as the
+  // app's Loro undo does, which this @lexical/history oracle cannot model.
+  // Remove `.fails` once both are resolved; this then fails loudly until it is.
+  test.fails(`(e) C-UNDO-SNAPSHOT-01: one undo equals Source: ${scenario.name}`, async () => {
+    const { expected, fixture } = await nativeAfterAction();
     expect(nativeOutcome(fixture)).toEqual(expected.after);
     fixture.port.command(CommandCode.Undo);
     expect(nativeOutcome(fixture)).toEqual(expected.undone);

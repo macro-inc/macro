@@ -17,13 +17,14 @@ import {
   $isTableSelection,
   type TableCellNode,
 } from '@lexical/table';
-import {
-  initializeNativeSurfaceTests,
-  nativeSurface,
-} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import { $getSelection, $isRangeSelection, $setSelection } from 'lexical';
-import { afterEach, beforeAll, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
 import { createNativeTableMoveHost } from '../../editing/overlay-hosts/native-table-move';
+import {
+  initializeNativeTableTests,
+  nativeTableSurface,
+  restoreNativeTableTests,
+} from '../../editing/overlay-hosts/native-table-test-fixture';
 import type { TableMoveMenuAction } from '../../editing/overlay-hosts/table-move';
 import { insertNativeTableAxis } from './native';
 import {
@@ -34,10 +35,11 @@ import {
   textGrid,
 } from './tableTestUtils';
 
-beforeAll(initializeNativeSurfaceTests);
-const cleanups: Array<() => void> = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+beforeAll(initializeNativeTableTests);
+afterAll(restoreNativeTableTests);
+const cleanups: Array<() => unknown> = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 type Coordinate = [row: number, column: number];
@@ -133,7 +135,7 @@ async function source(
 }
 
 function nativeMount() {
-  const fixture = nativeSurface();
+  const fixture = nativeTableSurface();
   cleanups.push(() => fixture.close());
   fixture.port.setState(
     JSON.stringify({
@@ -322,7 +324,7 @@ for (const item of CASES) {
     const host = createNativeTableMoveHost(fixture.view, () => true);
     cleanups.push(() => host.dispose());
     nativeSelect(fixture, [...item.anchor], [...item.focus]);
-    host.menuAction(item.action, host.trackedCells());
+    await host.menuAction(item.action, host.trackedCells());
     expect(nativeOutcome(fixture)).toEqual(expected);
   });
 }

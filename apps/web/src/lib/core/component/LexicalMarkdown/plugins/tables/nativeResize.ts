@@ -4,13 +4,27 @@
  * Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import type { JsonValue } from '@macro-inc/lexical-wasm-view/view/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
   dispatchApplicationCommand,
   queryApplication,
 } from '../group-b/command';
 
-function readResize(view: EditorView, value: unknown) {
+/**
+ * One gesture's frozen dimensions as command payloads: callers choose how to
+ * dispatch them (the legacy loop directly, the resize host through SessionEdit).
+ */
+export interface NativeTableResizeSnapshot {
+  readonly axis: 'row' | 'column';
+  /** The row (row axis) or table (column axis) the payloads name. */
+  readonly key: number;
+  readonly generation: number;
+  applyPayload(delta: number, merge: boolean): JsonValue;
+  restorePayload(): JsonValue;
+}
+
+function readResize(value: unknown): NativeTableResizeSnapshot | null {
   if (!value || typeof value !== 'object') return null;
   if (
     !('generation' in value) ||
@@ -34,22 +48,18 @@ function readResize(view: EditorView, value: unknown) {
       axis: 'row',
       key: row,
       generation,
-      apply(delta: number, merge: boolean) {
-        dispatchApplicationCommand(view, 'group-b.table', {
-          action: 'resize-row',
-          row,
-          baseHeight,
-          delta,
-          merge,
-        });
-      },
-      restore() {
-        dispatchApplicationCommand(view, 'group-b.table', {
-          action: 'restore-row',
-          row,
-          height: revertHeight,
-        });
-      },
+      applyPayload: (delta, merge) => ({
+        action: 'resize-row',
+        row,
+        baseHeight,
+        delta,
+        merge,
+      }),
+      restorePayload: () => ({
+        action: 'restore-row',
+        row,
+        height: revertHeight,
+      }),
     };
   }
   if (
@@ -83,28 +93,24 @@ function readResize(view: EditorView, value: unknown) {
     axis: 'column',
     key: table,
     generation,
-    apply(delta: number, merge: boolean) {
-      dispatchApplicationCommand(view, 'group-b.table', {
-        action: 'resize-column',
-        table,
-        column,
-        baseWidths,
-        delta,
-        merge,
-      });
-    },
-    restore() {
-      dispatchApplicationCommand(view, 'group-b.table', {
-        action: 'restore-columns',
-        table,
-        widths: revertWidths,
-      });
-    },
+    applyPayload: (delta, merge) => ({
+      action: 'resize-column',
+      table,
+      column,
+      baseWidths,
+      delta,
+      merge,
+    }),
+    restorePayload: () => ({
+      action: 'restore-columns',
+      table,
+      widths: revertWidths,
+    }),
   };
 }
 let manualZoom: boolean | undefined;
 /** Retargeted lexical-utils calculateZoomLevel, pinned v0.45.0. */
-function zoomLevel(element: Element): number {
+export function nativeZoomLevel(element: Element): number {
   const document = element.ownerDocument;
   if (manualZoom === undefined) {
     const probe = document.createElement('div');
@@ -130,6 +136,36 @@ function zoomLevel(element: Element): number {
   }
   return zoom;
 }
+/**
+ * One snapshot query for a gesture over the table's current layout: the cell's
+ * frozen base dimensions and its revert values, or null when refused.
+ */
+export function captureNativeTableResize(
+  view: EditorView,
+  cell: HTMLElement,
+  edge: 'left' | 'right' | 'bottom',
+  zoom: number
+): NativeTableResizeSnapshot | null {
+  const key = view.keyFromDOM(cell);
+  const table = cell.closest('table');
+  if (key === null || !table) return null;
+  const measurements: { key: number; width: number; height: number }[] = [];
+  for (const element of table.querySelectorAll('tr,td,th')) {
+    if (!view.ownsEvent(element, true)) continue;
+    const key = view.keyFromDOM(element);
+    if (key === null) continue;
+    const rect = element.getBoundingClientRect();
+    measurements.push({ key, width: rect.width, height: rect.height });
+  }
+  return readResize(
+    queryApplication(view, 'group-b.table-resize', {
+      cell: key,
+      edge,
+      zoom,
+      measurements,
+    })
+  );
+}
 /** A gesture owns one snapshot query, then native updates against its frozen dimensions. */
 export function createNativeTableResizer(view: EditorView) {
   let active = true;
@@ -149,35 +185,15 @@ export function createNativeTableResizer(view: EditorView) {
         !view.ownsEvent(cell, true)
       )
         return false;
-      const key = view.keyFromDOM(cell);
-      const table = cell.closest('table');
-      if (key === null || !table) return false;
+      if (view.keyFromDOM(cell) === null || !cell.closest('table'))
+        return false;
       const span =
         view.options.parentSpan?.span('editor.table.resize') ??
         Telemetry.span('editor.table.resize');
-      let drag: ReturnType<typeof readResize>;
-      const zoom = zoomLevel(cell);
+      let drag: NativeTableResizeSnapshot | null;
+      const zoom = nativeZoomLevel(cell);
       try {
-        const measurements: { key: number; width: number; height: number }[] =
-          [];
-        for (const element of table.querySelectorAll('tr,td,th')) {
-          if (!view.ownsEvent(element, true)) continue;
-          const key = view.keyFromDOM(element);
-          if (key === null) continue;
-          const rect = element.getBoundingClientRect();
-          measurements.push({ key, width: rect.width, height: rect.height });
-        }
-        drag = span.run(() =>
-          readResize(
-            view,
-            queryApplication(view, 'group-b.table-resize', {
-              cell: key,
-              edge,
-              zoom,
-              measurements,
-            })
-          )
-        );
+        drag = span.run(() => captureNativeTableResize(view, cell, edge, zoom));
       } catch (error) {
         span.error(error);
         span.end();
@@ -215,7 +231,13 @@ export function createNativeTableResizer(view: EditorView) {
           cleanup();
           return;
         }
-        span.run(() => snapshot.apply(delta, pushed));
+        span.run(() =>
+          dispatchApplicationCommand(
+            view,
+            'group-b.table',
+            snapshot.applyPayload(delta, pushed)
+          )
+        );
         pushed = true;
       };
       const move = (event: PointerEvent) => {
@@ -254,7 +276,14 @@ export function createNativeTableResizer(view: EditorView) {
       };
       const cancel = (event?: PointerEvent) => {
         if (event && event.pointerId !== down.pointerId) return;
-        if (pushed && current()) span.run(() => snapshot.restore());
+        if (pushed && current())
+          span.run(() =>
+            dispatchApplicationCommand(
+              view,
+              'group-b.table',
+              snapshot.restorePayload()
+            )
+          );
         span.event('cancel');
         cleanup();
       };

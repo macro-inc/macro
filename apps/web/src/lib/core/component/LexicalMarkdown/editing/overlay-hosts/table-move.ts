@@ -52,8 +52,12 @@ export interface TableMoveHost<Key> {
   shape(cells: TableMoveCells<Key> | undefined): TableMoveShape;
   /** Cells the range would land on at `target`, extended for appended rows. */
   previewRect(target: HTMLElement, shape: TableMoveShape): TableMoveRect;
-  /** Source $moveCellRange onto the cell under `target`; false when refused. */
-  move(cells: TableMoveCells<Key> | undefined, target: HTMLElement): boolean;
+  /**
+   * Source $moveCellRange onto the cell under `target`. The view ignores the
+   * result: the Source host decides synchronously, the native host settles a
+   * queued SessionEdit input and reports its own outcome to its callers.
+   */
+  move(cells: TableMoveCells<Key> | undefined, target: HTMLElement): void;
   /** Desktop tap: select the cells as a table selection and open its popup. */
   selectCells(cells: TableMoveCells<Key> | undefined): void;
   /**

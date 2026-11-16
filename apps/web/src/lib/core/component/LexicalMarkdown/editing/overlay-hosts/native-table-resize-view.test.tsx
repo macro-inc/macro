@@ -1,15 +1,33 @@
 /** @vitest-environment jsdom */
-import {
-  initializeNativeSurfaceTests,
-  nativeSurface,
-} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
+
 import { render } from 'solid-js/web';
-import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import { tableColumnResizeEdge } from '../../component/misc/TableCellResizer';
 import { TableCellResizerView } from '../../component/misc/TableCellResizerView';
 import { createNativeTableResizeHost } from './native-table-resize';
+import {
+  initializeNativeTableTests,
+  nativeTableSurface,
+  restoreNativeTableTests,
+} from './native-table-test-fixture';
 
-beforeAll(initializeNativeSurfaceTests);
+beforeAll(initializeNativeTableTests);
+afterAll(restoreNativeTableTests);
+/** As TableCellResizer.source.test.tsx: the resizer's width observer is inert here. */
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+beforeEach(() => vi.stubGlobal('ResizeObserver', TestResizeObserver));
 
 /** jsdom has no PointerEvent; the init fields the resizer reads are enough. */
 class TestPointerEvent extends MouseEvent {
@@ -25,9 +43,9 @@ class TestPointerEvent extends MouseEvent {
 }
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 30;
-const cleanups: Array<() => void> = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+const cleanups: Array<() => unknown> = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -112,7 +130,7 @@ function mount(colWidths = [CELL_WIDTH, CELL_WIDTH]) {
         value: () => false,
       });
   captureEverywhere();
-  const fixture = nativeSurface();
+  const fixture = nativeTableSurface();
   cleanups.push(() => fixture.close());
   fixture.port.setState(
     JSON.stringify({
@@ -152,7 +170,7 @@ function mount(colWidths = [CELL_WIDTH, CELL_WIDTH]) {
   document.body.append(container);
   cleanups.push(() => container.remove());
   cleanups.push(render(() => <TableCellResizerView host={host} />, container));
-  return fixture;
+  return Object.assign(fixture, { host });
 }
 type Fixture = ReturnType<typeof mount>;
 function cellElement(fixture: Fixture, index: number) {
@@ -272,7 +290,7 @@ test('(d) tableColumnResizeEdge names the dragged border during a strip drag and
   expect(tableColumnResizeEdge()).toBeUndefined();
 });
 
-test('hover: the row strip resizes the hovered row and Escape restores it', () => {
+test('hover: the row strip resizes the hovered row and Escape restores it', async () => {
   const flush = frames();
   const fixture = mount();
   const before = fixture.view.query.serializedState();
@@ -285,8 +303,11 @@ test('hover: the row strip resizes the hovered row and Escape restores it', () =
   expect(document.body.style.cursor).toBe('row-resize');
   document.dispatchEvent(pointer('pointermove', { clientX: 50, clientY: 70 }));
   flush();
+  await fixture.host.settled();
   expect(fixture.view.query.serializedState()).not.toBe(before);
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  // The restore is a queued SessionEdit input; settled() is its real fence.
+  await fixture.host.settled();
   expect(fixture.view.query.serializedState()).toBe(before);
   expect(document.body.style.cursor).toBe('');
 });

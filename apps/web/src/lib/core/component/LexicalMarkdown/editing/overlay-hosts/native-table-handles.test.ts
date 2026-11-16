@@ -1,22 +1,25 @@
 /** @vitest-environment jsdom */
-import {
-  initializeNativeSurfaceTests,
-  nativeSurface,
-} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
-import { afterEach, beforeAll, expect, test } from 'vitest';
+
+import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { insertNativeTableAxis } from '../../plugins/tables/native';
 import { createNativeTableMoveHost } from './native-table-move';
 import { createNativeTableResizeHost } from './native-table-resize';
+import {
+  initializeNativeTableTests,
+  nativeTableSurface,
+  restoreNativeTableTests,
+} from './native-table-test-fixture';
 
-beforeAll(initializeNativeSurfaceTests);
+beforeAll(initializeNativeTableTests);
+afterAll(restoreNativeTableTests);
 
-const cleanups: Array<() => void> = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+const cleanups: Array<() => unknown> = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 function mount(rows: string[][], colWidths?: number[]) {
-  const fixture = nativeSurface();
+  const fixture = nativeTableSurface();
   cleanups.push(() => fixture.close());
   fixture.port.setState(
     JSON.stringify({
@@ -119,7 +122,7 @@ function caretIn(fixture: Fixture, cell: number) {
 
 // --- Resize host (TableCellResizer backend) -------------------------------
 
-test('resize host: a target inside a cell resolves that cell; outside the table clears', () => {
+test('resize host: a target inside a cell resolves that cell; outside the table clears', async () => {
   const fixture = mount([['A', 'B']]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -131,7 +134,7 @@ test('resize host: a target inside a cell resolves that cell; outside the table 
   expect(host.cellFromTarget(null)).toBeNull();
 });
 
-test('resize host: a column drag applies live, merges, and restores the stored widths', () => {
+test('resize host: a column drag applies live, merges, and restores the stored widths', async () => {
   const fixture = mount([['A', 'B']], [100, 100]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -141,12 +144,14 @@ test('resize host: a column drag applies live, merges, and restores the stored w
   expect(drag?.axis).toBe('column');
   drag?.apply(40);
   drag?.apply(60);
+  await drag?.settled();
   expect(widths(fixture)).toEqual([160, 100]);
   drag?.restore();
+  await drag?.settled();
   expect(widths(fixture)).toEqual([100, 100]);
 });
 
-test('resize host: a left-edge drag resizes the previous column; the first column refuses', () => {
+test('resize host: a left-edge drag resizes the previous column; the first column refuses', async () => {
   const fixture = mount([['A', 'B']], [100, 100]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -154,11 +159,13 @@ test('resize host: a left-edge drag resizes the previous column; the first colum
   const second = host.cellFromTarget(cellElement(fixture, 1));
   if (!first || !second) throw new Error('Missing hits');
   expect(host.beginDrag(first, 'left', 1)).toBeUndefined();
-  host.beginDrag(second, 'left', 1)?.apply(25);
+  const drag = host.beginDrag(second, 'left', 1);
+  drag?.apply(25);
+  await drag?.settled();
   expect(widths(fixture)).toEqual([125, 100]);
 });
 
-test('resize host: a row drag sets the height and restores the unset height', () => {
+test('resize host: a row drag sets the height and restores the unset height', async () => {
   const fixture = mount([['A'], ['B']]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -168,12 +175,14 @@ test('resize host: a row drag sets the height and restores the unset height', ()
   const drag = host.beginDrag(cell, 'bottom', 1);
   expect(drag?.axis).toBe('row');
   drag?.apply(30);
+  await drag?.settled();
   expect(fixture.view.query.serializedState()).not.toBe(before);
   drag?.restore();
+  await drag?.settled();
   expect(fixture.view.query.serializedState()).toBe(before);
 });
 
-test('resize host: refused without edit; isEditable follows canEdit and the root', () => {
+test('resize host: refused without edit; isEditable follows canEdit and the root', async () => {
   let canEdit = false;
   const fixture = mount([['A', 'B']], [100, 100]);
   const host = createNativeTableResizeHost(fixture.view, () => canEdit);
@@ -189,7 +198,7 @@ test('resize host: refused without edit; isEditable follows canEdit and the root
   expect(widths(fixture)).toEqual([100, 100]);
 });
 
-test('resize host: a drag whose table is replaced stops applying', () => {
+test('resize host: a drag whose table is replaced stops applying', async () => {
   const fixture = mount([['A', 'B']], [100, 100]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -208,40 +217,71 @@ test('resize host: a drag whose table is replaced stops applying', () => {
   const after = fixture.view.query.serializedState();
   drag?.apply(40);
   drag?.restore();
+  await drag?.settled();
   expect(fixture.view.query.serializedState()).toBe(after);
 });
 
-test('resize host: elementFor re-resolves the cell after its row DOM is recreated', () => {
+test('resize host: elementFor re-resolves the cell after its row DOM is recreated', async () => {
   const fixture = mount([['A'], ['B']]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
   const cell = host.cellFromTarget(cellElement(fixture, 0));
   if (!cell) throw new Error('Missing hit');
-  host.beginDrag(cell, 'bottom', 1)?.apply(30);
+  const drag = host.beginDrag(cell, 'bottom', 1);
+  drag?.apply(30);
+  await drag?.settled();
   const current = host.elementFor(cell);
   expect(current?.isConnected).toBe(true);
   expect(current && fixture.view.keyFromDOM(current)).toBe(cell.key.index);
 });
 
-test('resize host: layout listeners fire on model commits and stop after release', () => {
+test('resize host: layout listeners fire on model commits and root width changes, and stop after release', async () => {
+  // Source registerLayout: editor updates plus the root's width observer.
+  const observers: Array<{ fire: () => void; observed: Element[] }> = [];
+  class TestResizeObserver {
+    readonly observed: Element[] = [];
+    constructor(callback: () => void) {
+      observers.push({ fire: callback, observed: this.observed });
+    }
+    observe(element: Element) {
+      this.observed.push(element);
+    }
+    unobserve() {}
+    disconnect() {
+      this.observed.length = 0;
+    }
+  }
+  vi.stubGlobal('ResizeObserver', TestResizeObserver);
+  cleanups.push(() => vi.unstubAllGlobals());
   const fixture = mount([['A', 'B']], [100, 100]);
   const host = createNativeTableResizeHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
   let bumps = 0;
   const release = host.registerLayout(() => bumps++);
+  expect(observers.map((observer) => observer.observed)).toEqual([
+    [fixture.root],
+  ]);
   const cell = host.cellFromTarget(cellElement(fixture, 0));
   if (!cell) throw new Error('Missing hit');
-  host.beginDrag(cell, 'right', 1)?.apply(10);
+  const first = host.beginDrag(cell, 'right', 1);
+  first?.apply(10);
+  await first?.settled();
   expect(bumps).toBeGreaterThan(0);
+  const afterCommit = bumps;
+  observers[0]?.fire();
+  expect(bumps).toBe(afterCommit + 1);
   const seen = bumps;
   release();
-  host.beginDrag(cell, 'right', 1)?.apply(20);
+  expect(observers[0]?.observed).toEqual([]);
+  const second = host.beginDrag(cell, 'right', 1);
+  second?.apply(20);
+  await second?.settled();
   expect(bumps).toBe(seen);
 });
 
 // --- Move host (TableMoveHandle backend) ----------------------------------
 
-test('move host: tracked cells follow a table selection, a caret cell, and clear outside', () => {
+test('move host: tracked cells follow a table selection, a caret cell, and clear outside', async () => {
   const fixture = mount([
     ['A', 'B'],
     ['C', 'D'],
@@ -257,7 +297,7 @@ test('move host: tracked cells follow a table selection, a caret cell, and clear
     focusCell: d,
   });
   const tracked = host.trackedCells();
-  expect(tracked && [tracked.anchor.index, tracked.focus.index]).toEqual([
+  expect(tracked && [tracked.anchor?.index, tracked.focus?.index]).toEqual([
     a,
     d,
   ]);
@@ -265,7 +305,7 @@ test('move host: tracked cells follow a table selection, a caret cell, and clear
   expect(tracked && host.shape(tracked)).toEqual({ rows: 2, columns: 2 });
   caretIn(fixture, d);
   const caret = host.trackedCells();
-  expect(caret && [caret.anchor.index, caret.focus.index]).toEqual([d, d]);
+  expect(caret && [caret.anchor?.index, caret.focus?.index]).toEqual([d, d]);
   const after = [...fixture.view.mirror.values()].find(
     (node) => node.kind === 'text' && node.text === 'after'
   );
@@ -278,7 +318,7 @@ test('move host: tracked cells follow a table selection, a caret cell, and clear
   expect(host.trackedCells()).toBeUndefined();
 });
 
-test('move host: dragging the handle moves the range onto the dropped cell', () => {
+test('move host: dragging the handle moves the range onto the dropped cell', async () => {
   const fixture = mount([
     ['A', 'B'],
     ['C', 'D'],
@@ -290,14 +330,26 @@ test('move host: dragging the handle moves the range onto the dropped cell', () 
   caretIn(fixture, a);
   const tracked = host.trackedCells();
   if (!tracked) throw new Error('Missing tracked cells');
-  expect(host.move(tracked, cellElement(fixture, 3))).toBe(true);
+  const probe = await host.move(tracked, cellElement(fixture, 3));
+  if (probe.kind === 'failed')
+    console.log(
+      'PROBE',
+      String(probe.error),
+      probe.error instanceof Error
+        ? probe.error.stack?.split('\n').slice(0, 6).join(' | ')
+        : ''
+    );
+  expect(probe).toMatchObject({
+    kind: 'settled',
+    published: true,
+  });
   expect(rowTexts(fixture)).toEqual([
     ['', 'B'],
     ['C', 'A'],
   ]);
 });
 
-test('move host: a desktop tap selects the tracked cells as a table selection', () => {
+test('move host: a desktop tap selects the tracked cells as a table selection', async () => {
   const fixture = mount([
     ['A', 'B'],
     ['C', 'D'],
@@ -309,7 +361,7 @@ test('move host: a desktop tap selects the tracked cells as a table selection', 
   caretIn(fixture, a);
   const tracked = host.trackedCells();
   if (!tracked) throw new Error('Missing tracked cells');
-  host.selectCells(tracked);
+  await host.selectCells(tracked);
   expect(fixture.view.selection().selection).toEqual({
     kind: 'table',
     table: tableKey(fixture),
@@ -320,7 +372,7 @@ test('move host: a desktop tap selects the tracked cells as a table selection', 
 
 // --- Gap (e): touch menu actions use the live selection (Source runMenuAction)
 
-test('(e) characterization: native insert-row under a two-row table selection inserts after the given cell', () => {
+test('(e) characterization: native insert-row under a two-row table selection inserts after the given cell', async () => {
   // The existing command select_starts its cell, so it inserts after the
   // anchor row. Source's touch menu calls $insertTableRowAtSelection(true),
   // which inserts after the lower of the anchor and focus rows.
@@ -337,7 +389,7 @@ test('(e) characterization: native insert-row under a two-row table selection in
   expect(rowTexts(fixture)).toEqual([['A'], [''], ['B'], ['C']]);
 });
 
-test('(e) touch menu "Insert row below" under a two-row table selection inserts below the selection, as Source', () => {
+test('(e) touch menu "Insert row below" under a two-row table selection inserts below the selection, as Source', async () => {
   const fixture = mount([['A'], ['B'], ['C']]);
   const host = createNativeTableMoveHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -349,11 +401,11 @@ test('(e) touch menu "Insert row below" under a two-row table selection inserts 
     anchorCell: a,
     focusCell: b,
   });
-  host.menuAction('insert-row-below', host.trackedCells());
+  await host.menuAction('insert-row-below', host.trackedCells());
   expect(rowTexts(fixture)).toEqual([['A'], ['B'], [''], ['C']]);
 });
 
-test('(e) touch menu "Insert row above" under a backward two-row selection inserts above the upper row, as Source', () => {
+test('(e) touch menu "Insert row above" under a backward two-row selection inserts above the upper row, as Source', async () => {
   const fixture = mount([['A'], ['B'], ['C']]);
   const host = createNativeTableMoveHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -365,11 +417,11 @@ test('(e) touch menu "Insert row above" under a backward two-row selection inser
     anchorCell: c,
     focusCell: b,
   });
-  host.menuAction('insert-row-above', host.trackedCells());
+  await host.menuAction('insert-row-above', host.trackedCells());
   expect(rowTexts(fixture)).toEqual([['A'], [''], ['B'], ['C']]);
 });
 
-test('(e) touch menu "Delete row" under a table selection deletes every covered row, as Source', () => {
+test('(e) touch menu "Delete row" under a table selection deletes every covered row, as Source', async () => {
   // Matches both Source $deleteTableRowAtSelection and the native hover delete.
   const fixture = mount([['A'], ['B'], ['C']]);
   const host = createNativeTableMoveHost(fixture.view, () => true);
@@ -382,11 +434,11 @@ test('(e) touch menu "Delete row" under a table selection deletes every covered 
     anchorCell: a,
     focusCell: b,
   });
-  host.menuAction('delete-row', host.trackedCells());
+  await host.menuAction('delete-row', host.trackedCells());
   expect(rowTexts(fixture)).toEqual([['C']]);
 });
 
-test('(e) touch menu with the live selection outside the table acts on the tracked anchor cell only', () => {
+test('(e) touch menu with the live selection outside the table acts on the tracked anchor cell only', async () => {
   const fixture = mount([['A'], ['B'], ['C']]);
   const host = createNativeTableMoveHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
@@ -403,17 +455,17 @@ test('(e) touch menu with the live selection outside the table acts on the track
     anchor: { key: after.key, offset: 0, type: 'text' },
     focus: { key: after.key, offset: 0, type: 'text' },
   });
-  host.menuAction('delete-row', tracked);
+  await host.menuAction('delete-row', tracked);
   expect(rowTexts(fixture)).toEqual([['A'], ['C']]);
 });
 
-test('(e) touch menu "Delete table" removes the whole table', () => {
+test('(e) touch menu "Delete table" removes the whole table', async () => {
   const fixture = mount([['A'], ['B']]);
   const host = createNativeTableMoveHost(fixture.view, () => true);
   cleanups.push(() => host.dispose());
   const [a] = cellKeys(fixture);
   if (a === undefined) throw new Error('Missing cells');
   caretIn(fixture, a);
-  host.menuAction('delete-table', host.trackedCells());
+  await host.menuAction('delete-table', host.trackedCells());
   expect(fixture.root.querySelector('table')).toBeNull();
 });
