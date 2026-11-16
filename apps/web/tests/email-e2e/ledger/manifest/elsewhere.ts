@@ -829,7 +829,10 @@ export const elsewhere = {
       fn: ['F-163'],
       state: 'result: the thread of the notification is open',
       trigger: 'after the action succeeds',
-      source: ['src/features/notifications/notification-navigation.ts'],
+      source: [
+        'src/features/notifications/notification-navigation.ts',
+        'src/features/notifications-inbox/views/notifications-view.tsx',
+      ],
     },
     {
       id: 'STX-949',
@@ -881,7 +884,10 @@ export const elsewhere = {
       fn: ['F-164'],
       state: 'result: Home lists only email',
       trigger: 'after the action succeeds',
-      source: ['src/features/home/home-facets.ts'],
+      source: [
+        'src/features/home/home-facets.ts',
+        'src/features/home/work-feed/home-work-feed.ts',
+      ],
     },
     {
       id: 'STX-973',

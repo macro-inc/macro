@@ -109,10 +109,7 @@ Both CI jobs run the report with `--enforce`. It fails when
 - a passing test covers what `waivers.tsv` waives: remove the line;
 - a function waived on no provider has no line in `proofs.tsv`;
 - a row without a line in `waivers.tsv` has no line in `proofs.tsv`: a
-  new row comes with a test and with the break that made the test fail.
-  `proofs-pending.tsv` lists the rows whose proof still waits; only a row
-  that the full-stack tier alone covers may be on it, and a row leaves it
-  with its proof. Do not add to it;
+  new row comes with a test and with the break that made the test fail;
 - the tests tagged `@known-bug` were not run, or one of them passes:
   remove the tag, and the waiver that stood for the bug. A bug that shows only in some runs is also tagged
   `@sometimes`, and a pass of its test fails nothing: one run cannot tell
@@ -204,10 +201,11 @@ the code that shows the state (its text changed, or its rendering switched
 off), under the row's id.
 
 Every row that is not waived needs its own line in `proofs.tsv`, and the
-check fails without it; the one exception is a row on
-`proofs-pending.tsv`, until its proof is run. A row that goes through another row's wiring or
+check fails without it. A row that goes through another row's wiring or
 render site is run against that row's break, and its line says which break
-it shares and why the row goes through it. A test that passes with its row
+it shares and why the row goes through it. A row that only the full-stack
+tier covers is proved there: the same bundle of breaks, run against a local
+stack instance, first with no break switched on. A test that passes with its row
 broken is weak: give it an assertion on what the row alone does or shows
 before recording a proof.
 

@@ -13,7 +13,6 @@ import {
   restMatcher,
 } from './ledger';
 import {
-  PROOFS_PENDING,
   parseFullStackOnly,
   parseFunctions,
   parseProofs,
@@ -308,7 +307,6 @@ describe('violations', () => {
       ['AL-001', 'a break of one way in'],
       ['STL-001', 'a break of what shows it'],
     ]),
-    proofsPending: [],
     waivers: [{ id: 'AL-002', on: '-', kind: 'backlog', reason: 'later' }],
     fullStackOnly: ['F-002 gmail', 'F-002 outlook', 'STL-001'],
     covered: {
@@ -407,29 +405,6 @@ describe('violations', () => {
     ).toEqual([
       "STL-001 is not proved: proofs.tsv names no break that makes its test fail at the row's own assertion",
     ]);
-  });
-
-  it('lets the proof of a row of the tier wait, and of no other row', () => {
-    const proofs = new Map([
-      ['F-001', 'a break'],
-      ['F-002', 'a break'],
-    ]);
-    expect(
-      violations(input({ proofs, proofsPending: ['STL-001', 'AL-001'] }))
-    ).toEqual([
-      'proofs-pending.tsv: AL-001 is not a row that only the full-stack tier covers',
-    ]);
-    expect(violations(input({ proofsPending: ['STL-001'] }))).toEqual([
-      'STL-001 is proved: remove it from proofs-pending.tsv',
-    ]);
-  });
-});
-
-describe('proofs-pending.tsv', () => {
-  // Lower the number as rows are proved. Never raise it: a new row comes
-  // with its proof.
-  it('does not grow', () => {
-    expect(PROOFS_PENDING.length).toBeLessThanOrEqual(52);
   });
 });
 

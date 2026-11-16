@@ -33,7 +33,6 @@ import {
   FULL_STACK_ONLY,
   FUNCTIONS,
   PROOFS,
-  PROOFS_PENDING,
   WAIVERS,
   type Waiver,
 } from './manifest/functions';
@@ -189,7 +188,7 @@ const WAIVER_KINDS: Record<Waiver['kind'], string> = {
 };
 
 const ENFORCED =
-  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv (proofs-pending.tsv lists the rows of the full-stack tier whose proof still waits); when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
+  'With --enforce the report fails when a function on a provider, or a row, that is not in waivers.tsv has no passing test on the stack it belongs to (the full-stack tier for what full-stack-only.tsv lists, the per-test stack for the rest); when a passing test covers something waivers.tsv waives; when a function with a test, or a row that is not in waivers.tsv, has no line in proofs.tsv; when a test tagged @known-bug passes (unless it is also tagged @sometimes: a bug that shows only in some runs); and when the manifest differs from the source. A row seen on one provider or layout of several counts as tested.';
 
 function waiverTable(): Table {
   return {
@@ -702,7 +701,6 @@ function report(mode: Mode): void {
       functions: FUNCTIONS,
       rows: ledger.rows.map((row) => row.id),
       proofs: PROOFS,
-      proofsPending: PROOFS_PENDING,
       waivers: WAIVERS,
       fullStackOnly: FULL_STACK_ONLY,
       covered,

@@ -81,35 +81,6 @@ export const PROOFS: ReadonlyMap<string, string> = parseProofs(
   readFileSync(new URL('../proofs.tsv', import.meta.url), 'utf8')
 );
 
-const PROOFS_PENDING_HEAD = 'id\treason';
-
-/**
- * `../proofs-pending.tsv`: the rows of the full-stack tier whose proof has
- * not been run yet, each with why. The list only shrinks: the check lets
- * nothing onto it that the per-test stack covers.
- */
-export function parseProofsPending(table: string): string[] {
-  const [head, ...lines] = table.split('\n').filter((line) => line !== '');
-  if (head !== PROOFS_PENDING_HEAD)
-    throw new Error(
-      `proofs-pending.tsv: the head is not ${PROOFS_PENDING_HEAD}`
-    );
-  const ids: string[] = [];
-  for (const line of lines) {
-    const [id, reason, ...more] = line.split('\t');
-    if (!PROOF_ID.test(id) || !reason || more.length > 0)
-      throw new Error(`proofs-pending.tsv: cannot read "${line}"`);
-    if (ids.includes(id))
-      throw new Error(`proofs-pending.tsv: ${id} is listed twice`);
-    ids.push(id);
-  }
-  return ids;
-}
-
-export const PROOFS_PENDING: readonly string[] = parseProofsPending(
-  readFileSync(new URL('../proofs-pending.tsv', import.meta.url), 'utf8')
-);
-
 /** Why something has no passing test and the job still passes. */
 export type Waiver = {
   /** A function (`F-012`) or a row (`AL-012`). */

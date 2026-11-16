@@ -56,8 +56,6 @@ export type Enforced = {
   /** The ids of the manifest's action and state rows. */
   rows: readonly string[];
   proofs: ReadonlyMap<string, string>;
-  /** The rows of `proofs-pending.tsv`. */
-  proofsPending: readonly string[];
   waivers: readonly Waiver[];
   fullStackOnly: readonly Item[];
   /** What each run that was made covers; a run not made is left out. */
@@ -108,19 +106,9 @@ export function violations(input: Enforced): string[] {
         `${fn.id} is not proved: proofs.tsv names no break that makes its tests fail`
       );
   }
-  // A proof may wait only for a row that the tier alone covers.
-  const pending = new Set(input.proofsPending);
-  for (const id of pending) {
-    if (input.proofs.has(id))
-      found.push(`${id} is proved: remove it from proofs-pending.tsv`);
-    else if (!tier.has(id) || waived.has(id))
-      found.push(
-        `proofs-pending.tsv: ${id} is not a row that only the full-stack tier covers`
-      );
-  }
   // A row passes with a test only when that test was seen to fail for it.
   for (const id of input.rows) {
-    if (!waived.has(id) && !input.proofs.has(id) && !pending.has(id))
+    if (!waived.has(id) && !input.proofs.has(id))
       found.push(
         `${id} is not proved: proofs.tsv names no break that makes its test fail at the row's own assertion`
       );
