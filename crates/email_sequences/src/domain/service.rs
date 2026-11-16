@@ -111,8 +111,10 @@ pub(super) fn in_flight(history: &[HistoryRow]) -> Option<&HistoryRow> {
 }
 
 /// The step an enrollment sends next and its position: the one after the last
-/// step it reached that is still in the sequence, or the first when it reached
-/// none of them. `None` once it is past the last.
+/// step it reached that is still in the sequence. When every step it reached
+/// was removed, it continues at the position after as many emails as it has
+/// had, so a rewritten opener never goes to someone who already got one.
+/// `None` once it is past the last.
 pub(super) fn next_step<'a>(
     steps: &'a [Step],
     history: &[HistoryRow],
@@ -120,7 +122,7 @@ pub(super) fn next_step<'a>(
     let reached = steps
         .iter()
         .rposition(|step| history.iter().any(|row| row.step_id == step.id));
-    let index = reached.map_or(0, |at| at + 1);
+    let index = reached.map_or(history.len(), |at| at + 1);
     steps.get(index).map(|step| (index, step))
 }
 
@@ -873,3 +875,6 @@ where
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod test;
