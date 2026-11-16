@@ -67,7 +67,7 @@ impl SyncCore {
             {
                 self.disconnected(now, out);
                 self.connection.state = Connection::Idle;
-                if code == 4401 {
+                if code == CLOSE_UNAUTHORIZED {
                     if self.route_denied {
                         self.stop(now, doc, None, CloseReason::Unauthorized, out);
                     } else {

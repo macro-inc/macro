@@ -125,7 +125,7 @@ impl RouterCore {
                 doc.clone(),
                 RouteEvent::Closed {
                     conn: route.generation,
-                    code: 4000,
+                    code: CLOSE_RETRYABLE,
                 },
             ));
             route.state = RouteState::Closed;
@@ -263,7 +263,8 @@ impl RouterCore {
                         .get(&doc)
                         .is_some_and(|r| r.deadline.is_some_and(|at| at <= now.mono))
                     {
-                        self.drop_route(&doc, 4401, out);
+                        // A slow subscribe is not a refusal; it retries with backoff.
+                        self.drop_route(&doc, CLOSE_RETRYABLE, out);
                     } else if self.connection.synced() {
                         self.subscribe(&doc, out);
                     }
@@ -349,8 +350,10 @@ impl RouterCore {
                     out,
                 );
             }
+            // A failed token fetch is transient, as on the direct path; only the
+            // server's refusal of a fetched token is unauthorized.
             TokenEvent::Failed { attempt: received } if received == attempt => {
-                self.drop_route(&doc, 4401, out)
+                self.drop_route(&doc, CLOSE_RETRYABLE, out)
             }
             _ => {}
         }
@@ -381,7 +384,7 @@ impl RouterCore {
                         doc.clone(),
                         RouteEvent::Closed {
                             conn: route.generation,
-                            code: 4000,
+                            code: CLOSE_RETRYABLE,
                         },
                     ));
                 }
@@ -436,17 +439,17 @@ impl RouterCore {
                         }
                     }
                     Ok(None) => {}
-                    Err(_) => self.drop_route(&doc, 4000, out),
+                    Err(_) => self.drop_route(&doc, CLOSE_RETRYABLE, out),
                 }
             }
             sync_protocol::FromRouter::RouterSubscribeFailed { doc_id, .. } => {
                 if let Ok(doc) = doc_id.parse() {
-                    self.drop_route(&doc, 4401, out);
+                    self.drop_route(&doc, CLOSE_UNAUTHORIZED, out);
                 }
             }
             sync_protocol::FromRouter::RouterDocClosed { doc_id, .. } => {
                 if let Ok(doc) = doc_id.parse() {
-                    self.drop_route(&doc, 4000, out);
+                    self.drop_route(&doc, CLOSE_RETRYABLE, out);
                 }
             }
             sync_protocol::FromRouter::Unknown => {}
@@ -473,7 +476,7 @@ impl RouterCore {
     fn disconnect_routes(&mut self, out: &mut RouterOutput) {
         let docs: Vec<_> = self.routes.keys().cloned().collect();
         for doc in docs {
-            self.drop_route(&doc, 4000, out);
+            self.drop_route(&doc, CLOSE_RETRYABLE, out);
             if let Some(route) = self.routes.get_mut(&doc) {
                 route.state = RouteState::Closed;
             }

@@ -159,6 +159,13 @@ pub enum ChatterMessage {
     Closing(SessionId),
 }
 
+/// Close code for a route or socket the server refused to authorize.
+pub const CLOSE_UNAUTHORIZED: u16 = 4401;
+/// Close code for a route that closed for a retryable reason.
+pub const CLOSE_RETRYABLE: u16 = 4000;
+/// Close code the sync service uses for a revoked, expired or retired session.
+pub const CLOSE_POLICY_VIOLATION: u16 = 1008;
+
 /// Router events are scoped to a physical route subscription generation.
 #[derive(Clone, Debug)]
 pub enum RouteEvent {

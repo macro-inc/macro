@@ -212,3 +212,60 @@ fn detach_keeps_shared_socket_until_last_owner() {
             .any(|e| matches!(e, IoEffect::SocketClose { .. }))
     );
 }
+#[test]
+fn a_failed_route_token_fetch_closes_the_route_as_retryable() {
+    let mut r = RouterCore::new(RouterConfig::default(), now(0));
+    let mut o = RouterOutput::default();
+    r.attach(doc(), None, &mut o);
+    r.handle(
+        now(0),
+        RouterInput::Socket {
+            conn: ConnId(1),
+            event: SocketEvent::Opened,
+        },
+        &mut o,
+    );
+    let RouteState::Authorizing(attempt) = r.routes[&doc()].state else {
+        panic!("expected the route to fetch a token")
+    };
+    r.handle(
+        now(0),
+        RouterInput::Token {
+            doc: doc(),
+            event: TokenEvent::Failed { attempt },
+        },
+        &mut o,
+    );
+    assert!(
+        o.to_sessions
+            .iter()
+            .any(|(_, e)| matches!(e, RouteEvent::Closed { code: 4000, .. })),
+        "{:?}",
+        o.to_sessions
+            .iter()
+            .map(|(_, e)| match e {
+                RouteEvent::Closed { code, .. } => *code,
+                _ => 0,
+            })
+            .collect::<Vec<_>>()
+    );
+}
+#[test]
+fn a_subscribe_timeout_closes_the_route_as_retryable() {
+    let (mut r, mut o) = setup();
+    let timeout = Timeouts::default().initial_sync;
+    r.handle(now(timeout.0), RouterInput::Tick, &mut o);
+    assert!(
+        o.to_sessions
+            .iter()
+            .any(|(_, e)| matches!(e, RouteEvent::Closed { code: 4000, .. })),
+        "{:?}",
+        o.to_sessions
+            .iter()
+            .map(|(_, e)| match e {
+                RouteEvent::Closed { code, .. } => *code,
+                _ => 0,
+            })
+            .collect::<Vec<_>>()
+    );
+}
