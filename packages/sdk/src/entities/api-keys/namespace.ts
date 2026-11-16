@@ -28,6 +28,8 @@ export class ApiKeyNamespace {
 
   /**
    * Create a key. Save the secret now; it cannot be retrieved later.
+   * Refused to an agent's program (ExecuteCode, a routine): have the user
+   * create one in Macro's settings.
    *
    * @write
    */

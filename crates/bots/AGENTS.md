@@ -28,7 +28,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Boundaries
 
 - Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
-  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`.
+  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
+  `agent_correlation` (inbound, for the routine claim).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
 ## Recipes
@@ -61,6 +62,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
   `macrod`⇔`harness_id` pairing is checked only for a runtime the request
   chooses; a patch that omits `harness` keeps an unbound agent editable.
+- `POST /bots/{id}/tokens` refuses an agent's program
+  (`macro_authorization::is_program_minting`, 403): the response carries the
+  secret. Programs present a `botCredential` card instead, which mints from the
+  user's own session.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).

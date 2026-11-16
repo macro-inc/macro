@@ -16,3 +16,12 @@ pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
 pub fn is_agent_run(agent_attributed: bool, headers: &HeaderMap) -> bool {
     agent_attributed || headers.contains_key(CODE_EXECUTION_HEADER)
 }
+
+/// Whether a request is a program that must not receive a new credential's
+/// secret, because the model reads what a program returns: an agent run
+/// ([`is_agent_run`]) or, with `routine_run` (the signed routine claim), a
+/// routine run, which as the owner signs no agent. Re-minting an API token
+/// keeps both claims, so a program cannot shed them.
+pub fn is_program_minting(agent_attributed: bool, routine_run: bool, headers: &HeaderMap) -> bool {
+    routine_run || is_agent_run(agent_attributed, headers)
+}

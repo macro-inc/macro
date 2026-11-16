@@ -14,7 +14,7 @@ use crate::domain::{
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, patch, post, put},
 };
@@ -29,7 +29,7 @@ use entity_access::{
 use macro_authorization::{
     AccountHolderOrInternal, AnyPrincipal, BotOnly, MacroAuthorization,
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    UserOrInternal, is_program_minting,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
@@ -595,9 +595,14 @@ pub async fn create_token_handler<
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(path): Path<BotPath>,
     Json(req): Json<CreateBotTokenRequest>,
 ) -> Result<(StatusCode, Json<CreateBotTokenResponse>), BotsHandlerErr> {
+    refuse_program_mint(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+    )?;
     let token = state
         .service
         .create_token(
@@ -607,6 +612,23 @@ pub async fn create_token_handler<
         )
         .await?;
     Ok((StatusCode::CREATED, Json(token)))
+}
+
+/// Why an agent's program may not mint a bot token: the response carries the
+/// secret, which would reach the model.
+const PROGRAM_MINT_REFUSAL: &str = "An agent's program cannot mint a bot token: its secret would reach you. In an agent session, present execution.views.present({widgets: [{type: 'botCredential', botId}]}); the user mints the token on that card and sees the secret, which never reaches you. Elsewhere, tell the user to mint it in the bot's settings.";
+
+/// Refuse a mint from a program ([`is_program_minting`]); a person mints
+/// from the card or bot settings.
+fn refuse_program_mint(agent_attributed: bool, headers: &HeaderMap) -> Result<(), BotsHandlerErr> {
+    if is_program_minting(
+        agent_attributed,
+        agent_correlation::context::current_routine().is_some(),
+        headers,
+    ) {
+        return Err(BotsHandlerErr::Forbidden(PROGRAM_MINT_REFUSAL));
+    }
+    Ok(())
 }
 
 /// Handler for `GET /bots/{bot_id}/tokens`.
@@ -841,6 +863,9 @@ pub enum BotsHandlerErr {
     /// Bad request.
     #[error("{0}")]
     BadRequest(&'static str),
+    /// The caller may not do this.
+    #[error("{0}")]
+    Forbidden(&'static str),
     /// Domain error.
     #[error(transparent)]
     Bot(#[from] BotError),
@@ -850,6 +875,7 @@ impl IntoResponse for BotsHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Bot(BotError::AgentTeammateComputer) => StatusCode::CONFLICT,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,

@@ -3644,6 +3644,7 @@ dependencies = [
 name = "bots"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -22103,6 +22104,7 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 name = "user_api_key"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "axum",
  "chrono",
  "hex",

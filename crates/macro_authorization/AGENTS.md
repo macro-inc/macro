@@ -78,6 +78,11 @@ managers.
 - Cookies are ambient and only considered when no explicit credential is
   present; an explicit credential always wins over a cookie.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- A route whose response carries a new credential's secret refuses
+  `is_program_minting` (an agent-attributed token, a signed routine run, or
+  `x-macro-code-execution`), because a program's results reach the model; the
+  bot-token and user API key routes do. Pass it the routine from
+  `agent_correlation::context::current_routine()`.
 - `mark_harness_token_used` runs on every harness-authenticated request. It
   writes `last_used_at` at most once a minute and skips a row another request
   is already updating. Don't make it a plain per-request `UPDATE`: one busy

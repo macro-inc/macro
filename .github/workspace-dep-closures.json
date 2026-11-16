@@ -549,6 +549,7 @@
       "crates/workspace-hack"
     ],
     "agent_credentials": [
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/bot_id",
       "crates/bot_token",
@@ -16510,6 +16511,7 @@
       "crates/workspace-hack"
     ],
     "user_api_key": [
+      "crates/agent_correlation",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
