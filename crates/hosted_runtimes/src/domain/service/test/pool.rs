@@ -129,7 +129,7 @@ async fn a_retried_purchase_returns_the_pool_computer_it_took() {
 }
 
 #[tokio::test]
-async fn a_refused_charge_releases_the_computer_it_took() {
+async fn a_refused_charge_releases_the_computer_it_took_and_tells_the_buyer() {
     let service = service_with(
         repo_with_pool(),
         FakeBilling {
@@ -160,6 +160,12 @@ async fn a_refused_charge_releases_the_computer_it_took() {
             Effect::JoinTeam,
             Effect::Destroy { host: HOST },
             Effect::RevokeHarness,
+            Effect::NotifySetup {
+                outcome: crate::domain::lifecycle::SetupOutcome::Failed {
+                    failure: crate::domain::lifecycle::Failure::Payment,
+                    failed_at: now(),
+                },
+            },
         ]
     );
     assert!(service.list(TEAM).await.unwrap().is_empty());

@@ -173,7 +173,7 @@ fn a_settled_charge_bills_the_computer_on_its_item() {
 }
 
 #[test]
-fn a_refused_charge_releases_the_computer_with_nothing_to_remove() {
+fn a_refused_charge_releases_the_computer_and_tells_the_buyer() {
     let charging = ComputerState {
         billing: Billing::Charging,
         ..pooled()
@@ -183,9 +183,19 @@ fn a_refused_charge_releases_the_computer_with_nothing_to_remove() {
 
     assert_eq!(next.billing, Billing::EndsAt { at: now() });
     assert_eq!(next.phase, Phase::Destroying);
+    assert_eq!(next.failure, Some(Failure::Payment));
     assert_eq!(
         effects,
-        vec![Effect::Destroy { host: HOST }, Effect::RevokeHarness]
+        vec![
+            Effect::Destroy { host: HOST },
+            Effect::RevokeHarness,
+            Effect::NotifySetup {
+                outcome: SetupOutcome::Failed {
+                    failure: Failure::Payment,
+                    failed_at: now(),
+                },
+            },
+        ]
     );
 }
 

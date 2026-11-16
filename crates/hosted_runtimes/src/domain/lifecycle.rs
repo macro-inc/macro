@@ -220,6 +220,9 @@ pub enum Failure {
     HostLost,
     /// No enrollment generation is left to recreate the guest with.
     SetupExhausted,
+    /// The charge for a computer taken from the warm pool was refused, so
+    /// it was released.
+    Payment,
 }
 
 impl Failure {
@@ -231,6 +234,7 @@ impl Failure {
             Self::KeptCrashing => "The computer kept crashing.",
             Self::HostLost => "The computer's host stopped responding.",
             Self::SetupExhausted => "The computer couldn't be set up again.",
+            Self::Payment => "The payment for the computer didn't go through, so it was released.",
         }
     }
 }
@@ -763,7 +767,17 @@ pub fn transition(
         Event::ChargeFailed => {
             if state.billing == Billing::Charging {
                 next.billing = Billing::EndsAt { at: now };
+                next.failure = Some(Failure::Payment);
                 destroy(&mut next, &mut effects, host);
+                // The purchase answered ready, so the buyer hears why the
+                // computer went away. A taken pool computer has no setup
+                // timeline, so `setup_outcome` never sends this.
+                effects.push(Effect::NotifySetup {
+                    outcome: SetupOutcome::Failed {
+                        failure: Failure::Payment,
+                        failed_at: now,
+                    },
+                });
             }
         }
 
