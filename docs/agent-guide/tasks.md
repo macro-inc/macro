@@ -1211,6 +1211,9 @@ above the floating controls. More opens the existing Details panel.
 The header has caret-only Back, the truncating project title, Share, and Details;
 there is no Tasks header island or Overview/Tasks switch. The Tasks heading pins
 beneath the header and shows the progress ring, completed/total count, and Filters.
+An extra 8px separates Tasks from the summary at rest. Only while pinned, a 20px
+page-color gradient fades task rows beneath the heading; reduced motion disables
+the opacity transition.
 One floating Task menu stays available at the bottom right, including at rest
 and in empty projects. No inline Add task remains on phones; empty states keep
 their explanation and Documentation link. The list reserves space below its last
