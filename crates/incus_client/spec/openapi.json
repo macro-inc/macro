@@ -1601,6 +1601,77 @@
         "type": "integer",
         "x-go-package": "github.com/lxc/incus/v7/shared/api"
       },
+      "StorageVolume": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ConfigMap"
+          },
+          "content_type": {
+            "description": "Volume content type (filesystem or block)\n\nAPI extension: custom_block_volumes",
+            "example": "filesystem",
+            "type": "string",
+            "x-go-name": "ContentType"
+          },
+          "created_at": {
+            "description": "Volume creation timestamp\nAPI extension: storage_volumes_created_at",
+            "example": "2021-03-23T20:00:00-04:00",
+            "format": "date-time",
+            "type": "string",
+            "x-go-name": "CreatedAt"
+          },
+          "description": {
+            "description": "Description of the storage volume\n\nAPI extension: entity_description",
+            "example": "My custom volume",
+            "type": "string",
+            "x-go-name": "Description"
+          },
+          "location": {
+            "description": "What cluster member this record was found on\n\nAPI extension: clustering",
+            "example": "server01",
+            "type": "string",
+            "x-go-name": "Location"
+          },
+          "name": {
+            "description": "Volume name",
+            "example": "foo",
+            "type": "string",
+            "x-go-name": "Name"
+          },
+          "project": {
+            "description": "Project containing the volume.\n\nAPI extension: storage_volumes_all_projects",
+            "example": "default",
+            "type": "string",
+            "x-go-name": "Project"
+          },
+          "restore": {
+            "description": "Name of a snapshot to restore\n\nAPI extension: storage_api_volume_snapshots",
+            "example": "snap0",
+            "type": "string",
+            "x-go-name": "Restore"
+          },
+          "type": {
+            "description": "Volume type",
+            "example": "custom",
+            "type": "string",
+            "x-go-name": "Type"
+          },
+          "used_by": {
+            "description": "List of URLs of objects using this storage volume",
+            "example": [
+              "/1.0/instances/blah"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "UsedBy"
+          }
+        },
+        "title": "StorageVolume represents the fields of a storage volume.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
       "StorageVolumeSource": {
         "description": "StorageVolumeSource represents the creation source for a new storage volume",
         "properties": {
@@ -3187,6 +3258,114 @@
           }
         },
         "summary": "Delete the storage volume",
+        "tags": [
+          "storage"
+        ]
+      },
+      "get": {
+        "description": "Gets a specific storage volume.",
+        "operationId": "storage_pool_volume_type_get",
+        "parameters": [
+          {
+            "description": "Storage pool name",
+            "in": "path",
+            "name": "poolName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume type",
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Storage volume name",
+            "in": "path",
+            "name": "volumeName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cluster member name",
+            "example": "server01",
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Sync response",
+                  "properties": {
+                    "metadata": {
+                      "$ref": "#/components/schemas/StorageVolume"
+                    },
+                    "status": {
+                      "description": "Status description",
+                      "example": "Success",
+                      "type": "string"
+                    },
+                    "status_code": {
+                      "description": "Status code",
+                      "example": 200,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "description": "Response type",
+                      "example": "sync",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Storage volume"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the storage volume",
         "tags": [
           "storage"
         ]

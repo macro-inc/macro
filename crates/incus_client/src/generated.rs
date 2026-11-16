@@ -1185,6 +1185,71 @@ pub mod types {
             value.parse()
         }
     }
+    ///Sync response
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
+    pub struct StoragePoolVolumeTypeGetResponse {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub metadata: ::std::option::Option<StorageVolume>,
+        ///Status description
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub status: ::std::option::Option<::std::string::String>,
+        ///Status code
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub status_code: ::std::option::Option<i64>,
+        ///Response type
+        #[serde(
+            rename = "type",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub type_: ::std::option::Option<::std::string::String>,
+    }
+    ///`StorageVolume`
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
+    pub struct StorageVolume {
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub config: ::std::option::Option<ConfigMap>,
+        ///Volume content type (filesystem or block)
+        ///
+        ///API extension: custom_block_volumes
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub content_type: ::std::option::Option<::std::string::String>,
+        ///Volume creation timestamp
+        ///API extension: storage_volumes_created_at
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub created_at: ::std::option::Option<::chrono::DateTime<::chrono::offset::Utc>>,
+        ///Description of the storage volume
+        ///
+        ///API extension: entity_description
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub description: ::std::option::Option<::std::string::String>,
+        ///What cluster member this record was found on
+        ///
+        ///API extension: clustering
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub location: ::std::option::Option<::std::string::String>,
+        ///Volume name
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub name: ::std::option::Option<::std::string::String>,
+        ///Project containing the volume.
+        ///
+        ///API extension: storage_volumes_all_projects
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub project: ::std::option::Option<::std::string::String>,
+        ///Name of a snapshot to restore
+        ///
+        ///API extension: storage_api_volume_snapshots
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub restore: ::std::option::Option<::std::string::String>,
+        ///Volume type
+        #[serde(
+            rename = "type",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub type_: ::std::option::Option<::std::string::String>,
+        ///List of URLs of objects using this storage volume
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub used_by: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
+    }
     ///StorageVolumeSource represents the creation source for a new storage volume
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct StorageVolumeSource {
@@ -2300,6 +2365,69 @@ impl Client {
             .build()?;
         let info = OperationInfo {
             operation_id: "storage_pool_volumes_type_post",
+        };
+        self.pre(&mut request, &info).await?;
+        let result = self.exec(request, &info).await;
+        self.post(&result, &info).await?;
+        let response = result?;
+        match response.status().as_u16() {
+            200u16 => ResponseValue::from_response(response).await,
+            400u16..=499u16 => Err(Error::ErrorResponse(
+                ResponseValue::from_response(response).await?,
+            )),
+            500u16..=599u16 => Err(Error::ErrorResponse(
+                ResponseValue::from_response(response).await?,
+            )),
+            _ => Err(Error::UnexpectedResponse(response)),
+        }
+    }
+    ///Get the storage volume
+    ///
+    ///Gets a specific storage volume.
+    ///
+    ///Sends a `GET` request to `/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}`
+    ///
+    ///Arguments:
+    ///- `pool_name`: Storage pool name
+    ///- `type_`: Storage volume type
+    ///- `volume_name`: Storage volume name
+    ///- `project`: Project name
+    ///- `target`: Cluster member name
+    pub async fn storage_pool_volume_type_get<'a>(
+        &'a self,
+        pool_name: &'a str,
+        type_: &'a str,
+        volume_name: &'a str,
+        project: Option<&'a str>,
+        target: Option<&'a str>,
+    ) -> Result<ResponseValue<types::StoragePoolVolumeTypeGetResponse>, Error<types::ErrorResponse>>
+    {
+        let url = format!(
+            "{}/1.0/storage-pools/{}/volumes/{}/{}",
+            self.baseurl,
+            encode_path(&pool_name.to_string()),
+            encode_path(&type_.to_string()),
+            encode_path(&volume_name.to_string()),
+        );
+        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(1usize);
+        header_map.append(
+            ::reqwest::header::HeaderName::from_static("api-version"),
+            ::reqwest::header::HeaderValue::from_static(Self::api_version()),
+        );
+        #[allow(unused_mut)]
+        let mut request = self
+            .client
+            .get(url)
+            .header(
+                ::reqwest::header::ACCEPT,
+                ::reqwest::header::HeaderValue::from_static("application/json"),
+            )
+            .query(&progenitor_client::QueryParam::new("project", &project))
+            .query(&progenitor_client::QueryParam::new("target", &target))
+            .headers(header_map)
+            .build()?;
+        let info = OperationInfo {
+            operation_id: "storage_pool_volume_type_get",
         };
         self.pre(&mut request, &info).await?;
         let result = self.exec(request, &info).await;

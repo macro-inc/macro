@@ -36,6 +36,10 @@ KEPT_OPERATIONS = {
         "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
         "delete",
     ): "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
+    (
+        "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
+        "get",
+    ): "/1.0/storage-pools/{poolName}/volumes/{type}/{volumeName}",
 }
 
 # Progenitor takes one success type. These operations document both a sync

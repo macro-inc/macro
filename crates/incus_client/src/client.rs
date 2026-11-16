@@ -20,6 +20,8 @@ use crate::{
 
 /// The storage volume type for volumes created through the API.
 const CUSTOM_VOLUME: &str = "custom";
+/// The storage volume type of an image unpacked on a pool.
+const IMAGE_VOLUME: &str = "image";
 
 /// The recursion level list endpoints are generated for.
 const RECURSION_FULL_OBJECTS: i64 = 1;
@@ -433,6 +435,27 @@ impl IncusClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// Whether `pool` holds the volume Incus unpacks the image `fingerprint`
+    /// into on its first use, which later instances clone.
+    #[tracing::instrument(name = "incus.image_volume_exists", skip(self), err)]
+    pub async fn image_volume_exists(
+        &self,
+        pool: &StoragePoolName,
+        fingerprint: &str,
+    ) -> Result<bool, IncusError> {
+        let volume = self
+            .api
+            .storage_pool_volume_type_get(pool.as_str(), IMAGE_VOLUME, fingerprint, None, None)
+            .await
+            .map_err(IncusError::from);
+
+        match volume {
+            Ok(_) => Ok(true),
+            Err(IncusError::NotFound { .. }) => Ok(false),
+            Err(error) => Err(error),
+        }
     }
 
     /// Attaches a custom block volume to an instance as disk device `device`.

@@ -17,7 +17,7 @@ and operation waiting.
 
 ## Start here
 
-- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, `exec_attached` (stdio over websockets, see `src/attached_exec.rs`), custom block volumes for computer data disks (create, attach, delete), `rebuild` from a new image, and `run_operation`.
+- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, `exec_attached` (stdio over websockets, see `src/attached_exec.rs`), custom block volumes for computer data disks (create, attach, delete), whether an image is unpacked on a pool (`image_volume_exists`), `rebuild` from a new image, and `run_operation`.
 - `src/error.rs`: `IncusError`; `NotFound` is how callers detect drift.
 - `spec/patch.py`: the endpoint allowlist and the reshaping progenitor needs.
 
