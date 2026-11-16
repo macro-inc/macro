@@ -1,6 +1,7 @@
 # Code execution in the agent harness
 
-`ExecuteCode` accepts a JavaScript ES module exporting `main`. The agent harness
+`ExecuteCode` accepts a JavaScript ES module exporting `main`. This crate
+also runs OCaml programs (below); `ExecuteCode` does not offer them yet. The agent harness
 starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
 service. Macro SDK and Handlebars imports are bundled ahead of time, with no
 per-run package download or TypeScript compilation.
@@ -39,6 +40,58 @@ JSON or error. New executions do not automatically journal each HTTP response.
 The result is untrusted program output, not proof that an external write occurred.
 Review cards load their separately saved records. Code completion does not wait
 for a user to submit those reviews.
+
+## OCaml programs
+
+`ExecuteRequest::language` is `Javascript` by default or `Ocaml`. An OCaml
+program is one `main.ml` that calls `Code_mode.run` (the contract and an
+example are in `packages/sdk-ocaml/README.md`, "Code mode"):
+
+```ocaml
+let () =
+  Code_mode.run @@ fun { macro; session_id; _ } ->
+  let reply = Macro_sdk_fetch.call_exn macro (Macro_sdk.Contacts.get_contacts ()) in
+  `Assoc [ ("contacts", `Int (List.length reply.contacts)) ]
+```
+
+Before Deno starts, `src/outbound/ocaml.rs` compiles it in the run's scratch
+directory against the prebuilt bundle (`CODE_MODE_OCAML_DIR` when
+`code_mode_assets` was built; without one an OCaml run fails saying so).
+Each step is a child process with the same cleared environment, scratch
+directory, CPU and priority limits and kill-on-drop as Deno, inside the run's
+deadline and cancellation, with fixed command lines (no dune, ocamlfind,
+`-pp` or `-ppx`, nothing from the program):
+
+1. `ocamlc -nostdlib -I <stdlib> -I <cmi> -bin-annot -c main.ml`: only the
+   SDK, its runtime, yojson, uri, `Macro_sdk_fetch` and `Code_mode` are
+   visible, not the JavaScript interop.
+2. `code_mode_policy main.cmt`: refuses `external` declarations and uses of
+   `Obj`, `Marshal`, `Sys.command`, `Unix` and `Js_of_ocaml`, also through
+   aliases. Defense in depth; Deno's permissions are the boundary.
+3. `wasm_of_ocaml compile` and `link` against the bundle's archives, keeping
+   only the program's own modules in scratch.
+
+Compiler and policy errors fail the run with `FailureCode::Compile` and the
+same diagnostic text `DenoChecker` gives: the problem ending in
+`at main.ml:<line>:<column>`. `OcamlChecker` checks a program the same way
+without compiling it to Wasm (`ocamlc -stop-after typing`, then the policy).
+
+The run is the same Deno launch with the same flags, plus read access to the
+bundle's library modules. The bootstrap checks for JSPI
+(`WebAssembly.Suspending`), sets `globalThis.__macroCodeMode`, and evaluates
+wasm_of_ocaml's loader with a `process` without env and a `require` serving
+only `node:fs`, `node:fs/promises`, `node:path` and `node:tty`. The program's
+stdout and stderr become log events, so it can't forge frames. Its SDK calls
+go through the bootstrap's `fetch` with their `{service, operation}`
+(`init.macroSdkOperation`): the same headers, dry-run gate, progress events
+and result limits apply. They carry no `x-macro-sdk-verb` yet (a display
+hint). An unattended OCaml program's client holds a stand-in token that
+`fetch` replaces with the real one, so the program never sees the
+credential; it takes no arguments yet.
+
+Measured on big-pickle, 2026-11-16, median of 11 (one program, warm bundle,
+cold processes): compile 62 ms; a whole OCaml run (compile, Deno start,
+`Code_mode.run`, exit) 216 ms, against 106 ms for an empty JavaScript run.
 
 ## Unattended programs
 
@@ -81,8 +134,8 @@ fingerprint stays valid until it changes.
 | --- | --- |
 | Concurrent Deno executions per harness replica | 8 (public MCP: 4 more) |
 | Additional queued executions | 16 (public MCP: 8 more) |
-| Total execution lifetime, including queueing and API calls | 30 seconds |
-| JavaScript source | 64 KiB |
+| Total execution lifetime, including queueing, OCaml compiling and API calls | 30 seconds |
+| JavaScript or OCaml source | 64 KiB |
 | Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
@@ -135,4 +188,6 @@ cargo test -p code_execution -- --include-ignored
 The suite covers actual SDK HTTP authentication and concurrency, prebundled
 Handlebars, plain JavaScript entry modules, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
-backpressure, and cleanup. It makes no model-provider calls.
+backpressure, and cleanup, and the same for OCaml programs plus compiling,
+the policy check and timeouts while compiling (they need
+`CODE_MODE_OCAML_DIR`, see `AGENTS.md`). It makes no model-provider calls.

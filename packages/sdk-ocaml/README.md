@@ -156,8 +156,9 @@ bootstrap.
 ### What `fetch` is told
 
 Code mode's bootstrap wraps `globalThis.fetch` to gate a dry run's writes
-and add the `x-macro-sdk-verb` header (it will read the field below once it
-runs OCaml programs). The TypeScript SDK gives it each
+and add the `x-macro-sdk-verb` header; for OCaml programs it reads the
+field below (and gates, marks and reports with it, but sends no verb
+header yet). The TypeScript SDK gives it each
 call's `{service, operation}` through `gateRequests` and `sendVerbHeaders`
 (`packages/sdk/src/utils/activity.ts`). This transport passes the same pair
 on the `fetch` call itself, as an extra `init` field a plain `fetch`
@@ -202,7 +203,7 @@ service host. The value `main` returns becomes the final frame
 `{"type":"error","message":...}`, the same frames JavaScript programs end
 with. The bootstrap's side (`globalThis.__macroCodeMode`: the context as
 JSON, and `finish(frame)`) is specified in `code_mode/code_mode.mli`; code
-mode's bootstrap does not implement it yet. Like `fetch/`, `code_mode`
+mode's bootstrap (`crates/code_execution`) implements it. Like `fetch/`, `code_mode`
 builds only in the `wasm` profile; its Deno tests (`code_mode/test/`,
 `run.mjs` plays the bootstrap with code mode's Deno flags) run with:
 
@@ -217,7 +218,8 @@ Programs must not print to stdout: it carries the bootstrap's frames.
 Code mode compiles each program against a bundle built once per image, the
 `code-mode-ocaml` flake package (`nix/cloud-storage.nix`;
 `code_mode/bundle/build.sh` does the work). Its path is meant to reach the
-agent harness as `CODE_MODE_OCAML_DIR` (`codeModeOcamlEnv`, not wired yet):
+harness as `CODE_MODE_OCAML_DIR` at build time (`codeModeOcamlEnv`;
+`code_mode_assets::OCAML_BUNDLE`):
 
 | Path | Contents |
 | --- | --- |
@@ -265,10 +267,10 @@ Check`) compiles `code_mode/test/sample.ml` that way and runs it under Deno
 2.9.6 with code mode's flags against a stand-in API
 (`code_mode/bundle/check.sh`, which prints the timings). On big-pickle,
 2026-11-16, median of 11 cold runs: compile 82 ms, spawn to `Code_mode.run`
-97 ms, whole run with one call 115 ms. The bundle's closure is 149 MiB
-(binaryen 50, glibc 34, the bundle itself 51: `ocamlc` and `wasm_of_ocaml`
-copied, with their references to the OCaml installation removed, which
-would otherwise add 640 MiB).
+97 ms, whole run with one call 115 ms. The bundle's closure is 162 MiB
+(binaryen 50, glibc 34, the bundle itself 64: `ocamlc`, `wasm_of_ocaml` and
+`code_mode_policy` (13 MiB) copied, with their references to the OCaml
+installation removed, which would otherwise add 640 MiB).
 
 ## How the spec maps to OCaml
 
