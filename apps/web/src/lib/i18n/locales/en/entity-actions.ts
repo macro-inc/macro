@@ -297,6 +297,8 @@ export default {
   download: 'Download',
   print: 'Print',
   downloadAsDocx: 'Download DOCX',
+  presentationActions: 'Presentation actions',
+  documentActions: 'Document actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',
